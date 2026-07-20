@@ -891,7 +891,14 @@ export default function EnvioMeta() {
 
             {template && (
               <div className="mt-2">
-                <TemplateWhatsAppPreview template={template} />
+                <TemplateWhatsAppPreview
+                  template={template}
+                  imageUrlOverride={
+                    (templateGroup?.rows || [])
+                      .map((r: any) => r?.variaveis?._header_image_url)
+                      .find((u: any) => typeof u === 'string' && u.trim().length > 0) || undefined
+                  }
+                />
               </div>
             )}
 

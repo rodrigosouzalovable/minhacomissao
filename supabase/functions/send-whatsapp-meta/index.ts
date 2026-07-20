@@ -280,6 +280,44 @@ Deno.serve(async (req) => {
     if (!template) throw new Error('Template não encontrado');
     if (template.status !== 'approved') throw new Error('Template não aprovado pela Meta');
 
+    // Fallback: se este template não tem imagem/components cadastrados, herda de
+    // qualquer instância irmã (mesmo nome_template + idioma) que já tenha configurado.
+    // Evita "Sem imagem configurada" quando só 1 das N instâncias cadastrou a mídia.
+    try {
+      const vars: any = (template.variaveis || {}) as any;
+      const hasImage = typeof vars?._header_image_url === 'string' && vars._header_image_url.trim().length > 0;
+      const hasComponents = Array.isArray(vars?._components) && vars._components.length > 0;
+      if (!hasImage || !hasComponents) {
+        const { data: siblings } = await supabase
+          .from('meta_whatsapp_templates')
+          .select('variaveis')
+          .eq('nome_template', template.nome_template)
+          .eq('idioma', template.idioma)
+          .eq('status', 'approved')
+          .neq('id', template.id)
+          .limit(50);
+        for (const s of (siblings || [])) {
+          const sv: any = (s as any).variaveis || {};
+          if (!hasImage && typeof sv._header_image_url === 'string' && sv._header_image_url.trim()) {
+            vars._header_image_url = sv._header_image_url;
+          }
+          if (!hasComponents && Array.isArray(sv._components) && sv._components.length > 0) {
+            vars._components = sv._components;
+          }
+          if (!vars._header_format && sv._header_format) {
+            vars._header_format = sv._header_format;
+          }
+          const doneImage = typeof vars._header_image_url === 'string' && vars._header_image_url.trim().length > 0;
+          const doneComps = Array.isArray(vars._components) && vars._components.length > 0;
+          if (doneImage && doneComps) break;
+        }
+        (template as any).variaveis = vars;
+      }
+    } catch (e) {
+      console.log('[send-whatsapp-meta] fallback header/components falhou:', String(e).slice(0, 200));
+    }
+
+
     // ===== GUARDRAIL: bloqueio anti-marketing =====
     const categoria = String(template.categoria || '').toUpperCase();
     if (categoria === 'MARKETING') {
