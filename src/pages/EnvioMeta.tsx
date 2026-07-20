@@ -656,6 +656,7 @@ export default function EnvioMeta() {
       erroValidacao: erroVal,
       templateIdByInstance,
       nomeCampanha: nomeCampanha.trim() || undefined,
+      modoRajada,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
