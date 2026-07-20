@@ -46,6 +46,8 @@ export default function AcordoDetalhe() {
   const [novaDataPagamento, setNovaDataPagamento] = useState<string>('');
   const [editandoComissao, setEditandoComissao] = useState<string | null>(null);
   const [novaComissao, setNovaComissao] = useState<string>('');
+  const [editandoValorParcela, setEditandoValorParcela] = useState<string | null>(null);
+  const [novoValorParcela, setNovoValorParcela] = useState<string>('');
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [editandoDataVencimento, setEditandoDataVencimento] = useState<string | null>(null);
   const [novaDataVencimento, setNovaDataVencimento] = useState<string>('');
