@@ -110,6 +110,7 @@ export function EditPermissionsDialog({
             permite_cpf_duplicado: permiteCpfDuplicado,
             pode_excluir_acordos: podeExcluirAcordos,
             recebe_consulta_cpf: recebeConsultaCpf,
+            pode_marcar_pago_global: podeMarcarPago,
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
