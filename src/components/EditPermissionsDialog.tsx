@@ -127,13 +127,14 @@ export function EditPermissionsDialog({
   }, [permissions, open]);
 
     const { user: currentUser } = useAuth();
+    const isSelf = currentUser?.id === userId;
 
     const saveMutation = useMutation({
     mutationFn: async () => {
-        // Garante que /admin/usuarios sempre esteja em abas_permitidas
-        const abasFinal = selectedTabs.includes('/admin/usuarios')
-          ? selectedTabs
-          : [...selectedTabs, '/admin/usuarios'];
+        // Garante que /admin/usuarios sempre esteja em abas_permitidas APENAS para o próprio admin logado
+        const abasFinal = isSelf && !selectedTabs.includes('/admin/usuarios')
+          ? [...selectedTabs, '/admin/usuarios']
+          : selectedTabs;
         const payload = {
             abas_permitidas: abasFinal,
             credores,
@@ -201,7 +202,7 @@ export function EditPermissionsDialog({
   });
 
   const toggleTab = (path: string) => {
-    if (path === '/admin/usuarios') return; // não pode ser desabilitada
+    if (isSelf && path === '/admin/usuarios') return; // proteção apenas para o próprio admin
     setSelectedTabs((prev) =>
       prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
     );
@@ -226,7 +227,7 @@ export function EditPermissionsDialog({
             <div className="space-y-3">
               <Label className="text-sm font-medium">Abas visíveis</Label>
               {AVAILABLE_TABS.map((tab) => {
-                const locked = tab.path === '/admin/usuarios';
+                const locked = isSelf && tab.path === '/admin/usuarios';
                 return (
                   <div key={tab.path} className="flex items-center gap-2">
                     <Checkbox
