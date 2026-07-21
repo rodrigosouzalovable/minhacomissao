@@ -473,13 +473,20 @@ serve(async (req) => {
           // 2) Caso contrário, cai no rodízio (round-robin por menor carga).
           if (!isEcho && contatoIdFinal) {
             try {
-              const { data: atendentes } = await supabase
+              const { data: atendentesRaw } = await supabase
                 .from('meta_whatsapp_etiquetas')
                 .select('id, nome')
                 .eq('user_id', inst.user_id)
                 .ilike('nome', 'Atendente:%');
 
-              const atendenteIds = (atendentes || []).map((a: any) => a.id);
+              // Todas as etiquetas de atendente (usadas para checar se contato já tem uma)
+              const atendentes = atendentesRaw || [];
+              // Lista elegível para RODÍZIO — exclui Thailinny Nolasco (regra de negócio)
+              const atendentesRodizio = atendentes.filter((a: any) =>
+                String(a.nome).trim().toLowerCase() !== 'atendente: thailinny nolasco'
+              );
+              const atendenteIds = atendentes.map((a: any) => a.id);
+              const atendenteRodizioIds = atendentesRodizio.map((a: any) => a.id);
 
               // Já tem atendente atribuído?
               let jaTemAtendente = false;
