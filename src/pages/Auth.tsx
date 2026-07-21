@@ -25,10 +25,12 @@ export default function Auth() {
   const { toast } = useToast();
   const initial = useInitialRoute();
 
-  // After successful login, when auth+permissions resolve, redirect appropriately.
-  if (user && !initial.loading) {
-    navigate(initial.path, { replace: true });
-  }
+  useEffect(() => {
+    if (user && !initial.loading) {
+      navigate(initial.path, { replace: true });
+    }
+  }, [user, initial.loading, initial.path, navigate]);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
