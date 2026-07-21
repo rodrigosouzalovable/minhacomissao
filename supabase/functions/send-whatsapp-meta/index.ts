@@ -523,7 +523,7 @@ Deno.serve(async (req) => {
             if (etiq?.id) {
               const { error: linkErr } = await supabase
                 .from('meta_whatsapp_contato_etiquetas')
-                .insert({ contato_id: contatoIdFinal, etiqueta_id: etiq.id } as any);
+                .insert({ contato_id: contatoIdFinal, etiqueta_id: etiq.id, origem: 'auto_atendente' } as any);
               if (linkErr && linkErr.code !== '23505' && !String(linkErr.message || '').toLowerCase().includes('duplicate')) {
                 console.log('[send-whatsapp-meta] falha ao vincular etiqueta atendente:', linkErr.message);
               }
