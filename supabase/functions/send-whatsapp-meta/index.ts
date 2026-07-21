@@ -508,17 +508,20 @@ Deno.serve(async (req) => {
           contatoIdFinal = (novo as any)?.id ?? null;
         }
 
-        // Aplicar etiqueta "Atendente: {nome}" ao contato — APENAS se já existir.
+        // Aplicar etiqueta "Atendente: {nome}%" ao contato — APENAS se já existir.
+        // Match por prefixo (nome curto do apelido casa com etiqueta canônica completa).
         // O sistema não cria etiquetas sozinho; só usuários criam via UI.
         if (atendenteNome && contatoIdFinal) {
           try {
-            const nomeEtiqueta = `Atendente: ${atendenteNome}`;
-            const { data: etiq } = await supabase
+            const primeiro = atendenteNome.split(/\s+/)[0];
+            const { data: etiqs } = await supabase
               .from('meta_whatsapp_etiquetas')
-              .select('id')
+              .select('id, nome')
               .eq('user_id', inst.user_id)
-              .ilike('nome', nomeEtiqueta)
-              .maybeSingle();
+              .ilike('nome', `Atendente: ${primeiro}%`);
+            const etiq = (etiqs ?? []).sort(
+              (a: any, b: any) => String(b.nome).length - String(a.nome).length,
+            )[0];
 
             if (etiq?.id) {
               const { error: linkErr } = await supabase
@@ -528,12 +531,13 @@ Deno.serve(async (req) => {
                 console.log('[send-whatsapp-meta] falha ao vincular etiqueta atendente:', linkErr.message);
               }
             } else {
-              console.log('[send-whatsapp-meta] etiqueta atendente não existe, ignorando:', nomeEtiqueta);
+              console.log('[send-whatsapp-meta] etiqueta atendente não existe, ignorando:', `Atendente: ${primeiro}%`);
             }
           } catch (e) {
             console.log('[send-whatsapp-meta] erro auto-etiqueta:', String(e).slice(0, 200));
           }
         }
+
       } catch (_) { /* não bloqueia o envio */ }
 
 
