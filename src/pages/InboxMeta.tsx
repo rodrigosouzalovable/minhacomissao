@@ -355,10 +355,16 @@ export default function InboxMeta() {
       })
       .subscribe();
     const poll = setInterval(() => { if (document.visibilityState === 'visible') fetchContatos(); }, 60000);
-    const onVis = () => { if (!document.hidden) fetchContatos(); };
+    const onVis = () => {
+      if (!document.hidden) {
+        fetchContatos();
+        // Reconcilia etiquetas caso algum evento realtime tenha sido perdido
+        fetchContatoEtiquetas();
+      }
+    };
     document.addEventListener('visibilitychange', onVis);
     return () => { supabase.removeChannel(channel); clearInterval(poll); document.removeEventListener('visibilitychange', onVis); };
-  }, [user, fetchContatos, fetchContatoEtiquetas, fetchEtiquetas]);
+  }, [user, fetchContatos, fetchContatoEtiquetas, fetchEtiquetas, applyEtiquetaEvent]);
 
   // ============== Mensagens ==============
   const fetchMensagens = useCallback(async (contato: MetaContato, loadMore = false) => {
