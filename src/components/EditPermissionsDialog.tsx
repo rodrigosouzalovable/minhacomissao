@@ -227,7 +227,7 @@ export function EditPermissionsDialog({
             <div className="space-y-3">
               <Label className="text-sm font-medium">Abas visíveis</Label>
               {AVAILABLE_TABS.map((tab) => {
-                const locked = tab.path === '/admin/usuarios';
+                const locked = isSelf && tab.path === '/admin/usuarios';
                 return (
                   <div key={tab.path} className="flex items-center gap-2">
                     <Checkbox
