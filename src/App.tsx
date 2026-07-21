@@ -88,15 +88,38 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const initial = useInitialRoute();
   
-  if (loading) {
+  if (loading || (user && initial.loading)) {
     return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
   }
   
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={initial.path} replace />;
   }
   
+  return <>{children}</>;
+}
+
+function DashboardRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { isAdmin, isGestor, loading: roleLoading } = useUserRole();
+  const { abasPermitidas, isLoading: permLoading } = useUserPermissions();
+  const initial = useInitialRoute();
+
+  if (loading || roleLoading || permLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  const allowed = isAdmin || isGestor || !abasPermitidas || abasPermitidas.includes('/dashboard');
+  if (!allowed) {
+    return <Navigate to={initial.path} replace />;
+  }
+
   return <>{children}</>;
 }
 
