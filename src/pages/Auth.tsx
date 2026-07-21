@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useInitialRoute } from '@/hooks/useInitialRoute';
 import acordosIcon from '@/assets/acordos-icon.png';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
