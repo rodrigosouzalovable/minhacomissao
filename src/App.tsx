@@ -221,7 +221,7 @@ const App = () => (
             <Route path="/antifraude" element={<AntifraudePage />} />
             <Route path="/credor/:slug/dashboard" element={<CredorDashboard />} />
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<DashboardRoute><Dashboard /></DashboardRoute>} />
             <Route path="/acordos" element={<ProtectedRoute><Acordos /></ProtectedRoute>} />
             <Route path="/acordos/novo" element={<ProtectedRoute><NovoAcordo /></ProtectedRoute>} />
             <Route path="/acordos/:id" element={<ProtectedRoute><AcordoDetalhe /></ProtectedRoute>} />
