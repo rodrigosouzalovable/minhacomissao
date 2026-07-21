@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useInitialRoute } from "@/hooks/useInitialRoute";
 import { AutoSendProvider } from "@/hooks/useAutoSend";
 import { WhatsAppSendingProvider } from "@/contexts/WhatsAppSendingContext";
 import { VoiceCampaignSendingProvider } from "@/contexts/VoiceCampaignSendingContext";
@@ -87,15 +88,38 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const initial = useInitialRoute();
   
-  if (loading) {
+  if (loading || (user && initial.loading)) {
     return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
   }
   
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={initial.path} replace />;
   }
   
+  return <>{children}</>;
+}
+
+function DashboardRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { isAdmin, isGestor, loading: roleLoading } = useUserRole();
+  const { abasPermitidas, isLoading: permLoading } = useUserPermissions();
+  const initial = useInitialRoute();
+
+  if (loading || roleLoading || permLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  const allowed = isAdmin || isGestor || !abasPermitidas || abasPermitidas.includes('/dashboard');
+  if (!allowed) {
+    return <Navigate to={initial.path} replace />;
+  }
+
   return <>{children}</>;
 }
 
@@ -197,7 +221,7 @@ const App = () => (
             <Route path="/antifraude" element={<AntifraudePage />} />
             <Route path="/credor/:slug/dashboard" element={<CredorDashboard />} />
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<DashboardRoute><Dashboard /></DashboardRoute>} />
             <Route path="/acordos" element={<ProtectedRoute><Acordos /></ProtectedRoute>} />
             <Route path="/acordos/novo" element={<ProtectedRoute><NovoAcordo /></ProtectedRoute>} />
             <Route path="/acordos/:id" element={<ProtectedRoute><AcordoDetalhe /></ProtectedRoute>} />

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useInitialRoute } from '@/hooks/useInitialRoute';
 import acordosIcon from '@/assets/acordos-icon.png';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,9 +20,17 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
-  const { signIn } = useAuth();
+  const { signIn, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const initial = useInitialRoute();
+
+  useEffect(() => {
+    if (user && !initial.loading) {
+      navigate(initial.path, { replace: true });
+    }
+  }, [user, initial.loading, initial.path, navigate]);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +58,7 @@ export default function Auth() {
               : error.message,
         });
       } else {
-        navigate('/dashboard');
+        // Redirect handled by useEffect based on user permissions
       }
     } catch (err) {
       if (err instanceof z.ZodError) {
