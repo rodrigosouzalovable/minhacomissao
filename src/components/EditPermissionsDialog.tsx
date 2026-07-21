@@ -54,6 +54,39 @@ export function EditPermissionsDialog({
   const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
   const [podeMarcarPago, setPodeMarcarPago] = useState(false);
+  const [selectedTenants, setSelectedTenants] = useState<string[]>([]);
+
+  const { data: allTenants } = useQuery({
+    queryKey: ['tenants-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tenants' as any)
+        .select('id, slug, nome, ativo')
+        .order('nome');
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: open,
+  });
+
+  const { data: userTenantRows } = useQuery({
+    queryKey: ['tenant-members', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tenant_members' as any)
+        .select('tenant_id')
+        .eq('user_id', userId);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: open && !!userId,
+  });
+
+  useEffect(() => {
+    if (userTenantRows) {
+      setSelectedTenants(userTenantRows.map((r: any) => r.tenant_id));
+    }
+  }, [userTenantRows]);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
@@ -128,9 +161,30 @@ export function EditPermissionsDialog({
           } as any);
         if (error) throw error;
       }
+
+      // Sync tenant_members
+      const currentIds = new Set((userTenantRows ?? []).map((r: any) => r.tenant_id));
+      const selectedIds = new Set(selectedTenants);
+      const toAdd = [...selectedIds].filter((id) => !currentIds.has(id));
+      const toRemove = [...currentIds].filter((id) => !selectedIds.has(id));
+      if (toAdd.length > 0) {
+        const { error } = await supabase
+          .from('tenant_members' as any)
+          .insert(toAdd.map((tenant_id) => ({ tenant_id, user_id: userId, role_tenant: 'member' })));
+        if (error) throw error;
+      }
+      if (toRemove.length > 0) {
+        const { error } = await supabase
+          .from('tenant_members' as any)
+          .delete()
+          .eq('user_id', userId)
+          .in('tenant_id', toRemove);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['tenant-members'] });
       onOpenChange(false);
       toast({
         title: 'Permissões salvas',
@@ -204,6 +258,30 @@ export function EditPermissionsDialog({
                 </div>
               ))}
             </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Tenants (áreas isoladas)</Label>
+              <p className="text-xs text-muted-foreground">
+                Marque para dar acesso à URL do tenant (ex: /avatusbarbearia). O usuário só verá dados Meta do tenant vinculado.
+              </p>
+              {(allTenants ?? []).map((t: any) => (
+                <div key={t.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`tenant-${t.id}`}
+                    checked={selectedTenants.includes(t.id)}
+                    onCheckedChange={() =>
+                      setSelectedTenants((prev) =>
+                        prev.includes(t.id) ? prev.filter((x) => x !== t.id) : [...prev, t.id]
+                      )
+                    }
+                  />
+                  <label htmlFor={`tenant-${t.id}`} className="text-sm cursor-pointer">
+                    {t.nome} <span className="text-xs text-muted-foreground">/{t.slug}</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+
 
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium">Visível no Ranking</Label>
