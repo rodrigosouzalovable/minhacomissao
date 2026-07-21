@@ -1,25 +1,33 @@
-## Objetivo
-Reorganizar o dialog "Etiquetas Meta" (acessado via clique direito → Etiquetas → Gerenciar etiquetas) para que todos os elementos caibam de forma limpa dentro do espaço, sem sobreposição do botão "Criar etiqueta" com a lista.
+## Problema confirmado
 
-## Alterações em `src/components/inbox/meta/MetaEtiquetasDialog.tsx`
+Anna Flávia abriu a conversa com Célio Raio Solidade, mas a etiqueta "Atendente: Anna Flavia Leite de Morais" não foi aplicada.
 
-1. **Aumentar largura e estruturar em seções claras**
-   - Trocar `max-w-sm` por `max-w-md` para dar mais respiro horizontal.
-   - Dividir o conteúdo em duas seções visuais com separador (`<Separator />`):
-     - **Seção "Nova etiqueta"**: input de nome, paleta de cores e botão "Criar etiqueta".
-     - **Seção "Etiquetas existentes"**: título pequeno + contador (ex: "6 etiquetas") + lista rolável.
+Causa raiz (verificada via banco + código):
+- A etiqueta cadastrada é `Atendente: Anna Flavia Leite de Morais` (nome completo do perfil).
+- Em `src/pages/InboxMeta.tsx` linhas 144-151, o front resolve `atendenteNome` como apelido curto (`"Anna Flavia"`) via tabela `APELIDOS`, e envia esse curto no campo `atendente_nome` do `send-whatsapp-meta`.
+- Em `supabase/functions/send-whatsapp-meta/index.ts` linha 515-521, a busca da etiqueta usa `ilike` com o valor exato `Atendente: Anna Flavia`, sem curinga → não encontra a etiqueta completa e cai no ramo "etiqueta não existe, ignorando".
 
-2. **Corrigir a sobreposição visual**
-   - Envolver a lista em um container com fundo próprio (`rounded-md border bg-muted/30 p-2`) e `max-h-64 overflow-y-auto` para o scroll ficar contido dentro da seção.
-   - Adicionar `pr-1` no scroll para a scrollbar não colar nos ícones de ação.
+O mesmo padrão afeta Wallace, Yasmim, Fernanda: o apelido curto nunca casa com a etiqueta canônica (nome completo).
 
-3. **Ajustes finos de layout**
-   - Alinhar as bolinhas de cor em grid fixo (`grid grid-cols-8 gap-2`) em vez de flex-wrap, evitando quebra irregular.
-   - Padronizar altura dos itens da lista (`h-10`) e usar `text-sm font-medium` no nome.
-   - Ícones de editar/excluir agrupados com um leve divisor visual (`border-l pl-1 ml-1`).
-   - Adicionar rótulo "Cor" acima da paleta no formulário de criação e no modo edição.
+Como o webhook (respostas do cliente) usa outra função e busca por prefixo `Atendente:%`, aquele fluxo já grava com cadeado; só o fluxo de **iniciar conversa** (nova conversa e reabrir com template) está falhando.
 
-4. **Estado vazio**
-   - Quando não houver etiquetas, mostrar mensagem discreta "Nenhuma etiqueta criada ainda." dentro do container da lista, em vez de esconder a seção.
+## Correção
 
-Nenhuma alteração de lógica/negócio — apenas apresentação.
+1. `supabase/functions/send-whatsapp-meta/index.ts` (bloco linhas 511-536):
+   - Trocar a busca pontual por match por prefixo, priorizando o nome mais longo:
+     - `select id, nome from meta_whatsapp_etiquetas where user_id = inst.user_id and nome ilike 'Atendente: <primeiro-nome>%' order by length(nome) desc limit 1`.
+   - Mantém `origem: 'auto_atendente'` no vínculo → cadeado já funciona via RLS/UI existentes.
+   - Não cria etiqueta nova (regra: só usuário cria).
+
+2. Aplicar a mesma correção nas funções que também iniciam/mandam mensagens do atendente e recebem `atendente_nome`:
+   - `supabase/functions/send-whatsapp-meta-text/index.ts` — adicionar bloco equivalente após persistir contato (hoje não etiqueta).
+   - `supabase/functions/send-whatsapp-meta-media/index.ts` — idem, se aceitar `atendente_nome` (verificar; se não aceitar, só atender ao request quando enviado via reabrir/nova conversa por template — que já cai no `send-whatsapp-meta`).
+
+3. Sem alterações de UI necessárias: o cadeado é renderizado a partir de `origem='auto_atendente'` e da política de RLS existente em `meta_whatsapp_contato_etiquetas` (admin remove; demais usuários não).
+
+## Verificação
+
+- Rodar novo envio de template pela aba "Nova conversa" com login da Anna Flávia → conferir que o contato criado recebe vínculo com a etiqueta `Atendente: Anna Flavia Leite de Morais` e origem `auto_atendente`.
+- Testar também com Wallace (etiqueta `Atendente: Wallace Maciel`) para garantir o match por prefixo.
+- Confirmar visualmente cadeado na UI e que usuário comum não consegue remover.
+- Não retroagir para conversas antigas — apenas novas conversas iniciadas passam a vir etiquetadas.
