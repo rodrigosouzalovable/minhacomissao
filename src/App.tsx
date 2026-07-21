@@ -63,6 +63,7 @@ const MetaTemplates = lazy(() => import("./pages/MetaTemplates"));
 const Consultoria = lazy(() => import("./pages/Consultoria"));
 const Cotacoes = lazy(() => import("./pages/Cotacoes"));
 const LembreteMeta = lazy(() => import("./pages/LembreteMeta"));
+const TenantLayout = lazy(() => import("./pages/tenant/TenantLayout"));
 
 const queryClient = new QueryClient();
 
