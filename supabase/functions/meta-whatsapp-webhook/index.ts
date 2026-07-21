@@ -519,18 +519,14 @@ serve(async (req) => {
                     if (nomeAt) {
                       atendenteAcordoNome = nomeAt;
                       const nomeEtiqueta = `Atendente: ${nomeAt}`;
+                      // Apenas usa etiqueta se ela JÁ existir — sistema não cria etiquetas sozinho.
                       const jaExiste = (atendentes || []).find((a: any) =>
                         String(a.nome).toLowerCase() === nomeEtiqueta.toLowerCase()
                       );
                       if (jaExiste) {
                         atendenteAcordoId = (jaExiste as any).id;
                       } else {
-                        const { data: novaEt } = await supabase
-                          .from('meta_whatsapp_etiquetas')
-                          .insert({ user_id: inst.user_id, nome: nomeEtiqueta, cor: '#25D366' } as any)
-                          .select('id')
-                          .maybeSingle();
-                        atendenteAcordoId = (novaEt as any)?.id || null;
+                        console.log('[MetaWebhook] etiqueta atendente inexistente, ignorando:', nomeEtiqueta);
                       }
                     }
                   }
