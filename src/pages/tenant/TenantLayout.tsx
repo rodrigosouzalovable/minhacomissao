@@ -110,10 +110,11 @@ function TenantGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export default function TenantLayout() {
-  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+export default function TenantLayout({ slug: propSlug }: { slug?: string } = {}) {
+  const params = useParams<{ tenantSlug: string }>();
+  const slug = propSlug ?? params.tenantSlug ?? 'avatusbarbearia';
   return (
-    <TenantProvider slug={tenantSlug}>
+    <TenantProvider slug={slug}>
       <TenantGate>
         <div className="min-h-screen bg-background">
           <TenantHeader />
