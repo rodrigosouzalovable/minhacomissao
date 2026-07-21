@@ -259,6 +259,30 @@ export function EditPermissionsDialog({
               ))}
             </div>
 
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Tenants (áreas isoladas)</Label>
+              <p className="text-xs text-muted-foreground">
+                Marque para dar acesso à URL do tenant (ex: /avatusbarbearia). O usuário só verá dados Meta do tenant vinculado.
+              </p>
+              {(allTenants ?? []).map((t: any) => (
+                <div key={t.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`tenant-${t.id}`}
+                    checked={selectedTenants.includes(t.id)}
+                    onCheckedChange={() =>
+                      setSelectedTenants((prev) =>
+                        prev.includes(t.id) ? prev.filter((x) => x !== t.id) : [...prev, t.id]
+                      )
+                    }
+                  />
+                  <label htmlFor={`tenant-${t.id}`} className="text-sm cursor-pointer">
+                    {t.nome} <span className="text-xs text-muted-foreground">/{t.slug}</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+
+
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium">Visível no Ranking</Label>
               <Switch
