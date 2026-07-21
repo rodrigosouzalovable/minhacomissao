@@ -1,20 +1,21 @@
-## Editar cor das etiquetas direto no dropdown do filtro
+## Consolidar Wallace + parar criação automática + botão "Criar Etiqueta"
 
-Adicionar um lápis ao lado de cada etiqueta no menu de filtro (ícone de tag azul ao lado da busca no Inbox Meta), permitindo trocar cor e nome sem sair dali.
+### 1. Consolidar etiqueta duplicada do Wallace (SQL de dados)
+Mesmo dono das duas etiquetas (`ee649720…`), então basta remapear e apagar:
+- Repontar todos os vínculos em `meta_whatsapp_contato_etiquetas` de `Atendente: Wallace` (`c086cd6d…`) para `Atendente: Wallace Maciel` (`151276d0…`), tratando o UNIQUE (contato_id, etiqueta_id) — remove vínculo curto quando já existir o canônico, senão faz UPDATE.
+- Apagar a etiqueta `Atendente: Wallace`.
 
-### Alterações
+### 2. Impedir que o sistema crie etiquetas sozinho
+Hoje duas Edge Functions criam etiqueta `Atendente: <nome>` na hora se não existir. Passar as duas para modo "apenas aplicar se já existir":
 
-**`src/pages/InboxMeta.tsx`** (ou o componente do dropdown de filtro de etiquetas — a confirmar na hora do build)
-- Em cada linha do dropdown "Todas as conversas / Atendente: ...", adicionar um ícone `Pencil` à direita (só visível para admin/owner da etiqueta).
-- Clicar no lápis abre um mini-popover inline com:
-  - Campo de texto para renomear
-  - Paleta de 8 cores (mesma do diálogo atual)
-  - Botões Salvar / Cancelar
-- Clicar no lápis **não** seleciona o filtro (stopPropagation).
-- Após salvar, invalidar a query `meta-etiquetas` para refletir na lista e nos badges das conversas.
+- `supabase/functions/send-whatsapp-meta/index.ts` (linhas ~511-559): remover o bloco de `insert` em `meta_whatsapp_etiquetas`. Se a etiqueta canônica não existir, apenas logar e seguir sem aplicar.
+- `supabase/functions/meta-whatsapp-webhook/index.ts` (linhas ~521-549): idem — buscar a etiqueta existente do atendente; se não achar, não criar, só ignorar.
 
-### Regras
-- Etiquetas automáticas (`auto_atendente = true`) — permitir só trocar cor, nome fica bloqueado (mantém a trava já existente).
-- Não-admin não vê o lápis.
+Resultado: só usuários criam etiquetas pelo diálogo/dropdown. As etiquetas já existentes continuam sendo aplicadas automaticamente às conversas correspondentes.
 
-Sem migrações. Sem mudanças no diálogo `MetaEtiquetasDialog` existente (continua funcionando pelo botão `+`).
+### 3. Botão "Criar Etiqueta" no dropdown do filtro
+Em `src/pages/InboxMeta.tsx`, dentro do `PopoverContent` do filtro de etiquetas (linha ~753-804), adicionar, logo abaixo do último item da lista, um botão full-width `+ Criar Etiqueta` que:
+- fecha o popover (`setFiltroEtOpen(false)`)
+- abre o diálogo já existente `MetaEtiquetasDialog` (`setEtiquetasOpen(true)`) — que já permite qualquer usuário criar etiquetas com nome + cor.
+
+Nenhuma migração de schema. Sem mudanças nas regras de RLS.
