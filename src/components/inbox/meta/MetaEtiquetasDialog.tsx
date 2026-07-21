@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Trash2, Plus, Pencil, Check, X } from 'lucide-react';
+import { Trash2, Plus, Pencil, Check, X, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const CORES = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];

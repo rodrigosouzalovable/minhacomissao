@@ -1,35 +1,25 @@
 ## Objetivo
+Reorganizar o dialog "Etiquetas Meta" (acessado via clique direito → Etiquetas → Gerenciar etiquetas) para que todos os elementos caibam de forma limpa dentro do espaço, sem sobreposição do botão "Criar etiqueta" com a lista.
 
-Garantir que toda etiqueta "Atendente: X" aplicada automaticamente venha travada (cadeado — só admin remove), remover a Thailinny do rodízio de novas conversas, e formalizar quem recebe a etiqueta em cada cenário.
+## Alterações em `src/components/inbox/meta/MetaEtiquetasDialog.tsx`
 
-## Regras de atribuição (consolidadas)
+1. **Aumentar largura e estruturar em seções claras**
+   - Trocar `max-w-sm` por `max-w-md` para dar mais respiro horizontal.
+   - Dividir o conteúdo em duas seções visuais com separador (`<Separator />`):
+     - **Seção "Nova etiqueta"**: input de nome, paleta de cores e botão "Criar etiqueta".
+     - **Seção "Etiquetas existentes"**: título pequeno + contador (ex: "6 etiquetas") + lista rolável.
 
-Ordem de prioridade quando o contato ainda não tem etiqueta de atendente:
+2. **Corrigir a sobreposição visual**
+   - Envolver a lista em um container com fundo próprio (`rounded-md border bg-muted/30 p-2`) e `max-h-64 overflow-y-auto` para o scroll ficar contido dentro da seção.
+   - Adicionar `pr-1` no scroll para a scrollbar não colar nos ícones de ação.
 
-1. **Match por acordo** — telefone bate (últimos 8 dígitos) com algum acordo lançado → etiqueta do atendente que lançou o acordo.
-2. **Conversa iniciada por atendente (saída antes de qualquer resposta)** — quando `send-whatsapp-meta` envia com `atendente_nome`, aplica a etiqueta desse atendente.
-3. **Cliente respondeu / iniciou** e não caiu em 1 ou 2 → rodízio (round-robin por menor carga), **excluindo "Atendente: Thailinny Nolasco"**.
+3. **Ajustes finos de layout**
+   - Alinhar as bolinhas de cor em grid fixo (`grid grid-cols-8 gap-2`) em vez de flex-wrap, evitando quebra irregular.
+   - Padronizar altura dos itens da lista (`h-10`) e usar `text-sm font-medium` no nome.
+   - Ícones de editar/excluir agrupados com um leve divisor visual (`border-l pl-1 ml-1`).
+   - Adicionar rótulo "Cor" acima da paleta no formulário de criação e no modo edição.
 
-Em todos os três casos a etiqueta é gravada com `origem='auto_atendente'`, o que já aciona as policies RLS existentes (`meta_contato_etiquetas_owner_delete` / `shared_delete`) que bloqueiam a remoção para não-admins — o cadeado no UI vem daí.
+4. **Estado vazio**
+   - Quando não houver etiquetas, mostrar mensagem discreta "Nenhuma etiqueta criada ainda." dentro do container da lista, em vez de esconder a seção.
 
-## Mudanças técnicas
-
-### 1. `supabase/functions/send-whatsapp-meta/index.ts` (linhas ~511-536)
-
-- No insert em `meta_whatsapp_contato_etiquetas`, adicionar `origem: 'auto_atendente'` para travar a etiqueta do atendente iniciador.
-
-### 2. `supabase/functions/meta-whatsapp-webhook/index.ts` (linhas ~470-590)
-
-- No fallback de rodízio (linha ~575), trocar `origem: 'manual'` por `origem: 'auto_atendente'` (trava também as atribuições por rodízio).
-- Filtrar a lista `atendentes` para excluir toda etiqueta cujo nome (case-insensitive) seja `Atendente: Thailinny Nolasco` antes de calcular carga/rodízio. A etiqueta continua existindo (para conversas antigas), apenas não recebe novas atribuições automáticas.
-- O passo 1 (match por acordo) continua respeitando o atendente do acordo mesmo que seja a Thailinny — regra explícita do usuário: "se identificado, marca com o atendente que lançou o acordo".
-
-### 3. UI — cadeado visível
-
-Verificar rapidamente no componente que renderiza os chips de etiqueta no Inbox (`src/pages/InboxMeta.tsx` e/ou `MetaEtiquetasDialog`) se, para etiquetas com `origem='auto_atendente'`, o botão de remover já é escondido/travado com ícone de cadeado quando o usuário não é admin. Se não houver indicação visual, adicionar ícone de cadeado (`Lock`) ao lado do nome da etiqueta travada e desabilitar o "x" para não-admins. Sem alterações de negócio — puramente presentacional.
-
-## Fora de escopo
-
-- Não mexer em etiquetas já aplicadas anteriormente.
-- Não apagar nem renomear a etiqueta da Thailinny.
-- Não alterar policies RLS (já corretas).
+Nenhuma alteração de lógica/negócio — apenas apresentação.
