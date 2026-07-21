@@ -181,6 +181,14 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/ir/boleto" element={<RedirectBoleto />} />
+            {/* Tenant routes (multi-tenant) — MUST come before /:creditor to avoid clash */}
+            <Route path="/avatusbarbearia" element={<TenantLayout />}>
+              <Route index element={<Navigate to="envio-meta" replace />} />
+              <Route path="envio-meta" element={<ProtectedRoute><EnvioMeta /></ProtectedRoute>} />
+              <Route path="api-meta" element={<ProtectedRoute><ConfigurarMeta /></ProtectedRoute>} />
+              <Route path="inbox" element={<ProtectedRoute><InboxMeta /></ProtectedRoute>} />
+              <Route path="cobrancas" element={<ProtectedRoute><MetaBilling /></ProtectedRoute>} />
+            </Route>
             <Route path="/inbox" element={<PermissionRoute><WhatsAppInbox /></PermissionRoute>} />
             <Route path="/consultoria/*" element={<Consultoria />} />
             <Route path="/:creditor" element={<PortalConsulta />} />
