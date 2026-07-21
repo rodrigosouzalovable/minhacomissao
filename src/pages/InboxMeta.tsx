@@ -747,21 +747,59 @@ export default function InboxMeta() {
                     <Tag className="h-3.5 w-3.5" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-48 p-1" align="end">
+                <PopoverContent className="w-56 p-1" align="end">
                   <button
                     onClick={() => { setFiltroEtiqueta(null); setFiltroEtOpen(false); }}
                     className={cn('w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent', !filtroEtiqueta && 'bg-accent')}>
                     Todas as conversas
                   </button>
-                  {etiquetas.map(et => (
-                    <button key={et.id}
-                      onClick={() => { setFiltroEtiqueta(et.id); setFiltroEtOpen(false); }}
-                      className={cn('w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-accent', filtroEtiqueta === et.id && 'bg-accent')}>
-                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: et.cor }} />
-                      <span className="truncate">{et.nome}</span>
-                    </button>
-                  ))}
+                  {etiquetas.map(et => {
+                    const emEdicao = editEtId === et.id;
+                    if (emEdicao) {
+                      return (
+                        <div key={et.id} className="p-2 rounded bg-accent/50 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: editEtCor }} />
+                            <span className="text-xs truncate flex-1">{et.nome}</span>
+                          </div>
+                          <div className="flex gap-1 flex-wrap">
+                            {CORES_ETIQUETA.map(c => (
+                              <button key={c} onClick={() => setEditEtCor(c)}
+                                className="h-5 w-5 rounded-full border-2 transition-transform"
+                                style={{ backgroundColor: c, borderColor: editEtCor === c ? 'hsl(var(--foreground))' : 'transparent', transform: editEtCor === c ? 'scale(1.15)' : 'scale(1)' }} />
+                            ))}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button size="sm" className="h-6 flex-1 text-xs" onClick={async () => {
+                              const { error } = await supabase.from('meta_whatsapp_etiquetas').update({ cor: editEtCor }).eq('id', et.id);
+                              if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
+                              setEditEtId(null); fetchEtiquetas();
+                            }}>Salvar</Button>
+                            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setEditEtId(null)}>Cancelar</Button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={et.id}
+                        className={cn('w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-accent group', filtroEtiqueta === et.id && 'bg-accent')}>
+                        <button
+                          onClick={() => { setFiltroEtiqueta(et.id); setFiltroEtOpen(false); }}
+                          className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                          <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
+                          <span className="truncate">{et.nome}</span>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditEtId(et.id); setEditEtCor(et.cor); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-background rounded"
+                          title="Editar cor">
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </PopoverContent>
+
               </Popover>
             </div>
             {/* Tabs */}
