@@ -54,6 +54,39 @@ export function EditPermissionsDialog({
   const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
   const [podeMarcarPago, setPodeMarcarPago] = useState(false);
+  const [selectedTenants, setSelectedTenants] = useState<string[]>([]);
+
+  const { data: allTenants } = useQuery({
+    queryKey: ['tenants-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tenants' as any)
+        .select('id, slug, nome, ativo')
+        .order('nome');
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: open,
+  });
+
+  const { data: userTenantRows } = useQuery({
+    queryKey: ['tenant-members', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tenant_members' as any)
+        .select('tenant_id')
+        .eq('user_id', userId);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: open && !!userId,
+  });
+
+  useEffect(() => {
+    if (userTenantRows) {
+      setSelectedTenants(userTenantRows.map((r: any) => r.tenant_id));
+    }
+  }, [userTenantRows]);
 
   const { data: permissions } = useQuery({
     queryKey: ['user-permissions', userId],
