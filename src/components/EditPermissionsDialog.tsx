@@ -202,7 +202,7 @@ export function EditPermissionsDialog({
   });
 
   const toggleTab = (path: string) => {
-    if (path === '/admin/usuarios') return; // não pode ser desabilitada
+    if (isSelf && path === '/admin/usuarios') return; // proteção apenas para o próprio admin
     setSelectedTabs((prev) =>
       prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
     );
