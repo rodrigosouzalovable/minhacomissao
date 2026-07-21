@@ -127,13 +127,14 @@ export function EditPermissionsDialog({
   }, [permissions, open]);
 
     const { user: currentUser } = useAuth();
+    const isSelf = currentUser?.id === userId;
 
     const saveMutation = useMutation({
     mutationFn: async () => {
-        // Garante que /admin/usuarios sempre esteja em abas_permitidas
-        const abasFinal = selectedTabs.includes('/admin/usuarios')
-          ? selectedTabs
-          : [...selectedTabs, '/admin/usuarios'];
+        // Garante que /admin/usuarios sempre esteja em abas_permitidas APENAS para o próprio admin logado
+        const abasFinal = isSelf && !selectedTabs.includes('/admin/usuarios')
+          ? [...selectedTabs, '/admin/usuarios']
+          : selectedTabs;
         const payload = {
             abas_permitidas: abasFinal,
             credores,
