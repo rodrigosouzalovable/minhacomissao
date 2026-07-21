@@ -347,8 +347,8 @@ export default function InboxMeta() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contatos' }, () => {
         fetchContatos();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contato_etiquetas' }, () => {
-        fetchContatoEtiquetas();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contato_etiquetas' }, (payload) => {
+        applyEtiquetaEvent(payload);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_etiquetas' }, () => {
         fetchEtiquetas();
