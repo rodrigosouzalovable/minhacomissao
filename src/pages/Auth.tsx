@@ -19,9 +19,15 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
-  const { signIn } = useAuth();
+  const { signIn, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const initial = useInitialRoute();
+
+  // After successful login, when auth+permissions resolve, redirect appropriately.
+  if (user && !initial.loading) {
+    navigate(initial.path, { replace: true });
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
