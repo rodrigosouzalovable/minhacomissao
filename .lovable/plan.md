@@ -1,33 +1,42 @@
-## Problema confirmado
+## Causa raiz confirmada
 
-Anna Flávia abriu a conversa com Célio Raio Solidade, mas a etiqueta "Atendente: Anna Flavia Leite de Morais" não foi aplicada.
+A tabela `meta_whatsapp_contato_etiquetas` já tem **1.158 vínculos** — acima do limite padrão de 1000 linhas do PostgREST.
 
-Causa raiz (verificada via banco + código):
-- A etiqueta cadastrada é `Atendente: Anna Flavia Leite de Morais` (nome completo do perfil).
-- Em `src/pages/InboxMeta.tsx` linhas 144-151, o front resolve `atendenteNome` como apelido curto (`"Anna Flavia"`) via tabela `APELIDOS`, e envia esse curto no campo `atendente_nome` do `send-whatsapp-meta`.
-- Em `supabase/functions/send-whatsapp-meta/index.ts` linha 515-521, a busca da etiqueta usa `ilike` com o valor exato `Atendente: Anna Flavia`, sem curinga → não encontra a etiqueta completa e cai no ramo "etiqueta não existe, ignorando".
+Em `src/pages/InboxMeta.tsx`, a função `fetchContatoEtiquetas` faz:
 
-O mesmo padrão afeta Wallace, Yasmim, Fernanda: o apelido curto nunca casa com a etiqueta canônica (nome completo).
+```ts
+supabase.from('meta_whatsapp_contato_etiquetas')
+  .select('contato_id, etiqueta_id, origem');
+```
 
-Como o webhook (respostas do cliente) usa outra função e busca por prefixo `Atendente:%`, aquele fluxo já grava com cadeado; só o fluxo de **iniciar conversa** (nova conversa e reabrir com template) está falhando.
+Sem `range()`, sem ordenação e sem paginação. Como resultado:
 
-## Correção
+- Só voltam **1000 vínculos** de 1158. Cerca de 158 conversas perdem suas etiquetas aleatoriamente (a ordem que o Postgres devolve não é estável).
+- Toda vez que **qualquer** evento realtime chega na tabela (`INSERT/UPDATE/DELETE`), o handler chama `fetchContatoEtiquetas()` de novo, que sobrescreve o state inteiro com a versão truncada. É por isso que os cadeados/etiquetas "somem sozinhos" durante o uso e "voltam" quando a página é recarregada em outra ordem.
 
-1. `supabase/functions/send-whatsapp-meta/index.ts` (bloco linhas 511-536):
-   - Trocar a busca pontual por match por prefixo, priorizando o nome mais longo:
-     - `select id, nome from meta_whatsapp_etiquetas where user_id = inst.user_id and nome ilike 'Atendente: <primeiro-nome>%' order by length(nome) desc limit 1`.
-   - Mantém `origem: 'auto_atendente'` no vínculo → cadeado já funciona via RLS/UI existentes.
-   - Não cria etiqueta nova (regra: só usuário cria).
+O crescimento contínuo da tabela (auto-etiquetagem no webhook + envios) só piora o quadro.
 
-2. Aplicar a mesma correção nas funções que também iniciam/mandam mensagens do atendente e recebem `atendente_nome`:
-   - `supabase/functions/send-whatsapp-meta-text/index.ts` — adicionar bloco equivalente após persistir contato (hoje não etiqueta).
-   - `supabase/functions/send-whatsapp-meta-media/index.ts` — idem, se aceitar `atendente_nome` (verificar; se não aceitar, só atender ao request quando enviado via reabrir/nova conversa por template — que já cai no `send-whatsapp-meta`).
+## Correção proposta
 
-3. Sem alterações de UI necessárias: o cadeado é renderizado a partir de `origem='auto_atendente'` e da política de RLS existente em `meta_whatsapp_contato_etiquetas` (admin remove; demais usuários não).
+Todas as mudanças ficam confinadas a `src/pages/InboxMeta.tsx` — sem tocar em RLS, edge functions, ou schema.
+
+1. **Paginar `fetchContatoEtiquetas`**: buscar em blocos de 1000 (`range(0,999)`, `range(1000,1999)`, …) e concatenar até o bloco voltar vazio. Ordenar por `contato_id` para que a paginação seja estável. Só depois disso montar `map` e `bloq` e chamar os dois `setState` juntos, para nunca ficar num estado parcial.
+
+2. **Aplicar realtime incrementalmente** em vez de refazer o fetch inteiro. O canal já entrega `payload.eventType`, `payload.new`, `payload.old`; passamos a atualizar apenas o `contato_id` afetado no state:
+   - `INSERT` → adiciona `etiqueta_id` ao array do contato e, se `origem === 'auto_atendente'`, ao set de bloqueadas.
+   - `DELETE` → remove das duas estruturas.
+   - `UPDATE` → recalcula só a origem (só afeta `etiquetasBloqueadas`).
+
+   Isso elimina o "flash" onde o state é zerado e depois preenchido, que era a janela em que o usuário via as etiquetas sumindo.
+
+3. **Fallback de segurança**: manter um refetch completo apenas quando a página volta a ficar visível (evento `visibilitychange`), reaproveitando o listener que já existe. Assim, se um evento realtime for perdido durante um sleep de aba, a lista se reconstrói sozinha — mas nunca durante uso ativo.
+
+4. **Mesmo tratamento** para o carregamento inicial: enquanto a paginação estiver em andamento, não substituir o state anterior; só chamar `setContatoEtiquetas`/`setEtiquetasBloqueadas` uma vez com o resultado final consolidado.
+
+Nenhuma outra parte do fluxo (context menu, cadeado, filtros, envio) muda: elas continuam consumindo `contatoEtiquetas[contato.id]` e `etiquetasBloqueadas[contato.id]` como hoje.
 
 ## Verificação
 
-- Rodar novo envio de template pela aba "Nova conversa" com login da Anna Flávia → conferir que o contato criado recebe vínculo com a etiqueta `Atendente: Anna Flavia Leite de Morais` e origem `auto_atendente`.
-- Testar também com Wallace (etiqueta `Atendente: Wallace Maciel`) para garantir o match por prefixo.
-- Confirmar visualmente cadeado na UI e que usuário comum não consegue remover.
-- Não retroagir para conversas antigas — apenas novas conversas iniciadas passam a vir etiquetadas.
+- Após a correção, abrir o Inbox Meta e conferir no console que `Object.values(contatoEtiquetas).flat().length` ≥ 1158.
+- Adicionar/remover uma etiqueta em uma conversa: apenas aquela conversa deve mudar; nenhuma outra pode "piscar" perdendo etiquetas.
+- Deixar a página aberta por alguns minutos com tráfego real — as etiquetas não devem mais desaparecer sozinhas.
