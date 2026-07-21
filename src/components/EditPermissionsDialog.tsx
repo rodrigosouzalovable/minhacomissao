@@ -161,9 +161,30 @@ export function EditPermissionsDialog({
           } as any);
         if (error) throw error;
       }
+
+      // Sync tenant_members
+      const currentIds = new Set((userTenantRows ?? []).map((r: any) => r.tenant_id));
+      const selectedIds = new Set(selectedTenants);
+      const toAdd = [...selectedIds].filter((id) => !currentIds.has(id));
+      const toRemove = [...currentIds].filter((id) => !selectedIds.has(id));
+      if (toAdd.length > 0) {
+        const { error } = await supabase
+          .from('tenant_members' as any)
+          .insert(toAdd.map((tenant_id) => ({ tenant_id, user_id: userId, role_tenant: 'member' })));
+        if (error) throw error;
+      }
+      if (toRemove.length > 0) {
+        const { error } = await supabase
+          .from('tenant_members' as any)
+          .delete()
+          .eq('user_id', userId)
+          .in('tenant_id', toRemove);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['tenant-members'] });
       onOpenChange(false);
       toast({
         title: 'Permissões salvas',
