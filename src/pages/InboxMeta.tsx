@@ -199,11 +199,28 @@ export default function InboxMeta() {
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
   const fetchContatoEtiquetas = useCallback(async () => {
-    const { data } = await supabase.from('meta_whatsapp_contato_etiquetas')
-      .select('contato_id, etiqueta_id, origem');
+    // Paginação obrigatória — a tabela já passa de 1000 vínculos e o
+    // PostgREST trunca silenciosamente. Sem isso, etiquetas "somem" aleatoriamente.
+    const PAGE = 1000;
+    let offset = 0;
+    const all: Array<{ contato_id: string; etiqueta_id: string; origem: string | null }> = [];
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data, error } = await supabase
+        .from('meta_whatsapp_contato_etiquetas')
+        .select('contato_id, etiqueta_id, origem')
+        .order('contato_id', { ascending: true })
+        .range(offset, offset + PAGE - 1);
+      if (error) return; // preserva state anterior em caso de erro
+      const chunk = (data as any[]) ?? [];
+      all.push(...chunk);
+      if (chunk.length < PAGE) break;
+      offset += PAGE;
+      if (offset > 100000) break;
+    }
     const map: Record<string, string[]> = {};
     const bloq: Record<string, Set<string>> = {};
-    (data ?? []).forEach((r: any) => {
+    all.forEach((r) => {
       if (!map[r.contato_id]) map[r.contato_id] = [];
       map[r.contato_id].push(r.etiqueta_id);
       if (r.origem === 'auto_atendente') {
@@ -213,6 +230,49 @@ export default function InboxMeta() {
     });
     setContatoEtiquetas(map);
     setEtiquetasBloqueadas(bloq);
+  }, []);
+
+  // Aplica evento realtime incrementalmente para não zerar o state a cada mudança
+  const applyEtiquetaEvent = useCallback((payload: any) => {
+    const evt = payload?.eventType;
+    const row = payload?.new ?? payload?.old;
+    if (!row?.contato_id || !row?.etiqueta_id) return;
+    const cid: string = row.contato_id;
+    const eid: string = row.etiqueta_id;
+    const origem: string | null = payload?.new?.origem ?? null;
+
+    if (evt === 'INSERT') {
+      setContatoEtiquetas(prev => {
+        const arr = prev[cid] ? [...prev[cid]] : [];
+        if (!arr.includes(eid)) arr.push(eid);
+        return { ...prev, [cid]: arr };
+      });
+      if (origem === 'auto_atendente') {
+        setEtiquetasBloqueadas(prev => {
+          const s = new Set(prev[cid] ?? []);
+          s.add(eid);
+          return { ...prev, [cid]: s };
+        });
+      }
+    } else if (evt === 'DELETE') {
+      setContatoEtiquetas(prev => {
+        if (!prev[cid]) return prev;
+        return { ...prev, [cid]: prev[cid].filter(x => x !== eid) };
+      });
+      setEtiquetasBloqueadas(prev => {
+        if (!prev[cid]) return prev;
+        const s = new Set(prev[cid]);
+        s.delete(eid);
+        return { ...prev, [cid]: s };
+      });
+    } else if (evt === 'UPDATE') {
+      setEtiquetasBloqueadas(prev => {
+        const s = new Set(prev[cid] ?? []);
+        if (origem === 'auto_atendente') s.add(eid);
+        else s.delete(eid);
+        return { ...prev, [cid]: s };
+      });
+    }
   }, []);
 
   const fetchMsgRapidas = useCallback(async () => {
