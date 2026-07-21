@@ -1,36 +1,33 @@
-## Objetivo
+## Contexto
 
-Fazer com que o login `avatusbarbearia@gmail.com` (e qualquer usuário que não tenha o Dashboard liberado nas permissões) caia direto em `/admin/inbox-meta` ao entrar, em vez de ver a tela do Dashboard.
+Confirmei no banco: a etiqueta do Matheus (62 8419-7883) **continua existindo** — está com "Atendente: Wallace" (origem `manual`). O sumiço visual provavelmente é reflexo da bagunça de nomes: hoje existem "Atendente: Wallace" **e** "Atendente: Wallace Maciel" como etiquetas separadas, o mesmo para Anna Flavia, Fernanda, Rodrigo e Yasmim, além de "Enviar boleto" / "Enviar Boleto". Consolidar tudo na versão com nome completo já resolve a inconsistência.
 
-## Diagnóstico
+## Plano aprovado
 
-Hoje o fluxo pós-login sempre manda para `/dashboard`:
+### 1. Consolidar etiquetas duplicadas (dados)
+Rodar um script único de dados que:
+- Remapeia em `meta_whatsapp_contato_etiquetas` todos os vínculos das etiquetas curtas para a canônica (nome completo):
+  - `Atendente: Anna Flavia` → `Atendente: Anna Flavia Leite de Morais`
+  - `Atendente: Fernanda` e `Fernanda Estock` → `Atendente: Fernanda Estock de Oliveira Barros`
+  - `Atendente: RODRIGO` → `Atendente: RODRIGO RIBEIRO DE SOUZA`
+  - `Atendente: Wallace` → `Atendente: Wallace Maciel`
+  - `Atendente: Yasmim` → `Atendente: Yasmim Batista Sousa Silva`
+  - `Enviar boleto` → `Enviar Boleto`
+- Antes de cada `UPDATE`, deleta o vínculo "velho" quando já existe o "novo" no mesmo contato (evita violar o UNIQUE `contato_id + etiqueta_id`).
+- Depois do remapeamento, deleta as 7 etiquetas duplicadas de `meta_whatsapp_etiquetas` (ficam sem vínculos).
 
-- `src/pages/Auth.tsx` faz `navigate('/dashboard')` após o `signIn`.
-- `src/App.tsx` no `PublicRoute` faz `<Navigate to="/dashboard" replace />` quando o usuário já está logado e acessa `/auth` ou `/`.
-- A rota `/dashboard` renderiza `Dashboard.tsx` sem checar permissões — por isso mesmo o usuário `avatusbarbearia` (que só tem Inbox / API / Envio / Cobranças Meta liberados) enxerga o Dashboard.
+Resultado final: 7 etiquetas (Anna Flavia, Fernanda, Rodrigo, Wallace, Yasmim, Thailinny e "Enviar Boleto"), todas com nome completo.
 
-O usuário `avatusbarbearia` tem em `user_permissions.abas_permitidas` apenas as abas do módulo Meta e não tem `/dashboard` liberado.
+### 2. Botão de editar etiquetas (UI)
+Em `src/components/inbox/meta/MetaEtiquetasDialog.tsx`:
+- Adicionar ícone de lápis ao lado do lixo em cada linha.
+- Ao clicar: a linha vira `Input` de nome + paleta de cores + botões "Salvar" / "Cancelar".
+- `Salvar` chama `update` em `meta_whatsapp_etiquetas` (RLS já permite dono/admin). A exclusão de auto-etiquetas continua restrita a admin.
 
-## Mudanças (somente frontend/routing)
+## Detalhes técnicos
 
-1. **Novo helper `useInitialRoute`** (`src/hooks/useInitialRoute.tsx`):
-   - Retorna `{ path, loading }`.
-   - Se o usuário é admin ou gestor → `/dashboard`.
-   - Se `abasPermitidas` inclui `/dashboard` → `/dashboard`.
-   - Senão, prioriza nesta ordem se estiverem em `abasPermitidas`: `/admin/inbox-meta`, `/admin/envio-meta`, `/admin/configurar-meta`, `/admin/cobrancas-meta`, e por fim a primeira aba permitida.
-   - Fallback final: `/dashboard`.
+- Operação de dados via `supabase--insert` (UPDATE/DELETE em tabelas existentes).
+- Sem migração de schema, sem edge function nova, sem cron.
+- Sem impacto de custo Lovable Cloud.
 
-2. **`src/pages/Auth.tsx`**:
-   - Após `signIn`, em vez de `navigate('/dashboard')`, aguardar o helper e navegar para `path` calculado (com pequeno loading state já existente).
-
-3. **`src/App.tsx`**:
-   - Substituir os redirects fixos para `/dashboard` no `PublicRoute` por navegação dinâmica usando `useInitialRoute`.
-   - Adicionar guarda em `/dashboard`: se o usuário não é admin/gestor **e** `abasPermitidas` não inclui `/dashboard`, redireciona para o `path` do helper. Isso protege quem digitar `/dashboard` diretamente.
-   - Não alterar as demais rotas (`PermissionRoute`, `AdminRoute`, etc.).
-
-## Escopo
-
-- Nenhuma mudança de dados, RLS ou lógica de negócio.
-- Comportamento para admins e para usuários que já têm Dashboard liberado permanece idêntico.
-- Efeito prático: ao entrar com `avatusbarbearia@gmail.com`, o sistema abre direto em `/admin/inbox-meta`.
+Aprovando, executo os dois passos em sequência.
