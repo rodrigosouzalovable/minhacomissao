@@ -473,13 +473,20 @@ serve(async (req) => {
           // 2) Caso contrário, cai no rodízio (round-robin por menor carga).
           if (!isEcho && contatoIdFinal) {
             try {
-              const { data: atendentes } = await supabase
+              const { data: atendentesRaw } = await supabase
                 .from('meta_whatsapp_etiquetas')
                 .select('id, nome')
                 .eq('user_id', inst.user_id)
                 .ilike('nome', 'Atendente:%');
 
-              const atendenteIds = (atendentes || []).map((a: any) => a.id);
+              // Todas as etiquetas de atendente (usadas para checar se contato já tem uma)
+              const atendentes = atendentesRaw || [];
+              // Lista elegível para RODÍZIO — exclui Thailinny Nolasco (regra de negócio)
+              const atendentesRodizio = atendentes.filter((a: any) =>
+                String(a.nome).trim().toLowerCase() !== 'atendente: thailinny nolasco'
+              );
+              const atendenteIds = atendentes.map((a: any) => a.id);
+              const atendenteRodizioIds = atendentesRodizio.map((a: any) => a.id);
 
               // Já tem atendente atribuído?
               let jaTemAtendente = false;
@@ -549,20 +556,20 @@ serve(async (req) => {
                       atendente: atendenteAcordoNome,
                     });
                   }
-                } else if (atendenteIds.length > 0) {
-                  // ---- Fallback: rodízio por menor carga ----
+                } else if (atendenteRodizioIds.length > 0) {
+                  // ---- Fallback: rodízio por menor carga (exclui Thailinny) ----
                   const { data: vinculos } = await supabase
                     .from('meta_whatsapp_contato_etiquetas')
                     .select('etiqueta_id')
-                    .in('etiqueta_id', atendenteIds);
+                    .in('etiqueta_id', atendenteRodizioIds);
 
                   const carga: Record<string, number> = {};
-                  for (const id of atendenteIds) carga[id] = 0;
+                  for (const id of atendenteRodizioIds) carga[id] = 0;
                   for (const v of (vinculos || [])) {
                     const eid = (v as any).etiqueta_id;
                     if (eid in carga) carga[eid] += 1;
                   }
-                  const ordenados = [...(atendentes || [])].sort((a: any, b: any) => {
+                  const ordenados = [...atendentesRodizio].sort((a: any, b: any) => {
                     const ca = carga[a.id] ?? 0;
                     const cb = carga[b.id] ?? 0;
                     if (ca !== cb) return ca - cb;
@@ -572,7 +579,7 @@ serve(async (req) => {
                   if (escolhido) {
                     const { error: linkErr } = await supabase
                       .from('meta_whatsapp_contato_etiquetas')
-                      .insert({ contato_id: contatoIdFinal, etiqueta_id: escolhido.id, origem: 'manual' } as any);
+                      .insert({ contato_id: contatoIdFinal, etiqueta_id: escolhido.id, origem: 'auto_atendente' } as any);
                     if (linkErr) {
                       const dup = String(linkErr.message || '').toLowerCase().includes('duplicate') || linkErr.code === '23505';
                       if (!dup) console.error('[MetaWebhook] falha ao atribuir atendente (rodízio)', linkErr.message);
