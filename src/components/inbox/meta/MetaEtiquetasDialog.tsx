@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, Pencil, Check, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const CORES = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -23,6 +23,9 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
   const { toast } = useToast();
   const [nome, setNome] = useState('');
   const [cor, setCor] = useState(CORES[0]);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState('');
+  const [editCor, setEditCor] = useState(CORES[0]);
 
   const criar = async () => {
     if (!nome.trim() || !user) return;
@@ -42,6 +45,29 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
       });
       return;
     }
+    onChange();
+  };
+
+  const iniciarEdicao = (et: MetaEtiqueta) => {
+    setEditandoId(et.id);
+    setEditNome(et.nome);
+    setEditCor(et.cor);
+  };
+  const cancelarEdicao = () => {
+    setEditandoId(null);
+    setEditNome('');
+  };
+  const salvarEdicao = async (id: string) => {
+    if (!editNome.trim()) return;
+    const { error } = await supabase
+      .from('meta_whatsapp_etiquetas')
+      .update({ nome: editNome.trim(), cor: editCor })
+      .eq('id', id);
+    if (error) {
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    cancelarEdicao();
     onChange();
   };
 
@@ -65,18 +91,56 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
             </Button>
           </div>
           {etiquetas.length > 0 && (
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {etiquetas.map(et => (
-                <div key={et.id} className="flex items-center justify-between gap-2 p-2 rounded-md bg-accent/30">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-3.5 w-3.5 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
-                    <span className="text-sm truncate">{et.nome}</span>
+            <div className="space-y-1.5 max-h-72 overflow-y-auto">
+              {etiquetas.map(et => {
+                const emEdicao = editandoId === et.id;
+                if (emEdicao) {
+                  return (
+                    <div key={et.id} className="space-y-2 p-2 rounded-md bg-accent/50 border border-border">
+                      <Input
+                        value={editNome}
+                        onChange={e => setEditNome(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') salvarEdicao(et.id);
+                          if (e.key === 'Escape') cancelarEdicao();
+                        }}
+                        autoFocus
+                      />
+                      <div className="flex gap-1.5 flex-wrap">
+                        {CORES.map(c => (
+                          <button key={c} onClick={() => setEditCor(c)}
+                            className="h-5 w-5 rounded-full border-2 transition-transform"
+                            style={{ backgroundColor: c, borderColor: editCor === c ? 'hsl(var(--foreground))' : 'transparent', transform: editCor === c ? 'scale(1.2)' : 'scale(1)' }} />
+                        ))}
+                      </div>
+                      <div className="flex gap-1.5">
+                        <Button size="sm" className="flex-1 h-7" onClick={() => salvarEdicao(et.id)} disabled={!editNome.trim()}>
+                          <Check className="h-3.5 w-3.5 mr-1" /> Salvar
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7" onClick={cancelarEdicao}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={et.id} className="flex items-center justify-between gap-2 p-2 rounded-md bg-accent/30">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-3.5 w-3.5 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
+                      <span className="text-sm truncate">{et.nome}</span>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => iniciarEdicao(et)} title="Editar">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => excluir(et.id)} title="Excluir">
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => excluir(et.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
