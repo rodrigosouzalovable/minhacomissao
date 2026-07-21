@@ -58,7 +58,7 @@ export default function Auth() {
               : error.message,
         });
       } else {
-        navigate('/dashboard');
+        // Redirect handled by useEffect based on user permissions
       }
     } catch (err) {
       if (err instanceof z.ZodError) {
