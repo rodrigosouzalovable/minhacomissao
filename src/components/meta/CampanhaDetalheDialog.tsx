@@ -271,6 +271,11 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 ⚠️ {job.instancias_bloqueadas_run.length} instância(s) ignorada(s) automaticamente após falhas consecutivas. Envios continuam com as demais.
               </div>
             )}
+            {Array.isArray((job as any).instancias_bloqueadas) && (job as any).instancias_bloqueadas.length > 0 && (
+              <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+                ⛔ {(job as any).instancias_bloqueadas.length} instância(s) desativada(s) neste envio por template pausado pela Meta. Pendentes redistribuídos para as ativas.
+              </div>
+            )}
           </div>
 
           {/* Delivery resumo */}
