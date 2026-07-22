@@ -41,8 +41,9 @@ Deno.serve(async (req) => {
       .from('envio_meta_job').select('*').eq('id', jobId).maybeSingle();
     if (jobErr) throw jobErr;
     if (!job) {
-      return new Response(JSON.stringify({ success: false, error: 'job não encontrado' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      // Job pode ter sido limpo/excluído — responde 200 para não quebrar auto-retomada/UI.
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: 'job_nao_encontrado' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     if (job.user_id !== user.id) {
