@@ -62,6 +62,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     return () => clearInterval(t);
   }, [open, jobId, jobs, recarregarItensJob]);
 
+  const [reenviandoErros, setReenviandoErros] = useState(false);
+
   if (!job) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,7 +84,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const percent = Math.round((totalProcessado / Math.max(job.total, 1)) * 100);
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
-  const [reenviandoErros, setReenviandoErros] = useState(false);
+
 
   const reenviarErros = async () => {
     if (reenviandoErros) return;
