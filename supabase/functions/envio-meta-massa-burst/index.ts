@@ -141,6 +141,9 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
     if (resp?.transient) {
       return { id: item.id, kind: 'transient', retryMs: Number(resp?.retry_after_ms) || 5_000, erro: resp?.error || 'transitório' };
     }
+    if (resp?.template_paused) {
+      return { id: item.id, kind: 'template_paused', erro: resp?.error || 'Template pausado pela Meta' };
+    }
     if (resp?.instance_restricted) {
       return { id: item.id, kind: 'restricted', erro: resp?.error || 'instância restringida' };
     }
