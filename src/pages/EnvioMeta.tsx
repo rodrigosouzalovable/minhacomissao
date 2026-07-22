@@ -1340,7 +1340,35 @@ export default function EnvioMeta() {
                   })}
                 </div>
                 <div className="text-[11px] text-amber-700/80 dark:text-amber-300/80">
-                  Cada instância dispara em paralelo, sem delay, todos os seus contatos ao mesmo tempo.
+                  Cada instância dispara em paralelo respeitando o limite abaixo (mensagens por segundo).
+                </div>
+                <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-amber-300/60 dark:border-amber-800/50">
+                  <div className="min-w-[9rem]">
+                    <Label className="text-xs">Msgs / segundo (por instância)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={msgsPorSegundo}
+                      onChange={(e) => setMsgsPorSegundo(e.target.value)}
+                      className="h-8"
+                    />
+                    <div className="text-[10px] text-amber-700/70 dark:text-amber-300/70 mt-0.5">
+                      Recomendado: 5-15. Muito acima → "Rate limit exceeded".
+                    </div>
+                  </div>
+                  {(() => {
+                    const mps = Math.max(1, Math.min(50, Number(msgsPorSegundo) || 10));
+                    const segundos = Math.ceil(maxQtd / mps);
+                    const min = Math.floor(segundos / 60);
+                    const s = segundos % 60;
+                    return (
+                      <div className="text-xs text-amber-800 dark:text-amber-200">
+                        <div className="font-semibold">Tempo estimado por instância</div>
+                        <div className="tabular-nums">~ {min}m {s}s ({mps} msg/s × {maxQtd.toLocaleString("pt-BR")} msgs)</div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             );
