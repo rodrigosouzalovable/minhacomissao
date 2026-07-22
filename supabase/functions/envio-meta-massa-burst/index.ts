@@ -147,7 +147,17 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
     if (resp?.instance_restricted) {
       return { id: item.id, kind: 'restricted', erro: resp?.error || 'instância restringida' };
     }
+    // Fallback: detecta template pausado (#132015) mesmo quando o send-whatsapp-meta
+    // ainda não retornou a flag template_paused (versão antiga em cache do runtime).
+    const rawErr = String(resp?.error || '');
+    const isPausedFallback =
+      rawErr.includes('#132015') ||
+      /template is (?:temporarily )?unavailable|is paused|paused due to low quality/i.test(rawErr);
+    if (isPausedFallback) {
+      return { id: item.id, kind: 'template_paused', erro: 'O template está pausado pela Meta. Escolha outro template ou aguarde a liberação.' };
+    }
     return { id: item.id, kind: 'error', erro: resp?.error || 'falha' };
+
   } catch (e) {
     return { id: item.id, kind: 'transient', retryMs: 3_000, erro: e instanceof Error ? e.message : String(e) };
   }
