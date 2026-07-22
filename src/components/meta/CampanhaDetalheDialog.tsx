@@ -333,7 +333,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           </div>
 
           {/* Enviados */}
-          <details className="rounded-md border bg-card" open={detalhes.enviados.length > 0 && detalhes.enviados.length <= 20}>
+          <details className="rounded-md border bg-card" open={openEnviados} onToggle={(e) => setOpenEnviados((e.currentTarget as HTMLDetailsElement).open)}>
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
               <span className="text-green-700 dark:text-green-400">
                 Enviados <span className="text-muted-foreground font-normal">({detalhes.enviados.length})</span>
