@@ -1348,24 +1348,29 @@ export default function EnvioMeta() {
                     <Input
                       type="number"
                       min={1}
-                      max={5}
+                      max={60}
                       value={msgsPorSegundo}
-                      onChange={(e) => setMsgsPorSegundo(String(Math.max(1, Math.min(5, Number(e.target.value) || 1))))}
+                      onChange={(e) => setMsgsPorSegundo(String(Math.max(1, Math.min(60, Number(e.target.value) || 1))))}
                       className="h-8"
                     />
                     <div className="text-[10px] text-amber-700/70 dark:text-amber-300/70 mt-0.5">
-                      Recomendado: 1. Máximo permitido: 5.
+                      Sugerido: 30 (par de números GREEN). Teto: 60 (limite Meta ~80/s).
                     </div>
                   </div>
                   {(() => {
-                    const mps = Math.max(1, Math.min(5, Number(msgsPorSegundo) || 1));
-                    const segundos = Math.ceil(maxQtd / mps);
+                    const mps = Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1));
+                    const k = instanciaIds.length;
+                    const throughputTotal = mps * k;
+                    const segundos = Math.max(1, Math.ceil(total / throughputTotal));
                     const min = Math.floor(segundos / 60);
                     const s = segundos % 60;
                     return (
                       <div className="text-xs text-amber-800 dark:text-amber-200">
-                        <div className="font-semibold">Tempo estimado por instância</div>
-                        <div className="tabular-nums">~ {min}m {s}s ({mps} msg/s × {maxQtd.toLocaleString("pt-BR")} msgs)</div>
+                        <div className="font-semibold">⚡ Velocidade estimada</div>
+                        <div className="tabular-nums">
+                          {k} × {mps} msg/s = <span className="font-bold">{throughputTotal} msg/s</span>
+                        </div>
+                        <div className="tabular-nums">{total.toLocaleString("pt-BR")} msgs → ~ {min}m {s}s</div>
                       </div>
                     );
                   })()}
