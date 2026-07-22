@@ -148,6 +148,7 @@ Deno.serve(async (req) => {
         proximo_em: new Date().toISOString(),
         nome_campanha: nomeCampanha,
         modo_rajada: modoRajada,
+        msgs_por_segundo: msgsPorSegundo,
       })
       .select('id')
       .single();
