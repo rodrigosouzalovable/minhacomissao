@@ -129,6 +129,7 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
         instancia_id: item.instancia_id,
         cliente,
         user_id: job.user_id,
+        ignorar_pausa_qualidade: true,
       }),
     }).then((r) => r.json());
 
@@ -176,7 +177,7 @@ Deno.serve(async (req) => {
     // Verifica se a instância está pausada por rate limit (definido pelo send-whatsapp-meta)
     const { data: inst } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, rate_limit_ate, estado_pool, pausa_automatica_ate')
+      .select('id, rate_limit_ate, estado_pool, pausa_automatica_ate, pausa_automatica_motivo')
       .eq('id', instanciaId)
       .maybeSingle();
     const agora = Date.now();
@@ -187,9 +188,15 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (inst?.estado_pool === 'restrita' || (inst?.pausa_automatica_ate && new Date(inst.pausa_automatica_ate).getTime() > agora)) {
-      // Instância restringida — não tenta novamente automaticamente
-      return new Response(JSON.stringify({ success: true, instancia_pausada: true }), {
+    // No modo RAJADA, IGNORAMOS pausas por qualidade (quality=YELLOW/RED). Só encerramos
+    // o worker quando a Meta de fato restringir/banir a instância (motivo status=...).
+    const motivoPausa = String(inst?.pausa_automatica_motivo || '').toLowerCase();
+    const pausaPorStatus = motivoPausa.startsWith('status=');
+    const restrita = inst?.estado_pool === 'restrita';
+    const pausaAtiva = !!inst?.pausa_automatica_ate && new Date(inst.pausa_automatica_ate).getTime() > agora;
+    if (restrita || (pausaAtiva && pausaPorStatus)) {
+      // Instância restringida pela Meta — não tenta novamente automaticamente
+      return new Response(JSON.stringify({ success: true, instancia_pausada: true, motivo: motivoPausa }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
