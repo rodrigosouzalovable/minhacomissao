@@ -310,6 +310,15 @@ Deno.serve(async (req) => {
           paradaPorRateLimit = true; // encerra este worker
           esperaRateLimitMs = 60_000;
           break;
+        } else if (r.kind === 'template_paused') {
+          // Template pausado pela Meta nesta instância — desativa este worker
+          // e redistribui os pendentes para outras instâncias ativas do job.
+          await supabase.from('envio_meta_job_item').update({
+            status: 'pendente', erro: r.erro,
+          }).eq('id', it.id);
+          templatePausado = true;
+          templatePausadoErro = r.erro;
+          break;
         } else {
           await supabase.from('envio_meta_job_item').update({
             status: 'erro', erro: r.erro, processado_em: nowIso,
