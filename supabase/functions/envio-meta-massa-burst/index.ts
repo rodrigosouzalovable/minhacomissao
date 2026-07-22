@@ -471,15 +471,20 @@ Deno.serve(async (req) => {
         grupos[target].push(idsRest[i]);
       }
       for (const [target, itemIds] of Object.entries(grupos)) {
-        if (itemIds.length === 0) continue;
-        const CHUNK = 500;
-        for (let i = 0; i < itemIds.length; i += CHUNK) {
-          await supabase.from('envio_meta_job_item').update({ instancia_id: target })
-            .in('id', itemIds.slice(i, i + CHUNK));
+        if (itemIds.length > 0) {
+          const CHUNK = 500;
+          for (let i = 0; i < itemIds.length; i += CHUNK) {
+            await supabase.from('envio_meta_job_item').update({ instancia_id: target })
+              .in('id', itemIds.slice(i, i + CHUNK));
+          }
         }
-        // Dispara worker para a instância que recebeu
-        await selfInvoke(jobId, target, 0);
       }
+      // Garante que TODAS as instâncias ativas estão com worker rodando
+      // (mesmo as que já haviam encerrado o próprio loop por falta de trabalho).
+      for (const inst of ativas) {
+        await selfInvoke(jobId, inst, 0);
+      }
+
 
       return new Response(JSON.stringify({
         success: true,
