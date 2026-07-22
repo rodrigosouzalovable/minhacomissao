@@ -1296,8 +1296,8 @@ export default function EnvioMeta() {
               <div className="text-sm">
                 <div className="font-semibold text-red-700 dark:text-red-300">Modo Rajada controlada — envio paralelo com limite por instância</div>
                 <div className="text-xs text-red-700/80 dark:text-red-300/80">
-                  Usa workers paralelos, mas respeita o campo de mensagens por segundo e remove instâncias RED/YELLOW automaticamente.
-                  Para grandes volumes, use 1 msg/s por instância.
+                  Workers paralelos por instância com token-bucket real (Promise.allSettled). Ajuste msgs/segundo
+                  abaixo — o sistema reduz automaticamente ao receber rate limit da Meta (#130429). Teto seguro: 60/s por número.
                 </div>
               </div>
             </label>
