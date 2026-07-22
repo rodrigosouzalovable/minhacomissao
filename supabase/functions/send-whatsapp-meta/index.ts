@@ -576,6 +576,38 @@ Deno.serve(async (req) => {
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'erro';
+
+      // ===== Rate limit da Meta: NÃO conta como erro fatal, NÃO restringe instância =====
+      const rlMatch = msg.match(/^__RATE_LIMIT__:(\d+):(.*)$/s);
+      if (rlMatch) {
+        const retryAfterMs = Number(rlMatch[1]);
+        const humanMsg = rlMatch[2];
+        // Marca a instância como pausada por rate limit até o tempo indicado
+        try {
+          await supabase.from('meta_whatsapp_instances').update({
+            rate_limit_ate: new Date(Date.now() + retryAfterMs).toISOString(),
+          }).eq('id', inst.id);
+        } catch { /* ignora */ }
+        return new Response(JSON.stringify({
+          success: false,
+          rate_limited: true,
+          retry_after_ms: retryAfterMs,
+          error: humanMsg,
+          instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const trMatch = msg.match(/^__TRANSIENT__:(\d+):(.*)$/s);
+      if (trMatch) {
+        return new Response(JSON.stringify({
+          success: false,
+          transient: true,
+          retry_after_ms: Number(trMatch[1]),
+          error: trMatch[2],
+          instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       await supabase.from('meta_whatsapp_envios_log').insert({
         instancia_id: inst.id,
         user_id: user_id || inst.user_id,
@@ -588,7 +620,7 @@ Deno.serve(async (req) => {
       // Detecta bloqueio/restrição/banimento síncrono da Meta
       const restrictedCodes = [
         131031, 131049, 368, 130429,
-        131042, 131050, 131056,
+        131042, 131050,
         133000, 133004, 133005, 133006, 133008, 133009, 133010, 133016,
         190, 10, 200, 803,
       ];
