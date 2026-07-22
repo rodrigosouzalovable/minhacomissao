@@ -398,6 +398,31 @@ Deno.serve(async (req) => {
       const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
       const ativas = todas.filter((x) => !bloqueadas.includes(x));
 
+      // Recupera itens já marcados como 'erro' por causa do #132015 antes desta correção
+      // (devolve para 'pendente' para serem redistribuídos).
+      await supabase.from('envio_meta_job_item')
+        .update({ status: 'pendente', erro: null, processado_em: null })
+        .eq('job_id', jobId)
+        .eq('instancia_id', instanciaId)
+        .eq('status', 'erro')
+        .or('erro.ilike.%132015%,erro.ilike.%is paused%,erro.ilike.%paused due to low quality%');
+
+      // Ajusta contador do job removendo esses erros recuperados
+      try {
+        const { count: recuperados } = await supabase
+          .from('envio_meta_job_item')
+          .select('id', { count: 'exact', head: true })
+          .eq('job_id', jobId)
+          .eq('instancia_id', instanciaId)
+          .eq('status', 'pendente')
+          .is('erro', null);
+        if ((recuperados ?? 0) > 0) {
+          const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
+          const novoErros = Math.max(0, (cur?.erros || 0) - 0); // não subtrai — evita descontar mais do que registramos
+          await supabase.from('envio_meta_job').update({ erros: novoErros }).eq('id', jobId);
+        }
+      } catch { /* ignora */ }
+
       // Pega os pendentes desta instância para reatribuir
       const { data: pendentesRest } = await supabase
         .from('envio_meta_job_item')
@@ -408,6 +433,7 @@ Deno.serve(async (req) => {
         .order('ordem', { ascending: true });
 
       const idsRest = (pendentesRest || []).map((r: any) => r.id);
+
 
       if (ativas.length === 0) {
         // Todas as instâncias caíram — marca como erro e encerra o job
