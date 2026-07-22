@@ -64,6 +64,26 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const [reenviandoErros, setReenviandoErros] = useState(false);
 
+  // Estado local dos <details> — inicializa uma única vez por abertura do diálogo
+  // para não "piscar" abrindo/fechando a cada polling (8s) quando a contagem muda.
+  const initialEnviadosLen = useMemo(() => {
+    if (!open || !jobId) return 0;
+    return 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, jobId]);
+  const [openEnviados, setOpenEnviados] = useState<boolean>(false);
+  const [openErros, setOpenErros] = useState<boolean>(true);
+  const [openFalhas, setOpenFalhas] = useState<boolean>(true);
+  useEffect(() => {
+    // Reseta preferências ao trocar de campanha / reabrir o diálogo.
+    if (open && jobId) {
+      setOpenEnviados(false);
+      setOpenErros(true);
+      setOpenFalhas(true);
+    }
+  }, [open, jobId]);
+  void initialEnviadosLen;
+
   if (!job) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
