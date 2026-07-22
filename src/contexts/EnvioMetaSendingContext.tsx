@@ -292,7 +292,17 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "envio_meta_job", filter: `user_id=eq.${uid}` },
-        () => { carregarJobs(); }
+        (payload: any) => {
+          carregarJobs();
+          // Se os contadores do job avançaram e temos itens em cache, refetch para atualizar a lista.
+          const row = payload.new || payload.old;
+          const jobId = row?.id;
+          if (jobId && itensByJob.has(jobId)) {
+            const cached = itensByJob.get(jobId) || [];
+            const backend = (row?.enviados || 0) + (row?.erros || 0);
+            if (backend !== cached.length) carregarItens(jobId);
+          }
+        }
       )
       .on(
         "postgres_changes",
