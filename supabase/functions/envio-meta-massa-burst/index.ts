@@ -336,7 +336,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (paradaPorRateLimit || atingiuTempo || !(await jobEstaRodando(jobId))) {
+      if (paradaPorRateLimit || atingiuTempo || templatePausado || !(await jobEstaRodando(jobId))) {
         await supabase.from('envio_meta_job_item')
           .update({ status: 'pendente' })
           .eq('job_id', jobId)
