@@ -267,6 +267,34 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     await Promise.all([carregarItens(jobId), carregarLogs(jobId, j?.iniciado_em || null)]);
   }, [jobs, carregarItens, carregarLogs]);
 
+  // Refresh parcial: atualiza APENAS contadores/current do job (não mexe em status/status_motivo).
+  // Usado pelo botão "Atualizar" no diálogo — nunca faz o botão "Reativar" aparecer sozinho.
+  const refreshCountersJob = useCallback(async (jobId: string) => {
+    const { data } = await (supabase as any)
+      .from("envio_meta_job")
+      .select("enviados, erros, total, atual_telefone, atual_instancia, proximo_em")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (!data) return;
+    setJobs((prev) => prev.map((j) => {
+      if (j.id !== jobId) return j;
+      const enviados = data.enviados || 0;
+      const erros = data.erros || 0;
+      const total = data.total || j.total;
+      return {
+        ...j,
+        enviados,
+        erros,
+        total,
+        atual_telefone: data.atual_telefone ?? j.atual_telefone,
+        atual_instancia: data.atual_instancia ?? j.atual_instancia,
+        proximo_em: data.proximo_em ?? j.proximo_em,
+        restantes: Math.max(0, total - enviados - erros),
+        // status e status_motivo preservados de propósito
+      };
+    }));
+  }, []);
+
   useEffect(() => { carregarJobs(); }, [carregarJobs]);
 
   // Ao carregar jobs, pré-carrega itens+logs para os jobs ativos e o último iniciado
