@@ -245,10 +245,39 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
       headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
       return { waId: data?.messages?.[0]?.id || null, formatUsed: format === 'none' ? (preferred || 'positional') : format };
     }
+
+    // ===== Detecção de RATE LIMIT / 502 temporário =====
+    // A Meta devolve 429/502 com "Rate limit exceeded" e às vezes um "Retry after Xms" no body,
+    // ou header Retry-After (em segundos). Extraímos o tempo para pausa automática.
+    const msgTxt = String(data?.error?.message || '');
+    const codeTxt = String(data?.error?.code || '');
+    const traceTxt = String(data?.error?.error_data?.details || data?.error?.fbtrace_id || '');
+    const combined = `${msgTxt} ${traceTxt}`;
+    const retryAfterHeader = res.headers.get('retry-after') || res.headers.get('Retry-After');
+    let retryMs = 0;
+    const mBody = combined.match(/retry\s*after\s*(\d+)\s*ms/i);
+    const mBodySec = combined.match(/retry\s*after\s*(\d+)\s*s(?:ec)?/i);
+    if (mBody) retryMs = Number(mBody[1]);
+    else if (mBodySec) retryMs = Number(mBodySec[1]) * 1000;
+    else if (retryAfterHeader) retryMs = Number(retryAfterHeader) * 1000;
+    const isRateLimit =
+      res.status === 429 ||
+      (res.status === 502 && /rate\s*limit/i.test(combined)) ||
+      /rate\s*limit\s*exceeded/i.test(combined) ||
+      codeTxt === '80007' || codeTxt === '131056' || codeTxt === '4';
+    if (isRateLimit) {
+      const ms = retryMs > 0 ? Math.min(retryMs, 5 * 60_000) : 30_000; // fallback 30s, teto 5min
+      throw new Error(`__RATE_LIMIT__:${ms}:(#${codeTxt || res.status}) ${msgTxt || 'Rate limit'}`);
+    }
+    // 502/503/504 sem indicação de rate limit → transitório da Meta
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      throw new Error(`__TRANSIENT__:5000:(#${res.status}) ${msgTxt || 'Bad Gateway'}`);
+    }
+
     lastErr = data?.error;
     const code = data?.error?.code;
     const details = data?.error?.error_data?.details || '';
