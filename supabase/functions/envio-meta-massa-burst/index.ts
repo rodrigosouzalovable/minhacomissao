@@ -374,6 +374,21 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // Antes de tentar encerrar: se ainda existem itens 'processando' desta instância (janela de corrida
+    // com outro worker), reagende curto ao invés de finalizar. Evita marcar concluido/erro cedo demais.
+    const { count: processando } = await supabase
+      .from('envio_meta_job_item')
+      .select('id', { count: 'exact', head: true })
+      .eq('job_id', jobId)
+      .eq('instancia_id', instanciaId)
+      .eq('status', 'processando');
+    if ((processando ?? 0) > 0) {
+      if (await jobEstaRodando(jobId)) await selfInvoke(jobId, instanciaId, 2000);
+      return new Response(JSON.stringify({ success: true, processados: processadosNesteWorker, restantes: 0, aguardando_processando: processando }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     await tentarEncerrarJob(jobId);
     return new Response(JSON.stringify({ success: true, processados: processadosNesteWorker, restantes: 0 }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

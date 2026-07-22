@@ -1,34 +1,40 @@
-## Problema
+## Objetivo
 
-No diálogo de detalhes da campanha, o cabeçalho mostra corretamente **1882/2302 processados** (esse número vem da linha do job, atualizada pelo backend), mas a lista **"Enviados"** e os cards de entrega (Aceito/Entregue/Lida/Falhou/Aguardando) ficam travados em **1000**, sem atualizar em tempo real. Só quando o usuário clica em "Atualizar" é que os números se aproximam, mas ainda assim param em 1000.
+O botão **Atualizar** do diálogo da campanha deve apenas refrescar contadores e listas — nunca dar a sensação de que "travou o envio" ou fez o botão **Reativar** reaparecer.
 
-Duas causas somadas:
+## Diagnóstico (não confirmado 100%)
 
-1. **Cap de 1000 do PostgREST**. A query em `carregarItens` (`EnvioMetaSendingContext.tsx`, linha ~201) usa `.limit(2000)`, mas o Supabase tem `max_rows=1000` na Data API — o `.limit(2000)` é ignorado. Por isso a lista/contadores derivados nunca passam de 1000, mesmo depois de "Atualizar".
+Lendo o código:
 
-2. **Polling só roda enquanto o job está `rodando`/`pausado`**. No print, o job já está com badge **"Erro"** (o worker encerrou porque a instância foi bloqueada). Como o status não é rodando/pausado, o `setInterval` (linha 61) nem é armado — e o realtime de `envio_meta_job_item` também não dispara mais eventos novos (o backend parou de escrever). Resultado: os itens que **ainda existem** no banco não são carregados até o usuário clicar em "Atualizar" manualmente.
+- `refreshStatus()` e `recarregarItensJob()` são leituras puras (SELECTs). Elas não conseguem parar o worker `envio-meta-massa-burst`, que roda no servidor e se auto-encadeia enquanto `job.status = 'rodando'`.
+- O worker se auto-termina quando: (a) atinge `restantes = 0` num snapshot (mesmo que existam itens em `processando`), (b) recebe erro permanente, ou (c) alguma trava marca `status = 'erro'`.
+- Quando isso acontece, `Atualizar` só está *revelando* um estado que já mudou no servidor — mas para o usuário parece que foi o clique que parou.
 
-Além disso, o realtime que existe hoje (`event: "*"` em `envio_meta_job_item`) é frágil: para uma campanha com 2 mil linhas mudando de status a cada segundo, os eventos podem ser descartados pelo canal, o que reforça a percepção de "só atualiza se eu apertar o botão".
+Como o diagnóstico "quem realmente parou o worker" não está 100% confirmado, o plano ataca os dois lados: garantir que **Atualizar seja inócuo** e que **o envio se auto-retome** se detectar que parou com pendências.
 
-## Correção
+## Mudanças
 
-Editar `src/contexts/EnvioMetaSendingContext.tsx`:
+### 1. `src/components/meta/CampanhaDetalheDialog.tsx` — Atualizar silencioso
+- Novo handler `atualizarSemInterferir()` no botão Atualizar.
+- Ele chama apenas `recarregarItensJob(job.id)` (que refaz `carregarItens` + `carregarLogs`) e um novo `refreshCountersJob(job.id)` (ver item 2).
+- **Não** chama mais `refreshStatus()` (que recarrega todos os jobs e substitui a linha inteira do job, podendo trocar `status` de `rodando` → `erro`/`concluido` na UI).
 
-### 1. Paginar `carregarItens` (elimina o teto de 1000)
-Trocar a query única `.limit(2000)` por um loop que busca em páginas de 1000 usando `.range(from, to)` até acabar. Filtro/ordenação continuam iguais (`job_id`, `status in ('enviado','erro')`, `processado_em desc`). Aplicar teto de segurança em ~10.000 linhas por job para não travar o navegador em campanhas gigantes.
+### 2. `src/contexts/EnvioMetaSendingContext.tsx` — refresh parcial
+- Adicionar `refreshCountersJob(jobId)`:
+  - Lê da `envio_meta_job` só: `enviados, erros, total, atual_telefone, atual_instancia, proximo_em`, e conta `pendente+processando` para derivar `restantes`.
+  - Atualiza o job em `jobs[]` fazendo *merge* — preserva `status` e `status_motivo` já em memória.
+- Assim, clicar Atualizar nunca faz o botão Reativar aparecer sozinho; o botão só aparece quando o Realtime traz uma mudança real de `status`.
 
-### 2. Reagir a mudanças nos contadores do job
-Sempre que o realtime em `envio_meta_job` atualizar um job específico e os contadores `enviados+erros` do banco divergirem do que está em cache (`itensByJob.get(jobId).length`), disparar `carregarItens(jobId)` automaticamente. Isso garante refresh em tempo real mesmo depois que o job muda de `rodando` → `concluido`/`erro`, e evita depender só do stream de `envio_meta_job_item` (que é ruidoso).
+### 3. `src/contexts/EnvioMetaSendingContext.tsx` — auto-retomada
+- Watcher em `useEffect([jobs])`: para cada job com `status ∈ {erro, cancelado, concluido}` **mas** `restantes > 0` e que **não foi cancelado manualmente pelo usuário** (novo `Set` `manuallyCanceledRef`), disparar `reativarJob(jobId)` uma vez (guardar em `Set` `autoResumedRef` para não ficar em loop caso a Meta rejeite de novo imediatamente — usar cooldown de 60s por job).
+- Em `cancelarJob`, marcar `manuallyCanceledRef.add(jobId)` para nunca auto-retomar cancelamento voluntário.
+- Em `reativarJob` (manual), limpar `manuallyCanceledRef` e `autoResumedRef` para permitir novo ciclo.
 
-### 3. Polling do diálogo — remover a condição de status
-Em `src/components/meta/CampanhaDetalheDialog.tsx`, o `setInterval` (linhas 57–63) fica ativo sempre que o diálogo estiver aberto **e** os contadores do job ainda estiverem divergindo do cache local. Isso cobre também o caso do job em erro que ainda tem itens novos para sincronizar. Assim que os números baterem, o polling para sozinho e não consome nada.
+### 4. Robustez do worker (bônus, mesmo arquivo `supabase/functions/envio-meta-massa-burst/index.ts`)
+- Antes de considerar `restantes = 0` e chamar `tentarEncerrarJob`, contar também itens em `processando` da **mesma instância** — se houver, agendar `selfInvoke` curto (2s) em vez de tentar encerrar. Isso evita que uma janela de corrida (itens reservados mas ainda não gravados como enviados) encerre o job antes da hora.
 
-## Efeito esperado
+## Como o usuário perceberá
 
-- O contador "Enviados (N)", os cards Aceito/Entregue/Lida/Falhou/Aguardando e a lista rolável passam a bater com o "1882/2302 processados" em tempo real, sem clicar em "Atualizar".
-- Funciona também para campanhas grandes (>1000 itens) e para jobs que já mudaram para `erro`/`concluido`/`cancelado`.
-- Zero custo adicional: o polling extra só existe enquanto há divergência e o diálogo está aberto.
-
-## Fora do escopo
-
-Nenhuma mudança em edge functions, no motor de disparo ou no schema do banco. Apenas leitura de dados no cliente.
+- Clicar **Atualizar** apenas atualiza os cards de "Aceito/Entregue/Lida/Falhou/Aguardando", listas de Enviados/Erros e o contador de processados. O status atual (Enviando/Erro) não muda por causa do clique.
+- Se o worker parar sozinho por rate limit / erro transiente e ainda houver pendentes, o sistema retoma sozinho em segundos, sem exigir clique manual em Reativar.
+- Se **você** clicar em Cancelar, o sistema respeita e não auto-retoma.

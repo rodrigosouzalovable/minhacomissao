@@ -110,6 +110,7 @@ type Ctx = {
   limparJob: (jobId: string) => Promise<void>;
   ensureItensLoaded: (jobId: string) => Promise<void>;
   recarregarItensJob: (jobId: string) => Promise<void>;
+  refreshCountersJob: (jobId: string) => Promise<void>;
 };
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
@@ -185,6 +186,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const [lastStartedId, setLastStartedId] = useState<string | null>(null);
   const onAfterRef = useRef<Record<string, (() => void) | undefined>>({});
   const seenConcludedRef = useRef<Set<string>>(new Set());
+  const manuallyCanceledRef = useRef<Set<string>>(new Set());
+  const autoResumeAtRef = useRef<Map<string, number>>(new Map()); // jobId -> last auto-resume ts
 
   const carregarJobs = useCallback(async () => {
     if (!uid) { setJobs([]); setItensByJob(new Map()); setLogByJob(new Map()); return; }
@@ -265,6 +268,34 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     const j = jobs.find((x) => x.id === jobId);
     await Promise.all([carregarItens(jobId), carregarLogs(jobId, j?.iniciado_em || null)]);
   }, [jobs, carregarItens, carregarLogs]);
+
+  // Refresh parcial: atualiza APENAS contadores/current do job (não mexe em status/status_motivo).
+  // Usado pelo botão "Atualizar" no diálogo — nunca faz o botão "Reativar" aparecer sozinho.
+  const refreshCountersJob = useCallback(async (jobId: string) => {
+    const { data } = await (supabase as any)
+      .from("envio_meta_job")
+      .select("enviados, erros, total, atual_telefone, atual_instancia, proximo_em")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (!data) return;
+    setJobs((prev) => prev.map((j) => {
+      if (j.id !== jobId) return j;
+      const enviados = data.enviados || 0;
+      const erros = data.erros || 0;
+      const total = data.total || j.total;
+      return {
+        ...j,
+        enviados,
+        erros,
+        total,
+        atual_telefone: data.atual_telefone ?? j.atual_telefone,
+        atual_instancia: data.atual_instancia ?? j.atual_instancia,
+        proximo_em: data.proximo_em ?? j.proximo_em,
+        restantes: Math.max(0, total - enviados - erros),
+        // status e status_motivo preservados de propósito
+      };
+    }));
+  }, []);
 
   useEffect(() => { carregarJobs(); }, [carregarJobs]);
 
@@ -481,6 +512,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
+      manuallyCanceledRef.current.add(jobId);
+      autoResumeAtRef.current.delete(jobId);
       toast.warning("Campanha cancelada");
       carregarJobs();
     } catch (e: any) {
@@ -488,29 +521,57 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
   }, [carregarJobs]);
 
-  const reativarJob = useCallback(async (jobId: string) => {
-    const j = jobs.find((x) => x.id === jobId);
-    if (!j) return;
-    if (!["cancelado", "erro", "concluido"].includes(j.status)) {
-      toast.error("Só é possível reativar campanhas finalizadas");
-      return;
-    }
-    if (j.restantes <= 0) {
-      toast.info("Não há contatos pendentes para reativar");
-      return;
-    }
+  // Reativação de baixo nível — usada por reativarJob (manual) e pelo auto-resume interno.
+  const reativarJobInterno = useCallback(async (jobId: string): Promise<boolean> => {
     try {
       const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
         body: { job_id: jobId, acao: "reativar" },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
+      return true;
+    } catch (e: any) {
+      console.warn("[envio-meta] reativar interno falhou:", e?.message || e);
+      return false;
+    }
+  }, []);
+
+  const reativarJob = useCallback(async (jobId: string) => {
+    const j = jobs.find((x) => x.id === jobId);
+    if (!j) return;
+    if (j.restantes <= 0) {
+      toast.info("Não há contatos pendentes para reativar");
+      return;
+    }
+    manuallyCanceledRef.current.delete(jobId);
+    autoResumeAtRef.current.delete(jobId);
+    const ok = await reativarJobInterno(jobId);
+    if (ok) {
       toast.success(`Campanha reativada — ${j.restantes} contatos restantes`);
       carregarJobs();
-    } catch (e: any) {
-      toast.error("Erro ao reativar: " + (e?.message || e));
+    } else {
+      toast.error("Erro ao reativar");
     }
-  }, [jobs, carregarJobs]);
+  }, [jobs, carregarJobs, reativarJobInterno]);
+
+  // Auto-retomada: se um job caiu para erro/concluido/cancelado mas ainda tem restantes
+  // e o usuário NÃO cancelou manualmente, reativa sozinho (cooldown de 60s por job).
+  useEffect(() => {
+    const now = Date.now();
+    for (const j of jobs) {
+      if (!["erro", "concluido", "cancelado"].includes(j.status)) continue;
+      if (j.restantes <= 0) continue;
+      if (manuallyCanceledRef.current.has(j.id)) continue;
+      const last = autoResumeAtRef.current.get(j.id) || 0;
+      if (now - last < 60_000) continue;
+      autoResumeAtRef.current.set(j.id, now);
+      reativarJobInterno(j.id).then((ok) => {
+        if (ok) carregarJobs();
+      });
+    }
+  }, [jobs, reativarJobInterno, carregarJobs]);
+
+
 
   const limparJob = useCallback(async (jobId: string) => {
     const j = jobs.find((x) => x.id === jobId);
@@ -577,7 +638,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, refreshCountersJob,
       }}
     >
       {children}
