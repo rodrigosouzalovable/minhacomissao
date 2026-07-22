@@ -71,12 +71,14 @@ Deno.serve(async (req) => {
     }
 
     // Ajusta contadores do job: decrementa erros pelos reenfileirados e reabre.
-    await supabase.from('envio_meta_job').update({
+    const jobPatch: Record<string, unknown> = {
       status: 'rodando',
       erros: Math.max(0, (job.erros || 0) - totalReenfileirados),
       concluido_em: null,
       proximo_em: new Date().toISOString(),
-    }).eq('id', jobId);
+    };
+    if (job.modo_rajada) jobPatch.msgs_por_segundo = Math.min(1, Number(job.msgs_por_segundo) || 1);
+    await supabase.from('envio_meta_job').update(jobPatch).eq('id', jobId);
 
     // Re-dispara worker apropriado
     if (job.modo_rajada) {
