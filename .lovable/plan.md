@@ -1,43 +1,34 @@
 ## Problema
 
-No modo Rajada, quando uma instância cai para qualidade **YELLOW** ou **RED**, o sistema `check-meta-instance-health` está pausando ela automaticamente (`estado_pool='pausado'` + `pausa_automatica_ate`). Isso faz:
+No diálogo de detalhes da campanha, o cabeçalho mostra corretamente **1882/2302 processados** (esse número vem da linha do job, atualizada pelo backend), mas a lista **"Enviados"** e os cards de entrega (Aceito/Entregue/Lida/Falhou/Aguardando) ficam travados em **1000**, sem atualizar em tempo real. Só quando o usuário clica em "Atualizar" é que os números se aproximam, mas ainda assim param em 1000.
 
-1. `envio-meta-massa-burst` detecta `estado_pool='restrita'` OU `pausa_automatica_ate > agora` e encerra o worker sem re-agendar → os 418 itens ficam parados.
-2. Os poucos itens que já estavam "processando" ao mudar de estado batem no `send-whatsapp-meta`, que devolve "Instância não está ativa no pool (estado: pausado)" e marca como erro.
-3. `envio-meta-massa-iniciar` também filtra RED/YELLOW já no início do rajada.
+Duas causas somadas:
 
-O usuário quer que, **no modo Rajada**, YELLOW/RED **não** interrompam o envio — só interrompam de fato quando a Meta banir/restringir a instância (status `FLAGGED`, `RESTRICTED`, `BANNED` ou erro `#131031/#368/"restricted"/"banned"` retornado no envio real).
+1. **Cap de 1000 do PostgREST**. A query em `carregarItens` (`EnvioMetaSendingContext.tsx`, linha ~201) usa `.limit(2000)`, mas o Supabase tem `max_rows=1000` na Data API — o `.limit(2000)` é ignorado. Por isso a lista/contadores derivados nunca passam de 1000, mesmo depois de "Atualizar".
+
+2. **Polling só roda enquanto o job está `rodando`/`pausado`**. No print, o job já está com badge **"Erro"** (o worker encerrou porque a instância foi bloqueada). Como o status não é rodando/pausado, o `setInterval` (linha 61) nem é armado — e o realtime de `envio_meta_job_item` também não dispara mais eventos novos (o backend parou de escrever). Resultado: os itens que **ainda existem** no banco não são carregados até o usuário clicar em "Atualizar" manualmente.
+
+Além disso, o realtime que existe hoje (`event: "*"` em `envio_meta_job_item`) é frágil: para uma campanha com 2 mil linhas mudando de status a cada segundo, os eventos podem ser descartados pelo canal, o que reforça a percepção de "só atualiza se eu apertar o botão".
 
 ## Correção
 
-### 1. `supabase/functions/envio-meta-massa-iniciar/index.ts`
-- Remover o filtro que exclui instâncias RED/YELLOW **quando `modoRajada=true`**. Manter apenas para o modo serial.
-- No rajada, só bloquear instâncias com `estado_pool='restrita'` cuja pausa tenha motivo diferente de qualidade (status Meta banido/restrito).
+Editar `src/contexts/EnvioMetaSendingContext.tsx`:
 
-### 2. `supabase/functions/envio-meta-massa-burst/index.ts`
-- Trocar o gate de "instância pausada" (linhas 176–195). Só encerrar o worker se:
-  - `estado_pool='restrita'`, **ou**
-  - `pausa_automatica_motivo` começar com `status=` (ex. `status=BANNED`, `status=FLAGGED`, `status=RESTRICTED`).
-- Ignorar completamente pausas com motivo `quality=YELLOW`, `quality=RED` ou `quality=RED em irmão`.
-- Continuar respeitando `rate_limit_ate` (esse é da Meta, não da qualidade).
+### 1. Paginar `carregarItens` (elimina o teto de 1000)
+Trocar a query única `.limit(2000)` por um loop que busca em páginas de 1000 usando `.range(from, to)` até acabar. Filtro/ordenação continuam iguais (`job_id`, `status in ('enviado','erro')`, `processado_em desc`). Aplicar teto de segurança em ~10.000 linhas por job para não travar o navegador em campanhas gigantes.
 
-### 3. `supabase/functions/send-whatsapp-meta/index.ts`
-- Aceitar novo campo opcional no body: `ignorar_pausa_qualidade: true` (só o burst envia).
-- Quando `ignorar_pausa_qualidade=true`: pular o bloqueio de `estado_pool !== 'ativo'` e de `pausa_automatica_ate` **se o motivo da pausa começar com `quality=`**. Se for `status=BANNED/FLAGGED/RESTRICTED`, continuar bloqueando (retornando `instance_restricted:true` para o burst encerrar aquela instância).
-- `envio-meta-massa-burst` passa `ignorar_pausa_qualidade: true` no payload do fetch para `send-whatsapp-meta`.
+### 2. Reagir a mudanças nos contadores do job
+Sempre que o realtime em `envio_meta_job` atualizar um job específico e os contadores `enviados+erros` do banco divergirem do que está em cache (`itensByJob.get(jobId).length`), disparar `carregarItens(jobId)` automaticamente. Isso garante refresh em tempo real mesmo depois que o job muda de `rodando` → `concluido`/`erro`, e evita depender só do stream de `envio_meta_job_item` (que é ruidoso).
 
-### 4. `envio-meta-massa-retry-erros` (já OK)
-Já devolve itens de `erro → pendente`, zera tentativas, reabre o job e re-dispara o burst por instância. O usuário disse que ele mesmo vai reativar depois — está coerente. Nenhuma mudança necessária aqui.
-
-### 5. Frontend (`CampanhaDetalheDialog.tsx`) — nenhuma mudança
-O botão "Tentar novamente" já chama `retry-erros` + `recarregarItensJob`, e a lista de erros se limpa quando os itens saem do status `erro`. Não mexer.
+### 3. Polling do diálogo — remover a condição de status
+Em `src/components/meta/CampanhaDetalheDialog.tsx`, o `setInterval` (linhas 57–63) fica ativo sempre que o diálogo estiver aberto **e** os contadores do job ainda estiverem divergindo do cache local. Isso cobre também o caso do job em erro que ainda tem itens novos para sincronizar. Assim que os números baterem, o polling para sozinho e não consome nada.
 
 ## Efeito esperado
 
-- No próximo envio rajada com uma instância caindo para RED/YELLOW: o disparo **continua** por essa instância até a Meta de fato responder com bloqueio (restricted/banned) — aí a instância é retirada e as outras seguem.
-- Se o WhatsApp for banido no meio, o worker daquela instância encerra sozinho (via `instance_restricted:true`); as demais continuam normalmente.
-- Ao clicar "Tentar novamente" nos 3 erros da lista: eles voltam para pendente, a lista de erros esvazia e o job volta a `rodando` — o usuário reativa e o envio continua.
+- O contador "Enviados (N)", os cards Aceito/Entregue/Lida/Falhou/Aguardando e a lista rolável passam a bater com o "1882/2302 processados" em tempo real, sem clicar em "Atualizar".
+- Funciona também para campanhas grandes (>1000 itens) e para jobs que já mudaram para `erro`/`concluido`/`cancelado`.
+- Zero custo adicional: o polling extra só existe enquanto há divergência e o diálogo está aberto.
 
 ## Fora do escopo
 
-Sem mudanças em `check-meta-instance-health` (a auto-pausa por qualidade continua existindo para o modo serial/lembretes, onde faz sentido preservar a saúde). Sem mudanças em `envio-meta-massa-tick`.
+Nenhuma mudança em edge functions, no motor de disparo ou no schema do banco. Apenas leitura de dados no cliente.
