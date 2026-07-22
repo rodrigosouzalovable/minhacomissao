@@ -399,7 +399,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
           {/* Falharam na entrega */}
           {falhasEntrega.length > 0 && (
-            <details className="rounded-md border bg-card" open>
+            <details className="rounded-md border bg-card" open={openFalhas} onToggle={(e) => setOpenFalhas((e.currentTarget as HTMLDetailsElement).open)}>
               <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
                 <span className="text-red-700 dark:text-red-400">
                   Falharam na entrega <span className="text-muted-foreground font-normal">({falhasEntrega.length})</span>
