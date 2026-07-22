@@ -315,7 +315,37 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, lastStartedId]);
 
-  // Realtime
+  // Refs mirrando estado + funções — evita recriar o canal Realtime a cada render
+  // (o que causava avalanche de eventos e a UI "piscando" no diálogo Campanhas).
+  const itensByJobRef = useRef(itensByJob);
+  useEffect(() => { itensByJobRef.current = itensByJob; }, [itensByJob]);
+  const carregarJobsRef = useRef(carregarJobs);
+  useEffect(() => { carregarJobsRef.current = carregarJobs; }, [carregarJobs]);
+  const carregarItensRef = useRef(carregarItens);
+  useEffect(() => { carregarItensRef.current = carregarItens; }, [carregarItens]);
+
+  // Debounces por jobId — coalescem bursts de eventos numa única refetch.
+  const debounceItensRef = useRef<Map<string, number>>(new Map());
+  const debounceJobsRef = useRef<number | null>(null);
+  const scheduleCarregarItens = useCallback((jobId: string, delay = 2000) => {
+    const map = debounceItensRef.current;
+    const prev = map.get(jobId);
+    if (prev) window.clearTimeout(prev);
+    const id = window.setTimeout(() => {
+      map.delete(jobId);
+      carregarItensRef.current?.(jobId);
+    }, delay);
+    map.set(jobId, id);
+  }, []);
+  const scheduleCarregarJobs = useCallback((delay = 800) => {
+    if (debounceJobsRef.current) window.clearTimeout(debounceJobsRef.current);
+    debounceJobsRef.current = window.setTimeout(() => {
+      debounceJobsRef.current = null;
+      carregarJobsRef.current?.();
+    }, delay);
+  }, []);
+
+  // Realtime — subscription única por usuário (sem depender de estados que mudam a cada refetch)
   useEffect(() => {
     if (!uid) return;
     const channel = supabase
@@ -324,14 +354,13 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         "postgres_changes",
         { event: "*", schema: "public", table: "envio_meta_job", filter: `user_id=eq.${uid}` },
         (payload: any) => {
-          carregarJobs();
-          // Se os contadores do job avançaram e temos itens em cache, refetch para atualizar a lista.
+          scheduleCarregarJobs(800);
           const row = payload.new || payload.old;
           const jobId = row?.id;
-          if (jobId && itensByJob.has(jobId)) {
-            const cached = itensByJob.get(jobId) || [];
+          if (jobId && itensByJobRef.current.has(jobId)) {
+            const cached = itensByJobRef.current.get(jobId) || [];
             const backend = (row?.enviados || 0) + (row?.erros || 0);
-            if (backend !== cached.length) carregarItens(jobId);
+            if (backend !== cached.length) scheduleCarregarItens(jobId, 2000);
           }
         }
       )
@@ -340,7 +369,10 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         { event: "*", schema: "public", table: "envio_meta_job_item" },
         (payload: any) => {
           const jobId = (payload.new || payload.old)?.job_id;
-          if (jobId && itensByJob.has(jobId)) carregarItens(jobId);
+          // Ignora eventos de jobs que o usuário nem tem aberto/carregado.
+          if (jobId && itensByJobRef.current.has(jobId)) {
+            scheduleCarregarItens(jobId, 2500);
+          }
         }
       )
       .on(
@@ -353,7 +385,6 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           const st = mapStatusMeta(row.status);
           setLogByJob((prev) => {
             const n = new Map(prev);
-            // aplica a todos jobs em cache (o telefone pertence ao user, então tudo bem)
             for (const [jid, m] of n.entries()) {
               const cur = m.get(key);
               if (!cur || rankDelivery(st) > rankDelivery(cur.status)) {
@@ -367,8 +398,15 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [uid, carregarJobs, carregarItens, itensByJob]);
+    return () => {
+      supabase.removeChannel(channel);
+      // limpa timers pendentes
+      for (const id of debounceItensRef.current.values()) window.clearTimeout(id);
+      debounceItensRef.current.clear();
+      if (debounceJobsRef.current) { window.clearTimeout(debounceJobsRef.current); debounceJobsRef.current = null; }
+    };
+  }, [uid, scheduleCarregarItens, scheduleCarregarJobs]);
+
 
   // Ticker para atualizar "próximo em Xs"
   useEffect(() => {

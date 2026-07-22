@@ -147,7 +147,17 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
     if (resp?.instance_restricted) {
       return { id: item.id, kind: 'restricted', erro: resp?.error || 'instância restringida' };
     }
+    // Fallback: detecta template pausado (#132015) mesmo quando o send-whatsapp-meta
+    // ainda não retornou a flag template_paused (versão antiga em cache do runtime).
+    const rawErr = String(resp?.error || '');
+    const isPausedFallback =
+      rawErr.includes('#132015') ||
+      /template is (?:temporarily )?unavailable|is paused|paused due to low quality/i.test(rawErr);
+    if (isPausedFallback) {
+      return { id: item.id, kind: 'template_paused', erro: 'O template está pausado pela Meta. Escolha outro template ou aguarde a liberação.' };
+    }
     return { id: item.id, kind: 'error', erro: resp?.error || 'falha' };
+
   } catch (e) {
     return { id: item.id, kind: 'transient', retryMs: 3_000, erro: e instanceof Error ? e.message : String(e) };
   }
@@ -388,6 +398,31 @@ Deno.serve(async (req) => {
       const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
       const ativas = todas.filter((x) => !bloqueadas.includes(x));
 
+      // Recupera itens já marcados como 'erro' por causa do #132015 antes desta correção
+      // (devolve para 'pendente' para serem redistribuídos).
+      await supabase.from('envio_meta_job_item')
+        .update({ status: 'pendente', erro: null, processado_em: null })
+        .eq('job_id', jobId)
+        .eq('instancia_id', instanciaId)
+        .eq('status', 'erro')
+        .or('erro.ilike.%132015%,erro.ilike.%is paused%,erro.ilike.%paused due to low quality%');
+
+      // Ajusta contador do job removendo esses erros recuperados
+      try {
+        const { count: recuperados } = await supabase
+          .from('envio_meta_job_item')
+          .select('id', { count: 'exact', head: true })
+          .eq('job_id', jobId)
+          .eq('instancia_id', instanciaId)
+          .eq('status', 'pendente')
+          .is('erro', null);
+        if ((recuperados ?? 0) > 0) {
+          const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
+          const novoErros = Math.max(0, (cur?.erros || 0) - 0); // não subtrai — evita descontar mais do que registramos
+          await supabase.from('envio_meta_job').update({ erros: novoErros }).eq('id', jobId);
+        }
+      } catch { /* ignora */ }
+
       // Pega os pendentes desta instância para reatribuir
       const { data: pendentesRest } = await supabase
         .from('envio_meta_job_item')
@@ -398,6 +433,7 @@ Deno.serve(async (req) => {
         .order('ordem', { ascending: true });
 
       const idsRest = (pendentesRest || []).map((r: any) => r.id);
+
 
       if (ativas.length === 0) {
         // Todas as instâncias caíram — marca como erro e encerra o job
@@ -435,15 +471,20 @@ Deno.serve(async (req) => {
         grupos[target].push(idsRest[i]);
       }
       for (const [target, itemIds] of Object.entries(grupos)) {
-        if (itemIds.length === 0) continue;
-        const CHUNK = 500;
-        for (let i = 0; i < itemIds.length; i += CHUNK) {
-          await supabase.from('envio_meta_job_item').update({ instancia_id: target })
-            .in('id', itemIds.slice(i, i + CHUNK));
+        if (itemIds.length > 0) {
+          const CHUNK = 500;
+          for (let i = 0; i < itemIds.length; i += CHUNK) {
+            await supabase.from('envio_meta_job_item').update({ instancia_id: target })
+              .in('id', itemIds.slice(i, i + CHUNK));
+          }
         }
-        // Dispara worker para a instância que recebeu
-        await selfInvoke(jobId, target, 0);
       }
+      // Garante que TODAS as instâncias ativas estão com worker rodando
+      // (mesmo as que já haviam encerrado o próprio loop por falta de trabalho).
+      for (const inst of ativas) {
+        await selfInvoke(jobId, inst, 0);
+      }
+
 
       return new Response(JSON.stringify({
         success: true,

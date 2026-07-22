@@ -120,6 +120,39 @@ Deno.serve(async (req) => {
         .in('status', ['erro', 'falha']);
       await devolverProcessandoParaFila();
 
+      // Se houver instâncias bloqueadas neste job (template pausado), reatribui os
+      // pendentes delas para as instâncias ativas (round-robin) antes de disparar.
+      const bloqueadas: string[] = Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [];
+      const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+      const ativas = todas.filter((x) => !bloqueadas.includes(x));
+      if (bloqueadas.length > 0 && ativas.length > 0) {
+        const { data: pendBlock } = await supabase
+          .from('envio_meta_job_item')
+          .select('id')
+          .eq('job_id', jobId)
+          .eq('status', 'pendente')
+          .in('instancia_id', bloqueadas)
+          .order('ordem', { ascending: true });
+        const ids = (pendBlock || []).map((r: any) => r.id);
+        if (ids.length > 0) {
+          const CHUNK = 500;
+          for (let i = 0; i < ids.length; i++) {
+            const target = ativas[i % ativas.length];
+            // agrupa por target para reduzir queries
+          }
+          const grupos: Record<string, string[]> = {};
+          for (const inst of ativas) grupos[inst] = [];
+          for (let i = 0; i < ids.length; i++) grupos[ativas[i % ativas.length]].push(ids[i]);
+          for (const [target, itemIds] of Object.entries(grupos)) {
+            for (let i = 0; i < itemIds.length; i += CHUNK) {
+              await supabase.from('envio_meta_job_item')
+                .update({ instancia_id: target })
+                .in('id', itemIds.slice(i, i + CHUNK));
+            }
+          }
+        }
+      }
+
       const { count: pendentes } = await supabase
         .from('envio_meta_job_item')
         .select('id', { count: 'exact', head: true })
@@ -137,6 +170,7 @@ Deno.serve(async (req) => {
         proximo_em: new Date().toISOString(),
       }).eq('id', jobId);
       dispararWorker(job);
+
     } else if (acao === 'limpar') {
       // Só remove jobs concluídos/cancelados
       if (!['concluido', 'cancelado', 'erro'].includes(job.status)) {
