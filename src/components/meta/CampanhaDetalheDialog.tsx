@@ -54,7 +54,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     }
   }, [open, jobId, ensureItensLoaded, recarregarItensJob]);
 
-  // Polling leve enquanto o diálogo está aberto — para sozinho quando cache = backend.
+  // Polling leve enquanto o diálogo está aberto — só refetch quando cache diverge do backend.
   useEffect(() => {
     if (!open || !jobId) return;
     const t = setInterval(() => {
@@ -63,11 +63,11 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       const backend = (j.enviados || 0) + (j.erros || 0);
       const det = getDetalhesJob(jobId);
       const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0);
-      const running = j.status === "rodando" || j.status === "pausado";
-      if (running || backend !== cached) recarregarItensJob(jobId);
-    }, 4000);
+      if (backend !== cached) recarregarItensJob(jobId);
+    }, 10000);
     return () => clearInterval(t);
   }, [open, jobId, jobs, recarregarItensJob, getDetalhesJob]);
+
 
   const [reenviandoErros, setReenviandoErros] = useState(false);
 
