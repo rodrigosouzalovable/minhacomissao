@@ -240,15 +240,19 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
               </span>
             </div>
             <Progress value={percent} />
-            {progresso?.atualTelefone && (
-              <div className="text-xs text-muted-foreground">
-                Último: <code>{progresso.atualTelefone}</code>
-                {progresso.atualInstancia && <> via <strong>{progresso.atualInstancia}</strong></>}
-              </div>
-            )}
-            {progresso && progresso.proximoEmSeg > 0 && !pausado && (
-              <div className="text-xs text-muted-foreground">Próximo envio em {progresso.proximoEmSeg}s</div>
-            )}
+            <div className="text-xs text-muted-foreground min-h-[16px]">
+              {progresso?.atualTelefone ? (
+                <>
+                  Último: <code>{progresso.atualTelefone}</code>
+                  {progresso.atualInstancia && <> via <strong>{progresso.atualInstancia}</strong></>}
+                </>
+              ) : null}
+            </div>
+            <div className="text-xs text-muted-foreground min-h-[16px]">
+              {progresso && progresso.proximoEmSeg > 0 && !pausado
+                ? `Próximo envio em ${progresso.proximoEmSeg}s`
+                : null}
+            </div>
             {resultado?.statusMotivo && resultado.enviados === 0 && (
               <div className="text-xs text-amber-600">Nenhuma mensagem foi enviada: {resultado.statusMotivo}</div>
             )}
