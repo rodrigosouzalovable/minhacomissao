@@ -40,6 +40,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     limparJob,
     ensureItensLoaded,
     recarregarItensJob,
+    refreshCountersJob,
     refreshStatus,
   } = useEnvioMetaSending();
 
