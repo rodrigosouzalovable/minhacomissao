@@ -112,8 +112,21 @@ Deno.serve(async (req) => {
     // Contagem hoje (fallback: enviados_hoje da própria row)
     const candidates: any[] = [];
     for (const inst of insts) {
-      if (inst.estado_pool && inst.estado_pool !== 'ativo') continue;
-      if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) continue;
+      const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
+      const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
+      const pausaPorStatus = motivoPausaLower.startsWith('status=');
+
+      if (inst.estado_pool && inst.estado_pool !== 'ativo') {
+        // Em modo rajada, ignora pausa por qualidade (só bloqueia restrita ou pausa por status).
+        const bloqueia = inst.estado_pool === 'restrita' || !(ignoraQualidade && pausaPorQualidade);
+        if (bloqueia) continue;
+      }
+      if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
+        const bloqueia = !(ignoraQualidade && pausaPorQualidade);
+        if (bloqueia) continue;
+        // pausa por status sempre bloqueia
+        if (pausaPorStatus) continue;
+      }
 
       // Reset diário (telemetria — não bloqueia envio)
       let uso = inst.enviados_hoje || 0;
@@ -135,14 +148,16 @@ Deno.serve(async (req) => {
         const ratio = mo.inbound / Math.max(1, mo.enviadas) * 100;
         if (ratio < ratioMinPct) tetoQualidade = 0.3; // sem inbound = teto 30% da cota
       }
-      const q = pesoQualidade(inst.saude_quality);
+      const q = pesoQualidade(inst.saude_quality, ignoraQualidade);
       if (q === 0) continue;
       if (String(inst.saude_quality || '').toUpperCase() === 'YELLOW') tetoQualidade = Math.min(tetoQualidade, 0.3);
+      if (String(inst.saude_quality || '').toUpperCase() === 'RED' && ignoraQualidade) tetoQualidade = Math.min(tetoQualidade, 0.3);
       const tierEfetivo = inst.messaging_limit_manual || inst.saude_tier;
       // Score prioriza chips com menos uso hoje para distribuição no round-robin.
       const score = q * pesoTier(tierEfetivo) * fatorIdade(diasAtivo) * tetoQualidade * (1 / (1 + uso));
       candidates.push({ inst, score, fase, cota: 999999, uso, diasAtivo });
     }
+
 
     if (!candidates.length) {
       return new Response(JSON.stringify({ success: false, blocked: 'sem_disponivel', error: 'Nenhuma instância disponível (cota, pausa ou qualidade)' }), {
