@@ -481,16 +481,16 @@ Deno.serve(async (req) => {
       } else if (jobId && jobs.length === 1) {
         const r = await rodarJobLoop(jobs[0]);
         processadosTotal += r.processados;
-        if (r.selfInvokeNeeded) selfInvoke(r.jobId);
+        if (r.selfInvokeNeeded) await selfInvoke(r.jobId);
       } else {
         for (const job of jobs) {
           try {
             const r = await processarItem(job);
             if ('advanced' in r && r.advanced) {
               processadosTotal++;
-              selfInvoke(job.id);
+              await selfInvoke(job.id);
             } else if (!('done' in r && r.done) && !('stop' in r && r.stop)) {
-              if ((r.waitMs ?? 0) <= 30_000) selfInvoke(job.id);
+              if ((r.waitMs ?? 0) <= 30_000) await selfInvoke(job.id);
             }
           } catch (e) {
             console.error('[tick job]', job.id, e);

@@ -242,7 +242,8 @@ Deno.serve(async (req) => {
         if (!(await jobEstaRodando(jobId))) {
           await supabase.from('envio_meta_job_item')
             .update({ status: 'pendente' })
-            .eq('id', it.id)
+            .eq('job_id', jobId)
+            .eq('instancia_id', instanciaId)
             .eq('status', 'processando');
           break;
         }
@@ -307,6 +308,14 @@ Deno.serve(async (req) => {
           await sleep(intervaloMs - gasto);
           if (!(await jobEstaRodando(jobId))) break;
         }
+      }
+
+      if (paradaPorRateLimit || !(await jobEstaRodando(jobId))) {
+        await supabase.from('envio_meta_job_item')
+          .update({ status: 'pendente' })
+          .eq('job_id', jobId)
+          .eq('instancia_id', instanciaId)
+          .eq('status', 'processando');
       }
 
       if (okCount > 0 || errCount > 0) {
