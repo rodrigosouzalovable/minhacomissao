@@ -57,6 +57,7 @@ export type IniciarParams = {
   templateIdByInstance?: Record<string, string>;
   nomeCampanha?: string;
   modoRajada?: boolean;
+  msgsPorSegundo?: number;
   onAfterEnvio?: () => void;
 };
 
