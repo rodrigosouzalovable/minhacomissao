@@ -1738,6 +1738,7 @@ export type Database = {
           id: string
           iniciado_em: string
           instancia_ids: string[]
+          instancias_bloqueadas: Json
           instancias_bloqueadas_run: Json
           max_seg: number
           min_seg: number
@@ -1767,6 +1768,7 @@ export type Database = {
           id?: string
           iniciado_em?: string
           instancia_ids?: string[]
+          instancias_bloqueadas?: Json
           instancias_bloqueadas_run?: Json
           max_seg?: number
           min_seg?: number
@@ -1796,6 +1798,7 @@ export type Database = {
           id?: string
           iniciado_em?: string
           instancia_ids?: string[]
+          instancias_bloqueadas?: Json
           instancias_bloqueadas_run?: Json
           max_seg?: number
           min_seg?: number

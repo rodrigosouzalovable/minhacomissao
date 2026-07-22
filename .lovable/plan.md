@@ -1,40 +1,35 @@
 ## Objetivo
 
-O botão **Atualizar** do diálogo da campanha deve apenas refrescar contadores e listas — nunca dar a sensação de que "travou o envio" ou fez o botão **Reativar** reaparecer.
+No **modo rajada**, quando uma instância receber o erro Meta `#132015` ("template pausado por baixa qualidade"), o worker daquela instância deve:
 
-## Diagnóstico (não confirmado 100%)
-
-Lendo o código:
-
-- `refreshStatus()` e `recarregarItensJob()` são leituras puras (SELECTs). Elas não conseguem parar o worker `envio-meta-massa-burst`, que roda no servidor e se auto-encadeia enquanto `job.status = 'rodando'`.
-- O worker se auto-termina quando: (a) atinge `restantes = 0` num snapshot (mesmo que existam itens em `processando`), (b) recebe erro permanente, ou (c) alguma trava marca `status = 'erro'`.
-- Quando isso acontece, `Atualizar` só está *revelando* um estado que já mudou no servidor — mas para o usuário parece que foi o clique que parou.
-
-Como o diagnóstico "quem realmente parou o worker" não está 100% confirmado, o plano ataca os dois lados: garantir que **Atualizar seja inócuo** e que **o envio se auto-retome** se detectar que parou com pendências.
+1. Parar imediatamente de tentar enviar por aquele número.
+2. **Redistribuir os contatos pendentes** dela para as outras instâncias que ainda estão ativas no job.
+3. Deixar o restante do envio seguir normalmente pelos números ativos.
+4. Só encerrar o job com erro se **todas** as instâncias caírem no mesmo problema.
 
 ## Mudanças
 
-### 1. `src/components/meta/CampanhaDetalheDialog.tsx` — Atualizar silencioso
-- Novo handler `atualizarSemInterferir()` no botão Atualizar.
-- Ele chama apenas `recarregarItensJob(job.id)` (que refaz `carregarItens` + `carregarLogs`) e um novo `refreshCountersJob(job.id)` (ver item 2).
-- **Não** chama mais `refreshStatus()` (que recarrega todos os jobs e substitui a linha inteira do job, podendo trocar `status` de `rodando` → `erro`/`concluido` na UI).
+### 1. `supabase/functions/send-whatsapp-meta/index.ts`
+- Ao receber resposta da Meta, detectar `error.code === 132015` (ou mensagem `template ... is paused`).
+- Retornar novo flag na resposta: `template_paused: true, instance_disable: true, error: "Template pausado pela Meta"`.
+- Não alterar `estado_pool` da instância (o problema é do template, não do número).
 
-### 2. `src/contexts/EnvioMetaSendingContext.tsx` — refresh parcial
-- Adicionar `refreshCountersJob(jobId)`:
-  - Lê da `envio_meta_job` só: `enviados, erros, total, atual_telefone, atual_instancia, proximo_em`, e conta `pendente+processando` para derivar `restantes`.
-  - Atualiza o job em `jobs[]` fazendo *merge* — preserva `status` e `status_motivo` já em memória.
-- Assim, clicar Atualizar nunca faz o botão Reativar aparecer sozinho; o botão só aparece quando o Realtime traz uma mudança real de `status`.
+### 2. `supabase/functions/envio-meta-massa-burst/index.ts`
+- No `enviarUm`, tratar `resp?.template_paused` como novo `SendResult.kind = 'template_paused'`.
+- Ao receber `template_paused` no loop:
+  - Devolver o item atual para `pendente`.
+  - Buscar `job.instancia_ids` menos as instâncias já marcadas como bloqueadas neste job.
+  - Se sobrar pelo menos uma instância ativa: fazer `UPDATE envio_meta_job_item SET instancia_id = <round-robin entre ativas> WHERE job_id=? AND instancia_id=<atual> AND status='pendente'`, e disparar `selfInvoke` para as ativas processarem.
+  - Se **não sobrar** instância ativa: marcar itens restantes desta instância como `erro` com motivo "Todas as instâncias com template pausado" e chamar `tentarEncerrarJob`.
+  - Encerrar este worker (não reagendar).
+- Persistir a lista de instâncias bloqueadas em uma coluna nova `envio_meta_job.instancias_bloqueadas jsonb DEFAULT '[]'` (via migração).
 
-### 3. `src/contexts/EnvioMetaSendingContext.tsx` — auto-retomada
-- Watcher em `useEffect([jobs])`: para cada job com `status ∈ {erro, cancelado, concluido}` **mas** `restantes > 0` e que **não foi cancelado manualmente pelo usuário** (novo `Set` `manuallyCanceledRef`), disparar `reativarJob(jobId)` uma vez (guardar em `Set` `autoResumedRef` para não ficar em loop caso a Meta rejeite de novo imediatamente — usar cooldown de 60s por job).
-- Em `cancelarJob`, marcar `manuallyCanceledRef.add(jobId)` para nunca auto-retomar cancelamento voluntário.
-- Em `reativarJob` (manual), limpar `manuallyCanceledRef` e `autoResumedRef` para permitir novo ciclo.
+### 3. Migração
+- `ALTER TABLE public.envio_meta_job ADD COLUMN IF NOT EXISTS instancias_bloqueadas jsonb NOT NULL DEFAULT '[]'::jsonb;`
 
-### 4. Robustez do worker (bônus, mesmo arquivo `supabase/functions/envio-meta-massa-burst/index.ts`)
-- Antes de considerar `restantes = 0` e chamar `tentarEncerrarJob`, contar também itens em `processando` da **mesma instância** — se houver, agendar `selfInvoke` curto (2s) em vez de tentar encerrar. Isso evita que uma janela de corrida (itens reservados mas ainda não gravados como enviados) encerre o job antes da hora.
+### 4. UI — `src/components/meta/CampanhaDetalheDialog.tsx`
+- Ler `job.instancias_bloqueadas` e mostrar um badge "Template pausado — instância desativada neste envio" ao lado do nome da instância no bloco de estatísticas.
 
-## Como o usuário perceberá
-
-- Clicar **Atualizar** apenas atualiza os cards de "Aceito/Entregue/Lida/Falhou/Aguardando", listas de Enviados/Erros e o contador de processados. O status atual (Enviando/Erro) não muda por causa do clique.
-- Se o worker parar sozinho por rate limit / erro transiente e ainda houver pendentes, o sistema retoma sozinho em segundos, sem exigir clique manual em Reativar.
-- Se **você** clicar em Cancelar, o sistema respeita e não auto-retoma.
+## Fora do escopo
+- Não alterar o modo tick (não-rajada) nem os workers de lembrete.
+- Não mexer em qualidade de instância (RED/YELLOW) — o comportamento atual permanece.

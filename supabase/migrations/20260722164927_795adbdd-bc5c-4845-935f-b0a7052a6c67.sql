@@ -1,0 +1,1 @@
+ALTER TABLE public.envio_meta_job ADD COLUMN IF NOT EXISTS instancias_bloqueadas jsonb NOT NULL DEFAULT '[]'::jsonb;
