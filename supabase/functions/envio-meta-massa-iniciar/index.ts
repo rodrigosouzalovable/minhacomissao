@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const minSec = modoRajada ? 0 : Math.max(1, Number(body?.minSec ?? 30));
     const maxSec = modoRajada ? 0 : Math.max(minSec, Number(body?.maxSec ?? 90));
     const msgsPorSegundo = modoRajada
-      ? Math.max(1, Math.min(50, Number(body?.msgsPorSegundo ?? 10)))
+      ? Math.max(1, Math.min(5, Number(body?.msgsPorSegundo ?? 1)))
       : 10;
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
@@ -68,31 +68,30 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Filtro server-side: remove instâncias com qualidade RED/YELLOW
-    // (desligado no modo rajada — usuário aceita o risco)
+    // Filtro server-side: remove instâncias com qualidade RED/YELLOW também na rajada.
     let instanciaIdsFiltradas = instanciaIds;
-    if (!modoRajada) {
-      const { data: instancesRows } = await supabase
-        .from('meta_whatsapp_instances')
-        .select('id, nome, saude_quality')
-        .in('id', instanciaIds);
-      const badIds = new Set(
-        (instancesRows || [])
-          .filter((r: any) => {
-            const q = String(r.saude_quality || '').toUpperCase();
-            return q === 'RED' || q === 'YELLOW';
-          })
-          .map((r: any) => r.id),
-      );
-      instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
-      if (instanciaIdsFiltradas.length === 0) {
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'Todas as instâncias selecionadas estão com qualidade RED/YELLOW. Aguarde recuperação ou selecione outras.',
-        }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    {
+    const { data: instancesRows } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id, nome, saude_quality')
+      .in('id', instanciaIds);
+    const badIds = new Set(
+      (instancesRows || [])
+        .filter((r: any) => {
+          const q = String(r.saude_quality || '').toUpperCase();
+          return q === 'RED' || q === 'YELLOW';
+        })
+        .map((r: any) => r.id),
+    );
+    instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
+    if (instanciaIdsFiltradas.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Todas as instâncias selecionadas estão com qualidade RED/YELLOW. Aguarde recuperação ou selecione outras.',
+      }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     }
 
     // Trava anti-gasto: bloqueia envio em massa de templates MARKETING (custo ~7x utility).
