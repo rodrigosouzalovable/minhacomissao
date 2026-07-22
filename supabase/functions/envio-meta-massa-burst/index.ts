@@ -1,5 +1,5 @@
 // Modo RAJADA CONTROLADA: um worker POR INSTÂNCIA, dispara N msgs/segundo
-// (job.msgs_por_segundo, padrão 10) para respeitar o rate limit da Meta.
+// (job.msgs_por_segundo, padrão 1) para respeitar o rate limit da Meta.
 // - Rate limit (#80007/#131056/429/502 "Rate limit"): devolve o item para 'pendente',
 //   pausa a instância pelo tempo Retry-After e re-agenda o worker.
 // - Erros transitórios (502/503/504 sem rate limit): devolve item para 'pendente'
@@ -322,8 +322,6 @@ Deno.serve(async (req) => {
           .eq('status', 'processando');
       }
 
-      if (atingiuTempo) break;
-
       if (okCount > 0 || errCount > 0) {
         await supabase.rpc('envio_meta_job_bump', {
           _job_id: jobId,
@@ -338,6 +336,8 @@ Deno.serve(async (req) => {
           }).eq('id', jobId);
         });
       }
+
+      if (atingiuTempo) break;
     }
 
     // Se ainda há pendentes, encadeia self-invoke (respeitando rate limit se houver)
