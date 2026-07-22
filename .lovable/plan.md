@@ -1,25 +1,24 @@
-Plano para corrigir o envio Meta:
+## Problema
 
-1. Corrigir o botão de parada/cancelamento
-- Fazer o backend devolver imediatamente para `pendente` qualquer item que esteja `processando` quando a campanha for cancelada.
-- Limpar `atual_telefone`, `atual_instancia` e `proximo_em` no cancelamento para a tela refletir que parou.
-- Ajustar os workers para checarem o status do job antes de reservar lote, antes de cada envio e antes de se auto-reagendar.
-- No modo rajada, reduzir o tamanho do lote reservado para evitar que muitos contatos fiquem presos como `processando` depois de clicar em parar.
+O diálogo de detalhes da campanha (`CampanhaDetalheDialog.tsx`) fica "balançando" para cima e para baixo enquanto está aberto.
 
-2. Impedir que workers antigos continuem após “Parar”
-- Hoje o worker da rajada só valida `status='rodando'` no início; se o usuário cancela durante o loop, ele pode continuar enviando até acabar o lote/tempo da função.
-- Vou adicionar checagens rápidas no loop e no `selfInvoke`, para que qualquer execução em andamento pare no próximo ponto seguro, sem continuar a fila.
-- Observação: se uma mensagem já foi enviada para a Meta no exato instante do clique, ela não pode ser “desenviada”; mas nenhum novo contato deve ser puxado depois da parada.
+## Causa
 
-3. Ajustar o Rate Limit da rajada
-- Diminuir o teto de `Msgs/segundo` aceito no modo rajada para uma faixa mais segura.
-- Alterar o padrão recomendado para mais conservador, começando com 1 msg/segundo por instância.
-- Quando a Meta retornar `Rate limit exceeded`, devolver o contato para `pendente`, pausar a instância pelo `Retry-After` e retomar com intervalo mais seguro.
+Dois pontos causam o thrashing de layout a cada polling (8s) + realtime:
 
-4. Melhorar a ação “Tentar novamente”
-- Ao reenfileirar erros, garantir que os itens com erro voltem para `pendente` e que itens `processando` de uma campanha cancelada também não fiquem travados.
-- Se a campanha for rajada, reabrir usando a regra controlada e mais lenta.
+1. **`<details open={detalhes.enviados.length > 0 && detalhes.enviados.length <= 20}>`** — Essa prop `open` é reavaliada em toda re-renderização. Conforme os enviados chegam (1, 2, 3…), o React força o `<details>` a abrir/fechar/re-abrir, e ao passar de 20 ele **fecha sozinho**, empurrando o conteúdo para cima. Isso também sobrescreve a interação manual do usuário.
 
-5. Validar
-- Conferir por código que `cancelar` não deixa `pendente/processando` sendo enviado após a mudança.
-- Verificar que os erros de Rate Limit continuam visíveis, mas não explodem a fila em paralelo.
+2. **Conteúdo cresce sem âncora de scroll** — a lista de "Enviados"/"Erros" recebe novos itens no topo/fim, e como o `DialogContent` é `overflow-y-auto`, a barra aparece/desaparece e a posição do scroll salta.
+
+## Correção
+
+Editar apenas `src/components/meta/CampanhaDetalheDialog.tsx`:
+
+- Trocar `open={...}` do `<details>` de "Enviados" por **`defaultOpen`** calculado uma única vez no primeiro render (via `useRef` ou `useState` inicial baseado no `job.id`). Assim, o estado aberto/fechado passa a ser controlado pelo usuário e não pisca a cada polling.
+- Aplicar o mesmo tratamento nos `<details>` de "Erros" e "Falharam na entrega" que hoje ficam com `open` fixo — trocar por `defaultOpen` para respeitar interação do usuário sem re-forçar o estado.
+- Adicionar `overflow-anchor: none` (via `style`) ao container principal do diálogo para evitar que o navegador re-ancore o scroll quando novos itens são inseridos na lista.
+- Reservar espaço estável para o bloco "Último: … via …" e "Próximo envio em Xs" (min-height fixa nessas duas linhas) para que a variação de texto não empurre o layout.
+
+## Fora do escopo
+
+Sem mudanças na lógica de envio, workers, contexto ou banco.

@@ -64,6 +64,18 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const [reenviandoErros, setReenviandoErros] = useState(false);
 
+  // Estado local dos <details> — controlado pelo usuário, sem re-forçar a cada polling.
+  const [openEnviados, setOpenEnviados] = useState<boolean>(false);
+  const [openErros, setOpenErros] = useState<boolean>(true);
+  const [openFalhas, setOpenFalhas] = useState<boolean>(true);
+  useEffect(() => {
+    if (open && jobId) {
+      setOpenEnviados(false);
+      setOpenErros(true);
+      setOpenFalhas(true);
+    }
+  }, [open, jobId]);
+
   if (!job) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -200,7 +212,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-5xl max-h-[90vh] overflow-y-auto"
+        style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}
+      >
         <DialogHeader>
           <div className="flex items-center gap-2 flex-wrap">
             <DialogTitle className="text-xl">{nome}</DialogTitle>
@@ -225,15 +240,19 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
               </span>
             </div>
             <Progress value={percent} />
-            {progresso?.atualTelefone && (
-              <div className="text-xs text-muted-foreground">
-                Último: <code>{progresso.atualTelefone}</code>
-                {progresso.atualInstancia && <> via <strong>{progresso.atualInstancia}</strong></>}
-              </div>
-            )}
-            {progresso && progresso.proximoEmSeg > 0 && !pausado && (
-              <div className="text-xs text-muted-foreground">Próximo envio em {progresso.proximoEmSeg}s</div>
-            )}
+            <div className="text-xs text-muted-foreground min-h-[16px]">
+              {progresso?.atualTelefone ? (
+                <>
+                  Último: <code>{progresso.atualTelefone}</code>
+                  {progresso.atualInstancia && <> via <strong>{progresso.atualInstancia}</strong></>}
+                </>
+              ) : null}
+            </div>
+            <div className="text-xs text-muted-foreground min-h-[16px]">
+              {progresso && progresso.proximoEmSeg > 0 && !pausado
+                ? `Próximo envio em ${progresso.proximoEmSeg}s`
+                : null}
+            </div>
             {resultado?.statusMotivo && resultado.enviados === 0 && (
               <div className="text-xs text-amber-600">Nenhuma mensagem foi enviada: {resultado.statusMotivo}</div>
             )}
@@ -314,7 +333,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           </div>
 
           {/* Enviados */}
-          <details className="rounded-md border bg-card" open={detalhes.enviados.length > 0 && detalhes.enviados.length <= 20}>
+          <details className="rounded-md border bg-card" open={openEnviados} onToggle={(e) => setOpenEnviados((e.currentTarget as HTMLDetailsElement).open)}>
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
               <span className="text-green-700 dark:text-green-400">
                 Enviados <span className="text-muted-foreground font-normal">({detalhes.enviados.length})</span>
@@ -346,7 +365,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
           {/* Erros */}
           {detalhes.erros.length > 0 && (
-            <details className="rounded-md border bg-card" open>
+            <details className="rounded-md border bg-card" open={openErros} onToggle={(e) => setOpenErros((e.currentTarget as HTMLDetailsElement).open)}>
               <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
                 <span className="text-red-700 dark:text-red-400">
                   Erros <span className="text-muted-foreground font-normal">({detalhes.erros.length})</span>
@@ -380,7 +399,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
           {/* Falharam na entrega */}
           {falhasEntrega.length > 0 && (
-            <details className="rounded-md border bg-card" open>
+            <details className="rounded-md border bg-card" open={openFalhas} onToggle={(e) => setOpenFalhas((e.currentTarget as HTMLDetailsElement).open)}>
               <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
                 <span className="text-red-700 dark:text-red-400">
                   Falharam na entrega <span className="text-muted-foreground font-normal">({falhasEntrega.length})</span>
