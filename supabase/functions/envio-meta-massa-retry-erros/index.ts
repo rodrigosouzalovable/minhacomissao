@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
       concluido_em: null,
       proximo_em: new Date().toISOString(),
     };
-    if (job.modo_rajada) jobPatch.msgs_por_segundo = Math.min(1, Number(job.msgs_por_segundo) || 1);
+    if (job.modo_rajada) jobPatch.msgs_por_segundo = 1;
     await supabase.from('envio_meta_job').update(jobPatch).eq('id', jobId);
 
     // Re-dispara worker apropriado
