@@ -1,30 +1,25 @@
-## O que está acontecendo
+Plano para corrigir o envio Meta:
 
-O botão atual chama a função `envio-meta-massa-retry-erros`, mas ela nunca foi registrada no `config.toml` do backend — por isso aparece **"Failed to send a request to the Edge Function"**. Além disso, você quer mudar o comportamento e o rótulo do botão.
+1. Corrigir o botão de parada/cancelamento
+- Fazer o backend devolver imediatamente para `pendente` qualquer item que esteja `processando` quando a campanha for cancelada.
+- Limpar `atual_telefone`, `atual_instancia` e `proximo_em` no cancelamento para a tela refletir que parou.
+- Ajustar os workers para checarem o status do job antes de reservar lote, antes de cada envio e antes de se auto-reagendar.
+- No modo rajada, reduzir o tamanho do lote reservado para evitar que muitos contatos fiquem presos como `processando` depois de clicar em parar.
 
-## Mudanças
+2. Impedir que workers antigos continuem após “Parar”
+- Hoje o worker da rajada só valida `status='rodando'` no início; se o usuário cancela durante o loop, ele pode continuar enviando até acabar o lote/tempo da função.
+- Vou adicionar checagens rápidas no loop e no `selfInvoke`, para que qualquer execução em andamento pare no próximo ponto seguro, sem continuar a fila.
+- Observação: se uma mensagem já foi enviada para a Meta no exato instante do clique, ela não pode ser “desenviada”; mas nenhum novo contato deve ser puxado depois da parada.
 
-**1. Renomear o botão**
-- `Reenviar erros (240)` → **`Tentar novamente (240)`**
-- Mantém o ícone de repetir, cor âmbar.
+3. Ajustar o Rate Limit da rajada
+- Diminuir o teto de `Msgs/segundo` aceito no modo rajada para uma faixa mais segura.
+- Alterar o padrão recomendado para mais conservador, começando com 1 msg/segundo por instância.
+- Quando a Meta retornar `Rate limit exceeded`, devolver o contato para `pendente`, pausar a instância pelo `Retry-After` e retomar com intervalo mais seguro.
 
-**2. Registrar a função no backend**
-- Adicionar `envio-meta-massa-retry-erros` ao `supabase/config.toml` para que fique deployada e acessível (isso corrige o "Failed to send a request").
+4. Melhorar a ação “Tentar novamente”
+- Ao reenfileirar erros, garantir que os itens com erro voltem para `pendente` e que itens `processando` de uma campanha cancelada também não fiquem travados.
+- Se a campanha for rajada, reabrir usando a regra controlada e mais lenta.
 
-**3. Novo fluxo ao clicar em "Tentar novamente"**
-- Os números com erro voltam para a fila como `pendente` (tentativas zeradas, erro limpo).
-- O contador de **Erros** cai para 0 imediatamente e esses números entram novamente na contagem de **Pendentes/Processando**.
-- A lista **"Erros (240)"** desaparece da tela na hora (some do painel).
-- O card mostra rapidamente **"240 números devolvidos para a fila"** e o job volta ao status **Rodando**.
-- O disparo respeita a nova regra de **msgs/segundo por instância** e o auto-pause do Rate Limit da Meta (já implementados).
-- Atualização automática do progresso e da lista logo em seguida.
-
-**4. Robustez**
-- Se a função devolver erro, mostrar mensagem clara ("Não foi possível devolver à fila — tente novamente em instantes").
-- Impedir cliques duplos enquanto processa.
-
-## Detalhes técnicos
-
-- `src/components/meta/CampanhaDetalheDialog.tsx`: renomear o botão, ajustar texto de confirmação, forçar refresh imediato (`refreshStatus` + `recarregarItensJob`) para limpar a lista de erros.
-- `supabase/config.toml`: adicionar entrada `[functions.envio-meta-massa-retry-erros] verify_jwt = true`.
-- A função em si já faz o reset correto (status `pendente`, tentativas 0, decrementa `erros`, reabre o job e re-dispara worker de rajada/tick). Não precisa mexer na lógica.
+5. Validar
+- Conferir por código que `cancelar` não deixa `pendente/processando` sendo enviado após a mudança.
+- Verificar que os erros de Rate Limit continuam visíveis, mas não explodem a fila em paralelo.
