@@ -82,6 +82,26 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const percent = Math.round((totalProcessado / Math.max(job.total, 1)) * 100);
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
+  const [reenviandoErros, setReenviandoErros] = useState(false);
+
+  const reenviarErros = async () => {
+    if (reenviandoErros) return;
+    if (!confirm(`Reenviar ${job.erros} mensagens com erro?\n\nElas voltam para a fila como pendentes e serão disparadas respeitando o limite de mensagens por segundo (evita "Rate limit exceeded" da Meta).`)) return;
+    setReenviandoErros(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("envio-meta-massa-retry-erros", {
+        body: { job_id: job.id },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha ao reenviar");
+      toast.success(`${data.reenfileirados ?? 0} mensagens re-enfileiradas`);
+      setTimeout(() => { refreshStatus(); recarregarItensJob(job.id); }, 800);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao reenviar");
+    } finally {
+      setReenviandoErros(false);
+    }
+  };
 
   const copiar = (arr: string[], titulo: string) => {
     if (arr.length === 0) return;
