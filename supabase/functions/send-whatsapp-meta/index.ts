@@ -633,6 +633,21 @@ Deno.serve(async (req) => {
         erro: msg,
       });
 
+      // Detecta template PAUSADO pela Meta (#132015) — não é problema da instância
+      const isTemplatePaused =
+        msg.includes('#132015') ||
+        /template is (?:temporarily )?unavailable|is paused|paused due to low quality/i.test(msg);
+      if (isTemplatePaused) {
+        return new Response(JSON.stringify({
+          success: false,
+          template_paused: true,
+          instance_disable: true,
+          error: 'O template está pausado pela Meta. Escolha outro template ou aguarde a liberação.',
+          detalhe: msg,
+          instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       // Detecta bloqueio/restrição/banimento síncrono da Meta
       const restrictedCodes = [
         131031, 131049, 368, 130429,
