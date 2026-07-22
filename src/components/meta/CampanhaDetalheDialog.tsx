@@ -263,7 +263,23 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 ? `Próximo envio em ${progresso.proximoEmSeg}s`
                 : null}
             </div>
-            {resultado?.statusMotivo && resultado.enviados === 0 && (
+            {(() => {
+              const motivo = String((job as any).status_motivo || resultado?.statusMotivo || '');
+              const isBALock = /business account|#131031|locked/i.test(motivo);
+              if (isBALock) {
+                return (
+                  <div className="text-xs text-red-700 dark:text-red-300 bg-red-500/10 border border-red-500/40 rounded px-3 py-2 space-y-1">
+                    <div className="font-semibold">⛔ Business Account bloqueada pela Meta (#131031)</div>
+                    <div>{motivo}</div>
+                    <div className="text-red-600/80 dark:text-red-400/80">
+                      Nenhum envio é possível enquanto a conta estiver <b>locked</b>. Acesse <b>business.facebook.com → Central de Contas / Qualidade da conta</b>, verifique o motivo e solicite revisão. Reativar aqui não tem efeito até a Meta liberar.
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            {resultado?.statusMotivo && resultado.enviados === 0 && !/business account|#131031|locked/i.test(String((job as any).status_motivo || resultado?.statusMotivo || '')) && (
               <div className="text-xs text-amber-600">Nenhuma mensagem foi enviada: {resultado.statusMotivo}</div>
             )}
             {job.instancias_bloqueadas_run.length > 0 && (
