@@ -8,12 +8,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-function pesoQualidade(q: string | null): number {
+function pesoQualidade(q: string | null, ignorarQualidade = false): number {
   const v = String(q || '').toUpperCase();
   if (v === 'GREEN') return 100;
   if (v === 'UNKNOWN' || v === '') return 60;
+  if (ignorarQualidade) return 30; // YELLOW/RED permitidos (mesmo peso do YELLOW throttled)
   return 0; // YELLOW/RED bloqueado
 }
+
 function pesoTier(t: string | null): number {
   const v = String(t || '').toUpperCase();
   if (v.includes('UNLIMITED')) return 1000;
