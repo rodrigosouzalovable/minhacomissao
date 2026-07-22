@@ -54,15 +54,28 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (acao === 'pausar') {
-      await supabase.from('envio_meta_job').update({ status: 'pausado' }).eq('id', jobId);
-    } else if (acao === 'retomar') {
-      await supabase.from('envio_meta_job').update({
-        status: 'rodando',
-        proximo_em: new Date().toISOString(),
-        status_motivo: null,
-      }).eq('id', jobId);
-      // dispara tick imediato
+    const devolverProcessandoParaFila = async () => {
+      await supabase
+        .from('envio_meta_job_item')
+        .update({ status: 'pendente', processado_em: null })
+        .eq('job_id', jobId)
+        .eq('status', 'processando');
+    };
+
+    const dispararWorker = (targetJob: any) => {
+      if (targetJob?.modo_rajada) {
+        for (const instId of (targetJob.instancia_ids || [])) {
+          fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({ job_id: jobId, instancia_id: instId }),
+          }).catch(() => {});
+        }
+        return;
+      }
       fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
         method: 'POST',
         headers: {
@@ -71,11 +84,32 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({ job_id: jobId }),
       }).catch(() => {});
+    };
+
+    if (acao === 'pausar') {
+      await supabase.from('envio_meta_job').update({
+        status: 'pausado',
+        atual_telefone: null,
+        atual_instancia: null,
+        proximo_em: null,
+      }).eq('id', jobId);
+      await devolverProcessandoParaFila();
+    } else if (acao === 'retomar') {
+      await supabase.from('envio_meta_job').update({
+        status: 'rodando',
+        proximo_em: new Date().toISOString(),
+        status_motivo: null,
+      }).eq('id', jobId);
+      dispararWorker(job);
     } else if (acao === 'cancelar') {
       await supabase.from('envio_meta_job').update({
         status: 'cancelado',
         concluido_em: new Date().toISOString(),
+        atual_telefone: null,
+        atual_instancia: null,
+        proximo_em: null,
       }).eq('id', jobId);
+      await devolverProcessandoParaFila();
     } else if (acao === 'reativar') {
       if (!['cancelado', 'erro', 'concluido'].includes(job.status)) {
         return new Response(JSON.stringify({ success: false, error: 'só é possível reativar jobs finalizados' }), {
@@ -99,14 +133,7 @@ Deno.serve(async (req) => {
         status_motivo: null,
         proximo_em: new Date().toISOString(),
       }).eq('id', jobId);
-      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({ job_id: jobId }),
-      }).catch(() => {});
+      dispararWorker(job);
     } else if (acao === 'limpar') {
       // Só remove jobs concluídos/cancelados
       if (!['concluido', 'cancelado', 'erro'].includes(job.status)) {
