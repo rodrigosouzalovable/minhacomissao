@@ -51,12 +51,14 @@ function faseFromDias(d: number): string {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { instancia_ids, user_id, excluir_id } = await req.json();
+    const { instancia_ids, user_id, excluir_id, ignorar_pausa_qualidade } = await req.json();
+    const ignoraQualidade = ignorar_pausa_qualidade === true;
     if (!Array.isArray(instancia_ids) || instancia_ids.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'instancia_ids obrigatório' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
