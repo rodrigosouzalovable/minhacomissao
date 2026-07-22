@@ -88,18 +88,20 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const reenviarErros = async () => {
     if (reenviandoErros) return;
-    if (!confirm(`Reenviar ${job.erros} mensagens com erro?\n\nElas voltam para a fila como pendentes e serão disparadas respeitando o limite de mensagens por segundo (evita "Rate limit exceeded" da Meta).`)) return;
+    if (!confirm(`Tentar novamente ${job.erros} números com erro?\n\nEles voltam para a fila de envios e a lista de erros é limpa. O disparo respeita o limite de mensagens por segundo (evita "Rate limit exceeded" da Meta).`)) return;
     setReenviandoErros(true);
     try {
       const { data, error } = await supabase.functions.invoke("envio-meta-massa-retry-erros", {
         body: { job_id: job.id },
       });
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Falha ao reenviar");
-      toast.success(`${data.reenfileirados ?? 0} mensagens re-enfileiradas`);
-      setTimeout(() => { refreshStatus(); recarregarItensJob(job.id); }, 800);
+      if (!data?.success) throw new Error(data?.error || "Falha ao devolver à fila");
+      toast.success(`${data.reenfileirados ?? 0} números devolvidos para a fila`);
+      // Atualiza imediatamente para limpar a lista de erros na tela
+      await Promise.all([refreshStatus(), recarregarItensJob(job.id)]);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao reenviar");
+      toast.error(e instanceof Error ? e.message : "Não foi possível devolver à fila — tente novamente em instantes");
+
     } finally {
       setReenviandoErros(false);
     }
@@ -298,7 +300,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 disabled={reenviandoErros}
                 onClick={reenviarErros}
               >
-                <Repeat className="h-3.5 w-3.5 mr-1.5" /> Reenviar erros ({job.erros})
+                <Repeat className="h-3.5 w-3.5 mr-1.5" /> {reenviandoErros ? "Devolvendo…" : `Tentar novamente (${job.erros})`}
               </Button>
             )}
             {!ativa && (
