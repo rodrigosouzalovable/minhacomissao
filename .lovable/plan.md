@@ -1,46 +1,51 @@
+# Por que "Reativar" não envia nada
 
-## Problema 1 — Instância ativa parou de enviar depois do template pausado
+Investiguei o banco antes de propor qualquer alteração. O problema **não é bug do reativar** — é bloqueio real da Meta nas duas instâncias do job.
 
-**Diagnóstico (confirmado no banco):**
-- Job `ac33474f…` tem `instancias_bloqueadas: []`, mas 5 itens da instância `62 98265-1759` estão como `status='erro'` com a mensagem exata `(#132015) … is paused`.
-- Se a lógica de `template_paused` tivesse sido executada no worker (`envio-meta-massa-burst`), esses itens teriam sido devolvidos para `pendente` (linha 317) e `instancias_bloqueadas` teria sido preenchida.
-- Como isso não aconteceu, a redistribuição para a instância `62 98147-5130` nunca ocorreu. Restaram 210 + 215 pendentes e o job acabou marcado como `erro`.
-- A causa foi que a versão da função `send-whatsapp-meta` que retorna `template_paused: true` só passou a valer depois do envio começar (mesmo raciocínio serve para invocações mais antigas em cache do runtime). Precisamos garantir que o worker consiga se recuperar mesmo quando o erro chega como `kind: 'error'` "cru" com a mensagem #132015.
+## Estado atual das duas instâncias do job `agende_a_videoconferncia`
 
-**Plano de correção (Edge Functions):**
-1. `supabase/functions/envio-meta-massa-burst/index.ts`
-   - No bloco `enviarUm`, se o resultado vier como `kind: 'error'` e `resp?.error` contiver `#132015` ou `is paused`/`paused due to low quality`, reclassificar o resultado como `kind: 'template_paused'` (fallback client-side).
-   - Ao entrar na branch `template_paused`, além do item corrente, converter **todos** os outros itens da instância bloqueada que estejam em `status='erro'` com a mesma mensagem de volta para `pendente` (limpando `erro`) antes de redistribuir, para que os 5 itens que hoje estão travados como erro voltem para a fila.
-   - Depois da redistribuição, chamar `selfInvoke` para cada instância que recebeu itens (já é feito) **e** também disparar `dispararWorker`-like invocação para cada instância que ainda esteja ativa mesmo que não tenha recebido itens desta rodada (garante que a `62 98147-5130` reative caso já tenha encerrado seu próprio worker).
-2. `supabase/functions/envio-meta-massa-control/index.ts`
-   - Na ação `reativar`, quando o job tem `instancias_bloqueadas`, pular essas instâncias na hora de reenfileirar itens (ou reatribuir os pendentes delas para instâncias ainda ativas) — evita que "Reativar" mande o worker tentar de novo pela instância que a Meta pausou.
-3. Recuperar o job atual (`ac33474f…`): após deploy, uma reativação manual pelo botão "Reativar" deve corrigir os 425 pendentes.
+| Instância | Estado | Motivo | Pendentes |
+|---|---|---|---|
+| **62 98147-5130** (`f46221b3`) | `estado_pool = restrita`, `pausa_automatica_ate = 23/07 17:36`, motivo **"Business Account locked" (#131031)** | Meta bloqueou a **Business Account** inteira | 424 |
+| **62 98265-1759** (`f85424d0`) | Bloqueada no job (template pausado #132015) | Template pausado pela Meta | 0 |
 
-## Problema 2 — Diálogo "Campanhas" piscando sem parar
+Também há **3 itens pendentes com `instancia_id = NULL`** (órfãos da redistribuição anterior) e o job está com `status = 'erro'`.
 
-**Diagnóstico (confirmado em `src/contexts/EnvioMetaSendingContext.tsx`):**
-- O canal Realtime em `envio_meta_job_item` (linha 340) escuta **todos** os eventos, sem filtro por job, e chama `carregarItens(jobId)` a cada evento. Em modo rajada saem centenas de updates por minuto, e cada `carregarItens` faz paginação de até 10k linhas e substitui o `Map` inteiro por outro novo.
-- O `useEffect` do Realtime (linha 371) inclui `itensByJob` e `carregarItens` nas dependências. Como `carregarItens` chama `setItensByJob(new Map(...))`, cada carregamento troca a referência e o efeito **derruba o canal e re-subscreve**, gerando avalanche de eventos.
-- O `CampanhaDetalheDialog.tsx` ainda tem um `setInterval` de 4s que chama `recarregarItensJob`, empilhando com o Realtime.
-- Toda essa cascata dispara `setJobs`/`setItensByJob` várias vezes por segundo → re-render do diálogo, e como cada carregamento zera a lista e depois preenche, o usuário vê "piscar".
+## Por que o Reativar "não fez nada"
 
-**Plano de correção (Frontend):**
-1. `src/contexts/EnvioMetaSendingContext.tsx`
-   - Guardar `itensByJob` e `carregarItens` em `ref`s dentro do `useEffect` do Realtime; remover ambos das dependências para que a subscription não seja recriada.
-   - Debounce por `jobId` para `carregarItens` (~2s) e para `carregarJobs` (~1s) usando `setTimeout` acumulativo — coalescendo bursts de eventos numa única chamada.
-   - Filtrar o handler de `envio_meta_job_item` para ignorar `job_id` que não esteja em `itensByJob` (via ref), evitando queries inúteis para jobs que o usuário nem abriu.
-   - `carregarItens`: fazer merge parcial (atualizar/anexar linhas alteradas quando o payload já traz `id` e `status`) antes de recorrer ao refetch completo, e só paginar até `total` conhecido do job em vez de sempre subir até 10k.
-2. `src/components/meta/CampanhaDetalheDialog.tsx`
-   - Aumentar o intervalo do polling de 4s para 10s **e** só chamar `recarregarItensJob` quando `backend !== cached` (já feito) — remover o "if running" que força reload contínuo. O Realtime debounced já cobre o restante.
+1. O botão até dispara o worker `envio-meta-massa-burst` para as duas instâncias (vi 4 boots recentes nos logs).
+2. Ao entrar, o worker consulta a instância `f46221b3`, vê `estado_pool='restrita'` + `pausa_automatica_motivo` começando com "Business Account locked" — e **sai imediatamente** (comportamento correto: `restrita` = banimento/bloqueio real da Meta, não é apenas RED de qualidade).
+3. A outra instância está bloqueada no job por template pausado, então também não envia.
+4. Sem worker ativo, ninguém volta o `status` para `rodando`; ele permanece `erro`.
 
-## Detalhes técnicos
+**#131031 "Business Account locked"** é um bloqueio administrativo aplicado pela Meta na Business Account (não no template, não na qualidade). Só a Meta desbloqueia — normalmente após revisão no Business Manager (Contas > Qualidade / Central de Contas).
 
-- Fallback de detecção do #132015 no worker é o mesmo regex já usado em `send-whatsapp-meta`: `msg.includes('#132015') || /template is (?:temporarily )?unavailable|is paused|paused due to low quality/i.test(msg)`.
-- Recuperar itens travados: `UPDATE envio_meta_job_item SET status='pendente', erro=NULL WHERE job_id=$1 AND status='erro' AND erro ILIKE '%132015%'` — executado dentro da branch `template_paused` do worker.
-- Debounce simples via `Map<string, number>` de timeouts por `jobId`, limpando no unmount do provider.
-- Nenhuma alteração de schema é necessária.
+## O que fazer
 
-## Fora de escopo
+### 1. Ação obrigatória fora do sistema (você)
+Entrar no **business.facebook.com > Central de Contas / Qualidade da conta** da CNPJ CERTIFICADORA, ver o motivo do lock e solicitar revisão. Enquanto a Business Account estiver *locked*, **nenhum código nosso consegue enviar por essas instâncias** — a Meta rejeita na origem.
 
-- Não altero regras de qualidade RED/YELLOW nem lógica de rate limit.
-- Não mexo na UI visual do diálogo além do intervalo de polling.
+### 2. Ação dentro do sistema (eu, quando aprovar)
+Como as duas instâncias do job estão indisponíveis, o job precisa ser **encerrado com honestidade** (não faz sentido ficar em loop de retry). Proposta:
+
+a. Marcar o job `ac33474f...` como `cancelado` com `status_motivo` explicando "Business Account bloqueada pela Meta (#131031) + template pausado (#132015)".
+b. Devolver os 3 órfãos (`instancia_id = NULL`) ao status correto para não ficarem pendurados.
+c. No `CampanhaDetalheDialog`, exibir um alerta vermelho dedicado quando `status_motivo` contiver "Business Account" — orientando abrir o Business Manager (hoje só temos aviso genérico de template pausado).
+d. No worker `envio-meta-massa-burst`, quando **todas** as instâncias do job estiverem `restrita`/locked, encerrar o job como `erro` com `status_motivo` claro (hoje ele só faz isso na rota de template pausado, não na de conta bloqueada).
+
+### 3. Depois que a Meta desbloquear a conta
+Você me avisa, eu rodo um UPDATE para limpar `estado_pool`, `pausa_automatica_ate` e `pausa_automatica_motivo` da `f46221b3`, e criamos um **novo** job de rajada com os 424 contatos restantes (o job atual fica no histórico como cancelado).
+
+## O que eu NÃO recomendo
+
+- **Forçar `status='rodando'` e disparar o worker de novo:** já foi tentado implicitamente pelo Reativar; a Meta continuará devolvendo #131031 em cada request, gastando cota de API e potencialmente agravando o bloqueio.
+- **Ignorar `estado_pool='restrita'` no modo rajada:** `restrita` significa banimento/lock real da Meta, diferente de qualidade RED (que já ignoramos no rajada). Ignorar isso pode levar a suspensão definitiva da BA.
+
+## Aprovar para eu executar
+
+Se você concordar, na próxima etapa eu:
+1. Cancelo o job atual com motivo claro.
+2. Ajusto o `CampanhaDetalheDialog` para mostrar o alerta específico de "Business Account bloqueada".
+3. Ajusto o `envio-meta-massa-burst` para encerrar o job como `erro` explicando o motivo quando todas as instâncias estão locked.
+
+**Nada disso destrava a Meta** — isso depende 100% da revisão no Business Manager. Confirma que posso seguir?
