@@ -111,12 +111,14 @@ Deno.serve(async (req) => {
       }).eq('id', jobId);
       await devolverProcessandoParaFila();
     } else if (acao === 'reativar') {
-      if (!['cancelado', 'erro', 'concluido'].includes(job.status)) {
-        return new Response(JSON.stringify({ success: false, error: 'só é possível reativar jobs finalizados' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      // Conta pendentes; se não houver, nada a fazer
+      // Reenfileira itens com erro/falha de volta para pendente e devolve órfãos em "processando"
+      await supabase
+        .from('envio_meta_job_item')
+        .update({ status: 'pendente', erro: null, tentativas: 0 })
+        .eq('job_id', jobId)
+        .in('status', ['erro', 'falha']);
+      await devolverProcessandoParaFila();
+
       const { count: pendentes } = await supabase
         .from('envio_meta_job_item')
         .select('id', { count: 'exact', head: true })
