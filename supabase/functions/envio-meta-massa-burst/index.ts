@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
     let templatePausado = false;
     let templatePausadoErro = '';
 
-    while (Date.now() - inicio < MAX_WALL_MS && !paradaPorRateLimit) {
+    while (Date.now() - inicio < MAX_WALL_MS && !paradaPorRateLimit && !templatePausado) {
       if (!(await jobEstaRodando(jobId))) {
         await supabase.from('envio_meta_job_item')
           .update({ status: 'pendente' })
