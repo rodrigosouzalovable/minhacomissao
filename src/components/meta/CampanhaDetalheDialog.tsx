@@ -53,14 +53,20 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     }
   }, [open, jobId, ensureItensLoaded, recarregarItensJob]);
 
-  // Polling leve enquanto o diálogo está aberto e o job segue rodando/pausado.
+  // Polling leve enquanto o diálogo está aberto — para sozinho quando cache = backend.
   useEffect(() => {
     if (!open || !jobId) return;
-    const j = jobs.find((x) => x.id === jobId);
-    if (!j || (j.status !== "rodando" && j.status !== "pausado")) return;
-    const t = setInterval(() => { recarregarItensJob(jobId); }, 8000);
+    const t = setInterval(() => {
+      const j = jobs.find((x) => x.id === jobId);
+      if (!j) return;
+      const backend = (j.enviados || 0) + (j.erros || 0);
+      const det = getDetalhesJob(jobId);
+      const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0);
+      const running = j.status === "rodando" || j.status === "pausado";
+      if (running || backend !== cached) recarregarItensJob(jobId);
+    }, 4000);
     return () => clearInterval(t);
-  }, [open, jobId, jobs, recarregarItensJob]);
+  }, [open, jobId, jobs, recarregarItensJob, getDetalhesJob]);
 
   const [reenviandoErros, setReenviandoErros] = useState(false);
 

@@ -199,16 +199,27 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   }, [uid]);
 
   const carregarItens = useCallback(async (jobId: string) => {
-    const { data } = await (supabase as any)
-      .from("envio_meta_job_item")
-      .select("*")
-      .eq("job_id", jobId)
-      .in("status", ["enviado", "erro"])
-      .order("processado_em", { ascending: false })
-      .limit(2000);
+    // Paginado — PostgREST tem cap de 1000 por request; buscamos em lotes até acabar (teto 10k).
+    const PAGE = 1000;
+    const MAX = 10000;
+    const acc: any[] = [];
+    for (let from = 0; from < MAX; from += PAGE) {
+      const to = from + PAGE - 1;
+      const { data, error } = await (supabase as any)
+        .from("envio_meta_job_item")
+        .select("*")
+        .eq("job_id", jobId)
+        .in("status", ["enviado", "erro"])
+        .order("processado_em", { ascending: false })
+        .range(from, to);
+      if (error) break;
+      const rows = data || [];
+      acc.push(...rows);
+      if (rows.length < PAGE) break;
+    }
     setItensByJob((prev) => {
       const n = new Map(prev);
-      n.set(jobId, data || []);
+      n.set(jobId, acc);
       return n;
     });
   }, []);
@@ -281,7 +292,17 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "envio_meta_job", filter: `user_id=eq.${uid}` },
-        () => { carregarJobs(); }
+        (payload: any) => {
+          carregarJobs();
+          // Se os contadores do job avançaram e temos itens em cache, refetch para atualizar a lista.
+          const row = payload.new || payload.old;
+          const jobId = row?.id;
+          if (jobId && itensByJob.has(jobId)) {
+            const cached = itensByJob.get(jobId) || [];
+            const backend = (row?.enviados || 0) + (row?.erros || 0);
+            if (backend !== cached.length) carregarItens(jobId);
+          }
+        }
       )
       .on(
         "postgres_changes",
