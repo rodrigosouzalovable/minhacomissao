@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useState } from "react";
 import { toast } from "sonner";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { exportarParaExcel } from "@/lib/exportExcel";
