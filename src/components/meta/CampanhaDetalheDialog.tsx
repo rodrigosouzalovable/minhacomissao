@@ -300,7 +300,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 disabled={reenviandoErros}
                 onClick={reenviarErros}
               >
-                <Repeat className="h-3.5 w-3.5 mr-1.5" /> Reenviar erros ({job.erros})
+                <Repeat className="h-3.5 w-3.5 mr-1.5" /> {reenviandoErros ? "Devolvendo…" : `Tentar novamente (${job.erros})`}
               </Button>
             )}
             {!ativa && (
