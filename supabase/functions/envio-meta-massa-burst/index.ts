@@ -212,6 +212,8 @@ Deno.serve(async (req) => {
     let paradaPorRateLimit = false;
     let esperaRateLimitMs = 0;
     let atingiuTempo = false;
+    let templatePausado = false;
+    let templatePausadoErro = '';
 
     while (Date.now() - inicio < MAX_WALL_MS && !paradaPorRateLimit) {
       if (!(await jobEstaRodando(jobId))) {
