@@ -18,7 +18,7 @@ const supabase = createClient(
 );
 
 const MAX_WALL_MS = 50_000;         // deixa margem antes do timeout de 60s
-const BATCH_PICK = 10;
+const MAX_MPS_HARD_CAP = 60;        // teto absoluto por instância (Meta permite ~80/s no tier padrão)
 const MAX_TENTATIVAS_TRANSIENTE = 3;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -267,8 +267,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const msgsPorSegundo = Math.max(1, Math.min(5, Number(job.msgs_por_segundo) || 1));
-    const intervaloMs = Math.floor(1000 / msgsPorSegundo);
+    // Token-bucket real: janela de 1 segundo, N envios em paralelo via Promise.allSettled.
+    // Começa em msgs_por_segundo do job, reduz pela metade em rate limit, sobe +5 após 3 janelas ok.
+    const mpsAlvo = Math.max(1, Math.min(MAX_MPS_HARD_CAP, Number(job.msgs_por_segundo) || 1));
+    let janela = mpsAlvo;
+    let sucessosSeguidos = 0;
 
     let processadosNesteWorker = 0;
     let paradaPorRateLimit = false;
@@ -289,6 +292,9 @@ Deno.serve(async (req) => {
         });
       }
 
+      const janelaInicio = Date.now();
+      const pickSize = Math.max(1, Math.min(MAX_MPS_HARD_CAP, janela));
+
       const { data: pendentes } = await supabase
         .from('envio_meta_job_item')
         .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, tentativas')
@@ -296,7 +302,7 @@ Deno.serve(async (req) => {
         .eq('instancia_id', instanciaId)
         .eq('status', 'pendente')
         .order('ordem', { ascending: true })
-        .limit(BATCH_PICK);
+        .limit(pickSize);
 
       if (!pendentes || pendentes.length === 0) break;
 
@@ -311,33 +317,23 @@ Deno.serve(async (req) => {
       const paraEnviar = pendentes.filter((p: any) => reservadosSet.has(p.id));
       if (paraEnviar.length === 0) continue;
 
+      // DISPARO PARALELO — todos os N envios da janela ao mesmo tempo
+      const resultados = await Promise.allSettled(paraEnviar.map((it: any) => enviarUm(it, job)));
+
       let okCount = 0;
       let errCount = 0;
+      let rateLimitVisto = false;
+      let rateLimitRetryMs = 0;
+      let restrictedVisto = false;
 
-      for (const it of paraEnviar) {
-        if (!(await jobEstaRodando(jobId))) {
-          await supabase.from('envio_meta_job_item')
-            .update({ status: 'pendente' })
-            .eq('job_id', jobId)
-            .eq('instancia_id', instanciaId)
-            .eq('status', 'processando');
-          break;
-        }
+      const nowIso = new Date().toISOString();
 
-        if (Date.now() - inicio >= MAX_WALL_MS) {
-          // Devolve o restante para pendente
-          await supabase.from('envio_meta_job_item')
-            .update({ status: 'pendente' })
-            .eq('job_id', jobId)
-            .eq('instancia_id', instanciaId)
-            .eq('status', 'processando');
-          atingiuTempo = true;
-          break;
-        }
-
-        const t0 = Date.now();
-        const r = await enviarUm(it, job);
-        const nowIso = new Date().toISOString();
+      for (let i = 0; i < paraEnviar.length; i++) {
+        const it = paraEnviar[i];
+        const settled = resultados[i];
+        const r: SendResult = settled.status === 'fulfilled'
+          ? settled.value
+          : { id: it.id, kind: 'transient', retryMs: 3_000, erro: String((settled as PromiseRejectedResult).reason).slice(0, 300) };
 
         if (r.kind === 'ok') {
           await supabase.from('envio_meta_job_item').update({
@@ -345,13 +341,11 @@ Deno.serve(async (req) => {
           }).eq('id', it.id);
           okCount++;
         } else if (r.kind === 'rate_limit') {
-          // Devolve o item, pausa este worker, agenda re-execução
           await supabase.from('envio_meta_job_item').update({
             status: 'pendente', erro: `rate limit: ${r.erro}`,
           }).eq('id', it.id);
-          paradaPorRateLimit = true;
-          esperaRateLimitMs = r.retryMs;
-          break;
+          rateLimitVisto = true;
+          rateLimitRetryMs = Math.max(rateLimitRetryMs, r.retryMs);
         } else if (r.kind === 'transient') {
           const tent = (it.tentativas || 0) + 1;
           if (tent >= MAX_TENTATIVAS_TRANSIENTE) {
@@ -365,46 +359,25 @@ Deno.serve(async (req) => {
             }).eq('id', it.id);
           }
         } else if (r.kind === 'restricted') {
-          // Instância restringida — devolve o item e sai
           await supabase.from('envio_meta_job_item').update({
             status: 'pendente', erro: r.erro,
           }).eq('id', it.id);
-          paradaPorRateLimit = true; // encerra este worker
-          esperaRateLimitMs = 60_000;
-          break;
+          restrictedVisto = true;
         } else if (r.kind === 'template_paused') {
-          // Template pausado pela Meta nesta instância — desativa este worker
-          // e redistribui os pendentes para outras instâncias ativas do job.
           await supabase.from('envio_meta_job_item').update({
             status: 'pendente', erro: r.erro,
           }).eq('id', it.id);
           templatePausado = true;
           templatePausadoErro = r.erro;
-          break;
         } else {
           await supabase.from('envio_meta_job_item').update({
             status: 'erro', erro: r.erro, processado_em: nowIso,
           }).eq('id', it.id);
           errCount++;
         }
-
-        processadosNesteWorker++;
-
-        // Throttle: garante N msgs/segundo (aguarda o restante do intervalo)
-        const gasto = Date.now() - t0;
-        if (intervaloMs > gasto) {
-          await sleep(intervaloMs - gasto);
-          if (!(await jobEstaRodando(jobId))) break;
-        }
       }
 
-      if (paradaPorRateLimit || atingiuTempo || templatePausado || !(await jobEstaRodando(jobId))) {
-        await supabase.from('envio_meta_job_item')
-          .update({ status: 'pendente' })
-          .eq('job_id', jobId)
-          .eq('instancia_id', instanciaId)
-          .eq('status', 'processando');
-      }
+      processadosNesteWorker += okCount + errCount;
 
       if (okCount > 0 || errCount > 0) {
         await supabase.rpc('envio_meta_job_bump', {
@@ -421,8 +394,50 @@ Deno.serve(async (req) => {
         });
       }
 
-      if (atingiuTempo) break;
+      // Ajuste dinâmico da janela (token-bucket adaptativo)
+      if (rateLimitVisto) {
+        janela = Math.max(1, Math.floor(janela / 2));
+        sucessosSeguidos = 0;
+        paradaPorRateLimit = true;
+        esperaRateLimitMs = Math.min(Math.max(rateLimitRetryMs, 2_000), 30_000);
+        break;
+      }
+      if (restrictedVisto) {
+        paradaPorRateLimit = true;
+        esperaRateLimitMs = 60_000;
+        break;
+      }
+      if (templatePausado) break;
+
+      if (errCount === 0 && okCount > 0) {
+        sucessosSeguidos++;
+        if (sucessosSeguidos >= 3 && janela < mpsAlvo) {
+          janela = Math.min(mpsAlvo, janela + 5);
+          sucessosSeguidos = 0;
+        }
+      } else if (errCount > 0) {
+        sucessosSeguidos = 0;
+      }
+
+      if (Date.now() - inicio >= MAX_WALL_MS) { atingiuTempo = true; break; }
+
+      // Aguarda o restante da janela de 1s (throttle real)
+      const gasto = Date.now() - janelaInicio;
+      if (gasto < 1000) {
+        await sleep(1000 - gasto);
+        if (!(await jobEstaRodando(jobId))) break;
+      }
     }
+
+    // Devolve qualquer item ainda em 'processando' desta instância
+    if (paradaPorRateLimit || atingiuTempo || templatePausado || !(await jobEstaRodando(jobId))) {
+      await supabase.from('envio_meta_job_item')
+        .update({ status: 'pendente' })
+        .eq('job_id', jobId)
+        .eq('instancia_id', instanciaId)
+        .eq('status', 'processando');
+    }
+
 
     // ===== Template pausado: desativa esta instância no job e redistribui =====
     if (templatePausado) {

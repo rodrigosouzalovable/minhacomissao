@@ -46,8 +46,10 @@ Deno.serve(async (req) => {
     const modoRajada: boolean = body?.modoRajada === true;
     const minSec = modoRajada ? 0 : Math.max(1, Number(body?.minSec ?? 30));
     const maxSec = modoRajada ? 0 : Math.max(minSec, Number(body?.maxSec ?? 90));
+    // Modo RAJADA: teto de 60 msg/s por instância (margem segura abaixo dos 80 mps documentados pela Meta).
+    // Ajustar via UI (slider). Modo serial mantém 10 como antes.
     const msgsPorSegundo = modoRajada
-      ? Math.max(1, Math.min(5, Number(body?.msgsPorSegundo ?? 1)))
+      ? Math.max(1, Math.min(60, Number(body?.msgsPorSegundo ?? 30)))
       : 10;
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;

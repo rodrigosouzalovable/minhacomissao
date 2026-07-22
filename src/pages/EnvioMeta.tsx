@@ -162,7 +162,7 @@ export default function EnvioMeta() {
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
   const [modoRajada, setModoRajada] = useState<boolean>(false);
-  const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("1");
+  const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("30");
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [validadorId, setValidadorId] = useState<string>("");
   const [validando, setValidando] = useState<boolean>(false);
@@ -605,7 +605,7 @@ export default function EnvioMeta() {
       const bloco = modoRajada
         ? `MODO RAJADA CONTROLADA — envio paralelo por instância, com limite seguro de mensagens por segundo.\n\n`
         : "";
-      const delayLinha = modoRajada ? `${Math.max(1, Math.min(5, Number(msgsPorSegundo) || 1))} msg/s por instância` : `delay ${lo}-${hi}s`;
+      const delayLinha = modoRajada ? `${Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1))} msg/s por instância` : `delay ${lo}-${hi}s`;
       if (!confirm(
         `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
@@ -615,7 +615,7 @@ export default function EnvioMeta() {
 
     // Gate universal para modo rajada — vale para todos os caminhos acima
     if (modoRajada) {
-      const digitou = prompt(`RAJADA CONTROLADA — confirma o disparo com limite de ${Math.max(1, Math.min(5, Number(msgsPorSegundo) || 1))} msg/s por instância?\nDigite RAJADA (maiúsculas) para prosseguir:`);
+      const digitou = prompt(`RAJADA CONTROLADA — confirma o disparo com limite de ${Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1))} msg/s por instância?\nDigite RAJADA (maiúsculas) para prosseguir:`);
       if ((digitou || "").trim() !== "RAJADA") { toast.error("Confirmação cancelada"); return; }
     }
 
@@ -661,7 +661,7 @@ export default function EnvioMeta() {
       templateIdByInstance,
       nomeCampanha: nomeCampanha.trim() || undefined,
       modoRajada,
-      msgsPorSegundo: modoRajada ? Math.max(1, Math.min(5, Number(msgsPorSegundo) || 1)) : undefined,
+      msgsPorSegundo: modoRajada ? Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1)) : undefined,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
@@ -1296,8 +1296,8 @@ export default function EnvioMeta() {
               <div className="text-sm">
                 <div className="font-semibold text-red-700 dark:text-red-300">Modo Rajada controlada — envio paralelo com limite por instância</div>
                 <div className="text-xs text-red-700/80 dark:text-red-300/80">
-                  Usa workers paralelos, mas respeita o campo de mensagens por segundo e remove instâncias RED/YELLOW automaticamente.
-                  Para grandes volumes, use 1 msg/s por instância.
+                  Workers paralelos por instância com token-bucket real (Promise.allSettled). Ajuste msgs/segundo
+                  abaixo — o sistema reduz automaticamente ao receber rate limit da Meta (#130429). Teto seguro: 60/s por número.
                 </div>
               </div>
             </label>
@@ -1348,24 +1348,29 @@ export default function EnvioMeta() {
                     <Input
                       type="number"
                       min={1}
-                      max={5}
+                      max={60}
                       value={msgsPorSegundo}
-                      onChange={(e) => setMsgsPorSegundo(String(Math.max(1, Math.min(5, Number(e.target.value) || 1))))}
+                      onChange={(e) => setMsgsPorSegundo(String(Math.max(1, Math.min(60, Number(e.target.value) || 1))))}
                       className="h-8"
                     />
                     <div className="text-[10px] text-amber-700/70 dark:text-amber-300/70 mt-0.5">
-                      Recomendado: 1. Máximo permitido: 5.
+                      Sugerido: 30 (par de números GREEN). Teto: 60 (limite Meta ~80/s).
                     </div>
                   </div>
                   {(() => {
-                    const mps = Math.max(1, Math.min(5, Number(msgsPorSegundo) || 1));
-                    const segundos = Math.ceil(maxQtd / mps);
+                    const mps = Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1));
+                    const k = instanciaIds.length;
+                    const throughputTotal = mps * k;
+                    const segundos = Math.max(1, Math.ceil(total / throughputTotal));
                     const min = Math.floor(segundos / 60);
                     const s = segundos % 60;
                     return (
                       <div className="text-xs text-amber-800 dark:text-amber-200">
-                        <div className="font-semibold">Tempo estimado por instância</div>
-                        <div className="tabular-nums">~ {min}m {s}s ({mps} msg/s × {maxQtd.toLocaleString("pt-BR")} msgs)</div>
+                        <div className="font-semibold">⚡ Velocidade estimada</div>
+                        <div className="tabular-nums">
+                          {k} × {mps} msg/s = <span className="font-bold">{throughputTotal} msg/s</span>
+                        </div>
+                        <div className="tabular-nums">{total.toLocaleString("pt-BR")} msgs → ~ {min}m {s}s</div>
                       </div>
                     );
                   })()}

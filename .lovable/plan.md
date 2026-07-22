@@ -1,51 +1,69 @@
-# Por que "Reativar" não envia nada
+## Objetivo
+Preparar o Modo Rajada para amanhã enviar **1000 mensagens no menor tempo possível** usando 2 números de qualidade alta (GREEN), respeitando o teto real da Meta (80 msg/s por número no tier padrão, sem ser bloqueado).
 
-Investiguei o banco antes de propor qualquer alteração. O problema **não é bug do reativar** — é bloqueio real da Meta nas duas instâncias do job.
+## Diagnóstico do que trava hoje
 
-## Estado atual das duas instâncias do job `agende_a_videoconferncia`
+Investiguei `envio-meta-massa-iniciar` e `pick-meta-instance`:
 
-| Instância | Estado | Motivo | Pendentes |
-|---|---|---|---|
-| **62 98147-5130** (`f46221b3`) | `estado_pool = restrita`, `pausa_automatica_ate = 23/07 17:36`, motivo **"Business Account locked" (#131031)** | Meta bloqueou a **Business Account** inteira | 424 |
-| **62 98265-1759** (`f85424d0`) | Bloqueada no job (template pausado #132015) | Template pausado pela Meta | 0 |
+1. **Trava artificial de velocidade**: `msgs_por_segundo` está clampado em `Math.max(1, Math.min(5, ...))` — no máximo **5 msg/s por instância**, mesmo em rajada. A Meta permite 80. Estamos usando <7% da capacidade.
+2. **Round-robin serial via `pick-meta-instance`**: cada envio chama uma função que consulta cota/qualidade/horário no banco. Isso adiciona ~200-500ms de latência por mensagem — mata paralelismo.
+3. **Guardrails desnecessários no rajada**: `bloquear_domingo`, `horario_inicio/fim`, `guardrail_ratio_inbound`, `guardrail_block_rate` — todos rodam mesmo em burst e podem pausar as instâncias no meio do teste.
+4. **Sem token-bucket real**: hoje o burst worker roda um loop sequencial `await send → await sleep(1000/msgs_por_segundo)`. Não faz `Promise.all` de verdade.
 
-Também há **3 itens pendentes com `instancia_id = NULL`** (órfãos da redistribuição anterior) e o job está com `status = 'erro'`.
+Com o setup atual, 1000 msgs em 2 números = ~1000/(2×1) = **~500 segundos (~8min)** no melhor caso, e frequentemente estoura para 15-20min quando um guardrail dispara.
 
-## Por que o Reativar "não fez nada"
+## O que vamos mudar (só o necessário para o teste de amanhã)
 
-1. O botão até dispara o worker `envio-meta-massa-burst` para as duas instâncias (vi 4 boots recentes nos logs).
-2. Ao entrar, o worker consulta a instância `f46221b3`, vê `estado_pool='restrita'` + `pausa_automatica_motivo` começando com "Business Account locked" — e **sai imediatamente** (comportamento correto: `restrita` = banimento/bloqueio real da Meta, não é apenas RED de qualidade).
-3. A outra instância está bloqueada no job por template pausado, então também não envia.
-4. Sem worker ativo, ninguém volta o `status` para `rodando`; ele permanece `erro`.
+### 1. Novo parâmetro `msgs_por_segundo_por_instancia` no burst
+- Remover o clamp `Math.min(5, ...)` no modo rajada em `envio-meta-massa-iniciar`.
+- Novo teto: **60 msg/s por instância** (margem de segurança abaixo dos 80 mps documentados pela Meta — evita erro `130429`).
+- UI (`EnvioMeta.tsx`): quando "Modo Rajada" estiver ligado, mostrar slider **"Velocidade por número"** (10-60 msg/s, default 30) em vez do delay 30-90s.
 
-**#131031 "Business Account locked"** é um bloqueio administrativo aplicado pela Meta na Business Account (não no template, não na qualidade). Só a Meta desbloqueia — normalmente após revisão no Business Manager (Contas > Qualidade / Central de Contas).
+### 2. Worker `envio-meta-massa-burst` com token-bucket + Promise.all
+- Reescrever o loop principal: em vez de `for item of items { await send }`, usar **janela paralela de N requests simultâneos** (N = `msgs_por_segundo`) com `Promise.allSettled` a cada 1s.
+- Ao receber erro `130429` (rate limit), reduzir janela pela metade e esperar 2s. Ao receber 3 sucessos seguidos, subir janela em +5.
+- Manter o check de "parar imediato" que já existe (checagem de `status` a cada iteração).
 
-## O que fazer
+### 3. Bypass de guardrails no rajada
+No `envio-meta-massa-burst`, quando `job.modo_rajada = true`:
+- Pular checagem de horário/domingo (`bloquear_domingo`, `horario_inicio/fim`).
+- Pular `guardrail_ratio_inbound` e `guardrail_block_rate_max_pct`.
+- Manter só: instância `ativo=true`, `estado_pool != 'restrita'`, e ausência de template pausado (#132015) / conta bloqueada (#131031).
+- **Não** chamar `pick-meta-instance` a cada envio — os itens já vêm pré-atribuídos via round-robin na criação do job (linha 164-166 do `iniciar`). O worker por instância só processa os itens da sua fila.
 
-### 1. Ação obrigatória fora do sistema (você)
-Entrar no **business.facebook.com > Central de Contas / Qualidade da conta** da CNPJ CERTIFICADORA, ver o motivo do lock e solicitar revisão. Enquanto a Business Account estiver *locked*, **nenhum código nosso consegue enviar por essas instâncias** — a Meta rejeita na origem.
+### 4. UI: card "Velocidade estimada" no `EnvioMeta.tsx`
+Antes de disparar, mostrar:
+```text
+2 números × 30 msg/s = 60 msg/s
+1000 mensagens → ETA ~17 segundos
+```
+Assim você vê o impacto do slider em tempo real.
 
-### 2. Ação dentro do sistema (eu, quando aprovar)
-Como as duas instâncias do job estão indisponíveis, o job precisa ser **encerrado com honestidade** (não faz sentido ficar em loop de retry). Proposta:
+### 5. Botão "Teste rápido" no `CampanhaDetalheDialog.tsx`
+Durante a campanha, mostrar métrica ao vivo:
+- **Throughput real (últimos 10s)**: X msg/s
+- **Rate limits recebidos**: contador de `130429`
+- **Instâncias ativas**: 2/2
 
-a. Marcar o job `ac33474f...` como `cancelado` com `status_motivo` explicando "Business Account bloqueada pela Meta (#131031) + template pausado (#132015)".
-b. Devolver os 3 órfãos (`instancia_id = NULL`) ao status correto para não ficarem pendurados.
-c. No `CampanhaDetalheDialog`, exibir um alerta vermelho dedicado quando `status_motivo` contiver "Business Account" — orientando abrir o Business Manager (hoje só temos aviso genérico de template pausado).
-d. No worker `envio-meta-massa-burst`, quando **todas** as instâncias do job estiverem `restrita`/locked, encerrar o job como `erro` com `status_motivo` claro (hoje ele só faz isso na rota de template pausado, não na de conta bloqueada).
+## O que NÃO vamos mexer
+- Não removeremos a detecção de `#132015` (template pausado) nem `#131031` (BA locked) — elas param a instância corretamente.
+- Não mexeremos no modo serial (delay 30-90s) que é o anti-ban padrão.
+- Não pediremos upgrade para 1000 mps agora — isso é automático da Meta e depende de histórico. Ficamos no tier padrão de 80 mps.
 
-### 3. Depois que a Meta desbloquear a conta
-Você me avisa, eu rodo um UPDATE para limpar `estado_pool`, `pausa_automatica_ate` e `pausa_automatica_motivo` da `f46221b3`, e criamos um **novo** job de rajada com os 424 contatos restantes (o job atual fica no histórico como cancelado).
+## ETA esperado com essas mudanças
+```text
+Config sugerida amanhã: 30 msg/s × 2 números = 60 msg/s
+1000 msgs → ~17 segundos de envio real
+```
+Se os dois números aguentarem sem `130429`, na próxima campanha subimos para 45 msg/s (90/s total) → **~11 segundos**.
 
-## O que eu NÃO recomendo
+## Detalhes técnicos
+- Arquivos alterados:
+  - `supabase/functions/envio-meta-massa-iniciar/index.ts` — remover clamp `min(5, ...)`, aceitar até 60.
+  - `supabase/functions/envio-meta-massa-burst/index.ts` — token-bucket com Promise.allSettled + backoff em `130429` + bypass de guardrails no rajada.
+  - `src/pages/EnvioMeta.tsx` — slider "Velocidade por número" (10-60) + card de ETA.
+  - `src/components/meta/CampanhaDetalheDialog.tsx` — métricas ao vivo (throughput/10s, rate limits).
+- Nada de migration de banco — usa colunas existentes (`msgs_por_segundo`, `modo_rajada`).
+- Nada de novo cron/schedule — sem impacto de custo Lovable Cloud recorrente.
 
-- **Forçar `status='rodando'` e disparar o worker de novo:** já foi tentado implicitamente pelo Reativar; a Meta continuará devolvendo #131031 em cada request, gastando cota de API e potencialmente agravando o bloqueio.
-- **Ignorar `estado_pool='restrita'` no modo rajada:** `restrita` significa banimento/lock real da Meta, diferente de qualidade RED (que já ignoramos no rajada). Ignorar isso pode levar a suspensão definitiva da BA.
-
-## Aprovar para eu executar
-
-Se você concordar, na próxima etapa eu:
-1. Cancelo o job atual com motivo claro.
-2. Ajusto o `CampanhaDetalheDialog` para mostrar o alerta específico de "Business Account bloqueada".
-3. Ajusto o `envio-meta-massa-burst` para encerrar o job como `erro` explicando o motivo quando todas as instâncias estão locked.
-
-**Nada disso destrava a Meta** — isso depende 100% da revisão no Business Manager. Confirma que posso seguir?
+Confirma para eu implementar antes do seu teste de amanhã?
