@@ -212,7 +212,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-5xl max-h-[90vh] overflow-y-auto"
+        style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}
+      >
         <DialogHeader>
           <div className="flex items-center gap-2 flex-wrap">
             <DialogTitle className="text-xl">{nome}</DialogTitle>
