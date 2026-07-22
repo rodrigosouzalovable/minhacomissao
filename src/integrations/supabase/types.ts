@@ -1742,6 +1742,7 @@ export type Database = {
           max_seg: number
           min_seg: number
           modo_rajada: boolean
+          msgs_por_segundo: number
           nome_campanha: string | null
           proximo_em: string | null
           status: string
@@ -1770,6 +1771,7 @@ export type Database = {
           max_seg?: number
           min_seg?: number
           modo_rajada?: boolean
+          msgs_por_segundo?: number
           nome_campanha?: string | null
           proximo_em?: string | null
           status?: string
@@ -1798,6 +1800,7 @@ export type Database = {
           max_seg?: number
           min_seg?: number
           modo_rajada?: boolean
+          msgs_por_segundo?: number
           nome_campanha?: string | null
           proximo_em?: string | null
           status?: string
@@ -3698,6 +3701,7 @@ export type Database = {
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
           phone_number_id: string
+          rate_limit_ate: string | null
           saude_ban_info: Json | null
           saude_checked_at: string | null
           saude_name_status: string | null
@@ -3735,6 +3739,7 @@ export type Database = {
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id: string
+          rate_limit_ate?: string | null
           saude_ban_info?: Json | null
           saude_checked_at?: string | null
           saude_name_status?: string | null
@@ -3772,6 +3777,7 @@ export type Database = {
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id?: string
+          rate_limit_ate?: string | null
           saude_ban_info?: Json | null
           saude_checked_at?: string | null
           saude_name_status?: string | null

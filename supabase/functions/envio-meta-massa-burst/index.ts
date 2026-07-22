@@ -1,7 +1,10 @@
-// Modo RAJADA: envia em paralelo (Promise.all em lotes) sem delay entre msgs.
-// Um worker POR INSTÂNCIA. Cada worker processa apenas os itens pré-atribuídos
-// à sua instância (envio_meta_job_item.instancia_id = <inst>).
-// Alto risco de ban — só para envios pontuais com números descartáveis.
+// Modo RAJADA CONTROLADA: um worker POR INSTÂNCIA, dispara N msgs/segundo
+// (job.msgs_por_segundo, padrão 10) para respeitar o rate limit da Meta.
+// - Rate limit (#80007/#131056/429/502 "Rate limit"): devolve o item para 'pendente',
+//   pausa a instância pelo tempo Retry-After e re-agenda o worker.
+// - Erros transitórios (502/503/504 sem rate limit): devolve item para 'pendente'
+//   com contador de tentativas até 3.
+// - Erros permanentes: marca como 'erro' (o usuário pode reenviar em lote).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -14,11 +17,14 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
-const MAX_WALL_MS = 50_000;      // deixa margem antes do timeout de 60s
-const CONCURRENCY = 50;          // envios simultâneos por instância
-const BATCH_PICK = 200;          // itens buscados por vez do banco
+const MAX_WALL_MS = 50_000;         // deixa margem antes do timeout de 60s
+const BATCH_PICK = 200;
+const MAX_TENTATIVAS_TRANSIENTE = 3;
 
-async function selfInvoke(jobId: string, instanciaId: string) {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function selfInvoke(jobId: string, instanciaId: string, delayMs = 0) {
+  if (delayMs > 0) await sleep(Math.min(delayMs, 2000)); // pequeno debounce
   await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
     method: 'POST',
     headers: {
@@ -31,20 +37,14 @@ async function selfInvoke(jobId: string, instanciaId: string) {
 
 async function notificarConclusao(jobId: string) {
   try {
-    const { data: job } = await supabase
-      .from('envio_meta_job')
-      .select('*')
-      .eq('id', jobId)
-      .maybeSingle();
+    const { data: job } = await supabase.from('envio_meta_job').select('*').eq('id', jobId).maybeSingle();
     if (!job) return;
-
     const total = job.total || 0;
     const enviados = job.enviados || 0;
     const erros = job.erros || 0;
     const template = job.template_nome || '—';
     const inicio = new Date(job.iniciado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
     const fim = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-
     const msg =
       `⚡ *Envio RAJADA concluído*\n\n` +
       `📄 Template: *${template}*\n` +
@@ -53,7 +53,6 @@ async function notificarConclusao(jobId: string) {
       `❌ Falharam: ${erros}\n` +
       `🕐 Início: ${inicio}\n` +
       `🕐 Fim: ${fim}`;
-
     const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
     await notificarAdmin(supabase, {
       tipo: 'envio_meta_concluido',
@@ -66,7 +65,6 @@ async function notificarConclusao(jobId: string) {
 }
 
 async function tentarEncerrarJob(jobId: string) {
-  // Só encerra quando NÃO houver mais itens pendentes/processando em NENHUMA instância.
   const { count } = await supabase
     .from('envio_meta_job_item')
     .select('id', { count: 'exact', head: true })
@@ -87,13 +85,18 @@ async function tentarEncerrarJob(jobId: string) {
     .eq('status', 'rodando')
     .select('id')
     .maybeSingle();
-  if (transitioned) {
-    await notificarConclusao(jobId);
-  }
+  if (transitioned) await notificarConclusao(jobId);
   return true;
 }
 
-async function processarUmItem(item: any, job: any) {
+type SendResult =
+  | { id: string; kind: 'ok'; waId: string | null }
+  | { id: string; kind: 'rate_limit'; retryMs: number; erro: string }
+  | { id: string; kind: 'transient'; retryMs: number; erro: string }
+  | { id: string; kind: 'restricted'; erro: string }
+  | { id: string; kind: 'error'; erro: string };
+
+async function enviarUm(item: any, job: any): Promise<SendResult> {
   const tplId = (job.template_id_by_instance || {})[item.instancia_id] || job.template_id;
   const cliente = {
     telefone: item.telefone,
@@ -103,7 +106,6 @@ async function processarUmItem(item: any, job: any) {
     saldo: item.saldo,
     vars: item.vars || {},
   };
-
   try {
     const resp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-whatsapp-meta`, {
       method: 'POST',
@@ -119,12 +121,19 @@ async function processarUmItem(item: any, job: any) {
       }),
     }).then((r) => r.json());
 
-    if (resp?.success) {
-      return { id: item.id, ok: true, waId: resp?.waId ?? null, erro: null as string | null };
+    if (resp?.success) return { id: item.id, kind: 'ok', waId: resp?.waId ?? null };
+    if (resp?.rate_limited) {
+      return { id: item.id, kind: 'rate_limit', retryMs: Number(resp?.retry_after_ms) || 30_000, erro: resp?.error || 'rate limit' };
     }
-    return { id: item.id, ok: false, waId: null, erro: resp?.error || 'falha' };
+    if (resp?.transient) {
+      return { id: item.id, kind: 'transient', retryMs: Number(resp?.retry_after_ms) || 5_000, erro: resp?.error || 'transitório' };
+    }
+    if (resp?.instance_restricted) {
+      return { id: item.id, kind: 'restricted', erro: resp?.error || 'instância restringida' };
+    }
+    return { id: item.id, kind: 'error', erro: resp?.error || 'falha' };
   } catch (e) {
-    return { id: item.id, ok: false, waId: null, erro: e instanceof Error ? e.message : String(e) };
+    return { id: item.id, kind: 'transient', retryMs: 3_000, erro: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -153,13 +162,38 @@ Deno.serve(async (req) => {
       });
     }
 
-    let processadosNesteWorker = 0;
+    // Verifica se a instância está pausada por rate limit (definido pelo send-whatsapp-meta)
+    const { data: inst } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id, rate_limit_ate, estado_pool, pausa_automatica_ate')
+      .eq('id', instanciaId)
+      .maybeSingle();
+    const agora = Date.now();
+    if (inst?.rate_limit_ate && new Date(inst.rate_limit_ate).getTime() > agora) {
+      const espera = new Date(inst.rate_limit_ate).getTime() - agora;
+      await selfInvoke(jobId, instanciaId, Math.min(espera, 2000));
+      return new Response(JSON.stringify({ success: true, aguardando_rate_limit: true, ms: espera }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (inst?.estado_pool === 'restrita' || (inst?.pausa_automatica_ate && new Date(inst.pausa_automatica_ate).getTime() > agora)) {
+      // Instância restringida — não tenta novamente automaticamente
+      return new Response(JSON.stringify({ success: true, instancia_pausada: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    while (Date.now() - inicio < MAX_WALL_MS) {
-      // Reserva um lote de pendentes desta instância transicionando para 'processando'
+    const msgsPorSegundo = Math.max(1, Math.min(50, Number(job.msgs_por_segundo) || 10));
+    const intervaloMs = Math.floor(1000 / msgsPorSegundo);
+
+    let processadosNesteWorker = 0;
+    let paradaPorRateLimit = false;
+    let esperaRateLimitMs = 0;
+
+    while (Date.now() - inicio < MAX_WALL_MS && !paradaPorRateLimit) {
       const { data: pendentes } = await supabase
         .from('envio_meta_job_item')
-        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id')
+        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, tentativas')
         .eq('job_id', jobId)
         .eq('instancia_id', instanciaId)
         .eq('status', 'pendente')
@@ -179,59 +213,86 @@ Deno.serve(async (req) => {
       const paraEnviar = pendentes.filter((p: any) => reservadosSet.has(p.id));
       if (paraEnviar.length === 0) continue;
 
-      // Executa em waves paralelas de CONCURRENCY
-      for (let i = 0; i < paraEnviar.length; i += CONCURRENCY) {
-        if (Date.now() - inicio >= MAX_WALL_MS) break;
-        const wave = paraEnviar.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(wave.map((it) => processarUmItem(it, job)));
+      let okCount = 0;
+      let errCount = 0;
 
-        const okItems = results.filter((r) => r.ok);
-        const errItems = results.filter((r) => !r.ok);
-
-        // Bulk update — enviados
-        if (okItems.length > 0) {
-          const nowIso = new Date().toISOString();
-          for (const r of okItems) {
-            await supabase.from('envio_meta_job_item').update({
-              status: 'enviado',
-              erro: null,
-              processado_em: nowIso,
-              wa_message_id: r.waId,
-            }).eq('id', r.id);
-          }
-        }
-        // Bulk update — erros
-        if (errItems.length > 0) {
-          const nowIso = new Date().toISOString();
-          for (const r of errItems) {
-            await supabase.from('envio_meta_job_item').update({
-              status: 'erro',
-              erro: r.erro,
-              processado_em: nowIso,
-            }).eq('id', r.id);
-          }
+      for (const it of paraEnviar) {
+        if (Date.now() - inicio >= MAX_WALL_MS) {
+          // Devolve o restante para pendente
+          await supabase.from('envio_meta_job_item')
+            .update({ status: 'pendente' })
+            .eq('id', it.id);
+          continue;
         }
 
-        // Bump contadores agregados no job
+        const t0 = Date.now();
+        const r = await enviarUm(it, job);
+        const nowIso = new Date().toISOString();
+
+        if (r.kind === 'ok') {
+          await supabase.from('envio_meta_job_item').update({
+            status: 'enviado', erro: null, processado_em: nowIso, wa_message_id: r.waId,
+          }).eq('id', it.id);
+          okCount++;
+        } else if (r.kind === 'rate_limit') {
+          // Devolve o item, pausa este worker, agenda re-execução
+          await supabase.from('envio_meta_job_item').update({
+            status: 'pendente', erro: `rate limit: ${r.erro}`,
+          }).eq('id', it.id);
+          paradaPorRateLimit = true;
+          esperaRateLimitMs = r.retryMs;
+          break;
+        } else if (r.kind === 'transient') {
+          const tent = (it.tentativas || 0) + 1;
+          if (tent >= MAX_TENTATIVAS_TRANSIENTE) {
+            await supabase.from('envio_meta_job_item').update({
+              status: 'erro', erro: r.erro, processado_em: nowIso, tentativas: tent,
+            }).eq('id', it.id);
+            errCount++;
+          } else {
+            await supabase.from('envio_meta_job_item').update({
+              status: 'pendente', tentativas: tent, erro: r.erro,
+            }).eq('id', it.id);
+          }
+        } else if (r.kind === 'restricted') {
+          // Instância restringida — devolve o item e sai
+          await supabase.from('envio_meta_job_item').update({
+            status: 'pendente', erro: r.erro,
+          }).eq('id', it.id);
+          paradaPorRateLimit = true; // encerra este worker
+          esperaRateLimitMs = 60_000;
+          break;
+        } else {
+          await supabase.from('envio_meta_job_item').update({
+            status: 'erro', erro: r.erro, processado_em: nowIso,
+          }).eq('id', it.id);
+          errCount++;
+        }
+
+        processadosNesteWorker++;
+
+        // Throttle: garante N msgs/segundo (aguarda o restante do intervalo)
+        const gasto = Date.now() - t0;
+        if (intervaloMs > gasto) await sleep(intervaloMs - gasto);
+      }
+
+      if (okCount > 0 || errCount > 0) {
         await supabase.rpc('envio_meta_job_bump', {
           _job_id: jobId,
-          _enviados_inc: okItems.length,
-          _erros_inc: errItems.length,
+          _enviados_inc: okCount,
+          _erros_inc: errCount,
           _proximo_em: new Date().toISOString(),
         }).then(() => {}).catch(async () => {
-          // Fallback: update direto se RPC falhar
           const { data: cur } = await supabase.from('envio_meta_job').select('enviados, erros').eq('id', jobId).maybeSingle();
           await supabase.from('envio_meta_job').update({
-            enviados: (cur?.enviados || 0) + okItems.length,
-            erros: (cur?.erros || 0) + errItems.length,
+            enviados: (cur?.enviados || 0) + okCount,
+            erros: (cur?.erros || 0) + errCount,
           }).eq('id', jobId);
         });
-
-        processadosNesteWorker += wave.length;
       }
     }
 
-    // Se ainda há pendentes desta instância, faz self-invoke encadeado.
+    // Se ainda há pendentes, encadeia self-invoke (respeitando rate limit se houver)
     const { count: restantes } = await supabase
       .from('envio_meta_job_item')
       .select('id', { count: 'exact', head: true })
@@ -240,15 +301,20 @@ Deno.serve(async (req) => {
       .eq('status', 'pendente');
 
     if ((restantes ?? 0) > 0) {
-      await selfInvoke(jobId, instanciaId);
-      return new Response(JSON.stringify({ success: true, processados: processadosNesteWorker, restantes, continua: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      // Se parou por rate limit, aguarda o tempo indicado antes de reagendar
+      const espera = paradaPorRateLimit ? Math.min(esperaRateLimitMs, 60_000) : 0;
+      await selfInvoke(jobId, instanciaId, espera);
+      return new Response(JSON.stringify({
+        success: true,
+        processados: processadosNesteWorker,
+        restantes,
+        continua: true,
+        rate_limited: paradaPorRateLimit,
+        aguardando_ms: espera,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Terminou tudo desta instância. Tenta encerrar o job (se todas as instâncias terminaram).
     await tentarEncerrarJob(jobId);
-
     return new Response(JSON.stringify({ success: true, processados: processadosNesteWorker, restantes: 0 }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

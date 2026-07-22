@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { exportarParaExcel } from "@/lib/exportExcel";
@@ -81,6 +82,26 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const percent = Math.round((totalProcessado / Math.max(job.total, 1)) * 100);
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
+  const [reenviandoErros, setReenviandoErros] = useState(false);
+
+  const reenviarErros = async () => {
+    if (reenviandoErros) return;
+    if (!confirm(`Reenviar ${job.erros} mensagens com erro?\n\nElas voltam para a fila como pendentes e serão disparadas respeitando o limite de mensagens por segundo (evita "Rate limit exceeded" da Meta).`)) return;
+    setReenviandoErros(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("envio-meta-massa-retry-erros", {
+        body: { job_id: job.id },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha ao reenviar");
+      toast.success(`${data.reenfileirados ?? 0} mensagens re-enfileiradas`);
+      setTimeout(() => { refreshStatus(); recarregarItensJob(job.id); }, 800);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao reenviar");
+    } finally {
+      setReenviandoErros(false);
+    }
+  };
 
   const copiar = (arr: string[], titulo: string) => {
     if (arr.length === 0) return;
@@ -265,6 +286,17 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             {!ativa && resultado && job.restantes > 0 && (
               <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => reativarJob(job.id)}>
                 <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reativar ({job.restantes})
+              </Button>
+            )}
+            {job.erros > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-500 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                disabled={reenviandoErros}
+                onClick={reenviarErros}
+              >
+                <Repeat className="h-3.5 w-3.5 mr-1.5" /> Reenviar erros ({job.erros})
               </Button>
             )}
             {!ativa && (

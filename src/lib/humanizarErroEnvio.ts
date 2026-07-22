@@ -33,8 +33,8 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
   if (s.includes("504")) {
     return "O servidor da Meta demorou demais para responder (timeout). Tente novamente mais tarde.";
   }
-  if (s.includes("429") || s.includes("rate limit") || s.includes("too many requests")) {
-    return "Essa instância enviou mensagens em excesso e foi limitada pela Meta temporariamente. Aguarde antes de tentar de novo.";
+  if (s.includes("429") || s.includes("rate limit") || s.includes("too many requests") || s.includes("#80007") || s.includes("#131056")) {
+    return "A Meta limitou os envios dessa instância (Rate limit exceeded) — o volume passou do teto por segundo. O sistema pausou a instância automaticamente e vai retomar quando a Meta liberar. Reduza o campo 'Msgs/segundo' no Modo Rajada (recomendado 5-15).";
   }
   if (s.includes("401") || s.includes("unauthorized") || s.includes("invalid token") || s.includes("access token")) {
     return "O token de acesso dessa instância está inválido ou expirado. Reconecte a instância nas configurações Meta.";
