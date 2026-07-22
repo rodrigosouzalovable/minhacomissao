@@ -288,6 +288,17 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reativar ({job.restantes})
               </Button>
             )}
+            {job.erros > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-500 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                disabled={reenviandoErros}
+                onClick={reenviarErros}
+              >
+                <Repeat className="h-3.5 w-3.5 mr-1.5" /> Reenviar erros ({job.erros})
+              </Button>
+            )}
             {!ativa && (
               <Button size="sm" variant="outline" onClick={() => limparJob(job.id)}>
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Limpar
