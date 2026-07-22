@@ -387,17 +387,33 @@ Deno.serve(async (req) => {
     // ===== Pool checks =====
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
 
+    // Se o chamador (burst) pede para ignorar pausas por qualidade, só bloqueamos quando
+    // o motivo da pausa/restrição for de fato um status Meta (BANNED/FLAGGED/RESTRICTED).
+    const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
+    const pausaPorStatus = motivoPausaLower.startsWith('status=');
+    const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
+    const ignoraQualidade = ignorar_pausa_qualidade === true;
+
     if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste) {
-      return new Response(JSON.stringify({
-        success: false, error: `Instância não está ativa no pool (estado: ${inst.estado_pool})`,
-        pool_blocked: true, instancia_id,
-      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      // Estado 'restrita' sempre bloqueia. 'pausado' por qualidade é ignorado no modo rajada.
+      const bloqueiaEstado = inst.estado_pool === 'restrita' || !(ignoraQualidade && pausaPorQualidade);
+      if (bloqueiaEstado) {
+        return new Response(JSON.stringify({
+          success: false, error: `Instância não está ativa no pool (estado: ${inst.estado_pool})`,
+          pool_blocked: true, instancia_id,
+          instance_restricted: inst.estado_pool === 'restrita' || pausaPorStatus,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
     if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
-      return new Response(JSON.stringify({
-        success: false, error: `Pausa automática até ${new Date(inst.pausa_automatica_ate).toLocaleString('pt-BR')} — motivo: ${inst.pausa_automatica_motivo || 'não informado'}`,
-        pool_paused: true, instancia_id,
-      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const bloqueiaPausa = !(ignoraQualidade && pausaPorQualidade);
+      if (bloqueiaPausa) {
+        return new Response(JSON.stringify({
+          success: false, error: `Pausa automática até ${new Date(inst.pausa_automatica_ate).toLocaleString('pt-BR')} — motivo: ${inst.pausa_automatica_motivo || 'não informado'}`,
+          pool_paused: true, instancia_id,
+          instance_restricted: pausaPorStatus,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
 
     // Bloqueio domingo/horário (ignorado em modo teste)
