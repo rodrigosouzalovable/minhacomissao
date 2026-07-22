@@ -615,7 +615,7 @@ export default function EnvioMeta() {
 
     // Gate universal para modo rajada — vale para todos os caminhos acima
     if (modoRajada) {
-      const digitou = prompt(`RAJADA CONTROLADA — confirma o disparo com limite de ${Math.max(1, Math.min(5, Number(msgsPorSegundo) || 1))} msg/s por instância?\nDigite RAJADA (maiúsculas) para prosseguir:`);
+      const digitou = prompt(`RAJADA CONTROLADA — confirma o disparo com limite de ${Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1))} msg/s por instância?\nDigite RAJADA (maiúsculas) para prosseguir:`);
       if ((digitou || "").trim() !== "RAJADA") { toast.error("Confirmação cancelada"); return; }
     }
 
