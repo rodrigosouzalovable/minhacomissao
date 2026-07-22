@@ -661,6 +661,7 @@ export default function EnvioMeta() {
       templateIdByInstance,
       nomeCampanha: nomeCampanha.trim() || undefined,
       modoRajada,
+      msgsPorSegundo: modoRajada ? Math.max(1, Math.min(50, Number(msgsPorSegundo) || 10)) : undefined,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
