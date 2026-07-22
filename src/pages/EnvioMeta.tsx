@@ -605,7 +605,7 @@ export default function EnvioMeta() {
       const bloco = modoRajada
         ? `MODO RAJADA CONTROLADA — envio paralelo por instância, com limite seguro de mensagens por segundo.\n\n`
         : "";
-      const delayLinha = modoRajada ? `${Math.max(1, Math.min(5, Number(msgsPorSegundo) || 1))} msg/s por instância` : `delay ${lo}-${hi}s`;
+      const delayLinha = modoRajada ? `${Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1))} msg/s por instância` : `delay ${lo}-${hi}s`;
       if (!confirm(
         `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
