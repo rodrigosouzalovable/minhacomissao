@@ -1301,6 +1301,50 @@ export default function EnvioMeta() {
             </label>
           </div>
 
+          {modoRajada && instanciaIds.length > 0 && (recipients.length > 0 || (validacaoPreview?.valid.length ?? 0) > 0) && (() => {
+            const total = validacaoPreview?.valid.length ?? recipients.length;
+            const k = instanciaIds.length;
+            const base = Math.floor(total / k);
+            const resto = total % k;
+            const selInst = instanciaIds
+              .map((id) => instancias.find((i) => i.id === id))
+              .filter(Boolean) as Instancia[];
+            const maxQtd = base + (resto > 0 ? 1 : 0);
+            return (
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
+                <div className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  ⚡ Divisão da rajada — {total.toLocaleString("pt-BR")} contatos ÷ {k} instância{k > 1 ? "s" : ""}
+                </div>
+                <div className="space-y-1.5">
+                  {selInst.map((inst, i) => {
+                    const qtd = base + (i < resto ? 1 : 0);
+                    const pct = maxQtd > 0 ? (qtd / maxQtd) * 100 : 0;
+                    return (
+                      <div key={inst.id} className="flex items-center gap-2 text-xs">
+                        <div className="min-w-0 flex-1 truncate">
+                          <span className="font-medium">{inst.nome}</span>
+                          {inst.display_phone && <span className="text-muted-foreground"> • {inst.display_phone}</span>}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 w-40">
+                          <div className="h-1.5 flex-1 bg-amber-200 dark:bg-amber-900/50 rounded overflow-hidden">
+                            <div className="h-full bg-amber-600" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="tabular-nums font-semibold text-amber-800 dark:text-amber-200 w-16 text-right">
+                            {qtd.toLocaleString("pt-BR")}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-[11px] text-amber-700/80 dark:text-amber-300/80">
+                  Cada instância dispara em paralelo, sem delay, todos os seus contatos ao mesmo tempo.
+                </div>
+              </div>
+            );
+          })()}
+
+
           <div className={"grid grid-cols-2 gap-3 max-w-sm " + (modoRajada ? "opacity-50" : "")}>
             <div>
               <Label>Mín. (s)</Label>
