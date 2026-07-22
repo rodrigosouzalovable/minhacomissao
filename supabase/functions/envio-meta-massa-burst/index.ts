@@ -362,6 +362,99 @@ Deno.serve(async (req) => {
       if (atingiuTempo) break;
     }
 
+    // ===== Template pausado: desativa esta instância no job e redistribui =====
+    if (templatePausado) {
+      // Marca a instância como bloqueada neste job
+      const bloqueadasAtuais: string[] = Array.isArray(job.instancias_bloqueadas) ? job.instancias_bloqueadas : [];
+      const bloqueadas = Array.from(new Set([...bloqueadasAtuais, instanciaId]));
+      await supabase.from('envio_meta_job').update({ instancias_bloqueadas: bloqueadas }).eq('id', jobId);
+
+      // Notifica admin (idempotente por job+instância)
+      try {
+        const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+        await notificarAdmin(supabase, {
+          tipo: 'meta_template_pausado',
+          mensagem:
+            `⚠️ Instância desativada por template pausado\n\n` +
+            `Job: ${job.nome || jobId}\n` +
+            `Instância: ${instanciaId}\n` +
+            `Motivo: ${templatePausadoErro}\n\n` +
+            `Os contatos pendentes serão redistribuídos entre as instâncias ativas.`,
+          chaveIdempotencia: `template_pausado_${jobId}_${instanciaId}`,
+        });
+      } catch (_) { /* ignore */ }
+
+      // Lista instâncias ainda ativas no job
+      const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+      const ativas = todas.filter((x) => !bloqueadas.includes(x));
+
+      // Pega os pendentes desta instância para reatribuir
+      const { data: pendentesRest } = await supabase
+        .from('envio_meta_job_item')
+        .select('id')
+        .eq('job_id', jobId)
+        .eq('instancia_id', instanciaId)
+        .eq('status', 'pendente')
+        .order('ordem', { ascending: true });
+
+      const idsRest = (pendentesRest || []).map((r: any) => r.id);
+
+      if (ativas.length === 0) {
+        // Todas as instâncias caíram — marca como erro e encerra o job
+        if (idsRest.length > 0) {
+          const CHUNK = 500;
+          for (let i = 0; i < idsRest.length; i += CHUNK) {
+            const slice = idsRest.slice(i, i + CHUNK);
+            await supabase.from('envio_meta_job_item').update({
+              status: 'erro',
+              erro: 'Todas as instâncias com template pausado pela Meta.',
+              processado_em: new Date().toISOString(),
+            }).in('id', slice);
+          }
+          try {
+            const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
+            await supabase.from('envio_meta_job').update({
+              erros: (cur?.erros || 0) + idsRest.length,
+            }).eq('id', jobId);
+          } catch { /* ignore */ }
+        }
+        await tentarEncerrarJob(jobId);
+        return new Response(JSON.stringify({
+          success: true,
+          template_pausado: true,
+          todas_bloqueadas: true,
+          restantes_marcados_erro: idsRest.length,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Redistribui round-robin entre as ativas
+      const grupos: Record<string, string[]> = {};
+      for (const inst of ativas) grupos[inst] = [];
+      for (let i = 0; i < idsRest.length; i++) {
+        const target = ativas[i % ativas.length];
+        grupos[target].push(idsRest[i]);
+      }
+      for (const [target, itemIds] of Object.entries(grupos)) {
+        if (itemIds.length === 0) continue;
+        const CHUNK = 500;
+        for (let i = 0; i < itemIds.length; i += CHUNK) {
+          await supabase.from('envio_meta_job_item').update({ instancia_id: target })
+            .in('id', itemIds.slice(i, i + CHUNK));
+        }
+        // Dispara worker para a instância que recebeu
+        await selfInvoke(jobId, target, 0);
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        template_pausado: true,
+        instancia_desativada: instanciaId,
+        redistribuidos: idsRest.length,
+        ativas_restantes: ativas,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+
     // Se ainda há pendentes, encadeia self-invoke (respeitando rate limit se houver)
     const { count: restantes } = await supabase
       .from('envio_meta_job_item')
