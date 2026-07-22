@@ -200,6 +200,7 @@ Deno.serve(async (req) => {
     let processadosNesteWorker = 0;
     let paradaPorRateLimit = false;
     let esperaRateLimitMs = 0;
+    let atingiuTempo = false;
 
     while (Date.now() - inicio < MAX_WALL_MS && !paradaPorRateLimit) {
       if (!(await jobEstaRodando(jobId))) {
@@ -252,8 +253,11 @@ Deno.serve(async (req) => {
           // Devolve o restante para pendente
           await supabase.from('envio_meta_job_item')
             .update({ status: 'pendente' })
-            .eq('id', it.id);
-          continue;
+            .eq('job_id', jobId)
+            .eq('instancia_id', instanciaId)
+            .eq('status', 'processando');
+          atingiuTempo = true;
+          break;
         }
 
         const t0 = Date.now();
@@ -310,13 +314,15 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (paradaPorRateLimit || !(await jobEstaRodando(jobId))) {
+      if (paradaPorRateLimit || atingiuTempo || !(await jobEstaRodando(jobId))) {
         await supabase.from('envio_meta_job_item')
           .update({ status: 'pendente' })
           .eq('job_id', jobId)
           .eq('instancia_id', instanciaId)
           .eq('status', 'processando');
       }
+
+      if (atingiuTempo) break;
 
       if (okCount > 0 || errCount > 0) {
         await supabase.rpc('envio_meta_job_bump', {
