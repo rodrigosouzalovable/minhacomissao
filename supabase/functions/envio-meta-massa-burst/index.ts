@@ -18,7 +18,7 @@ const supabase = createClient(
 );
 
 const MAX_WALL_MS = 50_000;         // deixa margem antes do timeout de 60s
-const BATCH_PICK = 10;
+const MAX_MPS_HARD_CAP = 60;        // teto absoluto por instância (Meta permite ~80/s no tier padrão)
 const MAX_TENTATIVAS_TRANSIENTE = 3;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
