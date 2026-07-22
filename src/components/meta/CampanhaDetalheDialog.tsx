@@ -337,7 +337,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Limpar
               </Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => { refreshStatus(); recarregarItensJob(job.id); }}>
+            <Button size="sm" variant="ghost" onClick={() => { refreshCountersJob(job.id); recarregarItensJob(job.id); }}>
               <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Atualizar
             </Button>
           </div>
