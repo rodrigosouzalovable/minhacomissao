@@ -186,6 +186,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const [lastStartedId, setLastStartedId] = useState<string | null>(null);
   const onAfterRef = useRef<Record<string, (() => void) | undefined>>({});
   const seenConcludedRef = useRef<Set<string>>(new Set());
+  const manuallyCanceledRef = useRef<Set<string>>(new Set());
+  const autoResumeAtRef = useRef<Map<string, number>>(new Map()); // jobId -> last auto-resume ts
 
   const carregarJobs = useCallback(async () => {
     if (!uid) { setJobs([]); setItensByJob(new Map()); setLogByJob(new Map()); return; }
