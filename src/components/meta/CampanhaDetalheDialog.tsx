@@ -243,7 +243,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
               </span>
             </div>
             <Progress value={percent} className="h-4 shrink-0" />
-            <div className="text-xs text-muted-foreground min-h-[16px]">
+            <div className="text-xs text-muted-foreground h-4 overflow-hidden whitespace-nowrap truncate">
               {progresso?.atualTelefone ? (
                 <>
                   Último: <code>{progresso.atualTelefone}</code>
@@ -251,7 +251,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 </>
               ) : null}
             </div>
-            <div className="text-xs text-muted-foreground min-h-[16px]">
+            <div className="text-xs text-muted-foreground h-4 overflow-hidden whitespace-nowrap truncate">
               {progresso && progresso.proximoEmSeg > 0 && !pausado
                 ? `Próximo envio em ${progresso.proximoEmSeg}s`
                 : null}
