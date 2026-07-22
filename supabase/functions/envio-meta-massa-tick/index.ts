@@ -21,7 +21,13 @@ async function fetchJob(id: string) {
   return data;
 }
 
-function selfInvoke(jobId: string) {
+async function jobEstaRodando(jobId: string) {
+  const { data } = await supabase.from('envio_meta_job').select('status').eq('id', jobId).maybeSingle();
+  return data?.status === 'rodando';
+}
+
+async function selfInvoke(jobId: string) {
+  if (!(await jobEstaRodando(jobId))) return;
   fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
     method: 'POST',
     headers: {
@@ -142,6 +148,7 @@ async function notificarConclusao(jobId: string, statusFinal: 'concluido' | 'err
 
 async function processarItem(job: any): Promise<ItemResult> {
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
+  if (!(await jobEstaRodando(job.id))) return { advanced: false, stop: true };
 
   const proxMs = job.proximo_em ? new Date(job.proximo_em).getTime() - Date.now() : 0;
   if (proxMs > 0) return { advanced: false, waitMs: proxMs };
@@ -227,6 +234,14 @@ async function processarItem(job: any): Promise<ItemResult> {
     .select('id')
     .maybeSingle();
   if (reservErr || !reserved) return { advanced: false, waitMs: 1_000 };
+
+  if (!(await jobEstaRodando(job.id))) {
+    await supabase.from('envio_meta_job_item')
+      .update({ status: 'pendente', instancia_id: null, instancia_nome: null })
+      .eq('id', pend.id)
+      .eq('status', 'processando');
+    return { advanced: false, stop: true };
+  }
 
   await supabase.from('envio_meta_job').update({
     atual_telefone: pend.telefone,
@@ -424,6 +439,7 @@ async function rodarJobLoop(jobInicial: any): Promise<{ processados: number; sel
       const restante = MAX_WALL_MS - (Date.now() - inicio);
       if (r.delayMs > restante) { selfInvokeNeeded = true; break; }
       await sleep(r.delayMs);
+      if (!(await jobEstaRodando(job.id))) break;
       const refreshed = await fetchJob(job.id);
       if (!refreshed || refreshed.status !== 'rodando') { job = refreshed; break; }
       job = refreshed;
@@ -434,6 +450,7 @@ async function rodarJobLoop(jobInicial: any): Promise<{ processados: number; sel
     const restante = MAX_WALL_MS - (Date.now() - inicio);
     if (waitMs > Math.min(restante, 15_000)) { selfInvokeNeeded = true; break; }
     await sleep(waitMs);
+    if (!(await jobEstaRodando(job.id))) break;
     const refreshed = await fetchJob(job.id);
     if (!refreshed || refreshed.status !== 'rodando') { job = refreshed; break; }
     job = refreshed;
@@ -464,16 +481,16 @@ Deno.serve(async (req) => {
       } else if (jobId && jobs.length === 1) {
         const r = await rodarJobLoop(jobs[0]);
         processadosTotal += r.processados;
-        if (r.selfInvokeNeeded) selfInvoke(r.jobId);
+        if (r.selfInvokeNeeded) await selfInvoke(r.jobId);
       } else {
         for (const job of jobs) {
           try {
             const r = await processarItem(job);
             if ('advanced' in r && r.advanced) {
               processadosTotal++;
-              selfInvoke(job.id);
+              await selfInvoke(job.id);
             } else if (!('done' in r && r.done) && !('stop' in r && r.stop)) {
-              if ((r.waitMs ?? 0) <= 30_000) selfInvoke(job.id);
+              if ((r.waitMs ?? 0) <= 30_000) await selfInvoke(job.id);
             }
           } catch (e) {
             console.error('[tick job]', job.id, e);

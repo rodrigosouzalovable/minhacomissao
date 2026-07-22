@@ -34,7 +34,7 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
     return "O servidor da Meta demorou demais para responder (timeout). Tente novamente mais tarde.";
   }
   if (s.includes("429") || s.includes("rate limit") || s.includes("too many requests") || s.includes("#80007") || s.includes("#131056")) {
-    return "A Meta limitou os envios dessa instância (Rate limit exceeded) — o volume passou do teto por segundo. O sistema pausou a instância automaticamente e vai retomar quando a Meta liberar. Reduza o campo 'Msgs/segundo' no Modo Rajada (recomendado 5-15).";
+    return "A Meta limitou os envios dessa instância (Rate limit exceeded). O contato voltou para a fila, a instância pausou automaticamente pelo tempo informado pela Meta e retomará em ritmo mais lento. Use 1 msg/segundo por instância no Modo Rajada.";
   }
   if (s.includes("401") || s.includes("unauthorized") || s.includes("invalid token") || s.includes("access token")) {
     return "O token de acesso dessa instância está inválido ou expirado. Reconecte a instância nas configurações Meta.";

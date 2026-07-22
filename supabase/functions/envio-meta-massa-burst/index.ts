@@ -1,5 +1,5 @@
 // Modo RAJADA CONTROLADA: um worker POR INSTÂNCIA, dispara N msgs/segundo
-// (job.msgs_por_segundo, padrão 10) para respeitar o rate limit da Meta.
+// (job.msgs_por_segundo, padrão 1) para respeitar o rate limit da Meta.
 // - Rate limit (#80007/#131056/429/502 "Rate limit"): devolve o item para 'pendente',
 //   pausa a instância pelo tempo Retry-After e re-agenda o worker.
 // - Erros transitórios (502/503/504 sem rate limit): devolve item para 'pendente'
@@ -18,13 +18,24 @@ const supabase = createClient(
 );
 
 const MAX_WALL_MS = 50_000;         // deixa margem antes do timeout de 60s
-const BATCH_PICK = 200;
+const BATCH_PICK = 10;
 const MAX_TENTATIVAS_TRANSIENTE = 3;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+async function jobEstaRodando(jobId: string) {
+  const { data } = await supabase
+    .from('envio_meta_job')
+    .select('status')
+    .eq('id', jobId)
+    .maybeSingle();
+  return data?.status === 'rodando';
+}
+
 async function selfInvoke(jobId: string, instanciaId: string, delayMs = 0) {
+  if (!(await jobEstaRodando(jobId))) return;
   if (delayMs > 0) await sleep(Math.min(delayMs, 2000)); // pequeno debounce
+  if (!(await jobEstaRodando(jobId))) return;
   await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
     method: 'POST',
     headers: {
@@ -183,14 +194,26 @@ Deno.serve(async (req) => {
       });
     }
 
-    const msgsPorSegundo = Math.max(1, Math.min(50, Number(job.msgs_por_segundo) || 10));
+    const msgsPorSegundo = Math.max(1, Math.min(5, Number(job.msgs_por_segundo) || 1));
     const intervaloMs = Math.floor(1000 / msgsPorSegundo);
 
     let processadosNesteWorker = 0;
     let paradaPorRateLimit = false;
     let esperaRateLimitMs = 0;
+    let atingiuTempo = false;
 
     while (Date.now() - inicio < MAX_WALL_MS && !paradaPorRateLimit) {
+      if (!(await jobEstaRodando(jobId))) {
+        await supabase.from('envio_meta_job_item')
+          .update({ status: 'pendente' })
+          .eq('job_id', jobId)
+          .eq('instancia_id', instanciaId)
+          .eq('status', 'processando');
+        return new Response(JSON.stringify({ success: true, cancelado: true, processados: processadosNesteWorker }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       const { data: pendentes } = await supabase
         .from('envio_meta_job_item')
         .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, tentativas')
@@ -217,12 +240,24 @@ Deno.serve(async (req) => {
       let errCount = 0;
 
       for (const it of paraEnviar) {
+        if (!(await jobEstaRodando(jobId))) {
+          await supabase.from('envio_meta_job_item')
+            .update({ status: 'pendente' })
+            .eq('job_id', jobId)
+            .eq('instancia_id', instanciaId)
+            .eq('status', 'processando');
+          break;
+        }
+
         if (Date.now() - inicio >= MAX_WALL_MS) {
           // Devolve o restante para pendente
           await supabase.from('envio_meta_job_item')
             .update({ status: 'pendente' })
-            .eq('id', it.id);
-          continue;
+            .eq('job_id', jobId)
+            .eq('instancia_id', instanciaId)
+            .eq('status', 'processando');
+          atingiuTempo = true;
+          break;
         }
 
         const t0 = Date.now();
@@ -273,7 +308,18 @@ Deno.serve(async (req) => {
 
         // Throttle: garante N msgs/segundo (aguarda o restante do intervalo)
         const gasto = Date.now() - t0;
-        if (intervaloMs > gasto) await sleep(intervaloMs - gasto);
+        if (intervaloMs > gasto) {
+          await sleep(intervaloMs - gasto);
+          if (!(await jobEstaRodando(jobId))) break;
+        }
+      }
+
+      if (paradaPorRateLimit || atingiuTempo || !(await jobEstaRodando(jobId))) {
+        await supabase.from('envio_meta_job_item')
+          .update({ status: 'pendente' })
+          .eq('job_id', jobId)
+          .eq('instancia_id', instanciaId)
+          .eq('status', 'processando');
       }
 
       if (okCount > 0 || errCount > 0) {
@@ -290,6 +336,8 @@ Deno.serve(async (req) => {
           }).eq('id', jobId);
         });
       }
+
+      if (atingiuTempo) break;
     }
 
     // Se ainda há pendentes, encadeia self-invoke (respeitando rate limit se houver)
@@ -301,6 +349,11 @@ Deno.serve(async (req) => {
       .eq('status', 'pendente');
 
     if ((restantes ?? 0) > 0) {
+      if (!(await jobEstaRodando(jobId))) {
+        return new Response(JSON.stringify({ success: true, cancelado: true, processados: processadosNesteWorker, restantes }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       // Se parou por rate limit, aguarda o tempo indicado antes de reagendar
       const espera = paradaPorRateLimit ? Math.min(esperaRateLimitMs, 60_000) : 0;
       await selfInvoke(jobId, instanciaId, espera);
