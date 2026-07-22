@@ -512,6 +512,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
+      manuallyCanceledRef.current.add(jobId);
+      autoResumeAtRef.current.delete(jobId);
       toast.warning("Campanha cancelada");
       carregarJobs();
     } catch (e: any) {
@@ -519,29 +521,57 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
   }, [carregarJobs]);
 
-  const reativarJob = useCallback(async (jobId: string) => {
-    const j = jobs.find((x) => x.id === jobId);
-    if (!j) return;
-    if (!["cancelado", "erro", "concluido"].includes(j.status)) {
-      toast.error("Só é possível reativar campanhas finalizadas");
-      return;
-    }
-    if (j.restantes <= 0) {
-      toast.info("Não há contatos pendentes para reativar");
-      return;
-    }
+  // Reativação de baixo nível — usada por reativarJob (manual) e pelo auto-resume interno.
+  const reativarJobInterno = useCallback(async (jobId: string): Promise<boolean> => {
     try {
       const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
         body: { job_id: jobId, acao: "reativar" },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
+      return true;
+    } catch (e: any) {
+      console.warn("[envio-meta] reativar interno falhou:", e?.message || e);
+      return false;
+    }
+  }, []);
+
+  const reativarJob = useCallback(async (jobId: string) => {
+    const j = jobs.find((x) => x.id === jobId);
+    if (!j) return;
+    if (j.restantes <= 0) {
+      toast.info("Não há contatos pendentes para reativar");
+      return;
+    }
+    manuallyCanceledRef.current.delete(jobId);
+    autoResumeAtRef.current.delete(jobId);
+    const ok = await reativarJobInterno(jobId);
+    if (ok) {
       toast.success(`Campanha reativada — ${j.restantes} contatos restantes`);
       carregarJobs();
-    } catch (e: any) {
-      toast.error("Erro ao reativar: " + (e?.message || e));
+    } else {
+      toast.error("Erro ao reativar");
     }
-  }, [jobs, carregarJobs]);
+  }, [jobs, carregarJobs, reativarJobInterno]);
+
+  // Auto-retomada: se um job caiu para erro/concluido/cancelado mas ainda tem restantes
+  // e o usuário NÃO cancelou manualmente, reativa sozinho (cooldown de 60s por job).
+  useEffect(() => {
+    const now = Date.now();
+    for (const j of jobs) {
+      if (!["erro", "concluido", "cancelado"].includes(j.status)) continue;
+      if (j.restantes <= 0) continue;
+      if (manuallyCanceledRef.current.has(j.id)) continue;
+      const last = autoResumeAtRef.current.get(j.id) || 0;
+      if (now - last < 60_000) continue;
+      autoResumeAtRef.current.set(j.id, now);
+      reativarJobInterno(j.id).then((ok) => {
+        if (ok) carregarJobs();
+      });
+    }
+  }, [jobs, reativarJobInterno, carregarJobs]);
+
+
 
   const limparJob = useCallback(async (jobId: string) => {
     const j = jobs.find((x) => x.id === jobId);
