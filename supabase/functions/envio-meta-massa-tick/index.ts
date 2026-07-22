@@ -197,7 +197,9 @@ async function processarItem(job: any): Promise<ItemResult> {
       instancia_ids: instanciaIdsDisponiveis,
       user_id: job.user_id,
       excluir_id: job.ultima_instancia_id || null,
+      ignorar_pausa_qualidade: job.modo_rajada === true,
     }),
+
   }).then((r) => r.json()).catch((e) => ({ success: false, error: String(e) }));
 
   if (!pickResp?.success) {
