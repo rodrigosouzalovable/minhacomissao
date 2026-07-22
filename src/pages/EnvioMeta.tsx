@@ -162,7 +162,7 @@ export default function EnvioMeta() {
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
   const [modoRajada, setModoRajada] = useState<boolean>(false);
-  const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("1");
+  const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("30");
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [validadorId, setValidadorId] = useState<string>("");
   const [validando, setValidando] = useState<boolean>(false);
