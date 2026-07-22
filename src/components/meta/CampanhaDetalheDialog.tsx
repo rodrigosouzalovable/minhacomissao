@@ -365,7 +365,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
           {/* Erros */}
           {detalhes.erros.length > 0 && (
-            <details className="rounded-md border bg-card" open>
+            <details className="rounded-md border bg-card" open={openErros} onToggle={(e) => setOpenErros((e.currentTarget as HTMLDetailsElement).open)}>
               <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
                 <span className="text-red-700 dark:text-red-400">
                   Erros <span className="text-muted-foreground font-normal">({detalhes.erros.length})</span>
