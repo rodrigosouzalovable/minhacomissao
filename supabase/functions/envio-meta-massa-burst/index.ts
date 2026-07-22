@@ -105,6 +105,7 @@ type SendResult =
   | { id: string; kind: 'rate_limit'; retryMs: number; erro: string }
   | { id: string; kind: 'transient'; retryMs: number; erro: string }
   | { id: string; kind: 'restricted'; erro: string }
+  | { id: string; kind: 'template_paused'; erro: string }
   | { id: string; kind: 'error'; erro: string };
 
 async function enviarUm(item: any, job: any): Promise<SendResult> {
