@@ -213,7 +213,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-5xl h-[85vh] overflow-y-auto flex flex-col"
+        className="max-w-5xl h-[85vh] overflow-hidden flex flex-col gap-3"
         style={{ overflowAnchor: "none", scrollbarGutter: "stable", top: "50%", transform: "translate(-50%, -50%)" }}
       >
         <DialogHeader>
@@ -228,7 +228,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div
+          className="flex-1 min-h-0 overflow-hidden flex flex-col gap-3"
+          style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}
+        >
           {/* Progresso */}
           <div className="rounded-md border bg-card p-3 space-y-2">
             <div className="flex justify-between text-sm">
@@ -239,7 +242,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 ✅ {job.enviados} • ❌ {job.erros} • ⏳ {Math.max(0, job.total - totalProcessado)}
               </span>
             </div>
-            <Progress value={percent} />
+            <Progress value={percent} className="h-4 shrink-0" />
             <div className="text-xs text-muted-foreground min-h-[16px]">
               {progresso?.atualTelefone ? (
                 <>
@@ -264,7 +267,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           </div>
 
           {/* Delivery resumo */}
-          {detalhes.enviados.length > 0 && (
+          <div className="min-h-[24px] flex items-center overflow-hidden">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <Badge variant="secondary">Aceito: {resumo.aceito}</Badge>
               <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300">Entregue: {resumo.entregue}</Badge>
@@ -290,11 +293,11 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 </Tooltip>
               </TooltipProvider>
             </div>
-          )}
+          </div>
 
 
           {/* Ações */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="min-h-[32px] flex flex-wrap items-center gap-2 shrink-0 overflow-hidden">
             {ativa && (
               <>
                 <Button size="sm" variant="secondary" onClick={() => togglePausaJob(job.id)}>
@@ -333,8 +336,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           </div>
 
           {/* Enviados */}
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3" style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}>
           <details className="rounded-md border bg-card" open={openEnviados} onToggle={(e) => setOpenEnviados((e.currentTarget as HTMLDetailsElement).open)}>
-            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between min-h-[36px]">
               <span className="text-green-700 dark:text-green-400">
                 Enviados <span className="text-muted-foreground font-normal">({detalhes.enviados.length})</span>
               </span>
@@ -349,7 +353,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 </div>
               )}
             </summary>
-            <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
+            <div className="h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono" style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}>
               {detalhes.enviados.map((e, i) => (
                 <div key={i} className="flex items-center justify-between gap-2 border-b border-border/40 py-0.5">
                   <span>{e.telefone}</span>
@@ -366,7 +370,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           {/* Erros */}
           {detalhes.erros.length > 0 && (
             <details className="rounded-md border bg-card" open={openErros} onToggle={(e) => setOpenErros((e.currentTarget as HTMLDetailsElement).open)}>
-              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between min-h-[36px]">
                 <span className="text-red-700 dark:text-red-400">
                   Erros <span className="text-muted-foreground font-normal">({detalhes.erros.length})</span>
                 </span>
@@ -379,7 +383,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   </Button>
                 </div>
               </summary>
-              <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
+              <div className="h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono" style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}>
                 {detalhes.erros.map((e, i) => (
                   <div key={i} className="border-b border-border/40 py-1">
                     <div className="flex justify-between gap-2">
@@ -400,7 +404,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           {/* Falharam na entrega */}
           {falhasEntrega.length > 0 && (
             <details className="rounded-md border bg-card" open={openFalhas} onToggle={(e) => setOpenFalhas((e.currentTarget as HTMLDetailsElement).open)}>
-              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between">
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between min-h-[36px]">
                 <span className="text-red-700 dark:text-red-400">
                   Falharam na entrega <span className="text-muted-foreground font-normal">({falhasEntrega.length})</span>
                 </span>
@@ -413,7 +417,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   </Button>
                 </div>
               </summary>
-              <div className="max-h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono">
+              <div className="h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono" style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}>
                 {falhasEntrega.map((e, i) => (
                   <div key={i} className="border-b border-border/40 py-1">
                     <div className="flex justify-between gap-2">
@@ -434,14 +438,15 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           {/* Sem WhatsApp */}
           {detalhes.semWhatsapp.length > 0 && (
             <details className="rounded-md border bg-card">
-              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium min-h-[36px]">
                 <span className="text-amber-700 dark:text-amber-400">Sem WhatsApp ({detalhes.semWhatsapp.length})</span>
               </summary>
-              <div className="max-h-48 overflow-auto px-3 py-2 space-y-0.5 text-xs font-mono">
+              <div className="h-48 overflow-auto px-3 py-2 space-y-0.5 text-xs font-mono" style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}>
                 {detalhes.semWhatsapp.map((t, i) => <div key={i}>{t}</div>)}
               </div>
             </details>
           )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
