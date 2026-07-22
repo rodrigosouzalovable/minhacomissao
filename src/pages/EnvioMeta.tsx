@@ -1347,6 +1347,41 @@ export default function EnvioMeta() {
                   Remover {validacaoPreview.invalid.length} sem WhatsApp
                 </Button>
               )}
+              {validacaoPreview && validacaoPreview.valid.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    const validSet = new Set(validacaoPreview.valid.map((t) => normalizeTelKey(t)));
+                    const dedup = dedupRecipientsRaw(recipientsRaw);
+                    const linhas = dedup.texto.split(/\r?\n/).filter(Boolean);
+                    const usarHeaders = recipientsHeaders.length > 0;
+                    const colHeaders = usarHeaders ? recipientsHeaders : ["Telefone", "Nome", "CPF/CNPJ", "Atraso", "Saldo"];
+                    const dados: Record<string, any>[] = [];
+                    for (const linha of linhas) {
+                      const parts = linha.split(/[,;\t]/).map((p) => p.trim());
+                      const tel = parts[0] || "";
+                      if (!validSet.has(normalizeTelKey(tel))) continue;
+                      const row: Record<string, any> = {};
+                      colHeaders.forEach((h, i) => { row[h] = parts[i] ?? ""; });
+                      dados.push(row);
+                    }
+                    if (dados.length === 0) { toast.error("Nada para exportar"); return; }
+                    const { exportarParaExcel } = await import("@/lib/exportExcel");
+                    const hoje = new Date().toISOString().slice(0, 10);
+                    await exportarParaExcel(
+                      dados,
+                      colHeaders.map((h) => ({ chave: h, titulo: h })),
+                      `contatos-com-whatsapp-${hoje}`
+                    );
+                    toast.success(`${dados.length} contatos exportados`);
+                  }}
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
+                  Baixar Excel ({validacaoPreview.valid.length} com WhatsApp)
+                </Button>
+              )}
             </div>
             {validacaoPreview && (
               <div className="mt-2 rounded-md border bg-muted/30 p-2 space-y-1.5">
