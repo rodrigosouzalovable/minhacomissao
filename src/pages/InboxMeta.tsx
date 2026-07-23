@@ -1301,35 +1301,6 @@ export default function InboxMeta() {
         onConfirmar={(f, caption) => enviarMidia(f, caption)}
         onCancelar={() => setArquivoParaConfirmar(null)}
       />
-      <Janela24hDialog
-        open={janela24hOpen}
-        onOpenChange={setJanela24hOpen}
-        mode="abrir"
-        instancias={instancias.map((i) => ({ id: i.id, nome: i.nome || i.display_phone || i.id.slice(0, 8), display_phone: i.display_phone }))}
-        onSelectConversa={async (contato) => {
-          const suffix = (contato.telefone || '').replace(/\D/g, '').slice(-8);
-          const existente = contatos.find((c) => c.instancia_id === contato.instancia_id && (c.telefone || '').replace(/\D/g, '').slice(-8) === suffix);
-          if (existente) {
-            setFiltroEtiqueta(null);
-            setBusca('');
-            setContatoAtivo(existente);
-            return;
-          }
-          // Fallback: buscar direto no banco
-          const { data } = await (supabase as any)
-            .from('meta_whatsapp_contatos')
-            .select('*')
-            .eq('id', contato.id)
-            .maybeSingle();
-          if (data) {
-            setFiltroEtiqueta(null);
-            setBusca('');
-            setContatoAtivo(data as any);
-          } else {
-            toast({ title: 'Conversa não encontrada', description: 'Não foi possível abrir esta conversa.', variant: 'destructive' });
-          }
-        }}
-      />
 
     </AppLayout>
   );
