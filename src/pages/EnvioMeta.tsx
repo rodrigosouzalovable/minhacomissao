@@ -1306,6 +1306,9 @@ export default function EnvioMeta() {
                 </div>
               </div>
             </label>
+          </div>
+
+
 
           {modoRajada && instanciaIds.length === 1 && (recipients.length > 0 || (validacaoPreview?.valid.length ?? 0) > 0) && (() => {
             const total = validacaoPreview?.valid.length ?? recipients.length;
