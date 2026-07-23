@@ -11,8 +11,9 @@ interface UseMetaAudioRecorderProps {
   onSent: () => void;
 }
 
-// Lazy-loaded ffmpeg.wasm instance — used to remux non-OGG audio into OGG/OPUS
-// (the container the Meta Cloud API accepts most reliably).
+// Lazy-loaded ffmpeg.wasm instance — used only when the browser can record
+// only WebM. Preferimos gravar direto em MP4/AAC porque a Meta aceita nativo e
+// evita travar o envio tentando converter todo áudio no navegador.
 let _ffmpegPromise: Promise<any> | null = null;
 async function getFFmpeg(): Promise<any> {
   if (_ffmpegPromise) return _ffmpegPromise;
@@ -24,21 +25,56 @@ async function getFFmpeg(): Promise<any> {
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
     });
     return ffmpeg;
-  })();
+  })().catch((err) => {
+    _ffmpegPromise = null;
+    throw err;
+  });
   return _ffmpegPromise;
+}
+
+function normalizeAudioMime(mimeType: string): { ext: 'ogg' | 'mp4' | 'm4a' | 'aac' | 'mp3' | 'webm'; contentType: string } {
+  const lower = (mimeType || '').toLowerCase();
+  if (lower.includes('ogg')) return { ext: 'ogg', contentType: 'audio/ogg' };
+  if (lower.includes('aac')) return { ext: 'aac', contentType: 'audio/aac' };
+  if (lower.includes('mpeg') || lower.includes('mp3')) return { ext: 'mp3', contentType: 'audio/mpeg' };
+  if (lower.includes('mp4') || lower.includes('m4a')) return { ext: 'm4a', contentType: 'audio/mp4' };
+  return { ext: 'webm', contentType: 'audio/webm' };
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const id = window.setTimeout(() => reject(new Error(`${label} demorou demais`)), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(id);
+        resolve(value);
+      },
+      (err) => {
+        window.clearTimeout(id);
+        reject(err);
+      },
+    );
+  });
 }
 
 async function ensureMetaAudio(
   blob: Blob,
   mimeType: string,
-): Promise<{ blob: Blob; ext: 'ogg'; contentType: string }> {
-  // Sempre re-encoda para OGG/OPUS 16 kHz mono 32 kbps — o único formato que
-  // o WhatsApp reproduz de forma confiável em todos os clientes. Copiar opus
-  // de webm para ogg (-c:a copy) produz container inválido: Meta aceita e
-  // devolve wamid, mas o app do destinatário descarta silenciosamente.
-  const ffmpeg = await getFFmpeg();
+): Promise<{ blob: Blob; ext: 'ogg' | 'mp4' | 'm4a' | 'aac' | 'mp3'; contentType: string }> {
+  const native = normalizeAudioMime(mimeType);
+  // Meta aceita MP4/AAC/MP3 nativamente. Não passe pelo ffmpeg nesses casos:
+  // era aqui que o áudio ficava “gravado, mas não enviado” quando o wasm travava.
+  if (native.contentType !== 'audio/webm' && native.contentType !== 'audio/ogg') {
+    const ext = native.ext === 'webm' || native.ext === 'ogg' ? 'm4a' : native.ext;
+    return { blob: new Blob([blob], { type: native.contentType }), ext, contentType: native.contentType };
+  }
+
+  // OGG gravado direto pelo navegador já causou descarte silencioso no WhatsApp;
+  // WebM não é aceito pela Meta. Nesses dois casos normalizamos para OGG/OPUS.
+  const ffmpeg = await withTimeout(getFFmpeg(), 30000, 'Carregamento do conversor de áudio');
   const lower = (mimeType || '').toLowerCase();
   const inExt = lower.includes('webm')
     ? 'webm'
@@ -50,8 +86,8 @@ async function ensureMetaAudio(
   const inName = `in.${inExt}`;
   const outName = 'out.ogg';
   const buf = new Uint8Array(await blob.arrayBuffer());
-  await ffmpeg.writeFile(inName, buf);
-  await ffmpeg.exec([
+  await withTimeout(ffmpeg.writeFile(inName, buf), 10000, 'Preparação do áudio');
+  await withTimeout(ffmpeg.exec([
     '-i', inName,
     '-vn',
     '-ac', '1',
@@ -60,8 +96,8 @@ async function ensureMetaAudio(
     '-b:a', '32k',
     '-application', 'voip',
     outName,
-  ]);
-  const data = await ffmpeg.readFile(outName);
+  ]), 45000, 'Conversão do áudio');
+  const data = await withTimeout(ffmpeg.readFile(outName), 10000, 'Leitura do áudio convertido');
   const out = new Blob([data as unknown as BlobPart], { type: 'audio/ogg' });
   try { await ffmpeg.deleteFile(inName); await ffmpeg.deleteFile(outName); } catch { /* noop */ }
   return { blob: out, ext: 'ogg', contentType: 'audio/ogg' };
@@ -83,20 +119,27 @@ export function useMetaAudioRecorder({
   const iniciarGravacao = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Ordem preferida: OGG/OPUS (aceito nativo pela Meta). Se o navegador não
-      // suportar (Safari/iOS ou Chrome sem mux OGG), caímos para webm/mp4/aac e
-      // o áudio é remuxado para OGG/OPUS via ffmpeg.wasm antes do envio.
+      // Ordem preferida: MP4/AAC, que a API oficial aceita nativamente. WebM só
+      // fica como fallback e será convertido para OGG/OPUS antes do envio.
       const candidatos = [
-        'audio/ogg;codecs=opus',
-        'audio/ogg',
-        'audio/webm;codecs=opus',
-        'audio/webm',
         'audio/mp4;codecs=mp4a.40.2',
         'audio/mp4',
         'audio/aac',
+        'audio/webm;codecs=opus',
+        'audio/webm',
       ];
-      const mimeType = candidatos.find(m => MediaRecorder.isTypeSupported(m));
-      if (!mimeType) {
+      let rec: MediaRecorder | null = null;
+      for (const mimeType of candidatos) {
+        if (!MediaRecorder.isTypeSupported(mimeType)) continue;
+        try {
+          rec = new MediaRecorder(stream, { mimeType });
+          break;
+        } catch {
+          rec = null;
+        }
+      }
+
+      if (!rec) {
         stream.getTracks().forEach(t => t.stop());
         toast({
           title: 'Navegador não suporta gravação de áudio',
@@ -105,7 +148,6 @@ export function useMetaAudioRecorder({
         });
         return;
       }
-      const rec = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = rec;
       chunksRef.current = [];
       rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
@@ -144,7 +186,7 @@ export function useMetaAudioRecorder({
         if (rawBlob.size === 0) { setTempoGravacao(0); resolve(); return; }
         setEnviandoAudio(true);
         try {
-          let prepared: { blob: Blob; ext: 'ogg' | 'mp4' | 'm4a'; contentType: string };
+          let prepared: { blob: Blob; ext: 'ogg' | 'mp4' | 'm4a' | 'aac' | 'mp3'; contentType: string };
           try {
             prepared = await ensureMetaAudio(rawBlob, rec.mimeType || 'audio/ogg');
           } catch (convErr) {
