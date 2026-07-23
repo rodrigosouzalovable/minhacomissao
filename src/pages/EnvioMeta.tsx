@@ -1154,7 +1154,17 @@ export default function EnvioMeta() {
                 Ou importe uma planilha Excel — ao importar, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Atraso, Saldo).
               </CardDescription>
             </div>
-            <div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setJanela24hOpen(true)}
+                title="Ver e importar contatos que estão dentro da janela de 24h (bolinha verde/amarela)"
+              >
+                <Clock className="h-3.5 w-3.5 mr-1.5 text-green-600" />
+                Janela 24h
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"
