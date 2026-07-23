@@ -211,6 +211,12 @@ export default function ModeloMensagem() {
         if (d.template) setTemplate(d.template);
         if (d.template_2) setTemplate2(d.template_2);
         else if (d.template) setTemplate2(d.template);
+        if (d.desconto_padrao != null) setDescVistaGlobal(Number(d.desconto_padrao));
+        if (d.desconto_parcelado_padrao != null) setDescParceladoGlobal(Number(d.desconto_parcelado_padrao));
+        if (d.parcelas_padrao != null) setParceladoQtdGlobal(Number(d.parcelas_padrao));
+        if (d.desconto_padrao_2 != null) setDescVistaGlobal2(Number(d.desconto_padrao_2));
+        if (d.desconto_parcelado_padrao_2 != null) setDescParceladoGlobal2(Number(d.desconto_parcelado_padrao_2));
+        if (d.parcelas_padrao_2 != null) setParceladoQtdGlobal2(Number(d.parcelas_padrao_2));
       }
     })();
   }, [user]);
