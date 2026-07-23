@@ -237,8 +237,28 @@ export function ColarImagemTab({
           </div>
 
           <div className="pt-2 border-t space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Mensagem gerada</Label>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium">Mensagem gerada</Label>
+                {hasModelo2 && (
+                  <div className="flex rounded-md border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setModelo(1)}
+                      className={`px-2 py-0.5 text-xs ${modelo === 1 ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                    >
+                      Modelo 1 ({descVistaGlobal}% / {descParceladoGlobal}%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModelo(2)}
+                      className={`px-2 py-0.5 text-xs border-l ${modelo === 2 ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                    >
+                      Modelo 2 ({descVistaGlobal2}% / {descParceladoGlobal2}%)
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex gap-1">
                 {campos.nome && (
                   <Button size="sm" variant="ghost" onClick={() => copiar(campos.nome, 'Nome')}>
