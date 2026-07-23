@@ -125,7 +125,7 @@ export default function Janela24hDialog({ open, onOpenChange, instancias, onImpo
       toast.error("Selecione ao menos um contato");
       return;
     }
-    onImportar(escolhidos);
+    onImportar?.(escolhidos);
     onOpenChange(false);
   };
 
