@@ -438,6 +438,9 @@ export default function ConfigurarMeta() {
       toast.error("Erro: " + (e?.message || e), { id: toastId });
     }
     setDiagnosticando(null);
+  };
+
+
 
   const testar = async (inst: Instancia) => {
     setTestando(inst.id);
