@@ -25,8 +25,8 @@ import * as XLSX from "xlsx";
 import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
-import Janela24hDialog from "@/components/meta/Janela24hDialog";
-import { Clock } from "lucide-react";
+
+
 
 type UazInstancia = {
   id: string;
@@ -160,7 +160,7 @@ export default function EnvioMeta() {
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [recipientsHeaders, setRecipientsHeaders] = useState<string[]>([]);
   const [editAsText, setEditAsText] = useState<boolean>(false);
-  const [janela24hOpen, setJanela24hOpen] = useState<boolean>(false);
+  
   const [nomeCampanha, setNomeCampanha] = useState<string>("");
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
@@ -1155,16 +1155,7 @@ export default function EnvioMeta() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setJanela24hOpen(true)}
-                title="Ver e importar contatos que estão dentro da janela de 24h (bolinha verde/amarela)"
-              >
-                <Clock className="h-3.5 w-3.5 mr-1.5 text-green-600" />
-                Janela 24h
-              </Button>
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1672,28 +1663,8 @@ export default function EnvioMeta() {
         templates={(templateGroup?.rows.filter((r) => r.status === "approved" && instanciaIds.includes(r.instancia_id)) || []) as any}
         onSaved={() => carregar()}
       />
-      <Janela24hDialog
-        open={janela24hOpen}
-        onOpenChange={setJanela24hOpen}
-        instancias={instancias.map((i) => ({ id: i.id, nome: i.nome, display_phone: i.display_phone }))}
-        onImportar={(contatos) => {
-          const linhasNovas = contatos.map((c) => {
-            const nome = (c.nome || "").replace(/,/g, " ").trim();
-            return nome ? `${c.telefone}, ${nome}` : c.telefone;
-          });
-          setRecipientsRaw((prev) => {
-            const existentes = new Set(
-              prev.split(/\r?\n/).map((l) => l.split(/[,;\t]/)[0]?.trim()).filter(Boolean)
-            );
-            const filtradas = linhasNovas.filter((l) => !existentes.has(l.split(",")[0].trim()));
-            const base = prev.trim();
-            return (base ? base + "\n" : "") + filtradas.join("\n");
-          });
-          setRecipientsHeaders([]);
-          setEditAsText(false);
-          toast.success(`${contatos.length} contato(s) importado(s) da janela 24h`);
-        }}
-      />
+
+
     </AppLayout>
   );
 }
