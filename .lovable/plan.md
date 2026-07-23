@@ -1,20 +1,22 @@
-## Mover botão "Janela 24h" para Inbox Meta Oficial
+## Objetivo
 
-### O que fazer
+Transformar o botão "🟢 Janela 24h" (ícone Clock, ao lado do filtro de etiquetas no Inbox Meta) num **filtro inline** da própria lista de conversas, em vez de abrir o dialog `Janela24hDialog`.
 
-1. **Remover** o botão "🟢 Janela 24h" e o dialog importado de `src/pages/EnvioMeta.tsx` (bloco de Destinatários).
+## Comportamento
 
-2. **Adicionar** o botão "🟢 Janela 24h" na barra de filtros/ações da aba **Inbox Meta Oficial** (`src/pages/InboxMeta.tsx`), próximo aos filtros de etiquetas.
+- **Clique no botão** → alterna um estado `filtroJanela24h` (on/off).
+- **Quando ativo**:
+  - A lista de conversas passa a mostrar **apenas** contatos cuja bolinha da janela está **verde (aberta)** ou **amarela (alerta)**, ou seja, `computeJanela(c.ultima_msg_entrada_em).status !== 'fechada'` (e há `ultima_msg_entrada_em` válida).
+  - Botão fica destacado (variant `default` / cor primary) para indicar filtro ativo.
+- **Clique novamente** → desativa o filtro e volta a mostrar todas as conversas.
+- O dialog `Janela24hDialog` **não abre mais** a partir desse botão.
 
-3. **Adaptar** `src/components/meta/Janela24hDialog.tsx` ao contexto de Inbox:
-   - Manter busca de contatos com interação nas últimas 24h (bolinha verde >1h restante, amarela <1h).
-   - Substituir a ação "Importar para destinatários" por **"Abrir conversa"**: ao clicar em um contato, fecha o dialog e abre aquela conversa no painel do Inbox (mesmo comportamento do clique em uma conversa da lista).
-   - Manter busca por nome/telefone, filtro por instância e contagem regressiva em tempo real.
+## Arquivos alterados
 
-4. **Comportamento visual**: quando o filtro estiver ativo (dialog aberto ou modo aplicado), a lista continua acessível — o dialog funciona como uma "lupa" de janelas 24h que permite pular direto para a conversa desejada.
+### `src/pages/InboxMeta.tsx`
+1. Remover `useState` `janela24hOpen` e o import de `Janela24hDialog`, remover a renderização `<Janela24hDialog ... />` no final do JSX.
+2. Adicionar `const [filtroJanela24h, setFiltroJanela24h] = useState(false);`.
+3. Alterar o `onClick` do botão (linha ~885) para `setFiltroJanela24h(v => !v)`; aplicar `variant={filtroJanela24h ? 'default' : 'outline'}` e ajustar `title` para "Filtrar conversas com janela 24h ativa (verde/amarela)".
+4. No `useMemo` `contatosFiltrados` (linha 513), adicionar etapa final: se `filtroJanela24h`, filtrar por `computeJanela(c.ultima_msg_entrada_em).status === 'aberta' || 'alerta'`.
 
-### Detalhes técnicos
-
-- Reaproveitar a query já existente em `Janela24hDialog` sobre `meta_whatsapp_contatos` (última interação nas 24h).
-- Em `InboxMeta.tsx`, expor um handler `onSelectConversa(telefone, instanceId)` que o dialog chamará para selecionar a conversa correspondente na lista já carregada (ou fazer fetch pontual caso não esteja na página atual).
-- Não alterar RLS nem edge functions.
+Nenhuma outra tela é afetada. O componente `Janela24hDialog` continua existindo no repo (não removo o arquivo), apenas deixa de ser usado aqui.

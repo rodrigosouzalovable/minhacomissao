@@ -26,7 +26,7 @@ import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversa
 import { ReabrirComTemplateDialog } from '@/components/inbox/meta/ReabrirComTemplateDialog';
 import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
 import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
-import Janela24hDialog from '@/components/meta/Janela24hDialog';
+
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
@@ -110,7 +110,7 @@ export default function InboxMeta() {
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
   const [filtroEtiqueta, setFiltroEtiqueta] = useState<string | null>(null);
   const [filtroEtOpen, setFiltroEtOpen] = useState(false);
-  const [janela24hOpen, setJanela24hOpen] = useState(false);
+  const [filtroJanela24h, setFiltroJanela24h] = useState(false);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
 
   
@@ -533,6 +533,11 @@ export default function InboxMeta() {
           if (!ids.includes(filtroEtiqueta)) return false;
         }
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
+        if (filtroJanela24h) {
+          if (!c.ultima_msg_entrada_em) return false;
+          const fim = new Date(c.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
+          if (fim - Date.now() <= 0) return false;
+        }
         return true;
       })
       .sort((a, b) => {
@@ -543,7 +548,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h]);
 
   const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
@@ -879,13 +884,13 @@ export default function InboxMeta() {
 
               </Popover>
               <Button
-                variant="outline"
+                variant={filtroJanela24h ? 'default' : 'outline'}
                 size="sm"
                 className="h-8 px-2"
-                onClick={() => setJanela24hOpen(true)}
-                title="Ver conversas dentro da janela de 24h (verde/amarelo)"
+                onClick={() => setFiltroJanela24h(v => !v)}
+                title="Filtrar conversas com janela 24h ativa (verde/amarela)"
               >
-                <Clock className="h-3.5 w-3.5 text-green-600" />
+                <Clock className={cn('h-3.5 w-3.5', !filtroJanela24h && 'text-green-600')} />
               </Button>
             </div>
             {/* Tabs */}
@@ -1300,35 +1305,6 @@ export default function InboxMeta() {
         enviando={enviandoArquivo}
         onConfirmar={(f, caption) => enviarMidia(f, caption)}
         onCancelar={() => setArquivoParaConfirmar(null)}
-      />
-      <Janela24hDialog
-        open={janela24hOpen}
-        onOpenChange={setJanela24hOpen}
-        mode="abrir"
-        instancias={instancias.map((i) => ({ id: i.id, nome: i.nome || i.display_phone || i.id.slice(0, 8), display_phone: i.display_phone }))}
-        onSelectConversa={async (contato) => {
-          const suffix = (contato.telefone || '').replace(/\D/g, '').slice(-8);
-          const existente = contatos.find((c) => c.instancia_id === contato.instancia_id && (c.telefone || '').replace(/\D/g, '').slice(-8) === suffix);
-          if (existente) {
-            setFiltroEtiqueta(null);
-            setBusca('');
-            setContatoAtivo(existente);
-            return;
-          }
-          // Fallback: buscar direto no banco
-          const { data } = await (supabase as any)
-            .from('meta_whatsapp_contatos')
-            .select('*')
-            .eq('id', contato.id)
-            .maybeSingle();
-          if (data) {
-            setFiltroEtiqueta(null);
-            setBusca('');
-            setContatoAtivo(data as any);
-          } else {
-            toast({ title: 'Conversa não encontrada', description: 'Não foi possível abrir esta conversa.', variant: 'destructive' });
-          }
-        }}
       />
 
     </AppLayout>
