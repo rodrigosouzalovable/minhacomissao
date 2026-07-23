@@ -411,6 +411,34 @@ export default function ConfigurarMeta() {
     setReinscrevendo(null);
   };
 
+  const diagnosticar = async (inst: Instancia) => {
+    setDiagnosticando(inst.id);
+    const toastId = toast.loading(`Diagnosticando ${inst.nome}...`);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-diagnose-instance", {
+        body: { instancia_id: inst.id },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha");
+      const p = data.phone || {};
+      const problems: string[] = data.problems || [];
+      const msg =
+        `Nome: ${p.verified_name || "-"} (${p.name_status || "?"})\n` +
+        `Verificação: ${p.code_verification_status || "?"}\n` +
+        `Qualidade: ${p.quality_rating || "?"} | Tier: ${p.messaging_limit_tier || p.throughput?.level || "?"}\n` +
+        `Status: ${p.status || "?"}\n\n` +
+        (problems.length ? `⚠️ Problemas:\n• ${problems.join("\n• ")}` : `✅ ${data.recommendation || "Sem problemas óbvios."}`);
+      toast.message(`Diagnóstico ${inst.nome}`, {
+        description: msg,
+        duration: 25000,
+        id: toastId,
+      });
+      console.log("[Diagnose]", inst.nome, data);
+    } catch (e: any) {
+      toast.error("Erro: " + (e?.message || e), { id: toastId });
+    }
+    setDiagnosticando(null);
+
   const testar = async (inst: Instancia) => {
     setTestando(inst.id);
     try {
