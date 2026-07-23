@@ -912,8 +912,9 @@ export default function EnvioMeta() {
                 <TemplateWhatsAppPreview
                   template={template}
                   imageUrlOverride={
-                    (templateGroup?.rows || [])
-                      .map((r: any) => r?.variaveis?._header_image_url)
+                    templates
+                      .filter((t: any) => t.nome_template === templateGroup?.nome && t.idioma === templateGroup?.idioma)
+                      .map((t: any) => t?.variaveis?._header_image_url)
                       .find((u: any) => typeof u === 'string' && u.trim().length > 0) || undefined
                   }
                 />
