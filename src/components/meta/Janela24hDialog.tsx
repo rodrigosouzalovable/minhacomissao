@@ -198,9 +198,11 @@ export default function Janela24hDialog({ open, onOpenChange, instancias, onImpo
             <table className="w-full text-xs">
               <thead className="bg-muted sticky top-0">
                 <tr>
-                  <th className="px-2 py-1.5 w-8">
-                    <Checkbox checked={todosSelecionados} onCheckedChange={toggleTodos} />
-                  </th>
+                  {mode === "importar" && (
+                    <th className="px-2 py-1.5 w-8">
+                      <Checkbox checked={todosSelecionados} onCheckedChange={toggleTodos} />
+                    </th>
+                  )}
                   <th className="text-left px-2 py-1.5">Contato</th>
                   <th className="text-left px-2 py-1.5">Instância</th>
                   <th className="text-left px-2 py-1.5 whitespace-nowrap">Fecha em</th>
@@ -209,15 +211,25 @@ export default function Janela24hDialog({ open, onOpenChange, instancias, onImpo
               <tbody>
                 {filtrados.map((c) => {
                   const inst = instMap.get(c.instancia_id);
+                  const handleRowClick = () => {
+                    if (mode === "abrir") {
+                      onSelectConversa?.(c);
+                      onOpenChange(false);
+                    } else {
+                      toggleUm(c.id);
+                    }
+                  };
                   return (
                     <tr
                       key={c.id}
                       className="border-t hover:bg-muted/40 cursor-pointer"
-                      onClick={() => toggleUm(c.id)}
+                      onClick={handleRowClick}
                     >
-                      <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={selecionados.has(c.id)} onCheckedChange={() => toggleUm(c.id)} />
-                      </td>
+                      {mode === "importar" && (
+                        <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox checked={selecionados.has(c.id)} onCheckedChange={() => toggleUm(c.id)} />
+                        </td>
+                      )}
                       <td className="px-2 py-1.5">
                         <div className="flex items-center gap-2">
                           <span className={`h-2 w-2 rounded-full shrink-0 ${c.status === "verde" ? "bg-green-500" : "bg-yellow-400"}`} />
@@ -245,18 +257,24 @@ export default function Janela24hDialog({ open, onOpenChange, instancias, onImpo
 
         <div className="flex items-center justify-between gap-2 pt-2 border-t">
           <div className="text-xs text-muted-foreground">
-            {selecionados.size > 0 ? `${selecionados.size} selecionado(s)` : `${filtrados.length} contato(s) listado(s)`}
+            {mode === "importar"
+              ? (selecionados.size > 0 ? `${selecionados.size} selecionado(s)` : `${filtrados.length} contato(s) listado(s)`)
+              : `${filtrados.length} conversa(s) na janela · clique para abrir`}
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={() => setSelecionados(new Set())} disabled={selecionados.size === 0}>
-              Limpar
-            </Button>
+            {mode === "importar" && (
+              <Button size="sm" variant="ghost" onClick={() => setSelecionados(new Set())} disabled={selecionados.size === 0}>
+                Limpar
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={carregar} disabled={loading}>
               Atualizar
             </Button>
-            <Button size="sm" onClick={importar} disabled={selecionados.size === 0}>
-              Importar para destinatários ({selecionados.size})
-            </Button>
+            {mode === "importar" && (
+              <Button size="sm" onClick={importar} disabled={selecionados.size === 0}>
+                Importar para destinatários ({selecionados.size})
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
