@@ -1,54 +1,43 @@
-
 ## Diagnóstico
 
-A LD02 recebeu **Rate limit exceeded (código 80007)** da Meta com `Retry-After: ~36s`. Não é banimento — é o teto de throughput do tier atual do número. Como o job só tem 1 instância selecionada, quando ela pausou o job travou (32 enviadas · 29 erros · 640 pendentes).
+O envio pela LD 06 Fernanda para 5562991672674 tem os seguintes fatos confirmados no banco:
 
-Os 29 erros já são os mesmos contatos que foram devolvidos à fila (aparecem no botão "Tentar novamente (29)"). Não perdemos ninguém.
+- Item marcado como `enviado` com `wa_message_id = wamid.HBgMNTU2...` (Meta aceitou a chamada e devolveu wamid).
+- Em `meta_whatsapp_envios_log` existe **apenas** o evento `sent` — não há evento `delivered`, `read` nem `failed`.
+- Instância LD 06: `saude_status=CONNECTED`, `saude_quality=GREEN`, `ativo=true`, sem pausa.
+- **Ponto crítico:** `saude_name_status = NON_EXISTS` na LD 06 (o Display Name não está aprovado / não está publicado no diretório do WhatsApp).
+- Template `solicitacao_de_renegociacao` está `approved` / `UTILITY`, então não é bloqueio de template.
 
-## Ação imediata (destravar essa campanha)
+Aceito no dashboard = a Meta devolveu 200 + wamid. Isso **não garante** entrega. Como não chega nenhum callback `delivered/failed`, a causa provável é uma destas duas — e o plano investiga as duas em ordem:
 
-1. Confirmar via SQL o estado do job e da instância LD02 (`pausa_automatica_ate`, `estado_pool`, `msgs_por_segundo` do job).
-2. Se ainda houver pausa vigente, aguardar/limpá-la; forçar `msgs_por_segundo = 1` no job.
-3. Reativar o job (`envio-meta-massa-control` → `reativar`) — ele já dispara o burst worker para a LD02.
-4. Rodar `envio-meta-massa-retry-erros` para devolver os 29 erros à fila da própria LD02 (a redistribuição não vai encontrar outra instância elegível, então mantém na LD02 mesmo — que é o desejado).
-5. Deixar o worker escoar os 669 restantes a 1 msg/s (~11 min).
+1. Webhook da Meta não está chegando de volta no nosso backend para essa instância (assinatura webhook do WABA sem `messages`/`message_status`, ou verify token diferente).
+2. A Meta está fazendo *silent drop* da mensagem (comum quando `name_status ≠ APPROVED`, spam score alto, ou o destinatário bloqueou o número business).
 
-## Prevenção — cap adaptativo por instância no Modo Rajada
+## Plano
 
-Objetivo: cada instância descobre sozinha seu teto sem travar o job inteiro.
+### 1. Verificar do lado da Meta o que aconteceu com o wamid
+Chamar a Graph API com o access_token da LD 06 para:
+- `GET /{phone_number_id}?fields=name_status,quality_rating,verified_name,throughput` → confirmar `name_status` real e se a Meta considera o número apto a enviar.
+- `GET /{phone_number_id}/message_qr_codes` / `messaging_analytics` para conferir se a mensagem consta como entregue no lado da Meta (o wamid não é consultável diretamente, mas conseguimos ver a métrica agregada do dia).
+- `GET /{waba_id}/subscribed_apps` → confirmar que nosso app está assinado.
 
-**Modelo de controle (por instância, dentro do burst worker):**
+Isso será feito por uma nova Edge Function `meta-diagnose-instance` (invocada pela UI num botão “Diagnosticar” dentro do card da instância) que retorna esse laudo consolidado.
 
-```text
-inicio:            msgs_por_segundo = 1
-a cada 60s sem erro de rate-limit: msgs_por_segundo = min(cap_slider, atual + 1)
-ao receber 80007 (rate limit):     msgs_por_segundo = max(1, floor(atual / 2))
-                                   respeita "Retry-After" do header/erro
-ao receber 131056 (pair rate):     mesma lógica de corte
-```
+### 2. Reprocessar o webhook / garantir que estamos assinando os eventos certos
+- Verificar em `supabase/functions/meta-webhook/index.ts` (ou nome equivalente) se estamos gravando `delivered/read/failed` em `meta_whatsapp_envios_log`.
+- Se sim, o problema é falta de assinatura na Meta → a nova função `meta-diagnose-instance` também chama `POST /{waba_id}/subscribed_apps` para (re)assinar campos `messages` e `message_status_updates`.
 
-Estado por instância vive em memória do worker + persistido em `meta_whatsapp_instances` (colunas novas ou reuso de campos existentes: `rajada_taxa_atual`, `rajada_ultima_reducao_em`). O slider global vira **teto máximo**, não valor fixo.
+### 3. Sinalizar no envio em massa quando o `name_status` da instância não é `APPROVED`
+Hoje o worker de rajada só respeita `BANNED/FLAGGED`. Quando `saude_name_status ∈ {NON_EXISTS, DECLINED, NONE}`, a Meta frequentemente aceita e descarta silenciosamente. O plano é:
+- Em `pick-meta-instance` e no preview do `EnvioMeta.tsx`: exibir aviso amarelo “Display Name não aprovado — mensagens podem ser aceitas mas não entregues”.
+- Não bloquear o envio (o usuário decide), apenas avisar antes de iniciar a campanha e dentro do `CampanhaDetalheDialog` quando `Aceito > 0` e `Entregue == 0` após 60s.
 
-**Mudanças de código:**
+### 4. Rodar o diagnóstico agora contra a LD 06
+Ao aprovar o plano, a primeira ação é invocar a nova função contra a LD 06 e trazer o laudo real da Meta — só assim a “correção” fica definitiva (webhook vs. name_status vs. block do destinatário). O resultado vai direcionar se o próximo passo é: (a) reassinar webhook, (b) aprovar Display Name no Business Manager, ou (c) confirmar que o destinatário bloqueou o número.
 
-- `supabase/functions/envio-meta-massa-burst/index.ts`: substituir o token-bucket global do job pelo bucket **por instância**, lendo `rajada_taxa_atual`. Ao receber 80007, além de pausar até `Retry-After`, gravar nova taxa reduzida. Ao completar N envios consecutivos sem 80007, subir a taxa de volta em 1.
-- `supabase/functions/send-whatsapp-meta/index.ts` (ou onde 80007 é tratado): garantir que o retorno inclua `retry_after_ms` e `rate_limited: true` para o worker consumir.
-- Migração: adicionar `rajada_taxa_atual smallint default 1`, `rajada_ultimo_ajuste_em timestamptz` em `meta_whatsapp_instances` (+ GRANTs padrão).
-- `src/pages/EnvioMeta.tsx`: renomear o slider para "Velocidade máxima por instância (msg/s)" e adicionar tooltip explicando que o sistema pode enviar mais devagar se a Meta pedir.
-- `src/components/meta/CampanhaDetalheDialog.tsx`: exibir, ao lado de cada instância, a **taxa atual** (ex.: "LD02 · 1 msg/s · pausada até 13:13:11") lendo `rajada_taxa_atual` / `pausa_automatica_ate`.
+## Detalhes técnicos
 
-## Observações
-
-- Não altero a lógica de banimento (BANNED/FLAGGED continua tirando a instância do job).
-- Rate-limit deixa de ser evento crítico visível — vira só um ponto no gráfico da taxa da instância.
-- Nada muda fora do Modo Rajada.
-
-## Passos de execução
-
-1. SQL: inspecionar `envio_meta_job`, `envio_meta_job_item` (erros/pendentes), `meta_whatsapp_instances` da LD02.
-2. Migração das colunas novas + GRANTs.
-3. Editar `envio-meta-massa-burst` com bucket por instância + AIMD (aumenta +1/min, corta pela metade em rate-limit).
-4. Ajustar retorno do sender para expor `retry_after_ms`.
-5. Ajustar UI (`EnvioMeta.tsx`, `CampanhaDetalheDialog.tsx`).
-6. Destravar a campanha atual: `msgs_por_segundo=1`, `rajada_taxa_atual=1` na LD02, chamar `envio-meta-massa-control` reativar + `envio-meta-massa-retry-erros`.
-7. Validar: acompanhar contadores subirem em ritmo constante de ~1/s sem novos 80007.
+- Nova função: `supabase/functions/meta-diagnose-instance/index.ts` — recebe `{ instancia_id, wamid? }`, chama Graph API v20.0 com o `access_token` da instância, devolve `{ name_status, quality_rating, throughput, subscribed, analytics_today, recommendation }`.
+- Sem novas tabelas. Sem migração.
+- UI: botão “Diagnosticar” no card da instância em `ConfigMeta.tsx` e alerta contextual no `CampanhaDetalheDialog.tsx` quando `aceitos > 0 && entregues == 0` após 60s.
+- Nada muda no motor de rajada além do aviso — sem impacto de custo (só chamadas Graph sob demanda).

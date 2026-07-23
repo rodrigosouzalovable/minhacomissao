@@ -210,6 +210,7 @@ export default function ConfigurarMeta() {
   const [assinando, setAssinando] = useState(false);
   const [resultadosAssinatura, setResultadosAssinatura] = useState<any[] | null>(null);
   const [reinscrevendo, setReinscrevendo] = useState<string | null>(null);
+  const [diagnosticando, setDiagnosticando] = useState<string | null>(null);
   const [editInst, setEditInst] = useState<Instancia | null>(null);
   const [editForm, setEditForm] = useState({
     nome: "",
@@ -409,6 +410,37 @@ export default function ConfigurarMeta() {
     }
     setReinscrevendo(null);
   };
+
+  const diagnosticar = async (inst: Instancia) => {
+    setDiagnosticando(inst.id);
+    const toastId = toast.loading(`Diagnosticando ${inst.nome}...`);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-diagnose-instance", {
+        body: { instancia_id: inst.id },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha");
+      const p = data.phone || {};
+      const problems: string[] = data.problems || [];
+      const msg =
+        `Nome: ${p.verified_name || "-"} (${p.name_status || "?"})\n` +
+        `Verificação: ${p.code_verification_status || "?"}\n` +
+        `Qualidade: ${p.quality_rating || "?"} | Tier: ${p.messaging_limit_tier || p.throughput?.level || "?"}\n` +
+        `Status: ${p.status || "?"}\n\n` +
+        (problems.length ? `⚠️ Problemas:\n• ${problems.join("\n• ")}` : `✅ ${data.recommendation || "Sem problemas óbvios."}`);
+      toast.message(`Diagnóstico ${inst.nome}`, {
+        description: msg,
+        duration: 25000,
+        id: toastId,
+      });
+      console.log("[Diagnose]", inst.nome, data);
+    } catch (e: any) {
+      toast.error("Erro: " + (e?.message || e), { id: toastId });
+    }
+    setDiagnosticando(null);
+  };
+
+
 
   const testar = async (inst: Instancia) => {
     setTestando(inst.id);
@@ -814,6 +846,15 @@ export default function ConfigurarMeta() {
                             ) : (
                               <><RefreshCw className="h-3 w-3 mr-1" />Webhook</>
                             )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => diagnosticar(inst)}
+                            disabled={diagnosticando === inst.id}
+                            title="Consultar Meta: name_status, quality, verificação e subscribed_apps"
+                          >
+                            {diagnosticando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "🔎 Diagnosticar"}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
                             {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
