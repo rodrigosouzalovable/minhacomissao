@@ -134,13 +134,13 @@ export function ColarImagemTab({
         valor: 0,
       })),
     };
-    return renderMensagem(template, {
+    return renderMensagem(tpl, {
       cliente,
-      descontoVistaPct: descVistaGlobal,
-      parceladoQtd: parceladoQtdGlobal,
-      descontoParceladoPct: descParceladoGlobal,
+      descontoVistaPct: dv,
+      parceladoQtd: pq,
+      descontoParceladoPct: dp,
     });
-  }, [campos, template, descVistaGlobal, descParceladoGlobal, parceladoQtdGlobal]);
+  }, [campos, tpl, dv, dp, pq]);
 
   const copiar = async (txt: string, label: string) => {
     await navigator.clipboard.writeText(txt);
