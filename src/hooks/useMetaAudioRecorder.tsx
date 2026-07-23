@@ -68,7 +68,8 @@ async function ensureMetaAudio(
   // Meta aceita MP4/AAC/MP3 nativamente. Não passe pelo ffmpeg nesses casos:
   // era aqui que o áudio ficava “gravado, mas não enviado” quando o wasm travava.
   if (native.contentType !== 'audio/webm' && native.contentType !== 'audio/ogg') {
-    return { blob: new Blob([blob], { type: native.contentType }), ext: native.ext, contentType: native.contentType };
+    const ext = native.ext === 'webm' || native.ext === 'ogg' ? 'm4a' : native.ext;
+    return { blob: new Blob([blob], { type: native.contentType }), ext, contentType: native.contentType };
   }
 
   // OGG gravado direto pelo navegador já causou descarte silencioso no WhatsApp;
