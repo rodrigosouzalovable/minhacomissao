@@ -33,7 +33,17 @@ const EMPTY: CamposExtraidos = {
   nome: '', cpf: '', contrato: '', dias_atraso: '', qtd_parcelas_atraso: '1', total_atraso: '',
 };
 
-export function ColarImagemTab({ template, descVistaGlobal, descParceladoGlobal, parceladoQtdGlobal }: Props) {
+export function ColarImagemTab({
+  template, descVistaGlobal, descParceladoGlobal, parceladoQtdGlobal,
+  template2, descVistaGlobal2, descParceladoGlobal2, parceladoQtdGlobal2,
+}: Props) {
+  const hasModelo2 = template2 !== undefined;
+  const [modelo, setModelo] = useState<1 | 2>(1);
+  const tpl = modelo === 2 && template2 !== undefined ? template2 : template;
+  const dv = modelo === 2 && descVistaGlobal2 !== undefined ? descVistaGlobal2 : descVistaGlobal;
+  const dp = modelo === 2 && descParceladoGlobal2 !== undefined ? descParceladoGlobal2 : descParceladoGlobal;
+  const pq = modelo === 2 && parceladoQtdGlobal2 !== undefined ? parceladoQtdGlobal2 : parceladoQtdGlobal;
+
   const [imageData, setImageData] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [campos, setCampos] = useState<CamposExtraidos>(EMPTY);
