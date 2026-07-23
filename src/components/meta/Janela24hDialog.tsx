@@ -25,7 +25,9 @@ type Props = {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   instancias: { id: string; nome: string; display_phone: string | null }[];
-  onImportar: (contatos: ContatoJanela[]) => void;
+  onImportar?: (contatos: ContatoJanela[]) => void;
+  onSelectConversa?: (contato: ContatoJanela) => void;
+  mode?: "importar" | "abrir";
 };
 
 export default function Janela24hDialog({ open, onOpenChange, instancias, onImportar }: Props) {
