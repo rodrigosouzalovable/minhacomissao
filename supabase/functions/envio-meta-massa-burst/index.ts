@@ -34,7 +34,9 @@ async function jobEstaRodando(jobId: string) {
 
 async function selfInvoke(jobId: string, instanciaId: string, delayMs = 0) {
   if (!(await jobEstaRodando(jobId))) return;
-  if (delayMs > 0) await sleep(Math.min(delayMs, 2000)); // pequeno debounce
+  // Respeita esperas até 10s (rate-limit real da Meta ~10s). Antes travava em 2s
+  // e re-invocava em loop enquanto rate_limit_ate ainda estava no futuro.
+  if (delayMs > 0) await sleep(Math.min(delayMs, 10_000));
   if (!(await jobEstaRodando(jobId))) return;
   await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
     method: 'POST',
@@ -45,6 +47,7 @@ async function selfInvoke(jobId: string, instanciaId: string, delayMs = 0) {
     body: JSON.stringify({ job_id: jobId, instancia_id: instanciaId }),
   }).catch(() => {});
 }
+
 
 async function notificarConclusao(jobId: string) {
   try {
