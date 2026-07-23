@@ -533,6 +533,11 @@ export default function InboxMeta() {
           if (!ids.includes(filtroEtiqueta)) return false;
         }
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
+        if (filtroJanela24h) {
+          if (!c.ultima_msg_entrada_em) return false;
+          const fim = new Date(c.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
+          if (fim - Date.now() <= 0) return false;
+        }
         return true;
       })
       .sort((a, b) => {
@@ -543,7 +548,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, nowTick]);
 
   const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
