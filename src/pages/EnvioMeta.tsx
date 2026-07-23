@@ -1308,6 +1308,22 @@ export default function EnvioMeta() {
             </label>
           </div>
 
+
+
+          {modoRajada && instanciaIds.length === 1 && (recipients.length > 0 || (validacaoPreview?.valid.length ?? 0) > 0) && (() => {
+            const total = validacaoPreview?.valid.length ?? recipients.length;
+            if (total < 300) return null;
+            const mps = Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1));
+            const minutos = Math.ceil(total / mps / 60);
+            return (
+              <div className="rounded-md border border-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 p-3 text-xs text-yellow-900 dark:text-yellow-200">
+                ⚠️ <strong>1 instância selecionada para {total.toLocaleString('pt-BR')} mensagens.</strong> A Meta limita o throughput por número — no teto de {mps} msg/s, esse envio levará ~{minutos} min. Para acelerar, selecione mais instâncias no card acima (o volume é dividido igualmente entre elas).
+              </div>
+            );
+          })()}
+
+
+
           {modoRajada && instanciaIds.length > 0 && (recipients.length > 0 || (validacaoPreview?.valid.length ?? 0) > 0) && (() => {
             const total = validacaoPreview?.valid.length ?? recipients.length;
             const k = instanciaIds.length;

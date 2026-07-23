@@ -1,43 +1,62 @@
-## Problema
+## Diagnóstico da campanha atual
 
-Todos os áudios enviados pelo Inbox Meta oficial são **aceitos pela Meta** (retornam `wamid`, `status_envio='enviada'`), porém nunca avançam para `entregue`/`lida` — nem hoje, nem ontem, nem anteontem. Imagens/textos da mesma instância chegam normalmente. Isso é o padrão clássico de **OGG malformado**: a Meta aceita o upload, gera wamid, mas o WhatsApp do destinatário descarta silenciosamente o container inválido.
+Job `solicitacao_de_renegociacao` (669 contatos, iniciado 14:05):
+- **1 instância selecionada** (MEMU 25), slider em **10 msg/s**.
+- 96 min depois: **320 enviados, 7 erros, 342 pendentes** → cadência real ≈ **0,056 msg/s** (bem abaixo dos 10/s configurados).
+- Os 7 rate-limits (#131056 "Retry after ~10.5s") aconteceram em janela de 6 s (17:07:26–17:07:32), logo no início.
+- `rajada_taxa_atual` na instância = **6** desde 17:07 (não colapsou até 1, mas travou).
 
-Duas causas foram identificadas no código atual (`useMetaAudioRecorder.tsx` + `send-whatsapp-meta-media/index.ts`):
+Causa raiz combinada:
+1. O worker começa a **janela em 1 msg/s** e só sobe +1 a cada **3 janelas consecutivas sem erro** — leva 24 s+ para chegar em 10/s mesmo em cenário limpo.
+2. Ao ver rate-limit, a janela é cortada **pela metade** e a instância marca `rate_limit_ate`. Enquanto `rate_limit_ate` estiver no futuro, cada re-invocação do worker sai imediatamente e re-agenda em 2 s — gastando invocações sem enviar.
+3. `selfInvoke` aplica `Math.min(delayMs, 2000)` mesmo quando o Meta pede 10 s de espera → sequência de re-invocações vazias.
+4. Só há 1 instância no job, então mesmo na taxa alvo o teto físico é ~10 msg/s (não é o problema principal, mas contribui).
 
-1. **Remux por cópia (webm→ogg com `-c:a copy`)**: opus dentro de webm usa framing diferente do opus em ogg. Copiar sem re-encodar produz um `.ogg` tecnicamente inválido — Meta aceita (não valida no upload), WhatsApp não reproduz.
-2. **Gravações "audio/ogg;codecs=opus" direto do navegador**: passam sem qualquer normalização, mas Chrome/Firefox produzem OGG com page-size irregular que também falha em alguns clientes WhatsApp.
-3. **Sem normalização de sample rate/canais**: WhatsApp espera OGG/OPUS **16 kHz, mono, ~32 kbps**. Qualquer variação aumenta chance de rejeição silenciosa.
+## O que o plano muda em `supabase/functions/envio-meta-massa-burst/index.ts`
 
-Além disso, o path no Storage está sendo salvo com `.ogg; codecs=opus` (o `mimeType` cru vira parte do nome do arquivo) — não é a causa da não-entrega (o upload à Meta é multipart, não por link), mas suja o bucket e é fácil arrumar junto.
+**1. Começar já no teto do slider, não em 1**
+- Ao entrar no worker, se `rajada_taxa_atual` estiver estale (sem ajuste nas últimas 15 min) e sem `rate_limit_ate` ativo, **resetar `rajada_taxa_atual = mpsAlvo`** antes de entrar no loop.
+- Isso evita "penalidade eterna" após um pico isolado de rate-limit no começo (que é exatamente o caso atual: taxa=6 travada há 96 min).
 
-## O que vai mudar
+**2. AIMD menos punitivo**
+- Corte no rate-limit: `janela = max(3, ceil(janela * 0.7))` (antes: `floor(janela/2)` com piso 1).
+- Ramp-up: **1 janela OK** já sobe +1 (antes: 3 janelas).
+- Piso mínimo da janela: **3 msg/s** por instância (Meta permite muito mais, e o rate-limit real vem por WABA, não por instância).
 
-### 1. `src/hooks/useMetaAudioRecorder.tsx` (frontend)
+**3. Backoff correto após rate-limit**
+- Em `selfInvoke`, respeitar `delayMs` até **10 s** (não 2 s). Como o Meta manda `retry_after` de ~10 s, deixamos o worker realmente esperar 1 vez, sem re-invocar em loop.
+- Manter o teto absoluto (`min(esperaRateLimitMs, 30_000)`) já existente.
 
-- Sempre re-encodar para OGG/OPUS 16 kHz mono 32 kbps via `ffmpeg.wasm`, independente do container de entrada — remover o "fast path" que ship o blob cru sem transcodar.
-- Argumentos ffmpeg: `-i in.<ext> -vn -ac 1 -ar 16000 -c:a libopus -b:a 32k -application voip out.ogg`.
-- Corrigir o path do Storage para não interpolar mimeType (usar sempre `.ogg`).
-- Manter `contentType: 'audio/ogg'` no upload (sem `; codecs=…`).
+**4. Destravar `rate_limit_ate` órfão**
+- Se `rate_limit_ate` estiver no passado (mais de 5 min) e `pausa_automatica_ate` também no passado, o próprio worker limpa esses campos antes de iniciar (idempotente). Evita ficar "vendo" um rate-limit antigo.
 
-### 2. `supabase/functions/send-whatsapp-meta-media/index.ts` (backend)
+**5. Reset one-shot da instância travada (script embutido no worker)**
+- Na primeira invocação após deploy, para qualquer instância cujo `rajada_ultimo_ajuste_em > 15 min atrás` **e** `rajada_taxa_atual < mpsAlvo`, o worker faz o reset descrito no item 1. Isso desbloqueia MEMU 25 sem precisar de UI manual.
 
-- No `uploadAudioToMeta`, forçar `Content-Type: audio/ogg` no `Blob` da parte `file` (hoje pega do `guessAudioMime` que pode carregar sujeira do path).
-- Adicionar `console.log` do tamanho do buffer, MIME final e resposta da Meta para diagnóstico.
-- Se a Meta devolver erro no upload, propagar mensagem detalhada ao frontend (já existe, só reforçar).
+## O que muda em `src/pages/EnvioMeta.tsx`
 
-### 3. Nenhuma mudança em contratos, DB ou UI
+**6. Aviso quando o usuário selecionar 1 instância em Rajada**
+- Se `instancia_ids.length === 1` e `total > 500`, mostrar um `Alert` amarelo:
+  _"Você selecionou 1 número para X mensagens. Mesmo no modo Rajada, a Meta limita ~10 msg/s por número — o envio de X mensagens levará ~Y min. Adicione mais instâncias para acelerar."_
+- Puramente informativo; não bloqueia.
 
-Sem migrations, sem novas colunas, sem alteração de layout. Só a lógica de preparação/upload de áudio.
+## O que **não** muda
 
-## Verificação após implementar
+- Nada em `send-whatsapp-meta` (a lógica de rate-limit ali segue igual).
+- Estrutura de tabelas, RLS, template, formato de mensagens.
+- Modos não-rajada.
 
-1. Gravar um áudio curto no Chrome no `/admin/inbox-meta` e enviar para o `62991672674`.
-2. Confirmar no log do `send-whatsapp-meta-media` que o MIME final foi `audio/ogg` e o upload retornou `id`.
-3. Confirmar no banco que `status_envio` avança de `enviada` → `entregue` → `lida` (agora que o webhook oficial está inscrito).
-4. Confirmar no celular que o áudio toca (não é apenas um balão vazio).
+## Efeito esperado
+
+Na campanha atual (após deploy + retry pelo botão "Tentar novamente" que já existe):
+- Taxa por instância volta a **10 msg/s** imediatamente.
+- Os 342 pendentes acabam em ~35 s no melhor caso, ~2–3 min com 1–2 rate-limits pelo caminho.
+- Nas próximas campanhas, mesmo com rate-limits eventuais, a cadência média fica próxima do teto do slider em vez de colapsar para <0,1/s.
 
 ## Detalhes técnicos
 
-- `ffmpeg.wasm` já está carregado no hook (`getFFmpeg`) — só ajusta os args e remove o atalho de "copy".
-- Custo: cada envio de áudio já rodava ffmpeg.wasm para webm; agora rodará para ogg/mp4 também (+1-2s no envio). Sem impacto em custo de backend/Lovable Cloud.
-- Não mexe em nada relacionado a UAZAPI, aquecimento, cotações ou envio em massa.
+Arquivos tocados:
+- `supabase/functions/envio-meta-massa-burst/index.ts` — todos os itens 1–5.
+- `src/pages/EnvioMeta.tsx` — item 6 (Alert).
+
+Nenhuma migração de banco. Colunas `rajada_taxa_atual`, `rajada_ultimo_ajuste_em`, `rate_limit_ate`, `pausa_automatica_ate`, `pausa_automatica_motivo` já existem em `meta_whatsapp_instances`.
