@@ -1349,7 +1349,7 @@ export default function EnvioMeta() {
                 </div>
                 <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-amber-300/60 dark:border-amber-800/50">
                   <div className="min-w-[9rem]">
-                    <Label className="text-xs">Msgs / segundo (por instância)</Label>
+                    <Label className="text-xs">Velocidade MÁX. (msg/s por instância)</Label>
                     <Input
                       type="number"
                       min={1}
@@ -1359,7 +1359,7 @@ export default function EnvioMeta() {
                       className="h-8"
                     />
                     <div className="text-[10px] text-amber-700/70 dark:text-amber-300/70 mt-0.5">
-                      Sugerido: 30 (par de números GREEN). Teto: 60 (limite Meta ~80/s).
+                      Cada instância começa em 1 msg/s e sobe sozinha até esse teto conforme a Meta permitir. Se receber rate-limit, corta pela metade automaticamente.
                     </div>
                   </div>
                   {(() => {
