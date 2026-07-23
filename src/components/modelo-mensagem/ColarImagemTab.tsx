@@ -14,6 +14,10 @@ interface Props {
   descVistaGlobal: number;
   descParceladoGlobal: number;
   parceladoQtdGlobal: number;
+  template2?: string;
+  descVistaGlobal2?: number;
+  descParceladoGlobal2?: number;
+  parceladoQtdGlobal2?: number;
 }
 
 interface CamposExtraidos {
