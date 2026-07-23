@@ -165,7 +165,7 @@ export default function EnvioMeta() {
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
   const [modoRajada, setModoRajada] = useState<boolean>(false);
-  const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("30");
+  const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("10");
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [validadorId, setValidadorId] = useState<string>("");
   const [validando, setValidando] = useState<boolean>(false);
@@ -1349,7 +1349,7 @@ export default function EnvioMeta() {
                 </div>
                 <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-amber-300/60 dark:border-amber-800/50">
                   <div className="min-w-[9rem]">
-                    <Label className="text-xs">Msgs / segundo (por instância)</Label>
+                    <Label className="text-xs">Velocidade MÁX. (msg/s por instância)</Label>
                     <Input
                       type="number"
                       min={1}
@@ -1359,7 +1359,7 @@ export default function EnvioMeta() {
                       className="h-8"
                     />
                     <div className="text-[10px] text-amber-700/70 dark:text-amber-300/70 mt-0.5">
-                      Sugerido: 30 (par de números GREEN). Teto: 60 (limite Meta ~80/s).
+                      Cada instância começa em 1 msg/s e sobe sozinha até esse teto conforme a Meta permitir. Se receber rate-limit, corta pela metade automaticamente.
                     </div>
                   </div>
                   {(() => {
