@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
     // Verifica se a instância está pausada por rate limit (definido pelo send-whatsapp-meta)
     const { data: inst } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, rate_limit_ate, estado_pool, pausa_automatica_ate, pausa_automatica_motivo')
+      .select('id, rate_limit_ate, estado_pool, pausa_automatica_ate, pausa_automatica_motivo, rajada_taxa_atual, rajada_ultimo_ajuste_em')
       .eq('id', instanciaId)
       .maybeSingle();
     const agora = Date.now();
