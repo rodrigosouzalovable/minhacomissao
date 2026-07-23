@@ -26,7 +26,7 @@ import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDial
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
 import Janela24hDialog from "@/components/meta/Janela24hDialog";
-import { Clock } from "lucide-react";
+
 
 type UazInstancia = {
   id: string;
