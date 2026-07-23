@@ -406,10 +406,11 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Ajuste dinâmico da janela (token-bucket adaptativo)
+      // Ajuste dinâmico da janela (AIMD adaptativo, persistido por instância)
       if (rateLimitVisto) {
         janela = Math.max(1, Math.floor(janela / 2));
         sucessosSeguidos = 0;
+        await persistirTaxa(janela);
         paradaPorRateLimit = true;
         esperaRateLimitMs = Math.min(Math.max(rateLimitRetryMs, 2_000), 30_000);
         break;
@@ -424,12 +425,14 @@ Deno.serve(async (req) => {
       if (errCount === 0 && okCount > 0) {
         sucessosSeguidos++;
         if (sucessosSeguidos >= 3 && janela < mpsAlvo) {
-          janela = Math.min(mpsAlvo, janela + 5);
+          janela = Math.min(mpsAlvo, janela + 1);
           sucessosSeguidos = 0;
+          await persistirTaxa(janela);
         }
       } else if (errCount > 0) {
         sucessosSeguidos = 0;
       }
+
 
       if (Date.now() - inicio >= MAX_WALL_MS) { atingiuTempo = true; break; }
 
