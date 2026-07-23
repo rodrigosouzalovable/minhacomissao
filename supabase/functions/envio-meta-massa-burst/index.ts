@@ -270,13 +270,38 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Token-bucket ADAPTATIVO por instância (AIMD).
-    // - `mpsAlvo` (slider do usuário) é apenas o TETO.
-    // - `janela` começa em rajada_taxa_atual (persistido por instância, default 1).
-    // - A cada rate-limit (80007/131056): janela = max(1, floor(janela/2)) e persiste.
-    // - A cada 3 janelas OK seguidas: janela = min(mpsAlvo, janela + 1) e persiste.
+    // Token-bucket ADAPTATIVO por instância (AIMD tunado).
+    // - `mpsAlvo` (slider do usuário) é o TETO.
+    // - Se a taxa persistida está "stale" (>15min sem ajuste) OU abaixo do alvo sem
+    //   rate-limit ativo, RESETA para mpsAlvo — evita penalidade eterna após picos
+    //   isolados de rate-limit no começo da campanha.
+    // - Corte no rate-limit: ceil(janela*0.7) com piso 3 (antes: floor/2 com piso 1).
+    // - Ramp-up: 1 janela OK já sobe +1 (antes: 3 janelas).
+    // - Também limpa rate_limit_ate órfão (passado > 5min).
+    const MIN_JANELA = 3;
     const mpsAlvo = Math.max(1, Math.min(MAX_MPS_HARD_CAP, Number(job.msgs_por_segundo) || 1));
-    let janela = Math.max(1, Math.min(mpsAlvo, Number(inst?.rajada_taxa_atual) || 1));
+
+    // Limpa rate_limit_ate órfão
+    if (inst?.rate_limit_ate && new Date(inst.rate_limit_ate).getTime() < agora - 5 * 60_000) {
+      await supabase.from('meta_whatsapp_instances')
+        .update({ rate_limit_ate: null })
+        .eq('id', instanciaId);
+    }
+
+    const ultimoAjuste = inst?.rajada_ultimo_ajuste_em ? new Date(inst.rajada_ultimo_ajuste_em).getTime() : 0;
+    const taxaPersist = Number(inst?.rajada_taxa_atual) || 1;
+    const stale = ultimoAjuste === 0 || (agora - ultimoAjuste) > 15 * 60_000;
+    const semRateLimitAtivo = !inst?.rate_limit_ate || new Date(inst.rate_limit_ate).getTime() <= agora;
+
+    let janela = Math.max(1, Math.min(mpsAlvo, taxaPersist));
+    if (semRateLimitAtivo && (stale || taxaPersist < mpsAlvo)) {
+      // Reset ao teto: começa cheia. Se hoje for problema, o AIMD corta imediatamente.
+      janela = mpsAlvo;
+      await supabase.from('meta_whatsapp_instances').update({
+        rajada_taxa_atual: mpsAlvo,
+        rajada_ultimo_ajuste_em: new Date().toISOString(),
+      }).eq('id', instanciaId);
+    }
     let sucessosSeguidos = 0;
 
     const persistirTaxa = async (nova: number) => {
@@ -286,6 +311,7 @@ Deno.serve(async (req) => {
         rajada_ultimo_ajuste_em: new Date().toISOString(),
       }).eq('id', instanciaId);
     };
+
 
 
     let processadosNesteWorker = 0;
