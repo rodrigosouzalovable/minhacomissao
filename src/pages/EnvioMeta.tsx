@@ -25,6 +25,8 @@ import * as XLSX from "xlsx";
 import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
+import Janela24hDialog from "@/components/meta/Janela24hDialog";
+import { Clock } from "lucide-react";
 
 type UazInstancia = {
   id: string;
