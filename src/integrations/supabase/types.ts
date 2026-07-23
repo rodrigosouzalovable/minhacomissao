@@ -3704,6 +3704,8 @@ export type Database = {
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
           phone_number_id: string
+          rajada_taxa_atual: number
+          rajada_ultimo_ajuste_em: string | null
           rate_limit_ate: string | null
           saude_ban_info: Json | null
           saude_checked_at: string | null
@@ -3742,6 +3744,8 @@ export type Database = {
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id: string
+          rajada_taxa_atual?: number
+          rajada_ultimo_ajuste_em?: string | null
           rate_limit_ate?: string | null
           saude_ban_info?: Json | null
           saude_checked_at?: string | null
@@ -3780,6 +3784,8 @@ export type Database = {
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id?: string
+          rajada_taxa_atual?: number
+          rajada_ultimo_ajuste_em?: string | null
           rate_limit_ate?: string | null
           saude_ban_info?: Json | null
           saude_checked_at?: string | null
