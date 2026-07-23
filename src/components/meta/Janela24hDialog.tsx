@@ -30,7 +30,7 @@ type Props = {
   mode?: "importar" | "abrir";
 };
 
-export default function Janela24hDialog({ open, onOpenChange, instancias, onImportar }: Props) {
+export default function Janela24hDialog({ open, onOpenChange, instancias, onImportar, onSelectConversa, mode = "importar" }: Props) {
   const [loading, setLoading] = useState(false);
   const [contatos, setContatos] = useState<ContatoJanela[]>([]);
   const [busca, setBusca] = useState("");
