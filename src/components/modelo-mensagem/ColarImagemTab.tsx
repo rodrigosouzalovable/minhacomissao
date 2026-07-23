@@ -14,6 +14,10 @@ interface Props {
   descVistaGlobal: number;
   descParceladoGlobal: number;
   parceladoQtdGlobal: number;
+  template2?: string;
+  descVistaGlobal2?: number;
+  descParceladoGlobal2?: number;
+  parceladoQtdGlobal2?: number;
 }
 
 interface CamposExtraidos {
@@ -29,7 +33,17 @@ const EMPTY: CamposExtraidos = {
   nome: '', cpf: '', contrato: '', dias_atraso: '', qtd_parcelas_atraso: '1', total_atraso: '',
 };
 
-export function ColarImagemTab({ template, descVistaGlobal, descParceladoGlobal, parceladoQtdGlobal }: Props) {
+export function ColarImagemTab({
+  template, descVistaGlobal, descParceladoGlobal, parceladoQtdGlobal,
+  template2, descVistaGlobal2, descParceladoGlobal2, parceladoQtdGlobal2,
+}: Props) {
+  const hasModelo2 = template2 !== undefined;
+  const [modelo, setModelo] = useState<1 | 2>(1);
+  const tpl = modelo === 2 && template2 !== undefined ? template2 : template;
+  const dv = modelo === 2 && descVistaGlobal2 !== undefined ? descVistaGlobal2 : descVistaGlobal;
+  const dp = modelo === 2 && descParceladoGlobal2 !== undefined ? descParceladoGlobal2 : descParceladoGlobal;
+  const pq = modelo === 2 && parceladoQtdGlobal2 !== undefined ? parceladoQtdGlobal2 : parceladoQtdGlobal;
+
   const [imageData, setImageData] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [campos, setCampos] = useState<CamposExtraidos>(EMPTY);
@@ -120,13 +134,13 @@ export function ColarImagemTab({ template, descVistaGlobal, descParceladoGlobal,
         valor: 0,
       })),
     };
-    return renderMensagem(template, {
+    return renderMensagem(tpl, {
       cliente,
-      descontoVistaPct: descVistaGlobal,
-      parceladoQtd: parceladoQtdGlobal,
-      descontoParceladoPct: descParceladoGlobal,
+      descontoVistaPct: dv,
+      parceladoQtd: pq,
+      descontoParceladoPct: dp,
     });
-  }, [campos, template, descVistaGlobal, descParceladoGlobal, parceladoQtdGlobal]);
+  }, [campos, tpl, dv, dp, pq]);
 
   const copiar = async (txt: string, label: string) => {
     await navigator.clipboard.writeText(txt);
@@ -223,8 +237,28 @@ export function ColarImagemTab({ template, descVistaGlobal, descParceladoGlobal,
           </div>
 
           <div className="pt-2 border-t space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Mensagem gerada</Label>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium">Mensagem gerada</Label>
+                {hasModelo2 && (
+                  <div className="flex rounded-md border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setModelo(1)}
+                      className={`px-2 py-0.5 text-xs ${modelo === 1 ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                    >
+                      Modelo 1 ({descVistaGlobal}% / {descParceladoGlobal}%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModelo(2)}
+                      className={`px-2 py-0.5 text-xs border-l ${modelo === 2 ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                    >
+                      Modelo 2 ({descVistaGlobal2}% / {descParceladoGlobal2}%)
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex gap-1">
                 {campos.nome && (
                   <Button size="sm" variant="ghost" onClick={() => copiar(campos.nome, 'Nome')}>
