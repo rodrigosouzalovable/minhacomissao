@@ -210,6 +210,7 @@ export default function ConfigurarMeta() {
   const [assinando, setAssinando] = useState(false);
   const [resultadosAssinatura, setResultadosAssinatura] = useState<any[] | null>(null);
   const [reinscrevendo, setReinscrevendo] = useState<string | null>(null);
+  const [diagnosticando, setDiagnosticando] = useState<string | null>(null);
   const [editInst, setEditInst] = useState<Instancia | null>(null);
   const [editForm, setEditForm] = useState({
     nome: "",
