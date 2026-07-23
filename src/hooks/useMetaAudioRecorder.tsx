@@ -128,8 +128,18 @@ export function useMetaAudioRecorder({
         'audio/webm;codecs=opus',
         'audio/webm',
       ];
-      const mimeType = candidatos.find(m => MediaRecorder.isTypeSupported(m));
-      if (!mimeType) {
+      let rec: MediaRecorder | null = null;
+      for (const mimeType of candidatos) {
+        if (!MediaRecorder.isTypeSupported(mimeType)) continue;
+        try {
+          rec = new MediaRecorder(stream, { mimeType });
+          break;
+        } catch {
+          rec = null;
+        }
+      }
+
+      if (!rec) {
         stream.getTracks().forEach(t => t.stop());
         toast({
           title: 'Navegador não suporta gravação de áudio',
@@ -138,7 +148,6 @@ export function useMetaAudioRecorder({
         });
         return;
       }
-      const rec = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = rec;
       chunksRef.current = [];
       rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
