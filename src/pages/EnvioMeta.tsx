@@ -1672,6 +1672,28 @@ export default function EnvioMeta() {
         templates={(templateGroup?.rows.filter((r) => r.status === "approved" && instanciaIds.includes(r.instancia_id)) || []) as any}
         onSaved={() => carregar()}
       />
+      <Janela24hDialog
+        open={janela24hOpen}
+        onOpenChange={setJanela24hOpen}
+        instancias={instancias.map((i) => ({ id: i.id, nome: i.nome, display_phone: i.display_phone }))}
+        onImportar={(contatos) => {
+          const linhasNovas = contatos.map((c) => {
+            const nome = (c.nome || "").replace(/,/g, " ").trim();
+            return nome ? `${c.telefone}, ${nome}` : c.telefone;
+          });
+          setRecipientsRaw((prev) => {
+            const existentes = new Set(
+              prev.split(/\r?\n/).map((l) => l.split(/[,;\t]/)[0]?.trim()).filter(Boolean)
+            );
+            const filtradas = linhasNovas.filter((l) => !existentes.has(l.split(",")[0].trim()));
+            const base = prev.trim();
+            return (base ? base + "\n" : "") + filtradas.join("\n");
+          });
+          setRecipientsHeaders([]);
+          setEditAsText(false);
+          toast.success(`${contatos.length} contato(s) importado(s) da janela 24h`);
+        }}
+      />
     </AppLayout>
   );
 }
