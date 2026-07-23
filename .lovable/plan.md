@@ -1,32 +1,30 @@
-# Correção do rodízio de atendentes no Inbox Meta
+## Problema
 
-## Diagnóstico (verificado)
+Na aba **Colar imagem**, o campo "Mensagem gerada" não reflete o desconto salvo em **Editar Modelo** por dois motivos confirmados no código:
 
-A tabela `meta_atendimento_fila` tem 4 entradas (Anna Flavia, Yasmim, Fernanda, Wallace), mas todos os `etiqueta_id` apontam para IDs de etiquetas **que não existem mais** (foram apagadas na consolidação anterior de etiquetas). As etiquetas atuais têm IDs novos.
+1. **`ColarImagemTab` está fixo em "Mensagem 2"** (`ModeloMensagem.tsx` linhas 681-686 passam `template2`, `descVistaGlobal2`, `descParceladoGlobal2`, `parceladoQtdGlobal2`). Se o usuário edita e salva a aba **Mensagem 1** do diálogo (a que abre por padrão), o Colar imagem continua usando os valores da Mensagem 2 e nada muda.
+2. **Descontos não são recarregados do banco.** A hidratação do template (`ModeloMensagem.tsx` linhas 201-216) lê apenas `template` e `template_2`, ignorando `desconto_padrao*`, `desconto_parcelado_padrao*` e `parcelas_padrao*`. Ao recarregar a página, os descontos voltam para os defaults (50 / 30 / 12), sobrescrevendo o que foi salvo.
 
-Como a trigger `atribuir_atendente_fila` insere em `meta_whatsapp_contato_etiquetas` usando o `etiqueta_id` da fila, todo insert do rodízio quebra por FK inválida (silencioso, capturado pelo `EXCEPTION WHEN OTHERS`). Ou seja, **o rodízio está 100% quebrado hoje**.
+## Correção
 
-As etiquetas que você vê chegando para Fernanda/Wallace/Yasmim vêm de outro caminho: o auto-etiquetamento por **acordo existente** (bate telefone → acordo → atendente do acordo). Como Anna Flavia tem poucos/nenhum acordo antigo, ela nunca aparece por essa via — e o rodízio, que deveria cobrir esse caso, está quebrado.
+### 1. `src/pages/ModeloMensagem.tsx` — hidratar descontos salvos
+No `useEffect` que lê `modelo_mensagem_template`, aplicar também:
+- `desconto_padrao` → `setDescVistaGlobal`
+- `desconto_parcelado_padrao` → `setDescParceladoGlobal`
+- `parcelas_padrao` → `setParceladoQtdGlobal`
+- `desconto_padrao_2` → `setDescVistaGlobal2`
+- `desconto_parcelado_padrao_2` → `setDescParceladoGlobal2`
+- `parcelas_padrao_2` → `setParceladoQtdGlobal2`
 
-## O que fazer
+Assim os valores editados persistem após refresh.
 
-1. Atualizar as 4 linhas de `meta_atendimento_fila` para apontarem para os `etiqueta_id` atuais (Anna Flavia, Yasmim, Fernanda, Wallace), mantendo `ativo = true` e `ordem` 1–4.
-2. Resetar `meta_atendimento_estado.ultimo_index` para 0, para o rodízio recomeçar limpo.
-3. Verificar (SELECT) que o join `fila → etiquetas` agora retorna nome em todas as linhas.
+### 2. `ColarImagemTab` — refletir o modelo escolhido
+Alterar a chamada no `TabsContent value="imagem"` para passar os dois conjuntos (Mensagem 1 e Mensagem 2), e adicionar um seletor **"Modelo 1 / Modelo 2"** no topo do `ColarImagemTab.tsx`. A `useMemo` da mensagem passa a usar o par correspondente ao modelo selecionado (padrão: Modelo 1, que é o que aparece primeiro no diálogo Editar Modelo).
 
-Nenhuma mudança em código de frontend ou trigger — só reparo de dados em 4 linhas.
+Isso garante que:
+- Editando os descontos da Mensagem 1 e salvando, o Colar imagem já usa esses valores (padrão).
+- O usuário pode alternar para Modelo 2 caso queira testar o outro template.
+- Como `useMemo` já depende de `descVistaGlobal`/`descParceladoGlobal`/`parceladoQtdGlobal`/`template`, a atualização é automática assim que `onSaved1`/`onSaved2` propaga o novo estado.
 
-## Detalhes técnicos
-
-```sql
--- 1) repointar fila para as etiquetas atuais
-UPDATE meta_atendimento_fila SET etiqueta_id = 'bb51fdd6-2ca1-4abe-8200-bd08b8061d3f' WHERE ordem = 1; -- Anna Flavia
-UPDATE meta_atendimento_fila SET etiqueta_id = '3946ebea-300a-4e72-93a1-be5e27d74ac8' WHERE ordem = 2; -- Yasmim
-UPDATE meta_atendimento_fila SET etiqueta_id = '017ec7e0-9149-4dea-8764-bd1380a824eb' WHERE ordem = 3; -- Fernanda
-UPDATE meta_atendimento_fila SET etiqueta_id = '151276d0-7bb2-4d51-8a7f-e6cb1c68046a' WHERE ordem = 4; -- Wallace
-
--- 2) reset do índice do round-robin
-UPDATE meta_atendimento_estado SET ultimo_index = 0, atualizado_em = now() WHERE id = 1;
-```
-
-Após aplicar, novas conversas de entrada (sem etiqueta prévia e sem acordo antigo casando pelo telefone) começarão a ser distribuídas nas 4 atendentes na ordem Anna Flavia → Yasmim → Fernanda → Wallace, incluindo a Anna Flavia que hoje está fora.
+### Fora de escopo
+Nenhuma mudança em `EditarTemplateMensagemDialog.tsx`, `renderMensagem` ou schema — o salvamento já grava tudo corretamente; só faltava ler de volta e conectar ao Colar imagem.
