@@ -878,6 +878,15 @@ export default function InboxMeta() {
                 </PopoverContent>
 
               </Popover>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                onClick={() => setJanela24hOpen(true)}
+                title="Ver conversas dentro da janela de 24h (verde/amarelo)"
+              >
+                <Clock className="h-3.5 w-3.5 text-green-600" />
+              </Button>
             </div>
             {/* Tabs */}
             <div className="flex gap-1 bg-muted/40 p-0.5 rounded">
