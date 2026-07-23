@@ -267,11 +267,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Token-bucket real: janela de 1 segundo, N envios em paralelo via Promise.allSettled.
-    // Começa em msgs_por_segundo do job, reduz pela metade em rate limit, sobe +5 após 3 janelas ok.
+    // Token-bucket ADAPTATIVO por instância (AIMD).
+    // - `mpsAlvo` (slider do usuário) é apenas o TETO.
+    // - `janela` começa em rajada_taxa_atual (persistido por instância, default 1).
+    // - A cada rate-limit (80007/131056): janela = max(1, floor(janela/2)) e persiste.
+    // - A cada 3 janelas OK seguidas: janela = min(mpsAlvo, janela + 1) e persiste.
     const mpsAlvo = Math.max(1, Math.min(MAX_MPS_HARD_CAP, Number(job.msgs_por_segundo) || 1));
-    let janela = mpsAlvo;
+    let janela = Math.max(1, Math.min(mpsAlvo, Number(inst?.rajada_taxa_atual) || 1));
     let sucessosSeguidos = 0;
+
+    const persistirTaxa = async (nova: number) => {
+      const v = Math.max(1, Math.min(MAX_MPS_HARD_CAP, Math.floor(nova)));
+      await supabase.from('meta_whatsapp_instances').update({
+        rajada_taxa_atual: v,
+        rajada_ultimo_ajuste_em: new Date().toISOString(),
+      }).eq('id', instanciaId);
+    };
+
 
     let processadosNesteWorker = 0;
     let paradaPorRateLimit = false;
