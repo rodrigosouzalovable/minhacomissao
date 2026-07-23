@@ -1,22 +1,22 @@
 ## Objetivo
 
-Transformar o botão "🟢 Janela 24h" (ícone Clock, ao lado do filtro de etiquetas no Inbox Meta) num **filtro inline** da própria lista de conversas, em vez de abrir o dialog `Janela24hDialog`.
+Ao clicar em "Tentar novamente" no dialog da campanha (modo rajada), redistribuir os itens com erro para as instâncias **ativas/saudáveis** do job — em vez de re-enfileirar mantendo a instância que falhou (ex.: LD 19 com "Business eligibility payment issue"). Assim, os retries saem pela instância que ainda está enviando (ex.: LD 14).
 
 ## Comportamento
 
-- **Clique no botão** → alterna um estado `filtroJanela24h` (on/off).
-- **Quando ativo**:
-  - A lista de conversas passa a mostrar **apenas** contatos cuja bolinha da janela está **verde (aberta)** ou **amarela (alerta)**, ou seja, `computeJanela(c.ultima_msg_entrada_em).status !== 'fechada'` (e há `ultima_msg_entrada_em` válida).
-  - Botão fica destacado (variant `default` / cor primary) para indicar filtro ativo.
-- **Clique novamente** → desativa o filtro e volta a mostrar todas as conversas.
-- O dialog `Janela24hDialog` **não abre mais** a partir desse botão.
+- Retry pega todos os itens `status='erro'` do job e volta para `pendente`.
+- Identifica quais instâncias do job (`job.instancia_ids`) estão **elegíveis agora**: `ativo=true`, não `estado_pool='restrita'`, sem `pausa_automatica_ate` no futuro (motivos como `status=…`, template pausado, eligibility issue). Em rajada, RED/YELLOW continuam elegíveis.
+- Se houver ao menos 1 instância elegível: reatribui `instancia_id` dos itens resetados via round-robin sobre as elegíveis, e dispara `envio-meta-massa-burst` apenas para essas.
+- Se nenhuma estiver elegível: mantém comportamento atual (retorna erros ao pool original) e devolve mensagem clara `"Nenhuma instância elegível para retomar"` para o front exibir o toast.
+- Modo serial (`modo_rajada=false`): sem mudança — o `pick-meta-instance` já escolhe entre as ativas.
 
 ## Arquivos alterados
 
-### `src/pages/InboxMeta.tsx`
-1. Remover `useState` `janela24hOpen` e o import de `Janela24hDialog`, remover a renderização `<Janela24hDialog ... />` no final do JSX.
-2. Adicionar `const [filtroJanela24h, setFiltroJanela24h] = useState(false);`.
-3. Alterar o `onClick` do botão (linha ~885) para `setFiltroJanela24h(v => !v)`; aplicar `variant={filtroJanela24h ? 'default' : 'outline'}` e ajustar `title` para "Filtrar conversas com janela 24h ativa (verde/amarela)".
-4. No `useMemo` `contatosFiltrados` (linha 513), adicionar etapa final: se `filtroJanela24h`, filtrar por `computeJanela(c.ultima_msg_entrada_em).status === 'aberta' || 'alerta'`.
+### `supabase/functions/envio-meta-massa-retry-erros/index.ts`
+1. Após o UPDATE que devolve itens para `pendente` (linha 58-63), quando `job.modo_rajada`:
+   - Buscar `meta_whatsapp_instances` para `job.instancia_ids` e filtrar as elegíveis (mesma regra do `pick-meta-instance`, sem checagem de qualidade).
+   - Se `elegiveis.length > 0`, fazer UPDATE em lote reatribuindo `instancia_id` dos itens resetados por round-robin (um `update` por instância usando `.in('id', chunkIds)`).
+   - Substituir o loop de dispatch (linhas 85-95) para chamar `envio-meta-massa-burst` apenas para as instâncias elegíveis.
+2. Se `elegiveis.length === 0`, retornar `success:false, error:'Nenhuma instância elegível para retomar (todas pausadas/restritas)'` com status 200 sem re-disparar workers.
 
-Nenhuma outra tela é afetada. O componente `Janela24hDialog` continua existindo no repo (não removo o arquivo), apenas deixa de ser usado aqui.
+Nenhuma alteração de UI necessária — o `CampanhaDetalheDialog` já exibe o toast com a mensagem retornada.
