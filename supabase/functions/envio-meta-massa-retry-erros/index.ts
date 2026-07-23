@@ -82,8 +82,47 @@ Deno.serve(async (req) => {
 
     // Re-dispara worker apropriado
     if (job.modo_rajada) {
-      const instancias = Array.from(new Set((reset || []).map((r: any) => r.instancia_id).filter(Boolean)));
-      for (const instId of instancias) {
+      // Redistribui itens com erro entre instâncias ELEGÍVEIS do job (não pausadas/restritas).
+      const jobInstIds: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+      const { data: insts } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, ativo, estado_pool, pausa_automatica_ate')
+        .in('id', jobInstIds.length ? jobInstIds : ['00000000-0000-0000-0000-000000000000']);
+      const agora = Date.now();
+      const elegiveis = (insts || []).filter((i: any) => {
+        if (!i.ativo) return false;
+        if (i.estado_pool === 'restrita') return false;
+        if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > agora) return false;
+        return true;
+      }).map((i: any) => i.id);
+
+      if (elegiveis.length === 0) {
+        return new Response(JSON.stringify({
+          success: false,
+          reenfileirados: totalReenfileirados,
+          error: 'Nenhuma instância elegível para retomar (todas pausadas/restritas).',
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Round-robin reatribuindo instancia_id dos itens resetados.
+      const buckets: Record<string, string[]> = {};
+      elegiveis.forEach((id: string) => { buckets[id] = []; });
+      (reset || []).forEach((row: any, idx: number) => {
+        const target = elegiveis[idx % elegiveis.length];
+        buckets[target].push(row.id);
+      });
+      for (const [instId, ids] of Object.entries(buckets)) {
+        if (!ids.length) continue;
+        // chunk para evitar payload muito grande
+        for (let i = 0; i < ids.length; i += 500) {
+          const chunk = ids.slice(i, i + 500);
+          await supabase.from('envio_meta_job_item')
+            .update({ instancia_id: instId })
+            .in('id', chunk);
+        }
+      }
+
+      for (const instId of elegiveis) {
         fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
           method: 'POST',
           headers: {
