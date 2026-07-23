@@ -879,13 +879,13 @@ export default function InboxMeta() {
 
               </Popover>
               <Button
-                variant="outline"
+                variant={filtroJanela24h ? 'default' : 'outline'}
                 size="sm"
                 className="h-8 px-2"
-                onClick={() => setJanela24hOpen(true)}
-                title="Ver conversas dentro da janela de 24h (verde/amarelo)"
+                onClick={() => setFiltroJanela24h(v => !v)}
+                title="Filtrar conversas com janela 24h ativa (verde/amarela)"
               >
-                <Clock className="h-3.5 w-3.5 text-green-600" />
+                <Clock className={cn('h-3.5 w-3.5', !filtroJanela24h && 'text-green-600')} />
               </Button>
             </div>
             {/* Tabs */}
