@@ -26,7 +26,7 @@ import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversa
 import { ReabrirComTemplateDialog } from '@/components/inbox/meta/ReabrirComTemplateDialog';
 import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
 import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
-import Janela24hDialog from '@/components/meta/Janela24hDialog';
+
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
