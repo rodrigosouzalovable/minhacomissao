@@ -110,6 +110,7 @@ export default function InboxMeta() {
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
   const [filtroEtiqueta, setFiltroEtiqueta] = useState<string | null>(null);
   const [filtroEtOpen, setFiltroEtOpen] = useState(false);
+  const [janela24hOpen, setJanela24hOpen] = useState(false);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
 
   
