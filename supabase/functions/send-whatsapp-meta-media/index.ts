@@ -31,14 +31,21 @@ async function uploadAudioToMeta(inst: any, mediaUrl: string): Promise<{ id?: st
   const res = await fetch(mediaUrl);
   if (!res.ok) return { error: `Falha ao baixar áudio do storage (HTTP ${res.status})` };
   const buf = new Uint8Array(await res.arrayBuffer());
-  const mime = guessAudioMime(mediaUrl);
+  const guessed = guessAudioMime(mediaUrl);
 
-  // Meta aceita: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg (OPUS).
+  // O frontend já re-encoda tudo para OGG/OPUS 16 kHz mono via ffmpeg.wasm.
+  // Forçamos audio/ogg sempre que o path indicar .ogg — evita que sujeira no
+  // nome do arquivo (ex.: ".ogg; codecs=opus") caia em octet-stream.
+  const url = (mediaUrl || '').toLowerCase();
+  const mime = url.includes('.ogg') ? 'audio/ogg' : guessed;
+
   if (mime === 'audio/webm' || mime === 'application/octet-stream') {
     return { error: 'Formato de áudio não suportado pela Meta (WhatsApp aceita OGG/OPUS, AAC, MP3, M4A ou AMR). Grave novamente em um navegador atualizado (Chrome/Edge).' };
   }
 
   const ext = mime === 'audio/ogg' ? 'ogg' : mime === 'audio/mpeg' ? 'mp3' : mime === 'audio/mp4' ? 'm4a' : mime === 'audio/aac' ? 'aac' : 'amr';
+  console.log('[send-whatsapp-meta-media] uploading audio to Meta', { bytes: buf.byteLength, mime, ext, phone_number_id: inst.phone_number_id });
+
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');
   form.append('type', mime);
@@ -51,9 +58,10 @@ async function uploadAudioToMeta(inst: any, mediaUrl: string): Promise<{ id?: st
   });
   const upJson: any = await up.json().catch(() => ({}));
   if (!up.ok) {
-    console.log('[send-whatsapp-meta-media] Meta upload error', upJson);
+    console.log('[send-whatsapp-meta-media] Meta upload error', { status: up.status, body: upJson });
     return { error: upJson?.error?.message || `HTTP ${up.status} no upload de mídia`, status: up.status };
   }
+  console.log('[send-whatsapp-meta-media] Meta upload ok', { media_id: upJson?.id });
   return { id: upJson?.id };
 }
 
