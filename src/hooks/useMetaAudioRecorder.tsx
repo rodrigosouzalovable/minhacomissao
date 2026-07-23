@@ -33,26 +33,34 @@ async function getFFmpeg(): Promise<any> {
 async function ensureMetaAudio(
   blob: Blob,
   mimeType: string,
-): Promise<{ blob: Blob; ext: 'ogg' | 'mp4' | 'm4a'; contentType: string }> {
-  // Fast path: OGG/OPUS already — ship as-is.
-  if (mimeType.includes('ogg')) {
-    return { blob, ext: 'ogg', contentType: 'audio/ogg' };
-  }
-  // Fast path: MP4/AAC (Safari default) — Meta accepts audio/mp4, no wasm needed.
-  if (mimeType.includes('mp4') || mimeType.includes('m4a') || mimeType.includes('aac')) {
-    return { blob, ext: 'm4a', contentType: 'audio/mp4' };
-  }
-  // Otherwise (webm/opus on Chrome/Edge/Firefox) → remux to OGG/OPUS via ffmpeg.wasm.
+): Promise<{ blob: Blob; ext: 'ogg'; contentType: string }> {
+  // Sempre re-encoda para OGG/OPUS 16 kHz mono 32 kbps — o único formato que
+  // o WhatsApp reproduz de forma confiável em todos os clientes. Copiar opus
+  // de webm para ogg (-c:a copy) produz container inválido: Meta aceita e
+  // devolve wamid, mas o app do destinatário descarta silenciosamente.
   const ffmpeg = await getFFmpeg();
-  const inExt = mimeType.includes('webm') ? 'webm' : 'bin';
+  const lower = (mimeType || '').toLowerCase();
+  const inExt = lower.includes('webm')
+    ? 'webm'
+    : lower.includes('ogg')
+      ? 'ogg'
+      : lower.includes('mp4') || lower.includes('m4a') || lower.includes('aac')
+        ? 'm4a'
+        : 'bin';
   const inName = `in.${inExt}`;
   const outName = 'out.ogg';
   const buf = new Uint8Array(await blob.arrayBuffer());
   await ffmpeg.writeFile(inName, buf);
-  const args = mimeType.includes('webm')
-    ? ['-i', inName, '-c:a', 'copy', '-vn', outName]
-    : ['-i', inName, '-c:a', 'libopus', '-b:a', '32k', '-vn', outName];
-  await ffmpeg.exec(args);
+  await ffmpeg.exec([
+    '-i', inName,
+    '-vn',
+    '-ac', '1',
+    '-ar', '16000',
+    '-c:a', 'libopus',
+    '-b:a', '32k',
+    '-application', 'voip',
+    outName,
+  ]);
   const data = await ffmpeg.readFile(outName);
   const out = new Blob([data as unknown as BlobPart], { type: 'audio/ogg' });
   try { await ffmpeg.deleteFile(inName); await ffmpeg.deleteFile(outName); } catch { /* noop */ }
