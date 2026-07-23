@@ -1,22 +1,32 @@
-## Objetivo
+# Correção do rodízio de atendentes no Inbox Meta
 
-Ao clicar em "Tentar novamente" no dialog da campanha (modo rajada), redistribuir os itens com erro para as instâncias **ativas/saudáveis** do job — em vez de re-enfileirar mantendo a instância que falhou (ex.: LD 19 com "Business eligibility payment issue"). Assim, os retries saem pela instância que ainda está enviando (ex.: LD 14).
+## Diagnóstico (verificado)
 
-## Comportamento
+A tabela `meta_atendimento_fila` tem 4 entradas (Anna Flavia, Yasmim, Fernanda, Wallace), mas todos os `etiqueta_id` apontam para IDs de etiquetas **que não existem mais** (foram apagadas na consolidação anterior de etiquetas). As etiquetas atuais têm IDs novos.
 
-- Retry pega todos os itens `status='erro'` do job e volta para `pendente`.
-- Identifica quais instâncias do job (`job.instancia_ids`) estão **elegíveis agora**: `ativo=true`, não `estado_pool='restrita'`, sem `pausa_automatica_ate` no futuro (motivos como `status=…`, template pausado, eligibility issue). Em rajada, RED/YELLOW continuam elegíveis.
-- Se houver ao menos 1 instância elegível: reatribui `instancia_id` dos itens resetados via round-robin sobre as elegíveis, e dispara `envio-meta-massa-burst` apenas para essas.
-- Se nenhuma estiver elegível: mantém comportamento atual (retorna erros ao pool original) e devolve mensagem clara `"Nenhuma instância elegível para retomar"` para o front exibir o toast.
-- Modo serial (`modo_rajada=false`): sem mudança — o `pick-meta-instance` já escolhe entre as ativas.
+Como a trigger `atribuir_atendente_fila` insere em `meta_whatsapp_contato_etiquetas` usando o `etiqueta_id` da fila, todo insert do rodízio quebra por FK inválida (silencioso, capturado pelo `EXCEPTION WHEN OTHERS`). Ou seja, **o rodízio está 100% quebrado hoje**.
 
-## Arquivos alterados
+As etiquetas que você vê chegando para Fernanda/Wallace/Yasmim vêm de outro caminho: o auto-etiquetamento por **acordo existente** (bate telefone → acordo → atendente do acordo). Como Anna Flavia tem poucos/nenhum acordo antigo, ela nunca aparece por essa via — e o rodízio, que deveria cobrir esse caso, está quebrado.
 
-### `supabase/functions/envio-meta-massa-retry-erros/index.ts`
-1. Após o UPDATE que devolve itens para `pendente` (linha 58-63), quando `job.modo_rajada`:
-   - Buscar `meta_whatsapp_instances` para `job.instancia_ids` e filtrar as elegíveis (mesma regra do `pick-meta-instance`, sem checagem de qualidade).
-   - Se `elegiveis.length > 0`, fazer UPDATE em lote reatribuindo `instancia_id` dos itens resetados por round-robin (um `update` por instância usando `.in('id', chunkIds)`).
-   - Substituir o loop de dispatch (linhas 85-95) para chamar `envio-meta-massa-burst` apenas para as instâncias elegíveis.
-2. Se `elegiveis.length === 0`, retornar `success:false, error:'Nenhuma instância elegível para retomar (todas pausadas/restritas)'` com status 200 sem re-disparar workers.
+## O que fazer
 
-Nenhuma alteração de UI necessária — o `CampanhaDetalheDialog` já exibe o toast com a mensagem retornada.
+1. Atualizar as 4 linhas de `meta_atendimento_fila` para apontarem para os `etiqueta_id` atuais (Anna Flavia, Yasmim, Fernanda, Wallace), mantendo `ativo = true` e `ordem` 1–4.
+2. Resetar `meta_atendimento_estado.ultimo_index` para 0, para o rodízio recomeçar limpo.
+3. Verificar (SELECT) que o join `fila → etiquetas` agora retorna nome em todas as linhas.
+
+Nenhuma mudança em código de frontend ou trigger — só reparo de dados em 4 linhas.
+
+## Detalhes técnicos
+
+```sql
+-- 1) repointar fila para as etiquetas atuais
+UPDATE meta_atendimento_fila SET etiqueta_id = 'bb51fdd6-2ca1-4abe-8200-bd08b8061d3f' WHERE ordem = 1; -- Anna Flavia
+UPDATE meta_atendimento_fila SET etiqueta_id = '3946ebea-300a-4e72-93a1-be5e27d74ac8' WHERE ordem = 2; -- Yasmim
+UPDATE meta_atendimento_fila SET etiqueta_id = '017ec7e0-9149-4dea-8764-bd1380a824eb' WHERE ordem = 3; -- Fernanda
+UPDATE meta_atendimento_fila SET etiqueta_id = '151276d0-7bb2-4d51-8a7f-e6cb1c68046a' WHERE ordem = 4; -- Wallace
+
+-- 2) reset do índice do round-robin
+UPDATE meta_atendimento_estado SET ultimo_index = 0, atualizado_em = now() WHERE id = 1;
+```
+
+Após aplicar, novas conversas de entrada (sem etiqueta prévia e sem acordo antigo casando pelo telefone) começarão a ser distribuídas nas 4 atendentes na ordem Anna Flavia → Yasmim → Fernanda → Wallace, incluindo a Anna Flavia que hoje está fora.
