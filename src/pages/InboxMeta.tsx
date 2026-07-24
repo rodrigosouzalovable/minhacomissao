@@ -1084,34 +1084,65 @@ export default function InboxMeta() {
                   <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                 ) : (
                   <div className="space-y-2">
-                    {mensagens.map((m, idx) => {
-                      const prev = idx > 0 ? mensagens[idx - 1] : null;
-                      const dStr = new Date(m.timestamp_msg).toLocaleDateString('pt-BR');
-                      const prevStr = prev ? new Date(prev.timestamp_msg).toLocaleDateString('pt-BR') : null;
-                      const sep = !prev || dStr !== prevStr;
-                      return (
-                        <div key={m.id}>
-                          {sep && (
-                            <div className="flex justify-center my-3">
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{dStr}</span>
-                            </div>
-                          )}
-                          <div onDoubleClick={() => setRespondendo(m)} title="Duplo clique para responder">
-                            <ChatMessage
-                              msg={{
-                                id: m.id, conteudo: m.conteudo, direcao: m.direcao,
-                                timestamp_msg: m.timestamp_msg, tipo_conteudo: m.tipo_conteudo,
-                                media_url: m.media_url, whatsapp_msg_id: m.wa_message_id,
-                                status_envio: m.status_envio,
-                                conteudo_citado: m.conteudo_citado,
-                                template_botoes: (m as any).template_botoes ?? null,
-                              } as any}
-                              formatMsgTime={formatMsgTime}
-                            />
-                          </div>
-                        </div>
+                    {(() => {
+                      // Regra "não entregue": saída, status_envio='enviada' e > 15 min sem callback delivered/read/failed.
+                      const NAO_ENTREGUE_MIN = 15;
+                      const agora = Date.now();
+                      const flagsNaoEntregue = mensagens.map(mm =>
+                        mm.direcao === 'saida'
+                        && (mm.status_envio === 'enviada' || mm.status_envio == null)
+                        && !!mm.wa_message_id
+                        && (agora - new Date(mm.timestamp_msg).getTime()) > NAO_ENTREGUE_MIN * 60 * 1000
                       );
-                    })}
+                      // Índice da última mensagem "não entregue" de cada dia (para exibir o aviso inline apenas uma vez por dia).
+                      const ultimaPorDia = new Map<string, number>();
+                      mensagens.forEach((mm, i) => {
+                        if (!flagsNaoEntregue[i]) return;
+                        const dia = new Date(mm.timestamp_msg).toLocaleDateString('pt-BR');
+                        ultimaPorDia.set(dia, i);
+                      });
+                      const idxsAviso = new Set(ultimaPorDia.values());
+                      return mensagens.map((m, idx) => {
+                        const prev = idx > 0 ? mensagens[idx - 1] : null;
+                        const dStr = new Date(m.timestamp_msg).toLocaleDateString('pt-BR');
+                        const prevStr = prev ? new Date(prev.timestamp_msg).toLocaleDateString('pt-BR') : null;
+                        const sep = !prev || dStr !== prevStr;
+                        const naoEntregue = flagsNaoEntregue[idx];
+                        const mostraAviso = idxsAviso.has(idx);
+                        return (
+                          <div key={m.id}>
+                            {sep && (
+                              <div className="flex justify-center my-3">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{dStr}</span>
+                              </div>
+                            )}
+                            <div onDoubleClick={() => setRespondendo(m)} title="Duplo clique para responder">
+                              <ChatMessage
+                                msg={{
+                                  id: m.id, conteudo: m.conteudo, direcao: m.direcao,
+                                  timestamp_msg: m.timestamp_msg, tipo_conteudo: m.tipo_conteudo,
+                                  media_url: m.media_url, whatsapp_msg_id: m.wa_message_id,
+                                  status_envio: m.status_envio,
+                                  conteudo_citado: m.conteudo_citado,
+                                  template_botoes: (m as any).template_botoes ?? null,
+                                } as any}
+                                formatMsgTime={formatMsgTime}
+                                possivelmenteNaoEntregue={naoEntregue}
+                              />
+                              {mostraAviso && (
+                                <div className="w-full flex justify-center mt-1 mb-1 px-2">
+                                  <p className="text-[10.5px] leading-snug text-amber-600 dark:text-amber-400 max-w-[85%] text-center">
+                                    ⚠️ Esta mensagem pode não ter sido entregue ao WhatsApp do cliente.
+                                    Isso costuma acontecer quando o aparelho está offline há muito tempo
+                                    ou o cliente ainda não abriu a conversa iniciada pela empresa.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                     <div ref={messagesEndRef} />
                   </div>
                 )}
