@@ -152,6 +152,10 @@ function rankDelivery(s: DeliveryStatus) {
   return s === "read" ? 3 : s === "delivered" ? 2 : s === "failed" ? 4 : 1;
 }
 
+function isRateLimitErro(erro?: string | null): boolean {
+  return /rate\s*limit|80007|131056|retry\s*after/i.test(String(erro || ""));
+}
+
 function toCampanhaJob(j: any): CampanhaJob {
   const total = j.total || 0;
   const enviados = j.enviados || 0;
@@ -461,6 +465,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           deliveryErro: dlv?.erro,
         });
       } else if (it.status === "erro") {
+        if (isRateLimitErro(it.erro)) continue;
         erros.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, erro: it.erro || undefined, ts });
       }
     }

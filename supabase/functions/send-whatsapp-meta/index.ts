@@ -602,6 +602,8 @@ Deno.serve(async (req) => {
         try {
           await supabase.from('meta_whatsapp_instances').update({
             rate_limit_ate: new Date(Date.now() + retryAfterMs).toISOString(),
+            rajada_taxa_atual: 1,
+            rajada_ultimo_ajuste_em: new Date().toISOString(),
           }).eq('id', inst.id);
         } catch { /* ignora */ }
         return new Response(JSON.stringify({

@@ -1,7 +1,8 @@
-// Modo RAJADA CONTROLADA: um worker POR INSTÂNCIA, dispara N msgs/segundo
-// (job.msgs_por_segundo, padrão 1) para respeitar o rate limit da Meta.
-// - Rate limit (#80007/#131056/429/502 "Rate limit"): devolve o item para 'pendente',
-//   pausa a instância pelo tempo Retry-After e re-agenda o worker.
+// Modo RAJADA CONTROLADA: um worker POR INSTÂNCIA, com teto definido em
+// job.msgs_por_segundo. A taxa real é adaptativa e persistida por instância.
+// - Rate limit (#80007/#131056/429/502 "Rate limit"): devolve o item para
+//   'pendente' sem contar como erro final, derruba a instância para 1 msg/s,
+//   respeita o Retry-After da Meta e re-agenda o worker automaticamente.
 // - Erros transitórios (502/503/504 sem rate limit): devolve item para 'pendente'
 //   com contador de tentativas até 3.
 // - Erros permanentes: marca como 'erro' (o usuário pode reenviar em lote).
@@ -18,8 +19,10 @@ const supabase = createClient(
 );
 
 const MAX_WALL_MS = 50_000;         // deixa margem antes do timeout de 60s
-const MAX_MPS_HARD_CAP = 60;        // teto absoluto por instância (Meta permite ~80/s no tier padrão)
+const MAX_MPS_HARD_CAP = 60;        // teto absoluto por instância
 const MAX_TENTATIVAS_TRANSIENTE = 3;
+const MIN_MPS_APOS_RATE_LIMIT = 1;
+const JANELAS_OK_PARA_RAMPUP = 10;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -34,8 +37,7 @@ async function jobEstaRodando(jobId: string) {
 
 async function selfInvoke(jobId: string, instanciaId: string, delayMs = 0) {
   if (!(await jobEstaRodando(jobId))) return;
-  // Respeita esperas até 10s (rate-limit real da Meta ~10s). Antes travava em 2s
-  // e re-invocava em loop enquanto rate_limit_ate ainda estava no futuro.
+  // O bloqueio real fica em rate_limit_ate; aqui dormimos curto para não estourar timeout.
   if (delayMs > 0) await sleep(Math.min(delayMs, 10_000));
   if (!(await jobEstaRodando(jobId))) return;
   await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
@@ -200,11 +202,36 @@ Deno.serve(async (req) => {
     const agora = Date.now();
     if (inst?.rate_limit_ate && new Date(inst.rate_limit_ate).getTime() > agora) {
       const espera = new Date(inst.rate_limit_ate).getTime() - agora;
-      await selfInvoke(jobId, instanciaId, Math.min(espera, 2000));
+      await supabase.from('envio_meta_job').update({
+        proximo_em: new Date(Date.now() + espera).toISOString(),
+        status_motivo: `RATE_LIMIT:${instanciaId}:${espera}:Meta pausou temporariamente esta instância por rate limit. Retomando automaticamente a 1 msg/s.`,
+      }).eq('id', jobId).eq('status', 'rodando');
+      await selfInvoke(jobId, instanciaId, espera);
       return new Response(JSON.stringify({ success: true, aguardando_rate_limit: true, ms: espera }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Recupera automaticamente rate limits legados que eventualmente tenham sido
+    // gravados como erro final antes desta regra. Eles voltam para a fila e somem
+    // da lista vermelha sem exigir clique manual.
+    try {
+      const { data: rateLimitErrors } = await supabase
+        .from('envio_meta_job_item')
+        .update({ status: 'pendente', erro: null, tentativas: 0, processado_em: null })
+        .eq('job_id', jobId)
+        .eq('instancia_id', instanciaId)
+        .eq('status', 'erro')
+        .or('erro.ilike.%rate limit%,erro.ilike.%Rate limit%,erro.ilike.%80007%,erro.ilike.%131056%')
+        .select('id');
+      const recuperados = rateLimitErrors?.length ?? 0;
+      if (recuperados > 0) {
+        const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
+        await supabase.from('envio_meta_job').update({
+          erros: Math.max(0, (cur?.erros || 0) - recuperados),
+        }).eq('id', jobId);
+      }
+    } catch { /* não bloqueia o worker */ }
     // No modo RAJADA, IGNORAMOS pausas por qualidade (quality=YELLOW/RED). Só encerramos
     // o worker quando a Meta de fato restringir/banir a instância (motivo status=...).
     const motivoPausa = String(inst?.pausa_automatica_motivo || '').toLowerCase();
@@ -270,15 +297,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Token-bucket ADAPTATIVO por instância (AIMD tunado).
+    // Token-bucket ADAPTATIVO por instância.
     // - `mpsAlvo` (slider do usuário) é o TETO.
-    // - Se a taxa persistida está "stale" (>15min sem ajuste) OU abaixo do alvo sem
-    //   rate-limit ativo, RESETA para mpsAlvo — evita penalidade eterna após picos
-    //   isolados de rate-limit no começo da campanha.
-    // - Corte no rate-limit: ceil(janela*0.7) com piso 3 (antes: floor/2 com piso 1).
-    // - Ramp-up: 1 janela OK já sobe +1 (antes: 3 janelas).
+    // - A taxa real nunca reseta agressivamente para o teto só por estar abaixo dele.
+    // - Rate limit derruba para 1 msg/s; ramp-up só ocorre após várias janelas OK.
     // - Também limpa rate_limit_ate órfão (passado > 5min).
-    const MIN_JANELA = 3;
     const mpsAlvo = Math.max(1, Math.min(MAX_MPS_HARD_CAP, Number(job.msgs_por_segundo) || 1));
 
     // Limpa rate_limit_ate órfão
@@ -288,20 +311,8 @@ Deno.serve(async (req) => {
         .eq('id', instanciaId);
     }
 
-    const ultimoAjuste = inst?.rajada_ultimo_ajuste_em ? new Date(inst.rajada_ultimo_ajuste_em).getTime() : 0;
     const taxaPersist = Number(inst?.rajada_taxa_atual) || 1;
-    const stale = ultimoAjuste === 0 || (agora - ultimoAjuste) > 15 * 60_000;
-    const semRateLimitAtivo = !inst?.rate_limit_ate || new Date(inst.rate_limit_ate).getTime() <= agora;
-
-    let janela = Math.max(1, Math.min(mpsAlvo, taxaPersist));
-    if (semRateLimitAtivo && (stale || taxaPersist < mpsAlvo)) {
-      // Reset ao teto: começa cheia. Se hoje for problema, o AIMD corta imediatamente.
-      janela = mpsAlvo;
-      await supabase.from('meta_whatsapp_instances').update({
-        rajada_taxa_atual: mpsAlvo,
-        rajada_ultimo_ajuste_em: new Date().toISOString(),
-      }).eq('id', instanciaId);
-    }
+    let janela = Math.max(MIN_MPS_APOS_RATE_LIMIT, Math.min(mpsAlvo, taxaPersist));
     let sucessosSeguidos = 0;
 
     const persistirTaxa = async (nova: number) => {
@@ -338,7 +349,7 @@ Deno.serve(async (req) => {
 
       const { data: pendentes } = await supabase
         .from('envio_meta_job_item')
-        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, tentativas')
+        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, instancia_nome, tentativas')
         .eq('job_id', jobId)
         .eq('instancia_id', instanciaId)
         .eq('status', 'pendente')
@@ -365,6 +376,8 @@ Deno.serve(async (req) => {
       let errCount = 0;
       let rateLimitVisto = false;
       let rateLimitRetryMs = 0;
+      let rateLimitTelefone = '';
+      let rateLimitErro = '';
       let restrictedVisto = false;
 
       const nowIso = new Date().toISOString();
@@ -383,10 +396,12 @@ Deno.serve(async (req) => {
           okCount++;
         } else if (r.kind === 'rate_limit') {
           await supabase.from('envio_meta_job_item').update({
-            status: 'pendente', erro: `rate limit: ${r.erro}`,
+            status: 'pendente', erro: null,
           }).eq('id', it.id);
           rateLimitVisto = true;
           rateLimitRetryMs = Math.max(rateLimitRetryMs, r.retryMs);
+          rateLimitTelefone = it.telefone || rateLimitTelefone;
+          rateLimitErro = r.erro || rateLimitErro;
         } else if (r.kind === 'transient') {
           const tent = (it.tentativas || 0) + 1;
           if (tent >= MAX_TENTATIVAS_TRANSIENTE) {
@@ -437,11 +452,19 @@ Deno.serve(async (req) => {
 
       // Ajuste dinâmico da janela (AIMD tunado, persistido por instância)
       if (rateLimitVisto) {
-        janela = Math.max(MIN_JANELA, Math.ceil(janela * 0.7));
+        janela = MIN_MPS_APOS_RATE_LIMIT;
         sucessosSeguidos = 0;
         await persistirTaxa(janela);
         paradaPorRateLimit = true;
-        esperaRateLimitMs = Math.min(Math.max(rateLimitRetryMs, 2_000), 30_000);
+        esperaRateLimitMs = Math.min(Math.max(rateLimitRetryMs, 2_000), 5 * 60_000);
+        const proximo = new Date(Date.now() + esperaRateLimitMs).toISOString();
+        const instNome = paraEnviar.find((it: any) => it.telefone === rateLimitTelefone)?.instancia_nome || instanciaId;
+        await supabase.from('envio_meta_job').update({
+          atual_telefone: rateLimitTelefone || null,
+          atual_instancia: instNome,
+          proximo_em: proximo,
+          status_motivo: `RATE_LIMIT:${instanciaId}:${esperaRateLimitMs}:Meta pausou temporariamente esta instância por rate limit. O contato voltou para a fila e a retomada será automática a 1 msg/s.${rateLimitErro ? ` Detalhe: ${String(rateLimitErro).slice(0, 180)}` : ''}`,
+        }).eq('id', jobId).eq('status', 'rodando');
         break;
       }
       if (restrictedVisto) {
@@ -452,12 +475,16 @@ Deno.serve(async (req) => {
       if (templatePausado) break;
 
       if (errCount === 0 && okCount > 0) {
-        // Ramp-up agressivo: 1 janela OK já sobe +1 até o teto
-        if (janela < mpsAlvo) {
+        if (String(job.status_motivo || '').startsWith(`RATE_LIMIT:${instanciaId}:`)) {
+          await supabase.from('envio_meta_job').update({ status_motivo: null }).eq('id', jobId).eq('status', 'rodando');
+        }
+        // Ramp-up conservador: várias janelas OK antes de subir +1 até o teto.
+        sucessosSeguidos++;
+        if (sucessosSeguidos >= JANELAS_OK_PARA_RAMPUP && janela < mpsAlvo) {
           janela = Math.min(mpsAlvo, janela + 1);
           await persistirTaxa(janela);
+          sucessosSeguidos = 0;
         }
-        sucessosSeguidos++;
       } else if (errCount > 0) {
         sucessosSeguidos = 0;
       }

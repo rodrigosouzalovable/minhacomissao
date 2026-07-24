@@ -165,7 +165,7 @@ export default function EnvioMeta() {
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
   const [modoRajada, setModoRajada] = useState<boolean>(false);
-  const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("10");
+  const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("1");
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [validadorId, setValidadorId] = useState<string>("");
   const [validando, setValidando] = useState<boolean>(false);
@@ -1301,8 +1301,8 @@ export default function EnvioMeta() {
               <div className="text-sm">
                 <div className="font-semibold text-red-700 dark:text-red-300">Modo Rajada controlada — envio paralelo com limite por instância</div>
                 <div className="text-xs text-red-700/80 dark:text-red-300/80">
-                  Workers paralelos por instância com token-bucket real (Promise.allSettled). Ajuste msgs/segundo
-                  abaixo — o sistema reduz automaticamente ao receber rate limit da Meta (#130429). Teto seguro: 60/s por número.
+                  Workers paralelos por instância com token-bucket real. Use 1 msg/s para maior estabilidade;
+                  se a Meta limitar, o contato volta para a fila e a retomada é automática em 1 msg/s.
                 </div>
               </div>
             </label>
@@ -1375,7 +1375,7 @@ export default function EnvioMeta() {
                       className="h-8"
                     />
                     <div className="text-[10px] text-amber-700/70 dark:text-amber-300/70 mt-0.5">
-                      Cada instância começa em 1 msg/s e sobe sozinha até esse teto conforme a Meta permitir. Se receber rate-limit, corta pela metade automaticamente.
+                      Recomendado: 1 msg/s. Se receber rate-limit, o sistema devolve o contato para a fila, pausa pelo tempo da Meta e retoma em 1 msg/s.
                     </div>
                   </div>
                   {(() => {
