@@ -445,6 +445,34 @@ export default function ConfigurarMeta() {
     setDiagnosticando(null);
   };
 
+  const verificarSaudeWebhooks = async () => {
+    setVerificandoWebhooks(true);
+    const toastId = toast.loading("Verificando saúde dos webhooks de todas as instâncias...");
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-webhook-health", { body: {} });
+      if (error) throw error;
+      const res: any[] = data?.resultados || [];
+      const okC = res.filter((r) => r.status === "ok").length;
+      const rei = res.filter((r) => r.status === "reinscrito").length;
+      const errC = res.filter((r) => r.status === "erro").length;
+      const perda = res.filter((r) => r.status === "perda_suspeita").length;
+      toast.success(
+        `Verificação concluída — ${okC} OK · ${rei} reinscritas · ${perda} com perda suspeita · ${errC} com erro`,
+        { id: toastId, duration: 12000 },
+      );
+      // Recarrega para atualizar badges
+      const { data: fresh } = await supabase
+        .from("meta_whatsapp_instances")
+        .select("*")
+        .order("criado_em", { ascending: false });
+      if (fresh) setInstancias(fresh as any);
+    } catch (e: any) {
+      toast.error("Erro: " + (e?.message || e), { id: toastId });
+    }
+    setVerificandoWebhooks(false);
+  };
+
+
 
 
   const testar = async (inst: Instancia) => {
