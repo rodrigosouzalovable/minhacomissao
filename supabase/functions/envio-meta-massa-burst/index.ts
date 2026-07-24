@@ -353,59 +353,32 @@ Deno.serve(async (req) => {
     const restrita = inst?.estado_pool === 'restrita';
     const pausaAtiva = !!inst?.pausa_automatica_ate && new Date(inst.pausa_automatica_ate).getTime() > agora;
     if (restrita || baLocked || (pausaAtiva && pausaPorStatus)) {
-      // Instância bloqueada pela Meta (banimento/lock da BA). Marca os pendentes desta
-      // instância como erro, adiciona à lista de bloqueadas do job e, se todas as
-      // instâncias caíram, encerra o job com motivo claro.
       const motivoLegivel = baLocked
         ? 'Business Account bloqueada pela Meta (#131031). Verifique o Business Manager.'
         : `Instância indisponível pela Meta (${inst?.pausa_automatica_motivo || inst?.estado_pool || 'restrita'}).`;
 
-      const bloqueadasAtuais: string[] = Array.isArray(job.instancias_bloqueadas) ? job.instancias_bloqueadas : [];
-      const bloqueadas = Array.from(new Set([...bloqueadasAtuais, instanciaId]));
-      await supabase.from('envio_meta_job').update({ instancias_bloqueadas: bloqueadas }).eq('id', jobId);
+      const resultado = await desativarInstanciaERedistribuir(
+        jobId,
+        instanciaId,
+        motivoLegivel,
+        baLocked ? 'envio_meta_ba_locked' : 'meta_instancia_restrita',
+        [
+          '%status=BANNED%', '%status=FLAGGED%', '%status=RESTRICTED%',
+          '%indispon%vel pela Meta%', '%#131031%',
+          '%Business Account%', '%restringida%', '%restringido%',
+        ],
+      );
 
-      const { data: pendDesta } = await supabase
-        .from('envio_meta_job_item')
-        .select('id')
-        .eq('job_id', jobId)
-        .eq('instancia_id', instanciaId)
-        .eq('status', 'pendente');
-      const idsPend = (pendDesta || []).map((r: any) => r.id);
-      if (idsPend.length > 0) {
-        const CHUNK = 500;
-        for (let i = 0; i < idsPend.length; i += CHUNK) {
-          await supabase.from('envio_meta_job_item').update({
-            status: 'erro', erro: motivoLegivel, processado_em: new Date().toISOString(),
-          }).in('id', idsPend.slice(i, i + CHUNK));
-        }
-        try {
-          const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
-          await supabase.from('envio_meta_job').update({ erros: (cur?.erros || 0) + idsPend.length }).eq('id', jobId);
-        } catch { /* ignore */ }
-      }
-
-      const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
-      const restantesAtivas = todas.filter((x) => !bloqueadas.includes(x));
-      if (restantesAtivas.length === 0) {
-        await supabase.from('envio_meta_job').update({
-          status: 'erro',
-          status_motivo: motivoLegivel,
-          concluido_em: new Date().toISOString(),
-          atual_telefone: null,
-          atual_instancia: null,
-          proximo_em: null,
-        }).eq('id', jobId);
-        try {
-          const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
-          await notificarAdmin(supabase, {
-            tipo: 'envio_meta_ba_locked',
-            mensagem: `⛔ Campanha encerrada — todas as instâncias bloqueadas pela Meta.\n\nJob: ${job.template_nome || jobId}\nMotivo: ${motivoLegivel}`,
-            chaveIdempotencia: `envio_meta_bloqueado_${jobId}`,
-          });
-        } catch (_) { /* ignore */ }
-      }
-
-      return new Response(JSON.stringify({ success: true, instancia_pausada: true, motivo: motivoPausa, ba_locked: baLocked, marcados_erro: idsPend.length }), {
+      return new Response(JSON.stringify({
+        success: true,
+        instancia_desativada: instanciaId,
+        motivo: motivoPausa,
+        ba_locked: baLocked,
+        redistribuidos: resultado.redistribuidos,
+        recuperados: resultado.recuperados,
+        ativas_restantes: resultado.ativas_restantes,
+        todas_bloqueadas: resultado.todas_bloqueadas,
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
