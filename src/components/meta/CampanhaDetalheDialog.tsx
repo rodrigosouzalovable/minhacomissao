@@ -27,6 +27,15 @@ function statusLabel(s: string) {
   return s === "rodando" ? "Rodando" : s === "pausado" ? "Pausada" : s === "concluido" ? "Concluída" : s === "cancelado" ? "Cancelada" : s === "erro" ? "Erro" : s;
 }
 
+function parseRateLimitMotivo(motivo?: string | null) {
+  const raw = String(motivo || "");
+  if (!raw.startsWith("RATE_LIMIT:")) return null;
+  const parts = raw.split(":");
+  const ms = Math.max(0, Number(parts[2]) || 0);
+  const mensagem = parts.slice(3).join(":") || "Meta pausou temporariamente esta instância por rate limit.";
+  return { segundos: Math.ceil(ms / 1000), mensagem };
+}
+
 export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Props) {
   const {
     jobs,
@@ -103,6 +112,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const percent = Math.round((totalProcessado / Math.max(job.total, 1)) * 100);
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
+  const rateLimitInfo = parseRateLimitMotivo((job as any).status_motivo || resultado?.statusMotivo);
 
 
   const reenviarErros = async () => {
@@ -285,6 +295,13 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             {job.instancias_bloqueadas_run.length > 0 && (
               <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
                 ⚠️ {job.instancias_bloqueadas_run.length} instância(s) ignorada(s) automaticamente após falhas consecutivas. Envios continuam com as demais.
+              </div>
+            )}
+            {rateLimitInfo && job.status === "rodando" && (
+              <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-3 py-2">
+                <div className="font-semibold">Rate limit temporário da Meta</div>
+                <div>{rateLimitInfo.mensagem}</div>
+                {rateLimitInfo.segundos > 0 && <div>Próxima tentativa em até {rateLimitInfo.segundos}s.</div>}
               </div>
             )}
             {Array.isArray((job as any).instancias_bloqueadas) && (job as any).instancias_bloqueadas.length > 0 && (
