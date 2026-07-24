@@ -211,6 +211,27 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Recupera automaticamente rate limits legados que eventualmente tenham sido
+    // gravados como erro final antes desta regra. Eles voltam para a fila e somem
+    // da lista vermelha sem exigir clique manual.
+    try {
+      const { data: rateLimitErrors } = await supabase
+        .from('envio_meta_job_item')
+        .update({ status: 'pendente', erro: null, tentativas: 0, processado_em: null })
+        .eq('job_id', jobId)
+        .eq('instancia_id', instanciaId)
+        .eq('status', 'erro')
+        .or('erro.ilike.%rate limit%,erro.ilike.%Rate limit%,erro.ilike.%80007%,erro.ilike.%131056%')
+        .select('id');
+      const recuperados = rateLimitErrors?.length ?? 0;
+      if (recuperados > 0) {
+        const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
+        await supabase.from('envio_meta_job').update({
+          erros: Math.max(0, (cur?.erros || 0) - recuperados),
+        }).eq('id', jobId);
+      }
+    } catch { /* não bloqueia o worker */ }
     // No modo RAJADA, IGNORAMOS pausas por qualidade (quality=YELLOW/RED). Só encerramos
     // o worker quando a Meta de fato restringir/banir a instância (motivo status=...).
     const motivoPausa = String(inst?.pausa_automatica_motivo || '').toLowerCase();
@@ -328,7 +349,7 @@ Deno.serve(async (req) => {
 
       const { data: pendentes } = await supabase
         .from('envio_meta_job_item')
-        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, tentativas')
+        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, instancia_nome, tentativas')
         .eq('job_id', jobId)
         .eq('instancia_id', instanciaId)
         .eq('status', 'pendente')
@@ -454,6 +475,9 @@ Deno.serve(async (req) => {
       if (templatePausado) break;
 
       if (errCount === 0 && okCount > 0) {
+        if (String(job.status_motivo || '').startsWith(`RATE_LIMIT:${instanciaId}:`)) {
+          await supabase.from('envio_meta_job').update({ status_motivo: null }).eq('id', jobId).eq('status', 'rodando');
+        }
         // Ramp-up conservador: várias janelas OK antes de subir +1 até o teto.
         sucessosSeguidos++;
         if (sucessosSeguidos >= JANELAS_OK_PARA_RAMPUP && janela < mpsAlvo) {
