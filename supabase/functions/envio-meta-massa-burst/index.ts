@@ -37,8 +37,8 @@ async function jobEstaRodando(jobId: string) {
 
 async function selfInvoke(jobId: string, instanciaId: string, delayMs = 0) {
   if (!(await jobEstaRodando(jobId))) return;
-  // Respeita o Retry-After real da Meta sempre que couber dentro da janela da function.
-  if (delayMs > 0) await sleep(Math.min(delayMs, 55_000));
+  // O bloqueio real fica em rate_limit_ate; aqui dormimos curto para não estourar timeout.
+  if (delayMs > 0) await sleep(Math.min(delayMs, 10_000));
   if (!(await jobEstaRodando(jobId))) return;
   await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
     method: 'POST',
