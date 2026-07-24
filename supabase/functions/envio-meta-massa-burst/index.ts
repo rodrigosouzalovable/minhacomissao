@@ -105,6 +105,119 @@ async function tentarEncerrarJob(jobId: string) {
   return true;
 }
 
+// Desativa uma instância dentro do job, recupera erros compatíveis com o
+// motivo do bloqueio e redistribui os pendentes órfãos (round-robin) entre
+// as instâncias ainda ativas. Se todas caírem, marca o restante como erro
+// final e encerra o job. Usado tanto para #132015 (template pausado) quanto
+// para BANNED/FLAGGED/RESTRICTED/#131031 (instância indisponível).
+async function desativarInstanciaERedistribuir(
+  jobId: string,
+  instanciaId: string,
+  motivo: string,
+  tipoNotif: string,
+  recuperarErrosLike: string[],
+): Promise<{ ativas_restantes: string[]; redistribuidos: number; todas_bloqueadas: boolean; recuperados: number }> {
+  const { data: job } = await supabase.from('envio_meta_job').select('*').eq('id', jobId).maybeSingle();
+  if (!job) return { ativas_restantes: [], redistribuidos: 0, todas_bloqueadas: false, recuperados: 0 };
+
+  const bloqueadasAtuais: string[] = Array.isArray(job.instancias_bloqueadas) ? job.instancias_bloqueadas : [];
+  const bloqueadas = Array.from(new Set([...bloqueadasAtuais, instanciaId]));
+  await supabase.from('envio_meta_job').update({ instancias_bloqueadas: bloqueadas }).eq('id', jobId);
+
+  // Devolve itens em 'processando' desta instância para 'pendente'
+  await supabase.from('envio_meta_job_item')
+    .update({ status: 'pendente' })
+    .eq('job_id', jobId).eq('instancia_id', instanciaId).eq('status', 'processando');
+
+  // Recupera erros compatíveis com este bloqueio (voltam para pendente)
+  let recuperados = 0;
+  if (recuperarErrosLike.length > 0) {
+    const orExpr = recuperarErrosLike.map((p) => `erro.ilike.${p}`).join(',');
+    const { data: recovered } = await supabase
+      .from('envio_meta_job_item')
+      .update({ status: 'pendente', erro: null, tentativas: 0, processado_em: null })
+      .eq('job_id', jobId).eq('instancia_id', instanciaId).eq('status', 'erro')
+      .or(orExpr)
+      .select('id');
+    recuperados = recovered?.length ?? 0;
+    if (recuperados > 0) {
+      const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
+      await supabase.from('envio_meta_job').update({
+        erros: Math.max(0, (cur?.erros || 0) - recuperados),
+      }).eq('id', jobId);
+    }
+  }
+
+  // Coleta pendentes desta instância (agora inclui os recuperados)
+  const { data: pendentes } = await supabase
+    .from('envio_meta_job_item')
+    .select('id')
+    .eq('job_id', jobId).eq('instancia_id', instanciaId).eq('status', 'pendente')
+    .order('ordem', { ascending: true });
+  const idsPend = (pendentes || []).map((r: any) => r.id);
+
+  const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+  const ativas = todas.filter((x) => !bloqueadas.includes(x));
+
+  if (ativas.length === 0) {
+    if (idsPend.length > 0) {
+      const CHUNK = 500;
+      for (let i = 0; i < idsPend.length; i += CHUNK) {
+        await supabase.from('envio_meta_job_item').update({
+          status: 'erro', erro: motivo, processado_em: new Date().toISOString(),
+        }).in('id', idsPend.slice(i, i + CHUNK));
+      }
+      const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
+      await supabase.from('envio_meta_job').update({
+        erros: (cur?.erros || 0) + idsPend.length,
+      }).eq('id', jobId);
+    }
+    try {
+      const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+      await notificarAdmin(supabase, {
+        tipo: tipoNotif,
+        mensagem: `⛔ Campanha encerrada — todas as instâncias bloqueadas pela Meta.\n\nJob: ${job.template_nome || jobId}\nMotivo: ${motivo}`,
+        chaveIdempotencia: `envio_meta_bloqueado_${jobId}`,
+      });
+    } catch { /* ignore */ }
+    await tentarEncerrarJob(jobId);
+    return { ativas_restantes: [], redistribuidos: 0, todas_bloqueadas: true, recuperados };
+  }
+
+  // Round-robin dos pendentes órfãos entre as instâncias ativas
+  const grupos: Record<string, string[]> = {};
+  for (const inst of ativas) grupos[inst] = [];
+  for (let i = 0; i < idsPend.length; i++) {
+    grupos[ativas[i % ativas.length]].push(idsPend[i]);
+  }
+  for (const [target, itemIds] of Object.entries(grupos)) {
+    if (itemIds.length === 0) continue;
+    const CHUNK = 500;
+    for (let i = 0; i < itemIds.length; i += CHUNK) {
+      await supabase.from('envio_meta_job_item').update({ instancia_id: target })
+        .in('id', itemIds.slice(i, i + CHUNK));
+    }
+  }
+
+  try {
+    const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+    await notificarAdmin(supabase, {
+      tipo: tipoNotif,
+      mensagem:
+        `⚠️ Instância desativada da campanha\n\n` +
+        `Job: ${job.template_nome || jobId}\n` +
+        `Motivo: ${motivo}\n` +
+        `${idsPend.length} contato(s) redistribuído(s) entre ${ativas.length} instância(s) ativa(s).`,
+      chaveIdempotencia: `envio_meta_desat_${jobId}_${instanciaId}`,
+    });
+  } catch { /* ignore */ }
+
+  for (const inst of ativas) await selfInvoke(jobId, inst, 0);
+
+  return { ativas_restantes: ativas, redistribuidos: idsPend.length, todas_bloqueadas: false, recuperados };
+}
+
+
 type SendResult =
   | { id: string; kind: 'ok'; waId: string | null }
   | { id: string; kind: 'rate_limit'; retryMs: number; erro: string }
