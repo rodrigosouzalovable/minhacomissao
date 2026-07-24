@@ -777,7 +777,20 @@ export default function ConfigurarMeta() {
             onChange={onPdfSelected}
           />
 
-          <div className="flex justify-end mb-3">
+          <div className="flex justify-end gap-2 mb-3">
+            <Button
+              variant="outline"
+              onClick={verificarSaudeWebhooks}
+              disabled={verificandoWebhooks}
+              title="Verifica todos os webhooks na Meta, reinscreve os que estiverem incorretos e detecta possíveis mensagens perdidas"
+            >
+              {verificandoWebhooks ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Verificar saúde dos webhooks
+            </Button>
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" /> Nova instância
             </Button>
