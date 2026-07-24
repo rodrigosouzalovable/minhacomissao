@@ -47,6 +47,10 @@ type Instancia = {
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
   meta_bm_id?: string | null;
+  webhook_saude_status?: string | null;
+  webhook_saude_verificado_em?: string | null;
+  webhook_ultimo_erro?: string | null;
+  webhook_perda_suspeita?: any;
 };
 
 type BM = {
