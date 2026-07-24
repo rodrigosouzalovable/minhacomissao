@@ -51,6 +51,10 @@ interface ChatMessageProps {
   onApagarParaTodos?: (msgId: string) => void;
   onEditar?: (msgId: string, conteudoAtual: string) => void;
   onResponder?: (msg: Mensagem) => void;
+  /** Se true, exibe indicador âmbar de "aceita pela Meta mas não entregue ao aparelho". */
+  possivelmenteNaoEntregue?: boolean;
+  /** Se true, renderiza aviso inline abaixo do balão explicando a possível não-entrega. */
+  mostrarAvisoNaoEntregue?: boolean;
 }
 
 function getMimeFromUrl(url: string): string | undefined {
