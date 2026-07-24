@@ -1,52 +1,56 @@
-# Alerta de mensagem não entregue (Inbox Meta)
+## Diagnóstico
 
-## Diagnóstico do caso 6299709475
+Confirmei via banco + logs:
 
-Confirmado no banco:
+- **Envio outbound OK**: nosso template "Atendente Yasmim" saiu da instância **Novo Mundo 3144** (`b103ac3e`, phone_number_id `892959203899506`) às 11:56 UTC. Registrado em `meta_whatsapp_mensagens`.
+- **Resposta "Sim" da cliente NÃO existe no banco**: nenhuma linha `direcao='entrada'` para `5563992170160`. O contato dela nessa instância tem `ultima_msg_entrada_em = NULL`.
+- **Webhook não recebeu o evento**: nos logs de `meta-whatsapp-webhook` do phone_number_id `892959203899506` só aparecem eventos `messages: 0, statuses: 1` (ACKs de entrega). Nenhum `messages: 1` no horário 11:56–12:00 UTC. A Meta simplesmente não entregou o webhook de inbound dessa resposta — apesar de a mesma instância ter recebido inbound de outra cliente às 12:48 UTC (Larissa), o que prova que a subscription base está viva mas eventos individuais estão sendo perdidos.
 
-- 23/07 21:06 — 2 mensagens **de entrada** do cliente ("Boa tarde", "Quero negociar…") → `status=entregue`.
-- 24/07 08:33 — saída "Bom dia, tudo bem?…" → `wa_message_id` recebido da Meta, mas `status_envio = enviada` (nunca avançou para `entregue`/`lida`/`erro`).
-- 24/07 09:39 — saída "Olá" → `status_envio = entregue`.
+Isso não é bug do nosso parser: o payload nunca chegou. É o mesmo padrão do caso anterior (Maria Jose). A Meta ocasionalmente falha ao entregar webhooks de `messages` e não repete indefinidamente. Precisamos de defesa em profundidade.
 
-A Meta aceitou a mensagem das 08:33 (retornou `wamid`), mas **nunca enviou callback `delivered`/`read`/`failed`** para o webhook. Isso é comportamento clássico quando:
+## Correção
 
-1. O aparelho do cliente está offline por muito tempo e a Meta expira a entrega silenciosamente, **ou**
-2. O cliente ainda não tocou a “balãozinho de conversa segura” da Meta (business‑initiated conversation) e o app filtra a mensagem para uma pasta lateral, **ou**
-3. O cliente bloqueou/silenciou o número após aceitar (o print do celular do usuário mostra que o número **não está nos contatos** e aparece o cartão "Bloquear / Adicionar", o que reforça o cenário 2).
+### 1. Reconciliador de conversas (novo — resolve a raiz do problema)
+Nova edge function `meta-inbox-reconciliar` rodando a cada **5 min via `pg_cron`**:
 
-Não há bug no envio: a Meta confirmou recebimento com `wamid`. O que falta é o app **avisar visualmente** quando o status parar em `enviada` por tempo demais — hoje o balão fica com o mesmo visual de "entregue".
+Para cada instância Meta ativa, listar conversas onde:
+- houve outbound nas últimas 48h; **E**
+- `ultima_msg_entrada_em` está NULL ou é anterior ao último outbound.
 
-## O que vai mudar
+Para cada uma, chamar `GET /{phone_number_id}/messages?since={ts}` da Graph API (Cloud API 2026 suporta leitura de conversation history via `/conversations` — usar o endpoint disponível na versão da WABA; caso a WABA não exponha history read, usar o fallback abaixo).
 
-Somente frontend do Inbox Meta (`src/pages/InboxMeta.tsx` + o renderer de bolha usado por ele). Sem mexer em webhook, envio ou schema.
+**Fallback quando a Graph não expõe history**: consultar `/{waba_id}/conversation_analytics` que devolve contagem de conversas por período — se detectar `user_initiated` > registrado, disparar alerta ao admin para reabrir manualmente com template UTILITY.
 
-1. **Regra visual "não entregue"**
-   - Considerar uma mensagem de saída como *possivelmente não entregue* quando:
-     - `direcao = 'saida'` **e**
-     - `status_envio = 'enviada'` (nunca virou entregue/lida/erro) **e**
-     - `timestamp_msg` tem mais de **15 minutos** no passado.
-   - Mensagens com `status = 'erro'` já continuam mostrando o motivo do erro (comportamento atual preservado).
+Cada mensagem retornada que não existe (via `wa_message_id`) é inserida com o mesmo pipeline do webhook (upsert contato, auto-etiqueta por acordo, incrementa `nao_lido`).
 
-2. **Indicador na própria bolha**
-   - Ícone de alerta âmbar ao lado do horário + tooltip: *"Aceita pela Meta mas ainda não entregue ao aparelho do cliente."*
-   - Mantém o check simples (✓) que já existe para `enviada`.
+### 2. Health check de subscription (impede o próximo caso)
+Nova edge function `meta-webhook-health` rodando **diariamente 03:00 BRT**:
+- Para cada `waba_id` único, chama `GET /{waba_id}/subscribed_apps` e valida que nosso app está inscrito no campo `messages`.
+- Se ausente, reinscreve automaticamente e alerta admin (62991672674) via WhatsApp com o nome da instância.
+- Grava resultado em novas colunas `meta_whatsapp_instances.webhook_status TEXT` + `webhook_ultima_verificacao TIMESTAMPTZ`.
 
-3. **Aviso inline na conversa**
-   - Logo abaixo da bolha da mensagem afetada, uma linha centralizada em texto miúdo âmbar:
-     *"⚠️ Esta mensagem pode não ter sido entregue ao WhatsApp do cliente. Isso costuma acontecer quando o aparelho está offline há muito tempo ou o cliente ainda não abriu a conversa iniciada pela empresa."*
-   - Só aparece para a mensagem mais recente em estado "não entregue" de cada dia, para não poluir a conversa.
+### 3. Banner de risco na conversa
+No `InboxMeta.tsx`, para conversas onde já existe outbound recente sem inbound e o cliente **respondeu no dispositivo** (detectado pela reconciliação da etapa 1), exibir na conversa um chip "🔄 Recuperado via reconciliação" na primeira mensagem restaurada, para o atendente saber que veio pelo caminho de fallback e não pelo webhook direto.
 
-4. **Atualização automática**
-   - O componente já revalida via Realtime; a regra é derivada do `status_envio` + `timestamp_msg`, então quando a Meta finalmente disparar `delivered` o alerta some sozinho.
+### 4. Card "Saúde do Webhook" em `ConfigurarMeta.tsx`
+Por instância, mostrar:
+- Última mensagem inbound recebida.
+- Status da subscription (`webhook_status`).
+- Botão "Reinscrever agora" (dispara `meta-webhook-health` só para aquela instância).
 
-## Fora do escopo
+## Escopo técnico
 
-- Não vamos alterar o webhook nem "forçar" reentrega — a Meta não expõe reenvio para business‑initiated. Reenviar tem que ser ação humana (o operador manda de novo/usa template).
-- Sem novas tabelas, sem cron novo, sem custo adicional em Lovable Cloud.
+- **Novas edge functions**: `supabase/functions/meta-inbox-reconciliar/index.ts`, `supabase/functions/meta-webhook-health/index.ts`
+- **Migration**: colunas `webhook_status`, `webhook_ultima_verificacao` em `meta_whatsapp_instances`
+- **pg_cron**: 
+  - `meta-inbox-reconciliar` a cada 5 min
+  - `meta-webhook-health` diário 06:00 UTC (03:00 BRT)
+- **UI edits**: `src/pages/ConfigurarMeta.tsx` (card de saúde), `src/pages/InboxMeta.tsx` (chip "Recuperado")
 
-## Detalhes técnicos
+## O que NÃO vou fazer
+- Não vou mexer no motor de envio nem no `envio-meta-massa-burst`.
+- Não vou recuperar retroativamente as mensagens da Yasmin e da Maria Jose antes do primeiro tick do reconciliador — mas o primeiro tick, ao rodar após o deploy, já vai buscar as últimas 48h e pegá-las se a Graph expuser o histórico.
+- Não vou remover o filtro anti-espelho do webhook (ele protege contra loops entre instâncias oficiais).
 
-- Arquivos tocados: `src/pages/InboxMeta.tsx` (renderização das bolhas de saída) e, se aplicável, o subcomponente de bolha Meta em `src/components/inbox/meta/` (ex.: onde hoje renderiza o `✓` de status).
-- Regra fica em um helper local `isPossivelmenteNaoEntregue(msg)` para reuso.
-- Threshold de 15 min fica em constante no topo do arquivo (`NAO_ENTREGUE_MIN = 15`) para ajuste fácil depois.
-- Nenhuma mudança de dados / RLS / grants.
+## Ação manual imediata (enquanto o plano não é aprovado)
+Para a Yasmin agora: **responder pelo Inbox só após ela responder de novo** ou **reabrir com template UTILITY** (a janela de 24h está aberta no lado dela, mas o nosso sistema não sabe — a reconciliação vai corrigir isso quando implantada).
