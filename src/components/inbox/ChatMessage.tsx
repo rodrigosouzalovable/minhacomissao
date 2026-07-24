@@ -439,15 +439,6 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
           })()}
         </div>
       </div>
-      {isSaida && mostrarAvisoNaoEntregue && (
-        <div className="w-full flex justify-center mt-1">
-          <p className="text-[10.5px] leading-snug text-amber-600 dark:text-amber-400 max-w-[85%] text-center">
-            ⚠️ Esta mensagem pode não ter sido entregue ao WhatsApp do cliente. Isso costuma
-            acontecer quando o aparelho está offline há muito tempo ou o cliente ainda não
-            abriu a conversa iniciada pela empresa.
-          </p>
-        </div>
-      )}
     </div>
   );
 
