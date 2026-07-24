@@ -599,126 +599,58 @@ Deno.serve(async (req) => {
 
     // ===== Template pausado: desativa esta instância no job e redistribui =====
     if (templatePausado) {
-      // Marca a instância como bloqueada neste job
-      const bloqueadasAtuais: string[] = Array.isArray(job.instancias_bloqueadas) ? job.instancias_bloqueadas : [];
-      const bloqueadas = Array.from(new Set([...bloqueadasAtuais, instanciaId]));
-      await supabase.from('envio_meta_job').update({ instancias_bloqueadas: bloqueadas }).eq('id', jobId);
-
-      // Notifica admin (idempotente por job+instância)
-      try {
-        const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
-        await notificarAdmin(supabase, {
-          tipo: 'meta_template_pausado',
-          mensagem:
-            `⚠️ Instância desativada por template pausado\n\n` +
-            `Job: ${job.nome || jobId}\n` +
-            `Instância: ${instanciaId}\n` +
-            `Motivo: ${templatePausadoErro}\n\n` +
-            `Os contatos pendentes serão redistribuídos entre as instâncias ativas.`,
-          chaveIdempotencia: `template_pausado_${jobId}_${instanciaId}`,
-        });
-      } catch (_) { /* ignore */ }
-
-      // Lista instâncias ainda ativas no job
-      const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
-      const ativas = todas.filter((x) => !bloqueadas.includes(x));
-
-      // Recupera itens já marcados como 'erro' por causa do #132015 antes desta correção
-      // (devolve para 'pendente' para serem redistribuídos).
-      await supabase.from('envio_meta_job_item')
-        .update({ status: 'pendente', erro: null, processado_em: null })
-        .eq('job_id', jobId)
-        .eq('instancia_id', instanciaId)
-        .eq('status', 'erro')
-        .or('erro.ilike.%132015%,erro.ilike.%is paused%,erro.ilike.%paused due to low quality%');
-
-      // Ajusta contador do job removendo esses erros recuperados
-      try {
-        const { count: recuperados } = await supabase
-          .from('envio_meta_job_item')
-          .select('id', { count: 'exact', head: true })
-          .eq('job_id', jobId)
-          .eq('instancia_id', instanciaId)
-          .eq('status', 'pendente')
-          .is('erro', null);
-        if ((recuperados ?? 0) > 0) {
-          const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
-          const novoErros = Math.max(0, (cur?.erros || 0) - 0); // não subtrai — evita descontar mais do que registramos
-          await supabase.from('envio_meta_job').update({ erros: novoErros }).eq('id', jobId);
-        }
-      } catch { /* ignora */ }
-
-      // Pega os pendentes desta instância para reatribuir
-      const { data: pendentesRest } = await supabase
-        .from('envio_meta_job_item')
-        .select('id')
-        .eq('job_id', jobId)
-        .eq('instancia_id', instanciaId)
-        .eq('status', 'pendente')
-        .order('ordem', { ascending: true });
-
-      const idsRest = (pendentesRest || []).map((r: any) => r.id);
-
-
-      if (ativas.length === 0) {
-        // Todas as instâncias caíram — marca como erro e encerra o job
-        if (idsRest.length > 0) {
-          const CHUNK = 500;
-          for (let i = 0; i < idsRest.length; i += CHUNK) {
-            const slice = idsRest.slice(i, i + CHUNK);
-            await supabase.from('envio_meta_job_item').update({
-              status: 'erro',
-              erro: 'Todas as instâncias com template pausado pela Meta.',
-              processado_em: new Date().toISOString(),
-            }).in('id', slice);
-          }
-          try {
-            const { data: cur } = await supabase.from('envio_meta_job').select('erros').eq('id', jobId).maybeSingle();
-            await supabase.from('envio_meta_job').update({
-              erros: (cur?.erros || 0) + idsRest.length,
-            }).eq('id', jobId);
-          } catch { /* ignore */ }
-        }
-        await tentarEncerrarJob(jobId);
-        return new Response(JSON.stringify({
-          success: true,
-          template_pausado: true,
-          todas_bloqueadas: true,
-          restantes_marcados_erro: idsRest.length,
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-
-      // Redistribui round-robin entre as ativas
-      const grupos: Record<string, string[]> = {};
-      for (const inst of ativas) grupos[inst] = [];
-      for (let i = 0; i < idsRest.length; i++) {
-        const target = ativas[i % ativas.length];
-        grupos[target].push(idsRest[i]);
-      }
-      for (const [target, itemIds] of Object.entries(grupos)) {
-        if (itemIds.length > 0) {
-          const CHUNK = 500;
-          for (let i = 0; i < itemIds.length; i += CHUNK) {
-            await supabase.from('envio_meta_job_item').update({ instancia_id: target })
-              .in('id', itemIds.slice(i, i + CHUNK));
-          }
-        }
-      }
-      // Garante que TODAS as instâncias ativas estão com worker rodando
-      // (mesmo as que já haviam encerrado o próprio loop por falta de trabalho).
-      for (const inst of ativas) {
-        await selfInvoke(jobId, inst, 0);
-      }
-
-
+      const resultado = await desativarInstanciaERedistribuir(
+        jobId,
+        instanciaId,
+        templatePausadoErro || 'Template pausado pela Meta (#132015).',
+        'meta_template_pausado',
+        ['%132015%', '%is paused%', '%paused due to low quality%', '%template%pausad%'],
+      );
       return new Response(JSON.stringify({
         success: true,
         template_pausado: true,
         instancia_desativada: instanciaId,
-        redistribuidos: idsRest.length,
-        ativas_restantes: ativas,
+        redistribuidos: resultado.redistribuidos,
+        recuperados: resultado.recuperados,
+        ativas_restantes: resultado.ativas_restantes,
+        todas_bloqueadas: resultado.todas_bloqueadas,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
+    // ===== Instância restringida/banida detectada durante o loop =====
+    // (send-whatsapp-meta retornou instance_restricted=true — normalmente porque
+    // o pool marcou a instância como 'restrita' após BANNED/FLAGGED). Redistribui
+    // imediatamente, sem esperar a próxima invocação.
+    if (restrictedVisto) {
+      // Recarrega inst para pegar motivo atualizado
+      const { data: instAtual } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('estado_pool, pausa_automatica_motivo')
+        .eq('id', instanciaId)
+        .maybeSingle();
+      const motivo = instAtual?.pausa_automatica_motivo || instAtual?.estado_pool || 'restrita';
+      const motivoLegivel = `Instância indisponível pela Meta (${motivo}).`;
+      const resultado = await desativarInstanciaERedistribuir(
+        jobId,
+        instanciaId,
+        motivoLegivel,
+        'meta_instancia_restrita',
+        [
+          '%status=BANNED%', '%status=FLAGGED%', '%status=RESTRICTED%',
+          '%indispon%vel pela Meta%', '%#131031%',
+          '%Business Account%', '%restringida%', '%restringido%',
+        ],
+      );
+      return new Response(JSON.stringify({
+        success: true,
+        instancia_desativada: instanciaId,
+        redistribuidos: resultado.redistribuidos,
+        recuperados: resultado.recuperados,
+        ativas_restantes: resultado.ativas_restantes,
+        todas_bloqueadas: resultado.todas_bloqueadas,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
 
 
     // Se ainda há pendentes, encadeia self-invoke (respeitando rate limit se houver)
