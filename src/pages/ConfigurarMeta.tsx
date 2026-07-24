@@ -835,6 +835,22 @@ export default function ConfigurarMeta() {
                             );
                           })()}
                           <MetaHealthStatusRow inst={inst} />
+                          {(() => {
+                            const s = inst.webhook_saude_status;
+                            if (!s) return null;
+                            const map: Record<string, { label: string; cls: string; title: string }> = {
+                              ok: { label: "Webhook OK", cls: "border-green-500/50 text-green-600", title: "Webhook inscrito no callback correto" },
+                              reinscrito: { label: "Webhook reinscrito", cls: "border-blue-500/50 text-blue-600", title: "O sistema detectou callback incorreto e reinscreveu automaticamente" },
+                              perda_suspeita: { label: "⚠ Possível perda", cls: "border-amber-500/60 text-amber-700 bg-amber-50", title: `Meta contou mais conversas iniciadas hoje do que chegaram ao Inbox. ${inst.webhook_perda_suspeita ? JSON.stringify(inst.webhook_perda_suspeita) : ""}` },
+                              erro: { label: "Webhook com erro", cls: "border-red-500/60 text-red-600 bg-red-50", title: inst.webhook_ultimo_erro || "Erro ao verificar webhook" },
+                            };
+                            const m = map[s] || { label: s, cls: "", title: "" };
+                            return (
+                              <Badge variant="outline" className={`text-[10px] ${m.cls}`} title={m.title}>
+                                {m.label}
+                              </Badge>
+                            );
+                          })()}
                         </div>
                         <div className="flex gap-1 flex-wrap justify-end shrink-0">
                           <Button
