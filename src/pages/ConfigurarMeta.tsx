@@ -89,6 +89,7 @@ export default function ConfigurarMeta() {
   const [bms, setBms] = useState<BM[]>([]);
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
+  const [verificandoWebhooks, setVerificandoWebhooks] = useState(false);
 
   // Importação de PDF de fatura Meta
   const pag = useMetaInstancePagamentos();
