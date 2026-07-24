@@ -47,6 +47,10 @@ type Instancia = {
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
   meta_bm_id?: string | null;
+  webhook_saude_status?: string | null;
+  webhook_saude_verificado_em?: string | null;
+  webhook_ultimo_erro?: string | null;
+  webhook_perda_suspeita?: any;
 };
 
 type BM = {
@@ -85,6 +89,7 @@ export default function ConfigurarMeta() {
   const [bms, setBms] = useState<BM[]>([]);
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
+  const [verificandoWebhooks, setVerificandoWebhooks] = useState(false);
 
   // Importação de PDF de fatura Meta
   const pag = useMetaInstancePagamentos();
@@ -440,6 +445,34 @@ export default function ConfigurarMeta() {
     setDiagnosticando(null);
   };
 
+  const verificarSaudeWebhooks = async () => {
+    setVerificandoWebhooks(true);
+    const toastId = toast.loading("Verificando saúde dos webhooks de todas as instâncias...");
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-webhook-health", { body: {} });
+      if (error) throw error;
+      const res: any[] = data?.resultados || [];
+      const okC = res.filter((r) => r.status === "ok").length;
+      const rei = res.filter((r) => r.status === "reinscrito").length;
+      const errC = res.filter((r) => r.status === "erro").length;
+      const perda = res.filter((r) => r.status === "perda_suspeita").length;
+      toast.success(
+        `Verificação concluída — ${okC} OK · ${rei} reinscritas · ${perda} com perda suspeita · ${errC} com erro`,
+        { id: toastId, duration: 12000 },
+      );
+      // Recarrega para atualizar badges
+      const { data: fresh } = await supabase
+        .from("meta_whatsapp_instances")
+        .select("*")
+        .order("criado_em", { ascending: false });
+      if (fresh) setInstancias(fresh as any);
+    } catch (e: any) {
+      toast.error("Erro: " + (e?.message || e), { id: toastId });
+    }
+    setVerificandoWebhooks(false);
+  };
+
+
 
 
   const testar = async (inst: Instancia) => {
@@ -744,7 +777,20 @@ export default function ConfigurarMeta() {
             onChange={onPdfSelected}
           />
 
-          <div className="flex justify-end mb-3">
+          <div className="flex justify-end gap-2 mb-3">
+            <Button
+              variant="outline"
+              onClick={verificarSaudeWebhooks}
+              disabled={verificandoWebhooks}
+              title="Verifica todos os webhooks na Meta, reinscreve os que estiverem incorretos e detecta possíveis mensagens perdidas"
+            >
+              {verificandoWebhooks ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Verificar saúde dos webhooks
+            </Button>
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" /> Nova instância
             </Button>
@@ -789,6 +835,22 @@ export default function ConfigurarMeta() {
                             );
                           })()}
                           <MetaHealthStatusRow inst={inst} />
+                          {(() => {
+                            const s = inst.webhook_saude_status;
+                            if (!s) return null;
+                            const map: Record<string, { label: string; cls: string; title: string }> = {
+                              ok: { label: "Webhook OK", cls: "border-green-500/50 text-green-600", title: "Webhook inscrito no callback correto" },
+                              reinscrito: { label: "Webhook reinscrito", cls: "border-blue-500/50 text-blue-600", title: "O sistema detectou callback incorreto e reinscreveu automaticamente" },
+                              perda_suspeita: { label: "⚠ Possível perda", cls: "border-amber-500/60 text-amber-700 bg-amber-50", title: `Meta contou mais conversas iniciadas hoje do que chegaram ao Inbox. ${inst.webhook_perda_suspeita ? JSON.stringify(inst.webhook_perda_suspeita) : ""}` },
+                              erro: { label: "Webhook com erro", cls: "border-red-500/60 text-red-600 bg-red-50", title: inst.webhook_ultimo_erro || "Erro ao verificar webhook" },
+                            };
+                            const m = map[s] || { label: s, cls: "", title: "" };
+                            return (
+                              <Badge variant="outline" className={`text-[10px] ${m.cls}`} title={m.title}>
+                                {m.label}
+                              </Badge>
+                            );
+                          })()}
                         </div>
                         <div className="flex gap-1 flex-wrap justify-end shrink-0">
                           <Button

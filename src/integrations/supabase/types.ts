@@ -3722,6 +3722,11 @@ export type Database = {
           ultimo_reset: string
           user_id: string
           waba_id: string
+          webhook_callback_url: string | null
+          webhook_perda_suspeita: Json | null
+          webhook_saude_status: string | null
+          webhook_saude_verificado_em: string | null
+          webhook_ultimo_erro: string | null
           webhook_verify_token: string | null
         }
         Insert: {
@@ -3762,6 +3767,11 @@ export type Database = {
           ultimo_reset?: string
           user_id: string
           waba_id: string
+          webhook_callback_url?: string | null
+          webhook_perda_suspeita?: Json | null
+          webhook_saude_status?: string | null
+          webhook_saude_verificado_em?: string | null
+          webhook_ultimo_erro?: string | null
           webhook_verify_token?: string | null
         }
         Update: {
@@ -3802,6 +3812,11 @@ export type Database = {
           ultimo_reset?: string
           user_id?: string
           waba_id?: string
+          webhook_callback_url?: string | null
+          webhook_perda_suspeita?: Json | null
+          webhook_saude_status?: string | null
+          webhook_saude_verificado_em?: string | null
+          webhook_ultimo_erro?: string | null
           webhook_verify_token?: string | null
         }
         Relationships: [
