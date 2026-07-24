@@ -51,6 +51,8 @@ interface ChatMessageProps {
   onApagarParaTodos?: (msgId: string) => void;
   onEditar?: (msgId: string, conteudoAtual: string) => void;
   onResponder?: (msg: Mensagem) => void;
+  /** Se true, exibe indicador âmbar de "aceita pela Meta mas não entregue ao aparelho". */
+  possivelmenteNaoEntregue?: boolean;
 }
 
 function getMimeFromUrl(url: string): string | undefined {
@@ -78,7 +80,7 @@ function getImageMimeFromUrl(url: string): string {
   return (ext && map[ext]) || 'image/jpeg';
 }
 
-export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaTodos, onEditar, onResponder }: ChatMessageProps) {
+export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaTodos, onEditar, onResponder, possivelmenteNaoEntregue }: ChatMessageProps) {
   const tipo = msg.tipo_conteudo || 'texto';
   const isSaida = msg.direcao === 'saida';
   const isTemp = msg.id.startsWith('temp-');
@@ -422,6 +424,14 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
             }
             if (status === 'entregue') {
               return <CheckCheck className="h-3.5 w-3.5 text-primary-foreground/70" aria-label="Entregue" />;
+            }
+            if (possivelmenteNaoEntregue) {
+              return (
+                <AlertCircle
+                  className="h-3.5 w-3.5 text-amber-300"
+                  aria-label="Aceita pela Meta mas ainda não entregue ao aparelho do cliente"
+                />
+              );
             }
             return <Check className="h-3.5 w-3.5 text-primary-foreground/70" aria-label="Enviada" />;
           })()}
