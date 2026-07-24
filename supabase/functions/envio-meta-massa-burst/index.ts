@@ -456,7 +456,7 @@ Deno.serve(async (req) => {
         sucessosSeguidos = 0;
         await persistirTaxa(janela);
         paradaPorRateLimit = true;
-        esperaRateLimitMs = Math.min(Math.max(rateLimitRetryMs, 2_000), 30_000);
+        esperaRateLimitMs = Math.min(Math.max(rateLimitRetryMs, 2_000), 5 * 60_000);
         const proximo = new Date(Date.now() + esperaRateLimitMs).toISOString();
         const instNome = paraEnviar.find((it: any) => it.telefone === rateLimitTelefone)?.instancia_nome || instanciaId;
         await supabase.from('envio_meta_job').update({
