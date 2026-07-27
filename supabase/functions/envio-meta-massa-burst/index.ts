@@ -248,6 +248,7 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
         instancia_id: item.instancia_id,
         cliente,
         user_id: job.user_id,
+        folder_id: job.folder_id ?? null,
         ignorar_pausa_qualidade: true,
       }),
     }).then((r) => r.json());

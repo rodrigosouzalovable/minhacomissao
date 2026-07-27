@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
       : 10;
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
+    const folderId: string | null = typeof body?.folderId === 'string' && body.folderId ? body.folderId : null;
 
     if (!template?.id) {
       return new Response(JSON.stringify({ success: false, error: 'template obrigatório' }), {
@@ -152,6 +153,7 @@ Deno.serve(async (req) => {
         nome_campanha: nomeCampanha,
         modo_rajada: modoRajada,
         msgs_por_segundo: msgsPorSegundo,
+        folder_id: folderId,
       })
       .select('id')
       .single();

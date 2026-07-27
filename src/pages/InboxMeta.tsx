@@ -26,6 +26,7 @@ import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversa
 import { ReabrirComTemplateDialog } from '@/components/inbox/meta/ReabrirComTemplateDialog';
 import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
 import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
+import { MetaFoldersDialog, type MetaInboxFolder } from '@/components/inbox/meta/MetaFoldersDialog';
 
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
@@ -55,6 +56,7 @@ interface MetaContato {
   bsuid?: string | null;
   whatsapp_username?: string | null;
   telefone_visivel?: boolean | null;
+  folder_id?: string | null;
 }
 interface MetaMensagem {
   id: string; instancia_id: string; telefone: string; conteudo: string;
@@ -111,6 +113,10 @@ export default function InboxMeta() {
   const [filtroEtiqueta, setFiltroEtiqueta] = useState<string | null>(null);
   const [filtroEtOpen, setFiltroEtOpen] = useState(false);
   const [filtroJanela24h, setFiltroJanela24h] = useState(false);
+  // Caixas de mensagens (folders) — null representa a caixa padrão (folder_id IS NULL)
+  const [folders, setFolders] = useState<MetaInboxFolder[]>([]);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [foldersDialogOpen, setFoldersDialogOpen] = useState(false);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
 
   
@@ -286,9 +292,24 @@ export default function InboxMeta() {
 
   useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); fetchMsgRapidas(); }, [fetchEtiquetas, fetchContatoEtiquetas, fetchMsgRapidas]);
 
+  const fetchFolders = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from('meta_inbox_folders')
+      .select('id, nome, cor, owner_id')
+      .order('nome');
+    setFolders(((data as any) ?? []) as MetaInboxFolder[]);
+  }, [user]);
+
+  useEffect(() => { fetchFolders(); }, [fetchFolders]);
+
+  const applyFolderFilter = <T extends { folder_id?: string | null } & { eq: any; is: any }>(q: any) => {
+    if (currentFolderId === null) return q.is('folder_id', null);
+    return q.eq('folder_id', currentFolderId);
+  };
+
   const fetchContatos = useCallback(async () => {
     if (!user) return;
-    const selectCols = 'id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado';
+    const selectCols = 'id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado, folder_id';
     // Lista base: 2000 mais recentes (usa idx_meta_wa_contatos_arq_ult).
     let q = supabase.from('meta_whatsapp_contatos')
       .select(selectCols)
@@ -296,6 +317,8 @@ export default function InboxMeta() {
       .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
       .limit(2000);
     if (filtroInstancia !== 'todas') q = q.eq('instancia_id', filtroInstancia);
+    if (currentFolderId === null) q = q.is('folder_id', null);
+    else q = q.eq('folder_id', currentFolderId);
     const { data: base } = await q;
     let combinados: MetaContato[] = (base as MetaContato[]) ?? [];
 
@@ -318,6 +341,8 @@ export default function InboxMeta() {
           .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
           .limit(200);
         if (filtroInstancia !== 'todas') qs = qs.eq('instancia_id', filtroInstancia);
+        if (currentFolderId === null) qs = qs.is('folder_id', null);
+        else qs = qs.eq('folder_id', currentFolderId);
         const { data: extras } = await qs;
         if (extras?.length) {
           const seen = new Set(combinados.map(c => c.id));
@@ -329,7 +354,7 @@ export default function InboxMeta() {
     }
 
     setContatos(combinados);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -915,6 +940,40 @@ export default function InboxMeta() {
                 Não lidas
               </button>
             </div>
+            {/* Caixas de mensagens */}
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                onClick={() => setCurrentFolderId(null)}
+                className={cn(
+                  'text-[11px] px-2 py-1 rounded border transition',
+                  currentFolderId === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-accent',
+                )}
+                title="Caixa padrão (mensagens da equipe)"
+              >
+                Padrão
+              </button>
+              {folders.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setCurrentFolderId(f.id)}
+                  className={cn(
+                    'text-[11px] px-2 py-1 rounded border transition',
+                    currentFolderId === f.id ? 'text-white border-transparent' : 'bg-muted/40 border-transparent hover:bg-accent',
+                  )}
+                  style={currentFolderId === f.id ? { backgroundColor: f.cor } : undefined}
+                  title={f.nome}
+                >
+                  {f.nome}
+                </button>
+              ))}
+              <button
+                onClick={() => setFoldersDialogOpen(true)}
+                className="text-[11px] px-1.5 py-1 rounded border border-dashed border-border hover:bg-accent text-muted-foreground"
+                title="Gerenciar caixas de mensagens"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
             {selMultipla && (
               <div className="flex items-center gap-1 bg-primary/10 rounded p-1.5">
                 <span className="text-xs flex-1">{selecionados.size} selecionada(s)</span>
@@ -1305,6 +1364,14 @@ export default function InboxMeta() {
 
       <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} />
       <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
+      {user && (
+        <MetaFoldersDialog
+          open={foldersDialogOpen}
+          onOpenChange={setFoldersDialogOpen}
+          currentUserId={user.id}
+          onChanged={fetchFolders}
+        />
+      )}
       <MetaNovaConversaDialog
         open={novaConversaOpen}
         onOpenChange={setNovaConversaOpen}

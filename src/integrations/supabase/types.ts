@@ -1735,6 +1735,7 @@ export type Database = {
           enviados: number
           erros: number
           falhas_por_instancia_run: Json
+          folder_id: string | null
           id: string
           iniciado_em: string
           instancia_ids: string[]
@@ -1765,6 +1766,7 @@ export type Database = {
           enviados?: number
           erros?: number
           falhas_por_instancia_run?: Json
+          folder_id?: string | null
           id?: string
           iniciado_em?: string
           instancia_ids?: string[]
@@ -1795,6 +1797,7 @@ export type Database = {
           enviados?: number
           erros?: number
           falhas_por_instancia_run?: Json
+          folder_id?: string | null
           id?: string
           iniciado_em?: string
           instancia_ids?: string[]
@@ -1817,7 +1820,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "envio_meta_job_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_folders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       envio_meta_job_item: {
         Row: {
@@ -3067,6 +3078,62 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_inbox_folder_members: {
+        Row: {
+          created_at: string
+          folder_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          folder_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          folder_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_inbox_folder_members_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_inbox_folders: {
+        Row: {
+          cor: string
+          created_at: string
+          id: string
+          nome: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          cor?: string
+          created_at?: string
+          id?: string
+          nome: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          cor?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meta_instance_daily_metrics: {
         Row: {
           atualizado_em: string
@@ -3527,6 +3594,7 @@ export type Database = {
           bsuid: string | null
           criado_em: string
           fixado: boolean
+          folder_id: string | null
           historico_inicial_importado_em: string | null
           id: string
           instancia_id: string
@@ -3548,6 +3616,7 @@ export type Database = {
           bsuid?: string | null
           criado_em?: string
           fixado?: boolean
+          folder_id?: string | null
           historico_inicial_importado_em?: string | null
           id?: string
           instancia_id: string
@@ -3569,6 +3638,7 @@ export type Database = {
           bsuid?: string | null
           criado_em?: string
           fixado?: boolean
+          folder_id?: string | null
           historico_inicial_importado_em?: string | null
           id?: string
           instancia_id?: string
@@ -3585,6 +3655,13 @@ export type Database = {
           whatsapp_username?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "meta_whatsapp_contatos_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "meta_whatsapp_contatos_instancia_id_fkey"
             columns: ["instancia_id"]
@@ -6477,6 +6554,10 @@ export type Database = {
           valor_atualizado: number
           valor_original: number
         }[]
+      }
+      can_access_meta_folder: {
+        Args: { _folder: string; _uid: string }
+        Returns: boolean
       }
       can_view_credor: {
         Args: { _credor: string; _user: string }
