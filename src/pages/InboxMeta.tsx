@@ -302,10 +302,6 @@ export default function InboxMeta() {
 
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
 
-  const applyFolderFilter = <T extends { folder_id?: string | null } & { eq: any; is: any }>(q: any) => {
-    if (currentFolderId === null) return q.is('folder_id', null);
-    return q.eq('folder_id', currentFolderId);
-  };
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
