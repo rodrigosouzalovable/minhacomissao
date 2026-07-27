@@ -273,7 +273,7 @@ async function processarItem(job: any): Promise<ItemResult> {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
-      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id }),
+      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null }),
     }).then((r) => r.json());
 
     if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused) {

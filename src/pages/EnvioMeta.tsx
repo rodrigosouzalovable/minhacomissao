@@ -162,6 +162,8 @@ export default function EnvioMeta() {
   const [editAsText, setEditAsText] = useState<boolean>(false);
   
   const [nomeCampanha, setNomeCampanha] = useState<string>("");
+  const [folderId, setFolderId] = useState<string>("__default__"); // __default__ = caixa padrão
+  const [foldersDisponiveis, setFoldersDisponiveis] = useState<Array<{ id: string; nome: string; cor: string }>>([]);
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
   const [modoRajada, setModoRajada] = useState<boolean>(false);
@@ -405,6 +407,16 @@ export default function EnvioMeta() {
 
   useEffect(() => {
     carregar();
+  }, []);
+
+  // Carrega caixas de mensagens disponíveis para o usuário atual (RLS restringe)
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('meta_inbox_folders')
+        .select('id, nome, cor')
+        .order('nome');
+      setFoldersDisponiveis(((data as any) ?? []) as any);
+    })();
   }, []);
 
   // Agrupa templates por (nome_template, idioma) — cada linha do dropdown é um "template lógico"
@@ -663,6 +675,7 @@ export default function EnvioMeta() {
       erroValidacao: erroVal,
       templateIdByInstance,
       nomeCampanha: nomeCampanha.trim() || undefined,
+      folderId: folderId === "__default__" ? null : folderId,
       modoRajada,
       msgsPorSegundo: modoRajada ? Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1)) : undefined,
       onAfterEnvio: () => {
@@ -1526,6 +1539,29 @@ export default function EnvioMeta() {
             />
             <p className="text-xs text-muted-foreground">
               Rótulo curto para identificar esta campanha no painel de campanhas ativas. Você pode iniciar várias campanhas em paralelo.
+            </p>
+          </div>
+
+          <div className="max-w-md space-y-1.5">
+            <Label>Caixa de mensagens do Inbox</Label>
+            <Select value={folderId} onValueChange={setFolderId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Caixa padrão" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">Caixa padrão (visível para a equipe)</SelectItem>
+                {foldersDisponiveis.map((f) => (
+                  <SelectItem key={f.id} value={f.id}>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: f.cor }} />
+                      {f.nome}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              As conversas geradas por esta campanha aparecerão apenas na caixa selecionada do Inbox Meta.
             </p>
           </div>
 

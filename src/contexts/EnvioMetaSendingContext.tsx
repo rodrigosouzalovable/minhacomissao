@@ -58,6 +58,7 @@ export type IniciarParams = {
   nomeCampanha?: string;
   modoRajada?: boolean;
   msgsPorSegundo?: number;
+  folderId?: string | null;
   onAfterEnvio?: () => void;
 };
 
@@ -510,6 +511,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           nomeCampanha: p.nomeCampanha ?? null,
           modoRajada: p.modoRajada === true,
           msgsPorSegundo: p.msgsPorSegundo,
+          folderId: p.folderId ?? null,
         },
       });
       if (error) throw error;

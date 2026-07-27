@@ -293,7 +293,7 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { template_id, instancia_id, cliente: clienteRaw, user_id, modo_teste, atendente_nome, ignorar_pausa_qualidade } = await req.json();
+    const { template_id, instancia_id, cliente: clienteRaw, user_id, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id } = await req.json();
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
@@ -536,11 +536,13 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (ex) {
           contatoIdFinal = (ex as any).id;
-          await supabase.from('meta_whatsapp_contatos').update({
+          const updContato: any = {
             ultima_mensagem: preview,
             ultima_mensagem_em: nowIso,
             atualizado_em: nowIso,
-          }).eq('id', ex.id);
+          };
+          if (folder_id) updContato.folder_id = folder_id;
+          await supabase.from('meta_whatsapp_contatos').update(updContato).eq('id', ex.id);
         } else {
           const { data: novo } = await supabase.from('meta_whatsapp_contatos').insert({
             user_id: user_id || inst.user_id,
@@ -549,6 +551,7 @@ Deno.serve(async (req) => {
             nome: (cliente.nome || '').trim() || null,
             ultima_mensagem: preview,
             ultima_mensagem_em: nowIso,
+            folder_id: folder_id || null,
           } as any).select('id').maybeSingle();
           contatoIdFinal = (novo as any)?.id ?? null;
         }
