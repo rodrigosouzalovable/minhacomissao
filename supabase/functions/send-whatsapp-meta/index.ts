@@ -536,11 +536,13 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (ex) {
           contatoIdFinal = (ex as any).id;
-          await supabase.from('meta_whatsapp_contatos').update({
+          const updContato: any = {
             ultima_mensagem: preview,
             ultima_mensagem_em: nowIso,
             atualizado_em: nowIso,
-          }).eq('id', ex.id);
+          };
+          if (folder_id) updContato.folder_id = folder_id;
+          await supabase.from('meta_whatsapp_contatos').update(updContato).eq('id', ex.id);
         } else {
           const { data: novo } = await supabase.from('meta_whatsapp_contatos').insert({
             user_id: user_id || inst.user_id,
@@ -549,6 +551,7 @@ Deno.serve(async (req) => {
             nome: (cliente.nome || '').trim() || null,
             ultima_mensagem: preview,
             ultima_mensagem_em: nowIso,
+            folder_id: folder_id || null,
           } as any).select('id').maybeSingle();
           contatoIdFinal = (novo as any)?.id ?? null;
         }
