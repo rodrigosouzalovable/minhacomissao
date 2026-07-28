@@ -184,6 +184,44 @@ export default function GoogleMapsLeads() {
         </div>
       </div>
 
+      {limite && (() => {
+        const pctBar = Math.min(100, (limite.consumo_atual / Math.max(limite.limite_maximo, 1)) * 100);
+        const cor =
+          limite.nivel === "bloqueado" ? "bg-muted-foreground" :
+          limite.nivel === "critico" ? "bg-red-500" :
+          limite.nivel === "alto" ? "bg-yellow-500" : "bg-green-500";
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center justify-between">
+                <span>Consumo do mês: {limite.consumo_atual} de {limite.limite_maximo} consultas</span>
+                <Badge variant={limite.nivel === "bloqueado" ? "destructive" : "secondary"}>
+                  {limite.percentual_consumido.toFixed(1)}%
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                <div className={`h-full ${cor} transition-all`} style={{ width: `${pctBar}%` }} />
+              </div>
+              {limite.nivel !== "normal" && (
+                <Alert variant={limite.nivel === "bloqueado" || limite.nivel === "critico" ? "destructive" : "default"}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>
+                    {limite.nivel === "bloqueado" ? "Buscas bloqueadas" :
+                     limite.nivel === "critico" ? "Consumo crítico" : "Consumo alto"}
+                  </AlertTitle>
+                  <AlertDescription>{limite.mensagem}</AlertDescription>
+                </Alert>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Bloqueio automático em {limite.limite_bloqueio} consultas • O contador reinicia em {limite.data_reset_br}
+              </p>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Nova busca</CardTitle>
