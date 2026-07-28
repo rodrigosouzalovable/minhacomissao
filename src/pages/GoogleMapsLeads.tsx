@@ -12,8 +12,21 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Loader2, Download, MapPin, Phone, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Clipboard, Loader2, Download, MapPin, Phone, Search, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
+
+interface FunctionErrorPayload {
+  error?: string;
+  message?: string;
+  status?: number;
+  details?: string;
+  reason?: string;
+  callerIp?: string;
+  apiName?: string;
+  methodName?: string;
+  consumer?: string;
+  next_steps?: string[];
+}
 
 interface Lead {
   id: string;
@@ -38,23 +51,29 @@ interface Busca {
   created_at: string;
 }
 
-async function getFunctionErrorMessage(error: unknown) {
+async function getFunctionErrorPayload(error: unknown): Promise<FunctionErrorPayload> {
   if (error instanceof FunctionsHttpError) {
     try {
       const payload = await error.context.json();
-      if (payload?.message) return String(payload.message);
-      if (payload?.details) return String(payload.details);
-      if (payload?.error) return String(payload.error);
+      return payload as FunctionErrorPayload;
     } catch (_jsonError) {
       try {
-        return await error.context.text();
+        const text = await error.context.text();
+        return { message: text };
       } catch (_textError) {
-        return error.message;
+        return { message: error.message };
       }
     }
   }
 
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) return { message: error.message };
+  return { message: "erro" };
+}
+
+function getFunctionErrorMessage(payload: FunctionErrorPayload) {
+  if (payload.message) return payload.message;
+  if (payload.error) return payload.error;
+  if (payload.details) return payload.details;
   return "erro";
 }
 
@@ -66,6 +85,7 @@ export default function GoogleMapsLeads() {
   const [buscando, setBuscando] = useState(false);
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
   const [somenteComTel, setSomenteComTel] = useState(true);
+  const [erroBusca, setErroBusca] = useState<FunctionErrorPayload | null>(null);
 
   const { data: limite, refetch: refetchLimite } = useQuery({
     queryKey: ["gm-limite"],
@@ -123,16 +143,24 @@ export default function GoogleMapsLeads() {
       return;
     }
     setBuscando(true);
+    setErroBusca(null);
     try {
       const { data, error } = await supabase.functions.invoke("google-maps-buscar-leads", {
         body: { categoria, localizacao, max_resultados: maxResultados },
       });
-      if (error) throw new Error(await getFunctionErrorMessage(error));
+      if (error) {
+        const payload = await getFunctionErrorPayload(error);
+        setErroBusca(payload);
+        toast.error("Falha na busca: " + getFunctionErrorMessage(payload));
+        return;
+      }
       if (data?.error === "limite_atingido") {
+        setErroBusca({ error: data.error, message: data.message });
         toast.error(data.message ?? "Limite mensal atingido");
         refetchLimite();
         return;
       }
+      setErroBusca(null);
       toast.success(
         `Busca concluída: ${data.total} resultados (${data.com_telefone} com telefone) — custo ~US$${data.custo_estimado_usd}`,
       );
@@ -180,6 +208,24 @@ export default function GoogleMapsLeads() {
     }
     navigator.clipboard.writeText(tels.join("\n"));
     toast.success(`${tels.length} telefones copiados`);
+  }
+
+  function copiarDiagnostico() {
+    if (!erroBusca) return;
+    const texto = [
+      `Erro: ${erroBusca.error ?? "google_maps"}`,
+      erroBusca.reason ? `Motivo: ${erroBusca.reason}` : null,
+      erroBusca.message ? `Mensagem: ${erroBusca.message}` : null,
+      erroBusca.apiName ? `API: ${erroBusca.apiName}` : null,
+      erroBusca.methodName ? `Método: ${erroBusca.methodName}` : null,
+      erroBusca.consumer ? `Projeto: ${erroBusca.consumer}` : null,
+      erroBusca.callerIp ? `IP: ${erroBusca.callerIp}` : null,
+      erroBusca.next_steps?.length ? `Próximos passos:\n- ${erroBusca.next_steps.join("\n- ")}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    navigator.clipboard.writeText(texto);
+    toast.success("Diagnóstico copiado");
   }
 
   async function excluirBusca(id: string) {
@@ -286,6 +332,40 @@ export default function GoogleMapsLeads() {
           </div>
         </CardContent>
       </Card>
+
+      {erroBusca && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>
+            {erroBusca.reason === "API_KEY_SERVICE_BLOCKED"
+              ? "Places API (New) bloqueada na chave do servidor"
+              : erroBusca.reason === "API_KEY_IP_ADDRESS_BLOCKED"
+                ? "IP de saída bloqueado na chave do servidor"
+                : "Falha na configuração do Google Maps"}
+          </AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>{getFunctionErrorMessage(erroBusca)}</p>
+            {erroBusca.next_steps?.length && (
+              <ol className="list-decimal pl-5 space-y-1">
+                {erroBusca.next_steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            )}
+            {(erroBusca.apiName || erroBusca.methodName || erroBusca.consumer || erroBusca.callerIp) && (
+              <div className="rounded-md border border-destructive/30 p-3 text-xs">
+                {erroBusca.apiName && <div>API: {erroBusca.apiName}</div>}
+                {erroBusca.methodName && <div>Método: {erroBusca.methodName}</div>}
+                {erroBusca.consumer && <div>Projeto: {erroBusca.consumer}</div>}
+                {erroBusca.callerIp && <div>IP informado pelo Google: {erroBusca.callerIp}</div>}
+              </div>
+            )}
+            <Button size="sm" variant="outline" onClick={copiarDiagnostico}>
+              <Clipboard className="h-4 w-4 mr-2" /> Copiar diagnóstico
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <Card>
