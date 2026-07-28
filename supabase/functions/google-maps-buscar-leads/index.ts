@@ -72,6 +72,26 @@ Deno.serve(async (req) => {
     }
     const maxRes = Math.min(Math.max(body.max_resultados ?? 60, 1), 60);
 
+    // Guardrail: verificar limite mensal antes de qualquer chamada à Places API
+    {
+      const { data: st, error: stErr } = await supabase.rpc("gm_status_uso");
+      if (stErr) throw stErr;
+      const s = Array.isArray(st) ? st[0] : st;
+      if (s && !s.pode_buscar) {
+        const resetBr = new Date(s.data_reset).toLocaleDateString("pt-BR");
+        return new Response(
+          JSON.stringify({
+            error: "limite_atingido",
+            message: `Não foi possível realizar a busca. O limite mensal de consultas foi atingido (${s.total_consultas}/${s.limite_bloqueio}). O contador reinicia em ${resetBr}.`,
+            consumo_atual: s.total_consultas,
+            limite_bloqueio: s.limite_bloqueio,
+            data_reset: s.data_reset,
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // Cria registro de busca
     const { data: busca, error: buscaErr } = await supabase
       .from("google_maps_buscas")
