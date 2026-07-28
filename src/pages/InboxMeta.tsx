@@ -393,12 +393,18 @@ export default function InboxMeta() {
   const fetchMensagens = useCallback(async (contato: MetaContato, loadMore = false) => {
     if (loadMore) setCarregandoAnteriores(true); else setCarregandoMsgs(true);
     const offset = loadMore ? (paginaAtual + 1) * PAGE_SIZE : 0;
-    const { data, count } = await supabase
+    // Casa pelo sufixo de 8 dígitos para unificar variações com/sem "9" do celular
+    const telDigits = String(contato.telefone || '').replace(/\D/g, '');
+    const telSuffix = telDigits.length >= 8 ? telDigits.slice(-8) : telDigits;
+    let query = supabase
       .from('meta_whatsapp_mensagens')
       .select('*', { count: 'exact' })
       .eq('instancia_id', contato.instancia_id)
-      .eq('telefone', contato.telefone)
-      .eq('apagada_para_mim', false)
+      .eq('apagada_para_mim', false);
+    query = telSuffix
+      ? query.ilike('telefone', `%${telSuffix}`)
+      : query.eq('telefone', contato.telefone);
+    const { data, count } = await query
       .order('timestamp_msg', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
     const lista = ((data as MetaMensagem[]) ?? []).reverse();
