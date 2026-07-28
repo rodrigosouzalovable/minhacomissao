@@ -257,9 +257,9 @@ export default function GoogleMapsLeads() {
             <p className="text-xs text-muted-foreground">
               Custo estimado: ~US$ {(maxResultados * 0.032).toFixed(2)} nesta busca (Text Search Pro).
             </p>
-            <Button onClick={buscar} disabled={buscando}>
+            <Button onClick={buscar} disabled={buscando || limite?.nivel === "bloqueado"} title={limite?.nivel === "bloqueado" ? limite.mensagem : undefined}>
               {buscando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
-              Buscar
+              {limite?.nivel === "bloqueado" ? "Limite atingido" : "Buscar"}
             </Button>
           </div>
         </CardContent>
