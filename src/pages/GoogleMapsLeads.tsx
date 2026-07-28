@@ -46,6 +46,27 @@ export default function GoogleMapsLeads() {
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
   const [somenteComTel, setSomenteComTel] = useState(true);
 
+  const { data: limite, refetch: refetchLimite } = useQuery({
+    queryKey: ["gm-limite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("verificar-limite-google-maps", { body: {} });
+      if (error) throw error;
+      return data as {
+        pode_buscar: boolean;
+        consumo_atual: number;
+        limite_maximo: number;
+        limite_bloqueio: number;
+        alerta_percentual: number;
+        percentual_consumido: number;
+        data_reset: string;
+        data_reset_br: string;
+        nivel: "normal" | "alto" | "critico" | "bloqueado";
+        mensagem: string;
+      };
+    },
+    refetchInterval: 60_000,
+  });
+
   const { data: buscas } = useQuery({
     queryKey: ["gm-buscas"],
     queryFn: async () => {
