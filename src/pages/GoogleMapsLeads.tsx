@@ -8,8 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Loader2, Download, MapPin, Phone, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Download, MapPin, Phone, Search, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 
 interface Lead {
