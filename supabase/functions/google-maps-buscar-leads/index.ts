@@ -1,9 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 
@@ -12,6 +8,60 @@ interface Body {
   localizacao: string;
   raio_metros?: number;
   max_resultados?: number; // padrão 60 (3 páginas x 20)
+}
+
+function getEnvOrThrow(name: string) {
+  const value = Deno.env.get(name);
+  if (!value) throw new Error(`Configuração ausente: ${name}`);
+  return value;
+}
+
+function parseGooglePermissionError(status: number, rawBody: string) {
+  if (status !== 403) return null;
+
+  try {
+    const parsed = JSON.parse(rawBody);
+    const details: Array<{ reason?: string; metadata?: Record<string, string> }> = parsed?.error?.details ?? [];
+    const info = details.find((item) => item.reason);
+    const reason = info?.reason;
+    const callerIp = info?.metadata?.callerIp;
+
+    if (reason === "API_KEY_IP_ADDRESS_BLOCKED") {
+      return {
+        error: "google_maps_ip_restrito",
+        message: callerIp
+          ? `A chave do Google Maps está bloqueando o IP de saída ${callerIp}. Adicione esse IP nas restrições da chave do servidor no Google Cloud ou remova a restrição por IP.`
+          : "A chave do Google Maps está com restrição de IP e bloqueou a chamada. Libere o IP informado pelo Google na chave do servidor ou remova a restrição por IP.",
+        reason,
+        callerIp,
+      };
+    }
+
+    if (reason === "API_KEY_HTTP_REFERRER_BLOCKED") {
+      return {
+        error: "google_maps_chave_referrer_restrita",
+        message:
+          'A chave do servidor do Google Maps está restrita por HTTP referrer. Para chamadas de backend, altere as restrições de aplicativo para "Nenhuma" ou "Endereços IP".',
+        reason,
+      };
+    }
+
+    if (reason === "API_KEY_SERVICE_BLOCKED") {
+      return {
+        error: "google_maps_api_nao_permitida",
+        message:
+          "A chave do Google Maps não permite a Places API (New). Ative/libere a Places API (New) nas restrições de API da chave do servidor.",
+        reason,
+      };
+    }
+  } catch (_error) {
+    return null;
+  }
+
+  return {
+    error: "google_maps_permissao_negada",
+    message: "O Google Maps negou a chamada (403). Verifique as restrições da chave do servidor.",
+  };
 }
 
 Deno.serve(async (req) => {
@@ -27,10 +77,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const supabaseUrl = getEnvOrThrow("SUPABASE_URL");
+    const serviceRoleKey = getEnvOrThrow("SUPABASE_SERVICE_ROLE_KEY");
+    const anonKey = getEnvOrThrow("SUPABASE_ANON_KEY");
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -40,8 +91,8 @@ Deno.serve(async (req) => {
       });
     }
     const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
+      supabaseUrl,
+      anonKey,
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: { user } } = await userClient.auth.getUser();
@@ -135,12 +186,18 @@ Deno.serve(async (req) => {
 
       if (!resp.ok) {
         const errBody = await resp.text();
+        const permissionError = parseGooglePermissionError(resp.status, errBody);
         await supabase
           .from("google_maps_buscas")
-          .update({ status: "erro", erro: `[${resp.status}] ${errBody}`.slice(0, 500) })
+          .update({ status: "erro", erro: `[${resp.status}] ${permissionError?.message ?? errBody}`.slice(0, 500) })
           .eq("id", busca.id);
         return new Response(
-          JSON.stringify({ error: "Falha no Google Maps", status: resp.status, details: errBody }),
+          JSON.stringify({
+            error: "Falha no Google Maps",
+            status: resp.status,
+            details: errBody,
+            ...(permissionError ?? {}),
+          }),
           { status: resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
