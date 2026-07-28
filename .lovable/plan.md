@@ -1,47 +1,53 @@
+## O que significa a mensagem atual
 
-## Diagnóstico (confirmado no banco)
+O código `(#2200) Callback verification failed ... curl_errno = 28 ... Operation timed out after 6000 milliseconds` é o retorno cru da Meta quando ela tenta reinscrever o webhook da instância e **não consegue chamar a URL do nosso servidor dentro de 6 segundos** (timeout de rede entre Meta ↔ Lovable Cloud naquele momento).
 
-A resposta "Parcelamento" da Darlene *existe* em `meta_whatsapp_mensagens` (id `5006eea2…`, 28/07 16:24). Ela só não aparece na conversa aberta porque **existem dois contatos duplicados na mesma instância**, com o telefone gravado em formatos diferentes:
+Na prática:
+- Não é banimento, não é bloqueio de conta, não é erro de token.
+- É uma falha temporária de rede na hora em que o `meta-webhook-health` (que roda periodicamente) tentou re-registrar o callback.
+- Nas próximas execuções (o job roda de tempos em tempos) ele tenta de novo. Se a Meta conseguir responder dentro do prazo, a instância volta ao normal sozinha.
+- Só vira problema real se **continuar falhando por várias horas seguidas na mesma instância** — aí mensagens recebidas podem não chegar no Inbox.
 
-- `Darlene Tavares` → `556195909521` (12 dígitos, sem o 9)
-- `DARLENE TAVARES SOARES DE MENEZES` → `5561995909521` (13 dígitos, com 9)
+## O que vou mudar
 
-As mensagens ficaram intercaladas entre os dois telefones (algumas enviadas para um formato, outras recebidas no outro). O Inbox filtra mensagens por `telefone = contato.telefone` exato, então cada card mostra só metade da conversa e "some" o resto.
+Reescrever a mensagem enviada ao admin em `supabase/functions/meta-webhook-health/index.ts` (bloco que hoje monta `Saúde Webhook Meta — ${nome}` + erro cru) para:
 
-A canonicalização por sufixo (últimos 8 dígitos) já existe no `meta-whatsapp-webhook`, mas ela só age se **já existir** um `meta_whatsapp_contatos` com telefone diferente no mesmo sufixo *no momento em que a mensagem chega*. Como a primeira entrada da Darlene chegou antes de qualquer contato/envio salvo naquele formato, o número entrou como 12 dígitos e depois os envios criaram um segundo contato com 13 dígitos — e o fluxo de envio (`send-whatsapp-meta`) não faz canonicalização nenhuma.
+1. **Traduzir os três casos** (`erro`, `perda_suspeita`, `reinscrito`) em português claro, sem jargão.
+2. **Detectar especificamente o timeout `(#2200)` / `curl_errno = 28`** e explicá-lo como falha temporária de rede da Meta.
+3. **Dizer o que fazer** em cada caso.
+4. Manter o código técnico só em uma linha final `Detalhe técnico: ...` (curto) para quando eu precisar debugar, sem poluir o texto principal.
 
-Esse mesmo padrão pode estar afetando outras conversas silenciosamente. É isso que precisamos resolver.
+### Novo formato da mensagem (exemplo do caso do print)
 
-## O que fazer
+```
+⚠️ Saúde do Webhook — MEMU 52
 
-### 1. Migração de dados: mesclar contatos duplicados por sufixo
+A Meta demorou demais para responder ao nosso servidor
+na hora de reconectar o recebimento de mensagens desta
+instância (timeout de 6s).
 
-Para cada `(instancia_id, últimos 8 dígitos do telefone)` com mais de um `meta_whatsapp_contatos`:
-- Escolher como **canônico** o contato que tem `ultima_msg_entrada_em` mais recente (ou o mais antigo, se nenhum tiver entrada).
-- Reapontar para o telefone canônico: `meta_whatsapp_mensagens`, `meta_whatsapp_envios_log`, `meta_whatsapp_contato_etiquetas` (via `contato_id`), campanhas e demais tabelas que referenciam `telefone` na mesma instância.
-- Copiar para o canônico: `nome` (se estiver vazio), `folder_id`, `nao_lido` (soma), `ultima_msg_entrada_em` (max), `arquivado` (OR).
-- Deletar os contatos duplicados não-canônicos.
+Isso costuma ser uma instabilidade momentânea entre a
+Meta e o nosso servidor. O sistema tentará novamente
+automaticamente na próxima verificação.
 
-### 2. Canonicalização no ponto de escrita (para nunca mais duplicar)
+O que fazer:
+• Nenhuma ação imediata é necessária.
+• Se você receber 3+ avisos seguidos da MESMA instância
+  em menos de 1 hora, abra Configurar Meta → Diagnóstico
+  daquela instância e clique em "Reinscrever webhook".
+• Só se preocupe se pararem de chegar mensagens de
+  clientes no Inbox por mais de 30 minutos.
 
-- **`send-whatsapp-meta` / `send-whatsapp-meta-text` / `send-whatsapp-meta-media`**: antes de inserir em `meta_whatsapp_mensagens` e antes de fazer upsert em `meta_whatsapp_contatos`, buscar contato existente pelo sufixo (`instancia_id` + últimos 8 dígitos) e usar o `telefone` já cadastrado. Se não existir, manter o formato Meta.
-- **`meta-whatsapp-webhook`**: ampliar a canonicalização atual para também considerar mensagens já gravadas em `meta_whatsapp_mensagens` (não só `contatos`/`envios_log`), fechando a corrida da "primeira mensagem".
+Detalhe técnico: (#2200) callback verification timeout 6000ms
+```
 
-### 3. Camada de defesa no front (Inbox Meta)
+Para os outros casos manterei o mesmo padrão amigável:
 
-Em `src/pages/InboxMeta.tsx`, ao carregar e escutar mensagens de um contato, filtrar por **sufixo de 8 dígitos** do telefone em vez de igualdade exata:
-- Trocar `.eq('telefone', contato.telefone)` por `.ilike('telefone', %<sufixo>)` (com o sufixo já normalizado sem não-dígitos).
-- Ajustar o filtro do Realtime da mesma forma (comparar `row.telefone` pelo sufixo).
+- **`erro` genérico (não timeout):** "Não foi possível reconectar o webhook desta instância. Motivo: <resumo>. Abra Configurar Meta → Diagnóstico e clique em Reinscrever webhook."
+- **`perda_suspeita`:** "A Meta registrou X conversas iniciadas hoje, mas o Inbox só recebeu Y. Podem ter faltado Z mensagens. Verifique se todas as instâncias estão com o webhook verde em Configurar Meta."
+- **`reinscrito`:** "O webhook desta instância caiu e foi religado automaticamente. Nenhuma ação necessária — mensagens já estão chegando de novo."
 
-Isso garante que, mesmo se um duplicado voltar a aparecer no futuro, a conversa continua unificada visualmente.
+## Escopo
 
-### 4. Validação
-
-- Confirmar no banco que a Darlene passou a ter um único `meta_whatsapp_contatos` com todas as mensagens (incluindo "Parcelamento" de 16:24).
-- Abrir a conversa no Inbox e verificar que aparece o histórico completo em ordem.
-- Rodar uma query genérica para confirmar que não há mais pares duplicados por sufixo em nenhuma instância.
-
-## Fora do escopo
-
-- Não vamos mexer no comportamento de arquivamento/retenção nem em templates.
-- Não vamos alterar a estrutura das tabelas (só dados + código).
+- Apenas a montagem do texto da notificação em `meta-webhook-health/index.ts`.
+- Não muda lógica de detecção, cadência, nem o painel de saúde no front. Nada de banco.
