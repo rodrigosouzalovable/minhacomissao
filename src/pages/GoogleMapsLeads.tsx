@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,26 @@ interface Busca {
   custo_estimado_usd: number | null;
   status: string;
   created_at: string;
+}
+
+async function getFunctionErrorMessage(error: unknown) {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const payload = await error.context.json();
+      if (payload?.message) return String(payload.message);
+      if (payload?.details) return String(payload.details);
+      if (payload?.error) return String(payload.error);
+    } catch (_jsonError) {
+      try {
+        return await error.context.text();
+      } catch (_textError) {
+        return error.message;
+      }
+    }
+  }
+
+  if (error instanceof Error) return error.message;
+  return "erro";
 }
 
 export default function GoogleMapsLeads() {
@@ -106,7 +127,7 @@ export default function GoogleMapsLeads() {
       const { data, error } = await supabase.functions.invoke("google-maps-buscar-leads", {
         body: { categoria, localizacao, max_resultados: maxResultados },
       });
-      if (error) throw error;
+      if (error) throw new Error(await getFunctionErrorMessage(error));
       if (data?.error === "limite_atingido") {
         toast.error(data.message ?? "Limite mensal atingido");
         refetchLimite();
@@ -118,8 +139,9 @@ export default function GoogleMapsLeads() {
       setBuscaSel(data.busca_id);
       qc.invalidateQueries({ queryKey: ["gm-buscas"] });
       refetchLimite();
-    } catch (e: any) {
-      toast.error("Falha na busca: " + (e?.message ?? "erro"));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "erro";
+      toast.error("Falha na busca: " + message);
     } finally {
       setBuscando(false);
     }
