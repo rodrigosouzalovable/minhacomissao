@@ -25,6 +25,9 @@ function parseGooglePermissionError(status: number, rawBody: string) {
     const info = details.find((item) => item.reason);
     const reason = info?.reason;
     const callerIp = info?.metadata?.callerIp;
+    const apiName = info?.metadata?.apiName;
+    const methodName = info?.metadata?.methodName;
+    const consumer = info?.metadata?.consumer;
 
     if (reason === "API_KEY_IP_ADDRESS_BLOCKED") {
       return {
@@ -34,6 +37,16 @@ function parseGooglePermissionError(status: number, rawBody: string) {
           : "A chave do Google Maps está com restrição de IP e bloqueou a chamada. Libere o IP informado pelo Google na chave do servidor ou remova a restrição por IP.",
         reason,
         callerIp,
+        next_steps: callerIp
+          ? [
+              `Adicionar ${callerIp} nas restrições de IP da chave do servidor do Google Maps.`,
+              `Se o Google pedir CIDR, usar ${callerIp}/128 para IPv6 ou ${callerIp}/32 para IPv4.`,
+              "Salvar a chave e aguardar 1–2 minutos antes de testar novamente.",
+            ]
+          : [
+              "Liberar o IP de saída informado pelo Google nas restrições da chave do servidor.",
+              "Salvar a chave e aguardar 1–2 minutos antes de testar novamente.",
+            ],
       };
     }
 
@@ -43,6 +56,11 @@ function parseGooglePermissionError(status: number, rawBody: string) {
         message:
           'A chave do servidor do Google Maps está restrita por HTTP referrer. Para chamadas de backend, altere as restrições de aplicativo para "Nenhuma" ou "Endereços IP".',
         reason,
+        next_steps: [
+          "Abrir a chave do servidor no Google Cloud.",
+          'Em "Restrições de aplicativo", trocar HTTP referrer por "Nenhuma" ou "Endereços IP".',
+          "Manter referrer apenas na chave de navegador, não na chave do servidor.",
+        ],
       };
     }
 
@@ -50,8 +68,16 @@ function parseGooglePermissionError(status: number, rawBody: string) {
       return {
         error: "google_maps_api_nao_permitida",
         message:
-          "A chave do Google Maps não permite a Places API (New). Ative/libere a Places API (New) nas restrições de API da chave do servidor.",
+          `A chave do Google Maps não permite a Places API (New)${apiName ? ` (${apiName})` : ""}. Ative a API e adicione ela nas restrições de API da chave do servidor.`,
         reason,
+        apiName,
+        methodName,
+        consumer,
+        next_steps: [
+          "No Google Cloud, confirme que a Places API (New) está ativada no projeto da chave.",
+          `Na chave do servidor, em "Restrições de API", permita ${apiName ?? "places.googleapis.com"}.`,
+          "Salve e aguarde 1–2 minutos antes de testar novamente.",
+        ],
       };
     }
   } catch (_error) {
