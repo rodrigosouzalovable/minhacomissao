@@ -107,11 +107,17 @@ export default function GoogleMapsLeads() {
         body: { categoria, localizacao, max_resultados: maxResultados },
       });
       if (error) throw error;
+      if (data?.error === "limite_atingido") {
+        toast.error(data.message ?? "Limite mensal atingido");
+        refetchLimite();
+        return;
+      }
       toast.success(
         `Busca concluída: ${data.total} resultados (${data.com_telefone} com telefone) — custo ~US$${data.custo_estimado_usd}`,
       );
       setBuscaSel(data.busca_id);
       qc.invalidateQueries({ queryKey: ["gm-buscas"] });
+      refetchLimite();
     } catch (e: any) {
       toast.error("Falha na busca: " + (e?.message ?? "erro"));
     } finally {
