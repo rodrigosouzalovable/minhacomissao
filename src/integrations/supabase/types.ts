@@ -6803,6 +6803,7 @@ export type Database = {
         Returns: undefined
       }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
+      phone_suffix8: { Args: { tel: string }; Returns: string }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
       ranking_mensal: {
         Args: { p_mes_ano?: string }

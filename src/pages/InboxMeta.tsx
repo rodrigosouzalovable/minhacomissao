@@ -393,12 +393,18 @@ export default function InboxMeta() {
   const fetchMensagens = useCallback(async (contato: MetaContato, loadMore = false) => {
     if (loadMore) setCarregandoAnteriores(true); else setCarregandoMsgs(true);
     const offset = loadMore ? (paginaAtual + 1) * PAGE_SIZE : 0;
-    const { data, count } = await supabase
+    // Casa pelo sufixo de 8 dígitos para unificar variações com/sem "9" do celular
+    const telDigits = String(contato.telefone || '').replace(/\D/g, '');
+    const telSuffix = telDigits.length >= 8 ? telDigits.slice(-8) : telDigits;
+    let query = supabase
       .from('meta_whatsapp_mensagens')
       .select('*', { count: 'exact' })
       .eq('instancia_id', contato.instancia_id)
-      .eq('telefone', contato.telefone)
-      .eq('apagada_para_mim', false)
+      .eq('apagada_para_mim', false);
+    query = telSuffix
+      ? query.ilike('telefone', `%${telSuffix}`)
+      : query.eq('telefone', contato.telefone);
+    const { data, count } = await query
       .order('timestamp_msg', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
     const lista = ((data as MetaMensagem[]) ?? []).reverse();
@@ -464,7 +470,12 @@ export default function InboxMeta() {
         { event: '*', schema: 'public', table: 'meta_whatsapp_mensagens', filter: `instancia_id=eq.${contatoAtivo.instancia_id}` },
         (payload) => {
           const row = (payload.new || payload.old) as MetaMensagem;
-          if (!row || row.telefone !== contatoAtivo.telefone) return;
+          if (!row || row.instancia_id !== contatoAtivo.instancia_id) return;
+          const rowDigits = String(row.telefone || '').replace(/\D/g, '');
+          const atvDigits = String(contatoAtivo.telefone || '').replace(/\D/g, '');
+          const rowSuf = rowDigits.length >= 8 ? rowDigits.slice(-8) : rowDigits;
+          const atvSuf = atvDigits.length >= 8 ? atvDigits.slice(-8) : atvDigits;
+          if (!rowSuf || !atvSuf || rowSuf !== atvSuf) return;
           if (payload.eventType === 'INSERT') {
             setMensagens(prev => prev.some(m => m.id === row.id) ? prev : [...prev, row]);
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);

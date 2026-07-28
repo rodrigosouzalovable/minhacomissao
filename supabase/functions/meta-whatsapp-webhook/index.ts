@@ -348,6 +348,20 @@ serve(async (req) => {
                 .maybeSingle();
               if (envioCanonico?.telefone) {
                 outroLado = envioCanonico.telefone;
+              } else {
+                // Última defesa: procura em mensagens já gravadas com o mesmo sufixo
+                const { data: msgCanonico } = await supabase
+                  .from('meta_whatsapp_mensagens')
+                  .select('telefone')
+                  .eq('instancia_id', inst.id)
+                  .ilike('telefone', `%${sufixo}`)
+                  .neq('telefone', outroLado)
+                  .order('criado_em', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (msgCanonico?.telefone) {
+                  outroLado = msgCanonico.telefone;
+                }
               }
             }
           }
