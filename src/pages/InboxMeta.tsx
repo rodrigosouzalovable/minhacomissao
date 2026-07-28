@@ -470,7 +470,12 @@ export default function InboxMeta() {
         { event: '*', schema: 'public', table: 'meta_whatsapp_mensagens', filter: `instancia_id=eq.${contatoAtivo.instancia_id}` },
         (payload) => {
           const row = (payload.new || payload.old) as MetaMensagem;
-          if (!row || row.telefone !== contatoAtivo.telefone) return;
+          if (!row || row.instancia_id !== contatoAtivo.instancia_id) return;
+          const rowDigits = String(row.telefone || '').replace(/\D/g, '');
+          const atvDigits = String(contatoAtivo.telefone || '').replace(/\D/g, '');
+          const rowSuf = rowDigits.length >= 8 ? rowDigits.slice(-8) : rowDigits;
+          const atvSuf = atvDigits.length >= 8 ? atvDigits.slice(-8) : atvDigits;
+          if (!rowSuf || !atvSuf || rowSuf !== atvSuf) return;
           if (payload.eventType === 'INSERT') {
             setMensagens(prev => prev.some(m => m.id === row.id) ? prev : [...prev, row]);
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
