@@ -72,6 +72,26 @@ Deno.serve(async (req) => {
     }
     const maxRes = Math.min(Math.max(body.max_resultados ?? 60, 1), 60);
 
+    // Guardrail: verificar limite mensal antes de qualquer chamada à Places API
+    {
+      const { data: st, error: stErr } = await supabase.rpc("gm_status_uso");
+      if (stErr) throw stErr;
+      const s = Array.isArray(st) ? st[0] : st;
+      if (s && !s.pode_buscar) {
+        const resetBr = new Date(s.data_reset).toLocaleDateString("pt-BR");
+        return new Response(
+          JSON.stringify({
+            error: "limite_atingido",
+            message: `Não foi possível realizar a busca. O limite mensal de consultas foi atingido (${s.total_consultas}/${s.limite_bloqueio}). O contador reinicia em ${resetBr}.`,
+            consumo_atual: s.total_consultas,
+            limite_bloqueio: s.limite_bloqueio,
+            data_reset: s.data_reset,
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // Cria registro de busca
     const { data: busca, error: buscaErr } = await supabase
       .from("google_maps_buscas")
@@ -129,6 +149,20 @@ Deno.serve(async (req) => {
       collected.push(...places);
       pageToken = data.nextPageToken;
       pages++;
+
+      // Incrementa contador de uso mensal (1 chamada Places consumida)
+      const { data: novoTotal } = await supabase.rpc("gm_incrementar_uso", { qtd: 1 });
+      // Se atingiu o bloqueio no meio da busca, interrompe paginação
+      const { data: st2 } = await supabase.rpc("gm_status_uso");
+      const s2 = Array.isArray(st2) ? st2[0] : st2;
+      if (s2 && !s2.pode_buscar) {
+        await supabase
+          .from("google_maps_buscas")
+          .update({ status: "parcial_limite" })
+          .eq("id", busca.id);
+        break;
+      }
+
       if (!pageToken) break;
       // Google requires ~2s delay between pageToken requests
       await new Promise((r) => setTimeout(r, 2000));

@@ -8,8 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Loader2, Download, MapPin, Phone, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, Download, MapPin, Phone, Search, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 
 interface Lead {
@@ -43,6 +45,27 @@ export default function GoogleMapsLeads() {
   const [buscando, setBuscando] = useState(false);
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
   const [somenteComTel, setSomenteComTel] = useState(true);
+
+  const { data: limite, refetch: refetchLimite } = useQuery({
+    queryKey: ["gm-limite"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("verificar-limite-google-maps", { body: {} });
+      if (error) throw error;
+      return data as {
+        pode_buscar: boolean;
+        consumo_atual: number;
+        limite_maximo: number;
+        limite_bloqueio: number;
+        alerta_percentual: number;
+        percentual_consumido: number;
+        data_reset: string;
+        data_reset_br: string;
+        nivel: "normal" | "alto" | "critico" | "bloqueado";
+        mensagem: string;
+      };
+    },
+    refetchInterval: 60_000,
+  });
 
   const { data: buscas } = useQuery({
     queryKey: ["gm-buscas"],
@@ -84,11 +107,17 @@ export default function GoogleMapsLeads() {
         body: { categoria, localizacao, max_resultados: maxResultados },
       });
       if (error) throw error;
+      if (data?.error === "limite_atingido") {
+        toast.error(data.message ?? "Limite mensal atingido");
+        refetchLimite();
+        return;
+      }
       toast.success(
         `Busca concluída: ${data.total} resultados (${data.com_telefone} com telefone) — custo ~US$${data.custo_estimado_usd}`,
       );
       setBuscaSel(data.busca_id);
       qc.invalidateQueries({ queryKey: ["gm-buscas"] });
+      refetchLimite();
     } catch (e: any) {
       toast.error("Falha na busca: " + (e?.message ?? "erro"));
     } finally {
@@ -155,6 +184,44 @@ export default function GoogleMapsLeads() {
         </div>
       </div>
 
+      {limite && (() => {
+        const pctBar = Math.min(100, (limite.consumo_atual / Math.max(limite.limite_maximo, 1)) * 100);
+        const cor =
+          limite.nivel === "bloqueado" ? "bg-muted-foreground" :
+          limite.nivel === "critico" ? "bg-red-500" :
+          limite.nivel === "alto" ? "bg-yellow-500" : "bg-green-500";
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center justify-between">
+                <span>Consumo do mês: {limite.consumo_atual} de {limite.limite_maximo} consultas</span>
+                <Badge variant={limite.nivel === "bloqueado" ? "destructive" : "secondary"}>
+                  {limite.percentual_consumido.toFixed(1)}%
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                <div className={`h-full ${cor} transition-all`} style={{ width: `${pctBar}%` }} />
+              </div>
+              {limite.nivel !== "normal" && (
+                <Alert variant={limite.nivel === "bloqueado" || limite.nivel === "critico" ? "destructive" : "default"}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>
+                    {limite.nivel === "bloqueado" ? "Buscas bloqueadas" :
+                     limite.nivel === "critico" ? "Consumo crítico" : "Consumo alto"}
+                  </AlertTitle>
+                  <AlertDescription>{limite.mensagem}</AlertDescription>
+                </Alert>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Bloqueio automático em {limite.limite_bloqueio} consultas • O contador reinicia em {limite.data_reset_br}
+              </p>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Nova busca</CardTitle>
@@ -190,9 +257,9 @@ export default function GoogleMapsLeads() {
             <p className="text-xs text-muted-foreground">
               Custo estimado: ~US$ {(maxResultados * 0.032).toFixed(2)} nesta busca (Text Search Pro).
             </p>
-            <Button onClick={buscar} disabled={buscando}>
+            <Button onClick={buscar} disabled={buscando || limite?.nivel === "bloqueado"} title={limite?.nivel === "bloqueado" ? limite.mensagem : undefined}>
               {buscando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
-              Buscar
+              {limite?.nivel === "bloqueado" ? "Limite atingido" : "Buscar"}
             </Button>
           </div>
         </CardContent>
