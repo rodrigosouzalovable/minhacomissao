@@ -32,7 +32,8 @@ import {
   MessageSquareText,
   Send,
   CreditCard,
-  Coins
+  Coins,
+  MapPin
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -107,6 +108,7 @@ export const navItems: NavItem[] = [
   { href: '/modelo-mensagem', label: 'Modelo Mensagem', icon: MessageSquareText },
   { href: '/admin/cotacoes', label: 'Cotações', icon: Coins, adminOnly: true },
   { href: '/admin/lembrete-meta', label: 'Lembrete Meta', icon: Bell, adminOnly: true },
+  { href: '/admin/google-maps-leads', label: 'Google Maps Leads', icon: MapPin, adminOnly: true },
 ];
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {

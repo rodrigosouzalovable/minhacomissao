@@ -64,6 +64,7 @@ const MetaTemplates = lazy(() => import("./pages/MetaTemplates"));
 const Consultoria = lazy(() => import("./pages/Consultoria"));
 const Cotacoes = lazy(() => import("./pages/Cotacoes"));
 const LembreteMeta = lazy(() => import("./pages/LembreteMeta"));
+const GoogleMapsLeads = lazy(() => import("./pages/GoogleMapsLeads"));
 const TenantLayout = lazy(() => import("./pages/tenant/TenantLayout"));
 
 const queryClient = new QueryClient();
@@ -259,6 +260,7 @@ const App = () => (
             <Route path="/admin/meta-templates" element={<AdminRoute><MetaTemplates /></AdminRoute>} />
             <Route path="/admin/cotacoes" element={<AdminRoute><Cotacoes /></AdminRoute>} />
             <Route path="/admin/lembrete-meta" element={<AdminRoute><LembreteMeta /></AdminRoute>} />
+            <Route path="/admin/google-maps-leads" element={<AdminRoute><GoogleMapsLeads /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>

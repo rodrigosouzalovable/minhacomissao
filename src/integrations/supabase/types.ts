@@ -2142,6 +2142,113 @@ export type Database = {
           },
         ]
       }
+      google_maps_buscas: {
+        Row: {
+          categoria: string
+          created_at: string
+          custo_estimado_usd: number | null
+          erro: string | null
+          id: string
+          localizacao: string
+          raio_metros: number | null
+          status: string
+          total_resultados: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          categoria: string
+          created_at?: string
+          custo_estimado_usd?: number | null
+          erro?: string | null
+          id?: string
+          localizacao: string
+          raio_metros?: number | null
+          status?: string
+          total_resultados?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          categoria?: string
+          created_at?: string
+          custo_estimado_usd?: number | null
+          erro?: string | null
+          id?: string
+          localizacao?: string
+          raio_metros?: number | null
+          status?: string
+          total_resultados?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      google_maps_leads: {
+        Row: {
+          avaliacao: number | null
+          busca_id: string
+          categoria: string | null
+          created_at: string
+          endereco: string | null
+          enviado_whatsapp: boolean
+          id: string
+          latitude: number | null
+          longitude: number | null
+          nome: string
+          place_id: string | null
+          site: string | null
+          telefone: string | null
+          telefone_internacional: string | null
+          total_avaliacoes: number | null
+          user_id: string
+        }
+        Insert: {
+          avaliacao?: number | null
+          busca_id: string
+          categoria?: string | null
+          created_at?: string
+          endereco?: string | null
+          enviado_whatsapp?: boolean
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          nome: string
+          place_id?: string | null
+          site?: string | null
+          telefone?: string | null
+          telefone_internacional?: string | null
+          total_avaliacoes?: number | null
+          user_id: string
+        }
+        Update: {
+          avaliacao?: number | null
+          busca_id?: string
+          categoria?: string | null
+          created_at?: string
+          endereco?: string | null
+          enviado_whatsapp?: boolean
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          nome?: string
+          place_id?: string | null
+          site?: string | null
+          telefone?: string | null
+          telefone_internacional?: string | null
+          total_avaliacoes?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_maps_leads_busca_id_fkey"
+            columns: ["busca_id"]
+            isOneToOne: false
+            referencedRelation: "google_maps_buscas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grupo_empresarial_membros: {
         Row: {
           cpf_cnpj: string
