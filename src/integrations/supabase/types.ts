@@ -2249,6 +2249,39 @@ export type Database = {
           },
         ]
       }
+      google_maps_uso_mensal: {
+        Row: {
+          alerta_percentual: number
+          created_at: string
+          id: number
+          limite_bloqueio: number
+          limite_maximo: number
+          mes_referencia: string
+          total_consultas: number
+          updated_at: string
+        }
+        Insert: {
+          alerta_percentual?: number
+          created_at?: string
+          id?: number
+          limite_bloqueio?: number
+          limite_maximo?: number
+          mes_referencia: string
+          total_consultas?: number
+          updated_at?: string
+        }
+        Update: {
+          alerta_percentual?: number
+          created_at?: string
+          id?: number
+          limite_bloqueio?: number
+          limite_maximo?: number
+          mes_referencia?: string
+          total_consultas?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       grupo_empresarial_membros: {
         Row: {
           cpf_cnpj: string
@@ -6827,6 +6860,22 @@ export type Database = {
         }[]
       }
       get_table_ddl: { Args: { p_table: string }; Returns: string }
+      gm_incrementar_uso: { Args: { qtd?: number }; Returns: number }
+      gm_mes_atual: { Args: never; Returns: string }
+      gm_status_uso: {
+        Args: never
+        Returns: {
+          alerta_percentual: number
+          data_reset: string
+          limite_bloqueio: number
+          limite_maximo: number
+          mes_referencia: string
+          nivel: string
+          percentual_consumido: number
+          pode_buscar: boolean
+          total_consultas: number
+        }[]
+      }
       has_acordos_compartilhados: {
         Args: { _user_id: string }
         Returns: boolean
