@@ -1,53 +1,70 @@
-## O que significa a mensagem atual
+## Bloqueio automático de custo — Google Maps Leads
 
-O código `(#2200) Callback verification failed ... curl_errno = 28 ... Operation timed out after 6000 milliseconds` é o retorno cru da Meta quando ela tenta reinscrever o webhook da instância e **não consegue chamar a URL do nosso servidor dentro de 6 segundos** (timeout de rede entre Meta ↔ Lovable Cloud naquele momento).
+Camada de segurança que garante que o módulo nunca ultrapasse a franquia gratuita mensal da Google Places API (New).
 
-Na prática:
-- Não é banimento, não é bloqueio de conta, não é erro de token.
-- É uma falha temporária de rede na hora em que o `meta-webhook-health` (que roda periodicamente) tentou re-registrar o callback.
-- Nas próximas execuções (o job roda de tempos em tempos) ele tenta de novo. Se a Meta conseguir responder dentro do prazo, a instância volta ao normal sozinha.
-- Só vira problema real se **continuar falhando por várias horas seguidas na mesma instância** — aí mensagens recebidas podem não chegar no Inbox.
+### Observação importante sobre a contagem
 
-## O que vou mudar
+Hoje `google-maps-buscar-leads` faz até **3 chamadas paginadas** por busca (pageSize=20 × 3 = 60 leads). O SKU cobrado é **Text Search Pro** (~US$32/1000 chamadas). A franquia gratuita da Google é de **US$200/mês**, o que dá ~**6.250 chamadas Places** — não "buscas".
 
-Reescrever a mensagem enviada ao admin em `supabase/functions/meta-webhook-health/index.ts` (bloco que hoje monta `Saúde Webhook Meta — ${nome}` + erro cru) para:
+Vou contar **chamadas de API** (não buscas do usuário), porque é o que a Google fatura. O limite de 5.000/4.800 do briefing vira 5.000/4.800 **chamadas Places**, o que corresponde na prática a ~1.600 buscas de 60 leads. Se preferir contar por busca (cada clique = 1), me diga no aprovação e ajusto antes de implementar.
 
-1. **Traduzir os três casos** (`erro`, `perda_suspeita`, `reinscrito`) em português claro, sem jargão.
-2. **Detectar especificamente o timeout `(#2200)` / `curl_errno = 28`** e explicá-lo como falha temporária de rede da Meta.
-3. **Dizer o que fazer** em cada caso.
-4. Manter o código técnico só em uma linha final `Detalhe técnico: ...` (curto) para quando eu precisar debugar, sem poluir o texto principal.
+### 1. Migration — tabela de uso
 
-### Novo formato da mensagem (exemplo do caso do print)
+`public.google_maps_uso_mensal`:
+- `mes_referencia` date (PK, sempre dia 01)
+- `total_consultas` int default 0 (chamadas Places incrementadas)
+- `limite_maximo` int default 5000
+- `limite_bloqueio` int default 4800
+- `alerta_percentual` int default 80
+- `updated_at` timestamptz
 
-```
-⚠️ Saúde do Webhook — MEMU 52
+RLS: SELECT/UPDATE apenas admin. GRANT para authenticated + service_role. Índice único em `mes_referencia`.
 
-A Meta demorou demais para responder ao nosso servidor
-na hora de reconectar o recebimento de mensagens desta
-instância (timeout de 6s).
+Função `public.gm_incrementar_uso(qtd int)` (SECURITY DEFINER): faz `INSERT ... ON CONFLICT (mes_referencia) DO UPDATE SET total_consultas = total_consultas + qtd`. Garante linha do mês corrente automaticamente — dispensa cron de reset (o "reset" acontece naturalmente ao virar o mês, e o histórico dos meses anteriores fica preservado).
 
-Isso costuma ser uma instabilidade momentânea entre a
-Meta e o nosso servidor. O sistema tentará novamente
-automaticamente na próxima verificação.
+### 2. Edge Function `verificar-limite-google-maps`
 
-O que fazer:
-• Nenhuma ação imediata é necessária.
-• Se você receber 3+ avisos seguidos da MESMA instância
-  em menos de 1 hora, abra Configurar Meta → Diagnóstico
-  daquela instância e clique em "Reinscrever webhook".
-• Só se preocupe se pararem de chegar mensagens de
-  clientes no Inbox por mais de 30 minutos.
+- Admin-only (mesmo padrão do `google-maps-buscar-leads`).
+- Lê/cria linha do mês corrente (America/Sao_Paulo).
+- Retorna: `pode_buscar`, `consumo_atual`, `limite_maximo`, `limite_bloqueio`, `percentual_consumido`, `data_reset` (dia 01 do próximo mês), `nivel` (`normal|alto|critico|bloqueado`), `mensagem` humanizada conforme tabela do briefing.
 
-Detalhe técnico: (#2200) callback verification timeout 6000ms
-```
+### 3. Modificar `google-maps-buscar-leads`
 
-Para os outros casos manterei o mesmo padrão amigável:
+- Antes do loop: chamar o verificador via SQL direto (RPC), abortar com 429 e mensagem amigável se `pode_buscar=false`.
+- Dentro do loop de páginas: após cada resposta 2xx da Places API, chamar `gm_incrementar_uso(1)`. Assim contamos chamadas reais, não estimadas.
+- Antes de pedir a próxima página: reavaliar o consumo; se cruzou o `limite_bloqueio` no meio da busca, interromper a paginação (não desperdiça o que já veio) e marcar `busca.status = 'parcial_limite'`.
 
-- **`erro` genérico (não timeout):** "Não foi possível reconectar o webhook desta instância. Motivo: <resumo>. Abra Configurar Meta → Diagnóstico e clique em Reinscrever webhook."
-- **`perda_suspeita`:** "A Meta registrou X conversas iniciadas hoje, mas o Inbox só recebeu Y. Podem ter faltado Z mensagens. Verifique se todas as instâncias estão com o webhook verde em Configurar Meta."
-- **`reinscrito`:** "O webhook desta instância caiu e foi religado automaticamente. Nenhuma ação necessária — mensagens já estão chegando de novo."
+### 4. UI — `src/pages/GoogleMapsLeads.tsx`
 
-## Escopo
+Novo card no topo (`ConsumoMensalCard`):
+- "Consumo do mês: **X** de **5.000** chamadas Places"
+- Barra de progresso Tailwind com cor semântica:
+  - verde ≤80%, amarelo 80–95%, vermelho 95–100% do bloqueio, cinza ≥bloqueio
+- Alerta contextual (Alert do shadcn) com a mensagem correspondente ao nível.
+- Rodapé: "O contador reinicia em **01/MM/AAAA**".
+- Botão "Buscar" desabilitado quando `nivel === 'bloqueado'`, com tooltip explicativo.
+- `useQuery(['gm-limite'])` chamando o verificador; `refetch` após cada busca concluída.
 
-- Apenas a montagem do texto da notificação em `meta-webhook-health/index.ts`.
-- Não muda lógica de detecção, cadência, nem o painel de saúde no front. Nada de banco.
+### 5. Reset automático
+
+Não precisa de pg_cron: a função `gm_incrementar_uso` sempre grava/atualiza a linha do mês corrente (`date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')`), então em 01/MM o contador do novo mês começa em 0 automaticamente e os meses anteriores ficam intactos para auditoria.
+
+### Respostas às 4 perguntas do briefing
+
+1. Confirmo o **conceito** de franquia gratuita (US$200/mês da Google), mas o número exato depende do que contamos — ver observação acima. Sugiro 5.000 **chamadas Places** como limite conservador.
+2. Bloqueio em **4.800** (200 de folga) como pedido — configurável na tabela.
+3. Alerta por e-mail: **fora do escopo desta fase** para manter simples; o card no topo + WhatsApp admin (se quiser, adiciono depois reusando o `admin_notificacoes_config` existente) resolve. Confirma se quer WhatsApp/e-mail agora ou numa próxima iteração?
+4. Reset automático em 01/MM: **sim**, via chave de mês na tabela (sem cron).
+
+### Arquivos afetados
+
+- Nova migration: tabela + função + RLS + grants.
+- Nova edge function: `supabase/functions/verificar-limite-google-maps/index.ts`.
+- Editar: `supabase/functions/google-maps-buscar-leads/index.ts`.
+- Editar: `src/pages/GoogleMapsLeads.tsx` (novo card + desabilitar botão).
+
+### Fora do escopo (confirmar se quer incluir)
+
+- Alertas por e-mail/WhatsApp ao cruzar 80%/95%.
+- Contagem por "busca" em vez de "chamada Places".
+- Painel admin para editar `limite_maximo`/`limite_bloqueio` pela UI (por ora só via SQL/tabela).
