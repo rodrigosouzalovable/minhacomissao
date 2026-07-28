@@ -137,6 +137,17 @@ Deno.serve(async (req) => {
       nomeById.set(r.id, r.nome || r.display_phone || r.id);
     }
 
+    // Limpa pausas residuais de rate limit herdadas de campanhas anteriores
+    // para que a nova campanha comece a enviar imediatamente. NÃO mexemos em
+    // pausa_automatica_ate quando o motivo for status=BANNED/FLAGGED/RESTRICTED
+    // — essa é uma pausa legítima da Meta.
+    try {
+      await supabase
+        .from('meta_whatsapp_instances')
+        .update({ rate_limit_ate: null, rajada_taxa_atual: null })
+        .in('id', instanciaIdsFiltradas);
+    } catch (_) { /* não bloqueia início */ }
+
     const { data: job, error: jobErr } = await supabase
       .from('envio_meta_job')
       .insert({

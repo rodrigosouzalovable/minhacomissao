@@ -316,14 +316,22 @@ Deno.serve(async (req) => {
     const agora = Date.now();
     if (inst?.rate_limit_ate && new Date(inst.rate_limit_ate).getTime() > agora) {
       const espera = new Date(inst.rate_limit_ate).getTime() - agora;
-      await supabase.from('envio_meta_job').update({
-        proximo_em: new Date(Date.now() + espera).toISOString(),
-        status_motivo: `RATE_LIMIT:${instanciaId}:${espera}:Meta pausou temporariamente esta instância por rate limit. Retomando automaticamente a 1 msg/s.`,
-      }).eq('id', jobId).eq('status', 'rodando');
-      await selfInvoke(jobId, instanciaId, espera);
-      return new Response(JSON.stringify({ success: true, aguardando_rate_limit: true, ms: espera }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      // Espera residual > 60s é tratada como órfã (herança de campanha anterior):
+      // limpa e segue enviando imediatamente.
+      if (espera > 60_000) {
+        await supabase.from('meta_whatsapp_instances')
+          .update({ rate_limit_ate: null })
+          .eq('id', instanciaId);
+      } else {
+        await supabase.from('envio_meta_job').update({
+          proximo_em: new Date(Date.now() + espera).toISOString(),
+          status_motivo: `RATE_LIMIT:${instanciaId}:${espera}:Meta pausou temporariamente esta instância por rate limit. Retomando automaticamente a 1 msg/s.`,
+        }).eq('id', jobId).eq('status', 'rodando');
+        await selfInvoke(jobId, instanciaId, espera);
+        return new Response(JSON.stringify({ success: true, aguardando_rate_limit: true, ms: espera }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Recupera automaticamente rate limits legados que eventualmente tenham sido
