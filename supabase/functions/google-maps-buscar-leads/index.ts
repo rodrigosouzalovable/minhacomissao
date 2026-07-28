@@ -149,6 +149,20 @@ Deno.serve(async (req) => {
       collected.push(...places);
       pageToken = data.nextPageToken;
       pages++;
+
+      // Incrementa contador de uso mensal (1 chamada Places consumida)
+      const { data: novoTotal } = await supabase.rpc("gm_incrementar_uso", { qtd: 1 });
+      // Se atingiu o bloqueio no meio da busca, interrompe paginação
+      const { data: st2 } = await supabase.rpc("gm_status_uso");
+      const s2 = Array.isArray(st2) ? st2[0] : st2;
+      if (s2 && !s2.pode_buscar) {
+        await supabase
+          .from("google_maps_buscas")
+          .update({ status: "parcial_limite" })
+          .eq("id", busca.id);
+        break;
+      }
+
       if (!pageToken) break;
       // Google requires ~2s delay between pageToken requests
       await new Promise((r) => setTimeout(r, 2000));
