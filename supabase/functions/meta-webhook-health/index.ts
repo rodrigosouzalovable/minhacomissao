@@ -141,24 +141,78 @@ Deno.serve(async (req) => {
         })
         .eq("id", inst.id);
 
-      // Notifica admin em problemas relevantes.
+      // Notifica admin em problemas relevantes — texto humanizado.
       if (status === "erro" || status === "perda_suspeita" || (forceNotify && status === "reinscrito")) {
-        const emoji = status === "erro" ? "🚨" : status === "perda_suspeita" ? "⚠️" : "🔄";
-        const linhas = [
-          `${emoji} Saúde Webhook Meta — ${inst.nome}`,
-          status === "erro"
-            ? `Erro: ${erro || "desconhecido"}`
-            : status === "perda_suspeita"
-            ? `Meta registrou ${perda?.meta_conversas} conversas iniciadas hoje, mas o Inbox só recebeu ${perda?.inbound_db}. Diferença: ${perda?.diferenca} mensagens que podem ter sido perdidas pela Meta.`
-            : "Webhook foi reinscrito automaticamente.",
-        ];
+        const errLower = (erro || "").toLowerCase();
+        const isTimeout =
+          errLower.includes("timed out") ||
+          errLower.includes("timeout") ||
+          errLower.includes("curl_errno = 28") ||
+          errLower.includes("#2200");
+
+        let corpo: string;
+        let emoji: string;
+
+        if (status === "reinscrito") {
+          emoji = "🔄";
+          corpo = [
+            "O recebimento de mensagens desta instância caiu e o sistema já religou sozinho.",
+            "",
+            "Nenhuma ação necessária — as mensagens dos clientes já estão chegando no Inbox de novo.",
+          ].join("\n");
+        } else if (status === "perda_suspeita") {
+          emoji = "⚠️";
+          corpo = [
+            `A Meta registrou ${perda?.meta_conversas} conversa(s) iniciada(s) por clientes hoje,`,
+            `mas o Inbox só recebeu ${perda?.inbound_db}. Podem ter faltado ${perda?.diferenca} mensagem(ns).`,
+            "",
+            "O que fazer:",
+            "• Abra Configurar Meta e confira se esta instância está com o webhook verde.",
+            "• Se estiver vermelho, clique em Diagnóstico → Reinscrever webhook.",
+            "• Peça ao cliente para reenviar a última mensagem se algo importante sumiu.",
+          ].join("\n");
+        } else if (isTimeout) {
+          emoji = "⚠️";
+          corpo = [
+            "A Meta demorou demais para responder ao nosso servidor na hora de reconectar",
+            "o recebimento de mensagens desta instância (timeout de 6 segundos).",
+            "",
+            "Isso costuma ser uma instabilidade momentânea entre a Meta e o nosso servidor.",
+            "O sistema tentará novamente sozinho na próxima verificação automática.",
+            "",
+            "O que fazer:",
+            "• Nenhuma ação imediata é necessária.",
+            "• Se receber 3+ avisos seguidos da MESMA instância em menos de 1 hora,",
+            "  abra Configurar Meta → Diagnóstico dela e clique em \"Reinscrever webhook\".",
+            "• Só se preocupe se pararem de chegar mensagens de clientes por mais de 30 minutos.",
+            "",
+            `Detalhe técnico: ${(erro || "").slice(0, 140)}`,
+          ].join("\n");
+        } else {
+          emoji = "🚨";
+          const motivoCurto = (erro || "desconhecido").replace(/\s+/g, " ").slice(0, 160);
+          corpo = [
+            "Não foi possível reconectar o recebimento de mensagens desta instância.",
+            "Enquanto isso, mensagens novas de clientes podem não aparecer no Inbox.",
+            "",
+            "O que fazer:",
+            "• Abra Configurar Meta, localize esta instância e clique em Diagnóstico.",
+            "• Clique em \"Reinscrever webhook\".",
+            "• Se persistir, verifique se o Access Token da instância ainda é válido.",
+            "",
+            `Detalhe técnico: ${motivoCurto}`,
+          ].join("\n");
+        }
+
+        const mensagem = `${emoji} Saúde do Webhook — ${inst.nome}\n\n${corpo}`;
         const chave = `${inst.id}:${status}:${new Date().toISOString().slice(0, 13)}`;
         await notificarAdmin(supabase, {
           tipo: "meta_webhook_saude",
-          mensagem: linhas.join("\n"),
+          mensagem,
           chaveIdempotencia: chave,
         });
       }
+
 
       resultados.push(out);
     }
