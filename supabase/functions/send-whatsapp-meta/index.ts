@@ -466,7 +466,21 @@ Deno.serve(async (req) => {
 
       // Espelha o envio no Inbox Meta (mensagem saída + upsert contato)
       try {
-        const tel = formatTelefone(cliente.telefone);
+        let tel = formatTelefone(cliente.telefone);
+        // Canonicaliza pelo sufixo de 8 dígitos para reaproveitar contato existente
+        if (tel && tel.length >= 8) {
+          const sufixo = tel.slice(-8);
+          const { data: canon } = await supabase
+            .from('meta_whatsapp_contatos')
+            .select('telefone')
+            .eq('instancia_id', inst.id)
+            .ilike('telefone', `%${sufixo}`)
+            .neq('telefone', tel)
+            .order('atualizado_em', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (canon?.telefone) tel = canon.telefone;
+        }
         const nowIso = new Date().toISOString();
 
         // Renderiza o corpo real do template com as variáveis substituídas
