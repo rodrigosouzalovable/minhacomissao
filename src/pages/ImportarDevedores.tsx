@@ -1212,7 +1212,17 @@ export default function ImportarDevedores() {
           } else if (credorSelecionado === 'cobmais') {
             pRows = parseCobmais(workbook);
           } else {
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            let sheet = workbook.Sheets[workbook.SheetNames[0]];
+            if (credorSelecionado === 'pesquisa') {
+              let bestRowCount = 0;
+              for (const sName of workbook.SheetNames) {
+                const s = workbook.Sheets[sName];
+                const ref = s['!ref'] || '';
+                const match = ref.match(/:.*?(\d+)$/);
+                const rowCount = match ? parseInt(match[1], 10) : 0;
+                if (rowCount > bestRowCount) { bestRowCount = rowCount; sheet = s; }
+              }
+            }
             const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
             const dataRows = json.slice(1);
             if (credorSelecionado === 'montreal') pRows = parseMontreal(dataRows);
