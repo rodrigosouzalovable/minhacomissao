@@ -126,8 +126,10 @@ _Portal de Acordos - Souza e Ribeiro_`;
             credor: credor || null,
             total_debitos: totalDebitos ?? 0,
             telefones: telefonesFormatados,
+            telefones_suffix: Array.from(sufixos),
             assigned_user_id: proximo,
           });
+
         if (insErr) console.error('Erro inserindo notificação rodízio:', insErr);
       } else {
         console.warn('Sem usuários elegíveis (nem pool nem admins) para notificação de CPF');
