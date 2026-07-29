@@ -554,6 +554,8 @@ Deno.serve(async (req) => {
             ultima_mensagem: preview,
             ultima_mensagem_em: nowIso,
             atualizado_em: nowIso,
+            // Novo envio reativa a conversa na lista principal
+            arquivado: false,
           };
           if (folder_id) updContato.folder_id = folder_id;
           await supabase.from('meta_whatsapp_contatos').update(updContato).eq('id', ex.id);
