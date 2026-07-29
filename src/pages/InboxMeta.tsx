@@ -328,7 +328,11 @@ export default function InboxMeta() {
       // ilike com escape básico de vírgulas e parênteses
       const safeText = bRaw.replace(/[,()%]/g, ' ').trim();
       if (safeText) orParts.push(`nome.ilike.%${safeText}%`);
-      if (bDigits) orParts.push(`telefone.ilike.%${bDigits}%`);
+      if (bDigits) {
+        orParts.push(`telefone.ilike.%${bDigits}%`);
+        // Também casa pelo sufixo (últimos 8 dígitos) — tolera o "9" extra do celular
+        if (bDigits.length >= 8) orParts.push(`telefone.ilike.%${bDigits.slice(-8)}`);
+      }
       if (orParts.length) {
         let qs = supabase.from('meta_whatsapp_contatos')
           .select(selectCols)
