@@ -1309,7 +1309,58 @@ export default function ImportarDevedores() {
       return inserted;
     }
 
-    // Standard layouts (padrao, montreal, cobmais, pesquisa, ume_consolidado)
+    // Layout "pesquisa": só vincula telefones ao CPF, não cria dívida
+    if (credorSelecionado === 'pesquisa') {
+      const seen = new Set<string>();
+      const phoneRecords: any[] = [];
+      for (const r of parsed.rows) {
+        const cpf = String(r.cpf || '').replace(/\D/g, '').padStart(11, '0');
+        const raw = String(r.telefone || '').replace(/\D/g, '');
+        if (!cpf || cpf === '00000000000' || raw.length < 10) continue;
+        const numero = raw.length === 10 || raw.length === 11 ? '55' + raw : raw;
+        const key = `${cpf}|${numero.slice(-8)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        phoneRecords.push({
+          devedor_cpf: cpf, numero, tipo: 'celular',
+          criado_por: user.id, is_whatsapp: true, is_contato: true,
+          observacao: r.nome ? `Portal - ${r.nome}` : 'Importação Portal',
+        });
+      }
+      if (phoneRecords.length === 0) return 0;
+      // Dedup contra o que já existe
+      const cpfs = Array.from(new Set(phoneRecords.map(p => p.devedor_cpf)));
+      const existentes = new Set<string>();
+      const CHUNK = 200, PAGE = 1000;
+      for (let i = 0; i < cpfs.length; i += CHUNK) {
+        const lote = cpfs.slice(i, i + CHUNK);
+        let from = 0;
+        while (true) {
+          const { data } = await supabase.from('devedor_telefones' as any)
+            .select('devedor_cpf, numero').in('devedor_cpf', lote).range(from, from + PAGE - 1);
+          const rows = (data ?? []) as any[];
+          for (const r of rows) existentes.add(`${r.devedor_cpf}|${String(r.numero || '').replace(/\D/g,'').slice(-8)}`);
+          if (rows.length < PAGE) break;
+          from += PAGE;
+        }
+      }
+      const finais = phoneRecords.filter(p => !existentes.has(`${p.devedor_cpf}|${p.numero.slice(-8)}`));
+      let inserted = 0;
+      const BATCH = 500;
+      for (let i = 0; i < finais.length; i += BATCH) {
+        const { error } = await supabase.from('devedor_telefones' as any).insert(finais.slice(i, i + BATCH) as any);
+        if (error) { console.error('[pesquisa] insert error', error); break; }
+        inserted += Math.min(BATCH, finais.length - i);
+      }
+      await supabase.from('importacoes' as any).insert({
+        nome_arquivo: fileName, credor: 'PORTAL - Vínculo Telefones',
+        total_registros: inserted, importado_por: user.id,
+      } as any);
+      toast({ title: 'Telefones vinculados', description: `${inserted} novos vínculos (${phoneRecords.length - inserted} já existiam).` });
+      return inserted;
+    }
+
+    // Standard layouts (padrao, montreal, cobmais, ume_consolidado)
     const rowsToImport = parsed.rows;
     if (rowsToImport.length === 0) return 0;
     const credorFinal = credorSelecionado === 'ume_consolidado' ? 'UME | NOVO MUNDO' : (credorDestino === 'outro' ? credorOutro.trim() : credorDestino);
