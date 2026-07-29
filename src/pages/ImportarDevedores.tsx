@@ -1843,7 +1843,7 @@ export default function ImportarDevedores() {
                   <SelectItem value="montreal">MONTREAL</SelectItem>
                   <SelectItem value="montreal_atualizacao">MONTREAL (Atualização)</SelectItem>
                    <SelectItem value="cobmais">COBMAIS</SelectItem>
-                   <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
+                   <SelectItem value="pesquisa">Vincular Telefones ao CPF (Portal)</SelectItem>
                    <SelectItem value="pagamentos">Pagamentos</SelectItem>
                    <SelectItem value="ume_aporte">UME APORTE</SelectItem>
                    <SelectItem value="ume_consolidado">UME Consolidado (INADIMPLENTES + APORTE)</SelectItem>
