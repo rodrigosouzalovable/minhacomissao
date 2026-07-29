@@ -1463,6 +1463,28 @@ export default function ImportarDevedores() {
       return { layout: 'devedores', credor: 'MONTREAL', dados: { records, telefones: phoneRecords }, totalRegistros: records.length };
     }
 
+    // Layout pesquisa: apenas vincular telefones ao CPF
+    if (credorSelecionado === 'pesquisa') {
+      const seen = new Set<string>();
+      const telefones: any[] = [];
+      for (const r of parsed.rows) {
+        const cpf = String(r.cpf || '').replace(/\D/g, '').padStart(11, '0');
+        const raw = String(r.telefone || '').replace(/\D/g, '');
+        if (!cpf || cpf === '00000000000' || raw.length < 10) continue;
+        const numero = raw.length === 10 || raw.length === 11 ? '55' + raw : raw;
+        const key = `${cpf}|${numero.slice(-8)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        telefones.push({
+          devedor_cpf: cpf, numero, tipo: 'celular',
+          criado_por: user.id, is_whatsapp: true, is_contato: true,
+          observacao: r.nome ? `Portal - ${r.nome}` : 'Importação Portal',
+        });
+      }
+      if (telefones.length === 0) return null;
+      return { layout: 'telefones', credor: 'PORTAL - Vínculo Telefones', dados: { telefones }, totalRegistros: telefones.length };
+    }
+
     // Standard layouts
     const rowsToImport = parsed.rows;
     if (rowsToImport.length === 0) return null;
@@ -1471,7 +1493,7 @@ export default function ImportarDevedores() {
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
       descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
     }));
     // Montreal telefones
