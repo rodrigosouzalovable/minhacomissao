@@ -613,10 +613,15 @@ export default function ConfigurarMeta() {
       const { data, error } = await supabase.functions.invoke("meta-subscribe-waba", { body: {} });
       if (error) throw error;
       setResultadosAssinatura(data?.resultados || []);
-      const okCount = (data?.resultados || []).filter((r: any) => r.subscribe_ok && r.callback_confirmado).length;
+      const okList = (data?.resultados || []).filter((r: any) => r.subscribe_ok && r.callback_confirmado);
+      const okCount = okList.length;
       const total = (data?.resultados || []).length;
+      for (const r of okList) {
+        await marcarWebhookReinscrito(r.id, r.webhook_url);
+      }
       if (okCount === total) toast.success(`${okCount}/${total} WABAs assinadas e callback confirmado`);
       else toast.error(`${okCount}/${total} com callback confirmado — veja detalhes abaixo`);
+
     } catch (e: any) {
       toast.error("Erro: " + e.message);
     }
