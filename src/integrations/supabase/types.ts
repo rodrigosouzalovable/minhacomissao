@@ -6954,6 +6954,14 @@ export type Database = {
         Args: { _ate?: string; _uid?: string }
         Returns: Json
       }
+      meta_inbox_folder_can_manage: {
+        Args: { _folder: string; _uid: string }
+        Returns: boolean
+      }
+      meta_inbox_folder_can_view: {
+        Args: { _folder: string; _uid: string }
+        Returns: boolean
+      }
       meta_metric_bump: {
         Args: { _campo: string; _inc?: number; _instancia_id: string }
         Returns: undefined
