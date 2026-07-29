@@ -416,21 +416,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Bloqueio domingo/horário (ignorado em modo teste)
-    const nowBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-    if (!isTeste && cfg?.bloquear_domingo && nowBrt.getDay() === 0) {
-      return new Response(JSON.stringify({ success: false, error: 'Envios Meta bloqueados aos domingos', blocked: 'domingo' }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    const hh = nowBrt.getHours() + nowBrt.getMinutes() / 60;
-    const [hIni] = String(cfg?.horario_inicio || '08:00:00').split(':').map(Number);
-    const [hFim] = String(cfg?.horario_fim || '20:00:00').split(':').map(Number);
-    if (!isTeste && (hh < hIni || hh >= hFim)) {
-      return new Response(JSON.stringify({ success: false, error: `Fora do horário permitido (${hIni}h–${hFim}h BRT)`, blocked: 'horario' }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // Bloqueio de domingo/horário desativado: envios liberados em qualquer dia/horário.
+
 
     // Reset diário
     const today = new Date().toISOString().slice(0, 10);
