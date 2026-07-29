@@ -61,14 +61,29 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
     const nome = novoNome.trim();
     if (!nome) return;
     setBusy(true);
-    const { error } = await supabase.from('meta_inbox_folders').insert({
-      nome, cor: novaCor, owner_id: currentUserId,
-    } as any);
-    setBusy(false);
-    if (error) { toast({ title: 'Erro ao criar', description: error.message, variant: 'destructive' }); return; }
-    setNovoNome('');
-    await load();
-    onChanged();
+    try {
+      const { error } = await supabase.from('meta_inbox_folders').insert({
+        nome, cor: novaCor, owner_id: currentUserId,
+      } as any);
+      if (error) {
+        console.error('[MetaFoldersDialog] Erro ao criar caixa:', error);
+        toast({ title: 'Erro ao criar caixa', description: error.message, variant: 'destructive' });
+        return;
+      }
+      setNovoNome('');
+      await load();
+      onChanged();
+      toast({ title: 'Caixa criada', description: `A caixa ${nome} já está disponível para campanhas.` });
+    } catch (error) {
+      console.error('[MetaFoldersDialog] Falha inesperada ao criar caixa:', error);
+      toast({
+        title: 'Erro ao criar caixa',
+        description: error instanceof Error ? error.message : 'Não foi possível criar a caixa. Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const excluir = async (id: string) => {

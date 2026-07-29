@@ -1,20 +1,20 @@
-## Correção: Criação de Caixas de Mensagens no Inbox Meta
+## Diagnóstico confirmado
+- As tabelas `meta_inbox_folders` e `meta_inbox_folder_members` continuam sem privilégios de acesso para `authenticated` e `service_role`.
+- As regras de segurança por usuário/admin existem, mas o acesso ao banco é barrado antes delas serem aplicadas; por isso clicar em **Criar** não gera a caixa.
 
-### Problema
-As tabelas `meta_inbox_folders` e `meta_inbox_folder_members` estão sem GRANTs para o role `authenticated`, o que faz o PostgREST bloquear qualquer INSERT/UPDATE/DELETE silenciosamente — inclusive para admins. Por isso o botão "Criar" não faz nada.
+## Plano de correção urgente
+1. **Aplicar migration de permissões**
+   - Restaurar acesso de dados para usuários autenticados nas tabelas:
+     - `meta_inbox_folders`
+     - `meta_inbox_folder_members`
+   - Manter a segurança pelas regras atuais: admin pode gerenciar tudo; dono da caixa pode gerenciar membros; usuários compartilhados podem visualizar.
+   - Garantir acesso interno do backend com `service_role`.
 
-### Passos
+2. **Melhorar feedback no botão Criar**
+   - Exibir erro claro caso o cadastro falhe novamente.
+   - Registrar o erro no console para facilitar diagnóstico futuro.
+   - Evitar que o botão pareça “não fazer nada”.
 
-1. **Migration SQL** — restaurar privilégios de dados nas duas tabelas, mantendo RLS:
-   - `GRANT SELECT, INSERT, UPDATE, DELETE ON public.meta_inbox_folders TO authenticated`
-   - `GRANT SELECT, INSERT, UPDATE, DELETE ON public.meta_inbox_folder_members TO authenticated`
-   - `GRANT ALL ... TO service_role` em ambas
-   - RLS permanece como está (criação/edição apenas por admin ou dono conforme policies existentes)
-
-2. **Melhoria de UX em `MetaFoldersDialog.tsx`**
-   - Exibir mensagem de erro clara via toast quando o insert falhar (hoje falha silenciosa)
-   - Logar `error.message` retornado pelo Supabase para facilitar diagnóstico futuro
-
-### Verificação
-- Após migration, testar criação de uma caixa nova como admin no Inbox Meta
-- Confirmar que a caixa aparece na lista e pode ser selecionada em Envio Meta
+3. **Verificar criação e vinculação**
+   - Confirmar que uma nova caixa criada aparece imediatamente na lista.
+   - Confirmar que a caixa fica disponível para seleção em novas campanhas do Envio Meta.

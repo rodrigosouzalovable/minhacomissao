@@ -18,6 +18,7 @@ import CustoEstimadoEnvio, { LIMITE_CUSTO_BRL_DEFAULT } from "@/components/meta/
 import { calcularCustoEstimado } from "@/hooks/useCustoEstimadoEnvio";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useMetaEnviosTotais } from "@/hooks/useMetaEnviosTotais";
+import { useAuth } from "@/hooks/useAuth";
 import { AgendarCampanhaBox, CampanhasAgendadasList } from "@/components/meta/CampanhaAgendadaSection";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
@@ -135,6 +136,7 @@ function dedupRecipientsRaw(raw: string): { texto: string; duplicados: number } 
 }
 
 export default function EnvioMeta() {
+  const { user } = useAuth();
   const {
     enviando,
     pausado,
@@ -411,13 +413,22 @@ export default function EnvioMeta() {
 
   // Carrega caixas de mensagens disponíveis para o usuário atual (RLS restringe)
   useEffect(() => {
+    if (!user) {
+      setFoldersDisponiveis([]);
+      return;
+    }
     (async () => {
-      const { data } = await supabase.from('meta_inbox_folders')
+      const { data, error } = await supabase.from('meta_inbox_folders')
         .select('id, nome, cor')
         .order('nome');
+      if (error) {
+        console.error('[EnvioMeta] Erro ao carregar caixas de mensagens:', error);
+        setFoldersDisponiveis([]);
+        return;
+      }
       setFoldersDisponiveis(((data as any) ?? []) as any);
     })();
-  }, []);
+  }, [user]);
 
   // Agrupa templates por (nome_template, idioma) — cada linha do dropdown é um "template lógico"
   // que pode existir em várias instâncias. `templateId` guarda a chave do grupo.
