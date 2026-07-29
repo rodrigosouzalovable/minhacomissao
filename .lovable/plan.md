@@ -1,70 +1,38 @@
-## Bloqueio automático de custo — Google Maps Leads
+# Correção: templates não aparecem em Nova Conversa Meta
 
-Camada de segurança que garante que o módulo nunca ultrapasse a franquia gratuita mensal da Google Places API (New).
+## Diagnóstico (confirmado)
 
-### Observação importante sobre a contagem
+A instância **IPHONE B2** (`40d6e63a-...`) possui 3 templates UTILITY aprovados no banco, mas o diálogo mostra "Nenhum template para esta instância".
 
-Hoje `google-maps-buscar-leads` faz até **3 chamadas paginadas** por busca (pageSize=20 × 3 = 60 leads). O SKU cobrado é **Text Search Pro** (~US$32/1000 chamadas). A franquia gratuita da Google é de **US$200/mês**, o que dá ~**6.250 chamadas Places** — não "buscas".
+A causa está na política RLS da tabela `meta_whatsapp_templates`:
 
-Vou contar **chamadas de API** (não buscas do usuário), porque é o que a Google fatura. O limite de 5.000/4.800 do briefing vira 5.000/4.800 **chamadas Places**, o que corresponde na prática a ~1.600 buscas de 60 leads. Se preferir contar por busca (cada clique = 1), me diga no aprovação e ajusto antes de implementar.
+```
+Users manage templates of own instances:
+  EXISTS(instance WHERE i.user_id = auth.uid() OR has_role('admin'))
+```
 
-### 1. Migration — tabela de uso
+Só o **dono técnico** da instância (ou admin) consegue ler os templates. Já a tabela `meta_whatsapp_instances` tem uma política extra (`meta_instances_shared_select` via `has_inbox_compartilhado`) que permite atendentes com acesso compartilhado enxergarem a instância — mas essa mesma permissão **não existe para os templates**. Resultado: o atendente enxerga a instância no Select e tenta abrir conversa, mas o `SELECT` dos templates volta vazio.
 
-`public.google_maps_uso_mensal`:
-- `mes_referencia` date (PK, sempre dia 01)
-- `total_consultas` int default 0 (chamadas Places incrementadas)
-- `limite_maximo` int default 5000
-- `limite_bloqueio` int default 4800
-- `alerta_percentual` int default 80
-- `updated_at` timestamptz
+O padrão do Inbox Meta (mesmo problema resolvido antes para `inbox-media`) é: qualquer usuário autenticado com acesso ao Inbox pode operar as instâncias e portanto precisa ler os templates aprovados delas.
 
-RLS: SELECT/UPDATE apenas admin. GRANT para authenticated + service_role. Índice único em `mes_referencia`.
+## Correção
 
-Função `public.gm_incrementar_uso(qtd int)` (SECURITY DEFINER): faz `INSERT ... ON CONFLICT (mes_referencia) DO UPDATE SET total_consultas = total_consultas + qtd`. Garante linha do mês corrente automaticamente — dispensa cron de reset (o "reset" acontece naturalmente ao virar o mês, e o histórico dos meses anteriores fica preservado).
+Migration SQL adicionando policy de leitura nos templates para usuários com acesso compartilhado ao Inbox, espelhando a lógica já usada em `meta_whatsapp_instances`:
 
-### 2. Edge Function `verificar-limite-google-maps`
+```sql
+CREATE POLICY meta_templates_shared_select
+ON public.meta_whatsapp_templates
+FOR SELECT
+TO authenticated
+USING (has_inbox_compartilhado(auth.uid()));
+```
 
-- Admin-only (mesmo padrão do `google-maps-buscar-leads`).
-- Lê/cria linha do mês corrente (America/Sao_Paulo).
-- Retorna: `pode_buscar`, `consumo_atual`, `limite_maximo`, `limite_bloqueio`, `percentual_consumido`, `data_reset` (dia 01 do próximo mês), `nivel` (`normal|alto|critico|bloqueado`), `mensagem` humanizada conforme tabela do briefing.
+Isso mantém as políticas existentes (dono + admin + tenant) intactas e apenas adiciona SELECT para quem tem acesso compartilhado ao Inbox. Nada de escrita é afetado — INSERT/UPDATE/DELETE continuam restritos ao dono/admin. Nenhuma finding de segurança anterior (`meta_whatsapp_templates_utility_broad_select`) é reaberta porque não damos acesso a `anon` nem a `authenticated` amplo — só a atendentes com `has_inbox_compartilhado`.
 
-### 3. Modificar `google-maps-buscar-leads`
+## Validação
 
-- Antes do loop: chamar o verificador via SQL direto (RPC), abortar com 429 e mensagem amigável se `pode_buscar=false`.
-- Dentro do loop de páginas: após cada resposta 2xx da Places API, chamar `gm_incrementar_uso(1)`. Assim contamos chamadas reais, não estimadas.
-- Antes de pedir a próxima página: reavaliar o consumo; se cruzou o `limite_bloqueio` no meio da busca, interromper a paginação (não desperdiça o que já veio) e marcar `busca.status = 'parcial_limite'`.
+Após aplicar:
+1. Rodar `SELECT count(*) FROM meta_whatsapp_templates WHERE instancia_id='40d6e63a-...' AND status='approved' AND categoria='UTILITY'` como um atendente compartilhado (via app) — deve retornar 3.
+2. Reabrir "Nova conversa Meta" com IPHONE B2 selecionado → templates aprovados devem listar.
 
-### 4. UI — `src/pages/GoogleMapsLeads.tsx`
-
-Novo card no topo (`ConsumoMensalCard`):
-- "Consumo do mês: **X** de **5.000** chamadas Places"
-- Barra de progresso Tailwind com cor semântica:
-  - verde ≤80%, amarelo 80–95%, vermelho 95–100% do bloqueio, cinza ≥bloqueio
-- Alerta contextual (Alert do shadcn) com a mensagem correspondente ao nível.
-- Rodapé: "O contador reinicia em **01/MM/AAAA**".
-- Botão "Buscar" desabilitado quando `nivel === 'bloqueado'`, com tooltip explicativo.
-- `useQuery(['gm-limite'])` chamando o verificador; `refetch` após cada busca concluída.
-
-### 5. Reset automático
-
-Não precisa de pg_cron: a função `gm_incrementar_uso` sempre grava/atualiza a linha do mês corrente (`date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo')`), então em 01/MM o contador do novo mês começa em 0 automaticamente e os meses anteriores ficam intactos para auditoria.
-
-### Respostas às 4 perguntas do briefing
-
-1. Confirmo o **conceito** de franquia gratuita (US$200/mês da Google), mas o número exato depende do que contamos — ver observação acima. Sugiro 5.000 **chamadas Places** como limite conservador.
-2. Bloqueio em **4.800** (200 de folga) como pedido — configurável na tabela.
-3. Alerta por e-mail: **fora do escopo desta fase** para manter simples; o card no topo + WhatsApp admin (se quiser, adiciono depois reusando o `admin_notificacoes_config` existente) resolve. Confirma se quer WhatsApp/e-mail agora ou numa próxima iteração?
-4. Reset automático em 01/MM: **sim**, via chave de mês na tabela (sem cron).
-
-### Arquivos afetados
-
-- Nova migration: tabela + função + RLS + grants.
-- Nova edge function: `supabase/functions/verificar-limite-google-maps/index.ts`.
-- Editar: `supabase/functions/google-maps-buscar-leads/index.ts`.
-- Editar: `src/pages/GoogleMapsLeads.tsx` (novo card + desabilitar botão).
-
-### Fora do escopo (confirmar se quer incluir)
-
-- Alertas por e-mail/WhatsApp ao cruzar 80%/95%.
-- Contagem por "busca" em vez de "chamada Places".
-- Painel admin para editar `limite_maximo`/`limite_bloqueio` pela UI (por ora só via SQL/tabela).
+Nenhuma mudança em frontend é necessária — `MetaNovaConversaDialog.tsx` já faz o filtro correto (`status=approved`, `categoria=UTILITY`, `instancia_id`).
