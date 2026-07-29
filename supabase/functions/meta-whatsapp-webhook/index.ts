@@ -563,6 +563,31 @@ serve(async (req) => {
                   }
                 }
 
+                // ---- Match por consulta no portal (sininho) — últimos 7 dias ----
+                if (!atendenteAcordoId && sufixoContato.length === 8) {
+                  try {
+                    const { data: consultaMatch } = await supabase
+                      .rpc('atendente_por_telefone_consulta', { p_suffix: sufixoContato, p_dias: 7 });
+                    const hit: any = Array.isArray(consultaMatch) ? consultaMatch[0] : consultaMatch;
+                    const nomeAt = String(hit?.nome || '').trim();
+                    if (nomeAt) {
+                      const nomeEtiqueta = `Atendente: ${nomeAt}`;
+                      const jaExiste = (atendentes || []).find((a: any) =>
+                        String(a.nome).toLowerCase() === nomeEtiqueta.toLowerCase()
+                      );
+                      if (jaExiste) {
+                        atendenteAcordoId = (jaExiste as any).id;
+                        atendenteAcordoNome = `${nomeAt} (consulta portal ${hit?.cpf || ''})`;
+                      } else {
+                        console.log('[MetaWebhook] etiqueta inexistente p/ consulta portal:', nomeEtiqueta);
+                      }
+                    }
+                  } catch (e: any) {
+                    console.error('[MetaWebhook] erro match consulta portal', e?.message || e);
+                  }
+                }
+
+
                 if (atendenteAcordoId) {
                   const { error: linkErr } = await supabase
                     .from('meta_whatsapp_contato_etiquetas')
