@@ -331,7 +331,9 @@ export default function ConfigurarMeta() {
         const r = sub?.resultados?.[0];
         if (r?.subscribe_ok) {
           toast.success("Webhook inscrito — mensagens recebidas passarão a aparecer no Inbox", { id: toastId });
+          await marcarWebhookReinscrito(novaInst.id, r?.webhook_url);
         } else {
+
           const raw = r?.subscribe_raw?.error?.message || "";
           toast.error(
             "Instância salva, mas o webhook não foi inscrito. " + humanizarErroSubscribe(raw) +
