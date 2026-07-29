@@ -461,6 +461,8 @@ serve(async (req) => {
               upd.ultima_interacao_em = tsMsg;
               upd.nao_lido = (existenteFinal.nao_lido || 0) + 1;
               upd.nome = existenteFinal.nome || nomeContato;
+              // Resposta do cliente sempre traz a conversa de volta para a lista principal
+              upd.arquivado = false;
             }
             await supabase.from('meta_whatsapp_contatos').update(upd).eq('id', existenteFinal.id);
           } else {
