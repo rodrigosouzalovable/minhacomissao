@@ -1635,6 +1635,62 @@ export default function ImportarDevedores() {
     setImportProgress(0);
     setInsertedCount(0);
 
+    // Layout pesquisa: vincula telefones ao CPF, sem criar dívida
+    if (credorSelecionado === 'pesquisa') {
+      const seen = new Set<string>();
+      const phoneRecords: any[] = [];
+      for (const r of rows) {
+        const cpf = String(r.cpf || '').replace(/\D/g, '').padStart(11, '0');
+        const raw = String(r.telefone || '').replace(/\D/g, '');
+        if (!cpf || cpf === '00000000000' || raw.length < 10) continue;
+        const numero = raw.length === 10 || raw.length === 11 ? '55' + raw : raw;
+        const key = `${cpf}|${numero.slice(-8)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        phoneRecords.push({
+          devedor_cpf: cpf, numero, tipo: 'celular',
+          criado_por: user.id, is_whatsapp: true, is_contato: true,
+          observacao: r.nome ? `Portal - ${r.nome}` : 'Importação Portal',
+        });
+      }
+
+      // Dedup contra existentes
+      const cpfs = Array.from(new Set(phoneRecords.map(p => p.devedor_cpf)));
+      const existentes = new Set<string>();
+      const CHUNK = 200, PAGE = 1000;
+      for (let i = 0; i < cpfs.length; i += CHUNK) {
+        const lote = cpfs.slice(i, i + CHUNK);
+        let from = 0;
+        while (true) {
+          const { data } = await supabase.from('devedor_telefones' as any)
+            .select('devedor_cpf, numero').in('devedor_cpf', lote).range(from, from + PAGE - 1);
+          const rs = (data ?? []) as any[];
+          for (const r of rs) existentes.add(`${r.devedor_cpf}|${String(r.numero || '').replace(/\D/g,'').slice(-8)}`);
+          if (rs.length < PAGE) break;
+          from += PAGE;
+        }
+      }
+      const finais = phoneRecords.filter(p => !existentes.has(`${p.devedor_cpf}|${p.numero.slice(-8)}`));
+      let inserted = 0;
+      const BATCH = 500;
+      for (let i = 0; i < finais.length; i += BATCH) {
+        const { error } = await supabase.from('devedor_telefones' as any).insert(finais.slice(i, i + BATCH) as any);
+        if (error) { console.error('[pesquisa] insert error', error); toast({ title: 'Erro ao inserir telefones', description: error.message, variant: 'destructive' }); break; }
+        inserted += Math.min(BATCH, finais.length - i);
+        setInsertedCount(inserted);
+        setImportProgress(Math.round(((i + BATCH) / Math.max(finais.length, 1)) * 100));
+      }
+      await supabase.from('importacoes' as any).insert({
+        nome_arquivo: file?.name || 'unknown', credor: 'PORTAL - Vínculo Telefones',
+        total_registros: inserted, importado_por: user.id,
+      } as any);
+      toast({ title: 'Telefones vinculados', description: `${inserted} novos vínculos (${phoneRecords.length - inserted} já existiam).` });
+      setImporting(false);
+      setImportProgress(100);
+      return;
+    }
+
+
     const { data: importacao, error: importError } = await supabase
       .from('importacoes' as any)
       .insert({
