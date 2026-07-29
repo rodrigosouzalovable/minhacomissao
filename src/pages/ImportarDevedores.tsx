@@ -576,9 +576,19 @@ export default function ImportarDevedores() {
     });
   };
 
+  // Normaliza CPF/CNPJ restaurando zeros à esquerda perdidos pelo Excel
+  const normalizarDoc = (raw: unknown): string => {
+    const d = String(raw ?? '').replace(/\D/g, '');
+    if (!d) return '';
+    const doc = d.length <= 11 ? d.padStart(11, '0') : d.length <= 14 ? d.padStart(14, '0') : d;
+    if (doc.length !== 11 && doc.length !== 14) return '';
+    if (/^0+$/.test(doc)) return '';
+    return doc;
+  };
+
   const parsePesquisa = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
     return dataRows.map((row) => {
-      const cpf = String(row['A'] ?? '').replace(/\D/g, '');
+      const cpf = normalizarDoc(row['A']);
       const nome = String(row['B'] ?? '').trim();
       const telefone = String(row['C'] ?? '').replace(/\D/g, '');
       return {
@@ -592,8 +602,9 @@ export default function ImportarDevedores() {
         valor_atualizado: 0,
         telefone: telefone || undefined,
       };
-    }).filter(r => r.cpf.length >= 11 && r.nome.length > 0);
+    }).filter(r => r.cpf.length > 0 && r.nome.length > 0);
   };
+
 
   const isNDValue = (val: unknown): boolean => {
     if (val === undefined || val === null) return true;
@@ -1468,9 +1479,10 @@ export default function ImportarDevedores() {
       const seen = new Set<string>();
       const telefones: any[] = [];
       for (const r of parsed.rows) {
-        const cpf = String(r.cpf || '').replace(/\D/g, '').padStart(11, '0');
+        const cpf = normalizarDoc(r.cpf);
         const raw = String(r.telefone || '').replace(/\D/g, '');
-        if (!cpf || cpf === '00000000000' || raw.length < 10) continue;
+        if (!cpf || raw.length < 10) continue;
+
         const numero = raw.length === 10 || raw.length === 11 ? '55' + raw : raw;
         const key = `${cpf}|${numero.slice(-8)}`;
         if (seen.has(key)) continue;
@@ -1640,9 +1652,10 @@ export default function ImportarDevedores() {
       const seen = new Set<string>();
       const phoneRecords: any[] = [];
       for (const r of rows) {
-        const cpf = String(r.cpf || '').replace(/\D/g, '').padStart(11, '0');
+        const cpf = normalizarDoc(r.cpf);
         const raw = String(r.telefone || '').replace(/\D/g, '');
-        if (!cpf || cpf === '00000000000' || raw.length < 10) continue;
+        if (!cpf || raw.length < 10) continue;
+
         const numero = raw.length === 10 || raw.length === 11 ? '55' + raw : raw;
         const key = `${cpf}|${numero.slice(-8)}`;
         if (seen.has(key)) continue;
