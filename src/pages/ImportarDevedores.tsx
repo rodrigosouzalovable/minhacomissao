@@ -1372,7 +1372,7 @@ export default function ImportarDevedores() {
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
       descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
       importado_por: user.id, arquivo_importacao: fileName, importacao_id: importacaoId,
     }));
