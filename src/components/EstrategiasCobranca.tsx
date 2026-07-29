@@ -16,19 +16,32 @@ const SUGESTOES = [
 ];
 
 async function buscarResumoCarteira(): Promise<string> {
-  const [acordosRes, pagamentosRes, devedoresRes, acordosCpfRes] = await Promise.all([
+  // Primeiro busca os acordos ativos; depois puxa APENAS os pagamentos desses acordos.
+  // Antes fazíamos full-scan em `pagamentos` (~270k execuções/dia) — agora filtramos por acordo_id.
+  const [acordosRes, devedoresRes, acordosCpfRes] = await Promise.all([
     supabase.from('acordos').select('id, valor_total, dias_atraso, status').eq('status', 'ativo'),
-    supabase.from('pagamentos').select('acordo_id, status, valor_parcela, data_prevista'),
     supabase.from('devedores').select('id, valor_atualizado, data_vencimento').eq('ativo', true),
     supabase.from('acordos').select('cliente_cpf').in('status', ['ativo', 'concluido']),
   ]);
 
   const acordos = acordosRes.data ?? [];
-  const pagamentos = pagamentosRes.data ?? [];
   const devedores = devedoresRes.data ?? [];
   const cpfsComAcordo = new Set(
     (acordosCpfRes.data ?? []).map(a => (a.cliente_cpf ?? '').replace(/\D/g, '')).filter(Boolean)
   );
+
+  // Busca pagamentos apenas dos acordos ativos, em lotes de 500 IDs para evitar URL gigante.
+  const acordoIds = acordos.map(a => a.id);
+  const pagamentos: Array<{ acordo_id: string; status: string; valor_parcela: number; data_prevista: string }> = [];
+  for (let i = 0; i < acordoIds.length; i += 500) {
+    const chunk = acordoIds.slice(i, i + 500);
+    if (chunk.length === 0) break;
+    const { data } = await supabase
+      .from('pagamentos')
+      .select('acordo_id, status, valor_parcela, data_prevista')
+      .in('acordo_id', chunk);
+    if (data) pagamentos.push(...(data as any));
+  }
 
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
