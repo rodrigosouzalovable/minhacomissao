@@ -509,7 +509,7 @@ export function NotificacoesCpfBell() {
                             className="h-5 w-5 flex-shrink-0"
                             onClick={() => {
                               navigator.clipboard.writeText(String(n.telefones || ""));
-                              toast({ description: "Telefone copiado" });
+                              toast.success("Telefone copiado!");
                             }}
                             title="Copiar telefone"
                           >
