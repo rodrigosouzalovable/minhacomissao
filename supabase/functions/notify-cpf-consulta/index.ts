@@ -28,7 +28,12 @@ serve(async (req) => {
       : cpf;
 
     // Telefones cadastrados
+    const phoneSuffix = (v: unknown) => {
+      const d = String(v ?? '').replace(/\D/g, '');
+      return d.length >= 8 ? d.slice(-8) : '';
+    };
     let telefonesFormatados = 'Não cadastrado';
+    const sufixos = new Set<string>();
     const { data: fonesTab } = await supabase
       .from('devedor_telefones')
       .select('numero')
@@ -36,6 +41,10 @@ serve(async (req) => {
       .eq('ativo', true);
     if (fonesTab && fonesTab.length > 0) {
       telefonesFormatados = fonesTab.map((f: any) => f.numero).join(', ');
+      for (const f of fonesTab as any[]) {
+        const s = phoneSuffix(f.numero);
+        if (s) sufixos.add(s);
+      }
     } else {
       const { data: devs } = await supabase
         .from('devedores')
@@ -43,8 +52,13 @@ serve(async (req) => {
         .eq('cpf', cpfLimpo)
         .not('telefone', 'is', null)
         .limit(1);
-      if (devs?.[0]?.telefone) telefonesFormatados = devs[0].telefone;
+      if (devs?.[0]?.telefone) {
+        telefonesFormatados = devs[0].telefone;
+        const s = phoneSuffix(devs[0].telefone);
+        if (s) sufixos.add(s);
+      }
     }
+
 
     const agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
@@ -112,8 +126,10 @@ _Portal de Acordos - Souza e Ribeiro_`;
             credor: credor || null,
             total_debitos: totalDebitos ?? 0,
             telefones: telefonesFormatados,
+            telefones_suffix: Array.from(sufixos),
             assigned_user_id: proximo,
           });
+
         if (insErr) console.error('Erro inserindo notificação rodízio:', insErr);
       } else {
         console.warn('Sem usuários elegíveis (nem pool nem admins) para notificação de CPF');

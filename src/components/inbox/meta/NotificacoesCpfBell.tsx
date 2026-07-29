@@ -500,11 +500,24 @@ export function NotificacoesCpfBell() {
                         {n.total_debitos}
                       </div>
                       {n.telefones && (
-                        <div className="break-all">
+                        <div className="flex items-start gap-1 break-all">
                           <span className="text-muted-foreground">Telefone(s):</span>{" "}
-                          {n.telefones}
+                          <span className="font-mono">{n.telefones}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 flex-shrink-0"
+                            onClick={() => {
+                              navigator.clipboard.writeText(String(n.telefones || ""));
+                              toast.success("Telefone copiado!");
+                            }}
+                            title="Copiar telefone"
+                          >
+                            <Copy className="h-3 w-3 text-muted-foreground" />
+                          </Button>
                         </div>
                       )}
+
                       {isAdmin && (
                         <div>
                           <span className="text-muted-foreground">Atribuído a:</span>{" "}

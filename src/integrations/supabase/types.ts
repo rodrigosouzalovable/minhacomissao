@@ -1145,6 +1145,7 @@ export type Database = {
           lida_em: string | null
           nome: string | null
           telefones: string | null
+          telefones_suffix: string[]
           total_debitos: number
           updated_at: string
         }
@@ -1158,6 +1159,7 @@ export type Database = {
           lida_em?: string | null
           nome?: string | null
           telefones?: string | null
+          telefones_suffix?: string[]
           total_debitos?: number
           updated_at?: string
         }
@@ -1171,6 +1173,7 @@ export type Database = {
           lida_em?: string | null
           nome?: string | null
           telefones?: string | null
+          telefones_suffix?: string[]
           total_debitos?: number
           updated_at?: string
         }
@@ -6679,6 +6682,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      atendente_por_telefone_consulta: {
+        Args: { p_dias?: number; p_suffix: string }
+        Returns: {
+          consultado_em: string
+          cpf: string
+          nome: string
+          user_id: string
+        }[]
+      }
       buscar_devedores_por_documento: {
         Args: { p_credor?: string; p_doc: string }
         Returns: {
