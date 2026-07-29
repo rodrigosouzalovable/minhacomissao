@@ -52,10 +52,10 @@ async function buscarResumoCarteira(): Promise<string> {
   let nuncaPagaram = 0;
   let parcelaUnica = 0;
 
-  const acordoIds = new Set(acordos.map(a => a.id));
+  const acordoIdsSet = new Set(acordoIds);
   const pagsPorAcordo = new Map<string, typeof pagamentos>();
   for (const p of pagamentos) {
-    if (!acordoIds.has(p.acordo_id)) continue;
+    if (!acordoIdsSet.has(p.acordo_id)) continue;
     if (!pagsPorAcordo.has(p.acordo_id)) pagsPorAcordo.set(p.acordo_id, []);
     pagsPorAcordo.get(p.acordo_id)!.push(p);
   }
