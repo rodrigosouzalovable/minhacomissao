@@ -330,22 +330,27 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   useEffect(() => { carregarItensRef.current = carregarItens; }, [carregarItens]);
 
   // Debounces por jobId — coalescem bursts de eventos numa única refetch.
+  // Delays elevados (5-8s) porque cada carregarItens lê até 10k linhas em envio_meta_job_item;
+  // com Rajada disparando eventos por segundo, delays baixos matavam a CPU do banco.
   const debounceItensRef = useRef<Map<string, number>>(new Map());
   const debounceJobsRef = useRef<number | null>(null);
-  const scheduleCarregarItens = useCallback((jobId: string, delay = 2000) => {
+  const scheduleCarregarItens = useCallback((jobId: string, delay = 8000) => {
     const map = debounceItensRef.current;
     const prev = map.get(jobId);
     if (prev) window.clearTimeout(prev);
     const id = window.setTimeout(() => {
       map.delete(jobId);
+      // Aba em segundo plano: adia — o próximo evento ou o abrir do diálogo dispara refetch.
+      if (document.visibilityState !== 'visible') return;
       carregarItensRef.current?.(jobId);
     }, delay);
     map.set(jobId, id);
   }, []);
-  const scheduleCarregarJobs = useCallback((delay = 800) => {
+  const scheduleCarregarJobs = useCallback((delay = 2500) => {
     if (debounceJobsRef.current) window.clearTimeout(debounceJobsRef.current);
     debounceJobsRef.current = window.setTimeout(() => {
       debounceJobsRef.current = null;
+      if (document.visibilityState !== 'visible') return;
       carregarJobsRef.current?.();
     }, delay);
   }, []);
@@ -359,13 +364,13 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         "postgres_changes",
         { event: "*", schema: "public", table: "envio_meta_job", filter: `user_id=eq.${uid}` },
         (payload: any) => {
-          scheduleCarregarJobs(800);
+          scheduleCarregarJobs(2500);
           const row = payload.new || payload.old;
           const jobId = row?.id;
           if (jobId && itensByJobRef.current.has(jobId)) {
             const cached = itensByJobRef.current.get(jobId) || [];
             const backend = (row?.enviados || 0) + (row?.erros || 0);
-            if (backend !== cached.length) scheduleCarregarItens(jobId, 2000);
+            if (backend !== cached.length) scheduleCarregarItens(jobId, 8000);
           }
         }
       )
@@ -376,7 +381,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           const jobId = (payload.new || payload.old)?.job_id;
           // Ignora eventos de jobs que o usuário nem tem aberto/carregado.
           if (jobId && itensByJobRef.current.has(jobId)) {
-            scheduleCarregarItens(jobId, 2500);
+            scheduleCarregarItens(jobId, 8000);
           }
         }
       )

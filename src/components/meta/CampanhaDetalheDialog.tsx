@@ -63,17 +63,21 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     }
   }, [open, jobId, ensureItensLoaded, recarregarItensJob]);
 
-  // Polling leve enquanto o diálogo está aberto — só refetch quando cache diverge do backend.
+  // Polling leve enquanto o diálogo está aberto — só refetch quando cache diverge do backend
+  // e apenas com a aba visível (economia de CPU do banco).
   useEffect(() => {
     if (!open || !jobId) return;
     const t = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
       const j = jobs.find((x) => x.id === jobId);
       if (!j) return;
+      // Não refetch em jobs finalizados.
+      if (j.status !== 'rodando' && j.status !== 'pausado') return;
       const backend = (j.enviados || 0) + (j.erros || 0);
       const det = getDetalhesJob(jobId);
       const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0);
       if (backend !== cached) recarregarItensJob(jobId);
-    }, 10000);
+    }, 15000);
     return () => clearInterval(t);
   }, [open, jobId, jobs, recarregarItensJob, getDetalhesJob]);
 
