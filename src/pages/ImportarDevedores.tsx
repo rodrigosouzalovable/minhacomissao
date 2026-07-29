@@ -91,7 +91,7 @@ const DESCRICOES: Record<CredorLayout, string> = {
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Atraso (dias), H = Nro Nota, I = Desdob., J = Vlr do Desdobramento, K = Dt. Venc. Inicial',
   montreal_atualizacao: 'Importação inteligente MONTREAL — Cruza com dados existentes e insere apenas parcelas novas. Mesmo layout da planilha Montreal.',
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total, H = Telefone | Aba 2: Telefones (opcional)',
-  pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
+  pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone — vincula o telefone ao CPF (grava em devedor_telefones), sem criar dívida. Usado pelo Portal de Negociação para identificar o cliente.',
   pagamentos: 'A = CPF/CNPJ, B = Cliente, C = Credor, D = Contrato, E = Inclusão, F = Arquivo, G = Número, H = Vencimento, I = Valor, J = Observação, K = Status — Marca parcelas PAGAS automaticamente',
   ume_aporte: 'A = CPF, B = Nome, C = Telefone, D = Nº Parcela, E = Data Vencimento, F = Valor Parcela — Cria acordos automaticamente no sistema',
   ume_consolidado: 'A = CPF, B = Nome, C = Credor, D = Contrato, E = Nº Parcela, F = Vencimento, G = Valor Parcela, H = Valor Total — Importa INADIMPLENTES e APORTE juntos',
