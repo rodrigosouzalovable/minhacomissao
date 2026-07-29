@@ -1120,7 +1120,18 @@ export default function ImportarDevedores() {
             toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
           }
         } else {
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          let sheet = workbook.Sheets[workbook.SheetNames[0]];
+          // Para o layout "pesquisa", detectar a melhor sheet (maior nº de linhas)
+          if (credorSelecionado === 'pesquisa') {
+            let bestRowCount = 0;
+            for (const sName of workbook.SheetNames) {
+              const s = workbook.Sheets[sName];
+              const ref = s['!ref'] || '';
+              const match = ref.match(/:.*?(\d+)$/);
+              const rowCount = match ? parseInt(match[1], 10) : 0;
+              if (rowCount > bestRowCount) { bestRowCount = rowCount; sheet = s; }
+            }
+          }
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
           const dataRows = json.slice(1);
           let parsed: DevedorRow[];
