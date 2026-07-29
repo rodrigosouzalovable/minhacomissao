@@ -1,70 +1,80 @@
-## Objetivo
-Permitir importar a planilha `CSIM_TODOS.xlsx` (aba "Planilha1": A = CPF, B = Nome, C = Telefone) em "Importar devedores" para vincular os telefones aos CPFs, de forma que, quando o cliente consultar o CPF no Portal de Negociação, o telefone esteja associado a ele (usado pelo botão de WhatsApp / chatbot / envios).
+# Otimização de CPU do Banco (100% → alvo ~30-40%)
 
-## Contexto atual (verificado)
-- Já existe o layout `pesquisa` em `src/pages/ImportarDevedores.tsx` (linhas 579-596, opção "Pesquisa Cliente"), com o mesmo mapeamento A/B/C.
-- Hoje ele grava linhas "vazias" em `public.devedores` (sem dívida) só para carregar o telefone — o que polui a base e não cobre bem o caso do portal, porque cria um novo registro em vez de vincular ao devedor real já cadastrado do CPF.
-- Existe a tabela `public.devedor_telefones` (usada pelo Detalhe do Devedor e pelo chatbot para achar CPF por telefone). Ela é o lugar certo para armazenar telefones adicionais por CPF.
-- A planilha enviada tem a sheet real chamada `Planilha1` (30.846 linhas). O parser atual pega `SheetNames[0]`, que nesse arquivo é "Cobrança" (vazia). Precisa detectar a melhor sheet.
+Baseado nas 4 queries que mais consomem CPU no seu banco agora. O objetivo é reduzir uso sem precisar fazer upgrade da instância.
 
-## O que fazer
+## 1. Polling do progresso de campanhas Meta (maior ofensor)
 
-### 1. Renomear/rotular a opção para o uso real
-- Renomear o rótulo da opção `pesquisa` no seletor para **"Vincular Telefones ao CPF (Portal)"** e ajustar a descrição para: `A = CPF, B = Nome, C = Telefone — vincula o telefone ao CPF já cadastrado, sem criar nova dívida.`
-- Manter o valor interno `pesquisa` para não quebrar histórico.
+**Problema:** ~650 mil consultas em `envio_meta_job_item` filtrando por `job_id` + `status`. A tela de detalhes da campanha (`CampanhaDetalheDialog`) e o painel flutuante (`CampanhasFlutuante`) fazem refetch muito rápido, mesmo com aba em segundo plano.
 
-### 2. Detecção de sheet correta
-- No branch `pesquisa` do parse, escolher automaticamente a sheet com maior número de linhas (mesma heurística já usada em `pagamentos`), em vez de sempre a primeira. Assim `Planilha1` é encontrada mesmo que exista a sheet "Cobrança" vazia antes.
+**Correções:**
+- Subir `refetchInterval` de campanhas em andamento para 5-10s (hoje deve estar em 1-2s).
+- Parar refetch quando `document.visibilityState !== "visible"` (aba fora de foco).
+- Parar refetch quando o job estiver em status final (`concluido`, `erro`, `cancelado`).
+- Garantir índice composto `(job_id, status, processado_em DESC)` em `envio_meta_job_item` — a query atual ordena por `processado_em DESC`, então esse índice elimina o sort.
 
-### 3. Nova lógica de importação (não cria dívida)
-No fluxo `importParsedData` quando `credorSelecionado === 'pesquisa'`:
-1. Normalizar CPF (11 dígitos, `padStart`) e telefone (só dígitos; se tiver 10/11 dígitos, prefixar `55`).
-2. Deduplicar em memória por par (cpf, telefone_sufixo8).
-3. Para cada CPF do lote (em blocos de 500):
-   - Buscar `devedores` ativos com aquele CPF.
-   - Se existir devedor: fazer `upsert` em `devedor_telefones` (por `devedor_id + telefone`) com `origem = 'importacao_portal'`, `nome_contato = nome da planilha` quando o campo estiver vazio; NÃO alterar o `telefone` principal do `devedores` para não sobrescrever manualmente cadastrado.
-   - Se NÃO existir devedor daquele CPF: gravar em uma nova tabela leve `devedor_contatos_cpf (cpf, nome, telefone, criado_por, created_at)` como agenda de contatos por CPF — o portal e o chatbot passam a consultar essa tabela como fallback.
-4. Registrar contadores (vinculados / novos-contatos / ignorados) e exibir toast + linha em `importacoes`.
+## 2. Polling do log de envios Meta
 
-### 4. Migration
-```sql
-CREATE TABLE public.devedor_contatos_cpf (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  cpf text NOT NULL,
-  nome text,
-  telefone text NOT NULL,
-  origem text DEFAULT 'importacao_portal',
-  criado_por uuid REFERENCES auth.users(id),
-  created_at timestamptz DEFAULT now(),
-  UNIQUE (cpf, telefone)
-);
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.devedor_contatos_cpf TO authenticated;
-GRANT ALL ON public.devedor_contatos_cpf TO service_role;
-ALTER TABLE public.devedor_contatos_cpf ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "auth read"   ON public.devedor_contatos_cpf FOR SELECT TO authenticated USING (true);
-CREATE POLICY "auth write"  ON public.devedor_contatos_cpf FOR INSERT TO authenticated WITH CHECK (auth.uid() = criado_por);
-CREATE POLICY "admin all"   ON public.devedor_contatos_cpf FOR ALL TO authenticated USING (is_admin_user(auth.uid())) WITH CHECK (is_admin_user(auth.uid()));
-CREATE INDEX ON public.devedor_contatos_cpf (cpf);
-```
+**Problema:** ~1 milhão de consultas em `meta_whatsapp_envios_log` filtrando por `user_id` + `enviado_em`. É o Monitor de Envios e telas de status.
 
-### 5. Uso no Portal de Negociação
-- No resultado da consulta por CPF (`/consulta/{credor}/{cpf}`), quando os débitos do CPF forem carregados e o botão de WhatsApp/atendimento for exibido, buscar telefones vinculados na ordem:
-  1. `devedores.telefone` + `devedor_telefones` (do CPF).
-  2. `devedor_contatos_cpf` do CPF (fallback vindo desta importação).
-- Também disponibilizar esses telefones para o chatbot e as campanhas via as consultas já existentes por CPF.
+**Correções:**
+- `staleTime` alto (60s) + `refetchInterval` mínimo 30s no hook que consulta esse log.
+- Guard de `visibilityState`.
+- Índice `(user_id, enviado_em DESC)` se ainda não existir.
 
-### 6. UI de pré-visualização
-Ajustar a tabela de preview do modo `isPesquisa` para 3 colunas (CPF / Nome / Telefone) e mostrar contagem "vinculará X telefones em Y CPFs (Z novos contatos)".
+## 3. Inbox Meta / WhatsApp - lista de contatos
 
-## Fora de escopo
-- Não altera o parser dos outros layouts.
-- Não remove o comportamento antigo de outros credores.
-- Não muda regras de negociação/descontos.
+**Problema:** ~665 mil consultas em `whatsapp_contatos` com JOIN em `user_whatsapp_instances`, ordenado por `ultima_mensagem_em`.
+
+**Correções:**
+- Aumentar `staleTime` da lista de contatos (30-60s) e depender do Realtime pra novidades em vez de polling.
+- Guard de `visibilityState` no refetch periódico.
+- Índice `(instancia_id, arquivado, ultima_mensagem_em DESC)`.
+
+## 4. Full-scan em `pagamentos` (query mais perigosa)
+
+**Problema:** SELECT em `pagamentos` **sem WHERE**, ordenado por `acordo_id`, paginado por OFFSET. Isso varre a tabela inteira em cada chamada — 269 mil execuções, média 512ms.
+
+**Correções:**
+- Localizar a chamada (provavelmente uma tela que faz `.from('pagamentos').select(...)` sem `.eq('acordo_id', ...)` ou `.in('acordo_id', [...])`) e passar a filtrar sempre por `acordo_id` ou por `user_id` via join implícito.
+- Se realmente precisa varrer, mudar para paginação por keyset (cursor em `acordo_id`) em vez de OFFSET, ou consumir via RPC agregada.
+- Índice `(acordo_id)` — já é PK provavelmente, então o problema é a query, não o índice.
 
 ## Detalhes técnicos
-- Arquivos alterados:
-  - `src/pages/ImportarDevedores.tsx` (rótulos, seleção de sheet, novo branch de importação `pesquisa`, preview).
-  - `src/pages/ConsultaResultado.tsx` (fallback de telefones para o botão WhatsApp).
-  - Nova migration SQL.
-- Sem novas dependências.
-- Batches de 500 registros com progresso já existente reaproveitado.
+
+**Arquivos que devem ser tocados (frontend):**
+- `src/components/meta/CampanhaDetalheDialog.tsx` e `src/components/meta/CampanhasFlutuante.tsx` — ajustar refetchInterval + visibility guard + parar em status final.
+- Hook do Monitor de Envios Meta (procurar quem lê `meta_whatsapp_envios_log`) — subir staleTime.
+- `src/pages/InboxMeta.tsx` e hooks de `whatsapp_contatos` — subir staleTime, remover polling redundante, manter Realtime.
+- Localizar o consumidor que faz SELECT em `pagamentos` sem filtro (candidatos: `EquipeAcordos.tsx`, `Comissoes.tsx`, `Dashboard.tsx`, `MetaBillingConciliacaoCard.tsx`) e restringir por `acordo_id`/`user_id`.
+
+**Migração de índices (uma migração só, com `CREATE INDEX IF NOT EXISTS`):**
+```sql
+CREATE INDEX IF NOT EXISTS idx_envio_meta_job_item_job_status_proc
+  ON public.envio_meta_job_item (job_id, status, processado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_meta_envios_log_user_enviado
+  ON public.meta_whatsapp_envios_log (user_id, enviado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_contatos_inst_arq_ult
+  ON public.whatsapp_contatos (instancia_id, arquivado, ultima_mensagem_em DESC);
+```
+
+**Padrão de visibility guard** que vou aplicar nos hooks:
+```ts
+useQuery({
+  queryKey: [...],
+  queryFn: ...,
+  staleTime: 30_000,
+  refetchInterval: (q) => document.visibilityState === "visible" ? 10_000 : false,
+  refetchIntervalInBackground: false,
+});
+```
+
+## Ordem de execução
+
+1. Rodar a migração dos 3 índices (efeito imediato no custo por query).
+2. Ajustar refetchIntervals + visibility guards nos 4 pontos.
+3. Corrigir a query de `pagamentos` sem filtro.
+4. Reavaliar CPU depois de ~15 min de uso real; se ainda estiver alto, considerar upgrade da instância.
+
+## Risco
+
+Baixo. São mudanças de frequência de refetch e índices adicivos — nada muda de comportamento visível pro usuário, só fica mais leve. O único ponto que exige atenção é a query de `pagamentos`: preciso identificar o call-site exato antes de mudar, pra não quebrar uma tela.
