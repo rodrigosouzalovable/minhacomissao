@@ -222,6 +222,59 @@ Deno.serve(async (req) => {
             .update({ registros_inseridos: totalInserted })
             .eq("id", job_id);
         }
+      } else if (layout === "telefones") {
+        // Vincula telefones ao CPF (usado pelo Portal). Não cria dívida.
+        const telefones = (dados.telefones ?? []) as any[];
+        if (telefones.length === 0) throw new Error("No telefones");
+
+        // Registrar importação
+        await supabase.from("importacoes").insert({
+          nome_arquivo: fileName,
+          credor: credor || "PORTAL - Vínculo Telefones",
+          total_registros: telefones.length,
+          importado_por: userId,
+        });
+
+        // Dedup contra o já existente
+        const cpfs = Array.from(new Set(telefones.map((t) => String(t.devedor_cpf)).filter(Boolean)));
+        const existentes = new Set<string>();
+        const CHUNK = 200, PAGE = 1000;
+        for (let i = 0; i < cpfs.length; i += CHUNK) {
+          const lote = cpfs.slice(i, i + CHUNK);
+          let from = 0;
+          while (true) {
+            const { data, error } = await supabase
+              .from("devedor_telefones")
+              .select("devedor_cpf, numero")
+              .in("devedor_cpf", lote)
+              .range(from, from + PAGE - 1);
+            if (error) throw new Error(`Dedup lookup error: ${error.message}`);
+            const rows = (data ?? []) as any[];
+            for (const r of rows) {
+              const suf = String(r.numero || "").replace(/\D/g, "").slice(-8);
+              existentes.add(`${r.devedor_cpf}|${suf}`);
+            }
+            if (rows.length < PAGE) break;
+            from += PAGE;
+          }
+        }
+        const finais = telefones.filter((t) => {
+          const suf = String(t.numero || "").replace(/\D/g, "").slice(-8);
+          return !existentes.has(`${t.devedor_cpf}|${suf}`);
+        });
+
+        const BATCH = 500;
+        for (let i = 0; i < finais.length; i += BATCH) {
+          const batch = finais.slice(i, i + BATCH);
+          const { error } = await supabase.from("devedor_telefones").insert(batch);
+          if (error) throw new Error(`Telefones insert error: ${error.message}`);
+          totalInserted += batch.length;
+
+          await supabase
+            .from("importacao_jobs")
+            .update({ registros_inseridos: totalInserted })
+            .eq("id", job_id);
+        }
       }
 
       // Mark as done, clear dados_json to save space
