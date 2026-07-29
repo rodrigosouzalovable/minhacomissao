@@ -331,7 +331,9 @@ export default function ConfigurarMeta() {
         const r = sub?.resultados?.[0];
         if (r?.subscribe_ok) {
           toast.success("Webhook inscrito — mensagens recebidas passarão a aparecer no Inbox", { id: toastId });
+          await marcarWebhookReinscrito(novaInst.id, r?.webhook_url);
         } else {
+
           const raw = r?.subscribe_raw?.error?.message || "";
           toast.error(
             "Instância salva, mas o webhook não foi inscrito. " + humanizarErroSubscribe(raw) +
@@ -395,6 +397,20 @@ export default function ConfigurarMeta() {
     return msg ? `Detalhe da Meta: ${msg}` : "Verifique WABA ID e Access Token.";
   };
 
+  const marcarWebhookReinscrito = async (instId: string, callbackUrl?: string | null) => {
+    await supabase
+      .from("meta_whatsapp_instances")
+      .update({
+        webhook_saude_status: "reinscrito",
+        webhook_saude_verificado_em: new Date().toISOString(),
+        webhook_ultimo_erro: null,
+        webhook_perda_suspeita: null,
+        ...(callbackUrl ? { webhook_callback_url: callbackUrl } : {}),
+      })
+      .eq("id", instId);
+    carregar();
+  };
+
   const reinscreverWebhook = async (inst: Instancia) => {
     setReinscrevendo(inst.id);
     const toastId = toast.loading(`Inscrevendo webhook em ${inst.nome}...`);
@@ -406,6 +422,7 @@ export default function ConfigurarMeta() {
       const r = data?.resultados?.[0];
       if (r?.subscribe_ok) {
         toast.success("Webhook inscrito — mensagens recebidas passarão a aparecer no Inbox", { id: toastId });
+        await marcarWebhookReinscrito(inst.id, r?.webhook_url);
       } else {
         const raw = r?.subscribe_raw?.error?.message || "";
         toast.error(humanizarErroSubscribe(raw), { id: toastId, duration: 15000 });
@@ -415,6 +432,7 @@ export default function ConfigurarMeta() {
     }
     setReinscrevendo(null);
   };
+
 
   const diagnosticar = async (inst: Instancia) => {
     setDiagnosticando(inst.id);
@@ -595,10 +613,15 @@ export default function ConfigurarMeta() {
       const { data, error } = await supabase.functions.invoke("meta-subscribe-waba", { body: {} });
       if (error) throw error;
       setResultadosAssinatura(data?.resultados || []);
-      const okCount = (data?.resultados || []).filter((r: any) => r.subscribe_ok && r.callback_confirmado).length;
+      const okList = (data?.resultados || []).filter((r: any) => r.subscribe_ok && r.callback_confirmado);
+      const okCount = okList.length;
       const total = (data?.resultados || []).length;
+      for (const r of okList) {
+        await marcarWebhookReinscrito(r.id, r.webhook_url);
+      }
       if (okCount === total) toast.success(`${okCount}/${total} WABAs assinadas e callback confirmado`);
       else toast.error(`${okCount}/${total} com callback confirmado — veja detalhes abaixo`);
+
     } catch (e: any) {
       toast.error("Erro: " + e.message);
     }

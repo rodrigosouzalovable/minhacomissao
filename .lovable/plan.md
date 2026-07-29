@@ -1,22 +1,28 @@
-## O que aconteceu (verificado no banco)
+## Problema (confirmado no código)
 
-A conversa **existe**, o webhook funcionou. Verifiquei os registros:
+O badge do card vem da coluna `webhook_saude_status` de `meta_whatsapp_instances`, gravada **apenas** pela função agendada `meta-webhook-health`.
 
-- Mensagem de entrada "oi" gravada às 21:57 na instância Novo Mundo 3144 — OK.
-- O contato (`Rodrigo`, instância Novo Mundo 3144) foi atualizado com a mensagem "oi", mas está com **`arquivado = true`**.
-- A aba "Conversas" só lista contatos com `arquivado = false` — por isso a conversa não aparece (ela está na aba "Arquivados").
+O botão "Webhook" do card (`reinscreverWebhook` em `src/pages/ConfigurarMeta.tsx`) chama `meta-subscribe-waba`, mostra o toast "Webhook inscrito — mensagens recebidas passarão a aparecer no Inbox" e **não grava nada no banco** nem recarrega a lista. Por isso o valor antigo `erro` continua exibido mesmo com o webhook já funcionando.
 
-Causa raiz: **nada no sistema desarquiva um contato quando chega resposta do cliente ou quando abrimos nova conversa com ele**. Uma vez arquivado (manualmente ou pela rotina de retenção de 3 dias), o contato fica invisível na lista principal mesmo com mensagens novas e não lidas.
+## Correção
 
-Problema secundário confirmado: o telefone do contato está gravado como `556291672674` (12 dígitos, sem o 9) porque foi criado pelo envio, enquanto a Meta devolve `5562991672674` (13 dígitos). A busca por telefone usa `ilike %digitos%`, então procurar por "62991672674" não encontra esse contato. As mensagens do histórico não são afetadas (o chat já casa por sufixo de 8 dígitos).
+Em `src/pages/ConfigurarMeta.tsx`, na função `reinscreverWebhook`, quando `subscribe_ok` for verdadeiro:
 
-## Correções
+1. Atualizar a instância no banco:
+   - `webhook_saude_status = 'reinscrito'`
+   - `webhook_saude_verificado_em = agora`
+   - `webhook_ultimo_erro = null`
+   - `webhook_perda_suspeita = null`
+   - `webhook_callback_url` = URL de callback confirmada retornada pela função
+2. Atualizar o estado local da lista (ou chamar `carregar()`) para o badge trocar na hora, sem precisar recarregar a página.
+3. Manter o toast atual de sucesso.
 
-1. **Webhook `meta-whatsapp-webhook`**: ao receber mensagem de entrada (não-echo), incluir `arquivado: false` na atualização do contato — qualquer resposta do cliente traz a conversa de volta à lista.
-2. **`send-whatsapp-meta`**: ao atualizar contato existente num novo envio, também setar `arquivado: false` — abrir nova conversa reativa o contato.
-3. **Busca no Inbox (`src/pages/InboxMeta.tsx`)**: quando o termo tiver 8+ dígitos, buscar também por sufixo (`telefone.ilike.%<8 últimos dígitos>`), assim "62991672674", "991672674" e "62 8419-7883" encontram o contato independentemente do 9 extra.
-4. **Correção pontual de dados (SQL)**: desarquivar contatos que possuem troca real de mensagens (`ultima_msg_entrada_em` preenchido) e que estão marcados como arquivados — devolve à lista as conversas que sumiram indevidamente, inclusive a do MATHEUS TEIXEIRA e a sua de agora.
+Mesmo tratamento no fluxo de auto-inscrição após "adicionar instância", para novos cards nascerem com o status correto.
 
-## Você precisa alterar algo?
+Em caso de falha, nada muda: continua o toast de erro e o badge vermelho.
 
-Não. Nada muda no painel da Meta nem no seu WhatsApp — a correção é toda no sistema. Único ponto de comportamento: conversas arquivadas manualmente voltarão a aparecer automaticamente quando o cliente responder (que é o comportamento correto pedido).
+## Detalhe técnico
+
+- O badge já possui o estado `reinscrito` mapeado (rótulo azul "Webhook reinscrito"), então nenhuma mudança de UI de rótulo é necessária — só passar a gravar esse valor.
+- Nenhuma alteração de schema, migration ou edge function é necessária.
+- A cron `meta-webhook-health` continua sobrescrevendo o status na próxima verificação; se o callback estiver correto ela grava `ok` (verde), o que é o comportamento desejado.
