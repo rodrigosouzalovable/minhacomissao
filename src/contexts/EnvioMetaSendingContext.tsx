@@ -153,6 +153,12 @@ function rankDelivery(s: DeliveryStatus) {
   return s === "read" ? 3 : s === "delivered" ? 2 : s === "failed" ? 4 : 1;
 }
 
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
 function isRateLimitErro(erro?: string | null): boolean {
   return /rate\s*limit|80007|131056|retry\s*after/i.test(String(erro || ""));
 }
@@ -206,7 +212,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     setJobs(arr);
   }, [uid]);
 
-  const carregarItens = useCallback(async (jobId: string) => {
+  const carregarItens = useCallback(async (jobId: string): Promise<any[]> => {
     // Paginado — PostgREST tem cap de 1000 por request; buscamos em lotes até acabar (teto 10k).
     const PAGE = 1000;
     const MAX = 10000;
@@ -215,7 +221,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       const to = from + PAGE - 1;
       const { data, error } = await (supabase as any)
         .from("envio_meta_job_item")
-        .select("*")
+        .select("telefone,status,instancia_nome,erro,processado_em")
         .eq("job_id", jobId)
         .in("status", ["enviado", "erro"])
         .order("processado_em", { ascending: false })
@@ -230,20 +236,38 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       n.set(jobId, acc);
       return n;
     });
+    return acc;
   }, []);
 
-  const carregarLogs = useCallback(async (jobId: string, desdeIso: string | null) => {
+  const carregarLogs = useCallback(async (jobId: string, desdeIso: string | null, telefones: string[] = []) => {
     if (!uid) return;
     const desde = desdeIso || new Date(Date.now() - 7 * 86400_000).toISOString();
-    const { data: logs } = await (supabase as any)
-      .from("meta_whatsapp_envios_log")
-      .select("telefone,status,erro,enviado_em")
-      .eq("user_id", uid)
-      .gte("enviado_em", desde)
-      .order("enviado_em", { ascending: false })
-      .limit(5000);
+    const telKeys = Array.from(new Set(telefones.map(normTel).filter(Boolean)));
+    const logs: any[] = [];
+    if (telKeys.length > 0) {
+      for (const chunk of chunkArray(telKeys, 200)) {
+        const { data } = await (supabase as any)
+          .from("meta_whatsapp_envios_log")
+          .select("telefone,status,erro,enviado_em")
+          .eq("user_id", uid)
+          .gte("enviado_em", desde)
+          .in("telefone", chunk)
+          .order("enviado_em", { ascending: false })
+          .limit(1000);
+        if (data?.length) logs.push(...data);
+      }
+    } else {
+      const { data } = await (supabase as any)
+        .from("meta_whatsapp_envios_log")
+        .select("telefone,status,erro,enviado_em")
+        .eq("user_id", uid)
+        .gte("enviado_em", desde)
+        .order("enviado_em", { ascending: false })
+        .limit(500);
+      if (data?.length) logs.push(...data);
+    }
     const m = new Map<string, { status: DeliveryStatus; erro?: string }>();
-    for (const l of logs || []) {
+    for (const l of logs) {
       const key = normTel(l.telefone);
       if (!key) continue;
       const st = mapStatusMeta(l.status);
@@ -261,17 +285,18 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   const ensureItensLoaded = useCallback(async (jobId: string) => {
     const has = itensByJob.has(jobId);
-    if (!has) await carregarItens(jobId);
+    const rows = has ? (itensByJob.get(jobId) || []) : await carregarItens(jobId);
     const hasLogs = logByJob.has(jobId);
     if (!hasLogs) {
       const j = jobs.find((x) => x.id === jobId);
-      await carregarLogs(jobId, j?.iniciado_em || null);
+      await carregarLogs(jobId, j?.iniciado_em || null, rows.map((r) => r.telefone));
     }
   }, [itensByJob, logByJob, jobs, carregarItens, carregarLogs]);
 
   const recarregarItensJob = useCallback(async (jobId: string) => {
     const j = jobs.find((x) => x.id === jobId);
-    await Promise.all([carregarItens(jobId), carregarLogs(jobId, j?.iniciado_em || null)]);
+    const rows = await carregarItens(jobId);
+    await carregarLogs(jobId, j?.iniciado_em || null, rows.map((r) => r.telefone));
   }, [jobs, carregarItens, carregarLogs]);
 
   // Refresh parcial: atualiza APENAS contadores/current do job (não mexe em status/status_motivo).
@@ -304,21 +329,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   useEffect(() => { carregarJobs(); }, [carregarJobs]);
 
-  // Ao carregar jobs, pré-carrega itens+logs para os jobs ativos e o último iniciado
-  useEffect(() => {
-    const alvo = new Set<string>();
-    jobs.filter((j) => j.status === "rodando" || j.status === "pausado").forEach((j) => alvo.add(j.id));
-    if (lastStartedId) alvo.add(lastStartedId);
-    if (!lastStartedId && jobs[0]) alvo.add(jobs[0].id);
-    alvo.forEach((id) => {
-      if (!itensByJob.has(id)) carregarItens(id);
-      if (!logByJob.has(id)) {
-        const j = jobs.find((x) => x.id === id);
-        carregarLogs(id, j?.iniciado_em || null);
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, lastStartedId]);
+  // Detalhes completos de itens/logs são carregados apenas quando o usuário abre a campanha.
 
   // Refs mirrando estado + funções — evita recriar o canal Realtime a cada render
   // (o que causava avalanche de eventos e a UI "piscando" no diálogo Campanhas).
@@ -370,18 +381,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           if (jobId && itensByJobRef.current.has(jobId)) {
             const cached = itensByJobRef.current.get(jobId) || [];
             const backend = (row?.enviados || 0) + (row?.erros || 0);
-            if (backend !== cached.length) scheduleCarregarItens(jobId, 8000);
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "envio_meta_job_item" },
-        (payload: any) => {
-          const jobId = (payload.new || payload.old)?.job_id;
-          // Ignora eventos de jobs que o usuário nem tem aberto/carregado.
-          if (jobId && itensByJobRef.current.has(jobId)) {
-            scheduleCarregarItens(jobId, 8000);
+            if (backend !== cached.length) scheduleCarregarItens(jobId, 15000);
           }
         }
       )

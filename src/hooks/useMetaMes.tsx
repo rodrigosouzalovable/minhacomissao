@@ -40,7 +40,9 @@ export function useMetaMes() {
       return data || [];
     },
     enabled: !!user?.id,
-    refetchInterval: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    refetchInterval: () => (document.visibilityState === 'visible' ? 15 * 60 * 1000 : false),
+    refetchIntervalInBackground: false,
   });
 
   const valorMeta = meta ? Number(meta.valor_meta) : 0;

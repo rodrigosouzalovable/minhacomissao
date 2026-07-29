@@ -519,7 +519,7 @@ export default function InboxMeta() {
     (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const suffix8 = (tel: string) => (tel || '').replace(/\D/g, '').slice(-8);
 
-  // Carrega nomes do CRM (devedores) para contatos que não têm nome salvo
+  // Carrega nomes do CRM por telefone sem varrer a tabela grande de devedores.
   useEffect(() => {
     (async () => {
       const semNome = contatos.filter(c => !c.nome && c.telefone);
@@ -527,14 +527,14 @@ export default function InboxMeta() {
       const suffixes = Array.from(new Set(semNome.map(c => suffix8(c.telefone)).filter(Boolean)));
       const faltando = suffixes.filter(s => !(s in nomesCRM));
       if (faltando.length === 0) return;
-      const ors = faltando.map(s => `telefone.ilike.%${s}`).join(',');
-      const { data } = await supabase.from('devedores').select('nome, telefone').or(ors).limit(2000);
+      const { data } = await (supabase as any)
+        .rpc('buscar_nomes_crm_por_telefone_suffix', { p_suffixes: faltando.slice(0, 200) });
       if (!data) return;
       setNomesCRM(prev => {
         const next = { ...prev };
         for (const s of faltando) if (!(s in next)) next[s] = '';
         for (const row of data as any[]) {
-          const sfx = suffix8(row.telefone || '');
+          const sfx = suffix8(row.suffix || '');
           if (sfx && row.nome && !next[sfx]) next[sfx] = row.nome;
         }
         return next;
