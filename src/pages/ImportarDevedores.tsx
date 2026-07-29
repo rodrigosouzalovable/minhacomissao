@@ -91,7 +91,7 @@ const DESCRICOES: Record<CredorLayout, string> = {
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Atraso (dias), H = Nro Nota, I = Desdob., J = Vlr do Desdobramento, K = Dt. Venc. Inicial',
   montreal_atualizacao: 'Importação inteligente MONTREAL — Cruza com dados existentes e insere apenas parcelas novas. Mesmo layout da planilha Montreal.',
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total, H = Telefone | Aba 2: Telefones (opcional)',
-  pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone',
+  pesquisa: 'A = CPF/CNPJ, B = Nome, C = Telefone — vincula o telefone ao CPF (grava em devedor_telefones), sem criar dívida. Usado pelo Portal de Negociação para identificar o cliente.',
   pagamentos: 'A = CPF/CNPJ, B = Cliente, C = Credor, D = Contrato, E = Inclusão, F = Arquivo, G = Número, H = Vencimento, I = Valor, J = Observação, K = Status — Marca parcelas PAGAS automaticamente',
   ume_aporte: 'A = CPF, B = Nome, C = Telefone, D = Nº Parcela, E = Data Vencimento, F = Valor Parcela — Cria acordos automaticamente no sistema',
   ume_consolidado: 'A = CPF, B = Nome, C = Credor, D = Contrato, E = Nº Parcela, F = Vencimento, G = Valor Parcela, H = Valor Total — Importa INADIMPLENTES e APORTE juntos',
@@ -1120,7 +1120,18 @@ export default function ImportarDevedores() {
             toast({ title: 'Nenhum registro encontrado', description: 'A planilha não contém dados válidos.', variant: 'destructive' });
           }
         } else {
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          let sheet = workbook.Sheets[workbook.SheetNames[0]];
+          // Para o layout "pesquisa", detectar a melhor sheet (maior nº de linhas)
+          if (credorSelecionado === 'pesquisa') {
+            let bestRowCount = 0;
+            for (const sName of workbook.SheetNames) {
+              const s = workbook.Sheets[sName];
+              const ref = s['!ref'] || '';
+              const match = ref.match(/:.*?(\d+)$/);
+              const rowCount = match ? parseInt(match[1], 10) : 0;
+              if (rowCount > bestRowCount) { bestRowCount = rowCount; sheet = s; }
+            }
+          }
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
           const dataRows = json.slice(1);
           let parsed: DevedorRow[];
@@ -1201,7 +1212,17 @@ export default function ImportarDevedores() {
           } else if (credorSelecionado === 'cobmais') {
             pRows = parseCobmais(workbook);
           } else {
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            let sheet = workbook.Sheets[workbook.SheetNames[0]];
+            if (credorSelecionado === 'pesquisa') {
+              let bestRowCount = 0;
+              for (const sName of workbook.SheetNames) {
+                const s = workbook.Sheets[sName];
+                const ref = s['!ref'] || '';
+                const match = ref.match(/:.*?(\d+)$/);
+                const rowCount = match ? parseInt(match[1], 10) : 0;
+                if (rowCount > bestRowCount) { bestRowCount = rowCount; sheet = s; }
+              }
+            }
             const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
             const dataRows = json.slice(1);
             if (credorSelecionado === 'montreal') pRows = parseMontreal(dataRows);
@@ -1288,7 +1309,58 @@ export default function ImportarDevedores() {
       return inserted;
     }
 
-    // Standard layouts (padrao, montreal, cobmais, pesquisa, ume_consolidado)
+    // Layout "pesquisa": só vincula telefones ao CPF, não cria dívida
+    if (credorSelecionado === 'pesquisa') {
+      const seen = new Set<string>();
+      const phoneRecords: any[] = [];
+      for (const r of parsed.rows) {
+        const cpf = String(r.cpf || '').replace(/\D/g, '').padStart(11, '0');
+        const raw = String(r.telefone || '').replace(/\D/g, '');
+        if (!cpf || cpf === '00000000000' || raw.length < 10) continue;
+        const numero = raw.length === 10 || raw.length === 11 ? '55' + raw : raw;
+        const key = `${cpf}|${numero.slice(-8)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        phoneRecords.push({
+          devedor_cpf: cpf, numero, tipo: 'celular',
+          criado_por: user.id, is_whatsapp: true, is_contato: true,
+          observacao: r.nome ? `Portal - ${r.nome}` : 'Importação Portal',
+        });
+      }
+      if (phoneRecords.length === 0) return 0;
+      // Dedup contra o que já existe
+      const cpfs = Array.from(new Set(phoneRecords.map(p => p.devedor_cpf)));
+      const existentes = new Set<string>();
+      const CHUNK = 200, PAGE = 1000;
+      for (let i = 0; i < cpfs.length; i += CHUNK) {
+        const lote = cpfs.slice(i, i + CHUNK);
+        let from = 0;
+        while (true) {
+          const { data } = await supabase.from('devedor_telefones' as any)
+            .select('devedor_cpf, numero').in('devedor_cpf', lote).range(from, from + PAGE - 1);
+          const rows = (data ?? []) as any[];
+          for (const r of rows) existentes.add(`${r.devedor_cpf}|${String(r.numero || '').replace(/\D/g,'').slice(-8)}`);
+          if (rows.length < PAGE) break;
+          from += PAGE;
+        }
+      }
+      const finais = phoneRecords.filter(p => !existentes.has(`${p.devedor_cpf}|${p.numero.slice(-8)}`));
+      let inserted = 0;
+      const BATCH = 500;
+      for (let i = 0; i < finais.length; i += BATCH) {
+        const { error } = await supabase.from('devedor_telefones' as any).insert(finais.slice(i, i + BATCH) as any);
+        if (error) { console.error('[pesquisa] insert error', error); break; }
+        inserted += Math.min(BATCH, finais.length - i);
+      }
+      await supabase.from('importacoes' as any).insert({
+        nome_arquivo: fileName, credor: 'PORTAL - Vínculo Telefones',
+        total_registros: inserted, importado_por: user.id,
+      } as any);
+      toast({ title: 'Telefones vinculados', description: `${inserted} novos vínculos (${phoneRecords.length - inserted} já existiam).` });
+      return inserted;
+    }
+
+    // Standard layouts (padrao, montreal, cobmais, ume_consolidado)
     const rowsToImport = parsed.rows;
     if (rowsToImport.length === 0) return 0;
     const credorFinal = credorSelecionado === 'ume_consolidado' ? 'UME | NOVO MUNDO' : (credorDestino === 'outro' ? credorOutro.trim() : credorDestino);
@@ -1300,7 +1372,7 @@ export default function ImportarDevedores() {
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
       descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
       importado_por: user.id, arquivo_importacao: fileName, importacao_id: importacaoId,
     }));
@@ -1391,6 +1463,28 @@ export default function ImportarDevedores() {
       return { layout: 'devedores', credor: 'MONTREAL', dados: { records, telefones: phoneRecords }, totalRegistros: records.length };
     }
 
+    // Layout pesquisa: apenas vincular telefones ao CPF
+    if (credorSelecionado === 'pesquisa') {
+      const seen = new Set<string>();
+      const telefones: any[] = [];
+      for (const r of parsed.rows) {
+        const cpf = String(r.cpf || '').replace(/\D/g, '').padStart(11, '0');
+        const raw = String(r.telefone || '').replace(/\D/g, '');
+        if (!cpf || cpf === '00000000000' || raw.length < 10) continue;
+        const numero = raw.length === 10 || raw.length === 11 ? '55' + raw : raw;
+        const key = `${cpf}|${numero.slice(-8)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        telefones.push({
+          devedor_cpf: cpf, numero, tipo: 'celular',
+          criado_por: user.id, is_whatsapp: true, is_contato: true,
+          observacao: r.nome ? `Portal - ${r.nome}` : 'Importação Portal',
+        });
+      }
+      if (telefones.length === 0) return null;
+      return { layout: 'telefones', credor: 'PORTAL - Vínculo Telefones', dados: { telefones }, totalRegistros: telefones.length };
+    }
+
     // Standard layouts
     const rowsToImport = parsed.rows;
     if (rowsToImport.length === 0) return null;
@@ -1399,7 +1493,7 @@ export default function ImportarDevedores() {
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
       descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
+      data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
     }));
     // Montreal telefones
@@ -1541,6 +1635,62 @@ export default function ImportarDevedores() {
     setImportProgress(0);
     setInsertedCount(0);
 
+    // Layout pesquisa: vincula telefones ao CPF, sem criar dívida
+    if (credorSelecionado === 'pesquisa') {
+      const seen = new Set<string>();
+      const phoneRecords: any[] = [];
+      for (const r of rows) {
+        const cpf = String(r.cpf || '').replace(/\D/g, '').padStart(11, '0');
+        const raw = String(r.telefone || '').replace(/\D/g, '');
+        if (!cpf || cpf === '00000000000' || raw.length < 10) continue;
+        const numero = raw.length === 10 || raw.length === 11 ? '55' + raw : raw;
+        const key = `${cpf}|${numero.slice(-8)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        phoneRecords.push({
+          devedor_cpf: cpf, numero, tipo: 'celular',
+          criado_por: user.id, is_whatsapp: true, is_contato: true,
+          observacao: r.nome ? `Portal - ${r.nome}` : 'Importação Portal',
+        });
+      }
+
+      // Dedup contra existentes
+      const cpfs = Array.from(new Set(phoneRecords.map(p => p.devedor_cpf)));
+      const existentes = new Set<string>();
+      const CHUNK = 200, PAGE = 1000;
+      for (let i = 0; i < cpfs.length; i += CHUNK) {
+        const lote = cpfs.slice(i, i + CHUNK);
+        let from = 0;
+        while (true) {
+          const { data } = await supabase.from('devedor_telefones' as any)
+            .select('devedor_cpf, numero').in('devedor_cpf', lote).range(from, from + PAGE - 1);
+          const rs = (data ?? []) as any[];
+          for (const r of rs) existentes.add(`${r.devedor_cpf}|${String(r.numero || '').replace(/\D/g,'').slice(-8)}`);
+          if (rs.length < PAGE) break;
+          from += PAGE;
+        }
+      }
+      const finais = phoneRecords.filter(p => !existentes.has(`${p.devedor_cpf}|${p.numero.slice(-8)}`));
+      let inserted = 0;
+      const BATCH = 500;
+      for (let i = 0; i < finais.length; i += BATCH) {
+        const { error } = await supabase.from('devedor_telefones' as any).insert(finais.slice(i, i + BATCH) as any);
+        if (error) { console.error('[pesquisa] insert error', error); toast({ title: 'Erro ao inserir telefones', description: error.message, variant: 'destructive' }); break; }
+        inserted += Math.min(BATCH, finais.length - i);
+        setInsertedCount(inserted);
+        setImportProgress(Math.round(((i + BATCH) / Math.max(finais.length, 1)) * 100));
+      }
+      await supabase.from('importacoes' as any).insert({
+        nome_arquivo: file?.name || 'unknown', credor: 'PORTAL - Vínculo Telefones',
+        total_registros: inserted, importado_por: user.id,
+      } as any);
+      toast({ title: 'Telefones vinculados', description: `${inserted} novos vínculos (${phoneRecords.length - inserted} já existiam).` });
+      setImporting(false);
+      setImportProgress(100);
+      return;
+    }
+
+
     const { data: importacao, error: importError } = await supabase
       .from('importacoes' as any)
       .insert({
@@ -1568,7 +1718,7 @@ export default function ImportarDevedores() {
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
       descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
-      data_vencimento: credorSelecionado === 'pesquisa' ? null : (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : credorSelecionado === 'ume_consolidado' ? parseDate(r.nascimento) : parseDate(r.nascimento),
+      data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
       importado_por: user.id,
       arquivo_importacao: file?.name || 'unknown',
@@ -1843,7 +1993,7 @@ export default function ImportarDevedores() {
                   <SelectItem value="montreal">MONTREAL</SelectItem>
                   <SelectItem value="montreal_atualizacao">MONTREAL (Atualização)</SelectItem>
                    <SelectItem value="cobmais">COBMAIS</SelectItem>
-                   <SelectItem value="pesquisa">Pesquisa Cliente</SelectItem>
+                   <SelectItem value="pesquisa">Vincular Telefones ao CPF (Portal)</SelectItem>
                    <SelectItem value="pagamentos">Pagamentos</SelectItem>
                    <SelectItem value="ume_aporte">UME APORTE</SelectItem>
                    <SelectItem value="ume_consolidado">UME Consolidado (INADIMPLENTES + APORTE)</SelectItem>
