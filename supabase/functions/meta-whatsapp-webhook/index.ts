@@ -485,7 +485,17 @@ serve(async (req) => {
           // 1) Se o telefone bate (últimos 8 dígitos, tolera "9" móvel) com algum acordo,
           //    aplica a etiqueta "Atendente: <nome>" do usuário que lançou o acordo (LOCKED — só admin remove).
           // 2) Caso contrário, cai no rodízio (round-robin por menor carga).
+          // Só aplica etiqueta de atendente para contatos na caixa padrão (folder_id null).
+          let _folderIdContato: string | null = null;
           if (!isEcho && contatoIdFinal) {
+            const { data: _cFolder } = await supabase
+              .from('meta_whatsapp_contatos')
+              .select('folder_id')
+              .eq('id', contatoIdFinal)
+              .maybeSingle();
+            _folderIdContato = (_cFolder as any)?.folder_id ?? null;
+          }
+          if (!isEcho && contatoIdFinal && _folderIdContato === null) {
             try {
               const { data: atendentesRaw } = await supabase
                 .from('meta_whatsapp_etiquetas')
