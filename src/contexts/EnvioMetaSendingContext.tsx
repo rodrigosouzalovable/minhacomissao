@@ -335,6 +335,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   // (o que causava avalanche de eventos e a UI "piscando" no diálogo Campanhas).
   const itensByJobRef = useRef(itensByJob);
   useEffect(() => { itensByJobRef.current = itensByJob; }, [itensByJob]);
+  const logByJobRef = useRef(logByJob);
+  useEffect(() => { logByJobRef.current = logByJob; }, [logByJob]);
   const carregarJobsRef = useRef(carregarJobs);
   useEffect(() => { carregarJobsRef.current = carregarJobs; }, [carregarJobs]);
   const carregarItensRef = useRef(carregarItens);
@@ -391,6 +393,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         (payload: any) => {
           const row = payload.new || payload.old;
           if (!row?.telefone || !row?.status) return;
+          if (logByJobRef.current.size === 0) return;
           const key = normTel(row.telefone);
           const st = mapStatusMeta(row.status);
           setLogByJob((prev) => {
