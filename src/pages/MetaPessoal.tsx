@@ -84,7 +84,9 @@ export default function MetaPessoal() {
       return data || [];
     },
     enabled: !!user?.id,
-    refetchInterval: 2 * 60 * 1000, // refresh every 30s
+    staleTime: 10 * 60 * 1000,
+    refetchInterval: () => (document.visibilityState === 'visible' ? 15 * 60 * 1000 : false),
+    refetchIntervalInBackground: false,
   });
 
   // Save/update meta

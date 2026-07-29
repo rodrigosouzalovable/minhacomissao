@@ -6695,6 +6695,13 @@ export type Database = {
           valor_original: number
         }[]
       }
+      buscar_nomes_crm_por_telefone_suffix: {
+        Args: { p_suffixes: string[] }
+        Returns: {
+          nome: string
+          suffix: string
+        }[]
+      }
       can_access_meta_folder: {
         Args: { _folder: string; _uid: string }
         Returns: boolean
