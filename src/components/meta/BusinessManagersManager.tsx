@@ -33,6 +33,9 @@ export default function BusinessManagersManager() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState("");
+  const [editAppId, setEditAppId] = useState("");
+  const [editBusinessId, setEditBusinessId] = useState("");
+  const [editDescricao, setEditDescricao] = useState("");
 
   async function load() {
     setLoading(true);
@@ -111,22 +114,28 @@ export default function BusinessManagersManager() {
     load();
   }
 
-  async function salvarNome(bm: BM) {
-    const novo = editNome.trim();
-    if (!novo) {
+  async function salvarEdicao(bm: BM) {
+    const novoNome = editNome.trim();
+    const novoAppId = editAppId.trim();
+    if (!novoNome) {
       toast.error("Informe um nome");
       return;
     }
-    if (novo === bm.nome) {
-      setEditingId(null);
+    if (!novoAppId) {
+      toast.error("Informe o App ID");
       return;
     }
     const { error } = await supabase
       .from("meta_business_managers")
-      .update({ nome: novo })
+      .update({
+        nome: novoNome,
+        app_id: novoAppId,
+        business_id: editBusinessId.trim() || null,
+        descricao: editDescricao.trim() || null,
+      })
       .eq("id", bm.id);
     if (error) return toast.error(error.message);
-    toast.success("Nome atualizado");
+    toast.success("BM atualizada");
     setEditingId(null);
     load();
   }
@@ -134,11 +143,17 @@ export default function BusinessManagersManager() {
   function iniciarEdicao(bm: BM) {
     setEditingId(bm.id);
     setEditNome(bm.nome);
+    setEditAppId(bm.app_id || "");
+    setEditBusinessId(bm.business_id || "");
+    setEditDescricao(bm.descricao || "");
   }
 
   function cancelarEdicao() {
     setEditingId(null);
     setEditNome("");
+    setEditAppId("");
+    setEditBusinessId("");
+    setEditDescricao("");
   }
 
   return (
@@ -196,38 +211,71 @@ export default function BusinessManagersManager() {
               {items.map((bm) => (
                 <div key={bm.id} className="flex flex-col md:flex-row md:items-center gap-3 border rounded-lg p-3">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {editingId === bm.id ? (
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <Input
-                            value={editNome}
-                            onChange={(e) => setEditNome(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") salvarNome(bm);
-                              if (e.key === "Escape") cancelarEdicao();
-                            }}
-                            className="h-8 text-sm flex-1 min-w-0"
-                            autoFocus
-                          />
-                          <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => salvarNome(bm)}>
-                            <Check className="h-4 w-4 text-green-600" />
+                    {editingId === bm.id ? (
+                      <div className="space-y-2">
+                        <div className="grid md:grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Nome</Label>
+                            <Input
+                              value={editNome}
+                              onChange={(e) => setEditNome(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Escape") cancelarEdicao(); }}
+                              className="h-8 text-sm"
+                              autoFocus
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">App ID</Label>
+                            <Input
+                              value={editAppId}
+                              onChange={(e) => setEditAppId(e.target.value.replace(/\D/g, ""))}
+                              onKeyDown={(e) => { if (e.key === "Escape") cancelarEdicao(); }}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Business ID</Label>
+                            <Input
+                              value={editBusinessId}
+                              onChange={(e) => setEditBusinessId(e.target.value.replace(/\D/g, ""))}
+                              onKeyDown={(e) => { if (e.key === "Escape") cancelarEdicao(); }}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Descrição</Label>
+                            <Textarea
+                              value={editDescricao}
+                              onChange={(e) => setEditDescricao(e.target.value)}
+                              rows={1}
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" onClick={() => salvarEdicao(bm)}>
+                            <Check className="h-4 w-4 mr-1" /> Salvar
                           </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={cancelarEdicao}>
-                            <X className="h-4 w-4 text-muted-foreground" />
+                          <Button size="sm" variant="ghost" onClick={cancelarEdicao}>
+                            <X className="h-4 w-4 mr-1" /> Cancelar
                           </Button>
                         </div>
-                      ) : (
-                        <span className="font-medium">{bm.nome}</span>
-                      )}
-                      {bm.padrao && <Badge className="bg-amber-500/15 text-amber-600">Padrão</Badge>}
-                      {!bm.ativo && <Badge variant="outline">Inativa</Badge>}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      App ID: <code>{bm.app_id}</code>
-                      {bm.business_id && <> · Business ID: <code>{bm.business_id}</code></>}
-                    </div>
-                    {bm.descricao && (
-                      <p className="text-xs text-muted-foreground mt-1">{bm.descricao}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{bm.nome}</span>
+                          {bm.padrao && <Badge className="bg-amber-500/15 text-amber-600">Padrão</Badge>}
+                          {!bm.ativo && <Badge variant="outline">Inativa</Badge>}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          App ID: <code>{bm.app_id}</code>
+                          {bm.business_id && <> · Business ID: <code>{bm.business_id}</code></>}
+                        </div>
+                        {bm.descricao && (
+                          <p className="text-xs text-muted-foreground mt-1">{bm.descricao}</p>
+                        )}
+                      </>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
