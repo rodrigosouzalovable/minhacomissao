@@ -33,6 +33,9 @@ export default function BusinessManagersManager() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState("");
+  const [editAppId, setEditAppId] = useState("");
+  const [editBusinessId, setEditBusinessId] = useState("");
+  const [editDescricao, setEditDescricao] = useState("");
 
   async function load() {
     setLoading(true);
@@ -111,22 +114,28 @@ export default function BusinessManagersManager() {
     load();
   }
 
-  async function salvarNome(bm: BM) {
-    const novo = editNome.trim();
-    if (!novo) {
+  async function salvarEdicao(bm: BM) {
+    const novoNome = editNome.trim();
+    const novoAppId = editAppId.trim();
+    if (!novoNome) {
       toast.error("Informe um nome");
       return;
     }
-    if (novo === bm.nome) {
-      setEditingId(null);
+    if (!novoAppId) {
+      toast.error("Informe o App ID");
       return;
     }
     const { error } = await supabase
       .from("meta_business_managers")
-      .update({ nome: novo })
+      .update({
+        nome: novoNome,
+        app_id: novoAppId,
+        business_id: editBusinessId.trim() || null,
+        descricao: editDescricao.trim() || null,
+      })
       .eq("id", bm.id);
     if (error) return toast.error(error.message);
-    toast.success("Nome atualizado");
+    toast.success("BM atualizada");
     setEditingId(null);
     load();
   }
@@ -134,11 +143,17 @@ export default function BusinessManagersManager() {
   function iniciarEdicao(bm: BM) {
     setEditingId(bm.id);
     setEditNome(bm.nome);
+    setEditAppId(bm.app_id || "");
+    setEditBusinessId(bm.business_id || "");
+    setEditDescricao(bm.descricao || "");
   }
 
   function cancelarEdicao() {
     setEditingId(null);
     setEditNome("");
+    setEditAppId("");
+    setEditBusinessId("");
+    setEditDescricao("");
   }
 
   return (
