@@ -507,12 +507,36 @@ serve(async (req) => {
 
               // Todas as etiquetas de atendente (usadas para checar se contato já tem uma)
               const atendentes = atendentesRaw || [];
-              // Lista elegível para RODÍZIO — exclui Thailinny Nolasco (regra de negócio)
-              const atendentesRodizio = atendentes.filter((a: any) =>
-                String(a.nome).trim().toLowerCase() !== 'atendente: thailinny nolasco'
-              );
               const atendenteIds = atendentes.map((a: any) => a.id);
+
+              // ---- Elegibilidade: apenas usuários com "Atende no Inbox Meta Oficial" ativo ----
+              // Casa etiqueta "Atendente: <nome>" com profiles.nome e user_permissions.atende_inbox_meta.
+              const { data: profsAll } = await supabase.from('profiles').select('id, nome');
+              const { data: permsAll } = await supabase
+                .from('user_permissions')
+                .select('user_id, atende_inbox_meta');
+              const permMap = new Map<string, boolean>(
+                (permsAll || []).map((p: any) => [p.user_id, p.atende_inbox_meta !== false])
+              );
+              const nomeElegivel = new Map<string, boolean>(); // nome (lower) -> elegível
+              const userIdPorNome = new Map<string, string>();
+              for (const p of (profsAll || [])) {
+                const n = String((p as any).nome || '').trim().toLowerCase();
+                if (!n) continue;
+                // permissão ausente => considera ativo (default true na coluna)
+                nomeElegivel.set(n, permMap.get((p as any).id) ?? true);
+                userIdPorNome.set(n, (p as any).id);
+              }
+              const etiquetaElegivel = (nomeEtiqueta: string) => {
+                const nome = String(nomeEtiqueta || '').replace(/^atendente:\s*/i, '').trim().toLowerCase();
+                if (!nome) return false;
+                return nomeElegivel.get(nome) ?? false;
+              };
+
+              // Lista elegível para RODÍZIO — só quem tem a permissão ativa
+              const atendentesRodizio = atendentes.filter((a: any) => etiquetaElegivel(a.nome));
               const atendenteRodizioIds = atendentesRodizio.map((a: any) => a.id);
+
 
               // Já tem atendente atribuído?
               let jaTemAtendente = false;
@@ -556,11 +580,14 @@ serve(async (req) => {
                       const jaExiste = (atendentes || []).find((a: any) =>
                         String(a.nome).toLowerCase() === nomeEtiqueta.toLowerCase()
                       );
-                      if (jaExiste) {
+                      if (jaExiste && etiquetaElegivel(nomeEtiqueta)) {
                         atendenteAcordoId = (jaExiste as any).id;
+                      } else if (jaExiste) {
+                        console.log('[MetaWebhook] atendente sem permissão de Inbox Meta, ignorando:', nomeEtiqueta);
                       } else {
                         console.log('[MetaWebhook] etiqueta atendente inexistente, ignorando:', nomeEtiqueta);
                       }
+
                     }
                   }
                 }
@@ -577,9 +604,11 @@ serve(async (req) => {
                       const jaExiste = (atendentes || []).find((a: any) =>
                         String(a.nome).toLowerCase() === nomeEtiqueta.toLowerCase()
                       );
-                      if (jaExiste) {
+                      if (jaExiste && etiquetaElegivel(nomeEtiqueta)) {
                         atendenteAcordoId = (jaExiste as any).id;
                         atendenteAcordoNome = `${nomeAt} (consulta portal ${hit?.cpf || ''})`;
+                      } else if (jaExiste) {
+                        console.log('[MetaWebhook] atendente sem permissão de Inbox Meta (consulta portal):', nomeEtiqueta);
                       } else {
                         console.log('[MetaWebhook] etiqueta inexistente p/ consulta portal:', nomeEtiqueta);
                       }
@@ -588,6 +617,47 @@ serve(async (req) => {
                     console.error('[MetaWebhook] erro match consulta portal', e?.message || e);
                   }
                 }
+
+                // ---- Match por quem realmente iniciou/atendeu a conversa ----
+                // Usa o usuário que enviou a última mensagem de saída para este contato.
+                if (!atendenteAcordoId) {
+                  try {
+                    const { data: ultimaSaida } = await supabase
+                      .from('meta_whatsapp_mensagens')
+                      .select('user_id, criado_em')
+                      .eq('contato_id', contatoIdFinal)
+                      .eq('direcao', 'saida')
+                      .not('user_id', 'is', null)
+                      .order('criado_em', { ascending: false })
+                      .limit(1)
+                      .maybeSingle();
+                    const remetenteId = (ultimaSaida as any)?.user_id;
+                    if (remetenteId) {
+                      const { data: profRem } = await supabase
+                        .from('profiles')
+                        .select('nome')
+                        .eq('id', remetenteId)
+                        .maybeSingle();
+                      const nomeRem = String((profRem as any)?.nome || '').trim();
+                      if (nomeRem) {
+                        const nomeEtiqueta = `Atendente: ${nomeRem}`;
+                        const jaExiste = (atendentes || []).find((a: any) =>
+                          String(a.nome).toLowerCase() === nomeEtiqueta.toLowerCase()
+                        );
+                        if (jaExiste && etiquetaElegivel(nomeEtiqueta)) {
+                          atendenteAcordoId = (jaExiste as any).id;
+                          atendenteAcordoNome = `${nomeRem} (iniciou a conversa)`;
+                        } else {
+                          console.log('[MetaWebhook] remetente não elegível/sem etiqueta:', nomeEtiqueta);
+                        }
+                      }
+                    }
+                  } catch (e: any) {
+                    console.error('[MetaWebhook] erro match remetente', e?.message || e);
+                  }
+                }
+
+
 
 
                 if (atendenteAcordoId) {
@@ -608,7 +678,7 @@ serve(async (req) => {
                     });
                   }
                 } else if (atendenteRodizioIds.length > 0) {
-                  // ---- Fallback: rodízio por menor carga (exclui Thailinny) ----
+                  // ---- Fallback: rodízio por menor carga (apenas atendentes com permissão ativa) ----
                   const { data: vinculos } = await supabase
                     .from('meta_whatsapp_contato_etiquetas')
                     .select('etiqueta_id')

@@ -54,6 +54,7 @@ export function EditPermissionsDialog({
   const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
   const [podeMarcarPago, setPodeMarcarPago] = useState(false);
+  const [atendeInboxMeta, setAtendeInboxMeta] = useState(true);
   const [selectedTenants, setSelectedTenants] = useState<string[]>([]);
 
   const { data: allTenants } = useQuery({
@@ -113,6 +114,7 @@ export function EditPermissionsDialog({
       setPodeExcluirAcordos((permissions as any).pode_excluir_acordos ?? false);
       setRecebeConsultaCpf((permissions as any).recebe_consulta_cpf ?? false);
       setPodeMarcarPago((permissions as any).pode_marcar_pago_global ?? false);
+      setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? true);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
@@ -123,6 +125,7 @@ export function EditPermissionsDialog({
       setPodeExcluirAcordos(false);
       setRecebeConsultaCpf(false);
       setPodeMarcarPago(false);
+      setAtendeInboxMeta(true);
     }
   }, [permissions, open]);
 
@@ -145,6 +148,7 @@ export function EditPermissionsDialog({
             pode_excluir_acordos: podeExcluirAcordos,
             recebe_consulta_cpf: recebeConsultaCpf,
             pode_marcar_pago_global: podeMarcarPago,
+            atende_inbox_meta: atendeInboxMeta,
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
@@ -357,6 +361,18 @@ export function EditPermissionsDialog({
                 onCheckedChange={setPodeMarcarPago}
               />
             </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Atende no Inbox Meta Oficial</Label>
+                <p className="text-xs text-muted-foreground">Se ativo, este usuário pode receber automaticamente a etiqueta de atendente das conversas do Inbox Meta Oficial (por conversa iniciada por ele ou por rodízio). Se desativado, nunca recebe etiqueta automática.</p>
+              </div>
+              <Switch
+                checked={atendeInboxMeta}
+                onCheckedChange={setAtendeInboxMeta}
+              />
+            </div>
+
 
           </div>
         </div>
