@@ -26,6 +26,8 @@ import * as XLSX from "xlsx";
 import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 
 
 
