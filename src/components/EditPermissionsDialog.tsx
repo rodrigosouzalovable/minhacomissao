@@ -148,6 +148,7 @@ export function EditPermissionsDialog({
             pode_excluir_acordos: podeExcluirAcordos,
             recebe_consulta_cpf: recebeConsultaCpf,
             pode_marcar_pago_global: podeMarcarPago,
+            atende_inbox_meta: atendeInboxMeta,
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
