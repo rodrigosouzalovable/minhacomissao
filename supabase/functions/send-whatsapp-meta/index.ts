@@ -188,20 +188,23 @@ function getHeaderFormat(template: any): string {
   return String(header?.format || template?.variaveis?._header_format || '').toUpperCase();
 }
 
-function buildMetaComponents(template: any, bodyParameters: any[]) {
+function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId?: string | null) {
   const components: any[] = [];
   const headerFormat = getHeaderFormat(template);
 
   if (headerFormat === 'IMAGE') {
     const imageUrl = template?.variaveis?._header_image_url;
-    if (!imageUrl) {
+    if (!imageUrl && !headerMediaId) {
       throw new Error(
         `Template "${template.nome_template}" exige header IMAGE mas não tem _header_image_url configurada.`,
       );
     }
     components.push({
       type: 'header',
-      parameters: [{ type: 'image', image: { link: imageUrl } }],
+      parameters: [{
+        type: 'image',
+        image: headerMediaId ? { id: headerMediaId } : { link: imageUrl },
+      }],
     });
   } else if (headerFormat === 'VIDEO' || headerFormat === 'DOCUMENT') {
     throw new Error(`Template exige cabeçalho ${headerFormat}. Configure uma mídia pública antes de enviar.`);
@@ -211,7 +214,80 @@ function buildMetaComponents(template: any, bodyParameters: any[]) {
   return components;
 }
 
-async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<{ waId: string | null; formatUsed: 'named' | 'positional' | 'none' }> {
+// ===== Cache de media_id da Meta (evita #131053 "Media upload error") =====
+// A Meta baixa a URL do header em CADA envio quando usamos { link }. Sob rajada,
+// ou se a URL expirar/demorar, ela devolve #131053. Subindo a imagem UMA vez para
+// /{phone_number_id}/media e reutilizando o id, a Meta não baixa mais nada.
+const MEDIA_ID_TTL_MS = 20 * 24 * 60 * 60 * 1000; // ids da Meta duram ~30 dias
+
+function cachedMediaId(template: any, instId: string): string | null {
+  const map = (template?.variaveis?._header_media_ids || {}) as Record<string, any>;
+  const entry = map[instId];
+  if (!entry?.id || !entry?.at) return null;
+  if (Date.now() - Date.parse(entry.at) > MEDIA_ID_TTL_MS) return null;
+  return String(entry.id);
+}
+
+async function persistMediaId(supabase: any, template: any, instId: string, mediaId: string | null) {
+  const vars = { ...((template.variaveis || {}) as Record<string, any>) };
+  const map = { ...((vars._header_media_ids || {}) as Record<string, any>) };
+  if (mediaId) map[instId] = { id: mediaId, at: new Date().toISOString() };
+  else delete map[instId];
+  vars._header_media_ids = map;
+  template.variaveis = vars;
+  await supabase.from('meta_whatsapp_templates').update({ variaveis: vars }).eq('id', template.id);
+}
+
+async function uploadHeaderMedia(inst: any, imageUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(imageUrl);
+    if (!res.ok) {
+      console.log('[send-whatsapp-meta] download da imagem do header falhou', res.status);
+      return null;
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const ct = res.headers.get('content-type') || 'image/jpeg';
+    const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg';
+    const fd = new FormData();
+    fd.append('messaging_product', 'whatsapp');
+    fd.append('type', ct);
+    fd.append('file', new Blob([bytes], { type: ct }), `header.${ext}`);
+    const up = await fetch(`https://graph.facebook.com/v21.0/${inst.phone_number_id}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${inst.access_token}` },
+      body: fd,
+    });
+    const j = await up.json().catch(() => ({}));
+    if (!up.ok || !j?.id) {
+      console.log('[send-whatsapp-meta] upload da mídia para a Meta falhou', up.status, JSON.stringify(j).slice(0, 200));
+      return null;
+    }
+    return String(j.id);
+  } catch (e) {
+    console.log('[send-whatsapp-meta] uploadHeaderMedia erro:', String(e).slice(0, 200));
+    return null;
+  }
+}
+
+// Resolve o media_id do header (cache → upload). Retorna null se não aplicável/falhou
+// (nesse caso o envio cai no fallback { link }).
+async function resolveHeaderMediaId(supabase: any, inst: any, template: any): Promise<string | null> {
+  if (getHeaderFormat(template) !== 'IMAGE') return null;
+  const cached = cachedMediaId(template, inst.id);
+  if (cached) return cached;
+  const imageUrl = template?.variaveis?._header_image_url;
+  if (!imageUrl) return null;
+  const id = await uploadHeaderMedia(inst, imageUrl);
+  if (id) await persistMediaId(supabase, template, inst.id, id);
+  return id;
+}
+
+async function sendOne(
+  inst: any,
+  template: any,
+  cliente: ClienteData,
+  supabase?: any,
+): Promise<{ waId: string | null; formatUsed: 'named' | 'positional' | 'none' }> {
   const variaveis = (template.variaveis || {}) as Record<string, string>;
   const preferred: 'named' | 'positional' | undefined =
     variaveis._format === 'named' || variaveis._format === 'positional' ? variaveis._format : undefined;
@@ -223,11 +299,16 @@ async function sendOne(inst: any, template: any, cliente: ClienteData): Promise<
   let lastErr: any = null;
   const triedKeys = new Set<string>();
 
+  // media_id do header (evita a Meta baixar a imagem em cada envio → #131053)
+  let headerMediaId: string | null = supabase ? await resolveHeaderMediaId(supabase, inst, template) : null;
+  let mediaFallbackUsado = false;
+
   for (const fmt of formatsToTry) {
     const { parameters, format } = buildParameters(template, cliente, fmt);
-    const key = `${format}:${JSON.stringify(parameters)}`;
+    const key = `${format}:${headerMediaId || 'link'}:${JSON.stringify(parameters)}`;
     if (triedKeys.has(key)) continue;
     triedKeys.add(key);
+
 
     const body: any = {
       messaging_product: 'whatsapp',
