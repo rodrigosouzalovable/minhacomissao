@@ -25,8 +25,9 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    // 3. Obter usuário atual
-    const { data: { user: callingUser }, error: userError } = await supabaseClient.auth.getUser()
+    // 3. Obter usuário atual (token explícito — o header sozinho não cria sessão)
+    const token = authHeader.replace(/^Bearer\s+/i, '')
+    const { data: { user: callingUser }, error: userError } = await supabaseClient.auth.getUser(token)
     if (userError || !callingUser) {
       console.error('Auth error:', userError)
       throw new Error('Usuário não autenticado')
