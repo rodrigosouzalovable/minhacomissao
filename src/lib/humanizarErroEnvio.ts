@@ -47,7 +47,11 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
   }
 
   // Erros de conteúdo/template
+  if (s.includes("#131053") || s.includes("media upload error")) {
+    return "A Meta não conseguiu baixar a imagem do cabeçalho do template neste envio. É uma falha temporária de mídia — o contato volta para a fila e o sistema tenta novamente automaticamente (a imagem agora é enviada por ID, sem novo download a cada mensagem).";
+  }
   if (s.includes("template") && (s.includes("not found") || s.includes("does not exist"))) {
+
     return "O template usado nesse envio não existe ou não está aprovado para essa instância.";
   }
   if (s.includes("template") && s.includes("paused")) {

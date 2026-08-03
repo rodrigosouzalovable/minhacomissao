@@ -315,8 +315,12 @@ async function processarItem(job: any): Promise<ItemResult> {
   const bloqueadasRunAtual: string[] = Array.isArray(job.instancias_bloqueadas_run)
     ? [...job.instancias_bloqueadas_run] : [];
 
-  if (ok) {
-    if (falhasMap[instId]) delete falhasMap[instId];
+  // #131053 (Media upload error) é falha da mídia do template, não da instância:
+  // o contato volta pra fila mas a instância NÃO é bloqueada.
+  const erroDeMidia = !ok && /#131053|media upload error/i.test(String(erroMsg || ''));
+
+  if (ok || erroDeMidia) {
+    if (ok && falhasMap[instId]) delete falhasMap[instId];
   } else {
     falhasMap[instId] = (falhasMap[instId] || 0) + 1;
     if (falhasMap[instId] >= MAX_FALHAS_CONSECUTIVAS && !bloqueadasRunAtual.includes(instId)) {
@@ -324,6 +328,7 @@ async function processarItem(job: any): Promise<ItemResult> {
       delete falhasMap[instId];
     }
   }
+
 
   // Verifica se ainda restam instâncias disponíveis para tentar outra vez
   const restantesDisponiveis = (job.instancia_ids || []).filter((id: string) => !bloqueadasRunAtual.includes(id));
