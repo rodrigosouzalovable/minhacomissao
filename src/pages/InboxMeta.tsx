@@ -93,6 +93,7 @@ function formatContatoTime(ts: string | null) {
 
 export default function InboxMeta() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const { toast } = useToast();
 
   const [instancias, setInstancias] = useState<MetaInstance[]>([]);
