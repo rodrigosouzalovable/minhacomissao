@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,9 @@ import { getDiasAtraso, getDescontoMaximoPortal } from '@/lib/descontoPortal';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
+import AdminDebitosEditor from '@/components/portal/AdminDebitosEditor';
 
 interface Debito {
   id: string;
@@ -69,6 +72,21 @@ export default function ConsultaResultado() {
   const [faixaEscolhida, setFaixaEscolhida] = useState<DescontoFaixa | undefined>(undefined);
   const [acordoExistente, setAcordoExistente] = useState<{ status: string; criadoEm: string; funcionarioNome: string } | null>(null);
   const [parcelasAcordo, setParcelasAcordo] = useState<ParcelaAcordo[]>([]);
+  const { user } = useAuth();
+  const { isAdmin } = useUserRole();
+
+  const recarregarDebitos = useCallback(async () => {
+    if (!cpf) return;
+    const { data, error } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpf });
+    if (error) return;
+    const typed = (data ?? []) as Debito[];
+    setDebitos(typed);
+    if (typed.length > 0) {
+      setNomeCliente(typed[0].nome);
+      setCpfCliente(typed[0].cpf);
+    }
+  }, [cpf]);
+
 
   const validCreditor = creditor && isValidCredorSlug(creditor);
   const config = validCreditor ? getCredorConfig(creditor)! : null;
@@ -466,6 +484,14 @@ export default function ConsultaResultado() {
                         {diasAtraso} {diasAtraso === 1 ? 'dia' : 'dias'} em atraso com a loja
                       </span>
                     </div>
+                  )}
+
+                  {isAdmin && debitos.length > 0 && (
+                    <AdminDebitosEditor
+                      debitos={debitos}
+                      userId={user?.id ?? null}
+                      onChanged={recarregarDebitos}
+                    />
                   )}
 
                   {/* Cards de débito colapsáveis */}

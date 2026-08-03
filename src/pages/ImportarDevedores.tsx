@@ -648,7 +648,7 @@ export default function ImportarDevedores() {
         credor,
         contrato,
         atraso: '',
-        descricao: `Parcela ${numeroParcela}`,
+        descricao: numeroParcela > 0 ? `Parcela ${numeroParcela}` : 'Parcela s/n',
         valor_original: valor,
         valor_atualizado: valor,
       };
