@@ -199,6 +199,32 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const seenConcludedRef = useRef<Set<string>>(new Set());
   const manuallyCanceledRef = useRef<Set<string>>(new Set());
   const autoResumeAtRef = useRef<Map<string, number>>(new Map()); // jobId -> last auto-resume ts
+  const sessionRefreshRef = useRef<Promise<string> | null>(null);
+
+  const invokeControle = useCallback(async (jobId: string, acao: string) => {
+    // A API de autenticação rejeita corretamente JWTs cuja sessão foi revogada.
+    // Renova a sessão antes do comando e envia explicitamente o token recém-emitido,
+    // evitando que o Functions client reutilize um access token obsoleto do storage.
+    if (!sessionRefreshRef.current) {
+      sessionRefreshRef.current = (async () => {
+        const { data, error } = await supabase.auth.refreshSession();
+        const accessToken = data.session?.access_token;
+        if (error || !accessToken) {
+          await supabase.auth.signOut();
+          throw new Error("Sua sessão expirou. Entre novamente para controlar a campanha.");
+        }
+        return accessToken;
+      })().finally(() => {
+        sessionRefreshRef.current = null;
+      });
+    }
+
+    const accessToken = await sessionRefreshRef.current;
+    return supabase.functions.invoke("envio-meta-massa-control", {
+      body: { job_id: jobId, acao },
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  }, []);
 
   const carregarJobs = useCallback(async () => {
     if (!uid) { setJobs([]); setItensByJob(new Map()); setLogByJob(new Map()); return; }
@@ -545,9 +571,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     if (!j) return;
     const acao = j.status === "rodando" ? "pausar" : "retomar";
     try {
-      const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
-        body: { job_id: jobId, acao },
-      });
+      const { data, error } = await invokeControle(jobId, acao);
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
       toast.info(acao === "pausar" ? "Campanha pausada" : "Campanha retomada");
@@ -555,14 +579,12 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     } catch (e: any) {
       toast.error("Erro: " + (e?.message || e));
     }
-  }, [jobs, carregarJobs]);
+  }, [jobs, carregarJobs, invokeControle]);
 
   const cancelarJob = useCallback(async (jobId: string) => {
     if (!confirm("Cancelar esta campanha? Os contatos restantes não serão disparados.")) return;
     try {
-      const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
-        body: { job_id: jobId, acao: "cancelar" },
-      });
+      const { data, error } = await invokeControle(jobId, "cancelar");
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
       manuallyCanceledRef.current.add(jobId);
@@ -572,14 +594,12 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     } catch (e: any) {
       toast.error("Erro: " + (e?.message || e));
     }
-  }, [carregarJobs]);
+  }, [carregarJobs, invokeControle]);
 
   // Reativação de baixo nível — usada por reativarJob (manual) e pelo auto-resume interno.
   const reativarJobInterno = useCallback(async (jobId: string): Promise<boolean> => {
     try {
-      const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
-        body: { job_id: jobId, acao: "reativar" },
-      });
+      const { data, error } = await invokeControle(jobId, "reativar");
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
       return true;
@@ -587,7 +607,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       console.warn("[envio-meta] reativar interno falhou:", e?.message || e);
       return false;
     }
-  }, []);
+  }, [invokeControle]);
 
   const reativarJob = useCallback(async (jobId: string) => {
     const j = jobs.find((x) => x.id === jobId);
@@ -634,9 +654,9 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       return;
     }
     try {
-      await supabase.functions.invoke("envio-meta-massa-control", {
-        body: { job_id: jobId, acao: "limpar" },
-      });
+      const { data, error } = await invokeControle(jobId, "limpar");
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha");
       setExtras((prev) => {
         const next = { ...prev };
         delete next[jobId];
@@ -650,7 +670,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     } catch (e: any) {
       toast.error("Erro: " + (e?.message || e));
     }
-  }, [jobs, lastStartedId, carregarJobs]);
+  }, [jobs, lastStartedId, carregarJobs, invokeControle]);
 
   // ============ Legacy single-job derivations ============
   const currentJob: CampanhaJob | null = useMemo(() => {
