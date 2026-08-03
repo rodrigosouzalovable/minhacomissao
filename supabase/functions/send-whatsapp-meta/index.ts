@@ -534,7 +534,7 @@ Deno.serve(async (req) => {
     // Bloqueios reais (pool/pausa/qualidade/horário/domingo) permanecem acima.
 
     try {
-      const { waId, formatUsed } = await sendOne(inst, template, cliente);
+      const { waId, formatUsed } = await sendOne(inst, template, cliente, supabase);
       await supabase.from('meta_whatsapp_instances')
         .update({ enviados_hoje: (inst.enviados_hoje || 0) + 1 }).eq('id', inst.id);
 
