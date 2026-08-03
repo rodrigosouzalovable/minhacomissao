@@ -604,9 +604,11 @@ serve(async (req) => {
                       const jaExiste = (atendentes || []).find((a: any) =>
                         String(a.nome).toLowerCase() === nomeEtiqueta.toLowerCase()
                       );
-                      if (jaExiste) {
+                      if (jaExiste && etiquetaElegivel(nomeEtiqueta)) {
                         atendenteAcordoId = (jaExiste as any).id;
                         atendenteAcordoNome = `${nomeAt} (consulta portal ${hit?.cpf || ''})`;
+                      } else if (jaExiste) {
+                        console.log('[MetaWebhook] atendente sem permissão de Inbox Meta (consulta portal):', nomeEtiqueta);
                       } else {
                         console.log('[MetaWebhook] etiqueta inexistente p/ consulta portal:', nomeEtiqueta);
                       }
@@ -615,6 +617,47 @@ serve(async (req) => {
                     console.error('[MetaWebhook] erro match consulta portal', e?.message || e);
                   }
                 }
+
+                // ---- Match por quem realmente iniciou/atendeu a conversa ----
+                // Usa o usuário que enviou a última mensagem de saída para este contato.
+                if (!atendenteAcordoId) {
+                  try {
+                    const { data: ultimaSaida } = await supabase
+                      .from('meta_whatsapp_mensagens')
+                      .select('user_id, criado_em')
+                      .eq('contato_id', contatoIdFinal)
+                      .eq('direcao', 'saida')
+                      .not('user_id', 'is', null)
+                      .order('criado_em', { ascending: false })
+                      .limit(1)
+                      .maybeSingle();
+                    const remetenteId = (ultimaSaida as any)?.user_id;
+                    if (remetenteId) {
+                      const { data: profRem } = await supabase
+                        .from('profiles')
+                        .select('nome')
+                        .eq('id', remetenteId)
+                        .maybeSingle();
+                      const nomeRem = String((profRem as any)?.nome || '').trim();
+                      if (nomeRem) {
+                        const nomeEtiqueta = `Atendente: ${nomeRem}`;
+                        const jaExiste = (atendentes || []).find((a: any) =>
+                          String(a.nome).toLowerCase() === nomeEtiqueta.toLowerCase()
+                        );
+                        if (jaExiste && etiquetaElegivel(nomeEtiqueta)) {
+                          atendenteAcordoId = (jaExiste as any).id;
+                          atendenteAcordoNome = `${nomeRem} (iniciou a conversa)`;
+                        } else {
+                          console.log('[MetaWebhook] remetente não elegível/sem etiqueta:', nomeEtiqueta);
+                        }
+                      }
+                    }
+                  } catch (e: any) {
+                    console.error('[MetaWebhook] erro match remetente', e?.message || e);
+                  }
+                }
+
+
 
 
                 if (atendenteAcordoId) {
