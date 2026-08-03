@@ -54,6 +54,7 @@ export function EditPermissionsDialog({
   const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
   const [podeMarcarPago, setPodeMarcarPago] = useState(false);
+  const [atendeInboxMeta, setAtendeInboxMeta] = useState(true);
   const [selectedTenants, setSelectedTenants] = useState<string[]>([]);
 
   const { data: allTenants } = useQuery({
