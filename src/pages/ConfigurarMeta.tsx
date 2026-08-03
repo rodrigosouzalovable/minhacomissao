@@ -51,7 +51,13 @@ type Instancia = {
   webhook_saude_verificado_em?: string | null;
   webhook_ultimo_erro?: string | null;
   webhook_perda_suspeita?: any;
+  meta_verified_name?: string | null;
+  meta_name_status?: string | null;
+  meta_profile_pic_url?: string | null;
+  meta_profile_about?: string | null;
+  meta_perfil_sync_em?: string | null;
 };
+
 
 type BM = {
   id: string;
