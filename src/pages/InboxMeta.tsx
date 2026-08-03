@@ -1010,7 +1010,15 @@ export default function InboxMeta() {
               const inst = instancias.find(i => i.id === c.instancia_id);
               const ativo = contatoAtivo?.id === c.id;
               const etIds = contatoEtiquetas[c.id] || [];
-              const ets = etiquetas.filter(e => etIds.includes(e.id));
+              // Atendente é exclusivo: exibe no máximo um chip de atendente
+              const etsTodas = etiquetas.filter(e => etIds.includes(e.id));
+              let atendenteJaExibido = false;
+              const ets = etsTodas.filter(e => {
+                if (!/^atendente:/i.test(String(e.nome || '').trim())) return true;
+                if (atendenteJaExibido) return false;
+                atendenteJaExibido = true;
+                return true;
+              });
               const sel = selecionados.has(c.id);
               const jan = computeJanela(c.ultima_msg_entrada_em);
               return (
