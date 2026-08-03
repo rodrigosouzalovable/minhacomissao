@@ -317,7 +317,7 @@ async function sendOne(
       template: {
         name: template.nome_template,
         language: { code: template.idioma || 'pt_BR' },
-        components: buildMetaComponents(template, parameters),
+        components: buildMetaComponents(template, parameters, headerMediaId),
       },
     };
 
