@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -19,8 +18,6 @@ export interface MetaInboxFolder {
   owner_id: string;
 }
 
-interface Funcionario { user_id: string; nome: string }
-
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -33,7 +30,6 @@ const CORES = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C',
 export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged }: Props) {
   const { toast } = useToast();
   const [folders, setFolders] = useState<MetaInboxFolder[]>([]);
-  const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [membersByFolder, setMembersByFolder] = useState<Record<string, Set<string>>>({});
   const [novoNome, setNovoNome] = useState('');
   const [novaCor, setNovaCor] = useState(CORES[0]);
@@ -54,8 +50,6 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
       map[r.folder_id].add(r.user_id);
     }
     setMembersByFolder(map);
-    const { data: funcs } = await (supabase as any).rpc('listar_funcionarios');
-    setFuncionarios((funcs as any) ?? []);
   }, []);
 
   useEffect(() => { if (open) load(); }, [open, load]);
