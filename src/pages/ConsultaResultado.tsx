@@ -72,6 +72,21 @@ export default function ConsultaResultado() {
   const [faixaEscolhida, setFaixaEscolhida] = useState<DescontoFaixa | undefined>(undefined);
   const [acordoExistente, setAcordoExistente] = useState<{ status: string; criadoEm: string; funcionarioNome: string } | null>(null);
   const [parcelasAcordo, setParcelasAcordo] = useState<ParcelaAcordo[]>([]);
+  const { user } = useAuth();
+  const { isAdmin } = useUserRole();
+
+  const recarregarDebitos = useCallback(async () => {
+    if (!cpf) return;
+    const { data, error } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpf });
+    if (error) return;
+    const typed = (data ?? []) as Debito[];
+    setDebitos(typed);
+    if (typed.length > 0) {
+      setNomeCliente(typed[0].nome);
+      setCpfCliente(typed[0].cpf);
+    }
+  }, [cpf]);
+
 
   const validCreditor = creditor && isValidCredorSlug(creditor);
   const config = validCreditor ? getCredorConfig(creditor)! : null;
