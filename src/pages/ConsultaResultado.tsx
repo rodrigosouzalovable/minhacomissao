@@ -486,6 +486,14 @@ export default function ConsultaResultado() {
                     </div>
                   )}
 
+                  {isAdmin && debitos.length > 0 && (
+                    <AdminDebitosEditor
+                      debitos={debitos}
+                      userId={user?.id ?? null}
+                      onChanged={recarregarDebitos}
+                    />
+                  )}
+
                   {/* Cards de débito colapsáveis */}
                   <div className="space-y-2 mb-6">
                     <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#ffffff66' }}>
