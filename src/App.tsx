@@ -49,6 +49,7 @@ const Aquecimento = lazy(() => import("./pages/Aquecimento"));
 const MonitorEnvios = lazy(() => import("./pages/MonitorEnvios"));
 const ExportarDados = lazy(() => import("./pages/ExportarDados"));
 const RedirectBoleto = lazy(() => import("./pages/RedirectBoleto"));
+const RedirectVerificarProposta = lazy(() => import("./pages/RedirectVerificarProposta"));
 
 const Relatorios = lazy(() => import("./pages/Relatorios"));
 const ComiteNovoMundo = lazy(() => import("./pages/ComiteNovoMundo"));
@@ -206,6 +207,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/ir/boleto" element={<RedirectBoleto />} />
+            <Route path="/ir/verificar-proposta-odres" element={<RedirectVerificarProposta />} />
             {/* Tenant routes (multi-tenant) — MUST come before /:creditor to avoid clash */}
             <Route path="/avatusbarbearia" element={<TenantLayout />}>
               <Route index element={<Navigate to="envio-meta" replace />} />
