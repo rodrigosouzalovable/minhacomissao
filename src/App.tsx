@@ -49,6 +49,7 @@ const Aquecimento = lazy(() => import("./pages/Aquecimento"));
 const MonitorEnvios = lazy(() => import("./pages/MonitorEnvios"));
 const ExportarDados = lazy(() => import("./pages/ExportarDados"));
 const RedirectBoleto = lazy(() => import("./pages/RedirectBoleto"));
+const RedirectVerificarProposta = lazy(() => import("./pages/RedirectVerificarProposta"));
 
 const Relatorios = lazy(() => import("./pages/Relatorios"));
 const ComiteNovoMundo = lazy(() => import("./pages/ComiteNovoMundo"));
