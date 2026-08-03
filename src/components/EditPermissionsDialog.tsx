@@ -125,6 +125,7 @@ export function EditPermissionsDialog({
       setPodeExcluirAcordos(false);
       setRecebeConsultaCpf(false);
       setPodeMarcarPago(false);
+      setAtendeInboxMeta(true);
     }
   }, [permissions, open]);
 
