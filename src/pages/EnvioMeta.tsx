@@ -54,7 +54,13 @@ type Instancia = {
   saude_ban_info?: any;
   saude_raw?: any;
   saude_checked_at?: string | null;
+  meta_verified_name?: string | null;
+  meta_name_status?: string | null;
+  meta_profile_pic_url?: string | null;
+  meta_profile_about?: string | null;
+  meta_perfil_sync_em?: string | null;
 };
+
 
 
 type Template = {
