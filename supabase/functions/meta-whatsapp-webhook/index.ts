@@ -580,11 +580,14 @@ serve(async (req) => {
                       const jaExiste = (atendentes || []).find((a: any) =>
                         String(a.nome).toLowerCase() === nomeEtiqueta.toLowerCase()
                       );
-                      if (jaExiste) {
+                      if (jaExiste && etiquetaElegivel(nomeEtiqueta)) {
                         atendenteAcordoId = (jaExiste as any).id;
+                      } else if (jaExiste) {
+                        console.log('[MetaWebhook] atendente sem permissão de Inbox Meta, ignorando:', nomeEtiqueta);
                       } else {
                         console.log('[MetaWebhook] etiqueta atendente inexistente, ignorando:', nomeEtiqueta);
                       }
+
                     }
                   }
                 }
