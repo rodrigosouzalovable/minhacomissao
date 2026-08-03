@@ -678,7 +678,7 @@ serve(async (req) => {
                     });
                   }
                 } else if (atendenteRodizioIds.length > 0) {
-                  // ---- Fallback: rodízio por menor carga (exclui Thailinny) ----
+                  // ---- Fallback: rodízio por menor carga (apenas atendentes com permissão ativa) ----
                   const { data: vinculos } = await supabase
                     .from('meta_whatsapp_contato_etiquetas')
                     .select('etiqueta_id')
