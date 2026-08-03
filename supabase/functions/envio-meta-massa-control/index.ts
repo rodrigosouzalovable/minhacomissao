@@ -20,19 +20,20 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
-    // Valida o JWT via getClaims (não depende de sessão no servidor)
-    const authClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY')!,
-    );
-    const { data: claimsData, error: userErr } = await authClient.auth.getClaims(jwt);
-    const userId = (claimsData as any)?.claims?.sub as string | undefined;
-    if (!userId) {
-      return new Response(JSON.stringify({ success: false, error: 'usuário inválido', detalhe: userErr?.message }), {
+    // Valida o JWT direto no endpoint de auth (não depende de sessão/SDK no servidor)
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? '';
+    const userRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${jwt}`, apikey: anonKey },
+    });
+    const userJson = await userRes.json().catch(() => null);
+    const userId = userJson?.id as string | undefined;
+    if (!userRes.ok || !userId) {
+      return new Response(JSON.stringify({ success: false, error: 'usuário inválido', detalhe: userJson?.msg || userJson?.message || `status ${userRes.status}` }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     const user = { id: userId };
+
 
 
 
