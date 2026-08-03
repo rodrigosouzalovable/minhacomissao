@@ -114,6 +114,7 @@ export function EditPermissionsDialog({
       setPodeExcluirAcordos((permissions as any).pode_excluir_acordos ?? false);
       setRecebeConsultaCpf((permissions as any).recebe_consulta_cpf ?? false);
       setPodeMarcarPago((permissions as any).pode_marcar_pago_global ?? false);
+      setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? true);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
