@@ -269,12 +269,17 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
     // Fallback: detecta template pausado (#132015) mesmo quando o send-whatsapp-meta
     // ainda não retornou a flag template_paused (versão antiga em cache do runtime).
     const rawErr = String(resp?.error || '');
+    // #131053 (Media upload error) é problema de mídia, não da instância → retry.
+    if (rawErr.includes('#131053') || /media upload error/i.test(rawErr)) {
+      return { id: item.id, kind: 'transient', retryMs: 4_000, erro: rawErr || 'Media upload error (#131053)' };
+    }
     const isPausedFallback =
       rawErr.includes('#132015') ||
       /template is (?:temporarily )?unavailable|is paused|paused due to low quality/i.test(rawErr);
     if (isPausedFallback) {
       return { id: item.id, kind: 'template_paused', erro: 'O template está pausado pela Meta. Escolha outro template ou aguarde a liberação.' };
     }
+
     return { id: item.id, kind: 'error', erro: resp?.error || 'falha' };
 
   } catch (e) {
