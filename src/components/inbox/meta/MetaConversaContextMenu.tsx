@@ -40,6 +40,8 @@ export function MetaConversaContextMenu({
     else onMarcarNaoLida();
   };
 
+  const isAtendente = (nome: string) => /^atendente:/i.test(String(nome || '').trim());
+
   const handleToggleEtiqueta = async (etiquetaId: string) => {
     const ativo = contatoEtiquetaIds.includes(etiquetaId);
     const travada = !!etiquetasBloqueadas?.has(etiquetaId);
@@ -58,11 +60,44 @@ export function MetaConversaContextMenu({
         toast({ title: 'Erro', description: error.message, variant: 'destructive' });
         return;
       }
-    } else {
-      await supabase.from('meta_whatsapp_contato_etiquetas').insert({ contato_id: contatoId, etiqueta_id: etiquetaId });
+      onEtiquetaToggle(contatoId, etiquetaId, false);
+      return;
     }
-    onEtiquetaToggle(contatoId, etiquetaId, !ativo);
+
+    // Atendente é exclusivo: marcar um substitui o anterior (nunca soma).
+    const alvo = etiquetas.find(e => e.id === etiquetaId);
+    const antigos = isAtendente(alvo?.nome || '')
+      ? etiquetas.filter(e => e.id !== etiquetaId && isAtendente(e.nome) && contatoEtiquetaIds.includes(e.id))
+      : [];
+
+    if (antigos.length > 0) {
+      const algumTravado = antigos.some(e => etiquetasBloqueadas?.has(e.id));
+      if (algumTravado && !isAdmin) {
+        toast({
+          title: 'Etiqueta bloqueada',
+          description: 'Esta conversa já tem atendente definido automaticamente — apenas admin pode trocar.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      const { error: delErr } = await supabase.from('meta_whatsapp_contato_etiquetas').delete()
+        .eq('contato_id', contatoId).in('etiqueta_id', antigos.map(e => e.id));
+      if (delErr) {
+        toast({ title: 'Erro', description: delErr.message, variant: 'destructive' });
+        return;
+      }
+      antigos.forEach(e => onEtiquetaToggle(contatoId, e.id, false));
+    }
+
+    const { error } = await supabase.from('meta_whatsapp_contato_etiquetas')
+      .insert({ contato_id: contatoId, etiqueta_id: etiquetaId });
+    if (error) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      return;
+    }
+    onEtiquetaToggle(contatoId, etiquetaId, true);
   };
+
 
   return (
     <>
