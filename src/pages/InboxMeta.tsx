@@ -958,30 +958,62 @@ export default function InboxMeta() {
             </div>
             {/* Caixas de mensagens */}
             <div className="flex flex-wrap items-center gap-1">
-              <button
-                onClick={() => setCurrentFolderId(null)}
-                className={cn(
-                  'text-[11px] px-2 py-1 rounded border transition',
-                  currentFolderId === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-accent',
-                )}
-                title="Caixa padrão (mensagens da equipe)"
-              >
-                Padrão
-              </button>
-              {folders.map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setCurrentFolderId(f.id)}
-                  className={cn(
-                    'text-[11px] px-2 py-1 rounded border transition',
-                    currentFolderId === f.id ? 'text-white border-transparent' : 'bg-muted/40 border-transparent hover:bg-accent',
+              {podeVerPadrao && (
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <button
+                      onClick={() => setCurrentFolderId(null)}
+                      className={cn(
+                        'text-[11px] px-2 py-1 rounded border transition',
+                        currentFolderId === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-accent',
+                      )}
+                      title="Caixa padrão (mensagens da equipe)"
+                    >
+                      Padrão
+                    </button>
+                  </ContextMenuTrigger>
+                  {isAdmin && (
+                    <ContextMenuContent>
+                      <ContextMenuItem onClick={() => setAcessoFolder({ id: null, nome: 'Padrão' })}>
+                        <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
+                      </ContextMenuItem>
+                    </ContextMenuContent>
                   )}
-                  style={currentFolderId === f.id ? { backgroundColor: f.cor } : undefined}
-                  title={f.nome}
-                >
-                  {f.nome}
-                </button>
-              ))}
+                </ContextMenu>
+              )}
+              {foldersVisiveis.map((f) => {
+                const podeGerenciar = isAdmin || f.owner_id === user?.id;
+                return (
+                  <ContextMenu key={f.id}>
+                    <ContextMenuTrigger asChild>
+                      <button
+                        onClick={() => setCurrentFolderId(f.id)}
+                        className={cn(
+                          'text-[11px] px-2 py-1 rounded border transition',
+                          currentFolderId === f.id ? 'text-white border-transparent' : 'bg-muted/40 border-transparent hover:bg-accent',
+                        )}
+                        style={currentFolderId === f.id ? { backgroundColor: f.cor } : undefined}
+                        title={f.nome}
+                      >
+                        {f.nome}
+                      </button>
+                    </ContextMenuTrigger>
+                    {podeGerenciar && (
+                      <ContextMenuContent>
+                        <ContextMenuItem onClick={() => setAcessoFolder({ id: f.id, nome: f.nome })}>
+                          <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    )}
+                  </ContextMenu>
+                );
+              })}
+              {!podeVerPadrao && foldersVisiveis.length === 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  Sem caixa de mensagens atribuída — fale com o administrador.
+                </span>
+              )}
+
               <button
                 onClick={() => setFoldersDialogOpen(true)}
                 className="text-[11px] px-1.5 py-1 rounded border border-dashed border-border hover:bg-accent text-muted-foreground"
