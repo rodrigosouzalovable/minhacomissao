@@ -20,13 +20,21 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
-    const { data: userData } = await supabase.auth.getUser(jwt);
+    // Valida o JWT com um client publishable separado (o client de service role
+    // com chave opaca não resolve auth.getUser corretamente)
+    const authClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY')!,
+      { global: { headers: { Authorization: `Bearer ${jwt}` } } },
+    );
+    const { data: userData, error: userErr } = await authClient.auth.getUser();
     const user = userData?.user;
     if (!user) {
-      return new Response(JSON.stringify({ success: false, error: 'usuário inválido' }), {
+      return new Response(JSON.stringify({ success: false, error: 'usuário inválido', detalhe: userErr?.message }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     const body = await req.json();
     const jobId: string = body?.job_id;
