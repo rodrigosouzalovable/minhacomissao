@@ -294,6 +294,22 @@ export default function EnvioMeta() {
     toast.success(`${invalidSet.size} número(s) sem WhatsApp removido(s)`);
   };
 
+  const [sincronizandoPerfis, setSincronizandoPerfis] = useState(false);
+  const sincronizarPerfis = async () => {
+    setSincronizandoPerfis(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-sync-perfil-instancias", { body: {} });
+      if (error) throw error;
+      const results: any[] = data?.results || [];
+      const comFoto = results.filter((r) => r.foto).length;
+      toast.success(`${results.length} instância(s) sincronizada(s) • ${comFoto} com foto`);
+      await carregar();
+    } catch (e: any) {
+      toast.error("Erro ao sincronizar perfis: " + (e?.message || e));
+    } finally {
+      setSincronizandoPerfis(false);
+    }
+  };
 
 
   const verificarSaude = async () => {
