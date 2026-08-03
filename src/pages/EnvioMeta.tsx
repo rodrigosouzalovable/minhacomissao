@@ -1104,6 +1104,13 @@ export default function EnvioMeta() {
                   ) : (
                     <>
                       <div className="font-medium text-sm">{i.nome}</div>
+                      {i.meta_verified_name && (
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          Meta: {i.meta_verified_name}
+                          {i.meta_name_status ? ` (${i.meta_name_status})` : ""}
+                        </div>
+                      )}
+
                       <div className="text-xs text-muted-foreground">
                         {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
                       </div>
