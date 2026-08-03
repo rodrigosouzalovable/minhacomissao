@@ -306,9 +306,35 @@ export default function InboxMeta() {
       .select('id, nome, cor, owner_id')
       .order('nome');
     setFolders(((data as any) ?? []) as MetaInboxFolder[]);
-  }, [user]);
+    // Caixa Padrão: visível só para admin ou usuários atribuídos a ela.
+    if (isAdmin) {
+      setPodeVerPadrao(true);
+    } else {
+      const { data: dm } = await (supabase as any)
+        .from('meta_inbox_default_members')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      setPodeVerPadrao(!!dm);
+    }
+  }, [user, isAdmin]);
 
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
+
+  // Somente caixas permitidas (RLS já filtra a lista de folders)
+  const foldersVisiveis = folders;
+
+  // Se a caixa ativa não é permitida, cai na primeira permitida.
+  useEffect(() => {
+    if (currentFolderId === null) {
+      if (!podeVerPadrao && foldersVisiveis.length > 0) setCurrentFolderId(foldersVisiveis[0].id);
+      return;
+    }
+    if (!foldersVisiveis.some((f) => f.id === currentFolderId)) {
+      setCurrentFolderId(podeVerPadrao ? null : (foldersVisiveis[0]?.id ?? null));
+    }
+  }, [podeVerPadrao, foldersVisiveis, currentFolderId]);
+
 
 
   const fetchContatos = useCallback(async () => {
