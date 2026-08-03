@@ -1470,6 +1470,7 @@ export default function InboxMeta() {
         instancias={instancias}
         defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
         atendenteNome={atendenteNome}
+        folderId={currentFolderId}
         onSent={() => { fetchContatos(); }}
       />
       {contatoAtivo && (
