@@ -1071,6 +1071,13 @@ export default function EnvioMeta() {
                   checked={instanciaIds.includes(i.id)}
                   onCheckedChange={() => toggleInstancia(i.id)}
                 />
+                <Avatar className="h-9 w-9 flex-shrink-0">
+                  <AvatarImage src={i.meta_profile_pic_url || undefined} alt={`Foto de perfil de ${i.meta_verified_name || i.nome}`} />
+                  <AvatarFallback className="text-[11px]">
+                    {(i.meta_verified_name || i.nome || "?").slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+
                 <div className="flex-1 min-w-0">
                   {isEditing ? (
                     <div
