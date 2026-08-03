@@ -1045,6 +1045,11 @@ export default function EnvioMeta() {
               {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
               Verificar saúde
             </Button>
+            <Button type="button" size="sm" variant="outline" onClick={sincronizarPerfis} disabled={sincronizandoPerfis || instancias.length === 0}>
+              {sincronizandoPerfis ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+              Sincronizar perfis
+            </Button>
+
           </div>
           <div className="overflow-auto flex-1 -mx-1 px-1">
           {instanciaIds.length > 0 && instanciaIds.every((id) => (instancias.find((x) => x.id === id)?.estado_pool || "aguardando_templates") !== "ativo") && (
