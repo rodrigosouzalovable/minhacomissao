@@ -7009,6 +7009,13 @@ export type Database = {
           user_id: string
         }[]
       }
+      listar_usuarios_ativos: {
+        Args: never
+        Returns: {
+          nome: string
+          user_id: string
+        }[]
+      }
       master_tenant_id: { Args: never; Returns: string }
       meta_envios_resumo: {
         Args: { _ate?: string; _uid?: string }

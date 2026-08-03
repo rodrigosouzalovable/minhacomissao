@@ -30,7 +30,7 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: funcs } = await (supabase as any).rpc('listar_funcionarios');
+      const { data: funcs } = await (supabase as any).rpc('listar_usuarios_ativos');
       setFuncionarios(((funcs as Funcionario[]) ?? []).slice().sort((a, b) => a.nome.localeCompare(b.nome)));
 
       if (folderId === null) {
