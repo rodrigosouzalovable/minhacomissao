@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
-  Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil,
+  Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users,
 } from 'lucide-react';
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
 import { cn } from '@/lib/utils';
@@ -27,6 +27,11 @@ import { ReabrirComTemplateDialog } from '@/components/inbox/meta/ReabrirComTemp
 import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
 import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
 import { MetaFoldersDialog, type MetaInboxFolder } from '@/components/inbox/meta/MetaFoldersDialog';
+import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcessoDialog';
+import { useUserRole } from '@/hooks/useUserRole';
+import {
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
@@ -88,6 +93,7 @@ function formatContatoTime(ts: string | null) {
 
 export default function InboxMeta() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const { toast } = useToast();
 
   const [instancias, setInstancias] = useState<MetaInstance[]>([]);
@@ -117,6 +123,8 @@ export default function InboxMeta() {
   const [folders, setFolders] = useState<MetaInboxFolder[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [foldersDialogOpen, setFoldersDialogOpen] = useState(false);
+  const [acessoFolder, setAcessoFolder] = useState<{ id: string | null; nome: string } | null>(null);
+  const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
 
   
@@ -298,9 +306,35 @@ export default function InboxMeta() {
       .select('id, nome, cor, owner_id')
       .order('nome');
     setFolders(((data as any) ?? []) as MetaInboxFolder[]);
-  }, [user]);
+    // Caixa Padrão: visível só para admin ou usuários atribuídos a ela.
+    if (isAdmin) {
+      setPodeVerPadrao(true);
+    } else {
+      const { data: dm } = await (supabase as any)
+        .from('meta_inbox_default_members')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      setPodeVerPadrao(!!dm);
+    }
+  }, [user, isAdmin]);
 
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
+
+  // Somente caixas permitidas (RLS já filtra a lista de folders)
+  const foldersVisiveis = folders;
+
+  // Se a caixa ativa não é permitida, cai na primeira permitida.
+  useEffect(() => {
+    if (currentFolderId === null) {
+      if (!podeVerPadrao && foldersVisiveis.length > 0) setCurrentFolderId(foldersVisiveis[0].id);
+      return;
+    }
+    if (!foldersVisiveis.some((f) => f.id === currentFolderId)) {
+      setCurrentFolderId(podeVerPadrao ? null : (foldersVisiveis[0]?.id ?? null));
+    }
+  }, [podeVerPadrao, foldersVisiveis, currentFolderId]);
+
 
 
   const fetchContatos = useCallback(async () => {
@@ -953,30 +987,62 @@ export default function InboxMeta() {
             </div>
             {/* Caixas de mensagens */}
             <div className="flex flex-wrap items-center gap-1">
-              <button
-                onClick={() => setCurrentFolderId(null)}
-                className={cn(
-                  'text-[11px] px-2 py-1 rounded border transition',
-                  currentFolderId === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-accent',
-                )}
-                title="Caixa padrão (mensagens da equipe)"
-              >
-                Padrão
-              </button>
-              {folders.map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setCurrentFolderId(f.id)}
-                  className={cn(
-                    'text-[11px] px-2 py-1 rounded border transition',
-                    currentFolderId === f.id ? 'text-white border-transparent' : 'bg-muted/40 border-transparent hover:bg-accent',
+              {podeVerPadrao && (
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <button
+                      onClick={() => setCurrentFolderId(null)}
+                      className={cn(
+                        'text-[11px] px-2 py-1 rounded border transition',
+                        currentFolderId === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-accent',
+                      )}
+                      title="Caixa padrão (mensagens da equipe)"
+                    >
+                      Padrão
+                    </button>
+                  </ContextMenuTrigger>
+                  {isAdmin && (
+                    <ContextMenuContent>
+                      <ContextMenuItem onClick={() => setAcessoFolder({ id: null, nome: 'Padrão' })}>
+                        <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
+                      </ContextMenuItem>
+                    </ContextMenuContent>
                   )}
-                  style={currentFolderId === f.id ? { backgroundColor: f.cor } : undefined}
-                  title={f.nome}
-                >
-                  {f.nome}
-                </button>
-              ))}
+                </ContextMenu>
+              )}
+              {foldersVisiveis.map((f) => {
+                const podeGerenciar = isAdmin || f.owner_id === user?.id;
+                return (
+                  <ContextMenu key={f.id}>
+                    <ContextMenuTrigger asChild>
+                      <button
+                        onClick={() => setCurrentFolderId(f.id)}
+                        className={cn(
+                          'text-[11px] px-2 py-1 rounded border transition',
+                          currentFolderId === f.id ? 'text-white border-transparent' : 'bg-muted/40 border-transparent hover:bg-accent',
+                        )}
+                        style={currentFolderId === f.id ? { backgroundColor: f.cor } : undefined}
+                        title={f.nome}
+                      >
+                        {f.nome}
+                      </button>
+                    </ContextMenuTrigger>
+                    {podeGerenciar && (
+                      <ContextMenuContent>
+                        <ContextMenuItem onClick={() => setAcessoFolder({ id: f.id, nome: f.nome })}>
+                          <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    )}
+                  </ContextMenu>
+                );
+              })}
+              {!podeVerPadrao && foldersVisiveis.length === 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  Sem caixa de mensagens atribuída — fale com o administrador.
+                </span>
+              )}
+
               <button
                 onClick={() => setFoldersDialogOpen(true)}
                 className="text-[11px] px-1.5 py-1 rounded border border-dashed border-border hover:bg-accent text-muted-foreground"
@@ -1391,12 +1457,20 @@ export default function InboxMeta() {
           onChanged={fetchFolders}
         />
       )}
+      <MetaFolderAcessoDialog
+        open={!!acessoFolder}
+        onOpenChange={(v) => { if (!v) setAcessoFolder(null); }}
+        folderId={acessoFolder?.id ?? null}
+        folderNome={acessoFolder?.nome ?? 'Padrão'}
+        onChanged={fetchFolders}
+      />
       <MetaNovaConversaDialog
         open={novaConversaOpen}
         onOpenChange={setNovaConversaOpen}
         instancias={instancias}
         defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
         atendenteNome={atendenteNome}
+        folderId={currentFolderId}
         onSent={() => { fetchContatos(); }}
       />
       {contatoAtivo && (

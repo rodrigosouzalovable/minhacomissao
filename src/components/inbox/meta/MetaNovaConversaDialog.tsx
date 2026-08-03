@@ -18,9 +18,11 @@ interface Props {
   defaultInstancia?: string;
   atendenteNome?: string;
   onSent: (instancia_id: string, telefone: string) => void;
+  /** Caixa de mensagens ativa — a nova conversa nasce nela (null = Padrão) */
+  folderId?: string | null;
 }
 
-export function MetaNovaConversaDialog({ open, onOpenChange, instancias, defaultInstancia, atendenteNome, onSent }: Props) {
+export function MetaNovaConversaDialog({ open, onOpenChange, instancias, defaultInstancia, atendenteNome, onSent, folderId }: Props) {
 
   const { toast } = useToast();
   const [instId, setInstId] = useState<string>(defaultInstancia || '');
@@ -113,6 +115,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
             ...(Object.keys(vars).length ? { vars } : {}),
           },
           atendente_nome: atendenteNome?.trim() || undefined,
+          folder_id: folderId ?? null,
         },
       });
 

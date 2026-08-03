@@ -3221,6 +3221,21 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_inbox_default_members: {
+        Row: {
+          criado_em: string
+          user_id: string
+        }
+        Insert: {
+          criado_em?: string
+          user_id: string
+        }
+        Update: {
+          criado_em?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       meta_inbox_folder_members: {
         Row: {
           created_at: string
@@ -6736,6 +6751,10 @@ export type Database = {
         Args: { _folder: string; _uid: string }
         Returns: boolean
       }
+      can_access_meta_inbox_default: {
+        Args: { _uid: string }
+        Returns: boolean
+      }
       can_view_credor: {
         Args: { _credor: string; _user: string }
         Returns: boolean
@@ -6746,6 +6765,10 @@ export type Database = {
       }
       can_view_devedor_id: {
         Args: { _devedor_id: string; _user: string }
+        Returns: boolean
+      }
+      can_view_meta_contato_folder: {
+        Args: { _folder: string; _uid: string }
         Returns: boolean
       }
       chatbot_append_buffer: {
