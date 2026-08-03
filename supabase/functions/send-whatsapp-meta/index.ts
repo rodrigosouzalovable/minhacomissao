@@ -359,12 +359,33 @@ async function sendOne(
       throw new Error(`__TRANSIENT__:5000:(#${res.status}) ${msgTxt || 'Bad Gateway'}`);
     }
 
+    // ===== #131053 Media upload error =====
+    // A Meta não conseguiu baixar/processar a imagem do header.
+    // 1) se estávamos usando media_id, invalida o cache e tenta subir de novo;
+    // 2) se estávamos usando { link }, tenta uma vez via upload (media_id);
+    // 3) se ainda falhar, devolve como transitório para o contato voltar à fila.
+    if (codeTxt === '131053' || /media upload error/i.test(combined)) {
+      if (!mediaFallbackUsado && supabase) {
+        mediaFallbackUsado = true;
+        if (headerMediaId) await persistMediaId(supabase, template, inst.id, null);
+        headerMediaId = null;
+        const novoId = await resolveHeaderMediaId(supabase, inst, template);
+        if (novoId) {
+          headerMediaId = novoId;
+          formatsToTry.push(fmt); // repete o mesmo formato já com o media_id novo
+          continue;
+        }
+      }
+      throw new Error(`__TRANSIENT__:4000:(#131053) ${msgTxt || 'Media upload error'}`);
+    }
+
     lastErr = data?.error;
     const code = data?.error?.code;
     const details = data?.error?.error_data?.details || '';
     if (code !== 132012 && code !== 132000 && code !== 100) {
       throw new Error(`(#${code}) ${data?.error?.message || 'Falha Meta API'}${details ? ' | ' + details : ''}`);
     }
+
   }
   const code = lastErr?.code;
   const details = lastErr?.error_data?.details || '';
