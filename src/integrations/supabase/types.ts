@@ -5052,6 +5052,7 @@ export type Database = {
         Row: {
           abas_permitidas: string[]
           acordos_compartilhados: boolean
+          atende_inbox_meta: boolean
           atualizado_em: string
           concedido_por: string | null
           credores: string[]
@@ -5068,6 +5069,7 @@ export type Database = {
         Insert: {
           abas_permitidas?: string[]
           acordos_compartilhados?: boolean
+          atende_inbox_meta?: boolean
           atualizado_em?: string
           concedido_por?: string | null
           credores?: string[]
@@ -5084,6 +5086,7 @@ export type Database = {
         Update: {
           abas_permitidas?: string[]
           acordos_compartilhados?: boolean
+          atende_inbox_meta?: boolean
           atualizado_em?: string
           concedido_por?: string | null
           credores?: string[]
