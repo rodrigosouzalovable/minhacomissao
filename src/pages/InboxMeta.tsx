@@ -27,6 +27,11 @@ import { ReabrirComTemplateDialog } from '@/components/inbox/meta/ReabrirComTemp
 import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
 import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
 import { MetaFoldersDialog, type MetaInboxFolder } from '@/components/inbox/meta/MetaFoldersDialog';
+import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcessoDialog';
+import { useUserRole } from '@/hooks/useUserRole';
+import {
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 
 
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
