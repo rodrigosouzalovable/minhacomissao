@@ -362,6 +362,18 @@ export function EditPermissionsDialog({
               />
             </div>
 
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-medium">Atende no Inbox Meta Oficial</Label>
+                <p className="text-xs text-muted-foreground">Se ativo, este usuário pode receber automaticamente a etiqueta de atendente das conversas do Inbox Meta Oficial (por conversa iniciada por ele ou por rodízio). Se desativado, nunca recebe etiqueta automática.</p>
+              </div>
+              <Switch
+                checked={atendeInboxMeta}
+                onCheckedChange={setAtendeInboxMeta}
+              />
+            </div>
+
+
           </div>
         </div>
 
