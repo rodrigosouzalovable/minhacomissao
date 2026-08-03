@@ -507,12 +507,36 @@ serve(async (req) => {
 
               // Todas as etiquetas de atendente (usadas para checar se contato já tem uma)
               const atendentes = atendentesRaw || [];
-              // Lista elegível para RODÍZIO — exclui Thailinny Nolasco (regra de negócio)
-              const atendentesRodizio = atendentes.filter((a: any) =>
-                String(a.nome).trim().toLowerCase() !== 'atendente: thailinny nolasco'
-              );
               const atendenteIds = atendentes.map((a: any) => a.id);
+
+              // ---- Elegibilidade: apenas usuários com "Atende no Inbox Meta Oficial" ativo ----
+              // Casa etiqueta "Atendente: <nome>" com profiles.nome e user_permissions.atende_inbox_meta.
+              const { data: profsAll } = await supabase.from('profiles').select('id, nome');
+              const { data: permsAll } = await supabase
+                .from('user_permissions')
+                .select('user_id, atende_inbox_meta');
+              const permMap = new Map<string, boolean>(
+                (permsAll || []).map((p: any) => [p.user_id, p.atende_inbox_meta !== false])
+              );
+              const nomeElegivel = new Map<string, boolean>(); // nome (lower) -> elegível
+              const userIdPorNome = new Map<string, string>();
+              for (const p of (profsAll || [])) {
+                const n = String((p as any).nome || '').trim().toLowerCase();
+                if (!n) continue;
+                // permissão ausente => considera ativo (default true na coluna)
+                nomeElegivel.set(n, permMap.get((p as any).id) ?? true);
+                userIdPorNome.set(n, (p as any).id);
+              }
+              const etiquetaElegivel = (nomeEtiqueta: string) => {
+                const nome = String(nomeEtiqueta || '').replace(/^atendente:\s*/i, '').trim().toLowerCase();
+                if (!nome) return false;
+                return nomeElegivel.get(nome) ?? false;
+              };
+
+              // Lista elegível para RODÍZIO — só quem tem a permissão ativa
+              const atendentesRodizio = atendentes.filter((a: any) => etiquetaElegivel(a.nome));
               const atendenteRodizioIds = atendentesRodizio.map((a: any) => a.id);
+
 
               // Já tem atendente atribuído?
               let jaTemAtendente = false;
