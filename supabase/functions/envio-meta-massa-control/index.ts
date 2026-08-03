@@ -159,8 +159,9 @@ Deno.serve(async (req) => {
         .eq('job_id', jobId)
         .eq('status', 'pendente');
       if (!pendentes || pendentes === 0) {
-        return new Response(JSON.stringify({ success: false, error: 'não há contatos pendentes para reativar' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        // Nada para reativar — não é erro: responde 200 para não quebrar a UI/auto-retomada.
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'sem_pendentes' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       await supabase.from('envio_meta_job').update({
