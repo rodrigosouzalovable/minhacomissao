@@ -1457,6 +1457,13 @@ export default function InboxMeta() {
           onChanged={fetchFolders}
         />
       )}
+      <MetaFolderAcessoDialog
+        open={!!acessoFolder}
+        onOpenChange={(v) => { if (!v) setAcessoFolder(null); }}
+        folderId={acessoFolder?.id ?? null}
+        folderNome={acessoFolder?.nome ?? 'Padrão'}
+        onChanged={fetchFolders}
+      />
       <MetaNovaConversaDialog
         open={novaConversaOpen}
         onOpenChange={setNovaConversaOpen}
