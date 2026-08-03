@@ -87,7 +87,10 @@ Deno.serve(async (req) => {
           saude_raw: { phone: r.raw, waba: r.waba || null },
           saude_checked_at: new Date().toISOString(),
           throughput_level: r.throughput?.level || null,
+          meta_verified_name: r.raw?.verified_name || null,
+          meta_name_status: r.name_status || null,
         };
+
         // Se a Graph API retornou tier, marca origem como meta_api
         // (só sobrescreve source se ainda não há override manual do usuário)
         if (r.messaging_limit_tier) {

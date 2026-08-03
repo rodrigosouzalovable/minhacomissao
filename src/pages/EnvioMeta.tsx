@@ -26,6 +26,8 @@ import * as XLSX from "xlsx";
 import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 
 
 
@@ -54,7 +56,13 @@ type Instancia = {
   saude_ban_info?: any;
   saude_raw?: any;
   saude_checked_at?: string | null;
+  meta_verified_name?: string | null;
+  meta_name_status?: string | null;
+  meta_profile_pic_url?: string | null;
+  meta_profile_about?: string | null;
+  meta_perfil_sync_em?: string | null;
 };
+
 
 
 type Template = {
@@ -288,6 +296,22 @@ export default function EnvioMeta() {
     toast.success(`${invalidSet.size} número(s) sem WhatsApp removido(s)`);
   };
 
+  const [sincronizandoPerfis, setSincronizandoPerfis] = useState(false);
+  const sincronizarPerfis = async () => {
+    setSincronizandoPerfis(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-sync-perfil-instancias", { body: {} });
+      if (error) throw error;
+      const results: any[] = data?.results || [];
+      const comFoto = results.filter((r) => r.foto).length;
+      toast.success(`${results.length} instância(s) sincronizada(s) • ${comFoto} com foto`);
+      await carregar();
+    } catch (e: any) {
+      toast.error("Erro ao sincronizar perfis: " + (e?.message || e));
+    } finally {
+      setSincronizandoPerfis(false);
+    }
+  };
 
 
   const verificarSaude = async () => {
@@ -1023,6 +1047,11 @@ export default function EnvioMeta() {
               {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
               Verificar saúde
             </Button>
+            <Button type="button" size="sm" variant="outline" onClick={sincronizarPerfis} disabled={sincronizandoPerfis || instancias.length === 0}>
+              {sincronizandoPerfis ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+              Sincronizar perfis
+            </Button>
+
           </div>
           <div className="overflow-auto flex-1 -mx-1 px-1">
           {instanciaIds.length > 0 && instanciaIds.every((id) => (instancias.find((x) => x.id === id)?.estado_pool || "aguardando_templates") !== "ativo") && (
@@ -1044,6 +1073,13 @@ export default function EnvioMeta() {
                   checked={instanciaIds.includes(i.id)}
                   onCheckedChange={() => toggleInstancia(i.id)}
                 />
+                <Avatar className="h-9 w-9 flex-shrink-0">
+                  <AvatarImage src={i.meta_profile_pic_url || undefined} alt={`Foto de perfil de ${i.meta_verified_name || i.nome}`} />
+                  <AvatarFallback className="text-[11px]">
+                    {(i.meta_verified_name || i.nome || "?").slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+
                 <div className="flex-1 min-w-0">
                   {isEditing ? (
                     <div
@@ -1068,6 +1104,13 @@ export default function EnvioMeta() {
                   ) : (
                     <>
                       <div className="font-medium text-sm">{i.nome}</div>
+                      {i.meta_verified_name && (
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          Meta: {i.meta_verified_name}
+                          {i.meta_name_status ? ` (${i.meta_name_status})` : ""}
+                        </div>
+                      )}
+
                       <div className="text-xs text-muted-foreground">
                         {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
                       </div>

@@ -3920,6 +3920,11 @@ export type Database = {
           messaging_limit_source: string | null
           messaging_limit_synced_at: string | null
           meta_bm_id: string | null
+          meta_name_status: string | null
+          meta_perfil_sync_em: string | null
+          meta_profile_about: string | null
+          meta_profile_pic_url: string | null
+          meta_verified_name: string | null
           nome: string
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
@@ -3965,6 +3970,11 @@ export type Database = {
           messaging_limit_source?: string | null
           messaging_limit_synced_at?: string | null
           meta_bm_id?: string | null
+          meta_name_status?: string | null
+          meta_perfil_sync_em?: string | null
+          meta_profile_about?: string | null
+          meta_profile_pic_url?: string | null
+          meta_verified_name?: string | null
           nome: string
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
@@ -4010,6 +4020,11 @@ export type Database = {
           messaging_limit_source?: string | null
           messaging_limit_synced_at?: string | null
           meta_bm_id?: string | null
+          meta_name_status?: string | null
+          meta_perfil_sync_em?: string | null
+          meta_profile_about?: string | null
+          meta_profile_pic_url?: string | null
+          meta_verified_name?: string | null
           nome?: string
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null

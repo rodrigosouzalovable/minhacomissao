@@ -20,6 +20,7 @@ import MetaBillingConciliacaoCard from "@/components/meta/MetaBillingConciliacao
 import { DollarSign, FileText, CreditCard, Upload } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
@@ -51,7 +52,13 @@ type Instancia = {
   webhook_saude_verificado_em?: string | null;
   webhook_ultimo_erro?: string | null;
   webhook_perda_suspeita?: any;
+  meta_verified_name?: string | null;
+  meta_name_status?: string | null;
+  meta_profile_pic_url?: string | null;
+  meta_profile_about?: string | null;
+  meta_perfil_sync_em?: string | null;
 };
+
 
 type BM = {
   id: string;
@@ -835,7 +842,22 @@ export default function ConfigurarMeta() {
                       {/* Header: nome + badges à esquerda, botões de ação à direita */}
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
-                          <h3 className="font-semibold truncate">{inst.nome}</h3>
+                          <Avatar className="h-9 w-9 flex-shrink-0">
+                            <AvatarImage src={inst.meta_profile_pic_url || undefined} alt={`Foto de perfil de ${inst.meta_verified_name || inst.nome}`} />
+                            <AvatarFallback className="text-[11px]">
+                              {(inst.meta_verified_name || inst.nome || "?").slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <h3 className="font-semibold truncate">{inst.nome}</h3>
+                            {inst.meta_verified_name && (
+                              <div className="text-[11px] text-muted-foreground truncate">
+                                Meta: {inst.meta_verified_name}
+                                {inst.meta_name_status ? ` (${inst.meta_name_status})` : ""}
+                              </div>
+                            )}
+                          </div>
+
                           {inst.ativo ? (
                             <Badge variant="default" className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Ativa</Badge>
                           ) : (
