@@ -13,6 +13,8 @@ interface Props {
   children: ReactNode;
   contatoId: string;
   etiquetas: MetaEtiqueta[];
+  /** Lista completa (sem filtro por caixa) usada na janela de gerenciamento */
+  etiquetasGerenciar?: MetaEtiqueta[];
   contatoEtiquetaIds: string[];
   etiquetasBloqueadas?: Set<string>;
   fixado: boolean;
