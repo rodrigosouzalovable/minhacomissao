@@ -61,6 +61,7 @@ type Instancia = {
   meta_profile_pic_url?: string | null;
   meta_profile_about?: string | null;
   meta_perfil_sync_em?: string | null;
+  meta_bm_id?: string | null;
 };
 
 
