@@ -147,7 +147,7 @@ export function MetaConversaContextMenu({
           </ContextMenuSub>
         </ContextMenuContent>
       </ContextMenu>
-      <MetaEtiquetasDialog open={gerenciarOpen} onOpenChange={setGerenciarOpen} etiquetas={etiquetas} onChange={onEtiquetasChange} />
+      <MetaEtiquetasDialog open={gerenciarOpen} onOpenChange={setGerenciarOpen} etiquetas={etiquetasGerenciar ?? etiquetas} onChange={onEtiquetasChange} />
     </>
   );
 }
