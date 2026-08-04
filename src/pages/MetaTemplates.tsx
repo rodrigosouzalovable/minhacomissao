@@ -159,7 +159,9 @@ export default function MetaTemplates() {
     return () => { supabase.removeChannel(ch); };
   }, []);
 
-  const nVarsCorpo = useMemo(() => extractVars(corpo), [corpo]);
+  const varsCorpo = useMemo(() => extrairVars(corpo), [corpo]);
+  const nVarsCorpo = varsCorpo.numeradas;
+  const varsNomeadas = varsCorpo.nomeadas;
 
   useEffect(() => {
     setExemploBody((prev) => {
@@ -169,6 +171,15 @@ export default function MetaTemplates() {
       return arr;
     });
   }, [nVarsCorpo]);
+
+  useEffect(() => {
+    setExemploNomeado((prev) => {
+      const next: Record<string, string> = {};
+      for (const k of varsNomeadas) next[k] = prev[k] ?? "";
+      return next;
+    });
+  }, [corpo]);
+
 
   // Gera URL assinada para a mídia do template selecionado na aba Lote
   useEffect(() => {
