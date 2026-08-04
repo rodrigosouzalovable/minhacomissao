@@ -15,11 +15,21 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // inclui PENDING/ENVIADO (para atualizar status) e REJECTED sem motivo (para enriquecer)
-    const { data: pendentes } = await supabase
-      .from("meta_templates_instancia")
-      .select("instancia_id, status, motivo_rejeicao")
-      .or("status.in.(PENDING,ENVIADO),and(status.eq.REJECTED,motivo_rejeicao.is.null)");
+    // inclui PENDING/ENVIADO (para atualizar status) e REJECTED (para enriquecer o motivo).
+    // O filtro combinado com .or() não retornava os REJECTED sem motivo, por isso são
+    // duas consultas separadas e unidas em memória.
+    const [pendRes, rejRes] = await Promise.all([
+      supabase
+        .from("meta_templates_instancia")
+        .select("instancia_id, status, motivo_rejeicao")
+        .in("status", ["PENDING", "ENVIADO"]),
+      supabase
+        .from("meta_templates_instancia")
+        .select("instancia_id, status, motivo_rejeicao")
+        .eq("status", "REJECTED")
+        .is("motivo_rejeicao", null),
+    ]);
+    const pendentes = [...(pendRes.data || []), ...(rejRes.data || [])];
 
     const instIds = Array.from(new Set((pendentes || []).map((r) => r.instancia_id)));
     if (instIds.length === 0) {
