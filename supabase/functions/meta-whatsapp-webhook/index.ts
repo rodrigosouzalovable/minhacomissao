@@ -34,7 +34,29 @@ function isMetaInstanceRestrictedError(errCode: number, errTextRaw: string): boo
   return restrictedCodes.has(Number(errCode || 0)) || restrictedKeywords.some((k) => errText.includes(k));
 }
 
-function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_url: string | null } {
+function formatBrPhone(raw: any): string {
+  const d = String(raw || '').replace(/\D/g, '');
+  const local = d.startsWith('55') ? d.slice(2) : d;
+  if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  return String(raw || '').trim();
+}
+
+function extractContatosCompartilhados(m: any): { nome: string; telefones: { numero: string; formatado: string; wa_id: string | null }[] }[] {
+  const arr = Array.isArray(m?.contacts) ? m.contacts : [];
+  return arr.map((c: any) => {
+    const nome = c?.name?.formatted_name
+      || [c?.name?.first_name, c?.name?.middle_name, c?.name?.last_name].filter(Boolean).join(' ').trim()
+      || 'Contato';
+    const telefones = (Array.isArray(c?.phones) ? c.phones : []).map((p: any) => {
+      const numero = String(p?.phone || p?.wa_id || '').trim();
+      return { numero, formatado: formatBrPhone(numero), wa_id: p?.wa_id ? String(p.wa_id) : null };
+    }).filter((p: any) => !!p.numero);
+    return { nome, telefones };
+  });
+}
+
+function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_url: string | null; contatos?: any[] } {
   const tipo = m.type || 'texto';
   if (m.text?.body) return { texto: m.text.body, tipo: 'texto', media_url: null };
   if (m.button?.text) return { texto: m.button.text, tipo: 'texto', media_url: null };
@@ -44,8 +66,24 @@ function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_u
   if (tipo === 'audio') return { texto: '[Áudio]', tipo: 'audio', media_url: null };
   if (tipo === 'document') return { texto: m.document?.filename || '[Documento]', tipo: 'documento', media_url: null };
   if (tipo === 'video') return { texto: m.video?.caption || '[Vídeo]', tipo: 'video', media_url: null };
+  if (tipo === 'contacts') {
+    const contatos = extractContatosCompartilhados(m);
+    if (contatos.length) {
+      const primeiro = contatos[0];
+      const tel = primeiro.telefones[0]?.formatado || '';
+      const extra = contatos.length > 1 ? ` e mais ${contatos.length - 1} contato(s)` : '';
+      return {
+        texto: `👤 ${primeiro.nome}${tel ? ` — ${tel}` : ''}${extra}`,
+        tipo: 'contato',
+        media_url: null,
+        contatos,
+      };
+    }
+    return { texto: '👤 Contato compartilhado', tipo: 'contato', media_url: null, contatos: [] };
+  }
   return { texto: `[${tipo}]`, tipo: 'texto', media_url: null };
 }
+
 
 function normalizePhone(tel: any): string {
   return String(tel || '').replace(/\D/g, '');
