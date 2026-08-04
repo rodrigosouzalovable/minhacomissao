@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_whatsapp_mensagens ADD COLUMN IF NOT EXISTS contatos_payload jsonb;
