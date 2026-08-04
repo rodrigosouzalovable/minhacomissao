@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { FileText, Image as ImageIcon, Loader2, X, Trash2, Ban, Pencil, Reply, CornerUpLeft, Check, CheckCheck, Clock3, AlertCircle, Copy, ExternalLink, Phone, MessageSquare } from 'lucide-react';
+import { FileText, Image as ImageIcon, Loader2, X, Trash2, Ban, Pencil, Reply, CornerUpLeft, Check, CheckCheck, Clock3, AlertCircle, Copy, ExternalLink, Phone, MessageSquare, User } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { createPortal } from 'react-dom';
 import { WhatsAppAudioPlayer } from './WhatsAppAudioPlayer';
@@ -22,12 +22,24 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+interface ContatoCompartilhadoTelefone {
+  numero: string;
+  formatado?: string | null;
+  wa_id?: string | null;
+}
+
+interface ContatoCompartilhado {
+  nome: string;
+  telefones?: ContatoCompartilhadoTelefone[] | null;
+}
+
 interface TemplateBotao {
   type: string;
   text: string;
   url?: string;
   phone_number?: string;
 }
+
 
 interface Mensagem {
   id: string;
@@ -42,6 +54,7 @@ interface Mensagem {
   quoted_direcao?: string | null;
   status_envio?: string | null;
   template_botoes?: TemplateBotao[] | null;
+  contatos_payload?: ContatoCompartilhado[] | null;
 }
 
 interface ChatMessageProps {
@@ -279,6 +292,72 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
         </div>
       );
     }
+
+    if (tipo === 'contato') {
+      const contatos = Array.isArray(msg.contatos_payload) ? msg.contatos_payload : [];
+      if (!contatos.length) {
+        return (
+          <div className="flex items-center gap-2 p-2 rounded bg-background/30">
+            <User className="h-5 w-5 shrink-0" />
+            <span className="text-sm">{msg.conteudo || 'Contato compartilhado'}</span>
+          </div>
+        );
+      }
+      return (
+        <div className="flex flex-col gap-2 min-w-[210px]">
+          {contatos.map((c, i) => {
+            const tel = c.telefones?.[0];
+            const digits = String(tel?.numero || '').replace(/\D/g, '');
+            const waDigits = digits ? (digits.startsWith('55') ? digits : `55${digits}`) : '';
+            return (
+              <div key={i} className="flex flex-col gap-2 p-2 rounded-lg bg-background/40">
+                <div className="flex items-center gap-2">
+                  <span className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                    <User className="h-5 w-5 text-muted-foreground" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{c.nome || 'Contato'}</p>
+                    {tel && (
+                      <p className="text-xs opacity-80 truncate">{tel.formatado || tel.numero}</p>
+                    )}
+                    {(c.telefones?.length || 0) > 1 && (
+                      <p className="text-[10px] opacity-70">
+                        +{(c.telefones?.length || 0) - 1} outro(s) número(s)
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {digits && (
+                  <div className="flex items-center gap-1 border-t border-border/40 pt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(tel?.formatado || digits);
+                        toast({ title: 'Número copiado' });
+                      }}
+                      className="flex-1 text-[11px] font-medium py-1 rounded hover:bg-background/60 transition flex items-center justify-center gap-1"
+                    >
+                      <Copy className="h-3 w-3" /> Copiar
+                    </button>
+                    <a
+                      href={`https://wa.me/${waDigits}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 text-[11px] font-medium py-1 rounded hover:bg-background/60 transition flex items-center justify-center gap-1"
+                    >
+                      <MessageSquare className="h-3 w-3" /> Conversar
+                    </a>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {renderBotoes()}
+        </div>
+      );
+    }
+
+
 
     return (
       <div className="flex flex-col">

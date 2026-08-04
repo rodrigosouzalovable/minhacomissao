@@ -4083,6 +4083,7 @@ export type Database = {
         Row: {
           apagada_para_mim: boolean
           bsuid: string | null
+          contatos_payload: Json | null
           conteudo: string
           conteudo_citado: string | null
           criado_em: string
@@ -4106,6 +4107,7 @@ export type Database = {
         Insert: {
           apagada_para_mim?: boolean
           bsuid?: string | null
+          contatos_payload?: Json | null
           conteudo?: string
           conteudo_citado?: string | null
           criado_em?: string
@@ -4129,6 +4131,7 @@ export type Database = {
         Update: {
           apagada_para_mim?: boolean
           bsuid?: string | null
+          contatos_payload?: Json | null
           conteudo?: string
           conteudo_citado?: string | null
           criado_em?: string
