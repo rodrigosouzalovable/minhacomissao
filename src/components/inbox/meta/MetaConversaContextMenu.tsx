@@ -28,7 +28,7 @@ interface Props {
 }
 
 export function MetaConversaContextMenu({
-  children, contatoId, etiquetas, contatoEtiquetaIds, etiquetasBloqueadas,
+  children, contatoId, etiquetas, etiquetasGerenciar, contatoEtiquetaIds, etiquetasBloqueadas,
   fixado, arquivado,
   onMarcarNaoLida, onExcluirConversa, onEtiquetaToggle, onEtiquetasChange, onFixarToggle, onArquivarToggle,
 }: Props) {
