@@ -61,6 +61,7 @@ type Instancia = {
   meta_profile_pic_url?: string | null;
   meta_profile_about?: string | null;
   meta_perfil_sync_em?: string | null;
+  meta_bm_id?: string | null;
 };
 
 
@@ -162,6 +163,7 @@ export default function EnvioMeta() {
   } = useEnvioMetaSending();
 
   const [instancias, setInstancias] = useState<Instancia[]>([]);
+  const [bmNomes, setBmNomes] = useState<Record<string, string>>({});
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -395,7 +397,7 @@ export default function EnvioMeta() {
 
   const carregar = async () => {
     setLoading(true);
-    const [i, t, u] = await Promise.all([
+    const [i, t, u, bm] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
       supabase.from("meta_whatsapp_templates")
         .select("*")
@@ -406,7 +408,15 @@ export default function EnvioMeta() {
         .select("id, nome, telefone, ativo, server_url, instance_token")
         .eq("ativo", true)
         .order("nome"),
+      (supabase as any).from("meta_business_managers")
+        .select("id, nome, business_id")
+        .order("nome"),
     ]);
+    if (bm?.data) {
+      const map: Record<string, string> = {};
+      for (const b of bm.data as any[]) map[b.id] = b.nome || b.business_id || "—";
+      setBmNomes(map);
+    }
     if (i.data) {
       const tierParaNumero = (tag?: string | null): number | null => {
         if (!tag) return null;
@@ -1112,7 +1122,7 @@ export default function EnvioMeta() {
                       )}
 
                       <div className="text-xs text-muted-foreground">
-                        {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
+                        {i.display_phone ? `${i.display_phone} • ` : ""}BM: {i.meta_bm_id ? (bmNomes[i.meta_bm_id] || "—") : "não vinculada"} • {i.enviados_hoje}/{i.tier_diario} hoje
                       </div>
                       {(i.saude_status || i.saude_quality) && (
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
