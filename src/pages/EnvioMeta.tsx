@@ -1136,7 +1136,7 @@ export default function EnvioMeta() {
           )}
 
           <div className="space-y-2">
-            {instancias.map((i) => {
+            {instanciasVisiveis.map((i) => {
               const isEditing = editingId === i.id;
               return (
               <label key={i.id} className="flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer">
