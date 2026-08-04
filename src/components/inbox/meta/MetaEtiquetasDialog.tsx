@@ -60,12 +60,21 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
   };
   const salvarEdicao = async (id: string) => {
     if (!editNome.trim()) return;
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('meta_whatsapp_etiquetas')
       .update({ nome: editNome.trim(), cor: editCor })
-      .eq('id', id);
+      .eq('id', id)
+      .select('id');
     if (error) {
       toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast({
+        title: 'Sem permissão',
+        description: 'Esta etiqueta foi criada por outro usuário. Apenas o administrador pode editá-la.',
+        variant: 'destructive',
+      });
       return;
     }
     cancelarEdicao();
