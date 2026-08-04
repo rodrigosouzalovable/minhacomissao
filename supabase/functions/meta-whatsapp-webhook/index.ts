@@ -343,7 +343,7 @@ serve(async (req) => {
           // Meta 2026: pode vir só BSUID sem telefone (username-only)
           const msgBsuid: string | null = m.from_user_id || m.from_userId || m.user_id || bsuidPorWaId[m.from] || null;
           if (!from && !msgBsuid) continue;
-          const { texto, tipo } = extractTextoFromMessage(m);
+          const { texto, tipo, contatos } = extractTextoFromMessage(m);
           const tsMsg = m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString();
           const nomeContato = nomePorWaId[from] || (msgBsuid ? nomePorBsuid[msgBsuid] : null) || null;
           const usernameContato = usernamePorWaId[from] || (msgBsuid ? usernamePorWaId[msgBsuid] : null) || null;
