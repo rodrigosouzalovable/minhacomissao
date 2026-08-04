@@ -335,6 +335,44 @@ export default function InboxMeta() {
     }
   }, [podeVerPadrao, foldersVisiveis, currentFolderId]);
 
+  // Atendentes responsáveis pela caixa ativa: nomes permitidos para etiqueta
+  const [nomesAtendenteCaixa, setNomesAtendenteCaixa] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      if (!user) return;
+      const q = currentFolderId
+        ? (supabase as any).from('meta_inbox_folder_members').select('user_id').eq('folder_id', currentFolderId)
+        : (supabase as any).from('meta_inbox_default_members').select('user_id');
+      const { data: mem } = await q;
+      const ids = ((mem as any[]) ?? []).map((m) => m.user_id);
+      if (cancelado) return;
+      if (ids.length === 0) { setNomesAtendenteCaixa(null); return; }
+      const { data: profs } = await supabase.from('profiles').select('id, nome').in('id', ids);
+      if (cancelado) return;
+      const nomes = new Set<string>(
+        ((profs as any[]) ?? [])
+          .map((p) => String(p.nome || '').trim().toLowerCase())
+          .filter(Boolean)
+      );
+      setNomesAtendenteCaixa(nomes.size > 0 ? nomes : null);
+    })();
+    return () => { cancelado = true; };
+  }, [user, currentFolderId]);
+
+  // Etiquetas oferecidas no menu de contexto: atendentes só da caixa ativa
+  const etiquetasMenu = useMemo(() => {
+    if (!nomesAtendenteCaixa) return etiquetas;
+    return etiquetas.filter((e) => {
+      const nome = String(e.nome || '').trim();
+      if (!/^atendente:/i.test(nome)) return true;
+      const puro = nome.replace(/^atendente:\s*/i, '').trim().toLowerCase();
+      return nomesAtendenteCaixa.has(puro);
+    });
+  }, [etiquetas, nomesAtendenteCaixa]);
+
+
+
 
 
   const fetchContatos = useCallback(async () => {
