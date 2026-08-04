@@ -214,10 +214,21 @@ export default function MetaTemplates() {
       toast.error("Preencha os exemplos das variáveis para a Meta aprovar");
       return;
     }
+    if (varsNomeadas.some((k) => !String(exemploNomeado[k] || "").trim())) {
+      toast.error("Preencha os exemplos das variáveis nomeadas — sem eles a Meta rejeita por INVALID_FORMAT");
+      return;
+    }
 
     setSalvando(true);
     const exemplo: any = {};
     if (nVarsCorpo > 0) exemplo.body_text = [exemploBody];
+    if (varsNomeadas.length > 0) {
+      exemplo.body_text_named_params = varsNomeadas.map((k) => ({
+        param_name: k,
+        example: exemploNomeado[k],
+      }));
+    }
+
 
     if (["IMAGE", "VIDEO", "DOCUMENT"].includes(cabecalhoTipo) && !mediaPath) {
       toast.error("Faça upload da amostra de mídia do cabeçalho");
