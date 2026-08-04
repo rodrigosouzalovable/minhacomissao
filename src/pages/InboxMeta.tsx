@@ -68,6 +68,7 @@ interface MetaMensagem {
   direcao: string; timestamp_msg: string; tipo_conteudo?: string;
   media_url?: string | null; wa_message_id?: string | null; status_envio?: string | null;
   wa_message_id_reply?: string | null; conteudo_citado?: string | null;
+  contatos_payload?: any[] | null;
   template_botoes?: any[] | null;
 }
 
