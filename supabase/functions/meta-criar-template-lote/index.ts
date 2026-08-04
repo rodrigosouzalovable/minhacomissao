@@ -55,6 +55,65 @@ async function obterHeaderHandle(params: {
   return uploadData.h as string;
 }
 
+// Extrai as variáveis do corpo, distinguindo numeradas ({{1}}) de nomeadas ({{name}}).
+function extrairVariaveis(texto: string): { numeradas: string[]; nomeadas: string[] } {
+  const numeradas = new Set<string>();
+  const nomeadas = new Set<string>();
+  for (const m of String(texto || "").matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*|\d+)\s*\}\}/g)) {
+    const k = m[1];
+    if (/^\d+$/.test(k)) numeradas.add(k);
+    else nomeadas.add(k);
+  }
+  return {
+    numeradas: Array.from(numeradas).sort((a, b) => Number(a) - Number(b)),
+    nomeadas: Array.from(nomeadas),
+  };
+}
+
+// Valida o cadastro do mestre ANTES de submeter à Meta.
+// Templates com variável sem exemplo são rejeitados pela Meta.
+function validarMestre(mestre: any): string[] {
+  const erros: string[] = [];
+  const { numeradas, nomeadas } = extrairVariaveis(mestre.corpo || "");
+  const ex = mestre.exemplo || {};
+
+  if (numeradas.length > 0) {
+    const vals = (ex.body_text?.[0] as string[]) || [];
+    if (vals.length < numeradas.length || vals.some((v: string) => !String(v || "").trim())) {
+      erros.push(
+        `Faltam exemplos para as variáveis ${numeradas.map((n) => `{{${n}}}`).join(", ")}. A Meta rejeita templates com variável sem exemplo.`,
+      );
+    }
+  }
+
+  if (nomeadas.length > 0) {
+    const named = (ex.body_text_named_params as any[]) || [];
+    const faltando = nomeadas.filter(
+      (n) => !named.some((p) => p?.param_name === n && String(p?.example || "").trim()),
+    );
+    if (faltando.length > 0) {
+      erros.push(
+        `Faltam exemplos para as variáveis nomeadas ${faltando.map((n) => `{{${n}}}`).join(", ")}. A Meta rejeita templates com variável sem exemplo.`,
+      );
+    }
+  }
+
+  if (["IMAGE", "VIDEO", "DOCUMENT"].includes(mestre.cabecalho_tipo || "") && !mestre.cabecalho_media_url) {
+    erros.push("Cabeçalho de mídia sem arquivo de amostra carregado.");
+  }
+
+  const botoes = Array.isArray(mestre.botoes) ? mestre.botoes : [];
+  for (const b of botoes) {
+    if (!String(b?.text || "").trim()) erros.push("Há botão sem texto.");
+    if (b?.type === "URL" && !String(b?.url || "").trim()) erros.push(`Botão URL "${b?.text}" sem endereço.`);
+    if (b?.type === "PHONE_NUMBER" && !String(b?.phone_number || "").trim()) {
+      erros.push(`Botão de telefone "${b?.text}" sem número.`);
+    }
+  }
+
+  return erros;
+}
+
 function buildComponents(mestre: any, headerHandle: string | null) {
   const components: any[] = [];
 
@@ -77,7 +136,16 @@ function buildComponents(mestre: any, headerHandle: string | null) {
 
   const body: any = { type: "BODY", text: mestre.corpo };
   const bodyVars = (mestre.exemplo?.body_text as string[][]) || [];
-  if (bodyVars.length > 0 && bodyVars[0]?.length > 0) {
+  const namedParams = (mestre.exemplo?.body_text_named_params as any[]) || [];
+  if (namedParams.length > 0) {
+    // Variáveis nomeadas ({{name}}) exigem body_text_named_params.
+    body.example = {
+      body_text_named_params: namedParams.map((p: any) => ({
+        param_name: String(p.param_name),
+        example: String(p.example ?? ""),
+      })),
+    };
+  } else if (bodyVars.length > 0 && bodyVars[0]?.length > 0) {
     body.example = { body_text: bodyVars };
   }
   components.push(body);
