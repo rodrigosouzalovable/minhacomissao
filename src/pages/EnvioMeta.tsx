@@ -397,7 +397,7 @@ export default function EnvioMeta() {
 
   const carregar = async () => {
     setLoading(true);
-    const [i, t, u] = await Promise.all([
+    const [i, t, u, bm] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
       supabase.from("meta_whatsapp_templates")
         .select("*")
@@ -408,7 +408,15 @@ export default function EnvioMeta() {
         .select("id, nome, telefone, ativo, server_url, instance_token")
         .eq("ativo", true)
         .order("nome"),
+      (supabase as any).from("meta_business_managers")
+        .select("id, nome, business_id")
+        .order("nome"),
     ]);
+    if (bm?.data) {
+      const map: Record<string, string> = {};
+      for (const b of bm.data as any[]) map[b.id] = b.nome || b.business_id || "—";
+      setBmNomes(map);
+    }
     if (i.data) {
       const tierParaNumero = (tag?: string | null): number | null => {
         if (!tag) return null;
