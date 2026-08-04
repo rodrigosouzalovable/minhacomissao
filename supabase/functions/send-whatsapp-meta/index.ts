@@ -184,9 +184,17 @@ function getTemplateComponents(template: any): any[] {
 }
 
 function getHeaderFormat(template: any): string {
-  const header = getTemplateComponents(template).find((c: any) => c?.type === 'HEADER');
-  return String(header?.format || template?.variaveis?._header_format || '').toUpperCase();
+  const components = getTemplateComponents(template);
+  const header = components.find((c: any) => c?.type === 'HEADER');
+  if (header) return String(header.format || '').toUpperCase();
+  // Components conhecidos e SEM header → não envie parâmetro de header.
+  // A Meta rejeita com #132018 ("Template does not contain title component,
+  // no parameters allowed"). _header_format só vale como fallback quando não
+  // conhecemos os components deste template.
+  if (components.length > 0) return '';
+  return String(template?.variaveis?._header_format || '').toUpperCase();
 }
+
 
 function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId?: string | null) {
   const components: any[] = [];
