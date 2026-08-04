@@ -337,8 +337,12 @@ serve(async (req) => {
           let headerHandle: string | null = null;
           if (precisaMidia && mediaBytes) {
             const appIdInst = (inst as any).meta_bm_id ? bmAppIdCache.get((inst as any).meta_bm_id) : null;
-            const metaAppId = appIdInst || defaultAppId;
-            if (!metaAppId) {
+            // Tenta o App da BM da instância e, se ele estiver sem acesso à
+            // Resumable Upload API, cai para o App da BM padrão.
+            const candidatos = Array.from(
+              new Set([appIdInst, defaultAppId].filter(Boolean) as string[]),
+            );
+            if (candidatos.length === 0) {
               throw new Error(
                 "Nenhuma Business Manager (App ID) configurada. Cadastre em Meta Templates → Business Managers.",
               );
@@ -350,14 +354,27 @@ serve(async (req) => {
             if (prev?.header_handle) {
               headerHandle = prev.header_handle;
             } else {
-              headerHandle = await obterHeaderHandle({
-                appId: metaAppId,
-
-                accessToken: inst.access_token,
-                fileBytes: mediaBytes,
-                fileType: mediaMime,
-                fileName: mediaName,
-              });
+              let ultimoErro = "";
+              for (const appId of candidatos) {
+                try {
+                  headerHandle = await obterHeaderHandle({
+                    appId,
+                    accessToken: inst.access_token,
+                    fileBytes: mediaBytes,
+                    fileType: mediaMime,
+                    fileName: mediaName,
+                  });
+                  break;
+                } catch (e) {
+                  ultimoErro = e instanceof Error ? e.message : String(e);
+                }
+              }
+              if (!headerHandle) {
+                throw new Error(
+                  `Upload da mídia do cabeçalho falhou (App ID ${candidatos.join(" e ")}): ${ultimoErro}. ` +
+                  `Verifique em Business Managers se o App desta instância tem acesso à API de upload da Meta.`,
+                );
+              }
               await supabase.from("meta_templates_instancia").upsert({
                 template_mestre_id: mestre_id,
                 instancia_id: inst.id,
