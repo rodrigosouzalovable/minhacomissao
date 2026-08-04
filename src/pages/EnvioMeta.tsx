@@ -542,10 +542,36 @@ export default function EnvioMeta() {
     return map;
   }, [templateGroup, instanciaIds]);
 
+  const SEM_BM = "__sem_bm__";
+  const bmsDisponiveis = useMemo(() => {
+    const map = new Map<string, { id: string; nome: string; qtd: number }>();
+    for (const i of instancias) {
+      const key = i.meta_bm_id || SEM_BM;
+      const nome = i.meta_bm_id ? (bmNomes[i.meta_bm_id] || "BM sem nome") : "Sem BM vinculada";
+      const cur = map.get(key);
+      if (cur) cur.qtd++;
+      else map.set(key, { id: key, nome, qtd: 1 });
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.id === SEM_BM) return 1;
+      if (b.id === SEM_BM) return -1;
+      return a.nome.localeCompare(b.nome);
+    });
+  }, [instancias, bmNomes]);
+
+  const instanciasVisiveis = useMemo(() => {
+    if (bmFiltro.length === 0) return instancias;
+    return instancias.filter((i) => bmFiltro.includes(i.meta_bm_id || SEM_BM));
+  }, [instancias, bmFiltro]);
+
+  const toggleBmFiltro = (id: string) => {
+    setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const toggleInstancia = (id: string) => {
     setInstanciaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
 
   const enviar = async () => {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
