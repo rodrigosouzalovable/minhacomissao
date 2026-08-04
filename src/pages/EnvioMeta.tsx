@@ -9,8 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2 } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
@@ -164,6 +165,7 @@ export default function EnvioMeta() {
 
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [bmNomes, setBmNomes] = useState<Record<string, string>>({});
+  const [bmFiltro, setBmFiltro] = useState<string[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -540,10 +542,36 @@ export default function EnvioMeta() {
     return map;
   }, [templateGroup, instanciaIds]);
 
+  const SEM_BM = "__sem_bm__";
+  const bmsDisponiveis = useMemo(() => {
+    const map = new Map<string, { id: string; nome: string; qtd: number }>();
+    for (const i of instancias) {
+      const key = i.meta_bm_id || SEM_BM;
+      const nome = i.meta_bm_id ? (bmNomes[i.meta_bm_id] || "BM sem nome") : "Sem BM vinculada";
+      const cur = map.get(key);
+      if (cur) cur.qtd++;
+      else map.set(key, { id: key, nome, qtd: 1 });
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.id === SEM_BM) return 1;
+      if (b.id === SEM_BM) return -1;
+      return a.nome.localeCompare(b.nome);
+    });
+  }, [instancias, bmNomes]);
+
+  const instanciasVisiveis = useMemo(() => {
+    if (bmFiltro.length === 0) return instancias;
+    return instancias.filter((i) => bmFiltro.includes(i.meta_bm_id || SEM_BM));
+  }, [instancias, bmFiltro]);
+
+  const toggleBmFiltro = (id: string) => {
+    setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const toggleInstancia = (id: string) => {
     setInstanciaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
 
   const enviar = async () => {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
@@ -1042,16 +1070,18 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              disabled={instancias.length === 0}
+              disabled={instanciasVisiveis.length === 0}
               onClick={() => {
-                if (instanciaIds.length === instancias.length) {
-                  setInstanciaIds([]);
+                const visIds = instanciasVisiveis.map((i) => i.id);
+                const todasMarcadas = visIds.every((id) => instanciaIds.includes(id));
+                if (todasMarcadas) {
+                  setInstanciaIds((prev) => prev.filter((id) => !visIds.includes(id)));
                 } else {
-                  setInstanciaIds(instancias.map((i) => i.id));
+                  setInstanciaIds((prev) => Array.from(new Set([...prev, ...visIds])));
                 }
               }}
             >
-              {instanciaIds.length === instancias.length && instancias.length > 0 ? "Limpar seleção" : "Selecionar todas"}
+              {instanciasVisiveis.length > 0 && instanciasVisiveis.every((i) => instanciaIds.includes(i.id)) ? "Limpar seleção" : "Selecionar todas"}
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
               {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
@@ -1061,8 +1091,39 @@ export default function EnvioMeta() {
               {sincronizandoPerfis ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
               Sincronizar perfis
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="sm" variant="outline" disabled={bmsDisponiveis.length === 0}>
+                  <Building2 className="h-3.5 w-3.5 mr-1.5" />
+                  {bmFiltro.length > 0 ? `BMs (${bmFiltro.length})` : "BMs"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-auto">
+                <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {bmsDisponiveis.map((bm) => (
+                  <DropdownMenuCheckboxItem
+                    key={bm.id}
+                    checked={bmFiltro.includes(bm.id)}
+                    onCheckedChange={() => toggleBmFiltro(bm.id)}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <span className="truncate">{bm.nome}</span>
+                    <span className="ml-auto pl-2 text-xs text-muted-foreground">{bm.qtd}</span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmFiltro(bmsDisponiveis.map((b) => b.id)); }}>
+                  Selecionar todas
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmFiltro([]); }}>
+                  Limpar filtro
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
           </div>
+
           <div className="overflow-auto flex-1 -mx-1 px-1">
           {instanciaIds.length > 0 && instanciaIds.every((id) => (instancias.find((x) => x.id === id)?.estado_pool || "aguardando_templates") !== "ativo") && (
             <div className="mb-3 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
@@ -1075,7 +1136,7 @@ export default function EnvioMeta() {
           )}
 
           <div className="space-y-2">
-            {instancias.map((i) => {
+            {instanciasVisiveis.map((i) => {
               const isEditing = editingId === i.id;
               return (
               <label key={i.id} className="flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer">
