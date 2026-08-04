@@ -426,7 +426,16 @@ Deno.serve(async (req) => {
       const vars: any = (template.variaveis || {}) as any;
       const hasImage = typeof vars?._header_image_url === 'string' && vars._header_image_url.trim().length > 0;
       const hasComponents = Array.isArray(vars?._components) && vars._components.length > 0;
-      if (!hasImage || !hasComponents) {
+      // Se os components deste template já provam que NÃO existe header,
+      // não herda imagem/formato de irmãs (evita #132018 na Meta).
+      const semHeaderLocal = hasComponents &&
+        !vars._components.some((c: any) => c?.type === 'HEADER');
+      if (semHeaderLocal) {
+        delete vars._header_image_url;
+        delete vars._header_format;
+        delete vars._header_media_ids;
+        (template as any).variaveis = vars;
+      } else if (!hasImage || !hasComponents) {
         const { data: siblings } = await supabase
           .from('meta_whatsapp_templates')
           .select('variaveis')
@@ -452,6 +461,7 @@ Deno.serve(async (req) => {
         }
         (template as any).variaveis = vars;
       }
+
     } catch (e) {
       console.log('[send-whatsapp-meta] fallback header/components falhou:', String(e).slice(0, 200));
     }
