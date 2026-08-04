@@ -694,10 +694,33 @@ export default function MetaTemplates() {
                   </div>
                 </div>
 
-                <Button onClick={enviarLote} disabled={enviando || !selMestre || selInst.size === 0}>
-                  {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-                  Enviar para Meta ({selInst.size})
-                </Button>
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium text-foreground">Fluxo recomendado (evita rejeição em massa)</p>
+                  <p>1. Envie o <b>piloto</b> para 1 número. 2. Aguarde a aprovação da Meta. 3. Clique em <b>Replicar nas demais</b> — só as instâncias ainda não aprovadas recebem.</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => enviarLote("piloto")}
+                    disabled={enviando || !selMestre || selInst.size === 0}
+                  >
+                    {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                    Enviar piloto (1 número)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => enviarLote("replicar")}
+                    disabled={enviando || !selMestre}
+                  >
+                    {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                    Replicar nas demais
+                  </Button>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0}>
+                    {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                    Enviar para todas agora ({selInst.size})
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
