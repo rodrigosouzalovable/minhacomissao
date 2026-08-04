@@ -302,20 +302,33 @@ export default function MetaTemplates() {
     setBotoes([...botoes, { type: tipo, text: "" }]);
   };
 
-  const enviarLote = async () => {
+  const enviarLote = async (modo?: "piloto" | "replicar") => {
     if (!selMestre) { toast.error("Selecione um template"); return; }
-    if (selInst.size === 0) { toast.error("Selecione ao menos uma instância"); return; }
+    if (modo !== "replicar" && selInst.size === 0) { toast.error("Selecione ao menos uma instância"); return; }
 
     setEnviando(true);
     const { data, error } = await supabase.functions.invoke("meta-criar-template-lote", {
-      body: { mestre_id: selMestre, instancia_ids: Array.from(selInst) },
+      body: {
+        mestre_id: selMestre,
+        instancia_ids: Array.from(selInst),
+        ...(modo ? { modo } : {}),
+      },
     });
     setEnviando(false);
     if (error) { toast.error(error.message); return; }
-    if ((data as any)?.success === false) { toast.error((data as any).error || "Falha"); return; }
-    toast.success(`Enviado: ${(data as any)?.sucessos ?? 0} sucesso(s), ${(data as any)?.falhas ?? 0} falha(s)`);
+    if ((data as any)?.success === false) {
+      const v = (data as any)?.validacao as string[] | undefined;
+      toast.error(v?.length ? v.join(" ") : ((data as any).error || "Falha"), { duration: 12000 });
+      return;
+    }
+    toast.success(
+      modo === "piloto"
+        ? "Piloto enviado. Aguarde a aprovação da Meta e depois clique em 'Replicar nas demais'."
+        : `Enviado: ${(data as any)?.sucessos ?? 0} sucesso(s), ${(data as any)?.falhas ?? 0} falha(s)`,
+    );
     carregar();
   };
+
 
   const reenviarFalhas = async (mestreId: string) => {
     setEnviando(true);
