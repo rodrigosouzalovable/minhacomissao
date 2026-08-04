@@ -260,7 +260,7 @@ export default function MetaTemplates() {
     carregar();
     toast.success("Template mestre criado. Vá em 'Aplicar em lote'.");
     setNome(""); setCorpo(""); setRodape(""); setCabecalhoTexto("");
-    setCabecalhoTipo("NONE"); setBotoes([]); setExemploBody([]);
+    setCabecalhoTipo("NONE"); setBotoes([]); setExemploBody([]); setExemploNomeado({});
     setMediaPath(null); setMediaMime(null); setMediaSignedUrl(null);
     setTab("lote");
   };
