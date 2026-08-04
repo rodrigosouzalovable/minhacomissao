@@ -163,6 +163,7 @@ export default function EnvioMeta() {
   } = useEnvioMetaSending();
 
   const [instancias, setInstancias] = useState<Instancia[]>([]);
+  const [bmNomes, setBmNomes] = useState<Record<string, string>>({});
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
 
