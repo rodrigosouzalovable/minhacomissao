@@ -438,6 +438,7 @@ serve(async (req) => {
             direcao: isEcho ? 'saida' : 'entrada',
             conteudo: texto,
             tipo_conteudo: tipo,
+            contatos_payload: contatos && contatos.length ? contatos : null,
             media_url: mediaUrl,
             timestamp_msg: tsMsg,
             status_envio: isEcho ? 'enviada' : 'entregue',
