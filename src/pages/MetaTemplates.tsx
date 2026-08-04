@@ -72,11 +72,37 @@ const STATUS_COLORS: Record<string, string> = {
   DISABLED: "bg-muted text-muted-foreground",
 };
 
-function extractVars(text: string): number {
-  const matches = Array.from(text.matchAll(/\{\{\s*(\d+)\s*\}\}/g));
-  if (matches.length === 0) return 0;
-  return Math.max(...matches.map((m) => Number(m[1])));
+// Extrai variáveis do corpo separando numeradas ({{1}}) de nomeadas ({{name}}).
+function extrairVars(text: string): { numeradas: number; nomeadas: string[] } {
+  const numeradas = new Set<number>();
+  const nomeadas: string[] = [];
+  for (const m of String(text || "").matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*|\d+)\s*\}\}/g)) {
+    const k = m[1];
+    if (/^\d+$/.test(k)) numeradas.add(Number(k));
+    else if (!nomeadas.includes(k)) nomeadas.push(k);
+  }
+  return {
+    numeradas: numeradas.size > 0 ? Math.max(...numeradas) : 0,
+    nomeadas,
+  };
 }
+
+// Termos que a Meta costuma ler como oferta/promoção — risco de rejeição em UTILITY.
+const TERMOS_PROMOCIONAIS = [
+  "oferta", "promoção", "promocao", "aproveite", "desconto", "condições", "condicoes",
+  "imperdível", "imperdivel", "última chance", "ultima chance", "exclusivo", "vantagem",
+];
+
+function riscosDeConteudo(corpo: string, categoria: string): string[] {
+  if (categoria !== "UTILITY") return [];
+  const txt = corpo.toLowerCase();
+  const achados = TERMOS_PROMOCIONAIS.filter((t) => txt.includes(t));
+  if (achados.length === 0) return [];
+  return [
+    `O corpo usa termos promocionais (${achados.join(", ")}). Em UTILITY isso costuma gerar rejeição por categoria incorreta — descreva uma transação existente do cliente (ex.: boleto, parcela, contrato).`,
+  ];
+}
+
 
 export default function MetaTemplates() {
   const [tab, setTab] = useState("criar");
@@ -95,6 +121,7 @@ export default function MetaTemplates() {
   const [rodape, setRodape] = useState("");
   const [botoes, setBotoes] = useState<Botao[]>([]);
   const [exemploBody, setExemploBody] = useState<string[]>([]);
+  const [exemploNomeado, setExemploNomeado] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   // mídia do cabeçalho
   const [mediaPath, setMediaPath] = useState<string | null>(null);
@@ -133,7 +160,10 @@ export default function MetaTemplates() {
     return () => { supabase.removeChannel(ch); };
   }, []);
 
-  const nVarsCorpo = useMemo(() => extractVars(corpo), [corpo]);
+  const varsCorpo = useMemo(() => extrairVars(corpo), [corpo]);
+  const riscosDeContexto = useMemo(() => riscosDeConteudo(corpo, categoria), [corpo, categoria]);
+  const nVarsCorpo = varsCorpo.numeradas;
+  const varsNomeadas = varsCorpo.nomeadas;
 
   useEffect(() => {
     setExemploBody((prev) => {
@@ -143,6 +173,15 @@ export default function MetaTemplates() {
       return arr;
     });
   }, [nVarsCorpo]);
+
+  useEffect(() => {
+    setExemploNomeado((prev) => {
+      const next: Record<string, string> = {};
+      for (const k of varsNomeadas) next[k] = prev[k] ?? "";
+      return next;
+    });
+  }, [corpo]);
+
 
   // Gera URL assinada para a mídia do template selecionado na aba Lote
   useEffect(() => {
@@ -176,10 +215,21 @@ export default function MetaTemplates() {
       toast.error("Preencha os exemplos das variáveis para a Meta aprovar");
       return;
     }
+    if (varsNomeadas.some((k) => !String(exemploNomeado[k] || "").trim())) {
+      toast.error("Preencha os exemplos das variáveis nomeadas — sem eles a Meta rejeita por INVALID_FORMAT");
+      return;
+    }
 
     setSalvando(true);
     const exemplo: any = {};
     if (nVarsCorpo > 0) exemplo.body_text = [exemploBody];
+    if (varsNomeadas.length > 0) {
+      exemplo.body_text_named_params = varsNomeadas.map((k) => ({
+        param_name: k,
+        example: exemploNomeado[k],
+      }));
+    }
+
 
     if (["IMAGE", "VIDEO", "DOCUMENT"].includes(cabecalhoTipo) && !mediaPath) {
       toast.error("Faça upload da amostra de mídia do cabeçalho");
@@ -211,7 +261,7 @@ export default function MetaTemplates() {
     carregar();
     toast.success("Template mestre criado. Vá em 'Aplicar em lote'.");
     setNome(""); setCorpo(""); setRodape(""); setCabecalhoTexto("");
-    setCabecalhoTipo("NONE"); setBotoes([]); setExemploBody([]);
+    setCabecalhoTipo("NONE"); setBotoes([]); setExemploBody([]); setExemploNomeado({});
     setMediaPath(null); setMediaMime(null); setMediaSignedUrl(null);
     setTab("lote");
   };
@@ -253,20 +303,33 @@ export default function MetaTemplates() {
     setBotoes([...botoes, { type: tipo, text: "" }]);
   };
 
-  const enviarLote = async () => {
+  const enviarLote = async (modo?: "piloto" | "replicar") => {
     if (!selMestre) { toast.error("Selecione um template"); return; }
-    if (selInst.size === 0) { toast.error("Selecione ao menos uma instância"); return; }
+    if (modo !== "replicar" && selInst.size === 0) { toast.error("Selecione ao menos uma instância"); return; }
 
     setEnviando(true);
     const { data, error } = await supabase.functions.invoke("meta-criar-template-lote", {
-      body: { mestre_id: selMestre, instancia_ids: Array.from(selInst) },
+      body: {
+        mestre_id: selMestre,
+        instancia_ids: Array.from(selInst),
+        ...(modo ? { modo } : {}),
+      },
     });
     setEnviando(false);
     if (error) { toast.error(error.message); return; }
-    if ((data as any)?.success === false) { toast.error((data as any).error || "Falha"); return; }
-    toast.success(`Enviado: ${(data as any)?.sucessos ?? 0} sucesso(s), ${(data as any)?.falhas ?? 0} falha(s)`);
+    if ((data as any)?.success === false) {
+      const v = (data as any)?.validacao as string[] | undefined;
+      toast.error(v?.length ? v.join(" ") : ((data as any).error || "Falha"), { duration: 12000 });
+      return;
+    }
+    toast.success(
+      modo === "piloto"
+        ? "Piloto enviado. Aguarde a aprovação da Meta e depois clique em 'Replicar nas demais'."
+        : `Enviado: ${(data as any)?.sucessos ?? 0} sucesso(s), ${(data as any)?.falhas ?? 0} falha(s)`,
+    );
     carregar();
   };
+
 
   const reenviarFalhas = async (mestreId: string) => {
     setEnviando(true);
@@ -434,6 +497,34 @@ export default function MetaTemplates() {
                             const arr = [...exemploBody]; arr[idx] = e.target.value; setExemploBody(arr);
                           }} placeholder={`Exemplo para variável ${idx + 1}`} />
                         </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {varsNomeadas.length > 0 && (
+                    <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+                      <Label>Exemplos das variáveis nomeadas *</Label>
+                      <p className="text-xs text-muted-foreground">
+                        A Meta exige um exemplo por variável nomeada. Sem isso o template é rejeitado com INVALID_FORMAT.
+                      </p>
+                      {varsNomeadas.map((k) => (
+                        <div key={k} className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground w-28 truncate">{`{{${k}}}`}</span>
+                          <Input
+                            value={exemploNomeado[k] ?? ""}
+                            onChange={(e) => setExemploNomeado((p) => ({ ...p, [k]: e.target.value }))}
+                            placeholder={`Exemplo para ${k}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {riscosDeContexto.length > 0 && (
+                    <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                      <Label className="text-amber-600 dark:text-amber-400">Risco de rejeição</Label>
+                      {riscosDeContexto.map((r, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">{r}</p>
                       ))}
                     </div>
                   )}
@@ -632,10 +723,33 @@ export default function MetaTemplates() {
                   </div>
                 </div>
 
-                <Button onClick={enviarLote} disabled={enviando || !selMestre || selInst.size === 0}>
-                  {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-                  Enviar para Meta ({selInst.size})
-                </Button>
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium text-foreground">Fluxo recomendado (evita rejeição em massa)</p>
+                  <p>1. Envie o <b>piloto</b> para 1 número. 2. Aguarde a aprovação da Meta. 3. Clique em <b>Replicar nas demais</b> — só as instâncias ainda não aprovadas recebem.</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => enviarLote("piloto")}
+                    disabled={enviando || !selMestre || selInst.size === 0}
+                  >
+                    {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                    Enviar piloto (1 número)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => enviarLote("replicar")}
+                    disabled={enviando || !selMestre}
+                  >
+                    {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                    Replicar nas demais
+                  </Button>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0}>
+                    {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                    Enviar para todas agora ({selInst.size})
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

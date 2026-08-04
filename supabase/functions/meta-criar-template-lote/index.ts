@@ -55,6 +55,65 @@ async function obterHeaderHandle(params: {
   return uploadData.h as string;
 }
 
+// Extrai as variáveis do corpo, distinguindo numeradas ({{1}}) de nomeadas ({{name}}).
+function extrairVariaveis(texto: string): { numeradas: string[]; nomeadas: string[] } {
+  const numeradas = new Set<string>();
+  const nomeadas = new Set<string>();
+  for (const m of String(texto || "").matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*|\d+)\s*\}\}/g)) {
+    const k = m[1];
+    if (/^\d+$/.test(k)) numeradas.add(k);
+    else nomeadas.add(k);
+  }
+  return {
+    numeradas: Array.from(numeradas).sort((a, b) => Number(a) - Number(b)),
+    nomeadas: Array.from(nomeadas),
+  };
+}
+
+// Valida o cadastro do mestre ANTES de submeter à Meta.
+// Templates com variável sem exemplo são rejeitados pela Meta.
+function validarMestre(mestre: any): string[] {
+  const erros: string[] = [];
+  const { numeradas, nomeadas } = extrairVariaveis(mestre.corpo || "");
+  const ex = mestre.exemplo || {};
+
+  if (numeradas.length > 0) {
+    const vals = (ex.body_text?.[0] as string[]) || [];
+    if (vals.length < numeradas.length || vals.some((v: string) => !String(v || "").trim())) {
+      erros.push(
+        `Faltam exemplos para as variáveis ${numeradas.map((n) => `{{${n}}}`).join(", ")}. A Meta rejeita templates com variável sem exemplo.`,
+      );
+    }
+  }
+
+  if (nomeadas.length > 0) {
+    const named = (ex.body_text_named_params as any[]) || [];
+    const faltando = nomeadas.filter(
+      (n) => !named.some((p) => p?.param_name === n && String(p?.example || "").trim()),
+    );
+    if (faltando.length > 0) {
+      erros.push(
+        `Faltam exemplos para as variáveis nomeadas ${faltando.map((n) => `{{${n}}}`).join(", ")}. A Meta rejeita templates com variável sem exemplo.`,
+      );
+    }
+  }
+
+  if (["IMAGE", "VIDEO", "DOCUMENT"].includes(mestre.cabecalho_tipo || "") && !mestre.cabecalho_media_url) {
+    erros.push("Cabeçalho de mídia sem arquivo de amostra carregado.");
+  }
+
+  const botoes = Array.isArray(mestre.botoes) ? mestre.botoes : [];
+  for (const b of botoes) {
+    if (!String(b?.text || "").trim()) erros.push("Há botão sem texto.");
+    if (b?.type === "URL" && !String(b?.url || "").trim()) erros.push(`Botão URL "${b?.text}" sem endereço.`);
+    if (b?.type === "PHONE_NUMBER" && !String(b?.phone_number || "").trim()) {
+      erros.push(`Botão de telefone "${b?.text}" sem número.`);
+    }
+  }
+
+  return erros;
+}
+
 function buildComponents(mestre: any, headerHandle: string | null) {
   const components: any[] = [];
 
@@ -77,7 +136,16 @@ function buildComponents(mestre: any, headerHandle: string | null) {
 
   const body: any = { type: "BODY", text: mestre.corpo };
   const bodyVars = (mestre.exemplo?.body_text as string[][]) || [];
-  if (bodyVars.length > 0 && bodyVars[0]?.length > 0) {
+  const namedParams = (mestre.exemplo?.body_text_named_params as any[]) || [];
+  if (namedParams.length > 0) {
+    // Variáveis nomeadas ({{name}}) exigem body_text_named_params.
+    body.example = {
+      body_text_named_params: namedParams.map((p: any) => ({
+        param_name: String(p.param_name),
+        example: String(p.example ?? ""),
+      })),
+    };
+  } else if (bodyVars.length > 0 && bodyVars[0]?.length > 0) {
     body.example = { body_text: bodyVars };
   }
   components.push(body);
@@ -107,7 +175,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { mestre_id, instancia_ids, apenas_falhas } = await req.json();
+    const { mestre_id, instancia_ids, apenas_falhas, modo, ignorar_validacao } = await req.json();
     if (!mestre_id) throw new Error("mestre_id obrigatório");
 
     const supabase = createClient(
@@ -127,6 +195,17 @@ serve(async (req) => {
       .from("meta_templates_mestre").select("*").eq("id", mestre_id).maybeSingle();
     if (me || !mestre) throw new Error("Template mestre não encontrado");
 
+    // ===== Pré-voo: bloqueia submissões que a Meta rejeitaria com certeza =====
+    if (ignorar_validacao !== true) {
+      const problemas = validarMestre(mestre);
+      if (problemas.length > 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: problemas.join(" "), validacao: problemas }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     let query = supabase.from("meta_whatsapp_instances")
       .select("id, nome, waba_id, phone_number_id, access_token, ativo, meta_bm_id");
     if (Array.isArray(instancia_ids) && instancia_ids.length > 0) {
@@ -134,8 +213,40 @@ serve(async (req) => {
     } else {
       query = query.eq("ativo", true);
     }
-    const { data: instancias, error: ie } = await query;
-    if (ie || !instancias) throw new Error("Falha ao carregar instâncias");
+    const { data: instanciasRaw, error: ie } = await query;
+    if (ie || !instanciasRaw) throw new Error("Falha ao carregar instâncias");
+
+    let instancias = instanciasRaw;
+
+    // ===== Modo replicar: só permitido depois de o piloto ser aprovado =====
+    if (modo === "replicar") {
+      const { data: jaEnviados } = await supabase
+        .from("meta_templates_instancia")
+        .select("instancia_id, status")
+        .eq("template_mestre_id", mestre_id);
+      const aprovadas = (jaEnviados || []).filter((r: any) => r.status === "APPROVED");
+      if (aprovadas.length === 0) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Nenhuma instância piloto aprovada ainda. Aguarde a aprovação da Meta no piloto antes de replicar.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const aprovadasIds = new Set(aprovadas.map((r: any) => r.instancia_id));
+      instancias = instancias.filter((i: any) => !aprovadasIds.has(i.id));
+      if (instancias.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Todas as instâncias selecionadas já estão aprovadas." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    if (modo === "piloto") {
+      instancias = instancias.slice(0, 1);
+    }
 
     // Se o mestre usa cabeçalho de mídia, pré-carregamos o arquivo do Storage
     const precisaMidia =
@@ -226,8 +337,12 @@ serve(async (req) => {
           let headerHandle: string | null = null;
           if (precisaMidia && mediaBytes) {
             const appIdInst = (inst as any).meta_bm_id ? bmAppIdCache.get((inst as any).meta_bm_id) : null;
-            const metaAppId = appIdInst || defaultAppId;
-            if (!metaAppId) {
+            // Tenta o App da BM da instância e, se ele estiver sem acesso à
+            // Resumable Upload API, cai para o App da BM padrão.
+            const candidatos = Array.from(
+              new Set([appIdInst, defaultAppId].filter(Boolean) as string[]),
+            );
+            if (candidatos.length === 0) {
               throw new Error(
                 "Nenhuma Business Manager (App ID) configurada. Cadastre em Meta Templates → Business Managers.",
               );
@@ -239,14 +354,27 @@ serve(async (req) => {
             if (prev?.header_handle) {
               headerHandle = prev.header_handle;
             } else {
-              headerHandle = await obterHeaderHandle({
-                appId: metaAppId,
-
-                accessToken: inst.access_token,
-                fileBytes: mediaBytes,
-                fileType: mediaMime,
-                fileName: mediaName,
-              });
+              let ultimoErro = "";
+              for (const appId of candidatos) {
+                try {
+                  headerHandle = await obterHeaderHandle({
+                    appId,
+                    accessToken: inst.access_token,
+                    fileBytes: mediaBytes,
+                    fileType: mediaMime,
+                    fileName: mediaName,
+                  });
+                  break;
+                } catch (e) {
+                  ultimoErro = e instanceof Error ? e.message : String(e);
+                }
+              }
+              if (!headerHandle) {
+                throw new Error(
+                  `Upload da mídia do cabeçalho falhou (App ID ${candidatos.join(" e ")}): ${ultimoErro}. ` +
+                  `Verifique em Business Managers se o App desta instância tem acesso à API de upload da Meta.`,
+                );
+              }
               await supabase.from("meta_templates_instancia").upsert({
                 template_mestre_id: mestre_id,
                 instancia_id: inst.id,
