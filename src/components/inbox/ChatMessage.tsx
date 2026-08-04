@@ -22,12 +22,24 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+interface ContatoCompartilhadoTelefone {
+  numero: string;
+  formatado?: string | null;
+  wa_id?: string | null;
+}
+
+interface ContatoCompartilhado {
+  nome: string;
+  telefones?: ContatoCompartilhadoTelefone[] | null;
+}
+
 interface TemplateBotao {
   type: string;
   text: string;
   url?: string;
   phone_number?: string;
 }
+
 
 interface Mensagem {
   id: string;
