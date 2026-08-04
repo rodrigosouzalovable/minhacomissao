@@ -1122,7 +1122,7 @@ export default function EnvioMeta() {
                       )}
 
                       <div className="text-xs text-muted-foreground">
-                        {i.display_phone || i.phone_number_id} • {i.enviados_hoje}/{i.tier_diario} hoje
+                        {i.display_phone ? `${i.display_phone} • ` : ""}BM: {i.meta_bm_id ? (bmNomes[i.meta_bm_id] || "—") : "não vinculada"} • {i.enviados_hoje}/{i.tier_diario} hoje
                       </div>
                       {(i.saude_status || i.saude_quality) && (
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
