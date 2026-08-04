@@ -1070,16 +1070,18 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              disabled={instancias.length === 0}
+              disabled={instanciasVisiveis.length === 0}
               onClick={() => {
-                if (instanciaIds.length === instancias.length) {
-                  setInstanciaIds([]);
+                const visIds = instanciasVisiveis.map((i) => i.id);
+                const todasMarcadas = visIds.every((id) => instanciaIds.includes(id));
+                if (todasMarcadas) {
+                  setInstanciaIds((prev) => prev.filter((id) => !visIds.includes(id)));
                 } else {
-                  setInstanciaIds(instancias.map((i) => i.id));
+                  setInstanciaIds((prev) => Array.from(new Set([...prev, ...visIds])));
                 }
               }}
             >
-              {instanciaIds.length === instancias.length && instancias.length > 0 ? "Limpar seleção" : "Selecionar todas"}
+              {instanciasVisiveis.length > 0 && instanciasVisiveis.every((i) => instanciaIds.includes(i.id)) ? "Limpar seleção" : "Selecionar todas"}
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
               {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
@@ -1089,8 +1091,39 @@ export default function EnvioMeta() {
               {sincronizandoPerfis ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
               Sincronizar perfis
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="sm" variant="outline" disabled={bmsDisponiveis.length === 0}>
+                  <Building2 className="h-3.5 w-3.5 mr-1.5" />
+                  {bmFiltro.length > 0 ? `BMs (${bmFiltro.length})` : "BMs"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-auto">
+                <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {bmsDisponiveis.map((bm) => (
+                  <DropdownMenuCheckboxItem
+                    key={bm.id}
+                    checked={bmFiltro.includes(bm.id)}
+                    onCheckedChange={() => toggleBmFiltro(bm.id)}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <span className="truncate">{bm.nome}</span>
+                    <span className="ml-auto pl-2 text-xs text-muted-foreground">{bm.qtd}</span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmFiltro(bmsDisponiveis.map((b) => b.id)); }}>
+                  Selecionar todas
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmFiltro([]); }}>
+                  Limpar filtro
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
           </div>
+
           <div className="overflow-auto flex-1 -mx-1 px-1">
           {instanciaIds.length > 0 && instanciaIds.every((id) => (instancias.find((x) => x.id === id)?.estado_pool || "aguardando_templates") !== "ativo") && (
             <div className="mb-3 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
