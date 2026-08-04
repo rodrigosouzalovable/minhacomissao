@@ -487,7 +487,8 @@ serve(async (req) => {
           // 1) Se o telefone bate (últimos 8 dígitos, tolera "9" móvel) com algum acordo,
           //    aplica a etiqueta "Atendente: <nome>" do usuário que lançou o acordo (LOCKED — só admin remove).
           // 2) Caso contrário, cai no rodízio (round-robin por menor carga).
-          // Só aplica etiqueta de atendente para contatos na caixa padrão (folder_id null).
+          // A etiqueta só pode ser de um atendente RESPONSÁVEL pela caixa de mensagens
+          // (folder) em que a conversa está. Caixa Padrão => meta_inbox_default_members.
           let _folderIdContato: string | null = null;
           if (!isEcho && contatoIdFinal) {
             const { data: _cFolder } = await supabase
@@ -497,7 +498,7 @@ serve(async (req) => {
               .maybeSingle();
             _folderIdContato = (_cFolder as any)?.folder_id ?? null;
           }
-          if (!isEcho && contatoIdFinal && _folderIdContato === null) {
+          if (!isEcho && contatoIdFinal) {
             try {
               const { data: atendentesRaw } = await supabase
                 .from('meta_whatsapp_etiquetas')
@@ -508,6 +509,21 @@ serve(async (req) => {
               // Todas as etiquetas de atendente (usadas para checar se contato já tem uma)
               const atendentes = atendentesRaw || [];
               const atendenteIds = atendentes.map((a: any) => a.id);
+
+              // ---- Responsáveis da caixa de mensagens da conversa ----
+              const permitidosCaixa = new Set<string>();
+              if (_folderIdContato) {
+                const { data: mem } = await supabase
+                  .from('meta_inbox_folder_members')
+                  .select('user_id')
+                  .eq('folder_id', _folderIdContato);
+                for (const m of (mem || [])) permitidosCaixa.add((m as any).user_id);
+              } else {
+                const { data: mem } = await supabase
+                  .from('meta_inbox_default_members')
+                  .select('user_id');
+                for (const m of (mem || [])) permitidosCaixa.add((m as any).user_id);
+              }
 
               // ---- Elegibilidade: apenas usuários com "Atende no Inbox Meta Oficial" ativo ----
               // Casa etiqueta "Atendente: <nome>" com profiles.nome e user_permissions.atende_inbox_meta.
@@ -530,12 +546,21 @@ serve(async (req) => {
               const etiquetaElegivel = (nomeEtiqueta: string) => {
                 const nome = String(nomeEtiqueta || '').replace(/^atendente:\s*/i, '').trim().toLowerCase();
                 if (!nome) return false;
-                return nomeElegivel.get(nome) ?? false;
+                if (!(nomeElegivel.get(nome) ?? false)) return false;
+                const uid = userIdPorNome.get(nome);
+                if (!uid) return false;
+                return permitidosCaixa.has(uid);
               };
 
-              // Lista elegível para RODÍZIO — só quem tem a permissão ativa
+              // Lista elegível para RODÍZIO — permissão ativa E responsável pela caixa
               const atendentesRodizio = atendentes.filter((a: any) => etiquetaElegivel(a.nome));
               const atendenteRodizioIds = atendentesRodizio.map((a: any) => a.id);
+              if (atendentesRodizio.length === 0) {
+                console.log('[MetaWebhook] nenhum atendente responsável elegível na caixa', {
+                  folder_id: _folderIdContato,
+                  contato_id: contatoIdFinal,
+                });
+              }
 
 
               // Já tem atendente atribuído?
