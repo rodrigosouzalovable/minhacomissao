@@ -161,6 +161,7 @@ export default function MetaTemplates() {
   }, []);
 
   const varsCorpo = useMemo(() => extrairVars(corpo), [corpo]);
+  const riscosDeContexto = useMemo(() => riscosDeConteudo(corpo, categoria), [corpo, categoria]);
   const nVarsCorpo = varsCorpo.numeradas;
   const varsNomeadas = varsCorpo.nomeadas;
 
