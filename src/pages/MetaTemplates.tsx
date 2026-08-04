@@ -121,6 +121,7 @@ export default function MetaTemplates() {
   const [rodape, setRodape] = useState("");
   const [botoes, setBotoes] = useState<Botao[]>([]);
   const [exemploBody, setExemploBody] = useState<string[]>([]);
+  const [exemploNomeado, setExemploNomeado] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   // mídia do cabeçalho
   const [mediaPath, setMediaPath] = useState<string | null>(null);
