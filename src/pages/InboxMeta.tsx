@@ -1307,6 +1307,7 @@ export default function InboxMeta() {
                                   media_url: m.media_url, whatsapp_msg_id: m.wa_message_id,
                                   status_envio: m.status_envio,
                                   conteudo_citado: m.conteudo_citado,
+                                  contatos_payload: (m as any).contatos_payload ?? null,
                                   template_botoes: (m as any).template_botoes ?? null,
                                 } as any}
                                 formatMsgTime={formatMsgTime}
