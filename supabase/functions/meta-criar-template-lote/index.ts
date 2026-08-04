@@ -175,7 +175,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { mestre_id, instancia_ids, apenas_falhas } = await req.json();
+    const { mestre_id, instancia_ids, apenas_falhas, modo, ignorar_validacao } = await req.json();
     if (!mestre_id) throw new Error("mestre_id obrigatório");
 
     const supabase = createClient(
@@ -195,6 +195,17 @@ serve(async (req) => {
       .from("meta_templates_mestre").select("*").eq("id", mestre_id).maybeSingle();
     if (me || !mestre) throw new Error("Template mestre não encontrado");
 
+    // ===== Pré-voo: bloqueia submissões que a Meta rejeitaria com certeza =====
+    if (ignorar_validacao !== true) {
+      const problemas = validarMestre(mestre);
+      if (problemas.length > 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: problemas.join(" "), validacao: problemas }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     let query = supabase.from("meta_whatsapp_instances")
       .select("id, nome, waba_id, phone_number_id, access_token, ativo, meta_bm_id");
     if (Array.isArray(instancia_ids) && instancia_ids.length > 0) {
@@ -202,8 +213,40 @@ serve(async (req) => {
     } else {
       query = query.eq("ativo", true);
     }
-    const { data: instancias, error: ie } = await query;
-    if (ie || !instancias) throw new Error("Falha ao carregar instâncias");
+    const { data: instanciasRaw, error: ie } = await query;
+    if (ie || !instanciasRaw) throw new Error("Falha ao carregar instâncias");
+
+    let instancias = instanciasRaw;
+
+    // ===== Modo replicar: só permitido depois de o piloto ser aprovado =====
+    if (modo === "replicar") {
+      const { data: jaEnviados } = await supabase
+        .from("meta_templates_instancia")
+        .select("instancia_id, status")
+        .eq("template_mestre_id", mestre_id);
+      const aprovadas = (jaEnviados || []).filter((r: any) => r.status === "APPROVED");
+      if (aprovadas.length === 0) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Nenhuma instância piloto aprovada ainda. Aguarde a aprovação da Meta no piloto antes de replicar.",
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const aprovadasIds = new Set(aprovadas.map((r: any) => r.instancia_id));
+      instancias = instancias.filter((i: any) => !aprovadasIds.has(i.id));
+      if (instancias.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Todas as instâncias selecionadas já estão aprovadas." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    if (modo === "piloto") {
+      instancias = instancias.slice(0, 1);
+    }
 
     // Se o mestre usa cabeçalho de mídia, pré-carregamos o arquivo do Storage
     const precisaMidia =
