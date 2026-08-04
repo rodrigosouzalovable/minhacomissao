@@ -60,11 +60,20 @@ serve(async (req) => {
         const remotoById = new Map(remotos.map((t) => [String(t.id), t]));
         const remotoByName = new Map(remotos.map((t) => [`${t.name}|${t.language}`, t]));
 
-        const { data: locais } = await supabase
-          .from("meta_templates_instancia")
-          .select("id, meta_template_id, template_mestre_id, status, motivo_rejeicao")
-          .eq("instancia_id", inst.id)
-          .or("status.in.(PENDING,ENVIADO),and(status.eq.REJECTED,motivo_rejeicao.is.null)");
+        const [locPend, locRej] = await Promise.all([
+          supabase
+            .from("meta_templates_instancia")
+            .select("id, meta_template_id, template_mestre_id, status, motivo_rejeicao")
+            .eq("instancia_id", inst.id)
+            .in("status", ["PENDING", "ENVIADO"]),
+          supabase
+            .from("meta_templates_instancia")
+            .select("id, meta_template_id, template_mestre_id, status, motivo_rejeicao")
+            .eq("instancia_id", inst.id)
+            .eq("status", "REJECTED")
+            .is("motivo_rejeicao", null),
+        ]);
+        const locais = [...(locPend.data || []), ...(locRej.data || [])];
 
         for (const local of locais || []) {
           let remoto: any = null;
@@ -80,20 +89,29 @@ serve(async (req) => {
           const novoStatus = String(remoto.status || "PENDING").toUpperCase();
           let motivo: string | null = remoto.rejected_reason || null;
 
-          // Se REJECTED sem motivo, busca detalhe individual do template
-          if (novoStatus === "REJECTED" && !motivo && remoto.id) {
+          // Se REJECTED, busca sempre o detalhe individual do template para
+          // capturar o motivo real (rejected_reason / categoria / quality score).
+          if (novoStatus === "REJECTED" && remoto.id) {
             try {
               const detRes = await fetch(
-                `https://graph.facebook.com/v21.0/${remoto.id}?fields=status,rejected_reason,quality_score,category`,
+                `https://graph.facebook.com/v21.0/${remoto.id}?fields=status,rejected_reason,quality_score,category,name,language`,
                 { headers: { Authorization: `Bearer ${inst.access_token}` } },
               );
               const det = await detRes.json();
               if (detRes.ok) {
-                motivo = det?.rejected_reason || motivo;
+                const partes: string[] = [];
+                if (det?.rejected_reason) partes.push(String(det.rejected_reason));
+                if (det?.category) partes.push(`categoria=${det.category}`);
                 const qs = det?.quality_score?.score;
-                if (!motivo && qs) motivo = `quality_score=${qs}`;
+                if (qs) partes.push(`quality_score=${qs}`);
+                const reasons = det?.quality_score?.reasons;
+                if (Array.isArray(reasons) && reasons.length > 0) partes.push(reasons.join("; "));
+                if (partes.length > 0) motivo = partes.join(" · ");
+              } else {
+                motivo = motivo || det?.error?.message || null;
               }
             } catch (_e) { /* segue */ }
+            if (!motivo) motivo = "Rejeitado pela Meta sem motivo detalhado na API";
           }
 
           // pula se nada mudou
