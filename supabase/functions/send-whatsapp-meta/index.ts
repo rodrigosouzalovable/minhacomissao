@@ -684,6 +684,38 @@ Deno.serve(async (req) => {
         // O sistema não cria etiquetas sozinho; só usuários criam via UI.
         if (atendenteNome && contatoIdFinal) {
           try {
+            // Só etiqueta se o remetente for responsável pela caixa do contato
+            const { data: cRow } = await supabase
+              .from('meta_whatsapp_contatos')
+              .select('folder_id')
+              .eq('id', contatoIdFinal)
+              .maybeSingle();
+            const folderDoContato = (cRow as any)?.folder_id ?? null;
+            const remetenteId = user_id || inst.user_id;
+            let ehResponsavel = false;
+            if (folderDoContato) {
+              const { data: m } = await supabase
+                .from('meta_inbox_folder_members')
+                .select('user_id')
+                .eq('folder_id', folderDoContato)
+                .eq('user_id', remetenteId)
+                .maybeSingle();
+              ehResponsavel = !!m;
+            } else {
+              const { data: m } = await supabase
+                .from('meta_inbox_default_members')
+                .select('user_id')
+                .eq('user_id', remetenteId)
+                .maybeSingle();
+              ehResponsavel = !!m;
+            }
+            if (!ehResponsavel) {
+              console.log('[send-whatsapp-meta] remetente não é responsável pela caixa, sem etiqueta', {
+                folder_id: folderDoContato, remetenteId,
+              });
+              throw new Error('__skip_etiqueta__');
+            }
+
             const primeiro = atendenteNome.split(/\s+/)[0];
             const { data: etiqs } = await supabase
               .from('meta_whatsapp_etiquetas')
@@ -693,6 +725,7 @@ Deno.serve(async (req) => {
             const etiq = (etiqs ?? []).sort(
               (a: any, b: any) => String(b.nome).length - String(a.nome).length,
             )[0];
+
 
             if (etiq?.id) {
               const { error: linkErr } = await supabase
