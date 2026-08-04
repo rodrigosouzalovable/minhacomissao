@@ -500,6 +500,34 @@ export default function MetaTemplates() {
                     </div>
                   )}
 
+                  {varsNomeadas.length > 0 && (
+                    <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+                      <Label>Exemplos das variáveis nomeadas *</Label>
+                      <p className="text-xs text-muted-foreground">
+                        A Meta exige um exemplo por variável nomeada. Sem isso o template é rejeitado com INVALID_FORMAT.
+                      </p>
+                      {varsNomeadas.map((k) => (
+                        <div key={k} className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground w-28 truncate">{`{{${k}}}`}</span>
+                          <Input
+                            value={exemploNomeado[k] ?? ""}
+                            onChange={(e) => setExemploNomeado((p) => ({ ...p, [k]: e.target.value }))}
+                            placeholder={`Exemplo para ${k}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {riscosDeContexto.length > 0 && (
+                    <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                      <Label className="text-amber-600 dark:text-amber-400">Risco de rejeição</Label>
+                      {riscosDeContexto.map((r, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">{r}</p>
+                      ))}
+                    </div>
+                  )}
+
                   <div>
                     <Label>Rodapé</Label>
                     <Input value={rodape} onChange={(e) => setRodape(e.target.value)} maxLength={60} />
