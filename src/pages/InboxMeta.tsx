@@ -1129,7 +1129,7 @@ export default function InboxMeta() {
                 <MetaConversaContextMenu
                   key={c.id}
                   contatoId={c.id}
-                  etiquetas={etiquetas}
+                  etiquetas={etiquetasMenu}
                   contatoEtiquetaIds={etIds}
                   etiquetasBloqueadas={etiquetasBloqueadas[c.id] ?? new Set()}
                   fixado={c.fixado}
