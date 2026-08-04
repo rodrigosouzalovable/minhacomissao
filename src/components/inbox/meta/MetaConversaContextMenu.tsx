@@ -13,6 +13,8 @@ interface Props {
   children: ReactNode;
   contatoId: string;
   etiquetas: MetaEtiqueta[];
+  /** Lista completa (sem filtro por caixa) usada na janela de gerenciamento */
+  etiquetasGerenciar?: MetaEtiqueta[];
   contatoEtiquetaIds: string[];
   etiquetasBloqueadas?: Set<string>;
   fixado: boolean;
@@ -26,7 +28,7 @@ interface Props {
 }
 
 export function MetaConversaContextMenu({
-  children, contatoId, etiquetas, contatoEtiquetaIds, etiquetasBloqueadas,
+  children, contatoId, etiquetas, etiquetasGerenciar, contatoEtiquetaIds, etiquetasBloqueadas,
   fixado, arquivado,
   onMarcarNaoLida, onExcluirConversa, onEtiquetaToggle, onEtiquetasChange, onFixarToggle, onArquivarToggle,
 }: Props) {
@@ -145,7 +147,7 @@ export function MetaConversaContextMenu({
           </ContextMenuSub>
         </ContextMenuContent>
       </ContextMenu>
-      <MetaEtiquetasDialog open={gerenciarOpen} onOpenChange={setGerenciarOpen} etiquetas={etiquetas} onChange={onEtiquetasChange} />
+      <MetaEtiquetasDialog open={gerenciarOpen} onOpenChange={setGerenciarOpen} etiquetas={etiquetasGerenciar ?? etiquetas} onChange={onEtiquetasChange} />
     </>
   );
 }
