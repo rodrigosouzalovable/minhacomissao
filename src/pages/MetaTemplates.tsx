@@ -72,11 +72,37 @@ const STATUS_COLORS: Record<string, string> = {
   DISABLED: "bg-muted text-muted-foreground",
 };
 
-function extractVars(text: string): number {
-  const matches = Array.from(text.matchAll(/\{\{\s*(\d+)\s*\}\}/g));
-  if (matches.length === 0) return 0;
-  return Math.max(...matches.map((m) => Number(m[1])));
+// Extrai variáveis do corpo separando numeradas ({{1}}) de nomeadas ({{name}}).
+function extrairVars(text: string): { numeradas: number; nomeadas: string[] } {
+  const numeradas = new Set<number>();
+  const nomeadas: string[] = [];
+  for (const m of String(text || "").matchAll(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*|\d+)\s*\}\}/g)) {
+    const k = m[1];
+    if (/^\d+$/.test(k)) numeradas.add(Number(k));
+    else if (!nomeadas.includes(k)) nomeadas.push(k);
+  }
+  return {
+    numeradas: numeradas.size > 0 ? Math.max(...numeradas) : 0,
+    nomeadas,
+  };
 }
+
+// Termos que a Meta costuma ler como oferta/promoção — risco de rejeição em UTILITY.
+const TERMOS_PROMOCIONAIS = [
+  "oferta", "promoção", "promocao", "aproveite", "desconto", "condições", "condicoes",
+  "imperdível", "imperdivel", "última chance", "ultima chance", "exclusivo", "vantagem",
+];
+
+function riscosDeConteudo(corpo: string, categoria: string): string[] {
+  if (categoria !== "UTILITY") return [];
+  const txt = corpo.toLowerCase();
+  const achados = TERMOS_PROMOCIONAIS.filter((t) => txt.includes(t));
+  if (achados.length === 0) return [];
+  return [
+    `O corpo usa termos promocionais (${achados.join(", ")}). Em UTILITY isso costuma gerar rejeição por categoria incorreta — descreva uma transação existente do cliente (ex.: boleto, parcela, contrato).`,
+  ];
+}
+
 
 export default function MetaTemplates() {
   const [tab, setTab] = useState("criar");
