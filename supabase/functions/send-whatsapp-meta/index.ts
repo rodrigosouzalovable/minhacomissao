@@ -184,9 +184,17 @@ function getTemplateComponents(template: any): any[] {
 }
 
 function getHeaderFormat(template: any): string {
-  const header = getTemplateComponents(template).find((c: any) => c?.type === 'HEADER');
-  return String(header?.format || template?.variaveis?._header_format || '').toUpperCase();
+  const components = getTemplateComponents(template);
+  const header = components.find((c: any) => c?.type === 'HEADER');
+  if (header) return String(header.format || '').toUpperCase();
+  // Components conhecidos e SEM header → não envie parâmetro de header.
+  // A Meta rejeita com #132018 ("Template does not contain title component,
+  // no parameters allowed"). _header_format só vale como fallback quando não
+  // conhecemos os components deste template.
+  if (components.length > 0) return '';
+  return String(template?.variaveis?._header_format || '').toUpperCase();
 }
+
 
 function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId?: string | null) {
   const components: any[] = [];
@@ -418,7 +426,16 @@ Deno.serve(async (req) => {
       const vars: any = (template.variaveis || {}) as any;
       const hasImage = typeof vars?._header_image_url === 'string' && vars._header_image_url.trim().length > 0;
       const hasComponents = Array.isArray(vars?._components) && vars._components.length > 0;
-      if (!hasImage || !hasComponents) {
+      // Se os components deste template já provam que NÃO existe header,
+      // não herda imagem/formato de irmãs (evita #132018 na Meta).
+      const semHeaderLocal = hasComponents &&
+        !vars._components.some((c: any) => c?.type === 'HEADER');
+      if (semHeaderLocal) {
+        delete vars._header_image_url;
+        delete vars._header_format;
+        delete vars._header_media_ids;
+        (template as any).variaveis = vars;
+      } else if (!hasImage || !hasComponents) {
         const { data: siblings } = await supabase
           .from('meta_whatsapp_templates')
           .select('variaveis')
@@ -444,6 +461,7 @@ Deno.serve(async (req) => {
         }
         (template as any).variaveis = vars;
       }
+
     } catch (e) {
       console.log('[send-whatsapp-meta] fallback header/components falhou:', String(e).slice(0, 200));
     }
