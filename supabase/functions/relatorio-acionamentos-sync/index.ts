@@ -211,6 +211,8 @@ Deno.serve(async (req) => {
 
     const totalAcordos = (acordos || []).length;
     const valorAcordos = (acordos || []).reduce((s: number, a: any) => s + Number(a.valor_total || 0), 0);
+    const totLigacoes = linhas.reduce((s, l) => s + l.ligacoes, 0);
+
 
     let enviado: any = { skipped: true };
     if (notificar) {
