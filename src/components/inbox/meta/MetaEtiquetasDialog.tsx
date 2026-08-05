@@ -46,7 +46,7 @@ function Paleta({ valor, onSelect, size = 'md' }: { valor: string; onSelect: (c:
   );
 }
 
-export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }: Props) {
+export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, isAdmin = false, modoConfig = false }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [criando, setCriando] = useState(false);
@@ -56,6 +56,25 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState('');
   const [editCor, setEditCor] = useState(CORES[0]);
+
+  const alternarAtiva = async (et: MetaEtiqueta) => {
+    const novo = et.ativa === false;
+    const { data, error } = await supabase
+      .from('meta_whatsapp_etiquetas')
+      .update({ ativa: novo } as any)
+      .eq('id', et.id)
+      .select('id');
+    if (error || !data || data.length === 0) {
+      toast({
+        title: 'Não foi possível alterar',
+        description: error?.message || 'Apenas o administrador pode ativar/desativar etiquetas.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    onChange();
+  };
+
 
   const criar = async () => {
     if (!nome.trim() || !user) return;
