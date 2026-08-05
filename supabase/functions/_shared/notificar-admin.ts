@@ -165,95 +165,96 @@ export async function notificarAdmin(
       idx = ultIdx >= 0 ? (ultIdx + 1) % insts.length : 0;
     }
 
-    const numero = String(cfg.admin_phone).replace(/\D/g, "");
-    const numeroFinal = numero.startsWith("55") ? numero : `55${numero}`;
+    const brutos = params.destinatarios?.length
+      ? params.destinatarios
+      : [String(cfg.admin_phone)];
+    const destinos = Array.from(
+      new Set(
+        brutos
+          .map((n) => String(n ?? "").replace(/\D/g, ""))
+          .filter((n) => n.length >= 10)
+          .map((n) => (n.startsWith("55") ? n : `55${n}`)),
+      ),
+    );
+    if (!destinos.length) return { success: false, error: "sem_destinatario", fallback: true };
+
     const mensagemFinal = `🤖 *Aviso Sistema*\n\n${params.mensagem}`;
 
-    const statusChecks = await Promise.allSettled(
-      insts.map(async (inst: any) => ({ inst, connected: await checkInstanceConnected(inst) })),
-    );
-    const connectedIds = new Set(
-      statusChecks
-        .filter((result): result is PromiseFulfilledResult<{ inst: any; connected: boolean }> => result.status === "fulfilled")
-        .filter((result) => result.value.connected)
-        .map((result) => result.value.inst.id),
-    );
-    const orderedInsts = insts.filter((inst: any) => connectedIds.has(inst.id));
+    const enviarPara = async (numeroFinal: string): Promise<{ ok: boolean; erro?: string }> => {
+      let ultimoErro = "sem_tentativas";
+      const errosTentativas: string[] = [];
+      const connectedStartIdx = cfg.ultima_instancia_id
+        ? Math.max(0, (orderedInsts.findIndex((i: any) => i.id === cfg.ultima_instancia_id) + 1) % orderedInsts.length)
+        : 0;
+      for (let t = 0; t < orderedInsts.length; t++) {
+        const inst: any = orderedInsts[(connectedStartIdx + t) % orderedInsts.length];
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const ctrl = new AbortController();
+          timer = setTimeout(() => ctrl.abort(), 7000);
+          const cleanUrl = String(inst.server_url).replace(/\/+$/, "");
+          const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
 
-    if (!orderedInsts.length) {
-      const erroFinal = `nenhuma_instancia_conectada; ativas_verificadas=${insts.length}`;
+          for (const endpoint of endpoints) {
+            const res = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", token: inst.instance_token },
+              body: JSON.stringify({ number: numeroFinal, text: mensagemFinal }),
+              signal: ctrl.signal,
+            });
+            const respText = await res.text();
+            const providerError = hasProviderError(respText);
+            if (res.ok && !providerError) {
+              if (timer) clearTimeout(timer);
+              await supabase.from("admin_notificacoes_log").insert({
+                tipo: params.tipo,
+                chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numeroFinal}` : null,
+                mensagem: `[${numeroFinal}] ${params.mensagem}`,
+                instancia_envio_id: inst.id,
+                status: "enviado",
+              });
+              await supabase
+                .from("admin_notificacoes_config")
+                .update({ ultima_instancia_id: inst.id, updated_at: new Date().toISOString() })
+                .eq("id", 1);
+              return { ok: true };
+            }
+
+            ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.substring(0, 200);
+            errosTentativas.push(ultimoErro);
+            if (res.status === 405) continue;
+            if (!isRetryableInstanceError(respText, res.status)) break;
+          }
+          if (timer) clearTimeout(timer);
+        } catch (e) {
+          if (timer) clearTimeout(timer);
+          ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.substring(0, 200);
+          errosTentativas.push(ultimoErro);
+        }
+      }
+
+      const erroFinal = errosTentativas.slice(-10).join(" | ") || ultimoErro;
       await supabase.from("admin_notificacoes_log").insert({
         tipo: params.tipo,
-        chave_idempotencia: params.chaveIdempotencia ?? null,
-        mensagem: params.mensagem,
+        chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numeroFinal}` : null,
+        mensagem: `[${numeroFinal}] ${params.mensagem}`,
         status: "erro",
         erro_detalhe: erroFinal,
       });
-      return { success: false, error: erroFinal, fallback: true };
+      return { ok: false, erro: erroFinal };
+    };
+
+    const resultados: { ok: boolean; erro?: string }[] = [];
+    for (const dest of destinos) {
+      resultados.push(await enviarPara(dest));
     }
 
-    // Tenta todas as instâncias conectadas em round-robin até uma enviar de verdade
-    let ultimoErro = "sem_tentativas";
-    const errosTentativas: string[] = [];
-    const connectedStartIdx = cfg.ultima_instancia_id
-      ? Math.max(0, (orderedInsts.findIndex((i: any) => i.id === cfg.ultima_instancia_id) + 1) % orderedInsts.length)
-      : 0;
-    for (let t = 0; t < orderedInsts.length; t++) {
-      const inst: any = orderedInsts[(connectedStartIdx + t) % orderedInsts.length];
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        const ctrl = new AbortController();
-        timer = setTimeout(() => ctrl.abort(), 7000);
-        const cleanUrl = String(inst.server_url).replace(/\/+$/, "");
-        const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
-
-        for (const endpoint of endpoints) {
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", token: inst.instance_token },
-            body: JSON.stringify({ number: numeroFinal, text: mensagemFinal }),
-            signal: ctrl.signal,
-          });
-          const respText = await res.text();
-          const providerError = hasProviderError(respText);
-          if (res.ok && !providerError) {
-            if (timer) clearTimeout(timer);
-            await supabase.from("admin_notificacoes_log").insert({
-              tipo: params.tipo,
-              chave_idempotencia: params.chaveIdempotencia ?? null,
-              mensagem: params.mensagem,
-              instancia_envio_id: inst.id,
-              status: "enviado",
-            });
-            await supabase
-              .from("admin_notificacoes_config")
-              .update({ ultima_instancia_id: inst.id, updated_at: new Date().toISOString() })
-              .eq("id", 1);
-            return { success: true };
-          }
-
-          ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.substring(0, 200);
-          errosTentativas.push(ultimoErro);
-          if (res.status === 405) continue;
-          if (!isRetryableInstanceError(respText, res.status)) break;
-        }
-        if (timer) clearTimeout(timer);
-      } catch (e) {
-        if (timer) clearTimeout(timer);
-        ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.substring(0, 200);
-        errosTentativas.push(ultimoErro);
-      }
-    }
-
-    const erroFinal = errosTentativas.slice(-10).join(" | ") || ultimoErro;
-    await supabase.from("admin_notificacoes_log").insert({
-      tipo: params.tipo,
-      chave_idempotencia: params.chaveIdempotencia ?? null,
-      mensagem: params.mensagem,
-      status: "erro",
-      erro_detalhe: erroFinal,
-    });
-    return { success: false, error: erroFinal, fallback: true };
+    if (resultados.some((r) => r.ok)) return { success: true };
+    return {
+      success: false,
+      error: resultados.map((r) => r.erro).filter(Boolean).join(" || ").substring(0, 400),
+      fallback: true,
+    };
   } catch (e) {
     return { success: false, error: String(e).substring(0, 200), fallback: true };
   }
