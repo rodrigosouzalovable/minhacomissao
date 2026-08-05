@@ -2,6 +2,7 @@
 // Fluxo: identifica CPF -> se já tem acordo, chama humano; se não tem, envia proposta calculada.
 // A IA nunca cria acordo: ao escolher à vista/parcelado, avisa os contatos de emergência.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { notificarAdmin } from '../_shared/notificar-admin.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -113,20 +114,69 @@ async function enviarTexto(supabase: any, instanciaId: string, telefone: string 
   return data;
 }
 
-async function avisarEmergencia(supabase: any, mensagem: string) {
+const ETIQUETA_HUMANO = 'Aguardando Humano';
+
+async function etiquetarAguardandoHumano(supabase: any, contatoId: string) {
+  try {
+    let { data: et } = await supabase
+      .from('meta_whatsapp_etiquetas')
+      .select('id')
+      .ilike('nome', ETIQUETA_HUMANO)
+      .limit(1)
+      .maybeSingle();
+
+    if (!et) {
+      const { data: adminRole } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'admin')
+        .limit(1)
+        .maybeSingle();
+      const { data: nova, error: errNova } = await supabase
+        .from('meta_whatsapp_etiquetas')
+        .insert({ nome: ETIQUETA_HUMANO, cor: '#F59E0B', user_id: (adminRole as any)?.user_id, ativa: true })
+        .select('id')
+        .maybeSingle();
+      if (errNova) throw errNova;
+      et = nova;
+    }
+    if (!et?.id) return;
+
+    const { error } = await supabase
+      .from('meta_whatsapp_contato_etiquetas')
+      .upsert({ contato_id: contatoId, etiqueta_id: (et as any).id, origem: 'manual' }, { onConflict: 'contato_id,etiqueta_id', ignoreDuplicates: true });
+    if (error) throw error;
+    console.log('[MetaIA] etiqueta Aguardando Humano aplicada', { contatoId });
+  } catch (e: any) {
+    console.error('[MetaIA] falha ao etiquetar Aguardando Humano', e?.message || e);
+  }
+}
+
+async function avisarEmergencia(supabase: any, mensagem: string, contatoId?: string) {
+  if (contatoId) await etiquetarAguardandoHumano(supabase, contatoId);
+
   const { data: contatos } = await supabase
     .from('meta_ia_contatos_emergencia')
     .select('telefone, nome')
     .eq('ativo', true);
-  for (const c of (contatos || [])) {
-    try {
-      await supabase.functions.invoke('send-whatsapp', {
-        body: { telefone: (c as any).telefone, mensagem },
-      });
-    } catch (e: any) {
-      console.error('[MetaIA] falha ao avisar emergência', (c as any).telefone, e?.message || e);
-    }
+
+  const destinatarios = (contatos || [])
+    .map((c: any) => String(c.telefone || '').replace(/\D/g, ''))
+    .filter((t: string) => t.length >= 10);
+
+  if (!destinatarios.length) {
+    console.error('[MetaIA] nenhum contato de emergência ativo cadastrado');
+    return { success: false, error: 'sem_contato_emergencia' };
   }
+
+  const res = await notificarAdmin(supabase, {
+    tipo: 'ia_humano',
+    mensagem,
+    destinatarios,
+  });
+  if (!res.success) console.error('[MetaIA] falha ao avisar emergência', res.error || res.skipped);
+  else console.log('[MetaIA] emergência avisada', destinatarios.length, 'contato(s)');
+  return res;
 }
 
 Deno.serve(async (req) => {
@@ -135,7 +185,15 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
-    const { contato_id, texto } = await req.json();
+    const body = await req.json();
+    const { contato_id, texto, teste } = body || {};
+
+    if (teste) {
+      const res = await avisarEmergencia(supabase,
+        `🤖 *IA — teste de aviso*\n\nEste é um teste de notificação de atendimento humano da caixa IA.\nSe você recebeu esta mensagem, os avisos estão funcionando.`);
+      return json({ success: !!res.success, error: (res as any).error || (res as any).skipped || null });
+    }
+
     if (!contato_id) return json({ success: false, error: 'contato_id é obrigatório' }, 400);
 
     // ===== Contato / caixa =====
@@ -296,7 +354,7 @@ Deno.serve(async (req) => {
           `🤖 *IA — não consegui identificar o cliente*\n\n` +
           `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
           `Última mensagem: "${String(texto || '').slice(0, 200)}"\n\n` +
-          `Assuma a conversa na caixa IA.`);
+          `Assuma a conversa na caixa IA.`, contato_id);
         console.log('[MetaIA] cpf sem sucesso, humano acionado', { contato_id });
         return json({ success: true, etapa: 'cpf_falhou_humano' });
       }
@@ -342,7 +400,7 @@ Deno.serve(async (req) => {
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Motivo: já possui acordo lançado${atendente ? ` (atendente: ${atendente})` : ''}\n\n` +
-        `Assuma a negociação no Inbox Meta Oficial (caixa IA).`);
+        `Assuma a negociação no Inbox Meta Oficial (caixa IA).`, contato_id);
 
       return json({ success: true, etapa: 'ja_tem_acordo' });
     }
@@ -399,7 +457,7 @@ Deno.serve(async (req) => {
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Credor: ${credor}\n` +
         `Opção escolhida: ${intencao === 'avista' ? `à vista ${vars.valor_avista}` : `${parcelas}x de ${vars.valor_parcela}`}\n\n` +
-        `Finalize o acordo e envie o boleto.`);
+        `Finalize o acordo e envie o boleto.`, contato_id);
       return json({ success: true, etapa: 'confirmacao_escolha' });
     }
 
@@ -410,7 +468,7 @@ Deno.serve(async (req) => {
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Mensagem: "${String(texto || '').slice(0, 300)}"\n\n` +
-        `Assuma a conversa na caixa IA.`);
+        `Assuma a conversa na caixa IA.`, contato_id);
       await supabase.from('meta_ia_conversas_estado')
         .update({ aguardando_humano: true, cpf }).eq('id', estado.id);
       return json({ success: true, etapa: 'duvida_humano' });
