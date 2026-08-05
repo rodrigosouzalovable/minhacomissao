@@ -27,14 +27,27 @@ function brtParts(d: Date) {
   return { dia, hora: Number(hh) };
 }
 
-// Status de ligação atendida na 3C (atendida humana / pós-atendimento)
+// Converte "00:01:23", "83" ou 83 em segundos
+function segundos(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if (!s || s === "-" || s === "null") return 0;
+  if (s.includes(":")) return s.split(":").map((p) => Number(p) || 0).reduce((a, n) => a * 60 + n, 0);
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// ALÔ = houve conversa real com o agente
 function foiAtendida(c: any): boolean {
-  const fala = String(c?.speaking_with_agent_time ?? "00:00:00");
-  if (fala !== "00:00:00" && fala !== "-") return true;
-  const txt = String(c?.readable_status_text ?? "").toLowerCase();
+  if (segundos(c?.speaking_with_agent_time) > 0) return true;
+  if (segundos(c?.speaking_time) > 0) return true;
+  const txt = String(c?.readable_status_text ?? c?.status_text ?? "").toLowerCase();
   if (txt.includes("atendida") && !txt.includes("não atendida") && !txt.includes("nao atendida")) return true;
+  if (Number(c?.agent?.id ?? 0) > 0 && segundos(c?.billed_time) > 0) return true;
   return c?.has_agent === true;
 }
+
 
 async function tresc(base: string, token: string, path: string, params: Record<string, string> = {}) {
   const url = new URL(`${base.replace(/\/+$/, "")}${path}`);
@@ -125,27 +138,30 @@ Deno.serve(async (req) => {
       if (lote.length < 500) break;
     }
 
+    const val = (v: any) => (v && v !== "-" && v !== "null" ? v : null);
     const linhas = registros.map((c: any) => {
       const dt = c.call_date_rfc3339 ? new Date(c.call_date_rfc3339) : new Date(String(c.call_date).replace(" ", "T") + "-03:00");
       const p = brtParts(dt);
+      const numero = String(c.number ?? c.phone ?? "");
       return {
-        call_id: String(c.id),
+        call_id: String(c.id ?? c._id),
         data: p.dia,
         hora: `${p.hora}h-${p.hora + 1}h`,
-        telefone: String(c.number ?? ""),
-        telefone_sufixo: suf8(c.number),
-        status_id: c.status_id ?? null,
-        status_texto: c.readable_status_text ?? null,
+        telefone: numero,
+        telefone_sufixo: suf8(numero),
+        status_id: c.status_id ?? (typeof c.status === "number" ? c.status : null),
+        status_texto: val(c.readable_status_text) ?? val(c.status_text) ?? null,
         atendida: foiAtendida(c),
-        qualificacao_id: c.qualification_id ?? null,
-        qualificacao_nome: c.qualification && c.qualification !== "-" ? c.qualification : null,
-        agente: c.agent && c.agent !== "-" ? c.agent : null,
-        campanha: c.campaign ?? null,
-        campanha_id: c.campaign_id ?? null,
-        modo: c.mode ?? null,
+        qualificacao_id: c.qualification_id ?? c.qualification?.id ?? null,
+        qualificacao_nome: val(c.qualification?.name) ?? (typeof c.qualification === "string" ? val(c.qualification) : null),
+        agente: val(c.agent?.name) ?? (typeof c.agent === "string" ? val(c.agent) : null),
+        campanha: val(c.campaign?.name) ?? (typeof c.campaign === "string" ? val(c.campaign) : null),
+        campanha_id: c.campaign_id ?? c.campaign?.id ?? null,
+        modo: val(c.mode) ?? val(c.call_mode),
         call_date: dt.toISOString(),
       };
     });
+
 
     if (linhas.length > 0) {
       for (let i = 0; i < linhas.length; i += 500) {

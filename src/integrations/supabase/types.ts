@@ -5171,6 +5171,7 @@ export type Database = {
           data: string
           hora: string
           modo: string | null
+          payload_debug: Json | null
           qualificacao_id: number | null
           qualificacao_nome: string | null
           status_id: number | null
@@ -5189,6 +5190,7 @@ export type Database = {
           data: string
           hora: string
           modo?: string | null
+          payload_debug?: Json | null
           qualificacao_id?: number | null
           qualificacao_nome?: string | null
           status_id?: number | null
@@ -5207,6 +5209,7 @@ export type Database = {
           data?: string
           hora?: string
           modo?: string | null
+          payload_debug?: Json | null
           qualificacao_id?: number | null
           qualificacao_nome?: string | null
           status_id?: number | null
