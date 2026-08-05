@@ -3890,6 +3890,7 @@ export type Database = {
       }
       meta_whatsapp_etiquetas: {
         Row: {
+          ativa: boolean
           atualizado_em: string
           cor: string
           criado_em: string
@@ -3899,6 +3900,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ativa?: boolean
           atualizado_em?: string
           cor?: string
           criado_em?: string
@@ -3908,6 +3910,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ativa?: boolean
           atualizado_em?: string
           cor?: string
           criado_em?: string
