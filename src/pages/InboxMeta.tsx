@@ -947,7 +947,7 @@ export default function InboxMeta() {
                     onWheel={(event) => event.stopPropagation()}
                     onTouchMove={(event) => event.stopPropagation()}
                   >
-                  {etiquetas.map(et => {
+                  {etiquetasAtivas.map(et => {
                     const emEdicao = editEtId === et.id;
                     if (emEdicao) {
                       return (
@@ -994,10 +994,16 @@ export default function InboxMeta() {
                   })}
                   </div>
                   <button
-                    onClick={() => { setFiltroEtOpen(false); setEtiquetasOpen(true); }}
+                    onClick={() => { setFiltroEtOpen(false); setEtiquetasConfigOpen(false); setEtiquetasOpen(true); }}
                     className="w-full flex items-center gap-2 text-xs px-2 py-1.5 mt-1 rounded border border-dashed border-border hover:bg-accent text-primary font-medium">
                     <Plus className="h-3.5 w-3.5" />
                     Criar Etiqueta
+                  </button>
+                  <button
+                    onClick={() => { setFiltroEtOpen(false); setEtiquetasOpen(false); setEtiquetasConfigOpen(true); }}
+                    className="w-full flex items-center gap-2 text-xs px-2 py-1.5 mt-1 rounded border border-border hover:bg-accent font-medium">
+                    <Settings2 className="h-3.5 w-3.5" />
+                    Configuração de etiquetas
                   </button>
                 </PopoverContent>
 
