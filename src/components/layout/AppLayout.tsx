@@ -272,16 +272,44 @@ export function AppLayout({ children }: AppLayoutProps) {
     setMetaInboxUnreadCount(count ?? 0);
   }, [user]);
 
+  // Canal Realtime único para os dois badges, com debounce e guarda de aba visível.
+  // Antes eram dois canais sem filtro: cada linha alterada em contatos disparava
+  // uma consulta de contagem em todas as abas abertas de todos os funcionários.
   useEffect(() => {
+    fetchUnreadCount();
     fetchMetaUnreadCount();
+
+    let tInbox: ReturnType<typeof setTimeout> | null = null;
+    let tMeta: ReturnType<typeof setTimeout> | null = null;
+    const agendar = (
+      ref: 'inbox' | 'meta',
+      fn: () => void,
+    ) => {
+      const atual = ref === 'inbox' ? tInbox : tMeta;
+      if (atual) clearTimeout(atual);
+      const id = setTimeout(() => {
+        if (document.visibilityState !== 'visible') return;
+        fn();
+      }, 15000);
+      if (ref === 'inbox') tInbox = id; else tMeta = id;
+    };
+
     const channel = supabase
-      .channel('meta-inbox-unread-badge')
+      .channel('unread-badges')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_contatos' }, () => {
+        agendar('inbox', fetchUnreadCount);
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contatos' }, () => {
-        fetchMetaUnreadCount();
+        agendar('meta', fetchMetaUnreadCount);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchMetaUnreadCount]);
+
+    return () => {
+      if (tInbox) clearTimeout(tInbox);
+      if (tMeta) clearTimeout(tMeta);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchUnreadCount, fetchMetaUnreadCount]);
 
   // Save sidebar order with debounce
   const saveSidebarOrder = useCallback((newOrder: string[]) => {
