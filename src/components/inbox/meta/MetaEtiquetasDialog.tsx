@@ -4,18 +4,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Trash2, Plus, Pencil, Check, X, Tag, Search, UserRound } from 'lucide-react';
+import { Trash2, Plus, Pencil, Check, X, Tag, Search, UserRound, Eye, EyeOff, Settings2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 
 const CORES = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
 
-export interface MetaEtiqueta { id: string; nome: string; cor: string; }
+export interface MetaEtiqueta { id: string; nome: string; cor: string; ativa?: boolean }
 
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   etiquetas: MetaEtiqueta[];
   onChange: () => void;
+  /** Quando true, exibe os controles de ativar/desativar etiquetas (somente admin). */
+  isAdmin?: boolean;
+  /** Modo configuração: foco em editar nome/cor e visibilidade das etiquetas existentes. */
+  modoConfig?: boolean;
 }
 
 const isAtendente = (nome: string) => /^atendente:/i.test(String(nome || '').trim());
@@ -42,7 +47,7 @@ function Paleta({ valor, onSelect, size = 'md' }: { valor: string; onSelect: (c:
   );
 }
 
-export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }: Props) {
+export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, isAdmin = false, modoConfig = false }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [criando, setCriando] = useState(false);
@@ -52,6 +57,25 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState('');
   const [editCor, setEditCor] = useState(CORES[0]);
+
+  const alternarAtiva = async (et: MetaEtiqueta) => {
+    const novo = et.ativa === false;
+    const { data, error } = await supabase
+      .from('meta_whatsapp_etiquetas')
+      .update({ ativa: novo } as any)
+      .eq('id', et.id)
+      .select('id');
+    if (error || !data || data.length === 0) {
+      toast({
+        title: 'Não foi possível alterar',
+        description: error?.message || 'Apenas o administrador pode ativar/desativar etiquetas.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    onChange();
+  };
+
 
   const criar = async () => {
     if (!nome.trim() || !user) return;
@@ -145,15 +169,29 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
         </div>
       );
     }
+    const inativa = et.ativa === false;
     return (
       <div
         key={et.id}
-        className="group flex items-center gap-2 h-9 pl-2 pr-1 rounded-md bg-background hover:bg-accent/40 transition-colors"
+        className={`group flex items-center gap-2 h-9 pl-2 pr-1 rounded-md bg-background hover:bg-accent/40 transition-colors ${inativa ? 'opacity-50' : ''}`}
       >
         <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
-        <span className="text-sm truncate flex-1 min-w-0">{et.nome}</span>
-        <div className="flex items-center shrink-0">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => iniciarEdicao(et)} title="Editar">
+        <span className={`text-sm truncate flex-1 min-w-0 ${inativa ? 'line-through' : ''}`}>{et.nome}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          {isAdmin && (
+            <div className="flex items-center gap-1">
+              {inativa
+                ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                : <Eye className="h-3.5 w-3.5 text-emerald-500" />}
+              <Switch
+                checked={!inativa}
+                onCheckedChange={() => alternarAtiva(et)}
+                className="scale-[0.8]"
+                aria-label={inativa ? 'Ativar etiqueta' : 'Desativar etiqueta'}
+              />
+            </div>
+          )}
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => iniciarEdicao(et)} title="Editar nome e cor">
             <Pencil className="h-3.5 w-3.5" />
           </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => excluir(et.id)} title="Excluir">
@@ -182,11 +220,17 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
       <DialogContent className="max-w-md p-0 gap-0 max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="px-4 py-3 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Tag className="h-4 w-4" /> Etiquetas Meta
+            {modoConfig ? <Settings2 className="h-4 w-4" /> : <Tag className="h-4 w-4" />}
+            {modoConfig ? 'Configuração de etiquetas' : 'Etiquetas Meta'}
             <span className="ml-auto text-xs font-normal text-muted-foreground">
               {etiquetas.length} {etiquetas.length === 1 ? 'etiqueta' : 'etiquetas'}
             </span>
           </DialogTitle>
+          {modoConfig && isAdmin && (
+            <p className="text-[11px] text-muted-foreground text-left">
+              Use o interruptor para deixar a etiqueta visível ou invisível para os usuários.
+            </p>
+          )}
         </DialogHeader>
 
         <div className="px-4 py-3 space-y-2 border-b shrink-0">

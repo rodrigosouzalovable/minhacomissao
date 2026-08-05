@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
-  Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users,
+  Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
 } from 'lucide-react';
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
 import { cn } from '@/lib/utils';
@@ -130,6 +130,7 @@ export default function InboxMeta() {
 
   
   const [etiquetasOpen, setEtiquetasOpen] = useState(false);
+  const [etiquetasConfigOpen, setEtiquetasConfigOpen] = useState(false);
   const [editEtId, setEditEtId] = useState<string | null>(null);
   const [editEtCor, setEditEtCor] = useState<string>(CORES_ETIQUETA[0]);
   const [msgRapidasOpen, setMsgRapidasOpen] = useState(false);
@@ -210,8 +211,8 @@ export default function InboxMeta() {
   const fetchEtiquetas = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase.from('meta_whatsapp_etiquetas')
-      .select('id, nome, cor').order('nome');
-    setEtiquetas((data as MetaEtiqueta[]) ?? []);
+      .select('id, nome, cor, ativa').order('nome');
+    setEtiquetas(((data as any[]) ?? []).map((e) => ({ ...e, ativa: e.ativa !== false })) as MetaEtiqueta[]);
   }, [user]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
@@ -361,16 +362,19 @@ export default function InboxMeta() {
     return () => { cancelado = true; };
   }, [user, currentFolderId]);
 
+  // Etiquetas ativas (desativadas ficam invisíveis nos menus/filtros)
+  const etiquetasAtivas = useMemo(() => etiquetas.filter(e => e.ativa !== false), [etiquetas]);
+
   // Etiquetas oferecidas no menu de contexto: atendentes só da caixa ativa
   const etiquetasMenu = useMemo(() => {
-    if (!nomesAtendenteCaixa) return etiquetas;
-    return etiquetas.filter((e) => {
+    if (!nomesAtendenteCaixa) return etiquetasAtivas;
+    return etiquetasAtivas.filter((e) => {
       const nome = String(e.nome || '').trim();
       if (!/^atendente:/i.test(nome)) return true;
       const puro = nome.replace(/^atendente:\s*/i, '').trim().toLowerCase();
       return nomesAtendenteCaixa.has(puro);
     });
-  }, [etiquetas, nomesAtendenteCaixa]);
+  }, [etiquetasAtivas, nomesAtendenteCaixa]);
 
 
 
@@ -944,7 +948,7 @@ export default function InboxMeta() {
                     onWheel={(event) => event.stopPropagation()}
                     onTouchMove={(event) => event.stopPropagation()}
                   >
-                  {etiquetas.map(et => {
+                  {etiquetasAtivas.map(et => {
                     const emEdicao = editEtId === et.id;
                     if (emEdicao) {
                       return (
@@ -991,10 +995,16 @@ export default function InboxMeta() {
                   })}
                   </div>
                   <button
-                    onClick={() => { setFiltroEtOpen(false); setEtiquetasOpen(true); }}
+                    onClick={() => { setFiltroEtOpen(false); setEtiquetasConfigOpen(false); setEtiquetasOpen(true); }}
                     className="w-full flex items-center gap-2 text-xs px-2 py-1.5 mt-1 rounded border border-dashed border-border hover:bg-accent text-primary font-medium">
                     <Plus className="h-3.5 w-3.5" />
                     Criar Etiqueta
+                  </button>
+                  <button
+                    onClick={() => { setFiltroEtOpen(false); setEtiquetasOpen(false); setEtiquetasConfigOpen(true); }}
+                    className="w-full flex items-center gap-2 text-xs px-2 py-1.5 mt-1 rounded border border-border hover:bg-accent font-medium">
+                    <Settings2 className="h-3.5 w-3.5" />
+                    Configuração de etiquetas
                   </button>
                 </PopoverContent>
 
@@ -1495,7 +1505,8 @@ export default function InboxMeta() {
       </div>
       </div>
 
-      <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} />
+      <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} isAdmin={isAdmin} />
+      <MetaEtiquetasDialog open={etiquetasConfigOpen} onOpenChange={setEtiquetasConfigOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} isAdmin={isAdmin} modoConfig />
       <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
       {user && (
         <MetaFoldersDialog

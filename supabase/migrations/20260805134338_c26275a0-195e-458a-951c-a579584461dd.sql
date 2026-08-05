@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_whatsapp_etiquetas ADD COLUMN IF NOT EXISTS ativa boolean NOT NULL DEFAULT true;
