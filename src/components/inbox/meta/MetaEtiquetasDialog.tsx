@@ -9,13 +9,17 @@ import { useToast } from '@/hooks/use-toast';
 
 const CORES = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
 
-export interface MetaEtiqueta { id: string; nome: string; cor: string; }
+export interface MetaEtiqueta { id: string; nome: string; cor: string; ativa?: boolean }
 
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   etiquetas: MetaEtiqueta[];
   onChange: () => void;
+  /** Quando true, exibe os controles de ativar/desativar etiquetas (somente admin). */
+  isAdmin?: boolean;
+  /** Modo configuração: foco em editar nome/cor e visibilidade das etiquetas existentes. */
+  modoConfig?: boolean;
 }
 
 const isAtendente = (nome: string) => /^atendente:/i.test(String(nome || '').trim());
