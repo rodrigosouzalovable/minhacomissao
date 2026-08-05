@@ -328,6 +328,18 @@ export default function Relatorios() {
           </div>
         </div>
 
+        {/* Funil consolidado */}
+        <FunilAcionamentosCard
+          dataFmt={format(data, 'dd/MM/yyyy')}
+          parcial={dataStr === toDateStr(new Date())}
+          syncEm={syncEm}
+          tentativas={totais.tentativas}
+          whatsapp={totais.whatsapp}
+          cpc={totais.cpc}
+          cpca={totais.cpca}
+          valor={totais.valor}
+        />
+
         {/* Card meta */}
         <Card>
           <CardContent className="pt-6 space-y-3">
