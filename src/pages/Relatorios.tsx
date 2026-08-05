@@ -304,6 +304,8 @@ export default function Relatorios() {
               <Download className="h-4 w-4 mr-2" /> Exportar CSV
             </Button>
             {isAdmin && <ImportarLigacoesDialog onDone={load} />}
+            {isAdmin && <Config3CPlusDialog onDone={load} />}
+
             {isAdmin && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
