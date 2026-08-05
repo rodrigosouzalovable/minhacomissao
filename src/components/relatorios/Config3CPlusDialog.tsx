@@ -153,8 +153,8 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
           <Phone className="h-4 w-4 mr-2" /> 3C Plus
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0">
+        <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle>Integração 3C Plus</DialogTitle>
           <DialogDescription>
             Conecte o discador para alimentar automaticamente as colunas de ligações, alô, CPC e CPC-A.
@@ -164,7 +164,7 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-3">
+        <ScrollArea className="flex-1 px-6 pb-2">
           <div className="space-y-6">
             <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
