@@ -124,22 +124,24 @@ export function MetaConversaContextMenu({
           <ContextMenuSeparator />
           <ContextMenuSub>
             <ContextMenuSubTrigger><Tag className="h-4 w-4 mr-2" />Etiquetas</ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-56">
-              {etiquetas.length === 0 ? (
-                <ContextMenuItem disabled className="text-xs text-muted-foreground">Nenhuma etiqueta</ContextMenuItem>
-              ) : etiquetas.map(et => {
-                const travada = !!etiquetasBloqueadas?.has(et.id) && contatoEtiquetaIds.includes(et.id);
-                return (
-                  <ContextMenuItem key={et.id} onSelect={(e) => { e.preventDefault(); handleToggleEtiqueta(et.id); }}>
-                    <div className="flex items-center gap-2 w-full">
-                      <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
-                      <span className="flex-1 truncate">{et.nome}</span>
-                      {travada && <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" aria-label="Só admin remove" />}
-                      {contatoEtiquetaIds.includes(et.id) && <Check className="h-4 w-4 text-primary shrink-0" />}
-                    </div>
-                  </ContextMenuItem>
-                );
-              })}
+            <ContextMenuSubContent className="w-56 max-h-[420px] flex flex-col p-1">
+              <ScrollArea className="flex-1 -mr-1 pr-1">
+                {etiquetas.length === 0 ? (
+                  <ContextMenuItem disabled className="text-xs text-muted-foreground">Nenhuma etiqueta</ContextMenuItem>
+                ) : etiquetas.map(et => {
+                  const travada = !!etiquetasBloqueadas?.has(et.id) && contatoEtiquetaIds.includes(et.id);
+                  return (
+                    <ContextMenuItem key={et.id} onSelect={(e) => { e.preventDefault(); handleToggleEtiqueta(et.id); }}>
+                      <div className="flex items-center gap-2 w-full">
+                        <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
+                        <span className="flex-1 truncate">{et.nome}</span>
+                        {travada && <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" aria-label="Só admin remove" />}
+                        {contatoEtiquetaIds.includes(et.id) && <Check className="h-4 w-4 text-primary shrink-0" />}
+                      </div>
+                    </ContextMenuItem>
+                  );
+                })}
+              </ScrollArea>
               <ContextMenuSeparator />
               <ContextMenuItem onClick={() => setGerenciarOpen(true)}>
                 <Settings className="h-4 w-4 mr-2" /> Gerenciar etiquetas
