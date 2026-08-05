@@ -147,11 +147,12 @@ Deno.serve(async (req) => {
       return json({ ok: true, ignorado: true });
     }
 
-    const guardarAmostra = url.searchParams.get("debug") === "1" || amostrasLogadas < 4;
+    // Amostra de diagnóstico apenas quando pedida explicitamente (?debug=1)
+    const guardarAmostra = url.searchParams.get("debug") === "1";
     if (guardarAmostra) {
-      amostrasLogadas++;
       console.log("tresc-webhook amostra:", evento, JSON.stringify(c).slice(0, 3000));
     }
+
 
 
 
