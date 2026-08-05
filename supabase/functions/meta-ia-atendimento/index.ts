@@ -274,10 +274,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // CPF/CNPJ vindo na mensagem do cliente (tolera máscara e texto ao redor)
-    const intencao = intencaoLocal(texto || '');
+    // CPF/CNPJ vindo na mensagem do cliente (tolera máscara e texto ao redor, em qualquer etapa)
+    let intencao: 'avista' | 'parcelado' | 'cpf' | 'outro' | 'duvida' = intencaoLocal(texto || '');
     const docMsg = extrairDoc(texto || '');
-    if (!cpf && docMsg && validaCpfCnpj(docMsg)) cpf = docMsg;
+    if (docMsg && validaCpfCnpj(docMsg)) cpf = docMsg;
+    // Sem palavra-chave clara: usa Lovable AI para interpretar a intenção
+    if (intencao === 'outro' && String(texto || '').trim().length > 1) {
+      intencao = await intencaoIA(texto || '');
+      console.log('[MetaIA] intencao IA', intencao, { contato_id });
+    }
 
     if (!cpf) {
       const tentativas = Number(estado.contexto?.tentativas_cpf || 0);
