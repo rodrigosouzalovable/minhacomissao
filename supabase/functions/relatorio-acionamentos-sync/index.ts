@@ -225,8 +225,10 @@ Deno.serve(async (req) => {
         "",
         `📣 Acionamentos: *${tot.tentativas}*`,
         `💬 WhatsApp (Meta): *${tot.whatsapp}*`,
+        `📞 Ligações (3C): *${totLigacoes}*  | Alô: *${tot.alo}* (${pct(tot.alo, totLigacoes)})`,
         `🗣️ Interações/CPC: *${tot.cpc}*  (${pct(tot.cpc, tot.tentativas)})`,
         `🤝 CPC-A: *${tot.cpca}*  (${pct(tot.cpca, tot.cpc)})`,
+
         `📄 Acordos lançados: *${totalAcordos}*`,
         `💵 Valor em acordos: *${brl(valorAcordos || tot.valor)}*`,
         "",
