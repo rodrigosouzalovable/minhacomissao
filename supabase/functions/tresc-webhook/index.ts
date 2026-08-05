@@ -175,8 +175,9 @@ Deno.serve(async (req) => {
       hora: `${p.hora}h-${p.hora + 1}h`,
       telefone: numero,
       telefone_sufixo: suf8(numero),
-      status_id: num(c?.status_id),
-      status_texto: txt(c?.readable_status_text ?? c?.status_text ?? c?.status),
+      status_id: num(c?.status_id ?? c?.status),
+      status_texto: txt(c?.readable_status_text ?? c?.status_text),
+
       atendida: foiAtendida(c),
       qualificacao_id: num(c?.qualification_id ?? c?.qualification?.id),
       qualificacao_nome: txt(c?.qualification?.name ?? (typeof c?.qualification === "string" ? c?.qualification : null)),
