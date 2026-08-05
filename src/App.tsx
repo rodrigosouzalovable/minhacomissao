@@ -68,7 +68,20 @@ const LembreteMeta = lazy(() => import("./pages/LembreteMeta"));
 const GoogleMapsLeads = lazy(() => import("./pages/GoogleMapsLeads"));
 const TenantLayout = lazy(() => import("./pages/tenant/TenantLayout"));
 
-const queryClient = new QueryClient();
+// Evita o efeito "o site fica atualizando sozinho": sem refetch ao focar a janela,
+// dados considerados frescos por 60s e sem refetch em segundo plano.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchIntervalInBackground: false,
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+      retry: 1,
+    },
+  },
+});
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center">Carregando...</div>
