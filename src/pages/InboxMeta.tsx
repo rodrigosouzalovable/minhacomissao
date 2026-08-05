@@ -932,12 +932,18 @@ export default function InboxMeta() {
                     <Tag className="h-3.5 w-3.5" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-1" align="end">
+                <PopoverContent className="w-64 p-1 overflow-hidden" align="end">
                   <button
                     onClick={() => { setFiltroEtiqueta(null); setFiltroEtOpen(false); }}
                     className={cn('w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent', !filtroEtiqueta && 'bg-accent')}>
                     Todas as conversas
                   </button>
+                  <div
+                    className="h-[min(420px,calc(100vh-10rem))] min-h-0 overflow-y-scroll overscroll-contain scrollbar-thin pr-1"
+                    style={{ scrollbarWidth: 'auto', scrollbarColor: 'hsl(var(--muted-foreground)) hsl(var(--muted))' }}
+                    onWheel={(event) => event.stopPropagation()}
+                    onTouchMove={(event) => event.stopPropagation()}
+                  >
                   {etiquetas.map(et => {
                     const emEdicao = editEtId === et.id;
                     if (emEdicao) {
@@ -983,6 +989,7 @@ export default function InboxMeta() {
                       </div>
                     );
                   })}
+                  </div>
                   <button
                     onClick={() => { setFiltroEtOpen(false); setEtiquetasOpen(true); }}
                     className="w-full flex items-center gap-2 text-xs px-2 py-1.5 mt-1 rounded border border-dashed border-border hover:bg-accent text-primary font-medium">
