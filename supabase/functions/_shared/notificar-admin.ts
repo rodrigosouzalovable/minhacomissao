@@ -7,6 +7,8 @@ export interface NotificarAdminParams {
   mensagem: string;
   chaveIdempotencia?: string;
   forcarFlag?: keyof FlagsToggle;
+  /** Se informado, envia para estes números em vez do admin_phone padrão */
+  destinatarios?: string[];
 }
 
 export interface FlagsToggle {
