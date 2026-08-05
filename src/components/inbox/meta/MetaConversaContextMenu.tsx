@@ -3,6 +3,7 @@ import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSub,
   ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuSeparator, ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserRole } from '@/hooks/useUserRole';
