@@ -87,11 +87,25 @@ export default function Relatorios() {
         };
       }
     });
+    const syncs = (rRes.data as any[] | null)?.map(r => r.sync_em).filter(Boolean) ?? [];
+    setSyncEm(syncs.length ? syncs.sort().slice(-1)[0] : null);
     setLinhas(map);
     setMeta(Number((mRes.data as any)?.meta_valor ?? 0));
   }, [dataStr]);
 
+  const sincronizarAgora = async () => {
+    setSincronizando(true);
+    const { error } = await supabase.functions.invoke('relatorio-acionamentos-sync', {
+      body: { dia: dataStr, notificar: false },
+    });
+    setSincronizando(false);
+    if (error) { toast.error('Falha ao atualizar: ' + error.message); return; }
+    toast.success('Relatório atualizado com os dados do Inbox Meta');
+    load();
+  };
+
   useEffect(() => { load(); }, [load]);
+
 
   // Realtime — só para o dia selecionado
   useEffect(() => {
