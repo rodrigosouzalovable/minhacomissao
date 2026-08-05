@@ -220,11 +220,17 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, i
       <DialogContent className="max-w-md p-0 gap-0 max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="px-4 py-3 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Tag className="h-4 w-4" /> Etiquetas Meta
+            {modoConfig ? <Settings2 className="h-4 w-4" /> : <Tag className="h-4 w-4" />}
+            {modoConfig ? 'Configuração de etiquetas' : 'Etiquetas Meta'}
             <span className="ml-auto text-xs font-normal text-muted-foreground">
               {etiquetas.length} {etiquetas.length === 1 ? 'etiqueta' : 'etiquetas'}
             </span>
           </DialogTitle>
+          {modoConfig && isAdmin && (
+            <p className="text-[11px] text-muted-foreground text-left">
+              Use o interruptor para deixar a etiqueta visível ou invisível para os usuários.
+            </p>
+          )}
         </DialogHeader>
 
         <div className="px-4 py-3 space-y-2 border-b shrink-0">
