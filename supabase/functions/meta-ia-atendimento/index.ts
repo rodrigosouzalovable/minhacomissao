@@ -151,20 +151,23 @@ Deno.serve(async (req) => {
       return json({ success: true, skipped: 'limite diário atingido' });
     }
 
-    // Um humano já respondeu essa conversa? (mensagem de saída com user_id real) => IA não atropela
+    // Um humano já respondeu essa conversa DEPOIS do último envio da IA? => IA não atropela
+    const corteHumano: string = String(estado.contexto?.ultimo_envio_ia || estado.created_at);
     const { data: saidaHumana } = await supabase
       .from('meta_whatsapp_mensagens')
-      .select('id')
+      .select('id, conteudo')
       .eq('instancia_id', (contato as any).instancia_id)
       .eq('telefone', (contato as any).telefone || '')
       .eq('direcao', 'saida')
-      .gt('criado_em', estado.created_at)
+      .gt('criado_em', corteHumano)
       .limit(1);
-    if ((saidaHumana || []).length > 0 && estado.etapa !== 'inicio' && !estado.contexto?.ultimo_envio_ia) {
+    if ((saidaHumana || []).length > 0 && estado.etapa !== 'inicio') {
       await supabase.from('meta_ia_conversas_estado')
         .update({ aguardando_humano: true }).eq('id', estado.id);
+      console.log('[MetaIA] humano assumiu', { contato_id });
       return json({ success: true, skipped: 'humano assumiu' });
     }
+
 
     // ===== Horário de atendimento =====
     const hora = agoraSP().getHours();
