@@ -221,26 +221,41 @@ Deno.serve(async (req) => {
       }
     }
 
-    // CPF vindo na mensagem do cliente
+    // CPF/CNPJ vindo na mensagem do cliente (tolera máscara e texto ao redor)
     const intencao = intencaoLocal(texto || '');
-    if (!cpf && intencao === 'cpf') {
-      const doc = soDigitos(texto);
-      if (validaCpfCnpj(doc)) cpf = doc;
-    }
+    const docMsg = extrairDoc(texto || '');
+    if (!cpf && docMsg && validaCpfCnpj(docMsg)) cpf = docMsg;
 
     if (!cpf) {
-      const digitos = soDigitos(texto);
-      if (digitos.length > 0 && !validaCpfCnpj(digitos) && estado.etapa === 'pedir_cpf') {
-        await enviar(tpl('cpf_invalido'), 'pedir_cpf');
-        return json({ success: true, etapa: 'cpf_invalido' });
+      const tentativas = Number(estado.contexto?.tentativas_cpf || 0);
+      const jaPediu = estado.etapa === 'pedir_cpf';
+
+      // Muitas tentativas sem CPF válido => chama humano
+      if (jaPediu && tentativas >= 3) {
+        await supabase.from('meta_ia_conversas_estado')
+          .update({ aguardando_humano: true }).eq('id', estado.id);
+        await avisarEmergencia(supabase,
+          `🤖 *IA — não consegui identificar o cliente*\n\n` +
+          `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
+          `Última mensagem: "${String(texto || '').slice(0, 200)}"\n\n` +
+          `Assuma a conversa na caixa IA.`);
+        console.log('[MetaIA] cpf sem sucesso, humano acionado', { contato_id });
+        return json({ success: true, etapa: 'cpf_falhou_humano' });
       }
-      if (estado.etapa === 'pedir_cpf' && (estado.msgs_hoje ?? 0) > 0 && !digitos.length) {
-        await enviar(tpl('cpf_invalido'), 'pedir_cpf');
-        return json({ success: true, etapa: 'cpf_invalido' });
-      }
-      await enviar(tpl('pedir_cpf'), 'pedir_cpf');
-      return json({ success: true, etapa: 'pedir_cpf' });
+
+      const etapaMsg = jaPediu ? 'cpf_invalido' : 'pedir_cpf';
+      const corpo = tpl(etapaMsg) || tpl('pedir_cpf');
+      await enviar(corpo, 'pedir_cpf', {
+        contexto: {
+          ...(estado.contexto || {}),
+          ultimo_envio_ia: new Date().toISOString(),
+          tentativas_cpf: jaPediu ? tentativas + 1 : 0,
+        },
+      });
+      console.log('[MetaIA] etapa', etapaMsg, { contato_id, tentativas });
+      return json({ success: true, etapa: etapaMsg });
     }
+
 
     // ===== Já tem acordo lançado? =====
     const { data: temAcordo } = await supabase.rpc('cpf_has_acordo', { p_cpf: cpf });
