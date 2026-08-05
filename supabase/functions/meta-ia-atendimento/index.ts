@@ -42,14 +42,28 @@ function render(tpl: string, vars: Record<string, string>): string {
   return String(tpl || '').replace(/\{([a-z0-9_]+)\}/gi, (m, k) => (vars[String(k).toLowerCase()] ?? m));
 }
 
+// Extrai CPF/CNPJ tolerando máscara, espaços e texto ao redor ("meu cpf é 123.456.789-09")
+function extrairDoc(texto: string): string {
+  const t = String(texto || '');
+  const candidatos = t.match(/(?:\d[\s.\-\/]*){11,14}/g) || [];
+  for (const c of candidatos) {
+    const d = soDigitos(c);
+    if (d.length === 11 || d.length === 14) return d;
+  }
+  const todos = soDigitos(t);
+  if (todos.length === 11 || todos.length === 14) return todos;
+  return '';
+}
+
 // Detecta intenção sem IA externa (rápido e barato). IA só é usada como fallback.
 function intencaoLocal(texto: string): 'avista' | 'parcelado' | 'cpf' | 'outro' {
   const t = String(texto || '').toLowerCase();
-  if (soDigitos(t).length === 11 || soDigitos(t).length === 14) return 'cpf';
+  if (extrairDoc(t)) return 'cpf';
   if (/(a\s*vista|à\s*vista|avista|quitar|quita[çc][ãa]o|uma\s*vez|1x)/.test(t)) return 'avista';
   if (/(parcel|dividir|vezes|\d+\s*x|boleto\s*mensal)/.test(t)) return 'parcelado';
   return 'outro';
 }
+
 
 async function enviarTexto(supabase: any, instanciaId: string, telefone: string | null, bsuid: string | null, texto: string) {
   const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-text', {
