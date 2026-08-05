@@ -1092,11 +1092,26 @@ export default function InboxMeta() {
                         <ContextMenuItem onClick={() => setAcessoFolder({ id: f.id, nome: f.nome })}>
                           <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
                         </ContextMenuItem>
+                        {f.nome.trim().toUpperCase() === 'IA' && (
+                          <ContextMenuItem onClick={() => setIaConfigOpen(true)}>
+                            <Bot className="h-4 w-4 mr-2" /> Configurar IA
+                          </ContextMenuItem>
+                        )}
                       </ContextMenuContent>
                     )}
                   </ContextMenu>
                 );
               })}
+              {isAdmin && foldersVisiveis.some((f) => f.id === currentFolderId && f.nome.trim().toUpperCase() === 'IA') && (
+                <button
+                  onClick={() => setIaConfigOpen(true)}
+                  className="text-[11px] px-2 py-1 rounded border border-dashed border-primary/50 text-primary hover:bg-accent flex items-center gap-1"
+                  title="Configurar modelos e regras da IA"
+                >
+                  <Bot className="h-3 w-3" /> Configurar IA
+                </button>
+              )}
+
               {!podeVerPadrao && foldersVisiveis.length === 0 && (
                 <span className="text-[11px] text-muted-foreground">
                   Sem caixa de mensagens atribuída — fale com o administrador.
