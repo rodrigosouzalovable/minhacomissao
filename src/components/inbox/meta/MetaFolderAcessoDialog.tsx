@@ -90,7 +90,13 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
         if (checked) n.add(userId); else n.delete(userId);
         return n;
       });
+      if (checked) {
+        // Garante etiqueta "Atendente: <nome>" + entrada na fila de distribuição
+        await (supabase as any).rpc('meta_provisionar_atendentes_fila', { _folder: folderId });
+        await loadFila();
+      }
       onChanged?.();
+
     } finally {
       setSaving(false);
     }
