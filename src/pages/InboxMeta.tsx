@@ -361,16 +361,19 @@ export default function InboxMeta() {
     return () => { cancelado = true; };
   }, [user, currentFolderId]);
 
+  // Etiquetas ativas (desativadas ficam invisíveis nos menus/filtros)
+  const etiquetasAtivas = useMemo(() => etiquetas.filter(e => e.ativa !== false), [etiquetas]);
+
   // Etiquetas oferecidas no menu de contexto: atendentes só da caixa ativa
   const etiquetasMenu = useMemo(() => {
-    if (!nomesAtendenteCaixa) return etiquetas;
-    return etiquetas.filter((e) => {
+    if (!nomesAtendenteCaixa) return etiquetasAtivas;
+    return etiquetasAtivas.filter((e) => {
       const nome = String(e.nome || '').trim();
       if (!/^atendente:/i.test(nome)) return true;
       const puro = nome.replace(/^atendente:\s*/i, '').trim().toLowerCase();
       return nomesAtendenteCaixa.has(puro);
     });
-  }, [etiquetas, nomesAtendenteCaixa]);
+  }, [etiquetasAtivas, nomesAtendenteCaixa]);
 
 
 
