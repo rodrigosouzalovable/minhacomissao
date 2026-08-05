@@ -143,9 +143,10 @@ export async function notificarAdmin(
         .from("admin_notificacoes_log")
         .select("id")
         .eq("tipo", params.tipo)
-        .eq("chave_idempotencia", params.chaveIdempotencia)
-        .maybeSingle();
-      if (ja) return { success: false, skipped: "ja_enviado" };
+        .like("chave_idempotencia", `${params.chaveIdempotencia}%`)
+        .eq("status", "enviado")
+        .limit(1);
+      if (ja?.length) return { success: false, skipped: "ja_enviado" };
     }
 
     // Round-robin: pega próxima instância ativa após a última usada
@@ -159,11 +160,30 @@ export async function notificarAdmin(
 
     if (!insts?.length) return { success: false, error: "sem_instancia_ativa", fallback: true };
 
-    let idx = 0;
-    if (cfg.ultima_instancia_id) {
-      const ultIdx = insts.findIndex((i: any) => i.id === cfg.ultima_instancia_id);
-      idx = ultIdx >= 0 ? (ultIdx + 1) % insts.length : 0;
+    const statusChecks = await Promise.allSettled(
+      insts.map(async (inst: any) => ({ inst, connected: await checkInstanceConnected(inst) })),
+    );
+    const connectedIds = new Set(
+      statusChecks
+        .filter((r): r is PromiseFulfilledResult<{ inst: any; connected: boolean }> => r.status === "fulfilled")
+        .filter((r) => r.value.connected)
+        .map((r) => r.value.inst.id),
+    );
+    const orderedInsts = insts.filter((inst: any) => connectedIds.has(inst.id));
+
+    if (!orderedInsts.length) {
+      const erroFinal = `nenhuma_instancia_conectada; ativas_verificadas=${insts.length}`;
+      await supabase.from("admin_notificacoes_log").insert({
+        tipo: params.tipo,
+        chave_idempotencia: params.chaveIdempotencia ?? null,
+        mensagem: params.mensagem,
+        status: "erro",
+        erro_detalhe: erroFinal,
+      });
+      return { success: false, error: erroFinal, fallback: true };
     }
+
+
 
     const brutos = params.destinatarios?.length
       ? params.destinatarios
