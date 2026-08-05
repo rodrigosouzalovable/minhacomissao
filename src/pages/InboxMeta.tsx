@@ -28,6 +28,8 @@ import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell
 import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
 import { MetaFoldersDialog, type MetaInboxFolder } from '@/components/inbox/meta/MetaFoldersDialog';
 import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcessoDialog';
+import MetaIAConfigDialog from '@/components/inbox/meta/MetaIAConfigDialog';
+
 import { useUserRole } from '@/hooks/useUserRole';
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
