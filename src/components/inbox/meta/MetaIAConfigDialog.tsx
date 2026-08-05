@@ -71,14 +71,14 @@ export default function MetaIAConfigDialog({ open, onOpenChange }: Props) {
   const [novoTel, setNovoTel] = useState('');
   const [etapaAtiva, setEtapaAtiva] = useState<string>('proposta');
   const [testando, setTestando] = useState(false);
-  const [ultimoAviso, setUltimoAviso] = useState<{ status: string; criado_em?: string; erro_detalhe?: string | null } | null>(null);
+  const [ultimoAviso, setUltimoAviso] = useState<{ status: string; enviado_em?: string; erro_detalhe?: string | null } | null>(null);
 
   const carregarUltimoAviso = async () => {
     const { data } = await supabase
       .from('admin_notificacoes_log' as any)
-      .select('status, criado_em, erro_detalhe')
+      .select('status, enviado_em, erro_detalhe')
       .eq('tipo', 'ia_humano')
-      .order('criado_em', { ascending: false })
+      .order("enviado_em", { ascending: false })
       .limit(1)
       .maybeSingle();
     setUltimoAviso((data as any) ?? null);
@@ -304,7 +304,7 @@ export default function MetaIAConfigDialog({ open, onOpenChange }: Props) {
                           : <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
                         <span className="truncate">
                           Último aviso: {ultimoAviso.status === 'enviado' ? 'enviado' : 'com erro'}
-                          {ultimoAviso.criado_em ? ` em ${new Date(ultimoAviso.criado_em).toLocaleString('pt-BR')}` : ''}
+                          {ultimoAviso.enviado_em ? ` em ${new Date(ultimoAviso.enviado_em).toLocaleString('pt-BR')}` : ''}
                           {ultimoAviso.status !== 'enviado' && ultimoAviso.erro_detalhe ? ` — ${ultimoAviso.erro_detalhe}` : ''}
                         </span>
                       </span>
