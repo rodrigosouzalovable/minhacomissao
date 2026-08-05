@@ -23,9 +23,18 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
   const { toast } = useToast();
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [membros, setMembros] = useState<Set<string>>(new Set());
+  const [naFila, setNaFila] = useState<Set<string>>(new Set());
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const loadFila = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from('meta_atendimento_fila')
+      .select('user_id')
+      .eq('ativo', true);
+    setNaFila(new Set(((data as any[]) ?? []).map((r) => r.user_id).filter(Boolean)));
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,12 +54,14 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
           .eq('folder_id', folderId);
         setMembros(new Set(((data as any[]) ?? []).map((r) => r.user_id)));
       }
+      await loadFila();
     } finally {
       setLoading(false);
     }
-  }, [folderId]);
+  }, [folderId, loadFila]);
 
   useEffect(() => { if (open) { setBusca(''); load(); } }, [open, load]);
+
 
   const toggle = async (userId: string, checked: boolean) => {
     setSaving(true);
