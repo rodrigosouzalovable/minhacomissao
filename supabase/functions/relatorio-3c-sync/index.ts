@@ -138,27 +138,30 @@ Deno.serve(async (req) => {
       if (lote.length < 500) break;
     }
 
+    const val = (v: any) => (v && v !== "-" && v !== "null" ? v : null);
     const linhas = registros.map((c: any) => {
       const dt = c.call_date_rfc3339 ? new Date(c.call_date_rfc3339) : new Date(String(c.call_date).replace(" ", "T") + "-03:00");
       const p = brtParts(dt);
+      const numero = String(c.number ?? c.phone ?? "");
       return {
-        call_id: String(c.id),
+        call_id: String(c.id ?? c._id),
         data: p.dia,
         hora: `${p.hora}h-${p.hora + 1}h`,
-        telefone: String(c.number ?? ""),
-        telefone_sufixo: suf8(c.number),
-        status_id: c.status_id ?? null,
-        status_texto: c.readable_status_text ?? null,
+        telefone: numero,
+        telefone_sufixo: suf8(numero),
+        status_id: c.status_id ?? (typeof c.status === "number" ? c.status : null),
+        status_texto: val(c.readable_status_text) ?? val(c.status_text) ?? null,
         atendida: foiAtendida(c),
-        qualificacao_id: c.qualification_id ?? null,
-        qualificacao_nome: c.qualification && c.qualification !== "-" ? c.qualification : null,
-        agente: c.agent && c.agent !== "-" ? c.agent : null,
-        campanha: c.campaign ?? null,
-        campanha_id: c.campaign_id ?? null,
-        modo: c.mode ?? null,
+        qualificacao_id: c.qualification_id ?? c.qualification?.id ?? null,
+        qualificacao_nome: val(c.qualification?.name) ?? (typeof c.qualification === "string" ? val(c.qualification) : null),
+        agente: val(c.agent?.name) ?? (typeof c.agent === "string" ? val(c.agent) : null),
+        campanha: val(c.campaign?.name) ?? (typeof c.campaign === "string" ? val(c.campaign) : null),
+        campanha_id: c.campaign_id ?? c.campaign?.id ?? null,
+        modo: val(c.mode) ?? val(c.call_mode),
         call_date: dt.toISOString(),
       };
     });
+
 
     if (linhas.length > 0) {
       for (let i = 0; i < linhas.length; i += 500) {
