@@ -4703,6 +4703,8 @@ export type Database = {
         Row: {
           acordos_valor: number
           alo: number
+          alo_auto: number
+          alo_manual: boolean
           atualizado_em: string
           atualizado_por: string | null
           cpc: number
@@ -4715,6 +4717,7 @@ export type Database = {
           data: string
           hora: string
           id: string
+          ligacoes_auto: number
           sync_em: string | null
           tentativas: number
           tentativas_auto: number
@@ -4726,6 +4729,8 @@ export type Database = {
         Insert: {
           acordos_valor?: number
           alo?: number
+          alo_auto?: number
+          alo_manual?: boolean
           atualizado_em?: string
           atualizado_por?: string | null
           cpc?: number
@@ -4738,6 +4743,7 @@ export type Database = {
           data: string
           hora: string
           id?: string
+          ligacoes_auto?: number
           sync_em?: string | null
           tentativas?: number
           tentativas_auto?: number
@@ -4749,6 +4755,8 @@ export type Database = {
         Update: {
           acordos_valor?: number
           alo?: number
+          alo_auto?: number
+          alo_manual?: boolean
           atualizado_em?: string
           atualizado_por?: string | null
           cpc?: number
@@ -4761,6 +4769,7 @@ export type Database = {
           data?: string
           hora?: string
           id?: string
+          ligacoes_auto?: number
           sync_em?: string | null
           tentativas?: number
           tentativas_auto?: number
@@ -5105,6 +5114,123 @@ export type Database = {
           id?: string
           nome?: string
           slug?: string
+        }
+        Relationships: []
+      }
+      tresc_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          base_url: string
+          campanhas: Json
+          criado_em: string
+          id: string
+          ultimo_sync: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          base_url?: string
+          campanhas?: Json
+          criado_em?: string
+          id?: string
+          ultimo_sync?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          base_url?: string
+          campanhas?: Json
+          criado_em?: string
+          id?: string
+          ultimo_sync?: string | null
+        }
+        Relationships: []
+      }
+      tresc_ligacoes: {
+        Row: {
+          agente: string | null
+          atendida: boolean
+          call_date: string | null
+          call_id: string
+          campanha: string | null
+          campanha_id: number | null
+          criado_em: string
+          data: string
+          hora: string
+          modo: string | null
+          qualificacao_id: number | null
+          qualificacao_nome: string | null
+          status_id: number | null
+          status_texto: string | null
+          telefone: string | null
+          telefone_sufixo: string | null
+        }
+        Insert: {
+          agente?: string | null
+          atendida?: boolean
+          call_date?: string | null
+          call_id: string
+          campanha?: string | null
+          campanha_id?: number | null
+          criado_em?: string
+          data: string
+          hora: string
+          modo?: string | null
+          qualificacao_id?: number | null
+          qualificacao_nome?: string | null
+          status_id?: number | null
+          status_texto?: string | null
+          telefone?: string | null
+          telefone_sufixo?: string | null
+        }
+        Update: {
+          agente?: string | null
+          atendida?: boolean
+          call_date?: string | null
+          call_id?: string
+          campanha?: string | null
+          campanha_id?: number | null
+          criado_em?: string
+          data?: string
+          hora?: string
+          modo?: string | null
+          qualificacao_id?: number | null
+          qualificacao_nome?: string | null
+          status_id?: number | null
+          status_texto?: string | null
+          telefone?: string | null
+          telefone_sufixo?: string | null
+        }
+        Relationships: []
+      }
+      tresc_qualificacoes: {
+        Row: {
+          atualizado_em: string
+          classificacao: string
+          cor: string | null
+          criado_em: string
+          id: string
+          nome: string
+          qualificacao_id: number
+        }
+        Insert: {
+          atualizado_em?: string
+          classificacao?: string
+          cor?: string | null
+          criado_em?: string
+          id?: string
+          nome: string
+          qualificacao_id: number
+        }
+        Update: {
+          atualizado_em?: string
+          classificacao?: string
+          cor?: string | null
+          criado_em?: string
+          id?: string
+          nome?: string
+          qualificacao_id?: number
         }
         Relationships: []
       }
@@ -6985,6 +7111,8 @@ export type Database = {
         Returns: {
           acordos_valor: number
           alo: number
+          alo_auto: number
+          alo_manual: boolean
           atualizado_em: string
           atualizado_por: string | null
           cpc: number
@@ -6997,6 +7125,7 @@ export type Database = {
           data: string
           hora: string
           id: string
+          ligacoes_auto: number
           sync_em: string | null
           tentativas: number
           tentativas_auto: number
@@ -7088,6 +7217,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      tresc_limpar_cache_antigo: { Args: never; Returns: number }
       user_can_access_tenant: {
         Args: { _tenant: string; _uid: string }
         Returns: boolean
