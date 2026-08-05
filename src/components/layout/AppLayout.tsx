@@ -236,18 +236,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     setInboxUnreadCount(count ?? 0);
   }, [user, isAdmin, abasPermitidas]);
 
-  useEffect(() => {
-    fetchUnreadCount();
+  // (as inscrições Realtime dos badges ficam consolidadas num único canal, mais abaixo)
 
-    const channel = supabase
-      .channel('inbox-unread-badge')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_contatos' }, () => {
-        fetchUnreadCount();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchUnreadCount]);
 
   // Fetch Meta Inbox unread count
   const fetchMetaUnreadCount = useCallback(async () => {
