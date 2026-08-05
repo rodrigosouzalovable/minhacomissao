@@ -10,7 +10,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
-import { Phone, RefreshCw, PlugZap, Download } from 'lucide-react';
+import { Phone, RefreshCw, PlugZap, Download, Webhook, CheckCircle2, AlertCircle } from 'lucide-react';
+import { CopyButton } from '@/components/CopyButton';
 import { cn } from '@/lib/utils';
 
 type Campanha = { id: number; nome: string; pausada?: boolean };
@@ -22,6 +23,9 @@ const CLASSES: Array<{ v: string; label: string }> = [
   { v: 'cpca', label: 'CPC-A' },
 ];
 
+const EVENTOS_3C = ['call-was-connected', 'call-history-was-created'];
+const FUNCTIONS_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
+
 export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,21 +35,37 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
   const [selecionadas, setSelecionadas] = useState<number[]>([]);
   const [quals, setQuals] = useState<Qual[]>([]);
   const [ultimoSync, setUltimoSync] = useState<string | null>(null);
+  const [webhookKey, setWebhookKey] = useState<string | null>(null);
+  const [ultimoWebhook, setUltimoWebhook] = useState<{ em: string | null; tipo: string | null }>({ em: null, tipo: null });
 
   const carregar = useCallback(async () => {
     const [{ data: cfg }, { data: q }] = await Promise.all([
       supabase.from('tresc_config' as any).select('*').limit(1).maybeSingle(),
       supabase.from('tresc_qualificacoes' as any).select('*').order('nome'),
     ]);
-    const c = cfg as any;
+    let c = cfg as any;
+    if (!c) {
+      const { data: nova } = await supabase
+        .from('tresc_config' as any)
+        .insert({ base_url: baseUrl })
+        .select('*')
+        .maybeSingle();
+      c = nova as any;
+    }
     if (c) {
       setCfgId(c.id);
       setBaseUrl(c.base_url);
       setSelecionadas(Array.isArray(c.campanhas) ? c.campanhas : []);
       setUltimoSync(c.ultimo_sync);
+      setWebhookKey(c.webhook_key ?? null);
+      setUltimoWebhook({ em: c.ultimo_webhook_em ?? null, tipo: c.ultimo_webhook_tipo ?? null });
     }
     setQuals((q as any[]) || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const webhookUrl = webhookKey ? `${FUNCTIONS_BASE}/tresc-webhook?k=${webhookKey}` : '';
+
 
   useEffect(() => { if (open) carregar(); }, [open, carregar]);
 
