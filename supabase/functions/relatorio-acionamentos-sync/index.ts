@@ -187,6 +187,11 @@ Deno.serve(async (req) => {
       };
     });
 
+    const { error: upErr } = await supabase
+      .from("relatorio_acionamentos")
+      .upsert(upserts, { onConflict: "data,hora" });
+    if (upErr) throw upErr;
+
 
     // Totais (usa valores finais gravados + valor de acordos já existente na tabela)
     const { data: finais } = await supabase
