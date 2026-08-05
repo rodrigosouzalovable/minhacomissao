@@ -148,7 +148,7 @@ export default function MetaIAConfigDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bot className="h-4 w-4" /> Configurar IA da caixa
@@ -169,7 +169,7 @@ export default function MetaIAConfigDialog({ open, onOpenChange }: Props) {
               <TabsTrigger value="contatos">Emergência</TabsTrigger>
             </TabsList>
 
-            <ScrollArea className="flex-1 min-h-0 mt-3 pr-3">
+            <ScrollArea className="h-[calc(80vh-10rem)] max-h-[620px] mt-3 pr-3">
               <TabsContent value="geral" className="space-y-4 mt-0">
                 {cfg && (
                   <>
