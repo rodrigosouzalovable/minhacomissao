@@ -1505,7 +1505,8 @@ export default function InboxMeta() {
       </div>
       </div>
 
-      <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} />
+      <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} isAdmin={isAdmin} />
+      <MetaEtiquetasDialog open={etiquetasConfigOpen} onOpenChange={setEtiquetasConfigOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} isAdmin={isAdmin} modoConfig />
       <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
       {user && (
         <MetaFoldersDialog
