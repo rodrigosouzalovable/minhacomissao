@@ -166,7 +166,47 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
 
         <ScrollArea className="flex-1 pr-3">
           <div className="space-y-6">
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="flex items-center gap-2">
+                  <Webhook className="h-4 w-4" /> Webhook da 3C Plus
+                </Label>
+                {ultimoWebhook.em ? (
+                  <Badge variant="secondary" className="gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Último evento {new Date(ultimoWebhook.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    {ultimoWebhook.tipo ? ` — ${ultimoWebhook.tipo}` : ''}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="gap-1">
+                    <AlertCircle className="h-3 w-3" /> Nenhum evento recebido ainda
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex gap-2 items-center">
+                <Input readOnly value={webhookUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                <CopyButton value={webhookUrl} label="Webhook" preserveText />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {EVENTOS_3C.map((e) => (
+                  <Badge key={e} variant="outline" className="font-mono text-xs">{e}</Badge>
+                ))}
+              </div>
+
+              <ol className="list-decimal pl-5 text-xs text-muted-foreground space-y-1">
+                <li>Na 3C Plus, abra “Novo webhook” e cole a URL acima no campo URL.</li>
+                <li>Marque os dois eventos acima e salve.</li>
+                <li>Volte aqui e recarregue: o selo mostra o horário do último evento recebido.</li>
+              </ol>
+              <p className="text-xs text-muted-foreground">
+                A chave no final da URL é exclusiva desta integração — não compartilhe fora do painel da 3C.
+              </p>
+            </div>
+
             <div className="space-y-2">
+
               <Label>Endereço da API</Label>
               <div className="flex gap-2">
                 <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://app.3c.fluxoti.com.br/api/v1" />
