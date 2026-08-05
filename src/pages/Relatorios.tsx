@@ -9,7 +9,8 @@ import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
-import { Plus, RotateCcw, Download, CalendarIcon, Trophy, Pencil } from 'lucide-react';
+import { Plus, RotateCcw, Download, CalendarIcon, Trophy, Pencil, RefreshCw } from 'lucide-react';
+import { FunilAcionamentosCard } from '@/components/relatorios/FunilAcionamentosCard';
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
@@ -63,6 +64,8 @@ export default function Relatorios() {
   const [editingCol, setEditingCol] = useState<{ hora: string; col: ColunaIncr } | null>(null);
   const [colInput, setColInput] = useState('');
   const cooldownRef = useRef<Record<string, number>>({});
+  const [syncEm, setSyncEm] = useState<string | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
 
   const dataStr = toDateStr(data);
 
