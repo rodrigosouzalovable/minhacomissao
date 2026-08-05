@@ -168,15 +168,29 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, i
         </div>
       );
     }
+    const inativa = et.ativa === false;
     return (
       <div
         key={et.id}
-        className="group flex items-center gap-2 h-9 pl-2 pr-1 rounded-md bg-background hover:bg-accent/40 transition-colors"
+        className={`group flex items-center gap-2 h-9 pl-2 pr-1 rounded-md bg-background hover:bg-accent/40 transition-colors ${inativa ? 'opacity-50' : ''}`}
       >
         <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
-        <span className="text-sm truncate flex-1 min-w-0">{et.nome}</span>
-        <div className="flex items-center shrink-0">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => iniciarEdicao(et)} title="Editar">
+        <span className={`text-sm truncate flex-1 min-w-0 ${inativa ? 'line-through' : ''}`}>{et.nome}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          {isAdmin && (
+            <div className="flex items-center gap-1">
+              {inativa
+                ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                : <Eye className="h-3.5 w-3.5 text-emerald-500" />}
+              <Switch
+                checked={!inativa}
+                onCheckedChange={() => alternarAtiva(et)}
+                className="scale-[0.8]"
+                aria-label={inativa ? 'Ativar etiqueta' : 'Desativar etiqueta'}
+              />
+            </div>
+          )}
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => iniciarEdicao(et)} title="Editar nome e cor">
             <Pencil className="h-3.5 w-3.5" />
           </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => excluir(et.id)} title="Excluir">
