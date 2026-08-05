@@ -7073,6 +7073,10 @@ export type Database = {
         Args: { _campo: string; _inc?: number; _instancia_id: string }
         Returns: undefined
       }
+      meta_provisionar_atendentes_fila: {
+        Args: { _folder?: string }
+        Returns: number
+      }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       phone_suffix8: { Args: { tel: string }; Returns: string }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }

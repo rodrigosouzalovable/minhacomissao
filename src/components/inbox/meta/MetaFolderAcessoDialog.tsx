@@ -23,9 +23,18 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
   const { toast } = useToast();
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [membros, setMembros] = useState<Set<string>>(new Set());
+  const [naFila, setNaFila] = useState<Set<string>>(new Set());
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const loadFila = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from('meta_atendimento_fila')
+      .select('user_id')
+      .eq('ativo', true);
+    setNaFila(new Set(((data as any[]) ?? []).map((r) => r.user_id).filter(Boolean)));
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,12 +54,14 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
           .eq('folder_id', folderId);
         setMembros(new Set(((data as any[]) ?? []).map((r) => r.user_id)));
       }
+      await loadFila();
     } finally {
       setLoading(false);
     }
-  }, [folderId]);
+  }, [folderId, loadFila]);
 
   useEffect(() => { if (open) { setBusca(''); load(); } }, [open, load]);
+
 
   const toggle = async (userId: string, checked: boolean) => {
     setSaving(true);
@@ -79,7 +90,13 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
         if (checked) n.add(userId); else n.delete(userId);
         return n;
       });
+      if (checked) {
+        // Garante etiqueta "Atendente: <nome>" + entrada na fila de distribuição
+        await (supabase as any).rpc('meta_provisionar_atendentes_fila', { _folder: folderId });
+        await loadFila();
+      }
       onChanged?.();
+
     } finally {
       setSaving(false);
     }
@@ -129,7 +146,13 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
             <label key={u.user_id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-accent/40 rounded px-1.5 py-1">
               <Checkbox checked={membros.has(u.user_id)} onCheckedChange={(v) => toggle(u.user_id, !!v)} />
               <span className="flex-1 truncate">{u.nome}</span>
+              {membros.has(u.user_id) && !naFila.has(u.user_id) && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 shrink-0">
+                  fora da fila
+                </span>
+              )}
             </label>
+
           ))}
         </ScrollArea>
 

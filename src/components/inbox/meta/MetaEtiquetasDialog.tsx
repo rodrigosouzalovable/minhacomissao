@@ -1,11 +1,10 @@
-import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useMemo, useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Trash2, Plus, Pencil, Check, X, Tag } from 'lucide-react';
+import { Trash2, Plus, Pencil, Check, X, Tag, Search, UserRound } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const CORES = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -19,11 +18,37 @@ interface Props {
   onChange: () => void;
 }
 
+const isAtendente = (nome: string) => /^atendente:/i.test(String(nome || '').trim());
+
+function Paleta({ valor, onSelect, size = 'md' }: { valor: string; onSelect: (c: string) => void; size?: 'sm' | 'md' }) {
+  const dim = size === 'sm' ? 'h-5 w-5' : 'h-6 w-6';
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {CORES.map(c => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onSelect(c)}
+          aria-label={`Cor ${c}`}
+          className={`${dim} rounded-full border-2 transition-transform shrink-0`}
+          style={{
+            backgroundColor: c,
+            borderColor: valor === c ? 'hsl(var(--foreground))' : 'transparent',
+            transform: valor === c ? 'scale(1.15)' : 'scale(1)',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [criando, setCriando] = useState(false);
   const [nome, setNome] = useState('');
   const [cor, setCor] = useState(CORES[0]);
+  const [busca, setBusca] = useState('');
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState('');
   const [editCor, setEditCor] = useState(CORES[0]);
@@ -34,8 +59,9 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
       user_id: user.id, nome: nome.trim(), cor,
     });
     if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    setNome(''); setCor(CORES[0]); onChange();
+    setNome(''); setCor(CORES[0]); setCriando(false); onChange();
   };
+
   const excluir = async (id: string) => {
     const { error } = await supabase.from('meta_whatsapp_etiquetas').delete().eq('id', id);
     if (error) {
@@ -54,10 +80,8 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
     setEditNome(et.nome);
     setEditCor(et.cor);
   };
-  const cancelarEdicao = () => {
-    setEditandoId(null);
-    setEditNome('');
-  };
+  const cancelarEdicao = () => { setEditandoId(null); setEditNome(''); };
+
   const salvarEdicao = async (id: string) => {
     if (!editNome.trim()) return;
     const { data, error } = await supabase
@@ -81,153 +105,142 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange }:
     onChange();
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Tag className="h-4 w-4" /> Etiquetas Meta
-          </DialogTitle>
-        </DialogHeader>
+  const { atendentes, gerais } = useMemo(() => {
+    const t = busca.trim().toLowerCase();
+    const lista = t
+      ? etiquetas.filter(e => String(e.nome || '').toLowerCase().includes(t))
+      : etiquetas;
+    const ordena = (a: MetaEtiqueta, b: MetaEtiqueta) => a.nome.localeCompare(b.nome, 'pt-BR');
+    return {
+      atendentes: lista.filter(e => isAtendente(e.nome)).sort(ordena),
+      gerais: lista.filter(e => !isAtendente(e.nome)).sort(ordena),
+    };
+  }, [etiquetas, busca]);
 
-        <div className="space-y-4">
-          {/* Nova etiqueta */}
-          <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Nova etiqueta
-            </p>
-            <Input
-              placeholder="Nome da etiqueta..."
-              value={nome}
-              onChange={e => setNome(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && criar()}
-            />
-            <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Cor</p>
-              <div className="grid grid-cols-8 gap-2">
-                {CORES.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setCor(c)}
-                    className="h-6 w-6 rounded-full border-2 transition-transform"
-                    style={{
-                      backgroundColor: c,
-                      borderColor: cor === c ? 'hsl(var(--foreground))' : 'transparent',
-                      transform: cor === c ? 'scale(1.15)' : 'scale(1)',
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-            <Button size="sm" onClick={criar} disabled={!nome.trim()} className="w-full">
-              <Plus className="h-4 w-4 mr-1" /> Criar etiqueta
-            </Button>
-          </div>
-
-          <Separator />
-
-          {/* Etiquetas existentes */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Etiquetas existentes
-              </p>
-              <span className="text-xs text-muted-foreground">
-                {etiquetas.length} {etiquetas.length === 1 ? 'etiqueta' : 'etiquetas'}
-              </span>
-            </div>
-
-            <div className="rounded-md border bg-muted/30 p-2 max-h-64 overflow-y-auto pr-1">
-              {etiquetas.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-4">
-                  Nenhuma etiqueta criada ainda.
-                </p>
-              ) : (
-                <div className="space-y-1.5">
-                  {etiquetas.map(et => {
-                    const emEdicao = editandoId === et.id;
-                    if (emEdicao) {
-                      return (
-                        <div key={et.id} className="space-y-2 p-2 rounded-md bg-background border border-border">
-                          <Input
-                            value={editNome}
-                            onChange={e => setEditNome(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') salvarEdicao(et.id);
-                              if (e.key === 'Escape') cancelarEdicao();
-                            }}
-                            autoFocus
-                          />
-                          <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground">Cor</p>
-                            <div className="grid grid-cols-8 gap-2">
-                              {CORES.map(c => (
-                                <button
-                                  key={c}
-                                  type="button"
-                                  onClick={() => setEditCor(c)}
-                                  className="h-5 w-5 rounded-full border-2 transition-transform"
-                                  style={{
-                                    backgroundColor: c,
-                                    borderColor: editCor === c ? 'hsl(var(--foreground))' : 'transparent',
-                                    transform: editCor === c ? 'scale(1.15)' : 'scale(1)',
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5">
-                            <Button size="sm" className="flex-1 h-7" onClick={() => salvarEdicao(et.id)} disabled={!editNome.trim()}>
-                              <Check className="h-3.5 w-3.5 mr-1" /> Salvar
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7" onClick={cancelarEdicao}>
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div
-                        key={et.id}
-                        className="flex items-center justify-between gap-2 h-10 px-2 rounded-md bg-background hover:bg-accent/40 transition-colors"
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <div
-                            className="h-3.5 w-3.5 rounded-full shrink-0"
-                            style={{ backgroundColor: et.cor }}
-                          />
-                          <span className="text-sm font-medium truncate">{et.nome}</span>
-                        </div>
-                        <div className="flex items-center gap-0.5 shrink-0 border-l pl-1 ml-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => iniciarEdicao(et)}
-                            title="Editar"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => excluir(et.id)}
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+  const renderLinha = (et: MetaEtiqueta) => {
+    if (editandoId === et.id) {
+      return (
+        <div key={et.id} className="rounded-md border border-border bg-background p-2 space-y-2">
+          <Input
+            value={editNome}
+            onChange={e => setEditNome(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') salvarEdicao(et.id);
+              if (e.key === 'Escape') cancelarEdicao();
+            }}
+            className="h-8"
+            autoFocus
+          />
+          <div className="flex items-center justify-between gap-2">
+            <Paleta valor={editCor} onSelect={setEditCor} size="sm" />
+            <div className="flex items-center gap-1 shrink-0">
+              <Button size="icon" className="h-7 w-7" onClick={() => salvarEdicao(et.id)} disabled={!editNome.trim()} title="Salvar">
+                <Check className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={cancelarEdicao} title="Cancelar">
+                <X className="h-3.5 w-3.5" />
+              </Button>
             </div>
           </div>
         </div>
+      );
+    }
+    return (
+      <div
+        key={et.id}
+        className="group flex items-center gap-2 h-9 pl-2 pr-1 rounded-md bg-background hover:bg-accent/40 transition-colors"
+      >
+        <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
+        <span className="text-sm truncate flex-1 min-w-0">{et.nome}</span>
+        <div className="flex items-center shrink-0">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => iniciarEdicao(et)} title="Editar">
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => excluir(et.id)} title="Excluir">
+            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const grupo = (titulo: string, icone: React.ReactNode, itens: MetaEtiqueta[]) => (
+    itens.length === 0 ? null : (
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5 px-0.5">
+          {icone}
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{titulo}</span>
+          <span className="text-[11px] text-muted-foreground">({itens.length})</span>
+        </div>
+        <div className="space-y-1">{itens.map(renderLinha)}</div>
+      </div>
+    )
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md p-0 gap-0 max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="px-4 py-3 border-b shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Tag className="h-4 w-4" /> Etiquetas Meta
+            <span className="ml-auto text-xs font-normal text-muted-foreground">
+              {etiquetas.length} {etiquetas.length === 1 ? 'etiqueta' : 'etiquetas'}
+            </span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="px-4 py-3 space-y-2 border-b shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8 h-8"
+                placeholder="Buscar etiqueta..."
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+              />
+            </div>
+            <Button size="sm" className="h-8 shrink-0" variant={criando ? 'secondary' : 'default'} onClick={() => setCriando(v => !v)}>
+              {criando ? <X className="h-4 w-4" /> : <><Plus className="h-4 w-4 mr-1" /> Nova</>}
+            </Button>
+          </div>
+
+          {criando && (
+            <div className="rounded-md border bg-muted/30 p-2 space-y-2">
+              <Input
+                className="h-8"
+                placeholder="Nome da etiqueta..."
+                value={nome}
+                onChange={e => setNome(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && criar()}
+                autoFocus
+              />
+              <div className="flex items-center justify-between gap-2">
+                <Paleta valor={cor} onSelect={setCor} size="sm" />
+                <Button size="sm" className="h-7 shrink-0" onClick={criar} disabled={!nome.trim()}>
+                  <Check className="h-3.5 w-3.5 mr-1" /> Criar
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
+          {atendentes.length === 0 && gerais.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">
+              {busca.trim() ? 'Nenhuma etiqueta encontrada.' : 'Nenhuma etiqueta criada ainda.'}
+            </p>
+          ) : (
+            <>
+              {grupo('Atendentes', <UserRound className="h-3.5 w-3.5 text-muted-foreground" />, atendentes)}
+              {grupo('Etiquetas gerais', <Tag className="h-3.5 w-3.5 text-muted-foreground" />, gerais)}
+            </>
+          )}
+        </div>
+
+        <DialogFooter className="px-4 py-3 border-t shrink-0">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Fechar</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
