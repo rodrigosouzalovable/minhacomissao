@@ -801,13 +801,27 @@ serve(async (req) => {
 
           // ===== Atendimento automático com IA (somente caixa "IA") =====
           if (!isEcho && contatoIdFinal) {
-            supabase.functions.invoke('meta-ia-atendimento', {
-              body: { contato_id: contatoIdFinal, texto },
-            }).then(
-              (r: any) => console.log('[MetaWebhook] IA', JSON.stringify(r?.data || r?.error || {})),
-              (e: any) => console.error('[MetaWebhook] IA erro', e?.message || e),
-            );
+            const iaTask = (async () => {
+              try {
+                const { data, error } = await supabase.functions.invoke('meta-ia-atendimento', {
+                  body: { contato_id: contatoIdFinal, texto },
+                });
+                if (error) console.error('[MetaWebhook] IA erro', error.message);
+                else console.log('[MetaWebhook] IA', JSON.stringify(data || {}));
+              } catch (e: any) {
+                console.error('[MetaWebhook] IA exceção', e?.message || e);
+              }
+            })();
+            // Garante execução mesmo depois de responder à Meta (evita abort no shutdown do isolate)
+            try {
+              // @ts-ignore EdgeRuntime existe no runtime das edge functions
+              if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(iaTask);
+              else await iaTask;
+            } catch {
+              await iaTask;
+            }
           }
+
 
           // Compatibilidade com o log de envios em massa — casa por sufixo
 
