@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Plus, Save, Trash2, Bot } from 'lucide-react';
+import { Loader2, Plus, Save, Trash2, Bot, Send, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -70,6 +70,30 @@ export default function MetaIAConfigDialog({ open, onOpenChange }: Props) {
   const [novoNome, setNovoNome] = useState('');
   const [novoTel, setNovoTel] = useState('');
   const [etapaAtiva, setEtapaAtiva] = useState<string>('proposta');
+  const [testando, setTestando] = useState(false);
+  const [ultimoAviso, setUltimoAviso] = useState<{ status: string; criado_em?: string; erro_detalhe?: string | null } | null>(null);
+
+  const carregarUltimoAviso = async () => {
+    const { data } = await supabase
+      .from('admin_notificacoes_log' as any)
+      .select('status, criado_em, erro_detalhe')
+      .eq('tipo', 'ia_humano')
+      .order('criado_em', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setUltimoAviso((data as any) ?? null);
+  };
+
+  const enviarTeste = async () => {
+    if (!contatos.some(c => c.ativo)) return toast.error('Cadastre e ative pelo menos um contato de emergência');
+    setTestando(true);
+    const { data, error } = await supabase.functions.invoke('meta-ia-atendimento', { body: { teste: true } });
+    setTestando(false);
+    await carregarUltimoAviso();
+    if (error) return toast.error('Erro no teste: ' + error.message);
+    if (!data?.success) return toast.error('Falha no envio: ' + (data?.error || 'desconhecido'));
+    toast.success('Aviso de teste enviado aos contatos ativos!');
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -83,6 +107,7 @@ export default function MetaIAConfigDialog({ open, onOpenChange }: Props) {
       setCfg((c.data as any) ?? null);
       setTpls(((t.data as any[]) ?? []) as Tpl[]);
       setContatos(((e.data as any[]) ?? []) as Contato[]);
+      await carregarUltimoAviso();
       setLoading(false);
     })();
   }, [open]);
@@ -267,7 +292,31 @@ export default function MetaIAConfigDialog({ open, onOpenChange }: Props) {
               <TabsContent value="contatos" className="space-y-3 mt-0">
                 <p className="text-xs text-muted-foreground">
                   Estes números recebem no WhatsApp o pedido para um humano assumir a negociação.
+                  A conversa também recebe automaticamente a etiqueta <strong>Aguardando Humano</strong>.
                 </p>
+
+                <div className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
+                  <div className="min-w-0 text-xs">
+                    {ultimoAviso ? (
+                      <span className="flex items-center gap-1.5">
+                        {ultimoAviso.status === 'enviado'
+                          ? <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                          : <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
+                        <span className="truncate">
+                          Último aviso: {ultimoAviso.status === 'enviado' ? 'enviado' : 'com erro'}
+                          {ultimoAviso.criado_em ? ` em ${new Date(ultimoAviso.criado_em).toLocaleString('pt-BR')}` : ''}
+                          {ultimoAviso.status !== 'enviado' && ultimoAviso.erro_detalhe ? ` — ${ultimoAviso.erro_detalhe}` : ''}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Nenhum aviso registrado ainda.</span>
+                    )}
+                  </div>
+                  <Button size="sm" variant="outline" onClick={enviarTeste} disabled={testando} className="shrink-0">
+                    {testando ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Send className="h-3 w-3 mr-1" />}
+                    Enviar aviso de teste
+                  </Button>
+                </div>
                 <div className="flex gap-2">
                   <Input placeholder="Nome" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} className="w-40" />
                   <Input placeholder="Telefone com DDD" value={novoTel} onChange={(e) => setNovoTel(e.target.value)} />
