@@ -285,7 +285,7 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
           </div>
         </ScrollArea>
 
-        <div className="flex justify-end gap-2 border-t pt-3">
+        <div className="flex justify-end gap-2 border-t px-6 py-4">
           <Button variant="ghost" onClick={() => setOpen(false)}>Fechar</Button>
           <Button onClick={sincronizar} disabled={loading}>
             <RefreshCw className={cn('h-4 w-4 mr-2', loading && 'animate-spin')} /> Sincronizar ligações de hoje
