@@ -191,16 +191,19 @@ Deno.serve(async (req) => {
     }
 
     // Um humano já respondeu essa conversa DEPOIS do último envio da IA? => IA não atropela
+    // (mensagens enviadas pela própria IA ficam registradas em contexto.msgs_ia e são ignoradas)
+    const idsIA: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
     const corteHumano: string = String(estado.contexto?.ultimo_envio_ia || estado.created_at);
-    const { data: saidaHumana } = await supabase
+    const { data: saidas } = await supabase
       .from('meta_whatsapp_mensagens')
       .select('id, conteudo')
       .eq('instancia_id', (contato as any).instancia_id)
       .eq('telefone', (contato as any).telefone || '')
       .eq('direcao', 'saida')
       .gt('criado_em', corteHumano)
-      .limit(1);
-    if ((saidaHumana || []).length > 0 && estado.etapa !== 'inicio') {
+      .limit(20);
+    const saidaHumana = (saidas || []).filter((m: any) => !idsIA.includes(m.id));
+    if (saidaHumana.length > 0 && estado.etapa !== 'inicio') {
       await supabase.from('meta_ia_conversas_estado')
         .update({ aguardando_humano: true }).eq('id', estado.id);
       console.log('[MetaIA] humano assumiu', { contato_id });
@@ -216,16 +219,27 @@ Deno.serve(async (req) => {
       return t ? String((t as any).template) : '';
     };
 
+    let enviados = 0;
     const enviar = async (texto: string, novaEtapa: string, extra: Record<string, unknown> = {}) => {
       if (!texto.trim()) return;
-      await enviarTexto(supabase, (contato as any).instancia_id, (contato as any).telefone, (contato as any).bsuid, texto);
+      const res = await enviarTexto(supabase, (contato as any).instancia_id, (contato as any).telefone, (contato as any).bsuid, texto);
+      enviados += 1;
+      const novoId = (res as any)?.mensagem_id;
+      const ctxExtra = (extra as any).contexto || {};
+      const ids = [...idsIA, ...(novoId ? [String(novoId)] : [])].slice(-20);
+      if (novoId) idsIA.push(String(novoId));
       await supabase.from('meta_ia_conversas_estado').update({
         etapa: novaEtapa,
         msgs_dia: hojeSP,
-        msgs_hoje: msgsHoje + 1,
+        msgs_hoje: msgsHoje + enviados,
         ultima_msg_em: new Date().toISOString(),
-        contexto: { ...(estado.contexto || {}), ultimo_envio_ia: new Date().toISOString() },
         ...extra,
+        contexto: {
+          ...(estado.contexto || {}),
+          ...ctxExtra,
+          msgs_ia: ids,
+          ultimo_envio_ia: new Date(Date.now() + 2000).toISOString(),
+        },
       }).eq('id', estado.id);
     };
 
