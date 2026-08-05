@@ -127,6 +127,8 @@ export default function InboxMeta() {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [foldersDialogOpen, setFoldersDialogOpen] = useState(false);
   const [acessoFolder, setAcessoFolder] = useState<{ id: string | null; nome: string } | null>(null);
+  const [iaConfigOpen, setIaConfigOpen] = useState(false);
+
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
 
