@@ -448,22 +448,30 @@ export default function EquipeAcordos() {
             setPagamentosEquipe(pagamentosNormalizados);
           }
 
-          // Buscar IDs de acordos com QUEBRA DE ACORDO via join
-          const { data: todasParcelasPendentes, error: quebraError } = await supabase
-            .from('pagamentos')
-            .select('acordo_id, data_prevista, acordos!inner(user_id)')
-            .in('acordos.user_id', funcionarioIds)
-            .eq('status', 'pendente')
-            .range(0, 9999);
-          
+          // Resumo de parcelas agregado no banco, restrito aos acordos da tela
+          const acordoIdsCarregados = (acordosData || []).map((a: any) => a.id);
+          let resumo: any[] = [];
+          let quebraError: any = null;
+          if (acordoIdsCarregados.length > 0) {
+            const CHUNK = 500;
+            for (let i = 0; i < acordoIdsCarregados.length; i += CHUNK) {
+              const { data: parte, error: parteError } = await supabase.rpc(
+                'acordos_parcelas_resumo' as any,
+                { p_acordo_ids: acordoIdsCarregados.slice(i, i + CHUNK) } as any
+              );
+              if (parteError) { quebraError = parteError; break; }
+              if (parte) resumo = resumo.concat(parte as any[]);
+            }
+          }
+
           if (quebraError) {
-            console.error('Erro ao buscar parcelas pendentes:', quebraError);
-          } else if (todasParcelasPendentes) {
+            console.error('Erro ao buscar resumo de parcelas:', quebraError);
+          } else {
             const hoje = new Date();
             const dezDiasAtras = new Date(hoje);
             dezDiasAtras.setDate(dezDiasAtras.getDate() - 10);
             const dezDiasAtrasStr = dezDiasAtras.toISOString().split('T')[0];
-            
+
             // Acordos com status 'quebrado' já são quebra de acordo
             const idsComQuebra = new Set<string>();
             (acordosData || []).forEach(a => {
@@ -471,35 +479,15 @@ export default function EquipeAcordos() {
                 idsComQuebra.add(a.id);
               }
             });
-            
-            // Agrupar por acordo_id e pegar a MAX data_prevista de cada (para quebra)
-            // E também construir mapa com TODAS as datas (pendentes + pagas) para filtro
-            const ultimaParcelaPorAcordo = new Map<string, string>();
+
             const allDatesMap = new Map<string, string[]>();
-            todasParcelasPendentes.forEach(p => {
-              const atual = ultimaParcelaPorAcordo.get(p.acordo_id);
-              if (!atual || p.data_prevista > atual) {
-                ultimaParcelaPorAcordo.set(p.acordo_id, p.data_prevista);
+            resumo.forEach((r: any) => {
+              allDatesMap.set(r.acordo_id, (r.datas || []) as string[]);
+              if (r.ultima_pendente_data && r.ultima_pendente_data < dezDiasAtrasStr) {
+                idsComQuebra.add(r.acordo_id);
               }
-              const arr = allDatesMap.get(p.acordo_id) || [];
-              arr.push(p.data_prevista);
-              allDatesMap.set(p.acordo_id, arr);
-            });
-            // Incluir datas das parcelas pagas
-            (pagamentosPagos || []).forEach((p: any) => {
-              if (!p.data_prevista) return;
-              const arr = allDatesMap.get(p.acordo_id) || [];
-              arr.push(p.data_prevista);
-              allDatesMap.set(p.acordo_id, arr);
             });
             setTodasDatasPorAcordo(allDatesMap);
-            
-            // Filtrar acordos cuja última parcela pendente está vencida há mais de 10 dias
-            ultimaParcelaPorAcordo.forEach((ultimaData, acordoId) => {
-              if (ultimaData < dezDiasAtrasStr) {
-                idsComQuebra.add(acordoId);
-              }
-            });
             setAcordosComQuebraAcordo(idsComQuebra);
           }
         }

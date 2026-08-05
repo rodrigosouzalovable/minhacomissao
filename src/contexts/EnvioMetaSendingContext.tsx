@@ -239,9 +239,10 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   }, [uid]);
 
   const carregarItens = useCallback(async (jobId: string): Promise<any[]> => {
-    // Paginado — PostgREST tem cap de 1000 por request; buscamos em lotes até acabar (teto 10k).
+    // Paginado — PostgREST tem cap de 1000 por request.
+    // Teto reduzido para 2k linhas: as leituras de 10k eram uma das maiores fontes de carga no banco.
     const PAGE = 1000;
-    const MAX = 10000;
+    const MAX = 2000;
     const acc: any[] = [];
     for (let from = 0; from < MAX; from += PAGE) {
       const to = from + PAGE - 1;
