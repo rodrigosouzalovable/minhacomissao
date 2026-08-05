@@ -113,20 +113,69 @@ async function enviarTexto(supabase: any, instanciaId: string, telefone: string 
   return data;
 }
 
-async function avisarEmergencia(supabase: any, mensagem: string) {
+const ETIQUETA_HUMANO = 'Aguardando Humano';
+
+async function etiquetarAguardandoHumano(supabase: any, contatoId: string) {
+  try {
+    let { data: et } = await supabase
+      .from('meta_whatsapp_etiquetas')
+      .select('id')
+      .ilike('nome', ETIQUETA_HUMANO)
+      .limit(1)
+      .maybeSingle();
+
+    if (!et) {
+      const { data: adminRole } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'admin')
+        .limit(1)
+        .maybeSingle();
+      const { data: nova, error: errNova } = await supabase
+        .from('meta_whatsapp_etiquetas')
+        .insert({ nome: ETIQUETA_HUMANO, cor: '#F59E0B', user_id: (adminRole as any)?.user_id, ativa: true })
+        .select('id')
+        .maybeSingle();
+      if (errNova) throw errNova;
+      et = nova;
+    }
+    if (!et?.id) return;
+
+    const { error } = await supabase
+      .from('meta_whatsapp_contato_etiquetas')
+      .upsert({ contato_id: contatoId, etiqueta_id: (et as any).id, origem: 'manual' }, { onConflict: 'contato_id,etiqueta_id', ignoreDuplicates: true });
+    if (error) throw error;
+    console.log('[MetaIA] etiqueta Aguardando Humano aplicada', { contatoId });
+  } catch (e: any) {
+    console.error('[MetaIA] falha ao etiquetar Aguardando Humano', e?.message || e);
+  }
+}
+
+async function avisarEmergencia(supabase: any, mensagem: string, contatoId?: string) {
+  if (contatoId) await etiquetarAguardandoHumano(supabase, contatoId);
+
   const { data: contatos } = await supabase
     .from('meta_ia_contatos_emergencia')
     .select('telefone, nome')
     .eq('ativo', true);
-  for (const c of (contatos || [])) {
-    try {
-      await supabase.functions.invoke('send-whatsapp', {
-        body: { telefone: (c as any).telefone, mensagem },
-      });
-    } catch (e: any) {
-      console.error('[MetaIA] falha ao avisar emergência', (c as any).telefone, e?.message || e);
-    }
+
+  const destinatarios = (contatos || [])
+    .map((c: any) => String(c.telefone || '').replace(/\D/g, ''))
+    .filter((t: string) => t.length >= 10);
+
+  if (!destinatarios.length) {
+    console.error('[MetaIA] nenhum contato de emergência ativo cadastrado');
+    return { success: false, error: 'sem_contato_emergencia' };
   }
+
+  const res = await notificarAdmin(supabase, {
+    tipo: 'ia_humano',
+    mensagem,
+    destinatarios,
+  });
+  if (!res.success) console.error('[MetaIA] falha ao avisar emergência', res.error || res.skipped);
+  else console.log('[MetaIA] emergência avisada', destinatarios.length, 'contato(s)');
+  return res;
 }
 
 Deno.serve(async (req) => {
