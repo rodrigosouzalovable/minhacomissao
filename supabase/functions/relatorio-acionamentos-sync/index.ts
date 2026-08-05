@@ -92,32 +92,77 @@ Deno.serve(async (req) => {
       else b.entrada.add(s);
     }
 
+    // === Ligações da 3C Plus (cache local) ===
+    const { data: quals } = await supabase
+      .from("tresc_qualificacoes")
+      .select("qualificacao_id, classificacao");
+    const qualMap = new Map<number, string>();
+    (quals || []).forEach((q: any) => qualMap.set(Number(q.qualificacao_id), String(q.classificacao)));
+
+    const { data: ligacoes } = await supabase
+      .from("tresc_ligacoes")
+      .select("hora, telefone_sufixo, atendida, qualificacao_id")
+      .eq("data", dia)
+      .limit(100000);
+
+    type LigBucket = { total: number; alo: number; cpc: Set<string>; cpca: Set<string> };
+    const ligBuckets = new Map<string, LigBucket>();
+    for (const h of HORAS) ligBuckets.set(h, { total: 0, alo: 0, cpc: new Set(), cpca: new Set() });
+    for (const l of (ligacoes || []) as any[]) {
+      const b = ligBuckets.get(String(l.hora));
+      if (!b) continue;
+      b.total++;
+      if (l.atendida) b.alo++;
+      const cls = qualMap.get(Number(l.qualificacao_id));
+      const s = suf8(l.telefone_sufixo);
+      if (!s) continue;
+      if (cls === "cpc" || cls === "cpca") b.cpc.add(s);
+      if (cls === "cpca") b.cpca.add(s);
+    }
+
     // Primeiro toque por telefone no dia (evita contar o mesmo cliente 2x)
     const jaAcionado = new Set<string>();
     const jaRespondeu = new Set<string>();
-    const linhas: Array<{ hora: string; whatsapp: number; cpc: number; cpca: number }> = [];
+    const linhas: Array<{ hora: string; whatsapp: number; ligacoes: number; alo: number; tentativas: number; cpc: number; cpca: number }> = [];
 
     for (const h of HORAS) {
       const b = buckets.get(h)!;
+      const lb = ligBuckets.get(h)!;
       let whatsapp = 0, cpc = 0, cpca = 0;
       for (const s of b.saida) {
         if (jaAcionado.has(s)) continue;
         jaAcionado.add(s);
         whatsapp++;
       }
+      // CPC por WhatsApp (resposta do cliente)
       for (const s of b.entrada) {
         if (jaRespondeu.has(s)) continue;
         jaRespondeu.add(s);
         cpc++;
         if (acordoSufixos.has(s)) cpca++;
       }
-      linhas.push({ hora: h, whatsapp, cpc, cpca });
+      // CPC por ligação (qualificação classificada)
+      for (const s of lb.cpc) {
+        if (jaRespondeu.has(s)) continue;
+        jaRespondeu.add(s);
+        cpc++;
+        if (lb.cpca.has(s) || acordoSufixos.has(s)) cpca++;
+      }
+      linhas.push({
+        hora: h,
+        whatsapp,
+        ligacoes: lb.total,
+        alo: lb.alo,
+        tentativas: whatsapp + lb.total,
+        cpc,
+        cpca,
+      });
     }
 
     // === Linhas já existentes (respeita edições manuais) ===
     const { data: existentes } = await supabase
       .from("relatorio_acionamentos")
-      .select("hora, tentativas, whatsapp, cpc, cpca, acordos_valor, whatsapp_manual, cpc_manual, cpca_manual, tentativas_manual")
+      .select("hora, tentativas, whatsapp, alo, cpc, cpca, acordos_valor, whatsapp_manual, cpc_manual, cpca_manual, tentativas_manual, alo_manual")
       .eq("data", dia);
     const exMap = new Map<string, any>();
     (existentes || []).forEach((r: any) => exMap.set(r.hora, r));
@@ -128,21 +173,20 @@ Deno.serve(async (req) => {
         data: dia,
         hora: l.hora,
         whatsapp_auto: l.whatsapp,
+        ligacoes_auto: l.ligacoes,
+        alo_auto: l.alo,
         cpc_auto: l.cpc,
         cpca_auto: l.cpca,
-        tentativas_auto: l.whatsapp,
+        tentativas_auto: l.tentativas,
         whatsapp: ex.whatsapp_manual ? ex.whatsapp ?? 0 : l.whatsapp,
+        alo: ex.alo_manual ? ex.alo ?? 0 : l.alo,
         cpc: ex.cpc_manual ? ex.cpc ?? 0 : l.cpc,
         cpca: ex.cpca_manual ? ex.cpca ?? 0 : l.cpca,
-        tentativas: ex.tentativas_manual ? ex.tentativas ?? 0 : l.whatsapp,
+        tentativas: ex.tentativas_manual ? ex.tentativas ?? 0 : l.tentativas,
         sync_em: new Date().toISOString(),
       };
     });
 
-    const { error: upErr } = await supabase
-      .from("relatorio_acionamentos")
-      .upsert(upserts, { onConflict: "data,hora" });
-    if (upErr) throw upErr;
 
     // Totais (usa valores finais gravados + valor de acordos já existente na tabela)
     const { data: finais } = await supabase
