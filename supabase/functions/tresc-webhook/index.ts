@@ -60,7 +60,7 @@ const num = (v: unknown) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-let amostrasLogadas = 0;
+
 
 
 Deno.serve(async (req) => {
