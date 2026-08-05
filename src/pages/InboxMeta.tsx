@@ -210,8 +210,8 @@ export default function InboxMeta() {
   const fetchEtiquetas = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase.from('meta_whatsapp_etiquetas')
-      .select('id, nome, cor').order('nome');
-    setEtiquetas((data as MetaEtiqueta[]) ?? []);
+      .select('id, nome, cor, ativa').order('nome');
+    setEtiquetas(((data as any[]) ?? []).map((e) => ({ ...e, ativa: e.ativa !== false })) as MetaEtiqueta[]);
   }, [user]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
