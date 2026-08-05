@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
       } as any);
     }
 
-    return new Response(JSON.stringify({ success: true, waId }), {
+    return new Response(JSON.stringify({ success: true, waId, mensagem_id: (msgRow as any)?.id || null }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
