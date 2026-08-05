@@ -27,14 +27,27 @@ function brtParts(d: Date) {
   return { dia, hora: Number(hh) };
 }
 
-// Status de ligação atendida na 3C (atendida humana / pós-atendimento)
+// Converte "00:01:23", "83" ou 83 em segundos
+function segundos(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if (!s || s === "-" || s === "null") return 0;
+  if (s.includes(":")) return s.split(":").map((p) => Number(p) || 0).reduce((a, n) => a * 60 + n, 0);
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// ALÔ = houve conversa real com o agente
 function foiAtendida(c: any): boolean {
-  const fala = String(c?.speaking_with_agent_time ?? "00:00:00");
-  if (fala !== "00:00:00" && fala !== "-") return true;
-  const txt = String(c?.readable_status_text ?? "").toLowerCase();
+  if (segundos(c?.speaking_with_agent_time) > 0) return true;
+  if (segundos(c?.speaking_time) > 0) return true;
+  const txt = String(c?.readable_status_text ?? c?.status_text ?? "").toLowerCase();
   if (txt.includes("atendida") && !txt.includes("não atendida") && !txt.includes("nao atendida")) return true;
+  if (Number(c?.agent?.id ?? 0) > 0 && segundos(c?.billed_time) > 0) return true;
   return c?.has_agent === true;
 }
+
 
 async function tresc(base: string, token: string, path: string, params: Record<string, string> = {}) {
   const url = new URL(`${base.replace(/\/+$/, "")}${path}`);
