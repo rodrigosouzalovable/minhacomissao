@@ -9,7 +9,8 @@ import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
-import { Plus, RotateCcw, Download, CalendarIcon, Trophy, Pencil } from 'lucide-react';
+import { Plus, RotateCcw, Download, CalendarIcon, Trophy, Pencil, RefreshCw } from 'lucide-react';
+import { FunilAcionamentosCard } from '@/components/relatorios/FunilAcionamentosCard';
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
@@ -63,6 +64,8 @@ export default function Relatorios() {
   const [editingCol, setEditingCol] = useState<{ hora: string; col: ColunaIncr } | null>(null);
   const [colInput, setColInput] = useState('');
   const cooldownRef = useRef<Record<string, number>>({});
+  const [syncEm, setSyncEm] = useState<string | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
 
   const dataStr = toDateStr(data);
 
@@ -84,11 +87,25 @@ export default function Relatorios() {
         };
       }
     });
+    const syncs = (rRes.data as any[] | null)?.map(r => r.sync_em).filter(Boolean) ?? [];
+    setSyncEm(syncs.length ? syncs.sort().slice(-1)[0] : null);
     setLinhas(map);
     setMeta(Number((mRes.data as any)?.meta_valor ?? 0));
   }, [dataStr]);
 
+  const sincronizarAgora = async () => {
+    setSincronizando(true);
+    const { error } = await supabase.functions.invoke('relatorio-acionamentos-sync', {
+      body: { dia: dataStr, notificar: false },
+    });
+    setSincronizando(false);
+    if (error) { toast.error('Falha ao atualizar: ' + error.message); return; }
+    toast.success('Relatório atualizado com os dados do Inbox Meta');
+    load();
+  };
+
   useEffect(() => { load(); }, [load]);
+
 
   // Realtime — só para o dia selecionado
   useEffect(() => {
@@ -206,7 +223,7 @@ export default function Relatorios() {
     const anterior = (linhas[hora]?.[col] as number) ?? 0;
     const { error } = await supabase
       .from('relatorio_acionamentos' as any)
-      .upsert({ data: dataStr, hora, [col]: v } as any, { onConflict: 'data,hora' });
+      .upsert({ data: dataStr, hora, [col]: v, [`${col}_manual`]: true } as any, { onConflict: 'data,hora' });
     if (error) { toast.error(error.message); return; }
     await supabase.from('relatorio_acionamentos_log' as any).insert({
       acao: 'edicao_' + col, data: dataStr, hora,
@@ -280,6 +297,9 @@ export default function Relatorios() {
                 />
               </PopoverContent>
             </Popover>
+            <Button variant="outline" size="sm" onClick={sincronizarAgora} disabled={sincronizando}>
+              <RefreshCw className={cn('h-4 w-4 mr-2', sincronizando && 'animate-spin')} /> Atualizar agora
+            </Button>
             <Button variant="outline" size="sm" onClick={exportCSV}>
               <Download className="h-4 w-4 mr-2" /> Exportar CSV
             </Button>
@@ -307,6 +327,18 @@ export default function Relatorios() {
             )}
           </div>
         </div>
+
+        {/* Funil consolidado */}
+        <FunilAcionamentosCard
+          dataFmt={format(data, 'dd/MM/yyyy')}
+          parcial={dataStr === toDateStr(new Date())}
+          syncEm={syncEm}
+          tentativas={totais.tentativas}
+          whatsapp={totais.whatsapp}
+          cpc={totais.cpc}
+          cpca={totais.cpca}
+          valor={totais.valor}
+        />
 
         {/* Card meta */}
         <Card>
