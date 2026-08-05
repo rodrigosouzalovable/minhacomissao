@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DEFAULT_BASE = "https://app.3c.fluxoti.com.br/api/v1";
+const DEFAULT_BASE = "https://app.3c.fluxoti.com/api/v1";
 
 const HORAS = [
   "8h-9h", "9h-10h", "10h-11h", "11h-12h", "12h-13h", "13h-14h",
