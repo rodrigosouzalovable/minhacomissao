@@ -64,10 +64,49 @@ function intencaoLocal(texto: string): 'avista' | 'parcelado' | 'cpf' | 'outro' 
   return 'outro';
 }
 
+// Fallback com Lovable AI para interpretar a intenção quando as palavras-chave não resolvem
+async function intencaoIA(texto: string): Promise<'avista' | 'parcelado' | 'cpf' | 'duvida'> {
+  const key = Deno.env.get('LOVABLE_API_KEY');
+  if (!key) return 'duvida';
+  try {
+    const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Lovable-API-Key': key },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Você classifica a intenção de um cliente numa negociação de dívida. ' +
+              'Responda APENAS com uma destas palavras: avista, parcelado, cpf, duvida. ' +
+              'avista = quer pagar de uma vez / quitar. parcelado = quer dividir/parcelas. ' +
+              'cpf = está informando ou perguntando sobre CPF/documento. duvida = qualquer outra coisa.',
+          },
+          { role: 'user', content: String(texto || '').slice(0, 500) },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error('[MetaIA] gateway status', res.status);
+      return 'duvida';
+    }
+    const data = await res.json();
+    const out = String(data?.choices?.[0]?.message?.content || '').toLowerCase();
+    if (out.includes('avista')) return 'avista';
+    if (out.includes('parcel')) return 'parcelado';
+    if (out.includes('cpf')) return 'cpf';
+    return 'duvida';
+  } catch (e: any) {
+    console.error('[MetaIA] falha intencaoIA', e?.message || e);
+    return 'duvida';
+  }
+}
+
 
 async function enviarTexto(supabase: any, instanciaId: string, telefone: string | null, bsuid: string | null, texto: string) {
   const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-text', {
-    body: { instancia_id: instanciaId, telefone: telefone || undefined, bsuid: bsuid || undefined, texto },
+    body: { instancia_id: instanciaId, telefone: telefone || undefined, bsuid: bsuid || undefined, texto, origem: 'ia' },
   });
   if (error) throw new Error(error.message);
   if (!data?.success) throw new Error(data?.error || 'falha no envio');
