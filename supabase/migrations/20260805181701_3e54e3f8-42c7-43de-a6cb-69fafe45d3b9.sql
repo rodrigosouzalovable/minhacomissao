@@ -1,0 +1,1 @@
+ALTER TABLE public.tresc_ligacoes ADD COLUMN IF NOT EXISTS payload_debug jsonb;

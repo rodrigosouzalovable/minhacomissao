@@ -33,6 +33,27 @@ function brtParts(d: Date) {
   return { dia, hora: Number(hh), minuto: Number(mm) };
 }
 
+// Lê todas as linhas paginando (a API corta o resultado em 1000 linhas por consulta)
+async function fetchAll(
+  build: () => any,
+  ordem: string,
+  passo = 1000,
+  maxPaginas = 200,
+): Promise<any[]> {
+  const out: any[] = [];
+  for (let p = 0; p < maxPaginas; p++) {
+    const from = p * passo;
+    const { data, error } = await build()
+      .order(ordem, { ascending: true })
+      .range(from, from + passo - 1);
+    if (error) throw error;
+    const lote = data || [];
+    out.push(...lote);
+    if (lote.length < passo) break;
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -54,32 +75,34 @@ Deno.serve(async (req) => {
     const inicioDia = `${dia}T00:00:00-03:00`;
     const fimDia = `${dia}T23:59:59-03:00`;
 
-    // === Mensagens do Inbox Meta no dia ===
-    const { data: msgs, error: msgsErr } = await supabase
-      .from("meta_whatsapp_mensagens")
-      .select("telefone, direcao, timestamp_msg")
-      .gte("timestamp_msg", inicioDia)
-      .lte("timestamp_msg", fimDia)
-      .limit(100000);
-    if (msgsErr) throw msgsErr;
+    // === Mensagens do Inbox Meta no dia (paginado) ===
+    const msgs = await fetchAll(
+      () => supabase
+        .from("meta_whatsapp_mensagens")
+        .select("telefone, direcao, timestamp_msg")
+        .gte("timestamp_msg", inicioDia)
+        .lte("timestamp_msg", fimDia),
+      "timestamp_msg",
+    );
 
-    // === Acordos criados no dia ===
-    const { data: acordos, error: acErr } = await supabase
-      .from("acordos")
-      .select("cliente_telefone, valor_total, criado_em")
-      .gte("criado_em", inicioDia)
-      .lte("criado_em", fimDia)
-      .limit(20000);
-    if (acErr) throw acErr;
+    // === Acordos criados no dia (paginado) ===
+    const acordos = await fetchAll(
+      () => supabase
+        .from("acordos")
+        .select("cliente_telefone, valor_total, criado_em")
+        .gte("criado_em", inicioDia)
+        .lte("criado_em", fimDia),
+      "criado_em",
+    );
 
     const acordoSufixos = new Set(
       (acordos || []).map((a: any) => suf8(a.cliente_telefone)).filter((s: string) => s.length === 8),
     );
 
-    // Buckets por hora
-    type Bucket = { saida: Set<string>; entrada: Set<string> };
+    // Buckets por hora: envios contam por volume; respostas por telefone único
+    type Bucket = { envios: number; entrada: Set<string> };
     const buckets = new Map<string, Bucket>();
-    for (const h of HORAS) buckets.set(h, { saida: new Set(), entrada: new Set() });
+    for (const h of HORAS) buckets.set(h, { envios: 0, entrada: new Set() });
 
     for (const m of (msgs || []) as any[]) {
       const s = suf8(m.telefone);
@@ -88,7 +111,7 @@ Deno.serve(async (req) => {
       const label = horaLabel(p.hora);
       const b = buckets.get(label);
       if (!b) continue; // fora da faixa 08h-19h
-      if (String(m.direcao) === "saida") b.saida.add(s);
+      if (String(m.direcao) === "saida") b.envios++;
       else b.entrada.add(s);
     }
 
@@ -99,11 +122,13 @@ Deno.serve(async (req) => {
     const qualMap = new Map<number, string>();
     (quals || []).forEach((q: any) => qualMap.set(Number(q.qualificacao_id), String(q.classificacao)));
 
-    const { data: ligacoes } = await supabase
-      .from("tresc_ligacoes")
-      .select("hora, telefone_sufixo, atendida, qualificacao_id")
-      .eq("data", dia)
-      .limit(100000);
+    const ligacoes = await fetchAll(
+      () => supabase
+        .from("tresc_ligacoes")
+        .select("call_id, hora, telefone_sufixo, atendida, qualificacao_id")
+        .eq("data", dia),
+      "call_id",
+    );
 
     type LigBucket = { total: number; alo: number; cpc: Set<string>; cpca: Set<string> };
     const ligBuckets = new Map<string, LigBucket>();
@@ -120,20 +145,17 @@ Deno.serve(async (req) => {
       if (cls === "cpca") b.cpca.add(s);
     }
 
-    // Primeiro toque por telefone no dia (evita contar o mesmo cliente 2x)
-    const jaAcionado = new Set<string>();
+
+    // WhatsApp/tentativas = volume de disparos. CPC/CPC-A = telefone único por dia.
     const jaRespondeu = new Set<string>();
     const linhas: Array<{ hora: string; whatsapp: number; ligacoes: number; alo: number; tentativas: number; cpc: number; cpca: number }> = [];
 
     for (const h of HORAS) {
       const b = buckets.get(h)!;
       const lb = ligBuckets.get(h)!;
-      let whatsapp = 0, cpc = 0, cpca = 0;
-      for (const s of b.saida) {
-        if (jaAcionado.has(s)) continue;
-        jaAcionado.add(s);
-        whatsapp++;
-      }
+      let cpc = 0, cpca = 0;
+      const whatsapp = b.envios;
+
       // CPC por WhatsApp (resposta do cliente)
       for (const s of b.entrada) {
         if (jaRespondeu.has(s)) continue;

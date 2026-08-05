@@ -29,11 +29,17 @@ function brtParts(d: Date) {
 function foiAtendida(c: any): boolean {
   const fala = String(c?.speaking_with_agent_time ?? "00:00:00");
   if (fala !== "00:00:00" && fala !== "-" && fala !== "null") return true;
-  const txt = String(c?.readable_status_text ?? c?.status ?? "").toLowerCase();
-  if (txt.includes("atendida") && !txt.includes("não atendida") && !txt.includes("nao atendida")) return true;
+  const t = String(c?.readable_status_text ?? c?.status ?? "").toLowerCase();
+  if (t.includes("atendida") && !t.includes("não atendida") && !t.includes("nao atendida")) return true;
   if (String(c?.status_id ?? "") === "3") return true; // conectada com agente
+  if (Number(c?.speaking_time ?? 0) > 0) return true;
+  if (Number(c?.billed_time ?? 0) > 0) return true;
+  if (Number(c?.agent?.id ?? 0) > 0 && Number(c?.call_timestamp?.answered_time ?? 0) > 0) return true;
+  return c?.has_agent === true;
+
   return c?.has_agent === true;
 }
+
 
 const txt = (v: unknown) => {
   const s = v == null ? "" : String(v);
@@ -43,6 +49,8 @@ const num = (v: unknown) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
+let amostrasLogadas = 0;
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -70,26 +78,84 @@ Deno.serve(async (req) => {
     let payload: any = {};
     try { payload = await req.json(); } catch (_) { payload = {}; }
 
-    // A 3C pode entregar o objeto na raiz, em "call", em "data" ou em "call_history"
-    const c = payload?.call ?? payload?.call_history ?? payload?.data?.call ?? payload?.data ?? payload;
-    const evento = txt(payload?.event ?? payload?.type ?? payload?.event_name) ?? "desconhecido";
+    // A 3C entrega o evento como CHAVE RAIZ, ex:
+    // { "call-history-was-created": { "callHistory": { "_id": ..., ... } } }
+    const EVENTOS = ["call-history-was-created", "call-was-connected", "call-was-created", "call-was-finished"];
+    let envelope: any = payload;
+    let evento = txt(payload?.event ?? payload?.type ?? payload?.event_name);
+    for (const ev of EVENTOS) {
+      if (payload && typeof payload === "object" && payload[ev]) {
+        evento = ev;
+        envelope = payload[ev];
+        break;
+      }
+    }
+    if (!evento && payload && typeof payload === "object") {
+      // qualquer chave única que contenha um objeto com callHistory/call
+      for (const [k, v] of Object.entries(payload)) {
+        if (v && typeof v === "object" && ((v as any).callHistory || (v as any).call)) {
+          evento = k; envelope = v; break;
+        }
+      }
+    }
+    evento = evento ?? "desconhecido";
 
-    const callId = txt(c?.id ?? c?.call_id ?? c?.uuid ?? payload?.call_id);
-    const numero = txt(c?.number ?? c?.phone ?? c?.telephone ?? c?.contact?.phone);
+    const c = envelope?.callHistory ?? envelope?.call_history ?? envelope?.call
+      ?? envelope?.data?.call ?? envelope?.data ?? envelope;
+
+    const callId = txt(c?.id ?? c?._id ?? c?.call_id ?? c?.uuid ?? envelope?.call_id ?? payload?.call_id);
+
+    // Busca do telefone: campos conhecidos e, como fallback, varredura por chaves de telefone
+    const deepPhone = (obj: any, depth = 0): string | null => {
+      if (!obj || typeof obj !== "object" || depth > 3) return null;
+      for (const [k, v] of Object.entries(obj)) {
+        if (v == null) continue;
+        if ((typeof v === "string" || typeof v === "number") && /phone|number|telefone|telephone|dialed/i.test(k)) {
+          const d = String(v).replace(/\D/g, "");
+          if (d.length >= 8) return String(v);
+        }
+      }
+      for (const v of Object.values(obj)) {
+        if (v && typeof v === "object") {
+          const r = deepPhone(v, depth + 1);
+          if (r) return r;
+        }
+      }
+      return null;
+    };
+    const numero = txt(
+      c?.number ?? c?.phone ?? c?.telephone ?? c?.dialed_number ?? c?.contact?.phone
+        ?? c?.contact?.number ?? c?.customer?.phone,
+    ) ?? deepPhone(c) ?? deepPhone(envelope);
 
     if (!callId || !numero) {
-      console.log("tresc-webhook payload sem id/numero:", JSON.stringify(payload).slice(0, 800));
+      console.log("tresc-webhook payload sem id/numero:", JSON.stringify(payload).slice(0, 1500));
       await supabase.from("tresc_config")
         .update({ ultimo_webhook_em: new Date().toISOString(), ultimo_webhook_tipo: `${evento} (ignorado)` })
         .eq("id", cfg.id);
       return json({ ok: true, ignorado: true });
     }
 
+    const guardarAmostra = url.searchParams.get("debug") === "1" || amostrasLogadas < 4;
+    if (guardarAmostra) {
+      amostrasLogadas++;
+      console.log("tresc-webhook amostra:", evento, JSON.stringify(c).slice(0, 3000));
+    }
+
+
+
+
+    const ts = c?.call_timestamp || {};
+    const epoch = Number(ts?.dialed_time ?? ts?.connected_time ?? ts?.answered_time ?? 0);
     const bruta = txt(c?.call_date_rfc3339) ?? txt(c?.call_date) ?? txt(c?.created_at);
-    const dt = bruta
-      ? new Date(bruta.includes("T") ? bruta : `${bruta.replace(" ", "T")}-03:00`)
-      : new Date();
+    let dt = epoch > 0 ? new Date(epoch * 1000) : null;
+    if (!dt || isNaN(dt.getTime())) {
+      dt = bruta
+        ? new Date(bruta.includes("T") ? bruta : `${bruta.replace(" ", "T")}-03:00`)
+        : new Date();
+    }
     const p = brtParts(isNaN(dt.getTime()) ? new Date() : dt);
+
 
     const linha = {
       call_id: callId,
@@ -98,16 +164,18 @@ Deno.serve(async (req) => {
       telefone: numero,
       telefone_sufixo: suf8(numero),
       status_id: num(c?.status_id),
-      status_texto: txt(c?.readable_status_text ?? c?.status),
+      status_texto: txt(c?.readable_status_text ?? c?.status_text ?? c?.status),
       atendida: foiAtendida(c),
       qualificacao_id: num(c?.qualification_id ?? c?.qualification?.id),
-      qualificacao_nome: txt(c?.qualification?.name ?? c?.qualification),
-      agente: txt(c?.agent?.name ?? c?.agent),
-      campanha: txt(c?.campaign?.name ?? c?.campaign),
+      qualificacao_nome: txt(c?.qualification?.name ?? (typeof c?.qualification === "string" ? c?.qualification : null)),
+      agente: txt(c?.agent?.name ?? (typeof c?.agent === "string" ? c?.agent : null)),
+      campanha: txt(c?.campaign?.name ?? (typeof c?.campaign === "string" ? c?.campaign : null)),
       campanha_id: num(c?.campaign_id ?? c?.campaign?.id),
-      modo: txt(c?.mode),
+      modo: txt(c?.mode ?? c?.call_mode),
+      payload_debug: guardarAmostra ? { evento, call: c } : null,
       call_date: (isNaN(dt.getTime()) ? new Date() : dt).toISOString(),
     };
+
 
     // Não sobrescreve com nulo o que já foi gravado por um evento anterior
     const { data: existente } = await supabase
