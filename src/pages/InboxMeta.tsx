@@ -130,6 +130,7 @@ export default function InboxMeta() {
 
   
   const [etiquetasOpen, setEtiquetasOpen] = useState(false);
+  const [etiquetasConfigOpen, setEtiquetasConfigOpen] = useState(false);
   const [editEtId, setEditEtId] = useState<string | null>(null);
   const [editEtCor, setEditEtCor] = useState<string>(CORES_ETIQUETA[0]);
   const [msgRapidasOpen, setMsgRapidasOpen] = useState(false);
