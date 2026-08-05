@@ -26,19 +26,30 @@ function brtParts(d: Date) {
   return { dia, hora: Number(hh) };
 }
 
-function foiAtendida(c: any): boolean {
-  const fala = String(c?.speaking_with_agent_time ?? "00:00:00");
-  if (fala !== "00:00:00" && fala !== "-" && fala !== "null") return true;
-  const t = String(c?.readable_status_text ?? c?.status ?? "").toLowerCase();
-  if (t.includes("atendida") && !t.includes("não atendida") && !t.includes("nao atendida")) return true;
-  if (String(c?.status_id ?? "") === "3") return true; // conectada com agente
-  if (Number(c?.speaking_time ?? 0) > 0) return true;
-  if (Number(c?.billed_time ?? 0) > 0) return true;
-  if (Number(c?.agent?.id ?? 0) > 0 && Number(c?.call_timestamp?.answered_time ?? 0) > 0) return true;
-  return c?.has_agent === true;
+// Converte "00:01:23", "83" ou 83 em segundos
+function segundos(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v).trim();
+  if (!s || s === "-" || s === "null") return 0;
+  if (s.includes(":")) {
+    const partes = s.split(":").map((p) => Number(p) || 0);
+    return partes.reduce((acc, n) => acc * 60 + n, 0);
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
 
+// ALÔ = houve conversa real com o agente
+function foiAtendida(c: any): boolean {
+  if (segundos(c?.speaking_with_agent_time) > 0) return true;
+  if (segundos(c?.speaking_time) > 0) return true;
+  const t = String(c?.readable_status_text ?? c?.status_text ?? "").toLowerCase();
+  if (t.includes("atendida") && !t.includes("não atendida") && !t.includes("nao atendida")) return true;
+  if (Number(c?.agent?.id ?? 0) > 0 && segundos(c?.billed_time) > 0) return true;
   return c?.has_agent === true;
 }
+
 
 
 const txt = (v: unknown) => {
