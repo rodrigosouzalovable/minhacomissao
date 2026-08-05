@@ -146,7 +146,13 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
             <label key={u.user_id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-accent/40 rounded px-1.5 py-1">
               <Checkbox checked={membros.has(u.user_id)} onCheckedChange={(v) => toggle(u.user_id, !!v)} />
               <span className="flex-1 truncate">{u.nome}</span>
+              {membros.has(u.user_id) && !naFila.has(u.user_id) && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 shrink-0">
+                  fora da fila
+                </span>
+              )}
             </label>
+
           ))}
         </ScrollArea>
 
