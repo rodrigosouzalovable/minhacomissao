@@ -64,10 +64,49 @@ function intencaoLocal(texto: string): 'avista' | 'parcelado' | 'cpf' | 'outro' 
   return 'outro';
 }
 
+// Fallback com Lovable AI para interpretar a intenção quando as palavras-chave não resolvem
+async function intencaoIA(texto: string): Promise<'avista' | 'parcelado' | 'cpf' | 'duvida'> {
+  const key = Deno.env.get('LOVABLE_API_KEY');
+  if (!key) return 'duvida';
+  try {
+    const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Lovable-API-Key': key },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Você classifica a intenção de um cliente numa negociação de dívida. ' +
+              'Responda APENAS com uma destas palavras: avista, parcelado, cpf, duvida. ' +
+              'avista = quer pagar de uma vez / quitar. parcelado = quer dividir/parcelas. ' +
+              'cpf = está informando ou perguntando sobre CPF/documento. duvida = qualquer outra coisa.',
+          },
+          { role: 'user', content: String(texto || '').slice(0, 500) },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error('[MetaIA] gateway status', res.status);
+      return 'duvida';
+    }
+    const data = await res.json();
+    const out = String(data?.choices?.[0]?.message?.content || '').toLowerCase();
+    if (out.includes('avista')) return 'avista';
+    if (out.includes('parcel')) return 'parcelado';
+    if (out.includes('cpf')) return 'cpf';
+    return 'duvida';
+  } catch (e: any) {
+    console.error('[MetaIA] falha intencaoIA', e?.message || e);
+    return 'duvida';
+  }
+}
+
 
 async function enviarTexto(supabase: any, instanciaId: string, telefone: string | null, bsuid: string | null, texto: string) {
   const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-text', {
-    body: { instancia_id: instanciaId, telefone: telefone || undefined, bsuid: bsuid || undefined, texto },
+    body: { instancia_id: instanciaId, telefone: telefone || undefined, bsuid: bsuid || undefined, texto, origem: 'ia' },
   });
   if (error) throw new Error(error.message);
   if (!data?.success) throw new Error(data?.error || 'falha no envio');
@@ -152,16 +191,19 @@ Deno.serve(async (req) => {
     }
 
     // Um humano já respondeu essa conversa DEPOIS do último envio da IA? => IA não atropela
+    // (mensagens enviadas pela própria IA ficam registradas em contexto.msgs_ia e são ignoradas)
+    const idsIA: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
     const corteHumano: string = String(estado.contexto?.ultimo_envio_ia || estado.created_at);
-    const { data: saidaHumana } = await supabase
+    const { data: saidas } = await supabase
       .from('meta_whatsapp_mensagens')
       .select('id, conteudo')
       .eq('instancia_id', (contato as any).instancia_id)
       .eq('telefone', (contato as any).telefone || '')
       .eq('direcao', 'saida')
       .gt('criado_em', corteHumano)
-      .limit(1);
-    if ((saidaHumana || []).length > 0 && estado.etapa !== 'inicio') {
+      .limit(20);
+    const saidaHumana = (saidas || []).filter((m: any) => !idsIA.includes(m.id));
+    if (saidaHumana.length > 0 && estado.etapa !== 'inicio') {
       await supabase.from('meta_ia_conversas_estado')
         .update({ aguardando_humano: true }).eq('id', estado.id);
       console.log('[MetaIA] humano assumiu', { contato_id });
@@ -177,16 +219,27 @@ Deno.serve(async (req) => {
       return t ? String((t as any).template) : '';
     };
 
+    let enviados = 0;
     const enviar = async (texto: string, novaEtapa: string, extra: Record<string, unknown> = {}) => {
       if (!texto.trim()) return;
-      await enviarTexto(supabase, (contato as any).instancia_id, (contato as any).telefone, (contato as any).bsuid, texto);
+      const res = await enviarTexto(supabase, (contato as any).instancia_id, (contato as any).telefone, (contato as any).bsuid, texto);
+      enviados += 1;
+      const novoId = (res as any)?.mensagem_id;
+      const ctxExtra = (extra as any).contexto || {};
+      const ids = [...idsIA, ...(novoId ? [String(novoId)] : [])].slice(-20);
+      if (novoId) idsIA.push(String(novoId));
       await supabase.from('meta_ia_conversas_estado').update({
         etapa: novaEtapa,
         msgs_dia: hojeSP,
-        msgs_hoje: msgsHoje + 1,
+        msgs_hoje: msgsHoje + enviados,
         ultima_msg_em: new Date().toISOString(),
-        contexto: { ...(estado.contexto || {}), ultimo_envio_ia: new Date().toISOString() },
         ...extra,
+        contexto: {
+          ...(estado.contexto || {}),
+          ...ctxExtra,
+          msgs_ia: ids,
+          ultimo_envio_ia: new Date(Date.now() + 2000).toISOString(),
+        },
       }).eq('id', estado.id);
     };
 
@@ -221,10 +274,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // CPF/CNPJ vindo na mensagem do cliente (tolera máscara e texto ao redor)
-    const intencao = intencaoLocal(texto || '');
+    // CPF/CNPJ vindo na mensagem do cliente (tolera máscara e texto ao redor, em qualquer etapa)
+    let intencao: 'avista' | 'parcelado' | 'cpf' | 'outro' | 'duvida' = intencaoLocal(texto || '');
     const docMsg = extrairDoc(texto || '');
-    if (!cpf && docMsg && validaCpfCnpj(docMsg)) cpf = docMsg;
+    if (docMsg && validaCpfCnpj(docMsg)) cpf = docMsg;
+    // Sem palavra-chave clara: usa Lovable AI para interpretar a intenção
+    if (intencao === 'outro' && String(texto || '').trim().length > 1) {
+      intencao = await intencaoIA(texto || '');
+      console.log('[MetaIA] intencao IA', intencao, { contato_id });
+    }
 
     if (!cpf) {
       const tentativas = Number(estado.contexto?.tentativas_cpf || 0);

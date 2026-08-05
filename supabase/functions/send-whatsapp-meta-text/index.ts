@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { instancia_id, telefone, bsuid, texto, user_id, reply_to_wa_id, conteudo_citado } = await req.json();
+    const { instancia_id, telefone, bsuid, texto, user_id, reply_to_wa_id, conteudo_citado, origem } = await req.json();
     if (!instancia_id || (!telefone && !bsuid) || !texto) {
       return new Response(JSON.stringify({ success: false, error: 'instancia_id, (telefone ou bsuid) e texto são obrigatórios' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     const nowIso = new Date().toISOString();
 
     // Persiste mensagem enviada
-    await supabase.from('meta_whatsapp_mensagens').insert({
+    const { data: msgRow } = await supabase.from('meta_whatsapp_mensagens').insert({
       user_id: uid,
       instancia_id,
       telefone: to || null,
@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       wa_message_id: waId,
       wa_message_id_reply: reply_to_wa_id || null,
       conteudo_citado: conteudo_citado || null,
-    } as any);
+    } as any).select('id').maybeSingle();
 
     // Atualiza preview do contato (cria se não existir)
     if (contato?.id) {
@@ -157,8 +157,8 @@ Deno.serve(async (req) => {
         })
         .eq('id', contato.id);
 
-      // Atendente humano respondeu => desliga a IA nessa conversa
-      if (user_id) {
+      // Atendente humano respondeu => desliga a IA nessa conversa (envios da própria IA não contam)
+      if (user_id && origem !== 'ia') {
         await supabase.from('meta_ia_conversas_estado')
           .update({ aguardando_humano: true })
           .eq('contato_id', contato.id);
@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
       } as any);
     }
 
-    return new Response(JSON.stringify({ success: true, waId }), {
+    return new Response(JSON.stringify({ success: true, waId, mensagem_id: (msgRow as any)?.id || null }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
