@@ -359,7 +359,9 @@ Deno.serve(async (req) => {
     }
 
     await enviar(render(tpl('proposta'), vars), 'proposta', { cpf });
+    console.log('[MetaIA] proposta enviada', { contato_id, cpf: cpf.slice(-4), total, parcelas });
     return json({ success: true, etapa: 'proposta', total, parcelas });
+
   } catch (e: any) {
     console.error('[MetaIA] erro', e?.message || e);
     return json({ success: false, error: String(e?.message || e) }, 500);
