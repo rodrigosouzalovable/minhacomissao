@@ -5126,6 +5126,9 @@ export type Database = {
           criado_em: string
           id: string
           ultimo_sync: string | null
+          ultimo_webhook_em: string | null
+          ultimo_webhook_tipo: string | null
+          webhook_key: string
         }
         Insert: {
           ativo?: boolean
@@ -5135,6 +5138,9 @@ export type Database = {
           criado_em?: string
           id?: string
           ultimo_sync?: string | null
+          ultimo_webhook_em?: string | null
+          ultimo_webhook_tipo?: string | null
+          webhook_key?: string
         }
         Update: {
           ativo?: boolean
@@ -5144,6 +5150,9 @@ export type Database = {
           criado_em?: string
           id?: string
           ultimo_sync?: string | null
+          ultimo_webhook_em?: string | null
+          ultimo_webhook_tipo?: string | null
+          webhook_key?: string
         }
         Relationships: []
       }
