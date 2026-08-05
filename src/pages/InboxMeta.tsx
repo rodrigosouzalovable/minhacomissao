@@ -1544,6 +1544,8 @@ export default function InboxMeta() {
         folderNome={acessoFolder?.nome ?? 'Padrão'}
         onChanged={fetchFolders}
       />
+      <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
+
       <MetaNovaConversaDialog
         open={novaConversaOpen}
         onOpenChange={setNovaConversaOpen}
