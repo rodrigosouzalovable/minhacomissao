@@ -156,7 +156,15 @@ Deno.serve(async (req) => {
           atualizado_em: nowIso,
         })
         .eq('id', contato.id);
+
+      // Atendente humano respondeu => desliga a IA nessa conversa
+      if (user_id) {
+        await supabase.from('meta_ia_conversas_estado')
+          .update({ aguardando_humano: true })
+          .eq('contato_id', contato.id);
+      }
     } else {
+
       await supabase.from('meta_whatsapp_contatos').insert({
         user_id: uid,
         instancia_id,

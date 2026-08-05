@@ -12,7 +12,9 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
+  Bot,
 } from 'lucide-react';
+
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +30,8 @@ import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell
 import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
 import { MetaFoldersDialog, type MetaInboxFolder } from '@/components/inbox/meta/MetaFoldersDialog';
 import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcessoDialog';
+import MetaIAConfigDialog from '@/components/inbox/meta/MetaIAConfigDialog';
+
 import { useUserRole } from '@/hooks/useUserRole';
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
@@ -125,6 +129,8 @@ export default function InboxMeta() {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [foldersDialogOpen, setFoldersDialogOpen] = useState(false);
   const [acessoFolder, setAcessoFolder] = useState<{ id: string | null; nome: string } | null>(null);
+  const [iaConfigOpen, setIaConfigOpen] = useState(false);
+
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
 
@@ -1088,11 +1094,26 @@ export default function InboxMeta() {
                         <ContextMenuItem onClick={() => setAcessoFolder({ id: f.id, nome: f.nome })}>
                           <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
                         </ContextMenuItem>
+                        {f.nome.trim().toUpperCase() === 'IA' && (
+                          <ContextMenuItem onClick={() => setIaConfigOpen(true)}>
+                            <Bot className="h-4 w-4 mr-2" /> Configurar IA
+                          </ContextMenuItem>
+                        )}
                       </ContextMenuContent>
                     )}
                   </ContextMenu>
                 );
               })}
+              {isAdmin && foldersVisiveis.some((f) => f.id === currentFolderId && f.nome.trim().toUpperCase() === 'IA') && (
+                <button
+                  onClick={() => setIaConfigOpen(true)}
+                  className="text-[11px] px-2 py-1 rounded border border-dashed border-primary/50 text-primary hover:bg-accent flex items-center gap-1"
+                  title="Configurar modelos e regras da IA"
+                >
+                  <Bot className="h-3 w-3" /> Configurar IA
+                </button>
+              )}
+
               {!podeVerPadrao && foldersVisiveis.length === 0 && (
                 <span className="text-[11px] text-muted-foreground">
                   Sem caixa de mensagens atribuída — fale com o administrador.
@@ -1523,6 +1544,8 @@ export default function InboxMeta() {
         folderNome={acessoFolder?.nome ?? 'Padrão'}
         onChanged={fetchFolders}
       />
+      <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
+
       <MetaNovaConversaDialog
         open={novaConversaOpen}
         onOpenChange={setNovaConversaOpen}

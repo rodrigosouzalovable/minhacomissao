@@ -799,7 +799,18 @@ serve(async (req) => {
             }
           }
 
+          // ===== Atendimento automático com IA (somente caixa "IA") =====
+          if (!isEcho && contatoIdFinal) {
+            supabase.functions.invoke('meta-ia-atendimento', {
+              body: { contato_id: contatoIdFinal, texto },
+            }).then(
+              (r: any) => console.log('[MetaWebhook] IA', JSON.stringify(r?.data || r?.error || {})),
+              (e: any) => console.error('[MetaWebhook] IA erro', e?.message || e),
+            );
+          }
+
           // Compatibilidade com o log de envios em massa — casa por sufixo
+
           if (!isEcho && !soBsuid && sufixo.length === 8) {
             await supabase.from('meta_whatsapp_envios_log')
               .update({ status: 'replied' })

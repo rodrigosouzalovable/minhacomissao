@@ -3221,6 +3221,169 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_ia_config: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          desconto_avista_pct: number
+          desconto_parcelado_pct: number
+          folder_id: string | null
+          hora_fim: number
+          hora_inicio: number
+          id: string
+          limite_msgs_dia: number
+          max_parcelas: number
+          parcela_minima: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          desconto_avista_pct?: number
+          desconto_parcelado_pct?: number
+          folder_id?: string | null
+          hora_fim?: number
+          hora_inicio?: number
+          id?: string
+          limite_msgs_dia?: number
+          max_parcelas?: number
+          parcela_minima?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          desconto_avista_pct?: number
+          desconto_parcelado_pct?: number
+          folder_id?: string | null
+          hora_fim?: number
+          hora_inicio?: number
+          id?: string
+          limite_msgs_dia?: number
+          max_parcelas?: number
+          parcela_minima?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ia_config_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_ia_contatos_emergencia: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          telefone: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          telefone: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          telefone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meta_ia_conversas_estado: {
+        Row: {
+          aguardando_humano: boolean
+          contato_id: string
+          contexto: Json
+          cpf: string | null
+          created_at: string
+          etapa: string
+          id: string
+          msgs_dia: string
+          msgs_hoje: number
+          telefone: string
+          ultima_msg_em: string | null
+          updated_at: string
+        }
+        Insert: {
+          aguardando_humano?: boolean
+          contato_id: string
+          contexto?: Json
+          cpf?: string | null
+          created_at?: string
+          etapa?: string
+          id?: string
+          msgs_dia?: string
+          msgs_hoje?: number
+          telefone: string
+          ultima_msg_em?: string | null
+          updated_at?: string
+        }
+        Update: {
+          aguardando_humano?: boolean
+          contato_id?: string
+          contexto?: Json
+          cpf?: string | null
+          created_at?: string
+          etapa?: string
+          id?: string
+          msgs_dia?: string
+          msgs_hoje?: number
+          telefone?: string
+          ultima_msg_em?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ia_conversas_estado_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: true
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_ia_templates: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          descricao: string
+          etapa: string
+          id: string
+          template: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          descricao?: string
+          etapa: string
+          id?: string
+          template: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          descricao?: string
+          etapa?: string
+          id?: string
+          template?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meta_inbox_default_members: {
         Row: {
           criado_em: string
