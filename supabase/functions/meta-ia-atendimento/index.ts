@@ -2,6 +2,7 @@
 // Fluxo: identifica CPF -> se já tem acordo, chama humano; se não tem, envia proposta calculada.
 // A IA nunca cria acordo: ao escolher à vista/parcelado, avisa os contatos de emergência.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { notificarAdmin } from '../_shared/notificar-admin.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -184,7 +185,15 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
-    const { contato_id, texto } = await req.json();
+    const body = await req.json();
+    const { contato_id, texto, teste } = body || {};
+
+    if (teste) {
+      const res = await avisarEmergencia(supabase,
+        `🤖 *IA — teste de aviso*\n\nEste é um teste de notificação de atendimento humano da caixa IA.\nSe você recebeu esta mensagem, os avisos estão funcionando.`);
+      return json({ success: !!res.success, error: (res as any).error || (res as any).skipped || null });
+    }
+
     if (!contato_id) return json({ success: false, error: 'contato_id é obrigatório' }, 400);
 
     // ===== Contato / caixa =====
@@ -345,7 +354,7 @@ Deno.serve(async (req) => {
           `🤖 *IA — não consegui identificar o cliente*\n\n` +
           `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
           `Última mensagem: "${String(texto || '').slice(0, 200)}"\n\n` +
-          `Assuma a conversa na caixa IA.`);
+          `Assuma a conversa na caixa IA.`, contato_id);
         console.log('[MetaIA] cpf sem sucesso, humano acionado', { contato_id });
         return json({ success: true, etapa: 'cpf_falhou_humano' });
       }
@@ -391,7 +400,7 @@ Deno.serve(async (req) => {
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Motivo: já possui acordo lançado${atendente ? ` (atendente: ${atendente})` : ''}\n\n` +
-        `Assuma a negociação no Inbox Meta Oficial (caixa IA).`);
+        `Assuma a negociação no Inbox Meta Oficial (caixa IA).`, contato_id);
 
       return json({ success: true, etapa: 'ja_tem_acordo' });
     }
@@ -448,7 +457,7 @@ Deno.serve(async (req) => {
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Credor: ${credor}\n` +
         `Opção escolhida: ${intencao === 'avista' ? `à vista ${vars.valor_avista}` : `${parcelas}x de ${vars.valor_parcela}`}\n\n` +
-        `Finalize o acordo e envie o boleto.`);
+        `Finalize o acordo e envie o boleto.`, contato_id);
       return json({ success: true, etapa: 'confirmacao_escolha' });
     }
 
@@ -459,7 +468,7 @@ Deno.serve(async (req) => {
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Mensagem: "${String(texto || '').slice(0, 300)}"\n\n` +
-        `Assuma a conversa na caixa IA.`);
+        `Assuma a conversa na caixa IA.`, contato_id);
       await supabase.from('meta_ia_conversas_estado')
         .update({ aguardando_humano: true, cpf }).eq('id', estado.id);
       return json({ success: true, etapa: 'duvida_humano' });
