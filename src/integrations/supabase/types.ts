@@ -4706,13 +4706,22 @@ export type Database = {
           atualizado_em: string
           atualizado_por: string | null
           cpc: number
+          cpc_auto: number
+          cpc_manual: boolean
           cpca: number
+          cpca_auto: number
+          cpca_manual: boolean
           criado_em: string
           data: string
           hora: string
           id: string
+          sync_em: string | null
           tentativas: number
+          tentativas_auto: number
+          tentativas_manual: boolean
           whatsapp: number
+          whatsapp_auto: number
+          whatsapp_manual: boolean
         }
         Insert: {
           acordos_valor?: number
@@ -4720,13 +4729,22 @@ export type Database = {
           atualizado_em?: string
           atualizado_por?: string | null
           cpc?: number
+          cpc_auto?: number
+          cpc_manual?: boolean
           cpca?: number
+          cpca_auto?: number
+          cpca_manual?: boolean
           criado_em?: string
           data: string
           hora: string
           id?: string
+          sync_em?: string | null
           tentativas?: number
+          tentativas_auto?: number
+          tentativas_manual?: boolean
           whatsapp?: number
+          whatsapp_auto?: number
+          whatsapp_manual?: boolean
         }
         Update: {
           acordos_valor?: number
@@ -4734,13 +4752,22 @@ export type Database = {
           atualizado_em?: string
           atualizado_por?: string | null
           cpc?: number
+          cpc_auto?: number
+          cpc_manual?: boolean
           cpca?: number
+          cpca_auto?: number
+          cpca_manual?: boolean
           criado_em?: string
           data?: string
           hora?: string
           id?: string
+          sync_em?: string | null
           tentativas?: number
+          tentativas_auto?: number
+          tentativas_manual?: boolean
           whatsapp?: number
+          whatsapp_auto?: number
+          whatsapp_manual?: boolean
         }
         Relationships: []
       }
@@ -6961,13 +6988,22 @@ export type Database = {
           atualizado_em: string
           atualizado_por: string | null
           cpc: number
+          cpc_auto: number
+          cpc_manual: boolean
           cpca: number
+          cpca_auto: number
+          cpca_manual: boolean
           criado_em: string
           data: string
           hora: string
           id: string
+          sync_em: string | null
           tentativas: number
+          tentativas_auto: number
+          tentativas_manual: boolean
           whatsapp: number
+          whatsapp_auto: number
+          whatsapp_manual: boolean
         }
         SetofOptions: {
           from: "*"
