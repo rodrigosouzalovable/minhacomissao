@@ -939,7 +939,7 @@ export default function InboxMeta() {
                     Todas as conversas
                   </button>
                   <div
-                    className="h-[min(420px,calc(100vh-10rem))] min-h-0 overflow-y-scroll overscroll-contain scrollbar-thin pr-1"
+                    className="label-filter-scroll h-[min(420px,calc(100vh-10rem))] min-h-0 overflow-y-scroll overscroll-contain pr-1"
                     style={{ scrollbarWidth: 'auto', scrollbarColor: 'hsl(var(--muted-foreground)) hsl(var(--muted))' }}
                     onWheel={(event) => event.stopPropagation()}
                     onTouchMove={(event) => event.stopPropagation()}
