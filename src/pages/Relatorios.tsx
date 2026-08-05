@@ -223,7 +223,7 @@ export default function Relatorios() {
     const anterior = (linhas[hora]?.[col] as number) ?? 0;
     const { error } = await supabase
       .from('relatorio_acionamentos' as any)
-      .upsert({ data: dataStr, hora, [col]: v } as any, { onConflict: 'data,hora' });
+      .upsert({ data: dataStr, hora, [col]: v, [`${col}_manual`]: true } as any, { onConflict: 'data,hora' });
     if (error) { toast.error(error.message); return; }
     await supabase.from('relatorio_acionamentos_log' as any).insert({
       acao: 'edicao_' + col, data: dataStr, hora,
@@ -297,6 +297,9 @@ export default function Relatorios() {
                 />
               </PopoverContent>
             </Popover>
+            <Button variant="outline" size="sm" onClick={sincronizarAgora} disabled={sincronizando}>
+              <RefreshCw className={cn('h-4 w-4 mr-2', sincronizando && 'animate-spin')} /> Atualizar agora
+            </Button>
             <Button variant="outline" size="sm" onClick={exportCSV}>
               <Download className="h-4 w-4 mr-2" /> Exportar CSV
             </Button>
