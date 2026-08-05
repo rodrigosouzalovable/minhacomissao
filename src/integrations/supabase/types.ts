@@ -6883,6 +6883,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acordos_parcelas_resumo: {
+        Args: { p_acordo_ids: string[] }
+        Returns: {
+          acordo_id: string
+          datas: string[]
+          ultima_paga_data: string
+          ultima_paga_numero: number
+          ultima_pendente_data: string
+        }[]
+      }
       atendente_por_telefone_consulta: {
         Args: { p_dias?: number; p_suffix: string }
         Returns: {
