@@ -10,7 +10,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
-import { Phone, RefreshCw, PlugZap, Download } from 'lucide-react';
+import { Phone, RefreshCw, PlugZap, Download, Webhook, CheckCircle2, AlertCircle } from 'lucide-react';
+import { CopyButton } from '@/components/CopyButton';
 import { cn } from '@/lib/utils';
 
 type Campanha = { id: number; nome: string; pausada?: boolean };
@@ -22,6 +23,9 @@ const CLASSES: Array<{ v: string; label: string }> = [
   { v: 'cpca', label: 'CPC-A' },
 ];
 
+const EVENTOS_3C = ['call-was-connected', 'call-history-was-created'];
+const FUNCTIONS_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
+
 export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,21 +35,37 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
   const [selecionadas, setSelecionadas] = useState<number[]>([]);
   const [quals, setQuals] = useState<Qual[]>([]);
   const [ultimoSync, setUltimoSync] = useState<string | null>(null);
+  const [webhookKey, setWebhookKey] = useState<string | null>(null);
+  const [ultimoWebhook, setUltimoWebhook] = useState<{ em: string | null; tipo: string | null }>({ em: null, tipo: null });
 
   const carregar = useCallback(async () => {
     const [{ data: cfg }, { data: q }] = await Promise.all([
       supabase.from('tresc_config' as any).select('*').limit(1).maybeSingle(),
       supabase.from('tresc_qualificacoes' as any).select('*').order('nome'),
     ]);
-    const c = cfg as any;
+    let c = cfg as any;
+    if (!c) {
+      const { data: nova } = await supabase
+        .from('tresc_config' as any)
+        .insert({ base_url: baseUrl })
+        .select('*')
+        .maybeSingle();
+      c = nova as any;
+    }
     if (c) {
       setCfgId(c.id);
       setBaseUrl(c.base_url);
       setSelecionadas(Array.isArray(c.campanhas) ? c.campanhas : []);
       setUltimoSync(c.ultimo_sync);
+      setWebhookKey(c.webhook_key ?? null);
+      setUltimoWebhook({ em: c.ultimo_webhook_em ?? null, tipo: c.ultimo_webhook_tipo ?? null });
     }
     setQuals((q as any[]) || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const webhookUrl = webhookKey ? `${FUNCTIONS_BASE}/tresc-webhook?k=${webhookKey}` : '';
+
 
   useEffect(() => { if (open) carregar(); }, [open, carregar]);
 
@@ -146,7 +166,47 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
 
         <ScrollArea className="flex-1 pr-3">
           <div className="space-y-6">
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="flex items-center gap-2">
+                  <Webhook className="h-4 w-4" /> Webhook da 3C Plus
+                </Label>
+                {ultimoWebhook.em ? (
+                  <Badge variant="secondary" className="gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Último evento {new Date(ultimoWebhook.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    {ultimoWebhook.tipo ? ` — ${ultimoWebhook.tipo}` : ''}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="gap-1">
+                    <AlertCircle className="h-3 w-3" /> Nenhum evento recebido ainda
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex gap-2 items-center">
+                <Input readOnly value={webhookUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                <CopyButton value={webhookUrl} label="Webhook" preserveText />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {EVENTOS_3C.map((e) => (
+                  <Badge key={e} variant="outline" className="font-mono text-xs">{e}</Badge>
+                ))}
+              </div>
+
+              <ol className="list-decimal pl-5 text-xs text-muted-foreground space-y-1">
+                <li>Na 3C Plus, abra “Novo webhook” e cole a URL acima no campo URL.</li>
+                <li>Marque os dois eventos acima e salve.</li>
+                <li>Volte aqui e recarregue: o selo mostra o horário do último evento recebido.</li>
+              </ol>
+              <p className="text-xs text-muted-foreground">
+                A chave no final da URL é exclusiva desta integração — não compartilhe fora do painel da 3C.
+              </p>
+            </div>
+
             <div className="space-y-2">
+
               <Label>Endereço da API</Label>
               <div className="flex gap-2">
                 <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://app.3c.fluxoti.com.br/api/v1" />
