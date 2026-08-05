@@ -3,7 +3,6 @@ import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSub,
   ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuSeparator, ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -124,8 +123,12 @@ export function MetaConversaContextMenu({
           <ContextMenuSeparator />
           <ContextMenuSub>
             <ContextMenuSubTrigger><Tag className="h-4 w-4 mr-2" />Etiquetas</ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-56 max-h-[420px] flex flex-col p-1">
-              <ScrollArea className="flex-1 -mr-1 pr-1">
+            <ContextMenuSubContent className="w-56 max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden p-1">
+              <div
+                className="max-h-[min(22rem,calc(100vh-8rem))] overflow-y-auto overscroll-contain pr-1 [scrollbar-color:hsl(var(--muted-foreground)/0.35)_transparent] [scrollbar-width:thin]"
+                onWheelCapture={(event) => event.stopPropagation()}
+                onTouchMoveCapture={(event) => event.stopPropagation()}
+              >
                 {etiquetas.length === 0 ? (
                   <ContextMenuItem disabled className="text-xs text-muted-foreground">Nenhuma etiqueta</ContextMenuItem>
                 ) : etiquetas.map(et => {
@@ -141,7 +144,7 @@ export function MetaConversaContextMenu({
                     </ContextMenuItem>
                   );
                 })}
-              </ScrollArea>
+              </div>
               <ContextMenuSeparator />
               <ContextMenuItem onClick={() => setGerenciarOpen(true)}>
                 <Settings className="h-4 w-4 mr-2" /> Gerenciar etiquetas
