@@ -42,14 +42,28 @@ function render(tpl: string, vars: Record<string, string>): string {
   return String(tpl || '').replace(/\{([a-z0-9_]+)\}/gi, (m, k) => (vars[String(k).toLowerCase()] ?? m));
 }
 
+// Extrai CPF/CNPJ tolerando máscara, espaços e texto ao redor ("meu cpf é 123.456.789-09")
+function extrairDoc(texto: string): string {
+  const t = String(texto || '');
+  const candidatos = t.match(/(?:\d[\s.\-\/]*){11,14}/g) || [];
+  for (const c of candidatos) {
+    const d = soDigitos(c);
+    if (d.length === 11 || d.length === 14) return d;
+  }
+  const todos = soDigitos(t);
+  if (todos.length === 11 || todos.length === 14) return todos;
+  return '';
+}
+
 // Detecta intenção sem IA externa (rápido e barato). IA só é usada como fallback.
 function intencaoLocal(texto: string): 'avista' | 'parcelado' | 'cpf' | 'outro' {
   const t = String(texto || '').toLowerCase();
-  if (soDigitos(t).length === 11 || soDigitos(t).length === 14) return 'cpf';
+  if (extrairDoc(t)) return 'cpf';
   if (/(a\s*vista|à\s*vista|avista|quitar|quita[çc][ãa]o|uma\s*vez|1x)/.test(t)) return 'avista';
   if (/(parcel|dividir|vezes|\d+\s*x|boleto\s*mensal)/.test(t)) return 'parcelado';
   return 'outro';
 }
+
 
 async function enviarTexto(supabase: any, instanciaId: string, telefone: string | null, bsuid: string | null, texto: string) {
   const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-text', {
@@ -137,20 +151,23 @@ Deno.serve(async (req) => {
       return json({ success: true, skipped: 'limite diário atingido' });
     }
 
-    // Um humano já respondeu essa conversa? (mensagem de saída com user_id real) => IA não atropela
+    // Um humano já respondeu essa conversa DEPOIS do último envio da IA? => IA não atropela
+    const corteHumano: string = String(estado.contexto?.ultimo_envio_ia || estado.created_at);
     const { data: saidaHumana } = await supabase
       .from('meta_whatsapp_mensagens')
-      .select('id')
+      .select('id, conteudo')
       .eq('instancia_id', (contato as any).instancia_id)
       .eq('telefone', (contato as any).telefone || '')
       .eq('direcao', 'saida')
-      .gt('criado_em', estado.created_at)
+      .gt('criado_em', corteHumano)
       .limit(1);
-    if ((saidaHumana || []).length > 0 && estado.etapa !== 'inicio' && !estado.contexto?.ultimo_envio_ia) {
+    if ((saidaHumana || []).length > 0 && estado.etapa !== 'inicio') {
       await supabase.from('meta_ia_conversas_estado')
         .update({ aguardando_humano: true }).eq('id', estado.id);
+      console.log('[MetaIA] humano assumiu', { contato_id });
       return json({ success: true, skipped: 'humano assumiu' });
     }
+
 
     // ===== Horário de atendimento =====
     const hora = agoraSP().getHours();
@@ -204,26 +221,41 @@ Deno.serve(async (req) => {
       }
     }
 
-    // CPF vindo na mensagem do cliente
+    // CPF/CNPJ vindo na mensagem do cliente (tolera máscara e texto ao redor)
     const intencao = intencaoLocal(texto || '');
-    if (!cpf && intencao === 'cpf') {
-      const doc = soDigitos(texto);
-      if (validaCpfCnpj(doc)) cpf = doc;
-    }
+    const docMsg = extrairDoc(texto || '');
+    if (!cpf && docMsg && validaCpfCnpj(docMsg)) cpf = docMsg;
 
     if (!cpf) {
-      const digitos = soDigitos(texto);
-      if (digitos.length > 0 && !validaCpfCnpj(digitos) && estado.etapa === 'pedir_cpf') {
-        await enviar(tpl('cpf_invalido'), 'pedir_cpf');
-        return json({ success: true, etapa: 'cpf_invalido' });
+      const tentativas = Number(estado.contexto?.tentativas_cpf || 0);
+      const jaPediu = estado.etapa === 'pedir_cpf';
+
+      // Muitas tentativas sem CPF válido => chama humano
+      if (jaPediu && tentativas >= 3) {
+        await supabase.from('meta_ia_conversas_estado')
+          .update({ aguardando_humano: true }).eq('id', estado.id);
+        await avisarEmergencia(supabase,
+          `🤖 *IA — não consegui identificar o cliente*\n\n` +
+          `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
+          `Última mensagem: "${String(texto || '').slice(0, 200)}"\n\n` +
+          `Assuma a conversa na caixa IA.`);
+        console.log('[MetaIA] cpf sem sucesso, humano acionado', { contato_id });
+        return json({ success: true, etapa: 'cpf_falhou_humano' });
       }
-      if (estado.etapa === 'pedir_cpf' && (estado.msgs_hoje ?? 0) > 0 && !digitos.length) {
-        await enviar(tpl('cpf_invalido'), 'pedir_cpf');
-        return json({ success: true, etapa: 'cpf_invalido' });
-      }
-      await enviar(tpl('pedir_cpf'), 'pedir_cpf');
-      return json({ success: true, etapa: 'pedir_cpf' });
+
+      const etapaMsg = jaPediu ? 'cpf_invalido' : 'pedir_cpf';
+      const corpo = tpl(etapaMsg) || tpl('pedir_cpf');
+      await enviar(corpo, 'pedir_cpf', {
+        contexto: {
+          ...(estado.contexto || {}),
+          ultimo_envio_ia: new Date().toISOString(),
+          tentativas_cpf: jaPediu ? tentativas + 1 : 0,
+        },
+      });
+      console.log('[MetaIA] etapa', etapaMsg, { contato_id, tentativas });
+      return json({ success: true, etapa: etapaMsg });
     }
+
 
     // ===== Já tem acordo lançado? =====
     const { data: temAcordo } = await supabase.rpc('cpf_has_acordo', { p_cpf: cpf });
@@ -327,7 +359,9 @@ Deno.serve(async (req) => {
     }
 
     await enviar(render(tpl('proposta'), vars), 'proposta', { cpf });
+    console.log('[MetaIA] proposta enviada', { contato_id, cpf: cpf.slice(-4), total, parcelas });
     return json({ success: true, etapa: 'proposta', total, parcelas });
+
   } catch (e: any) {
     console.error('[MetaIA] erro', e?.message || e);
     return json({ success: false, error: String(e?.message || e) }, 500);
