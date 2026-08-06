@@ -70,7 +70,11 @@ const checkConnected = async (inst: any) => {
 };
 
 const normalizarNumero = (num: string) => {
-  const n = String(num).replace(/\D/g, "");
+  const bruto = String(num).trim();
+  // Grupos de WhatsApp já vêm no formato JID (…@g.us) e não recebem prefixo 55
+  if (bruto.includes("@")) return bruto;
+  if (/^\d{15,}$/.test(bruto.replace(/\D/g, ""))) return `${bruto.replace(/\D/g, "")}@g.us`;
+  const n = bruto.replace(/\D/g, "");
   return n.startsWith("55") ? n : `55${n}`;
 };
 
