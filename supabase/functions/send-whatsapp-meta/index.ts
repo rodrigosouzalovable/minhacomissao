@@ -1,6 +1,7 @@
 // Envio unitário (1 mensagem por chamada). O loop, delay, pausa e round-robin
 // vivem no frontend para permitir pausar/retomar/cancelar sem servidor extra.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -680,66 +681,14 @@ Deno.serve(async (req) => {
         }
 
         // Aplicar etiqueta "Atendente: {nome}%" ao contato — APENAS se já existir.
-        // Match por prefixo (nome curto do apelido casa com etiqueta canônica completa).
-        // O sistema não cria etiquetas sozinho; só usuários criam via UI.
+        // Vale o ATENDENTE NOMEADO na mensagem, não o remetente técnico do disparo.
         if (atendenteNome && contatoIdFinal) {
-          try {
-            // Só etiqueta se o remetente for responsável pela caixa do contato
-            const { data: cRow } = await supabase
-              .from('meta_whatsapp_contatos')
-              .select('folder_id')
-              .eq('id', contatoIdFinal)
-              .maybeSingle();
-            const folderDoContato = (cRow as any)?.folder_id ?? null;
-            const remetenteId = user_id || inst.user_id;
-            let ehResponsavel = false;
-            if (folderDoContato) {
-              const { data: m } = await supabase
-                .from('meta_inbox_folder_members')
-                .select('user_id')
-                .eq('folder_id', folderDoContato)
-                .eq('user_id', remetenteId)
-                .maybeSingle();
-              ehResponsavel = !!m;
-            } else {
-              const { data: m } = await supabase
-                .from('meta_inbox_default_members')
-                .select('user_id')
-                .eq('user_id', remetenteId)
-                .maybeSingle();
-              ehResponsavel = !!m;
-            }
-            if (!ehResponsavel) {
-              console.log('[send-whatsapp-meta] remetente não é responsável pela caixa, sem etiqueta', {
-                folder_id: folderDoContato, remetenteId,
-              });
-              throw new Error('__skip_etiqueta__');
-            }
-
-            const primeiro = atendenteNome.split(/\s+/)[0];
-            const { data: etiqs } = await supabase
-              .from('meta_whatsapp_etiquetas')
-              .select('id, nome')
-              .eq('user_id', inst.user_id)
-              .ilike('nome', `Atendente: ${primeiro}%`);
-            const etiq = (etiqs ?? []).sort(
-              (a: any, b: any) => String(b.nome).length - String(a.nome).length,
-            )[0];
-
-
-            if (etiq?.id) {
-              const { error: linkErr } = await supabase
-                .from('meta_whatsapp_contato_etiquetas')
-                .insert({ contato_id: contatoIdFinal, etiqueta_id: etiq.id, origem: 'auto_atendente' } as any);
-              if (linkErr && linkErr.code !== '23505' && !String(linkErr.message || '').toLowerCase().includes('duplicate')) {
-                console.log('[send-whatsapp-meta] falha ao vincular etiqueta atendente:', linkErr.message);
-              }
-            } else {
-              console.log('[send-whatsapp-meta] etiqueta atendente não existe, ignorando:', `Atendente: ${primeiro}%`);
-            }
-          } catch (e) {
-            console.log('[send-whatsapp-meta] erro auto-etiqueta:', String(e).slice(0, 200));
-          }
+          await aplicarEtiquetaAtendente(supabase, {
+            contatoId: contatoIdFinal,
+            atendenteNome,
+            ownerUserId: inst.user_id,
+            logPrefix: '[send-whatsapp-meta]',
+          });
         }
 
       } catch (_) { /* não bloqueia o envio */ }
