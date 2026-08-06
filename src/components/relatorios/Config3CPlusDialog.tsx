@@ -66,6 +66,11 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
 
   const webhookUrl = webhookKey ? `${FUNCTIONS_BASE}/tresc-webhook?k=${webhookKey}` : '';
 
+  const webhookParado = ultimoWebhook.em
+    ? Date.now() - new Date(ultimoWebhook.em).getTime() > 2 * 60 * 60 * 1000
+    : false;
+
+
 
   useEffect(() => { if (open) carregar(); }, [open, carregar]);
 
