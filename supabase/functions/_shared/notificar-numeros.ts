@@ -5,9 +5,12 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.88.0
 export interface NotificarNumerosParams {
   tipo: string;
   mensagem: string;
-  destinatarios: string[]; // números com ou sem DDI 55
+  destinatarios: string[]; // números com ou sem DDI 55, ou JIDs de grupo (…@g.us)
   chaveIdempotencia?: string;
+  // Instância obrigatória/preferida por destino (ex.: grupo só recebe da instância que participa dele)
+  instanciaPorDestino?: Record<string, string>;
 }
+
 
 const isRetryableInstanceError = (text: string, status: number) => {
   const n = text.toLowerCase();
