@@ -382,7 +382,29 @@ export default function EditarAcordo() {
                   </Button>
                 </div>
               </div>
+
+              {isAdmin && (
+                <div className="space-y-2">
+                  <Label>Operador vinculado</Label>
+                  <Select value={operadorId} onValueChange={setOperadorId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o operador" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {operadores.map((o) => (
+                        <SelectItem key={o.user_id} value={o.user_id}>
+                          {o.nome || o.user_id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Alterar o operador transfere o acordo e a comissão para ele.
+                  </p>
+                </div>
+              )}
             </CardContent>
+
           </Card>
 
           <Card>
