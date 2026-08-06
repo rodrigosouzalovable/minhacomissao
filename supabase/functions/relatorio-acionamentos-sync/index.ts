@@ -99,6 +99,26 @@ Deno.serve(async (req) => {
       (acordos || []).map((a: any) => suf8(a.cliente_telefone)).filter((s: string) => s.length === 8),
     );
 
+    // Acordos por faixa de hora — CPC-A = todo acordo lançado no sistema
+    const acordosPorHora = new Map<string, number>();
+    for (const h of HORAS) acordosPorHora.set(h, 0);
+    for (const a of (acordos || []) as any[]) {
+      const p = brtParts(new Date(a.criado_em));
+      const label = horaLabel(p.hora);
+      if (!acordosPorHora.has(label)) continue;
+      acordosPorHora.set(label, (acordosPorHora.get(label) || 0) + 1);
+    }
+
+    // === Consultas do portal de negociação no dia (CPC por portal) ===
+    const consultas = await fetchAll(
+      () => supabase
+        .from("consulta_cpf_notificacoes")
+        .select("cpf, telefones_suffix, created_at")
+        .gte("created_at", inicioDia)
+        .lte("created_at", fimDia),
+      "created_at",
+    );
+
     // Buckets por hora: envios contam por volume; respostas por telefone único
     type Bucket = { envios: number; entrada: Set<string> };
     const buckets = new Map<string, Bucket>();
@@ -115,71 +135,94 @@ Deno.serve(async (req) => {
       else b.entrada.add(s);
     }
 
-    // === Ligações da 3C Plus (cache local) ===
-    const { data: quals } = await supabase
-      .from("tresc_qualificacoes")
-      .select("qualificacao_id, classificacao");
-    const qualMap = new Map<number, string>();
-    (quals || []).forEach((q: any) => qualMap.set(Number(q.qualificacao_id), String(q.classificacao)));
+    // Portal: chave = sufixo do telefone quando existir, senão o CPF normalizado
+    const portalBuckets = new Map<string, Set<string>>();
+    for (const h of HORAS) portalBuckets.set(h, new Set());
+    for (const c of (consultas || []) as any[]) {
+      const p = brtParts(new Date(c.created_at));
+      const set = portalBuckets.get(horaLabel(p.hora));
+      if (!set) continue;
+      const sufixos: string[] = Array.isArray(c.telefones_suffix)
+        ? c.telefones_suffix.map((t: unknown) => suf8(t)).filter((s: string) => s.length === 8)
+        : [];
+      if (sufixos.length) sufixos.forEach((s) => set.add(s));
+      else {
+        const cpf = String(c.cpf ?? "").replace(/\D/g, "");
+        if (cpf) set.add(`cpf:${cpf}`);
+      }
+    }
 
+    // === Ligações da 3C Plus (cache local) ===
     const ligacoes = await fetchAll(
       () => supabase
         .from("tresc_ligacoes")
-        .select("call_id, hora, telefone_sufixo, atendida, qualificacao_id")
+        .select("call_id, hora, telefone_sufixo, atendida")
         .eq("data", dia),
       "call_id",
     );
 
-    type LigBucket = { total: number; alo: number; cpc: Set<string>; cpca: Set<string> };
+    // Toda ligação falada no discador conta como CPC (cliente localizado)
+    type LigBucket = { total: number; alo: number; cpc: Set<string> };
     const ligBuckets = new Map<string, LigBucket>();
-    for (const h of HORAS) ligBuckets.set(h, { total: 0, alo: 0, cpc: new Set(), cpca: new Set() });
+    for (const h of HORAS) ligBuckets.set(h, { total: 0, alo: 0, cpc: new Set() });
     for (const l of (ligacoes || []) as any[]) {
       const b = ligBuckets.get(String(l.hora));
       if (!b) continue;
       b.total++;
-      if (l.atendida) b.alo++;
-      const cls = qualMap.get(Number(l.qualificacao_id));
+      if (!l.atendida) continue;
+      b.alo++;
       const s = suf8(l.telefone_sufixo);
-      if (!s) continue;
-      if (cls === "cpc" || cls === "cpca") b.cpc.add(s);
-      if (cls === "cpca") b.cpca.add(s);
+      if (s) b.cpc.add(s);
     }
 
 
-    // WhatsApp/tentativas = volume de disparos. CPC/CPC-A = telefone único por dia.
-    const jaRespondeu = new Set<string>();
-    const linhas: Array<{ hora: string; whatsapp: number; ligacoes: number; alo: number; tentativas: number; cpc: number; cpca: number }> = [];
+    // WhatsApp/tentativas = volume de disparos. CPC = pessoa única por dia. CPC-A = acordos lançados.
+    const jaContado = new Set<string>();
+    const linhas: Array<{
+      hora: string; whatsapp: number; ligacoes: number; alo: number; tentativas: number;
+      cpc: number; cpca: number; cpcWhats: number; cpcLig: number; cpcPortal: number;
+    }> = [];
 
     for (const h of HORAS) {
       const b = buckets.get(h)!;
       const lb = ligBuckets.get(h)!;
-      let cpc = 0, cpca = 0;
+      const pb = portalBuckets.get(h)!;
+      let cpcWhats = 0, cpcLig = 0, cpcPortal = 0;
       const whatsapp = b.envios;
 
       // CPC por WhatsApp (resposta do cliente)
       for (const s of b.entrada) {
-        if (jaRespondeu.has(s)) continue;
-        jaRespondeu.add(s);
-        cpc++;
-        if (acordoSufixos.has(s)) cpca++;
+        if (jaContado.has(s)) continue;
+        jaContado.add(s);
+        cpcWhats++;
       }
-      // CPC por ligação (qualificação classificada)
+      // CPC por ligação falada no discador
       for (const s of lb.cpc) {
-        if (jaRespondeu.has(s)) continue;
-        jaRespondeu.add(s);
-        cpc++;
-        if (lb.cpca.has(s) || acordoSufixos.has(s)) cpca++;
+        if (jaContado.has(s)) continue;
+        jaContado.add(s);
+        cpcLig++;
       }
+      // CPC por consulta no portal de negociação
+      for (const s of pb) {
+        if (jaContado.has(s)) continue;
+        jaContado.add(s);
+        cpcPortal++;
+      }
+
       linhas.push({
         hora: h,
         whatsapp,
         ligacoes: lb.total,
         alo: lb.alo,
         tentativas: whatsapp + lb.total,
-        cpc,
-        cpca,
+        cpc: cpcWhats + cpcLig + cpcPortal,
+        cpca: acordosPorHora.get(h) || 0,
+        cpcWhats,
+        cpcLig,
+        cpcPortal,
       });
     }
+
 
     // === Linhas já existentes (respeita edições manuais) ===
     const { data: existentes } = await supabase
