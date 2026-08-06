@@ -649,7 +649,7 @@ export default function ConsultaResultado() {
                               </div>
 
                               <div>
-                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional)</Label>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional — mínimo {formatCurrency(VALOR_MINIMO_ENTRADA)})</Label>
                                 <Input
                                   type="number"
                                   min={0}
@@ -664,10 +664,13 @@ export default function ConsultaResultado() {
                                 {negociacao.entrada > getValorComDesconto(negociacao) && (
                                   <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>Entrada não pode ser maior que o valor com desconto</p>
                                 )}
+                                {negociacao.entrada > 0 && negociacao.entrada < VALOR_MINIMO_ENTRADA && (
+                                  <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>A entrada mínima é de {formatCurrency(VALOR_MINIMO_ENTRADA)}</p>
+                                )}
                               </div>
 
                               <div>
-                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Número de parcelas</Label>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Número de parcelas (mínimo {formatCurrency(VALOR_MINIMO_PARCELA)} por parcela)</Label>
                                 <Select
                                   value={String(negociacao.parcelas)}
                                   onValueChange={(v) => updateNegociacao({ parcelas: parseInt(v) })}
@@ -687,6 +690,8 @@ export default function ConsultaResultado() {
                                   </SelectContent>
                                 </Select>
                               </div>
+                              </>)}
+
 
                               <div>
                                 <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>
