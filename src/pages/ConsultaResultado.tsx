@@ -193,12 +193,22 @@ export default function ConsultaResultado() {
     return Math.max(1, Math.min(maxPelaFaixa, maxPeloValor));
   };
 
+  const dataDentroDoLimite = (d: Date | undefined) => {
+    if (!d) return false;
+    const { hoje, max } = limiteDatas();
+    const dd = new Date(d);
+    dd.setHours(0, 0, 0, 0);
+    return dd >= hoje && dd <= max;
+  };
+
   const isNegociacaoValida = (neg: NegociacaoState) => {
     if (!neg.descontoFaixa) return false;
-    if (!neg.dataPrimeiroPagamento) return false;
+    if (!dataDentroDoLimite(neg.dataPrimeiroPagamento)) return false;
+    if (neg.descontoFaixa === 'avista') return true;
     const valorDesc = getValorComDesconto(neg);
     if (neg.entrada > valorDesc) return false;
     if (neg.entrada < 0) return false;
+    if (neg.entrada > 0 && neg.entrada < VALOR_MINIMO_ENTRADA) return false;
     const valorParcela = getValorParcela(neg);
     if (valorParcela < VALOR_MINIMO_PARCELA && (valorDesc - (neg.entrada || 0)) > 0) return false;
     return true;
