@@ -688,7 +688,13 @@ export default function ConsultaResultado() {
                               </div>
 
                               <div>
-                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Data do primeiro pagamento</Label>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>
+                                  {negociacao.descontoFaixa === 'avista'
+                                    ? 'Data do pagamento à vista *'
+                                    : negociacao.entrada > 0
+                                      ? 'Data do pagamento da entrada *'
+                                      : 'Data do primeiro pagamento *'}
+                                </Label>
                                 <Popover>
                                   <PopoverTrigger asChild>
                                     <Button
@@ -708,16 +714,22 @@ export default function ConsultaResultado() {
                                       selected={negociacao.dataPrimeiroPagamento}
                                       onSelect={(d) => updateNegociacao({ dataPrimeiroPagamento: d })}
                                       disabled={(date) => {
-                                        const today = new Date();
-                                        today.setHours(0, 0, 0, 0);
-                                        return date < today;
+                                        const { hoje, max } = limiteDatas();
+                                        const d = new Date(date);
+                                        d.setHours(0, 0, 0, 0);
+                                        return d < hoje || d > max;
                                       }}
+                                      fromDate={limiteDatas().hoje}
+                                      toDate={limiteDatas().max}
                                       initialFocus
                                       className={cn("p-3 pointer-events-auto")}
                                       locale={ptBR}
                                     />
                                   </PopoverContent>
                                 </Popover>
+                                <p className="text-xs mt-1" style={{ color: '#ffffff77' }}>
+                                  Escolha uma data até {format(limiteDatas().max, 'dd/MM/yyyy', { locale: ptBR })} (máximo {DIAS_MAX_PRIMEIRO_PAGAMENTO} dias).
+                                </p>
                               </div>
 
                               {negociacao.descontoFaixa === 'parcelado' && negociacao.dataPrimeiroPagamento && negociacao.entrada <= getValorComDesconto(negociacao) && (
