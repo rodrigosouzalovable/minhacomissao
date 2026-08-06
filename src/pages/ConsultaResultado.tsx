@@ -751,29 +751,16 @@ export default function ConsultaResultado() {
 
                           {(() => {
                             const isAvista = faixaEscolhida === 'avista';
-                            const isParcelado = faixaEscolhida === 'parcelado';
-                            const parceladoValido = isParcelado && negociacao && isNegociacaoValida(negociacao);
-                            const habilitado = isAvista || !!parceladoValido;
+                            const propostaValida = !!negociacao && isNegociacaoValida(negociacao);
+                            const habilitado = propostaValida;
 
-                            const contratosStr = debitos.map(d => d.contrato).filter(Boolean).join(', ');
-                            const descontoAvista = getDesconto('avista', diasAtraso);
-                            const valorAvistaSel = valorTotal * (1 - descontoAvista / 100);
-                            const descontoStrAvista = descontoAvista > 0 ? `, com desconto de ${descontoAvista}%, totalizando ${formatCurrency(valorAvistaSel)}` : '';
-                            const msgAvista = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStrAvista}. Quero pagar à vista. Me envie o boleto por gentileza.`;
-
-                            const linkPrincipal = isAvista
-                              ? `https://wa.me/${PHONE}?text=${encodeURIComponent(msgAvista)}`
-                              : parceladoValido
-                                ? gerarWhatsappLink(negociacao!)
-                                : '#';
+                            const linkPrincipal = propostaValida ? gerarWhatsappLink(negociacao!) : '#';
 
                             const labelPrincipal = !faixaEscolhida
                               ? 'ESCOLHA UMA OPÇÃO ACIMA'
-                              : isAvista
-                                ? 'QUITAR À VISTA NO WHATSAPP'
-                                : parceladoValido
-                                  ? 'ENVIAR PROPOSTA PELO WHATSAPP'
-                                  : 'PREENCHA A PROPOSTA ACIMA';
+                              : propostaValida
+                                ? (isAvista ? 'QUITAR À VISTA NO WHATSAPP' : 'ENVIAR PROPOSTA PELO WHATSAPP')
+                                : (isAvista ? 'INFORME A DATA DO PAGAMENTO' : 'PREENCHA A PROPOSTA ACIMA');
 
                             const msgContra = `Olá, quero negociar meu débito e tenho uma contraproposta.`;
                             const linkContra = `https://wa.me/${PHONE}?text=${encodeURIComponent(msgContra)}`;
