@@ -122,6 +122,9 @@ export default function EditarAcordo() {
         setHasParcelasPagas(temPagas);
 
         setEmpresa((acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda') || 'ume_novo_mundo');
+        setOperadorId(acordo.user_id || '');
+        setOperadorOriginal(acordo.user_id || '');
+
         
         setForm({
           clienteNome: acordo.cliente_nome,
