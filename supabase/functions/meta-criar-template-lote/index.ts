@@ -102,6 +102,12 @@ function validarMestre(mestre: any): string[] {
     erros.push("Cabeçalho de mídia sem arquivo de amostra carregado.");
   }
 
+  if (mestre.cabecalho_tipo === "TEXT" && !String(mestre.cabecalho_texto || "").trim()) {
+    erros.push(
+      "O template está marcado com cabeçalho de TEXTO, mas o texto do cabeçalho está vazio. Preencha o texto do cabeçalho ou salve o template sem cabeçalho — a Meta rejeita com \"o componente do tipo HEADER não contém os campos esperados\".",
+    );
+  }
+
   const botoes = Array.isArray(mestre.botoes) ? mestre.botoes : [];
   for (const b of botoes) {
     if (!String(b?.text || "").trim()) erros.push("Há botão sem texto.");
@@ -117,21 +123,22 @@ function validarMestre(mestre: any): string[] {
 function buildComponents(mestre: any, headerHandle: string | null) {
   const components: any[] = [];
 
-  if (mestre.cabecalho_tipo) {
-    const header: any = { type: "HEADER", format: mestre.cabecalho_tipo };
-    if (mestre.cabecalho_tipo === "TEXT" && mestre.cabecalho_texto) {
-      header.text = mestre.cabecalho_texto;
-      const headerVars = (mestre.exemplo?.header_text as string[]) || [];
-      if (headerVars.length > 0) {
-        header.example = { header_text: headerVars };
-      }
-    } else if (
-      ["IMAGE", "VIDEO", "DOCUMENT"].includes(mestre.cabecalho_tipo) &&
-      headerHandle
-    ) {
-      header.example = { header_handle: [headerHandle] };
-    }
+  // Só enviamos o componente HEADER quando ele está completo.
+  // HEADER TEXT sem texto (ou mídia sem handle) faz a Meta responder
+  // "o componente do tipo HEADER não contém o(s) campo(s) esperado(s)".
+  const cabTexto = String(mestre.cabecalho_texto || "").trim();
+  const cabTipo = mestre.cabecalho_tipo || null;
+  if (cabTipo === "TEXT" && cabTexto) {
+    const header: any = { type: "HEADER", format: "TEXT", text: cabTexto };
+    const headerVars = (mestre.exemplo?.header_text as string[]) || [];
+    if (headerVars.length > 0) header.example = { header_text: headerVars };
     components.push(header);
+  } else if (cabTipo && ["IMAGE", "VIDEO", "DOCUMENT"].includes(cabTipo) && headerHandle) {
+    components.push({
+      type: "HEADER",
+      format: cabTipo,
+      example: { header_handle: [headerHandle] },
+    });
   }
 
   const body: any = { type: "BODY", text: mestre.corpo };
@@ -170,6 +177,24 @@ function buildComponents(mestre: any, headerHandle: string | null) {
   return components;
 }
 
+
+// Monta uma descrição completa e específica do erro devolvido pela Meta.
+function descreverErroMeta(data: any, httpStatus: number): string {
+  const e = data?.error || {};
+  const partes: string[] = [];
+  if (e.error_user_title) partes.push(String(e.error_user_title));
+  if (e.error_user_msg) partes.push(String(e.error_user_msg));
+  if (e.message && !partes.some((p) => p === String(e.message))) partes.push(String(e.message));
+  const det = e.error_data?.details;
+  if (det) partes.push(`Detalhe: ${typeof det === "string" ? det : JSON.stringify(det)}`);
+  const codigos: string[] = [];
+  if (e.code !== undefined) codigos.push(`code ${e.code}`);
+  if (e.error_subcode !== undefined) codigos.push(`subcode ${e.error_subcode}`);
+  codigos.push(`HTTP ${httpStatus}`);
+  if (e.fbtrace_id) codigos.push(`trace ${e.fbtrace_id}`);
+  const base = partes.length > 0 ? partes.join(" — ") : `Erro sem descrição da Meta (HTTP ${httpStatus})`;
+  return `${base} [${codigos.join(", ")}]`;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -408,7 +433,7 @@ serve(async (req) => {
 
           if (!res.ok) {
             falhas++;
-            const errMsg = data?.error?.error_user_msg || data?.error?.message || `HTTP ${res.status}`;
+            const errMsg = descreverErroMeta(data, res.status);
             await supabase.from("meta_templates_instancia").upsert({
               template_mestre_id: mestre_id,
               instancia_id: inst.id,

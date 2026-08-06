@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { humanizarErroTemplate } from "@/lib/humanizarErroTemplate";
 import { Loader2, Plus, Send, Trash2, RefreshCw, X } from "lucide-react";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import BusinessManagersManager from "@/components/meta/BusinessManagersManager";
@@ -230,6 +231,12 @@ export default function MetaTemplates() {
       }));
     }
 
+
+    if (cabecalhoTipo === "TEXT" && !cabecalhoTexto.trim()) {
+      toast.error("Cabeçalho de texto vazio: preencha o texto do cabeçalho ou escolha \"Nenhum\" — a Meta rejeita cabeçalho sem conteúdo");
+      setSalvando(false);
+      return;
+    }
 
     if (["IMAGE", "VIDEO", "DOCUMENT"].includes(cabecalhoTipo) && !mediaPath) {
       toast.error("Faça upload da amostra de mídia do cabeçalho");
@@ -709,10 +716,10 @@ export default function MetaTemplates() {
                               <Badge className={STATUS_COLORS[status] || ""}>{status}</Badge>
                               {(t?.erro || t?.motivo_rejeicao) && (
                                 <span
-                                  className="text-[11px] text-destructive text-right leading-tight line-clamp-2"
+                                  className="text-[11px] text-destructive text-right leading-snug"
                                   title={t?.erro || t?.motivo_rejeicao || ""}
                                 >
-                                  {t?.erro || t?.motivo_rejeicao}
+                                  {humanizarErroTemplate(t?.erro || t?.motivo_rejeicao)}
                                 </span>
                               )}
                             </div>
@@ -804,8 +811,8 @@ export default function MetaTemplates() {
                               <span className="flex-1">{inst?.nome || f.instancia_id} <span className="text-xs text-muted-foreground">{inst?.display_phone}</span></span>
                               <Badge className={STATUS_COLORS[f.status] || ""}>{f.status}</Badge>
                               {(f.erro || f.motivo_rejeicao) && (
-                                <span className="text-xs text-destructive truncate max-w-xs" title={f.erro || f.motivo_rejeicao || ""}>
-                                  {f.erro || f.motivo_rejeicao}
+                                <span className="text-xs text-destructive max-w-sm leading-snug" title={f.erro || f.motivo_rejeicao || ""}>
+                                  {humanizarErroTemplate(f.erro || f.motivo_rejeicao)}
                                 </span>
                               )}
                             </div>
