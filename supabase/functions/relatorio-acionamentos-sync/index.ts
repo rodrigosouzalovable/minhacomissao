@@ -321,18 +321,25 @@ Deno.serve(async (req) => {
       // Destinos extras configurados (grupos de WhatsApp)
       const { data: destinos } = await supabase
         .from("relatorio_destinos")
-        .select("jid")
+        .select("jid, instancia_id")
         .eq("ativo", true);
       const grupos = (destinos || [])
         .map((d: any) => String(d.jid || "").trim())
         .filter((j: string) => j.length > 0);
+      const instanciaPorDestino: Record<string, string> = {};
+      for (const d of (destinos || []) as any[]) {
+        const j = String(d.jid || "").trim();
+        if (j && d.instancia_id) instanciaPorDestino[j] = d.instancia_id;
+      }
 
       enviado = await notificarNumeros(supabase, {
         tipo: consolidado ? "relatorio_acionamentos_dia" : "relatorio_acionamentos_hora",
         mensagem: linhasMsg.join("\n"),
         destinatarios: [...DESTINATARIOS, ...grupos],
+        instanciaPorDestino,
         chaveIdempotencia: chave,
       });
+
     }
 
 
