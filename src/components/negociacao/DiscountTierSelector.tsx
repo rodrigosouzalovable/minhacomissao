@@ -3,7 +3,7 @@ import { getDescontoPortal } from '@/lib/descontoPortal';
 
 export type DescontoFaixa = 'avista' | 'parcelado';
 
-const VALOR_MINIMO_PARCELA = 90;
+const VALOR_MINIMO_PARCELA = 100;
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);

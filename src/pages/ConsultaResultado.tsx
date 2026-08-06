@@ -50,7 +50,17 @@ interface NegociacaoState {
   descontoFaixa: DescontoFaixa | undefined;
 }
 
-const VALOR_MINIMO_PARCELA = 90;
+const VALOR_MINIMO_PARCELA = 100;
+const VALOR_MINIMO_ENTRADA = 100;
+const DIAS_MAX_PRIMEIRO_PAGAMENTO = 10;
+
+function limiteDatas() {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const max = new Date(hoje);
+  max.setDate(max.getDate() + DIAS_MAX_PRIMEIRO_PAGAMENTO);
+  return { hoje, max };
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -183,12 +193,22 @@ export default function ConsultaResultado() {
     return Math.max(1, Math.min(maxPelaFaixa, maxPeloValor));
   };
 
+  const dataDentroDoLimite = (d: Date | undefined) => {
+    if (!d) return false;
+    const { hoje, max } = limiteDatas();
+    const dd = new Date(d);
+    dd.setHours(0, 0, 0, 0);
+    return dd >= hoje && dd <= max;
+  };
+
   const isNegociacaoValida = (neg: NegociacaoState) => {
     if (!neg.descontoFaixa) return false;
-    if (!neg.dataPrimeiroPagamento) return false;
+    if (!dataDentroDoLimite(neg.dataPrimeiroPagamento)) return false;
+    if (neg.descontoFaixa === 'avista') return true;
     const valorDesc = getValorComDesconto(neg);
     if (neg.entrada > valorDesc) return false;
     if (neg.entrada < 0) return false;
+    if (neg.entrada > 0 && neg.entrada < VALOR_MINIMO_ENTRADA) return false;
     const valorParcela = getValorParcela(neg);
     if (valorParcela < VALOR_MINIMO_PARCELA && (valorDesc - (neg.entrada || 0)) > 0) return false;
     return true;
@@ -586,25 +606,22 @@ export default function ConsultaResultado() {
                             selected={faixaEscolhida}
                             onSelect={(faixa) => {
                               setFaixaEscolhida(faixa);
-                              if (faixa === 'parcelado') {
-                                setNegociacao({
-                                  negociando: true,
-                                  confirmado: false,
-                                  entrada: 0,
-                                  parcelas: getMinParcelas('parcelado'),
-                                  dataPrimeiroPagamento: undefined,
-                                  descontoFaixa: 'parcelado',
-                                });
-                              } else {
-                                setNegociacao(null);
-                              }
+                              setNegociacao({
+                                negociando: true,
+                                confirmado: false,
+                                entrada: 0,
+                                parcelas: getMinParcelas(faixa),
+                                dataPrimeiroPagamento: undefined,
+                                descontoFaixa: faixa,
+                              });
                             }}
                             valorTotal={valorTotal}
                             diasAtraso={diasAtraso}
                           />
 
-                          {faixaEscolhida === 'parcelado' && negociacao && (
+                          {negociacao && (
                             <div className="space-y-4 pt-2">
+                              {negociacao.descontoFaixa === 'parcelado' && (<>
                               <div
                                 className="rounded-xl p-5 text-center"
                                 style={{
@@ -628,7 +645,7 @@ export default function ConsultaResultado() {
                               </div>
 
                               <div>
-                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional)</Label>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional — mínimo {formatCurrency(VALOR_MINIMO_ENTRADA)})</Label>
                                 <Input
                                   type="number"
                                   min={0}
@@ -643,10 +660,13 @@ export default function ConsultaResultado() {
                                 {negociacao.entrada > getValorComDesconto(negociacao) && (
                                   <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>Entrada não pode ser maior que o valor com desconto</p>
                                 )}
+                                {negociacao.entrada > 0 && negociacao.entrada < VALOR_MINIMO_ENTRADA && (
+                                  <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>A entrada mínima é de {formatCurrency(VALOR_MINIMO_ENTRADA)}</p>
+                                )}
                               </div>
 
                               <div>
-                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Número de parcelas</Label>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Número de parcelas (mínimo {formatCurrency(VALOR_MINIMO_PARCELA)} por parcela)</Label>
                                 <Select
                                   value={String(negociacao.parcelas)}
                                   onValueChange={(v) => updateNegociacao({ parcelas: parseInt(v) })}
@@ -666,9 +686,17 @@ export default function ConsultaResultado() {
                                   </SelectContent>
                                 </Select>
                               </div>
+                              </>)}
+
 
                               <div>
-                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Data do primeiro pagamento</Label>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>
+                                  {negociacao.descontoFaixa === 'avista'
+                                    ? 'Data do pagamento à vista *'
+                                    : negociacao.entrada > 0
+                                      ? 'Data do pagamento da entrada *'
+                                      : 'Data do primeiro pagamento *'}
+                                </Label>
                                 <Popover>
                                   <PopoverTrigger asChild>
                                     <Button
@@ -688,19 +716,25 @@ export default function ConsultaResultado() {
                                       selected={negociacao.dataPrimeiroPagamento}
                                       onSelect={(d) => updateNegociacao({ dataPrimeiroPagamento: d })}
                                       disabled={(date) => {
-                                        const today = new Date();
-                                        today.setHours(0, 0, 0, 0);
-                                        return date < today;
+                                        const { hoje, max } = limiteDatas();
+                                        const d = new Date(date);
+                                        d.setHours(0, 0, 0, 0);
+                                        return d < hoje || d > max;
                                       }}
+                                      fromDate={limiteDatas().hoje}
+                                      toDate={limiteDatas().max}
                                       initialFocus
                                       className={cn("p-3 pointer-events-auto")}
                                       locale={ptBR}
                                     />
                                   </PopoverContent>
                                 </Popover>
+                                <p className="text-xs mt-1" style={{ color: '#ffffff77' }}>
+                                  Escolha uma data até {format(limiteDatas().max, 'dd/MM/yyyy', { locale: ptBR })} (máximo {DIAS_MAX_PRIMEIRO_PAGAMENTO} dias).
+                                </p>
                               </div>
 
-                              {negociacao.dataPrimeiroPagamento && negociacao.entrada <= getValorComDesconto(negociacao) && (
+                              {negociacao.descontoFaixa === 'parcelado' && negociacao.dataPrimeiroPagamento && negociacao.entrada <= getValorComDesconto(negociacao) && (
                                 <div
                                   className="rounded-xl p-4"
                                   style={{
@@ -731,29 +765,16 @@ export default function ConsultaResultado() {
 
                           {(() => {
                             const isAvista = faixaEscolhida === 'avista';
-                            const isParcelado = faixaEscolhida === 'parcelado';
-                            const parceladoValido = isParcelado && negociacao && isNegociacaoValida(negociacao);
-                            const habilitado = isAvista || !!parceladoValido;
+                            const propostaValida = !!negociacao && isNegociacaoValida(negociacao);
+                            const habilitado = propostaValida;
 
-                            const contratosStr = debitos.map(d => d.contrato).filter(Boolean).join(', ');
-                            const descontoAvista = getDesconto('avista', diasAtraso);
-                            const valorAvistaSel = valorTotal * (1 - descontoAvista / 100);
-                            const descontoStrAvista = descontoAvista > 0 ? `, com desconto de ${descontoAvista}%, totalizando ${formatCurrency(valorAvistaSel)}` : '';
-                            const msgAvista = `Olá! Meu nome é ${nomeCliente}, meu CPF é ${cpfCliente} e quero negociar os contratos em aberto ${contratosStr}, no valor total de ${formatCurrency(valorTotal)}${descontoStrAvista}. Quero pagar à vista. Me envie o boleto por gentileza.`;
-
-                            const linkPrincipal = isAvista
-                              ? `https://wa.me/${PHONE}?text=${encodeURIComponent(msgAvista)}`
-                              : parceladoValido
-                                ? gerarWhatsappLink(negociacao!)
-                                : '#';
+                            const linkPrincipal = propostaValida ? gerarWhatsappLink(negociacao!) : '#';
 
                             const labelPrincipal = !faixaEscolhida
                               ? 'ESCOLHA UMA OPÇÃO ACIMA'
-                              : isAvista
-                                ? 'QUITAR À VISTA NO WHATSAPP'
-                                : parceladoValido
-                                  ? 'ENVIAR PROPOSTA PELO WHATSAPP'
-                                  : 'PREENCHA A PROPOSTA ACIMA';
+                              : propostaValida
+                                ? (isAvista ? 'QUITAR À VISTA NO WHATSAPP' : 'ENVIAR PROPOSTA PELO WHATSAPP')
+                                : (isAvista ? 'INFORME A DATA DO PAGAMENTO' : 'PREENCHA A PROPOSTA ACIMA');
 
                             const msgContra = `Olá, quero negociar meu débito e tenho uma contraproposta.`;
                             const linkContra = `https://wa.me/${PHONE}?text=${encodeURIComponent(msgContra)}`;
