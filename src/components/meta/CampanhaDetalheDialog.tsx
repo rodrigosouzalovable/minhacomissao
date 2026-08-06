@@ -118,6 +118,59 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const nome = job.nome_campanha || job.template_nome || "Campanha";
   const rateLimitInfo = parseRateLimitMotivo((job as any).status_motivo || resultado?.statusMotivo);
 
+  // ===== Previsão de término (estimativa) =====
+  const eta = (() => {
+    const restantes = Math.max(0, job.total - totalProcessado);
+
+    // Campanha finalizada: mostra a duração real.
+    if (!ativa) {
+      if (!job.iniciado_em) return null;
+      const fim = job.concluido_em ? new Date(job.concluido_em).getTime() : Date.now();
+      const seg = Math.max(0, Math.round((fim - new Date(job.iniciado_em).getTime()) / 1000));
+      return { tipo: "final" as const, duracao: formatDuracao(seg) };
+    }
+    if (restantes === 0) return null;
+
+    const instTotal = job.instancia_ids?.length || 1;
+    const bloqueadas = job.instancias_bloqueadas_run?.length || 0;
+    const instAtivas = Math.max(1, instTotal - bloqueadas);
+
+    // Ritmo teórico conforme as configurações da campanha.
+    let segPorMsgTeorico: number;
+    if (job.modo_rajada) {
+      const taxa = Math.max(0.1, (job.msgs_por_segundo || 30) * instAtivas);
+      segPorMsgTeorico = 1 / taxa;
+    } else {
+      const lo = Math.max(1, job.min_seg ?? 30);
+      const hi = Math.max(lo, job.max_seg ?? 90);
+      segPorMsgTeorico = (lo + hi) / 2;
+    }
+
+    // Ritmo real observado (mais fiel quando já há histórico suficiente).
+    let segPorMsg = segPorMsgTeorico;
+    if (job.iniciado_em && totalProcessado >= 5) {
+      const decorrido = (Date.now() - new Date(job.iniciado_em).getTime()) / 1000;
+      if (decorrido > 0) segPorMsg = decorrido / totalProcessado;
+    }
+
+    const segRestantes = Math.round(restantes * segPorMsg);
+    const fim = new Date(Date.now() + segRestantes * 1000);
+    const hoje = new Date();
+    const mesmoDia = fim.toDateString() === hoje.toDateString();
+    const hora = fim.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const termino = mesmoDia
+      ? `hoje ${hora}`
+      : `${hora} (${fim.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })})`;
+
+    const ritmo = segPorMsg < 1
+      ? `~${(1 / segPorMsg).toFixed(1)} msg/s`
+      : `~1 msg / ${Math.round(segPorMsg)}s`;
+
+    return { tipo: "previsao" as const, restantes, ritmo, duracao: formatDuracao(segRestantes), termino };
+  })();
+
+
+
 
   const reenviarErros = async () => {
     if (reenviandoErros) return;
