@@ -277,6 +277,34 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 ? `Próximo envio em ${progresso.proximoEmSeg}s`
                 : null}
             </div>
+            {eta && (
+              <div className="text-xs rounded border bg-muted/40 px-2 py-1.5 space-y-0.5">
+                {eta.tipo === "final" ? (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>Duração total: <strong>{eta.duracao}</strong></span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>
+                        Restam <strong>{eta.restantes}</strong> envios • Ritmo: <strong>{eta.ritmo}</strong>
+                      </span>
+                    </div>
+                    <div>
+                      Tempo estimado: <strong>~{eta.duracao}</strong> • Previsão de término:{" "}
+                      <strong>{eta.termino}</strong>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {pausado
+                        ? "Pausada — a contagem recomeça ao continuar. Estimativa aproximada."
+                        : "Estimativa aproximada: varia com falhas, rate limit da Meta e instâncias bloqueadas."}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {(() => {
               const motivo = String((job as any).status_motivo || resultado?.statusMotivo || '');
               const isBALock = /business account|#131031|locked/i.test(motivo);
