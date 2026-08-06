@@ -720,7 +720,7 @@ export default function ConsultaResultado() {
                                 </Popover>
                               </div>
 
-                              {negociacao.dataPrimeiroPagamento && negociacao.entrada <= getValorComDesconto(negociacao) && (
+                              {negociacao.descontoFaixa === 'parcelado' && negociacao.dataPrimeiroPagamento && negociacao.entrada <= getValorComDesconto(negociacao) && (
                                 <div
                                   className="rounded-xl p-4"
                                   style={{
