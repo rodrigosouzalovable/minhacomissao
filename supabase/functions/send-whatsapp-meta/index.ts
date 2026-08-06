@@ -1,6 +1,7 @@
 // Envio unitário (1 mensagem por chamada). O loop, delay, pausa e round-robin
 // vivem no frontend para permitir pausar/retomar/cancelar sem servidor extra.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

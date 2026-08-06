@@ -2,6 +2,7 @@
 // Só funciona dentro da janela de 24h da última mensagem recebida do cliente.
 // Para janelas expiradas, use send-whatsapp-meta com um template HSM.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
