@@ -201,6 +201,10 @@ export default function EditarAcordo() {
       // Admin: reativar acordo se estava quebrado/cancelado
       if (isAdmin) {
         updatePayload.status = 'ativo';
+        if (operadorId && operadorId !== operadorOriginal) {
+          updatePayload.user_id = operadorId;
+        }
+
       }
       let updateQuery = supabase
         .from('acordos')
