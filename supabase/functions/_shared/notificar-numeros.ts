@@ -135,10 +135,20 @@ export async function notificarNumeros(
     let sucesso = false;
     let ultimoErro = "sem_tentativas";
 
-    for (let t = 0; t < conectadas.length && !sucesso; t++) {
-      const inst = conectadas[(cursor + t) % conectadas.length];
+    // Ordem de tentativa: instância fixada para este destino primeiro, depois round-robin
+    const fixada = params.instanciaPorDestino?.[rawDest] || params.instanciaPorDestino?.[numero];
+    const ordem = fixada
+      ? [
+          ...conectadas.filter((i: any) => i.id === fixada),
+          ...conectadas.filter((i: any) => i.id !== fixada),
+        ]
+      : conectadas;
+
+    for (let t = 0; t < ordem.length && !sucesso; t++) {
+      const inst = fixada ? ordem[t] : ordem[(cursor + t) % ordem.length];
       const cleanUrl = String(inst.server_url).replace(/\/+$/, "");
       const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
+
 
       for (const endpoint of endpoints) {
         let timer: any;
