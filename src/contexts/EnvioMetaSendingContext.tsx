@@ -79,6 +79,10 @@ export type CampanhaJob = {
   status_motivo: string | null;
   restantes: number;
   instancias_bloqueadas_run: string[];
+  min_seg: number | null;
+  max_seg: number | null;
+  modo_rajada: boolean;
+  msgs_por_segundo: number | null;
 };
 
 type Ctx = {
@@ -182,6 +186,10 @@ function toCampanhaJob(j: any): CampanhaJob {
     status_motivo: j.status_motivo ?? null,
     restantes: Math.max(0, total - enviados - erros),
     instancias_bloqueadas_run: Array.isArray(j.instancias_bloqueadas_run) ? j.instancias_bloqueadas_run : [],
+    min_seg: j.min_seg ?? null,
+    max_seg: j.max_seg ?? null,
+    modo_rajada: j.modo_rajada === true,
+    msgs_por_segundo: j.msgs_por_segundo ?? null,
   };
 }
 

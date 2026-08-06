@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
@@ -35,6 +35,15 @@ function parseRateLimitMotivo(motivo?: string | null) {
   const mensagem = parts.slice(3).join(":") || "Meta pausou temporariamente esta instância por rate limit.";
   return { segundos: Math.ceil(ms / 1000), mensagem };
 }
+function formatDuracao(seg: number): string {
+  if (seg < 60) return `${Math.max(1, Math.round(seg))}s`;
+  const totalMin = Math.round(seg / 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}min`;
+  return m === 0 ? `${h}h` : `${h}h ${m}min`;
+}
+
 
 export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Props) {
   const {
@@ -117,6 +126,59 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
   const rateLimitInfo = parseRateLimitMotivo((job as any).status_motivo || resultado?.statusMotivo);
+
+  // ===== Previsão de término (estimativa) =====
+  const eta = (() => {
+    const restantes = Math.max(0, job.total - totalProcessado);
+
+    // Campanha finalizada: mostra a duração real.
+    if (!ativa) {
+      if (!job.iniciado_em) return null;
+      const fim = job.concluido_em ? new Date(job.concluido_em).getTime() : Date.now();
+      const seg = Math.max(0, Math.round((fim - new Date(job.iniciado_em).getTime()) / 1000));
+      return { tipo: "final" as const, duracao: formatDuracao(seg) };
+    }
+    if (restantes === 0) return null;
+
+    const instTotal = job.instancia_ids?.length || 1;
+    const bloqueadas = job.instancias_bloqueadas_run?.length || 0;
+    const instAtivas = Math.max(1, instTotal - bloqueadas);
+
+    // Ritmo teórico conforme as configurações da campanha.
+    let segPorMsgTeorico: number;
+    if (job.modo_rajada) {
+      const taxa = Math.max(0.1, (job.msgs_por_segundo || 30) * instAtivas);
+      segPorMsgTeorico = 1 / taxa;
+    } else {
+      const lo = Math.max(1, job.min_seg ?? 30);
+      const hi = Math.max(lo, job.max_seg ?? 90);
+      segPorMsgTeorico = (lo + hi) / 2;
+    }
+
+    // Ritmo real observado (mais fiel quando já há histórico suficiente).
+    let segPorMsg = segPorMsgTeorico;
+    if (job.iniciado_em && totalProcessado >= 5) {
+      const decorrido = (Date.now() - new Date(job.iniciado_em).getTime()) / 1000;
+      if (decorrido > 0) segPorMsg = decorrido / totalProcessado;
+    }
+
+    const segRestantes = Math.round(restantes * segPorMsg);
+    const fim = new Date(Date.now() + segRestantes * 1000);
+    const hoje = new Date();
+    const mesmoDia = fim.toDateString() === hoje.toDateString();
+    const hora = fim.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const termino = mesmoDia
+      ? `hoje ${hora}`
+      : `${hora} (${fim.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })})`;
+
+    const ritmo = segPorMsg < 1
+      ? `~${(1 / segPorMsg).toFixed(1)} msg/s`
+      : `~1 msg / ${Math.round(segPorMsg)}s`;
+
+    return { tipo: "previsao" as const, restantes, ritmo, duracao: formatDuracao(segRestantes), termino };
+  })();
+
+
 
 
   const reenviarErros = async () => {
@@ -277,6 +339,34 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 ? `Próximo envio em ${progresso.proximoEmSeg}s`
                 : null}
             </div>
+            {eta && (
+              <div className="text-xs rounded border bg-muted/40 px-2 py-1.5 space-y-0.5">
+                {eta.tipo === "final" ? (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>Duração total: <strong>{eta.duracao}</strong></span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>
+                        Restam <strong>{eta.restantes}</strong> envios • Ritmo: <strong>{eta.ritmo}</strong>
+                      </span>
+                    </div>
+                    <div>
+                      Tempo estimado: <strong>~{eta.duracao}</strong> • Previsão de término:{" "}
+                      <strong>{eta.termino}</strong>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {pausado
+                        ? "Pausada — a contagem recomeça ao continuar. Estimativa aproximada."
+                        : "Estimativa aproximada: varia com falhas, rate limit da Meta e instâncias bloqueadas."}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {(() => {
               const motivo = String((job as any).status_motivo || resultado?.statusMotivo || '');
               const isBALock = /business account|#131031|locked/i.test(motivo);
