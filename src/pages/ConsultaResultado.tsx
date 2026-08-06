@@ -50,7 +50,17 @@ interface NegociacaoState {
   descontoFaixa: DescontoFaixa | undefined;
 }
 
-const VALOR_MINIMO_PARCELA = 90;
+const VALOR_MINIMO_PARCELA = 100;
+const VALOR_MINIMO_ENTRADA = 100;
+const DIAS_MAX_PRIMEIRO_PAGAMENTO = 10;
+
+function limiteDatas() {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const max = new Date(hoje);
+  max.setDate(max.getDate() + DIAS_MAX_PRIMEIRO_PAGAMENTO);
+  return { hoje, max };
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
