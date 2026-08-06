@@ -606,18 +606,14 @@ export default function ConsultaResultado() {
                             selected={faixaEscolhida}
                             onSelect={(faixa) => {
                               setFaixaEscolhida(faixa);
-                              if (faixa === 'parcelado') {
-                                setNegociacao({
-                                  negociando: true,
-                                  confirmado: false,
-                                  entrada: 0,
-                                  parcelas: getMinParcelas('parcelado'),
-                                  dataPrimeiroPagamento: undefined,
-                                  descontoFaixa: 'parcelado',
-                                });
-                              } else {
-                                setNegociacao(null);
-                              }
+                              setNegociacao({
+                                negociando: true,
+                                confirmado: false,
+                                entrada: 0,
+                                parcelas: getMinParcelas(faixa),
+                                dataPrimeiroPagamento: undefined,
+                                descontoFaixa: faixa,
+                              });
                             }}
                             valorTotal={valorTotal}
                             diasAtraso={diasAtraso}
