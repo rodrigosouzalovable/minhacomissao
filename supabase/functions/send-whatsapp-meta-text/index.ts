@@ -162,6 +162,24 @@ Deno.serve(async (req) => {
         await supabase.from('meta_ia_conversas_estado')
           .update({ aguardando_humano: true })
           .eq('contato_id', contato.id);
+
+        // Etiqueta a conversa com o atendente que enviou (se ainda não houver etiqueta de atendente)
+        const mAt = String(texto || '').match(/^\*Atendente\s+(.+?):\*/i);
+        let nomeAtendente = mAt?.[1]?.trim() || '';
+        if (!nomeAtendente) {
+          const { data: prof } = await supabase
+            .from('profiles').select('nome').eq('id', user_id).maybeSingle();
+          nomeAtendente = String((prof as any)?.nome || '').trim();
+        }
+        if (nomeAtendente) {
+          await aplicarEtiquetaAtendente(supabase, {
+            contatoId: contato.id,
+            atendenteNome: nomeAtendente,
+            ownerUserId: inst.user_id,
+            somenteSeSemEtiqueta: true,
+            logPrefix: '[send-whatsapp-meta-text]',
+          });
+        }
       }
     } else {
 
