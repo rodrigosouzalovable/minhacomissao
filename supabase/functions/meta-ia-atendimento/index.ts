@@ -468,8 +468,12 @@ Deno.serve(async (req) => {
 
     // Cliente escolheu uma opção => confirma e chama humano para fechar
     if (estado.etapa === 'proposta' && (intencao === 'avista' || intencao === 'parcelado')) {
-      await enviar(render(tpl('confirmacao_escolha'), vars), 'aguardando_humano', {
-        cpf, aguardando_humano: true, contexto: { ...(estado.contexto || {}), escolha: intencao },
+      await enviar(render(tpl('confirmacao_escolha'), {
+        ...vars,
+        max_parcelas: String(parcelasEscolhidas),
+        valor_parcela: fmtBRL(valorParcelaEscolhida),
+      }), 'aguardando_humano', {
+        cpf, aguardando_humano: true, contexto: { ...(estado.contexto || {}), escolha: intencao, parcelas: parcelasEscolhidas },
       });
       await avisarEmergencia(supabase,
         `🤖 *IA — cliente aceitou proposta*\n\n` +
@@ -477,7 +481,7 @@ Deno.serve(async (req) => {
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Credor: ${credor}\n` +
-        `Opção escolhida: ${intencao === 'avista' ? `à vista ${vars.valor_avista}` : `${parcelas}x de ${vars.valor_parcela}`}\n\n` +
+        `Opção escolhida: ${intencao === 'avista' ? `à vista ${vars.valor_avista}` : `${parcelasEscolhidas}x de ${fmtBRL(valorParcelaEscolhida)}`}\n\n` +
         `Finalize o acordo e envie o boleto.`, contato_id);
       return json({ success: true, etapa: 'confirmacao_escolha' });
     }
