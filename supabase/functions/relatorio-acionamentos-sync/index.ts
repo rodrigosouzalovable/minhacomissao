@@ -67,9 +67,30 @@ Deno.serve(async (req) => {
     try { body = await req.json(); } catch (_) { /* sem body */ }
 
     const agora = brtParts(new Date());
+
+    // Envio de teste para um destino (grupo) específico
+    if (body.action === "testar_destino") {
+      const jid = String(body.jid || "").trim();
+      if (!jid) {
+        return new Response(JSON.stringify({ error: "jid obrigatório" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const r = await notificarNumeros(supabase, {
+        tipo: "relatorio_destino_teste",
+        mensagem: `✅ Teste do relatório de acionamentos — ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`,
+        destinatarios: [jid],
+        instanciaPorDestino: body.instancia_id ? { [jid]: String(body.instancia_id) } : undefined,
+      });
+      return new Response(JSON.stringify(r), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const dia: string = body.dia || agora.dia;
     const notificar: boolean = body.notificar !== false;
     const consolidado: boolean = body.consolidado === true;
+
 
     // Janela do dia em BRT
     const inicioDia = `${dia}T00:00:00-03:00`;
