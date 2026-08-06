@@ -424,11 +424,21 @@ Deno.serve(async (req) => {
 
     const valorAvista = total * (1 - descAvista / 100);
     const valorParcelado = total * (1 - descParc / 100);
-    let parcelas = 1;
-    for (let i = maxParc; i >= 1; i--) {
-      if (valorParcelado / i >= parcMin) { parcelas = i; break; }
+
+    // Grade de parcelamento ofertada (só aparece se a parcela ficar >= parcela mínima)
+    const GRADE = [4, 8, 12, 16, 20, 24];
+    let opcoes = GRADE.filter((n) => n <= maxParc && valorParcelado / n >= parcMin);
+    if (!opcoes.length) {
+      // Valor baixo: oferta o maior número de parcelas possível respeitando o mínimo
+      for (let i = Math.min(maxParc, 24); i >= 2; i--) {
+        if (valorParcelado / i >= parcMin) { opcoes = [i]; break; }
+      }
     }
+    const parcelas = opcoes.length ? opcoes[opcoes.length - 1] : 1;
     const valorParcela = valorParcelado / parcelas;
+    const opcoesTexto = opcoes.length
+      ? opcoes.map((n) => `• ${n}x de ${fmtBRL(valorParcelado / n)}`).join('\n')
+      : `• 1x de ${fmtBRL(valorParcelado)}`;
 
     const vars: Record<string, string> = {
       primeiro_nome: primeiroNome(nomeCli),
@@ -442,13 +452,28 @@ Deno.serve(async (req) => {
       max_parcelas: String(parcelas),
       valor_parcela: fmtBRL(valorParcela),
       valor_parcelado: fmtBRL(valorParcelado),
+      opcoes_parcelamento: opcoesTexto,
       telefone_contato: '(62) 98218-3144',
     };
 
+    // Se o cliente citou uma quantidade de parcelas ("12x", "em 8 vezes"), respeita a escolha
+    const mQtd = String(texto || '').match(/(\d{1,2})\s*(?:x|vezes|parcelas)/i);
+    let parcelasEscolhidas = parcelas;
+    if (mQtd) {
+      const n = Number(mQtd[1]);
+      if (opcoes.includes(n)) parcelasEscolhidas = n;
+      else if (n >= 2 && n <= maxParc && valorParcelado / n >= parcMin) parcelasEscolhidas = n;
+    }
+    const valorParcelaEscolhida = valorParcelado / parcelasEscolhidas;
+
     // Cliente escolheu uma opção => confirma e chama humano para fechar
     if (estado.etapa === 'proposta' && (intencao === 'avista' || intencao === 'parcelado')) {
-      await enviar(render(tpl('confirmacao_escolha'), vars), 'aguardando_humano', {
-        cpf, aguardando_humano: true, contexto: { ...(estado.contexto || {}), escolha: intencao },
+      await enviar(render(tpl('confirmacao_escolha'), {
+        ...vars,
+        max_parcelas: String(parcelasEscolhidas),
+        valor_parcela: fmtBRL(valorParcelaEscolhida),
+      }), 'aguardando_humano', {
+        cpf, aguardando_humano: true, contexto: { ...(estado.contexto || {}), escolha: intencao, parcelas: parcelasEscolhidas },
       });
       await avisarEmergencia(supabase,
         `🤖 *IA — cliente aceitou proposta*\n\n` +
@@ -456,7 +481,7 @@ Deno.serve(async (req) => {
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Credor: ${credor}\n` +
-        `Opção escolhida: ${intencao === 'avista' ? `à vista ${vars.valor_avista}` : `${parcelas}x de ${vars.valor_parcela}`}\n\n` +
+        `Opção escolhida: ${intencao === 'avista' ? `à vista ${vars.valor_avista}` : `${parcelasEscolhidas}x de ${fmtBRL(valorParcelaEscolhida)}`}\n\n` +
         `Finalize o acordo e envie o boleto.`, contato_id);
       return json({ success: true, etapa: 'confirmacao_escolha' });
     }
