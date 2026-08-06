@@ -623,8 +623,9 @@ export default function ConsultaResultado() {
                             diasAtraso={diasAtraso}
                           />
 
-                          {faixaEscolhida === 'parcelado' && negociacao && (
+                          {negociacao && (
                             <div className="space-y-4 pt-2">
+                              {negociacao.descontoFaixa === 'parcelado' && (<>
                               <div
                                 className="rounded-xl p-5 text-center"
                                 style={{
