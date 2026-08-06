@@ -1,33 +1,38 @@
-# Aviso de atenção humana da caixa IA não chega no WhatsApp
+# Corrigir FALHA_ENVIO "componente HEADER não contém os campos esperados"
 
-## O que foi verificado
+## O que aconteceu (confirmado)
 
-- A conversa do teste ficou corretamente marcada como "aguardando humano" (CPF 074.606.402-04, etapa `aguardando_humano`), ou seja, a IA **decidiu** chamar o humano.
-- Os dois contatos de emergência estão cadastrados e ativos (Admin 62991672674 e Anna Flavia 6484480875).
-- A função que a IA usa hoje para o aviso (`send-whatsapp`, com a instância global de secrets) **não registrou nenhuma execução** — o aviso morre em silêncio, porque o erro é apenas capturado e escrito no console.
-- Em contrapartida, o caminho usado pelas outras notificações do sistema (round-robin entre as instâncias conectadas, com log em `admin_notificacoes_log`) enviou mensagens com sucesso hoje às 22:05 e 22:14. Esse caminho é o confiável.
+O template mestre `dados_cadastrais` está salvo com **cabeçalho do tipo TEXTO, mas com o texto vazio**. Ao submeter para a Meta, o sistema envia um componente de cabeçalho sem conteúdo, e a Meta recusa com a mensagem "o componente do tipo HEADER não contém o(s) campo(s) esperado(s)".
 
-Conclusão: o problema é o meio de envio do aviso, não a lógica da IA.
+Ou seja: não é problema da conta nem da categoria UTILITY — é um cabeçalho vazio sendo enviado junto do template. Nas outras contas onde esse template já foi aprovado, ele foi criado sem cabeçalho.
 
-## Correção
+## Correções
 
-1. Trocar o envio do aviso de emergência da IA para o mesmo motor confiável já usado nas notificações do sistema: percorre as instâncias ativas, testa quais estão conectadas e tenta uma a uma até enviar de verdade.
-2. Enviar para **todos** os contatos de emergência ativos (não só o número do admin), com o texto: cliente, telefone, CPF, caixa de mensagens (IA), motivo (já possui acordo / aceitou proposta / dúvida / CPF não identificado) e atendente que lançou o acordo.
-3. Registrar cada aviso (enviado ou com erro, com o detalhe do erro) no log de notificações, para nunca mais falhar silenciosamente.
-4. Se nenhuma instância conseguir enviar, a IA registra o erro e mantém a conversa marcada como "aguardando humano" (nada é perdido).
+1. **Não enviar cabeçalho vazio**: ao montar o template para a Meta, o cabeçalho de texto só é incluído se realmente tiver texto. Cabeçalho de mídia só é incluído se a amostra do arquivo existir. Assim, esse mesmo template passa a ser submetido sem cabeçalho (como nas contas aprovadas).
+2. **Bloquear antes de enviar**: na validação prévia, se o tipo de cabeçalho for TEXTO e o texto estiver vazio, o sistema avisa em português claro em vez de deixar a Meta rejeitar.
+3. **Impedir o cadastro errado**: no formulário de criação/edição do template, se o cabeçalho for "Texto" e o campo estiver vazio, o salvamento é bloqueado com aviso (ou o cabeçalho é gravado como "nenhum").
+4. **Limpar o registro atual**: o template `dados_cadastrais` passa a ficar sem cabeçalho, permitindo reenviar pelo botão "Reenviar falhas".
 
-## No painel "Configurar IA da caixa"
+## Erros muito mais específicos
 
-- Na aba **Emergência**: botão **"Enviar aviso de teste"** para conferir na hora se a mensagem chega nos números cadastrados.
-- Mostrar o status do último aviso disparado (enviado/erro e horário), para diagnóstico rápido.
+Hoje só aparece um trecho cortado da mensagem da Meta. Passará a:
 
-## Reenvio do caso atual
-
-Disparar manualmente o aviso pendente do cliente do teste (Rodrigo / CPF 074.606.402-04) para os dois números, para você confirmar o recebimento.
+- Guardar e exibir a mensagem completa da Meta + o código do erro e o detalhe técnico (`error_user_title`, `error_user_msg`, `code`, `error_subcode`, `details`).
+- Traduzir os erros mais comuns em explicações acionáveis, por exemplo:
+  - cabeçalho sem texto/mídia → "O cabeçalho está vazio: preencha o texto ou remova o cabeçalho".
+  - variável sem exemplo → "Falta o exemplo da variável X".
+  - nome duplicado → "Já existe um template com esse nome nessa conta".
+  - token inválido/permissão → "O token da instância não tem permissão nessa WABA".
+  - limite de templates → "A conta atingiu o limite de templates".
+- Exibir na lista de status a explicação amigável em destaque, com o texto técnico original disponível ao passar o mouse (tooltip) e sem cortar a frase no meio.
 
 ## Detalhes técnicos
 
-- `supabase/functions/meta-ia-atendimento/index.ts`: substituir `avisarEmergencia` (que invocava `send-whatsapp`) por uma chamada ao helper compartilhado `_shared/notificar-admin.ts`, generalizado para aceitar uma lista de destinatários (`meta_ia_contatos_emergencia`) em vez de somente `admin_notificacoes_config.admin_phone`, mantendo round-robin, checagem de conexão, retry e gravação em `admin_notificacoes_log` (`tipo = 'ia_humano'`).
-- Nova rota de teste em `notificar-admin` (`tipo = 'ia_teste'`) usada pelo botão do painel.
-- `src/components/inbox/meta/MetaIAConfigDialog.tsx`: botão de teste + leitura do último registro de `admin_notificacoes_log` com `tipo = 'ia_humano'`.
-- Sem cron novo, sem polling novo — custo inalterado.
+- `supabase/functions/meta-criar-template-lote/index.ts`
+  - `buildComponents`: só empurra o componente HEADER quando `TEXT` tem `cabecalho_texto` não vazio ou quando mídia tem `header_handle`.
+  - `validarMestre`: novo erro para `cabecalho_tipo === 'TEXT'` sem texto.
+  - Captura de erro da Meta: montar mensagem com `error_user_title`, `error_user_msg`, `message`, `code`, `error_subcode` e `error_data.details`, salvando o texto completo em `erro`.
+  - Nova função `explicarErroTemplate(dataErro)` para tradução dos casos comuns (mesma ideia de `src/lib/humanizarErroEnvio.ts`).
+- `src/lib/humanizarErroTemplate.ts` (novo): tradutor reutilizado na UI.
+- `src/pages/MetaTemplates.tsx`: validação do cabeçalho de texto no salvamento; exibição do erro humanizado + tooltip com o texto bruto nas listas de status e de falhas.
+- Migração simples de dados: `update meta_templates_mestre set cabecalho_tipo = null where nome = 'dados_cadastrais' and coalesce(cabecalho_texto,'') = ''`.
