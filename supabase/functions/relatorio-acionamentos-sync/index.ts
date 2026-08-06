@@ -280,6 +280,9 @@ Deno.serve(async (req) => {
     const totalAcordos = (acordos || []).length;
     const valorAcordos = (acordos || []).reduce((s: number, a: any) => s + Number(a.valor_total || 0), 0);
     const totLigacoes = linhas.reduce((s, l) => s + l.ligacoes, 0);
+    const cpcWhats = linhas.reduce((s, l) => s + l.cpcWhats, 0);
+    const cpcLig = linhas.reduce((s, l) => s + l.cpcLig, 0);
+    const cpcPortal = linhas.reduce((s, l) => s + l.cpcPortal, 0);
 
 
     let enviado: any = { skipped: true };
@@ -297,6 +300,7 @@ Deno.serve(async (req) => {
         `💬 WhatsApp (Meta): *${tot.whatsapp}*`,
         `📞 Ligações (3C): *${totLigacoes}*  | Alô: *${tot.alo}* (${pct(tot.alo, totLigacoes)})`,
         `🗣️ Interações/CPC: *${tot.cpc}*  (${pct(tot.cpc, tot.tentativas)})`,
+        `   ↳ WhatsApp: ${cpcWhats} • Ligação: ${cpcLig} • Portal: ${cpcPortal}`,
         `🤝 CPC-A: *${tot.cpca}*  (${pct(tot.cpca, tot.cpc)})`,
 
         `📄 Acordos lançados: *${totalAcordos}*`,
@@ -314,13 +318,23 @@ Deno.serve(async (req) => {
         ? `relat-acion-consol-${dia}`
         : `relat-acion-${dia}-${String(agora.hora).padStart(2, "0")}h`;
 
+      // Destinos extras configurados (grupos de WhatsApp)
+      const { data: destinos } = await supabase
+        .from("relatorio_destinos")
+        .select("jid")
+        .eq("ativo", true);
+      const grupos = (destinos || [])
+        .map((d: any) => String(d.jid || "").trim())
+        .filter((j: string) => j.length > 0);
+
       enviado = await notificarNumeros(supabase, {
         tipo: consolidado ? "relatorio_acionamentos_dia" : "relatorio_acionamentos_hora",
         mensagem: linhasMsg.join("\n"),
-        destinatarios: DESTINATARIOS,
+        destinatarios: [...DESTINATARIOS, ...grupos],
         chaveIdempotencia: chave,
       });
     }
+
 
     return new Response(JSON.stringify({ ok: true, dia, totais: tot, totalAcordos, valorAcordos, notificacao: enviado }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
