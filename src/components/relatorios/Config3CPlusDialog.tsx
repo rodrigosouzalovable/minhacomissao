@@ -272,10 +272,15 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
                   <Download className="h-4 w-4 mr-2" /> Importar da 3C
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                O CPC de ligação agora conta <strong>toda ligação falada com agente</strong>, sem depender da
+                qualificação. Este mapeamento é apenas informativo.
+              </p>
               {quals.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Nenhuma qualificação cadastrada ainda. Importe da 3C e depois marque quais contam como CPC e CPC-A.
+                  Nenhuma qualificação cadastrada ainda. Se quiser, importe da 3C para consulta.
                 </p>
+
               ) : (
                 <div className="rounded-md border divide-y">
                   {quals.map((q) => (
