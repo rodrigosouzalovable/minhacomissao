@@ -65,6 +65,17 @@ export default function EditarAcordo() {
   const [loadingData, setLoadingData] = useState(true);
   const [hasParcelasPagas, setHasParcelasPagas] = useState(false);
   const [cpfError, setCpfError] = useState('');
+  const [operadorId, setOperadorId] = useState('');
+  const [operadorOriginal, setOperadorOriginal] = useState('');
+  const [operadores, setOperadores] = useState<Array<{ user_id: string; nome: string | null }>>([]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    supabase.rpc('listar_usuarios_ativos').then(({ data }) => {
+      setOperadores((data as any) || []);
+    });
+  }, [isAdmin]);
+
   
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
   
