@@ -4875,7 +4875,10 @@ export type Database = {
           atualizado_por: string | null
           cpc: number
           cpc_auto: number
+          cpc_ligacao_auto: number
           cpc_manual: boolean
+          cpc_portal_auto: number
+          cpc_whatsapp_auto: number
           cpca: number
           cpca_auto: number
           cpca_manual: boolean
@@ -4901,7 +4904,10 @@ export type Database = {
           atualizado_por?: string | null
           cpc?: number
           cpc_auto?: number
+          cpc_ligacao_auto?: number
           cpc_manual?: boolean
+          cpc_portal_auto?: number
+          cpc_whatsapp_auto?: number
           cpca?: number
           cpca_auto?: number
           cpca_manual?: boolean
@@ -4927,7 +4933,10 @@ export type Database = {
           atualizado_por?: string | null
           cpc?: number
           cpc_auto?: number
+          cpc_ligacao_auto?: number
           cpc_manual?: boolean
+          cpc_portal_auto?: number
+          cpc_whatsapp_auto?: number
           cpca?: number
           cpca_auto?: number
           cpca_manual?: boolean
@@ -4997,6 +5006,39 @@ export type Database = {
           atualizado_por?: string | null
           data?: string
           meta_valor?: number
+        }
+        Relationships: []
+      }
+      relatorio_destinos: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          id: string
+          instancia_id: string | null
+          jid: string
+          nome: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          instancia_id?: string | null
+          jid: string
+          nome?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          id?: string
+          instancia_id?: string | null
+          jid?: string
+          nome?: string | null
+          tipo?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -7305,7 +7347,10 @@ export type Database = {
           atualizado_por: string | null
           cpc: number
           cpc_auto: number
+          cpc_ligacao_auto: number
           cpc_manual: boolean
+          cpc_portal_auto: number
+          cpc_whatsapp_auto: number
           cpca: number
           cpca_auto: number
           cpca_manual: boolean
