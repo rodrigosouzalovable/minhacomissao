@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { calcularComissao, calcularPercentualComissaoMundoDaModa, formatarMoeda, gerarParcelas, gerarParcelasMundoDaModa, tabelaComissoes, tabelaComissoesMundoDaModa } from '@/lib/comissao';
@@ -63,6 +65,17 @@ export default function EditarAcordo() {
   const [loadingData, setLoadingData] = useState(true);
   const [hasParcelasPagas, setHasParcelasPagas] = useState(false);
   const [cpfError, setCpfError] = useState('');
+  const [operadorId, setOperadorId] = useState('');
+  const [operadorOriginal, setOperadorOriginal] = useState('');
+  const [operadores, setOperadores] = useState<Array<{ user_id: string; nome: string | null }>>([]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    supabase.rpc('listar_usuarios_ativos').then(({ data }) => {
+      setOperadores((data as any) || []);
+    });
+  }, [isAdmin]);
+
   
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
   
@@ -109,6 +122,9 @@ export default function EditarAcordo() {
         setHasParcelasPagas(temPagas);
 
         setEmpresa((acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda') || 'ume_novo_mundo');
+        setOperadorId(acordo.user_id || '');
+        setOperadorOriginal(acordo.user_id || '');
+
         
         setForm({
           clienteNome: acordo.cliente_nome,
@@ -185,6 +201,10 @@ export default function EditarAcordo() {
       // Admin: reativar acordo se estava quebrado/cancelado
       if (isAdmin) {
         updatePayload.status = 'ativo';
+        if (operadorId && operadorId !== operadorOriginal) {
+          updatePayload.user_id = operadorId;
+        }
+
       }
       let updateQuery = supabase
         .from('acordos')
@@ -382,7 +402,29 @@ export default function EditarAcordo() {
                   </Button>
                 </div>
               </div>
+
+              {isAdmin && (
+                <div className="space-y-2">
+                  <Label>Operador vinculado</Label>
+                  <Select value={operadorId} onValueChange={setOperadorId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o operador" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {operadores.map((o) => (
+                        <SelectItem key={o.user_id} value={o.user_id}>
+                          {o.nome || o.user_id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Alterar o operador transfere o acordo e a comissão para ele.
+                  </p>
+                </div>
+              )}
             </CardContent>
+
           </Card>
 
           <Card>
