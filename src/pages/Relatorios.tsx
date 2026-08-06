@@ -23,6 +23,8 @@ import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ImportarLigacoesDialog } from '@/components/relatorios/ImportarLigacoesDialog';
 import { Config3CPlusDialog } from '@/components/relatorios/Config3CPlusDialog';
+import { DestinosRelatorioDialog } from '@/components/relatorios/DestinosRelatorioDialog';
+
 
 
 const HORAS = [
