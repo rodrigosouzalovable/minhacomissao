@@ -58,7 +58,7 @@ const VARIAVEIS = [
   '{primeiro_nome}', '{nome_completo}', '{cpf_formatado}', '{credor}',
   '{valor_total}', '{valor_avista}', '{desconto_avista_pct}',
   '{max_parcelas}', '{valor_parcela}', '{valor_parcelado}',
-  '{desconto_parcelado_pct}', '{telefone_contato}',
+  '{opcoes_parcelamento}', '{desconto_parcelado_pct}', '{telefone_contato}',
 ];
 
 export default function MetaIAConfigDialog({ open, onOpenChange }: Props) {
