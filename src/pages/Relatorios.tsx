@@ -307,6 +307,8 @@ export default function Relatorios() {
             </Button>
             {isAdmin && <ImportarLigacoesDialog onDone={load} />}
             {isAdmin && <Config3CPlusDialog onDone={load} />}
+            {isAdmin && <DestinosRelatorioDialog />}
+
 
             {isAdmin && (
               <AlertDialog>
