@@ -189,6 +189,21 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
                 )}
               </div>
 
+              {webhookParado && (
+                <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>
+                    Nenhum evento recebido desde{' '}
+                    {new Date(ultimoWebhook.em!).toLocaleString('pt-BR', {
+                      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                    })}
+                    . Verifique se o webhook continua cadastrado e ativo no painel da 3C Plus.
+                  </span>
+                </div>
+              )}
+
+
+
               <div className="flex gap-2 items-center">
                 <Input readOnly value={webhookUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
                 <CopyButton value={webhookUrl} label="Webhook" preserveText />
