@@ -5,9 +5,12 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.88.0
 export interface NotificarNumerosParams {
   tipo: string;
   mensagem: string;
-  destinatarios: string[]; // números com ou sem DDI 55
+  destinatarios: string[]; // números com ou sem DDI 55, ou JIDs de grupo (…@g.us)
   chaveIdempotencia?: string;
+  // Instância obrigatória/preferida por destino (ex.: grupo só recebe da instância que participa dele)
+  instanciaPorDestino?: Record<string, string>;
 }
+
 
 const isRetryableInstanceError = (text: string, status: number) => {
   const n = text.toLowerCase();
@@ -70,7 +73,11 @@ const checkConnected = async (inst: any) => {
 };
 
 const normalizarNumero = (num: string) => {
-  const n = String(num).replace(/\D/g, "");
+  const bruto = String(num).trim();
+  // Grupos de WhatsApp já vêm no formato JID (…@g.us) e não recebem prefixo 55
+  if (bruto.includes("@")) return bruto;
+  if (/^\d{15,}$/.test(bruto.replace(/\D/g, ""))) return `${bruto.replace(/\D/g, "")}@g.us`;
+  const n = bruto.replace(/\D/g, "");
   return n.startsWith("55") ? n : `55${n}`;
 };
 
@@ -128,10 +135,20 @@ export async function notificarNumeros(
     let sucesso = false;
     let ultimoErro = "sem_tentativas";
 
-    for (let t = 0; t < conectadas.length && !sucesso; t++) {
-      const inst = conectadas[(cursor + t) % conectadas.length];
+    // Ordem de tentativa: instância fixada para este destino primeiro, depois round-robin
+    const fixada = params.instanciaPorDestino?.[rawDest] || params.instanciaPorDestino?.[numero];
+    const ordem = fixada
+      ? [
+          ...conectadas.filter((i: any) => i.id === fixada),
+          ...conectadas.filter((i: any) => i.id !== fixada),
+        ]
+      : conectadas;
+
+    for (let t = 0; t < ordem.length && !sucesso; t++) {
+      const inst = fixada ? ordem[t] : ordem[(cursor + t) % ordem.length];
       const cleanUrl = String(inst.server_url).replace(/\/+$/, "");
       const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
+
 
       for (const endpoint of endpoints) {
         let timer: any;

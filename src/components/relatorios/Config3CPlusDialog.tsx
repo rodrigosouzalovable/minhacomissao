@@ -66,6 +66,11 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
 
   const webhookUrl = webhookKey ? `${FUNCTIONS_BASE}/tresc-webhook?k=${webhookKey}` : '';
 
+  const webhookParado = ultimoWebhook.em
+    ? Date.now() - new Date(ultimoWebhook.em).getTime() > 2 * 60 * 60 * 1000
+    : false;
+
+
 
   useEffect(() => { if (open) carregar(); }, [open, carregar]);
 
@@ -184,6 +189,21 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
                 )}
               </div>
 
+              {webhookParado && (
+                <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>
+                    Nenhum evento recebido desde{' '}
+                    {new Date(ultimoWebhook.em!).toLocaleString('pt-BR', {
+                      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                    })}
+                    . Verifique se o webhook continua cadastrado e ativo no painel da 3C Plus.
+                  </span>
+                </div>
+              )}
+
+
+
               <div className="flex gap-2 items-center">
                 <Input readOnly value={webhookUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
                 <CopyButton value={webhookUrl} label="Webhook" preserveText />
@@ -246,15 +266,21 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Qualificações → CPC / CPC-A</Label>
+                <Label>Qualificações (opcional)</Label>
+
                 <Button variant="outline" size="sm" onClick={importarQuals} disabled={loading}>
                   <Download className="h-4 w-4 mr-2" /> Importar da 3C
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                O CPC de ligação agora conta <strong>toda ligação falada com agente</strong>, sem depender da
+                qualificação. Este mapeamento é apenas informativo.
+              </p>
               {quals.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Nenhuma qualificação cadastrada ainda. Importe da 3C e depois marque quais contam como CPC e CPC-A.
+                  Nenhuma qualificação cadastrada ainda. Se quiser, importe da 3C para consulta.
                 </p>
+
               ) : (
                 <div className="rounded-md border divide-y">
                   {quals.map((q) => (
