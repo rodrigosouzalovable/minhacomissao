@@ -35,6 +35,15 @@ function parseRateLimitMotivo(motivo?: string | null) {
   const mensagem = parts.slice(3).join(":") || "Meta pausou temporariamente esta instância por rate limit.";
   return { segundos: Math.ceil(ms / 1000), mensagem };
 }
+function formatDuracao(seg: number): string {
+  if (seg < 60) return `${Math.max(1, Math.round(seg))}s`;
+  const totalMin = Math.round(seg / 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}min`;
+  return m === 0 ? `${h}h` : `${h}h ${m}min`;
+}
+
 
 export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Props) {
   const {
