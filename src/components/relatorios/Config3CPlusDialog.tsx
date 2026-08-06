@@ -266,7 +266,8 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Qualificações → CPC / CPC-A</Label>
+                <Label>Qualificações (opcional)</Label>
+
                 <Button variant="outline" size="sm" onClick={importarQuals} disabled={loading}>
                   <Download className="h-4 w-4 mr-2" /> Importar da 3C
                 </Button>
