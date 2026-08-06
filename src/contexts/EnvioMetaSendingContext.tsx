@@ -79,6 +79,10 @@ export type CampanhaJob = {
   status_motivo: string | null;
   restantes: number;
   instancias_bloqueadas_run: string[];
+  min_seg: number | null;
+  max_seg: number | null;
+  modo_rajada: boolean;
+  msgs_por_segundo: number | null;
 };
 
 type Ctx = {
