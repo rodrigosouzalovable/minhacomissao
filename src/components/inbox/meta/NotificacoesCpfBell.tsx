@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Bell, Check, CheckCheck, Copy, Download } from "lucide-react";
 import { exportarParaExcel } from "@/lib/exportExcel";
 import { Button } from "@/components/ui/button";
@@ -80,11 +80,18 @@ export function NotificacoesCpfBell() {
   const [statsPorDia, setStatsPorDia] = useState<{ data: string; total: number }[]>([]);
   const [totalHoje, setTotalHoje] = useState(0);
 
+  const [naoLidasCount, setNaoLidasCount] = useState(0);
+  // Mantido em ref para não entrar nas dependências do fetch (causava
+  // recarga em ciclo e reinscrição repetida do canal em tempo real).
+  const nomesRef = useRef<Record<string, string>>({});
+
   const fetchNotificacoes = useCallback(async () => {
     if (!user?.id) return;
     let query = supabase
       .from("consulta_cpf_notificacoes" as any)
-      .select("*")
+      .select(
+        "id, cpf, nome, credor, total_debitos, telefones, lida_em, cpf_copiado_em, assigned_user_id, created_at"
+      )
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -100,53 +107,43 @@ export function NotificacoesCpfBell() {
       const ids = Array.from(
         new Set(rows.map((n) => n.assigned_user_id).filter(Boolean) as string[])
       );
-      const faltantes = ids.filter((id) => !(id in nomesUsuarios));
+      const faltantes = ids.filter((id) => !(id in nomesRef.current));
       if (faltantes.length > 0) {
         const { data: profs } = await supabase
           .from("profiles")
           .select("id, nome, email")
           .in("id", faltantes);
-        const map: Record<string, string> = { ...nomesUsuarios };
+        const map: Record<string, string> = { ...nomesRef.current };
         for (const p of (profs || []) as any[]) {
           map[p.id] = p.nome || p.email || p.id.slice(0, 8);
         }
+        nomesRef.current = map;
         setNomesUsuarios(map);
       }
     }
-  }, [user?.id, isAdmin, nomesUsuarios]);
+  }, [user?.id, isAdmin]);
 
+  // Contagem leve para o badge (sem baixar registros)
+  const fetchNaoLidas = useCallback(async () => {
+    if (!user?.id) return;
+    const { data } = await (supabase as any).rpc("consulta_cpf_nao_lidas");
+    setNaoLidasCount(typeof data === "number" ? data : 0);
+  }, [user?.id]);
+
+  // Estatísticas agregadas no banco (últimos 7 dias) — sem leitura em massa
   const fetchStats = useCallback(async () => {
     if (!user?.id) return;
-    // Últimos 7 dias (inclui hoje) em BRT — buscamos por created_at >= inicio (UTC)
-    const inicio = new Date();
-    inicio.setDate(inicio.getDate() - 7);
-    inicio.setHours(0, 0, 0, 0);
-    const inicioISO = inicio.toISOString();
-
-    let q = supabase
-      .from("consulta_cpf_notificacoes" as any)
-      .select("created_at, assigned_user_id")
-      .gte("created_at", inicioISO)
-      .order("created_at", { ascending: false })
-      .limit(5000);
-
-    if (!isAdmin) {
-      q = q.eq("assigned_user_id", user.id);
-    }
-
-    const { data } = await q;
-    const rows = ((data as any) || []) as { created_at: string; assigned_user_id: string | null }[];
+    const { data } = await (supabase as any).rpc("consulta_cpf_stats_7d");
+    const rows = ((data as any) || []) as { dia: string; total: number }[];
 
     const contagem = new Map<string, number>();
-    // pré-popula últimos 7 dias com zero
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       contagem.set(dataBRT(d.toISOString()), 0);
     }
     for (const r of rows) {
-      const dia = dataBRT(r.created_at);
-      contagem.set(dia, (contagem.get(dia) || 0) + 1);
+      if (contagem.has(r.dia)) contagem.set(r.dia, Number(r.total) || 0);
     }
 
     const dias = Array.from(contagem.entries())
@@ -155,12 +152,12 @@ export function NotificacoesCpfBell() {
 
     setStatsPorDia(dias);
     setTotalHoje(contagem.get(hojeBRT()) || 0);
-  }, [user?.id, isAdmin]);
+  }, [user?.id]);
 
+  // Badge: contagem leve + canal em tempo real criado uma única vez
   useEffect(() => {
     if (!user?.id || loadingRole) return;
-    fetchNotificacoes();
-    fetchStats();
+    fetchNaoLidas();
 
     const channel = supabase
       .channel(`consulta-cpf-notif-${user.id}-${isAdmin ? "admin" : "user"}`)
@@ -175,8 +172,8 @@ export function NotificacoesCpfBell() {
               filter: `assigned_user_id=eq.${user.id}`,
             },
         () => {
-          fetchNotificacoes();
-          fetchStats();
+          fetchNaoLidas();
+          setDirty(true);
         }
       )
       .subscribe();
@@ -184,14 +181,24 @@ export function NotificacoesCpfBell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, isAdmin, loadingRole, fetchNotificacoes, fetchStats]);
+  }, [user?.id, isAdmin, loadingRole, fetchNaoLidas]);
 
-  const naoLidas = notificacoes.filter((n) => !n.lida_em).length;
+  // Lista e estatísticas só quando o sino é aberto (ou após novo evento)
+  const [dirty, setDirty] = useState(true);
+  useEffect(() => {
+    if (!open || !user?.id || loadingRole || !dirty) return;
+    setDirty(false);
+    fetchNotificacoes(); fetchNaoLidas();
+    fetchStats();
+  }, [open, dirty, user?.id, loadingRole, fetchNotificacoes, fetchStats]);
+
+  const naoLidas = naoLidasCount;
 
   // Não lidas de hoje (funcionário: disponíveis para atender)
   const naoLidasHoje = notificacoes.filter(
     (n) => !n.lida_em && dataBRT(n.created_at) === hojeBRT()
   ).length;
+
 
   // Média dos últimos 7 dias excluindo hoje
   const diasAnteriores = statsPorDia.filter((d) => d.data !== hojeBRT());
@@ -207,7 +214,7 @@ export function NotificacoesCpfBell() {
       .from("consulta_cpf_notificacoes" as any)
       .update({ lida_em: new Date().toISOString() })
       .eq("id", id);
-    fetchNotificacoes();
+    fetchNotificacoes(); fetchNaoLidas();
   };
 
   const marcarTodasLidas = async () => {
@@ -218,7 +225,7 @@ export function NotificacoesCpfBell() {
       .is("lida_em", null);
     if (!isAdmin) q = q.eq("assigned_user_id", user.id);
     await q;
-    fetchNotificacoes();
+    fetchNotificacoes(); fetchNaoLidas();
   };
 
   const copiarCpf = async (n: Notificacao) => {
@@ -234,7 +241,7 @@ export function NotificacoesCpfBell() {
         .from("consulta_cpf_notificacoes" as any)
         .update({ cpf_copiado_em: new Date().toISOString() })
         .eq("id", n.id);
-      fetchNotificacoes();
+      fetchNotificacoes(); fetchNaoLidas();
     }
   };
 

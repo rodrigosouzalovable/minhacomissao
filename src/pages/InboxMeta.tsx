@@ -222,25 +222,21 @@ export default function InboxMeta() {
   }, [user]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
-  const fetchContatoEtiquetas = useCallback(async () => {
-    // Paginação obrigatória — a tabela já passa de 1000 vínculos e o
-    // PostgREST trunca silenciosamente. Sem isso, etiquetas "somem" aleatoriamente.
-    const PAGE = 1000;
-    let offset = 0;
+  // Busca vínculos de etiqueta SOMENTE dos contatos exibidos na tela.
+  // Antes fazia varredura completa da tabela em cada carregamento/foco.
+  const fetchContatoEtiquetas = useCallback(async (contatoIds?: string[]) => {
+    const ids = (contatoIds ?? []).filter(Boolean);
+    if (ids.length === 0) return;
+    const CHUNK = 200;
     const all: Array<{ contato_id: string; etiqueta_id: string; origem: string | null }> = [];
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
       const { data, error } = await supabase
         .from('meta_whatsapp_contato_etiquetas')
         .select('contato_id, etiqueta_id, origem')
-        .order('contato_id', { ascending: true })
-        .range(offset, offset + PAGE - 1);
+        .in('contato_id', slice);
       if (error) return; // preserva state anterior em caso de erro
-      const chunk = (data as any[]) ?? [];
-      all.push(...chunk);
-      if (chunk.length < PAGE) break;
-      offset += PAGE;
-      if (offset > 100000) break;
+      all.push(...((data as any[]) ?? []));
     }
     const map: Record<string, string[]> = {};
     const bloq: Record<string, Set<string>> = {};
@@ -252,9 +248,14 @@ export default function InboxMeta() {
         bloq[r.contato_id].add(r.etiqueta_id);
       }
     });
-    setContatoEtiquetas(map);
-    setEtiquetasBloqueadas(bloq);
+    setContatoEtiquetas(prev => ({ ...prev, ...map }));
+    setEtiquetasBloqueadas(prev => {
+      const next = { ...prev };
+      for (const id of ids) delete next[id];
+      return { ...next, ...bloq };
+    });
   }, []);
+
 
   // Aplica evento realtime incrementalmente para não zerar o state a cada mudança
   const applyEtiquetaEvent = useCallback((payload: any) => {
@@ -306,7 +307,7 @@ export default function InboxMeta() {
     setMsgRapidas((data as MetaMsgRapida[]) ?? []);
   }, [user]);
 
-  useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); fetchMsgRapidas(); }, [fetchEtiquetas, fetchContatoEtiquetas, fetchMsgRapidas]);
+  useEffect(() => { fetchEtiquetas(); fetchMsgRapidas(); }, [fetchEtiquetas, fetchMsgRapidas]);
 
   const fetchFolders = useCallback(async () => {
     if (!user) return;
@@ -383,18 +384,26 @@ export default function InboxMeta() {
   }, [etiquetasAtivas, nomesAtendenteCaixa]);
 
 
+  // Paginação da lista de conversas: lote inicial leve + "carregar mais"
+  const PAGE_CONTATOS = 300;
+  const contatoIdsRef = useRef<string[]>([]);
+  const [limiteContatos, setLimiteContatos] = useState(PAGE_CONTATOS);
 
+  const [carregandoMais, setCarregandoMais] = useState(false);
 
+  // Troca de caixa/instância/aba/busca volta ao primeiro lote
+  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId]);
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
     const selectCols = 'id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado, folder_id';
-    // Lista base: 2000 mais recentes (usa idx_meta_wa_contatos_arq_ult).
+    // Lista base paginada (usa idx_meta_wa_contatos_arq_ult).
     let q = supabase.from('meta_whatsapp_contatos')
       .select(selectCols)
       .eq('arquivado', abaAtiva === 'arquivados')
       .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
-      .limit(2000);
+      .limit(limiteContatos);
+
     if (filtroInstancia !== 'todas') q = q.eq('instancia_id', filtroInstancia);
     if (currentFolderId === null) q = q.is('folder_id', null);
     else q = q.eq('folder_id', currentFolderId);
@@ -437,7 +446,10 @@ export default function InboxMeta() {
     }
 
     setContatos(combinados);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId]);
+    contatoIdsRef.current = combinados.map(c => c.id);
+    // Etiquetas apenas dos contatos que entraram na lista
+    fetchContatoEtiquetas(contatoIdsRef.current);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -445,17 +457,29 @@ export default function InboxMeta() {
     return () => clearTimeout(t);
   }, [busca]);
 
+  useEffect(() => {
+    let ativo = true;
+    (async () => {
+      if (limiteContatos > PAGE_CONTATOS) setCarregandoMais(true);
+      await fetchContatos();
+      if (ativo) setCarregandoMais(false);
+    })();
+    return () => { ativo = false; };
+  }, [fetchContatos]); // eslint-disable-line react-hooks/exhaustive-deps
 
-
-  useEffect(() => { fetchContatos(); }, [fetchContatos]);
-
-  // Realtime + polling fallback
+  // Realtime (agrupado) — sem polling periódico
   useEffect(() => {
     if (!user) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const agendarRefetch = () => {
+      if (timer) return; // agrupa rajadas de eventos em uma única leitura
+      timer = setTimeout(() => { timer = null; fetchContatos(); }, 1500);
+    };
+    const contatosFilter = currentFolderId ? { filter: `folder_id=eq.${currentFolderId}` } : {};
     const channel = supabase
       .channel('meta-inbox-contatos')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contatos' }, () => {
-        fetchContatos();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contatos', ...contatosFilter }, () => {
+        agendarRefetch();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contato_etiquetas' }, (payload) => {
         applyEtiquetaEvent(payload);
@@ -464,17 +488,21 @@ export default function InboxMeta() {
         fetchEtiquetas();
       })
       .subscribe();
-    const poll = setInterval(() => { if (document.visibilityState === 'visible') fetchContatos(); }, 60000);
     const onVis = () => {
       if (!document.hidden) {
         fetchContatos();
-        // Reconcilia etiquetas caso algum evento realtime tenha sido perdido
-        fetchContatoEtiquetas();
+        // Reconcilia etiquetas dos contatos visíveis caso algum evento tenha sido perdido
+        fetchContatoEtiquetas(contatoIdsRef.current);
       }
     };
     document.addEventListener('visibilitychange', onVis);
-    return () => { supabase.removeChannel(channel); clearInterval(poll); document.removeEventListener('visibilitychange', onVis); };
-  }, [user, fetchContatos, fetchContatoEtiquetas, fetchEtiquetas, applyEtiquetaEvent]);
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [user, currentFolderId, fetchContatos, fetchContatoEtiquetas, fetchEtiquetas, applyEtiquetaEvent]);
+
 
   // ============== Mensagens ==============
   const fetchMensagens = useCallback(async (contato: MetaContato, loadMore = false) => {
@@ -1244,7 +1272,21 @@ export default function InboxMeta() {
                 </MetaConversaContextMenu>
               );
             })}
+            {contatos.length >= limiteContatos && (
+              <div className="p-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  disabled={carregandoMais}
+                  onClick={() => setLimiteContatos((n) => n + PAGE_CONTATOS)}
+                >
+                  {carregandoMais ? 'Carregando...' : 'Carregar mais conversas'}
+                </Button>
+              </div>
+            )}
             </div>
+
           </ScrollArea>
         </div>
 
