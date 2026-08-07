@@ -124,8 +124,26 @@ export default function AdminUsuarios() {
     },
   });
 
-  const ehIago = (nome: string) => /iago/i.test(nome || '');
-  const iagoExiste = (users ?? []).some((u) => ehIago(u.nome));
+  // O IAGO é identificado pelo usuário vinculado na config da IA.
+  // Fallback: nome que COMEÇA com "IAGO" (nunca "Thiago").
+  const { data: iagoCfg } = useQuery({
+    queryKey: ['iago-config-user'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('iago_config')
+        .select('id, user_id')
+        .order('created_at')
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const ehNomeIago = (nome: string) => /^\s*iago\b/i.test(nome || '');
+  const ehIago = (user: { id: string; nome: string }) =>
+    iagoCfg?.user_id ? user.id === iagoCfg.user_id : ehNomeIago(user.nome);
+  const iagoExiste = (users ?? []).some((u) => ehIago(u));
+
 
   // Filtrar usuários por nome ou email
   const filteredUsers = users?.filter(user =>
@@ -265,11 +283,22 @@ export default function AdminUsuarios() {
 
       if (response.error) throw response.error;
       if (!response.data.success) throw new Error(response.data.error);
-      
+
+      // Se for o IAGO, vincula o novo usuário à configuração da IA
+      if (ehNomeIago(nome) && response.data.userId) {
+        if (iagoCfg?.id) {
+          await supabase.from('iago_config').update({ user_id: response.data.userId }).eq('id', iagoCfg.id);
+        } else {
+          await supabase.from('iago_config').insert({ user_id: response.data.userId });
+        }
+      }
+
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['iago-config-user'] });
+
       toast({
         title: 'Usuário criado',
         description: 'O novo usuário foi criado com sucesso.',
@@ -528,7 +557,7 @@ export default function AdminUsuarios() {
                       <TableCell className="font-medium">
                         <span className="flex items-center gap-1.5">
                           {user.nome}
-                          {ehIago(user.nome) && (
+                          {ehIago(user) && (
                             <Badge variant="secondary" className="text-[10px] gap-1">
                               <Bot className="h-3 w-3" /> IA
                             </Badge>
@@ -592,7 +621,7 @@ export default function AdminUsuarios() {
                             >
                               Salvar
                             </Button>
-                            {ehIago(user.nome) && (
+                            {ehIago(user) && (
                               <Button
                                 size="sm"
                                 variant="secondary"
