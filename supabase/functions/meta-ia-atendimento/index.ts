@@ -301,7 +301,12 @@ Deno.serve(async (req) => {
       }).eq('id', estado.id);
     };
 
-    if (hora < (cfg.hora_inicio ?? 8) || hora >= (cfg.hora_fim ?? 20)) {
+    // Atendimento da IA 24h/7 dias: a janela de horário só bloqueia se for
+    // configurada explicitamente (hora_inicio > 0 ou hora_fim < 24).
+    const hIni = Number(cfg.hora_inicio ?? 0);
+    const hFim = Number(cfg.hora_fim ?? 24);
+    const janelaAtiva = hIni > 0 || hFim < 24;
+    if (janelaAtiva && (hora < hIni || hora >= hFim)) {
       if (estado.etapa === 'fora_horario') return json({ success: true, skipped: 'já avisou fora de horário' });
       await enviar(tpl('fora_horario'), 'fora_horario');
       return json({ success: true, etapa: 'fora_horario' });
