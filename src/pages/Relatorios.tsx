@@ -98,6 +98,34 @@ export default function Relatorios() {
     setMeta(Number((mRes.data as any)?.meta_valor ?? 0));
   }, [dataStr]);
 
+  // Alerta de coleta 3C parada (sem webhook nem sync nas últimas 2h em horário comercial)
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      const { data: cfg } = await supabase
+        .from('tresc_config' as any)
+        .select('ativo, ultimo_webhook_em, ultimo_sync')
+        .maybeSingle();
+      if (cancelado) return;
+      const c: any = cfg;
+      if (!c?.ativo) { setAlerta3c(null); return; }
+      const ts = [c.ultimo_webhook_em, c.ultimo_sync].filter(Boolean).map((v: string) => new Date(v).getTime());
+      const ultimo = ts.length ? Math.max(...ts) : 0;
+      const horaBrt = Number(
+        new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }),
+      );
+      const paradaHa = ultimo ? (Date.now() - ultimo) / 3600000 : 999;
+      if (horaBrt >= 8 && horaBrt <= 19 && paradaHa >= 2) {
+        setAlerta3c(
+          ultimo
+            ? new Date(ultimo).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+            : 'nunca',
+        );
+      } else setAlerta3c(null);
+    })();
+    return () => { cancelado = true; };
+  }, [dataStr]);
+
   const sincronizarAgora = async () => {
     setSincronizando(true);
     const { error } = await supabase.functions.invoke('relatorio-acionamentos-sync', {
