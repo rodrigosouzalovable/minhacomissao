@@ -546,7 +546,7 @@ export default function AdminUsuarios() {
                       <TableCell className="font-medium">
                         <span className="flex items-center gap-1.5">
                           {user.nome}
-                          {ehIago(user.nome) && (
+                          {ehIago(user) && (
                             <Badge variant="secondary" className="text-[10px] gap-1">
                               <Bot className="h-3 w-3" /> IA
                             </Badge>
@@ -610,7 +610,7 @@ export default function AdminUsuarios() {
                             >
                               Salvar
                             </Button>
-                            {ehIago(user.nome) && (
+                            {ehIago(user) && (
                               <Button
                                 size="sm"
                                 variant="secondary"
