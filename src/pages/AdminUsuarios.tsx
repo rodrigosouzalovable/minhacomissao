@@ -124,8 +124,26 @@ export default function AdminUsuarios() {
     },
   });
 
-  const ehIago = (nome: string) => /iago/i.test(nome || '');
-  const iagoExiste = (users ?? []).some((u) => ehIago(u.nome));
+  // O IAGO é identificado pelo usuário vinculado na config da IA.
+  // Fallback: nome que COMEÇA com "IAGO" (nunca "Thiago").
+  const { data: iagoCfg } = useQuery({
+    queryKey: ['iago-config-user'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('iago_config')
+        .select('id, user_id')
+        .order('created_at')
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const ehNomeIago = (nome: string) => /^\s*iago\b/i.test(nome || '');
+  const ehIago = (user: { id: string; nome: string }) =>
+    iagoCfg?.user_id ? user.id === iagoCfg.user_id : ehNomeIago(user.nome);
+  const iagoExiste = (users ?? []).some((u) => ehIago(u));
+
 
   // Filtrar usuários por nome ou email
   const filteredUsers = users?.filter(user =>
