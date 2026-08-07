@@ -444,7 +444,10 @@ export default function InboxMeta() {
     }
 
     setContatos(combinados);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId]);
+    contatoIdsRef.current = combinados.map(c => c.id);
+    // Etiquetas apenas dos contatos que entraram na lista
+    fetchContatoEtiquetas(contatoIdsRef.current);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -452,17 +455,29 @@ export default function InboxMeta() {
     return () => clearTimeout(t);
   }, [busca]);
 
+  useEffect(() => {
+    let ativo = true;
+    (async () => {
+      if (limiteContatos > PAGE_CONTATOS) setCarregandoMais(true);
+      await fetchContatos();
+      if (ativo) setCarregandoMais(false);
+    })();
+    return () => { ativo = false; };
+  }, [fetchContatos]); // eslint-disable-line react-hooks/exhaustive-deps
 
-
-  useEffect(() => { fetchContatos(); }, [fetchContatos]);
-
-  // Realtime + polling fallback
+  // Realtime (agrupado) — sem polling periódico
   useEffect(() => {
     if (!user) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const agendarRefetch = () => {
+      if (timer) return; // agrupa rajadas de eventos em uma única leitura
+      timer = setTimeout(() => { timer = null; fetchContatos(); }, 1500);
+    };
+    const contatosFilter = currentFolderId ? { filter: `folder_id=eq.${currentFolderId}` } : {};
     const channel = supabase
       .channel('meta-inbox-contatos')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contatos' }, () => {
-        fetchContatos();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contatos', ...contatosFilter }, () => {
+        agendarRefetch();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contato_etiquetas' }, (payload) => {
         applyEtiquetaEvent(payload);
@@ -471,17 +486,21 @@ export default function InboxMeta() {
         fetchEtiquetas();
       })
       .subscribe();
-    const poll = setInterval(() => { if (document.visibilityState === 'visible') fetchContatos(); }, 60000);
     const onVis = () => {
       if (!document.hidden) {
         fetchContatos();
-        // Reconcilia etiquetas caso algum evento realtime tenha sido perdido
-        fetchContatoEtiquetas();
+        // Reconcilia etiquetas dos contatos visíveis caso algum evento tenha sido perdido
+        fetchContatoEtiquetas(contatoIdsRef.current);
       }
     };
     document.addEventListener('visibilitychange', onVis);
-    return () => { supabase.removeChannel(channel); clearInterval(poll); document.removeEventListener('visibilitychange', onVis); };
-  }, [user, fetchContatos, fetchContatoEtiquetas, fetchEtiquetas, applyEtiquetaEvent]);
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [user, currentFolderId, fetchContatos, fetchContatoEtiquetas, fetchEtiquetas, applyEtiquetaEvent]);
+
 
   // ============== Mensagens ==============
   const fetchMensagens = useCallback(async (contato: MetaContato, loadMore = false) => {
