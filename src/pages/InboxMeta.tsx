@@ -307,7 +307,7 @@ export default function InboxMeta() {
     setMsgRapidas((data as MetaMsgRapida[]) ?? []);
   }, [user]);
 
-  useEffect(() => { fetchEtiquetas(); fetchContatoEtiquetas(); fetchMsgRapidas(); }, [fetchEtiquetas, fetchContatoEtiquetas, fetchMsgRapidas]);
+  useEffect(() => { fetchEtiquetas(); fetchMsgRapidas(); }, [fetchEtiquetas, fetchMsgRapidas]);
 
   const fetchFolders = useCallback(async () => {
     if (!user) return;
