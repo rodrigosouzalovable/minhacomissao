@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
           .eq("id", cfg?.id ?? "");
       }
 
-      if (lote.length < 500) break;
+      if (lote.length < perPage) break;
       if (page + 1 >= pageInicial + maxPaginas) proximaPagina = page + 1;
     }
 
