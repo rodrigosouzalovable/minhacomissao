@@ -386,7 +386,9 @@ export default function InboxMeta() {
 
   // Paginação da lista de conversas: lote inicial leve + "carregar mais"
   const PAGE_CONTATOS = 300;
+  const contatoIdsRef = useRef<string[]>([]);
   const [limiteContatos, setLimiteContatos] = useState(PAGE_CONTATOS);
+
   const [carregandoMais, setCarregandoMais] = useState(false);
 
   // Troca de caixa/instância/aba/busca volta ao primeiro lote
