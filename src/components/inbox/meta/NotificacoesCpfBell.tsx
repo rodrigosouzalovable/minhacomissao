@@ -188,7 +188,7 @@ export function NotificacoesCpfBell() {
   useEffect(() => {
     if (!open || !user?.id || loadingRole || !dirty) return;
     setDirty(false);
-    fetchNotificacoes();
+    fetchNotificacoes(); fetchNaoLidas();
     fetchStats();
   }, [open, dirty, user?.id, loadingRole, fetchNotificacoes, fetchStats]);
 
@@ -214,7 +214,7 @@ export function NotificacoesCpfBell() {
       .from("consulta_cpf_notificacoes" as any)
       .update({ lida_em: new Date().toISOString() })
       .eq("id", id);
-    fetchNotificacoes();
+    fetchNotificacoes(); fetchNaoLidas();
   };
 
   const marcarTodasLidas = async () => {
@@ -225,7 +225,7 @@ export function NotificacoesCpfBell() {
       .is("lida_em", null);
     if (!isAdmin) q = q.eq("assigned_user_id", user.id);
     await q;
-    fetchNotificacoes();
+    fetchNotificacoes(); fetchNaoLidas();
   };
 
   const copiarCpf = async (n: Notificacao) => {
@@ -241,7 +241,7 @@ export function NotificacoesCpfBell() {
         .from("consulta_cpf_notificacoes" as any)
         .update({ cpf_copiado_em: new Date().toISOString() })
         .eq("id", n.id);
-      fetchNotificacoes();
+      fetchNotificacoes(); fetchNaoLidas();
     }
   };
 
