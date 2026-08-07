@@ -365,6 +365,12 @@ export default function Relatorios() {
           </div>
         </div>
 
+        {alerta3c && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Coleta da 3C Plus sem dados desde {alerta3c} — as ligações podem estar zeradas no relatório.
+          </div>
+        )}
+
         {/* Funil consolidado */}
         <FunilAcionamentosCard
           dataFmt={format(data, 'dd/MM/yyyy')}
