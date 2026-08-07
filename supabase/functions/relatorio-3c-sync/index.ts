@@ -216,8 +216,26 @@ Deno.serve(async (req) => {
         .eq("id", cfg?.id ?? "");
     }
 
+    // Se sobraram páginas, continua em outra invocação (evita estourar o tempo)
+    if (proximaPagina) {
+      const cont = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/relatorio-3c-sync`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({
+          action: "sync", dia, page_inicial: proximaPagina, per_page: perPage,
+          orcamento_ms: orcamentoMs, notificar: body.notificar === true,
+          recalcular: body.recalcular !== false,
+        }),
+      }).then((r) => console.log(`continuação pág.${proximaPagina}: ${r.status}`))
+        .catch((e) => console.error("continuação falhou:", e));
+      try { (globalThis as any).EdgeRuntime?.waitUntil?.(cont); } catch (_) { /* noop */ }
+    }
+
     // Recalcula o relatório em segundo plano (não bloqueia a resposta)
-    if (body.recalcular !== false) {
+    if (body.recalcular !== false && !proximaPagina) {
       const tarefa = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/relatorio-acionamentos-sync`, {
         method: "POST",
         headers: {
