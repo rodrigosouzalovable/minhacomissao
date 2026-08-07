@@ -222,25 +222,21 @@ export default function InboxMeta() {
   }, [user]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
-  const fetchContatoEtiquetas = useCallback(async () => {
-    // Paginação obrigatória — a tabela já passa de 1000 vínculos e o
-    // PostgREST trunca silenciosamente. Sem isso, etiquetas "somem" aleatoriamente.
-    const PAGE = 1000;
-    let offset = 0;
+  // Busca vínculos de etiqueta SOMENTE dos contatos exibidos na tela.
+  // Antes fazia varredura completa da tabela em cada carregamento/foco.
+  const fetchContatoEtiquetas = useCallback(async (contatoIds?: string[]) => {
+    const ids = (contatoIds ?? []).filter(Boolean);
+    if (ids.length === 0) return;
+    const CHUNK = 200;
     const all: Array<{ contato_id: string; etiqueta_id: string; origem: string | null }> = [];
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
       const { data, error } = await supabase
         .from('meta_whatsapp_contato_etiquetas')
         .select('contato_id, etiqueta_id, origem')
-        .order('contato_id', { ascending: true })
-        .range(offset, offset + PAGE - 1);
+        .in('contato_id', slice);
       if (error) return; // preserva state anterior em caso de erro
-      const chunk = (data as any[]) ?? [];
-      all.push(...chunk);
-      if (chunk.length < PAGE) break;
-      offset += PAGE;
-      if (offset > 100000) break;
+      all.push(...((data as any[]) ?? []));
     }
     const map: Record<string, string[]> = {};
     const bloq: Record<string, Set<string>> = {};
@@ -252,9 +248,14 @@ export default function InboxMeta() {
         bloq[r.contato_id].add(r.etiqueta_id);
       }
     });
-    setContatoEtiquetas(map);
-    setEtiquetasBloqueadas(bloq);
+    setContatoEtiquetas(prev => ({ ...prev, ...map }));
+    setEtiquetasBloqueadas(prev => {
+      const next = { ...prev };
+      for (const id of ids) delete next[id];
+      return { ...next, ...bloq };
+    });
   }, []);
+
 
   // Aplica evento realtime incrementalmente para não zerar o state a cada mudança
   const applyEtiquetaEvent = useCallback((payload: any) => {
