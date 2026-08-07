@@ -384,18 +384,24 @@ export default function InboxMeta() {
   }, [etiquetasAtivas, nomesAtendenteCaixa]);
 
 
+  // Paginação da lista de conversas: lote inicial leve + "carregar mais"
+  const PAGE_CONTATOS = 300;
+  const [limiteContatos, setLimiteContatos] = useState(PAGE_CONTATOS);
+  const [carregandoMais, setCarregandoMais] = useState(false);
 
-
+  // Troca de caixa/instância/aba/busca volta ao primeiro lote
+  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId]);
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
     const selectCols = 'id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado, folder_id';
-    // Lista base: 2000 mais recentes (usa idx_meta_wa_contatos_arq_ult).
+    // Lista base paginada (usa idx_meta_wa_contatos_arq_ult).
     let q = supabase.from('meta_whatsapp_contatos')
       .select(selectCols)
       .eq('arquivado', abaAtiva === 'arquivados')
       .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
-      .limit(2000);
+      .limit(limiteContatos);
+
     if (filtroInstancia !== 'todas') q = q.eq('instancia_id', filtroInstancia);
     if (currentFolderId === null) q = q.is('folder_id', null);
     else q = q.eq('folder_id', currentFolderId);
