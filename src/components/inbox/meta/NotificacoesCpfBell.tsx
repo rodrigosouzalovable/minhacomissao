@@ -239,22 +239,36 @@ export function NotificacoesCpfBell() {
   };
 
   const [exportando, setExportando] = useState(false);
+  const [exportProgresso, setExportProgresso] = useState(0);
   const baixarExcel = async () => {
     if (!user?.id) return;
     setExportando(true);
+    setExportProgresso(0);
     try {
-      let query = supabase
-        .from("consulta_cpf_notificacoes" as any)
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (!isAdmin) query = query.eq("assigned_user_id", user.id);
-      const { data, error } = await query;
-      if (error) throw error;
-      const rows = ((data as any) || []) as Notificacao[];
+      const PAGE = 1000;
+      const rows: Notificacao[] = [];
+      let from = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        let query = supabase
+          .from("consulta_cpf_notificacoes" as any)
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (!isAdmin) query = query.eq("assigned_user_id", user.id);
+        const { data, error } = await query;
+        if (error) throw error;
+        const pagina = ((data as any) || []) as Notificacao[];
+        rows.push(...pagina);
+        setExportProgresso(rows.length);
+        if (pagina.length < PAGE) break;
+        from += PAGE;
+      }
       if (rows.length === 0) {
         toast.info("Nenhuma consulta para exportar");
         return;
       }
+
 
       let nomeMap: Record<string, string> = { ...nomesUsuarios };
       if (isAdmin) {
