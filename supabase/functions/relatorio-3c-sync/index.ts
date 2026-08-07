@@ -53,8 +53,19 @@ async function tresc(base: string, token: string, path: string, params: Record<s
   const url = new URL(`${base.replace(/\/+$/, "")}${path}`);
   url.searchParams.set("api_token", token);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  const res = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+  const t0 = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(25_000),
+    });
+  } catch (e) {
+    console.error(`3C ${path} sem resposta após ${Date.now() - t0}ms:`, e);
+    throw new Error(`3C ${path}: sem resposta em ${Math.round((Date.now() - t0) / 1000)}s (timeout da API 3C)`);
+  }
   const body = await res.text();
+  console.log(`3C ${path} [${res.status}] em ${Date.now() - t0}ms (${body.length} bytes)`);
   if (!res.ok) {
     console.error(`3C ${path} falhou [${res.status}]: ${body.slice(0, 500)}`);
     throw new Error(`3C ${path} [${res.status}]: ${body.slice(0, 300)}`);
