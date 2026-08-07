@@ -70,6 +70,7 @@ export default function Relatorios() {
   const cooldownRef = useRef<Record<string, number>>({});
   const [syncEm, setSyncEm] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
+  const [alerta3c, setAlerta3c] = useState<string | null>(null);
 
   const dataStr = toDateStr(data);
 
