@@ -130,16 +130,8 @@ Deno.serve(async (req) => {
     const campanhas: number[] = Array.isArray(cfg?.campanhas) ? cfg!.campanhas as number[] : [];
     if (campanhas.length > 0) params.campaign_ids = campanhas.join(",");
 
-    const registros: any[] = [];
-    for (let page = 1; page <= 40; page++) {
-      const json = await tresc(base, token, "/calls", { ...params, page: String(page) });
-      const lote = json?.data || [];
-      registros.push(...lote);
-      if (lote.length < 500) break;
-    }
-
     const val = (v: any) => (v && v !== "-" && v !== "null" ? v : null);
-    const linhas = registros.map((c: any) => {
+    const mapear = (c: any) => {
       const dt = c.call_date_rfc3339 ? new Date(c.call_date_rfc3339) : new Date(String(c.call_date).replace(" ", "T") + "-03:00");
       const p = brtParts(dt);
       const numero = String(c.number ?? c.phone ?? "");
@@ -160,40 +152,84 @@ Deno.serve(async (req) => {
         modo: val(c.mode) ?? val(c.call_mode),
         call_date: dt.toISOString(),
       };
-    });
+    };
 
+    // Orçamento de tempo: grava por página e retoma na próxima chamada
+    const inicio = Date.now();
+    const orcamentoMs = Number(body.orcamento_ms ?? 50_000);
+    const pageInicial = Math.max(1, Number(body.page_inicial ?? 1));
+    const maxPaginas = Math.max(1, Number(body.max_paginas ?? 40));
 
-    if (linhas.length > 0) {
-      for (let i = 0; i < linhas.length; i += 500) {
+    let totalGravado = 0;
+    let paginasLidas = 0;
+    let proximaPagina: number | null = null;
+    const porHoraAcc = new Map<string, { ligacoes: number; atendidas: number }>();
+
+    for (let page = pageInicial; page < pageInicial + maxPaginas; page++) {
+      if (Date.now() - inicio > orcamentoMs) { proximaPagina = page; break; }
+
+      const json = await tresc(base, token, "/calls", { ...params, page: String(page) });
+      const lote = json?.data || [];
+      paginasLidas++;
+      console.log(`3C sync ${dia} pág.${page}: ${lote.length} ligações`);
+
+      if (lote.length > 0) {
+        const linhas = lote.map(mapear);
         const { error } = await supabase
           .from("tresc_ligacoes")
-          .upsert(linhas.slice(i, i + 500), { onConflict: "call_id" });
+          .upsert(linhas, { onConflict: "call_id" });
         if (error) throw error;
+        totalGravado += linhas.length;
+
+        for (const l of linhas) {
+          const acc = porHoraAcc.get(l.hora) ?? { ligacoes: 0, atendidas: 0 };
+          acc.ligacoes++;
+          if (l.atendida) acc.atendidas++;
+          porHoraAcc.set(l.hora, acc);
+        }
+
+        await supabase.from("tresc_config")
+          .update({ ultimo_sync: new Date().toISOString() })
+          .eq("id", cfg?.id ?? "");
       }
+
+      if (lote.length < 500) break;
+      if (page + 1 >= pageInicial + maxPaginas) proximaPagina = page + 1;
     }
 
-    await supabase.from("tresc_config").update({ ultimo_sync: new Date().toISOString() }).eq("id", cfg?.id ?? "");
+    // Marca o sync mesmo quando o dia não tem ligações
+    if (totalGravado === 0) {
+      await supabase.from("tresc_config")
+        .update({ ultimo_sync: new Date().toISOString() })
+        .eq("id", cfg?.id ?? "");
+    }
 
-    // Repassa para o consolidador de relatório (soma WhatsApp + ligações)
-    let repasse: any = { skipped: true };
+    // Recalcula o relatório em segundo plano (não bloqueia a resposta)
     if (body.recalcular !== false) {
-      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/relatorio-acionamentos-sync`, {
+      const tarefa = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/relatorio-acionamentos-sync`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         },
         body: JSON.stringify({ dia, notificar: body.notificar === true }),
-      });
-      repasse = { status: res.status, body: (await res.text()).slice(0, 500) };
+      }).then((r) => console.log(`repasse relatorio-acionamentos-sync: ${r.status}`))
+        .catch((e) => console.error("repasse falhou:", e));
+      try { (globalThis as any).EdgeRuntime?.waitUntil?.(tarefa); } catch (_) { /* noop */ }
     }
 
-    const porHora = HORAS.map((h) => {
-      const ls = linhas.filter((l) => l.hora === h);
-      return { hora: h, ligacoes: ls.length, atendidas: ls.filter((l) => l.atendida).length };
-    });
+    const porHora = HORAS.map((h) => ({
+      hora: h,
+      ligacoes: porHoraAcc.get(h)?.ligacoes ?? 0,
+      atendidas: porHoraAcc.get(h)?.atendidas ?? 0,
+    }));
 
-    return new Response(JSON.stringify({ ok: true, dia, total: linhas.length, porHora, repasse }), {
+    console.log(`3C sync ${dia} concluído: ${totalGravado} gravadas em ${paginasLidas} páginas (próxima: ${proximaPagina ?? "-"})`);
+
+    return new Response(JSON.stringify({
+      ok: true, dia, total: totalGravado, paginas: paginasLidas,
+      proxima_pagina: proximaPagina, porHora,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
