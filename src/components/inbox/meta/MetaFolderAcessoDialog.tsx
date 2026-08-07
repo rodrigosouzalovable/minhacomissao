@@ -29,11 +29,16 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
   const [saving, setSaving] = useState(false);
 
   const loadFila = useCallback(async () => {
-    const { data } = await (supabase as any)
-      .from('meta_atendimento_fila')
-      .select('user_id')
-      .eq('ativo', true);
-    setNaFila(new Set(((data as any[]) ?? []).map((r) => r.user_id).filter(Boolean)));
+    const [{ data }, { data: perms }] = await Promise.all([
+      (supabase as any).from('meta_atendimento_fila').select('user_id').eq('ativo', true),
+      (supabase as any).from('user_permissions').select('user_id, atende_inbox_meta'),
+    ]);
+    const fila = new Set(((data as any[]) ?? []).map((r) => r.user_id).filter(Boolean));
+    const bloqueados = new Set(
+      ((perms as any[]) ?? []).filter((p) => p.atende_inbox_meta === false).map((p) => p.user_id)
+    );
+    // "Na fila" exige registro ativo E permissão de atendimento no Inbox Meta
+    setNaFila(new Set([...fila].filter((id) => !bloqueados.has(id as string))) as Set<string>);
   }, []);
 
   const load = useCallback(async () => {
