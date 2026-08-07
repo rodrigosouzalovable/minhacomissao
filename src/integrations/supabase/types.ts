@@ -7334,6 +7334,14 @@ export type Database = {
         }
         Returns: Json
       }
+      consulta_cpf_nao_lidas: { Args: never; Returns: number }
+      consulta_cpf_stats_7d: {
+        Args: never
+        Returns: {
+          dia: string
+          total: number
+        }[]
+      }
       consultar_acordo_ativo_por_cpf: {
         Args: { p_cpf: string }
         Returns: {
