@@ -70,6 +70,7 @@ export default function Relatorios() {
   const cooldownRef = useRef<Record<string, number>>({});
   const [syncEm, setSyncEm] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
+  const [alerta3c, setAlerta3c] = useState<string | null>(null);
 
   const dataStr = toDateStr(data);
 
@@ -95,6 +96,34 @@ export default function Relatorios() {
     setSyncEm(syncs.length ? syncs.sort().slice(-1)[0] : null);
     setLinhas(map);
     setMeta(Number((mRes.data as any)?.meta_valor ?? 0));
+  }, [dataStr]);
+
+  // Alerta de coleta 3C parada (sem webhook nem sync nas últimas 2h em horário comercial)
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      const { data: cfg } = await supabase
+        .from('tresc_config' as any)
+        .select('ativo, ultimo_webhook_em, ultimo_sync')
+        .maybeSingle();
+      if (cancelado) return;
+      const c: any = cfg;
+      if (!c?.ativo) { setAlerta3c(null); return; }
+      const ts = [c.ultimo_webhook_em, c.ultimo_sync].filter(Boolean).map((v: string) => new Date(v).getTime());
+      const ultimo = ts.length ? Math.max(...ts) : 0;
+      const horaBrt = Number(
+        new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }),
+      );
+      const paradaHa = ultimo ? (Date.now() - ultimo) / 3600000 : 999;
+      if (horaBrt >= 8 && horaBrt <= 19 && paradaHa >= 2) {
+        setAlerta3c(
+          ultimo
+            ? new Date(ultimo).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+            : 'nunca',
+        );
+      } else setAlerta3c(null);
+    })();
+    return () => { cancelado = true; };
   }, [dataStr]);
 
   const sincronizarAgora = async () => {
@@ -335,6 +364,12 @@ export default function Relatorios() {
             )}
           </div>
         </div>
+
+        {alerta3c && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Coleta da 3C Plus sem dados desde {alerta3c} — as ligações podem estar zeradas no relatório.
+          </div>
+        )}
 
         {/* Funil consolidado */}
         <FunilAcionamentosCard
