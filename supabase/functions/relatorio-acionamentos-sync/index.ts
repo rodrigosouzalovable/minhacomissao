@@ -306,6 +306,28 @@ Deno.serve(async (req) => {
     const cpcPortal = linhas.reduce((s, l) => s + l.cpcPortal, 0);
 
 
+    // Alerta de coleta 3C parada (webhook e sync sem dados recentes)
+    let alerta3c: string | null = null;
+    {
+      const { data: cfg3c } = await supabase
+        .from("tresc_config")
+        .select("ativo, ultimo_webhook_em, ultimo_sync")
+        .maybeSingle();
+      if (cfg3c?.ativo && dia === agora.dia) {
+        const ts = [cfg3c.ultimo_webhook_em, cfg3c.ultimo_sync]
+          .filter(Boolean)
+          .map((v: any) => new Date(v).getTime());
+        const ultimo = ts.length ? Math.max(...ts) : 0;
+        const horas = ultimo ? (Date.now() - ultimo) / 3600000 : 999;
+        if (agora.hora >= HORA_INICIO && agora.hora <= 19 && horas >= 2) {
+          const quando = ultimo
+            ? new Date(ultimo).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+            : "nunca";
+          alerta3c = `⚠️ _Coleta 3C sem dados desde ${quando}_`;
+        }
+      }
+    }
+
     let enviado: any = { skipped: true };
     if (notificar) {
       const [a, m, d] = dia.split("-");
@@ -314,26 +336,57 @@ Deno.serve(async (req) => {
         ? `📊 *RELATÓRIO CONSOLIDADO — ${dataFmt}*`
         : `📊 *PARCIAL ${dataFmt} — ${String(agora.hora).padStart(2, "0")}h*`;
 
-      const linhasMsg = [
-        titulo,
-        "",
-        `📣 Acionamentos: *${tot.tentativas}*`,
-        `💬 WhatsApp (Meta): *${tot.whatsapp}*`,
-        `📞 Ligações (3C): *${totLigacoes}*  | Alô: *${tot.alo}* (${pct(tot.alo, totLigacoes)})`,
-        `🗣️ Interações/CPC: *${tot.cpc}*  (${pct(tot.cpc, tot.tentativas)})`,
-        `   ↳ WhatsApp: ${cpcWhats} • Ligação: ${cpcLig} • Portal: ${cpcPortal}`,
-        `🤝 CPC-A: *${tot.cpca}*  (${pct(tot.cpca, tot.cpc)})`,
+      // Ratificação de ocorrências em CPC (por origem, maior → menor)
+      const ocorrencias = [
+        { nome: "WhatsApp", volume: cpcWhats },
+        { nome: "Portal de negociação", volume: cpcPortal },
+        { nome: "Ligação (3C)", volume: cpcLig },
+      ].sort((x, y) => y.volume - x.volume);
 
-        `📄 Acordos lançados: *${totalAcordos}*`,
-        `💵 Valor em acordos: *${brl(valorAcordos || tot.valor)}*`,
-        "",
-        "*Por hora (acion. / CPC / CPC-A):*",
-        ...(finais || [])
-          .slice()
-          .sort((x: any, y: any) => HORAS.indexOf(x.hora) - HORAS.indexOf(y.hora))
-          .filter((r: any) => (r.tentativas || 0) + (r.cpc || 0) > 0)
-          .map((r: any) => `• ${r.hora}: ${r.tentativas || 0} / ${r.cpc || 0} / ${r.cpca || 0}`),
-      ];
+      const linhasMsg = consolidado
+        ? [
+            titulo,
+            "",
+            `📣 Volume Total Acionado: *${tot.tentativas}*  (100%)`,
+            `   ↳ WhatsApp (Meta): ${tot.whatsapp} • Ligações (3C): ${totLigacoes} (Alô: ${tot.alo})`,
+            "",
+            `🗣️ CPC: *${tot.cpc}*  (${pct(tot.cpc, tot.tentativas)} do acionado)`,
+            `🤝 CPC-A: *${tot.cpca}*  (${pct(tot.cpca, tot.cpc)} do CPC)`,
+            "",
+            "*📋 Ratificação de ocorrências em CPC:*",
+            ...ocorrencias.map((o, i) => `  ${i + 1}. ${o.nome} — ${o.volume}`),
+            "",
+            `📄 Acordos lançados: *${totalAcordos}*`,
+            `💵 Valor em acordos: *${brl(valorAcordos || tot.valor)}*`,
+            ...(alerta3c ? ["", alerta3c] : []),
+            "",
+            "*Por hora (acion. / CPC / CPC-A):*",
+            ...(finais || [])
+              .slice()
+              .sort((x: any, y: any) => HORAS.indexOf(x.hora) - HORAS.indexOf(y.hora))
+              .filter((r: any) => (r.tentativas || 0) + (r.cpc || 0) > 0)
+              .map((r: any) => `• ${r.hora}: ${r.tentativas || 0} / ${r.cpc || 0} / ${r.cpca || 0}`),
+          ]
+        : [
+            titulo,
+            "",
+            `📣 Acionamentos: *${tot.tentativas}*`,
+            `💬 WhatsApp (Meta): *${tot.whatsapp}*`,
+            `📞 Ligações (3C): *${totLigacoes}*  | Alô: *${tot.alo}* (${pct(tot.alo, totLigacoes)})`,
+            `🗣️ Interações/CPC: *${tot.cpc}*  (${pct(tot.cpc, tot.tentativas)})`,
+            `   ↳ WhatsApp: ${cpcWhats} • Ligação: ${cpcLig} • Portal: ${cpcPortal}`,
+            `🤝 CPC-A: *${tot.cpca}*  (${pct(tot.cpca, tot.cpc)})`,
+            `📄 Acordos lançados: *${totalAcordos}*`,
+            `💵 Valor em acordos: *${brl(valorAcordos || tot.valor)}*`,
+            ...(alerta3c ? ["", alerta3c] : []),
+            "",
+            "*Por hora (acion. / CPC / CPC-A):*",
+            ...(finais || [])
+              .slice()
+              .sort((x: any, y: any) => HORAS.indexOf(x.hora) - HORAS.indexOf(y.hora))
+              .filter((r: any) => (r.tentativas || 0) + (r.cpc || 0) > 0)
+              .map((r: any) => `• ${r.hora}: ${r.tentativas || 0} / ${r.cpc || 0} / ${r.cpca || 0}`),
+          ];
 
       const chave = consolidado
         ? `relat-acion-consol-${dia}`
