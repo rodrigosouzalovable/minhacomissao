@@ -283,11 +283,22 @@ export default function AdminUsuarios() {
 
       if (response.error) throw response.error;
       if (!response.data.success) throw new Error(response.data.error);
-      
+
+      // Se for o IAGO, vincula o novo usuário à configuração da IA
+      if (ehNomeIago(nome) && response.data.userId) {
+        if (iagoCfg?.id) {
+          await supabase.from('iago_config').update({ user_id: response.data.userId }).eq('id', iagoCfg.id);
+        } else {
+          await supabase.from('iago_config').insert({ user_id: response.data.userId });
+        }
+      }
+
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['iago-config-user'] });
+
       toast({
         title: 'Usuário criado',
         description: 'O novo usuário foi criado com sucesso.',
