@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Bell, Check, CheckCheck, Copy, Download } from "lucide-react";
 import { exportarParaExcel } from "@/lib/exportExcel";
 import { Button } from "@/components/ui/button";
