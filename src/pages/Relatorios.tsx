@@ -367,7 +367,7 @@ export default function Relatorios() {
 
         {alerta3c && (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            Coleta da 3C Plus sem dados desde {alerta3c} — as ligações podem estar zeradas no relatório.
+            Coleta da 3C Plus sem novidades — as ligações podem estar zeradas no relatório. {alerta3c}
           </div>
         )}
 
