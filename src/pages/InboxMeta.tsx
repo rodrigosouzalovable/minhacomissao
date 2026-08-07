@@ -1272,7 +1272,21 @@ export default function InboxMeta() {
                 </MetaConversaContextMenu>
               );
             })}
+            {contatos.length >= limiteContatos && (
+              <div className="p-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  disabled={carregandoMais}
+                  onClick={() => setLimiteContatos((n) => n + PAGE_CONTATOS)}
+                >
+                  {carregandoMais ? 'Carregando...' : 'Carregar mais conversas'}
+                </Button>
+              </div>
+            )}
             </div>
+
           </ScrollArea>
         </div>
 
