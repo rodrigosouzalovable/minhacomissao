@@ -361,7 +361,10 @@ export function NotificacoesCpfBell() {
               title="Baixar todas as consultas em Excel"
             >
               <Download className="h-3.5 w-3.5 mr-1" />
-              {exportando ? "Baixando..." : "Excel"}
+              {exportando
+                ? `Baixando...${exportProgresso ? ` ${exportProgresso.toLocaleString("pt-BR")}` : ""}`
+                : "Excel"}
+
             </Button>
             {naoLidas > 0 && (
               <Button
