@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     const agora = brtParts(new Date());
     const dia: string = body.dia || agora.dia;
 
-    const perPage = Math.min(500, Math.max(10, Number(body.per_page ?? 200)));
+    const perPage = Math.min(500, Math.max(10, Number(body.per_page ?? 500)));
     const params: Record<string, string> = {
       start_date: `${dia} 00:00:00`,
       end_date: `${dia} 23:59:59`,
