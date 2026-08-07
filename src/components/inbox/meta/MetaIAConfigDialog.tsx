@@ -228,15 +228,19 @@ export default function MetaIAConfigDialog({ open, onOpenChange }: Props) {
                           onChange={(e) => setCfg({ ...cfg, parcela_minima: Number(e.target.value) })} />
                       </div>
                       <div>
-                        <Label className="text-xs">Hora início</Label>
+                        <Label className="text-xs">Hora início (0 = 24h)</Label>
                         <Input type="number" min={0} max={23} value={cfg.hora_inicio}
                           onChange={(e) => setCfg({ ...cfg, hora_inicio: Number(e.target.value) })} />
                       </div>
                       <div>
-                        <Label className="text-xs">Hora fim</Label>
+                        <Label className="text-xs">Hora fim (24 = 24h)</Label>
                         <Input type="number" min={1} max={24} value={cfg.hora_fim}
                           onChange={(e) => setCfg({ ...cfg, hora_fim: Number(e.target.value) })} />
                       </div>
+                      <div className="col-span-2 text-xs text-muted-foreground">
+                        Com 0 e 24 a IA atende 24h por dia, 7 dias por semana (configuração atual).
+                      </div>
+
                       <div>
                         <Label className="text-xs">Limite de mensagens por conversa/dia</Label>
                         <Input type="number" min={1} max={100} value={cfg.limite_msgs_dia}
