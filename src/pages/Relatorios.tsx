@@ -109,6 +109,8 @@ export default function Relatorios() {
       if (cancelado) return;
       const c: any = cfg;
       if (!c?.ativo) { setAlerta3c(null); return; }
+      const fmtTs = (v?: string | null) =>
+        v ? new Date(v).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : 'nunca';
       const ts = [c.ultimo_webhook_em, c.ultimo_sync].filter(Boolean).map((v: string) => new Date(v).getTime());
       const ultimo = ts.length ? Math.max(...ts) : 0;
       const horaBrt = Number(
@@ -117,9 +119,7 @@ export default function Relatorios() {
       const paradaHa = ultimo ? (Date.now() - ultimo) / 3600000 : 999;
       if (horaBrt >= 8 && horaBrt <= 19 && paradaHa >= 2) {
         setAlerta3c(
-          ultimo
-            ? new Date(ultimo).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-            : 'nunca',
+          `Último webhook: ${fmtTs(c.ultimo_webhook_em)} · Última coleta: ${fmtTs(c.ultimo_sync)}`,
         );
       } else setAlerta3c(null);
     })();
