@@ -70,10 +70,11 @@ export async function perfilIago(supabase: any, cfg: any) {
   const { data } = await supabase
     .from('profiles')
     .select('id, nome')
-    .ilike('nome', '%iago%')
+    .ilike('nome', 'iago%')
     .order('criado_em')
     .limit(1)
     .maybeSingle();
+
   return data;
 }
 
