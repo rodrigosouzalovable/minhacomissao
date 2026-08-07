@@ -2312,6 +2312,156 @@ export type Database = {
         }
         Relationships: []
       }
+      iago_config: {
+        Row: {
+          aprendizado_auto: boolean
+          assina_nome: boolean
+          ativo: boolean
+          created_at: string
+          delay_digitacao_seg: number
+          followup_ativo: boolean
+          followup_hora_fim: number
+          followup_hora_inicio: number
+          followup_horas: number
+          followup_texto: string
+          id: string
+          instrucoes_gerais: string
+          limite_msgs_dia: number
+          persona_nome: string
+          tom: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          aprendizado_auto?: boolean
+          assina_nome?: boolean
+          ativo?: boolean
+          created_at?: string
+          delay_digitacao_seg?: number
+          followup_ativo?: boolean
+          followup_hora_fim?: number
+          followup_hora_inicio?: number
+          followup_horas?: number
+          followup_texto?: string
+          id?: string
+          instrucoes_gerais?: string
+          limite_msgs_dia?: number
+          persona_nome?: string
+          tom?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          aprendizado_auto?: boolean
+          assina_nome?: boolean
+          ativo?: boolean
+          created_at?: string
+          delay_digitacao_seg?: number
+          followup_ativo?: boolean
+          followup_hora_fim?: number
+          followup_hora_inicio?: number
+          followup_horas?: number
+          followup_texto?: string
+          id?: string
+          instrucoes_gerais?: string
+          limite_msgs_dia?: number
+          persona_nome?: string
+          tom?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      iago_conhecimento: {
+        Row: {
+          ativo: boolean
+          conteudo: string
+          created_at: string
+          gatilho: string | null
+          id: string
+          origem: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo: string
+          created_at?: string
+          gatilho?: string | null
+          id?: string
+          origem?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          conteudo?: string
+          created_at?: string
+          gatilho?: string | null
+          id?: string
+          origem?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      iago_conversa_estado: {
+        Row: {
+          aguardando_humano: boolean
+          contato_id: string
+          contexto: Json
+          cpf: string | null
+          created_at: string
+          etapa: string
+          followup_em: string | null
+          followup_feito: boolean
+          id: string
+          msgs_dia: string | null
+          msgs_hoje: number
+          optout: boolean
+          telefone: string
+          ultima_msg_cliente_em: string | null
+          ultima_msg_em: string | null
+          updated_at: string
+        }
+        Insert: {
+          aguardando_humano?: boolean
+          contato_id: string
+          contexto?: Json
+          cpf?: string | null
+          created_at?: string
+          etapa?: string
+          followup_em?: string | null
+          followup_feito?: boolean
+          id?: string
+          msgs_dia?: string | null
+          msgs_hoje?: number
+          optout?: boolean
+          telefone?: string
+          ultima_msg_cliente_em?: string | null
+          ultima_msg_em?: string | null
+          updated_at?: string
+        }
+        Update: {
+          aguardando_humano?: boolean
+          contato_id?: string
+          contexto?: Json
+          cpf?: string | null
+          created_at?: string
+          etapa?: string
+          followup_em?: string | null
+          followup_feito?: boolean
+          id?: string
+          msgs_dia?: string | null
+          msgs_hoje?: number
+          optout?: boolean
+          telefone?: string
+          ultima_msg_cliente_em?: string | null
+          ultima_msg_em?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       importacao_jobs: {
         Row: {
           atualizado_em: string

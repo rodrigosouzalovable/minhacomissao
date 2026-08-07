@@ -23,7 +23,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff, Settings2, Trash2, ArrowLeftRight } from 'lucide-react';
+import { Users, Shield, UserCheck, KeyRound, DollarSign, Search, MessageCircle, UserPlus, Eye, EyeOff, Settings2, Trash2, ArrowLeftRight, Bot } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { ResetPasswordDialog } from '@/components/ResetPasswordDialog';
@@ -31,6 +31,7 @@ import type { Database } from '@/integrations/supabase/types';
 import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
 import { WhatsAppLembreteConfigDialog } from '@/components/WhatsAppLembreteConfigDialog';
 import { TransferAcordosDialog } from '@/components/TransferAcordosDialog';
+import { IagoConfigDialog } from '@/components/admin/IagoConfigDialog';
 import { useAuth } from '@/hooks/useAuth';
 import {
   AlertDialog,
@@ -79,6 +80,7 @@ export default function AdminUsuarios() {
   const [deleteUser, setDeleteUser] = useState<UserWithRole | null>(null);
   const [whatsappConfigUser, setWhatsappConfigUser] = useState<UserWithRole | null>(null);
   const [transferUser, setTransferUser] = useState<UserWithRole | null>(null);
+  const [iagoUser, setIagoUser] = useState<UserWithRole | null>(null);
   
   // Estados para criação de novo usuário
   const [newUserNome, setNewUserNome] = useState('');
@@ -121,6 +123,9 @@ export default function AdminUsuarios() {
       return usersWithRoles;
     },
   });
+
+  const ehIago = (nome: string) => /iago/i.test(nome || '');
+  const iagoExiste = (users ?? []).some((u) => ehIago(u.nome));
 
   // Filtrar usuários por nome ou email
   const filteredUsers = users?.filter(user =>
@@ -381,9 +386,31 @@ export default function AdminUsuarios() {
         {/* Criar Novo Usuário */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5" />
-              Criar Novo Usuário
+            <CardTitle className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5" />
+                Criar Novo Usuário
+              </span>
+              {!iagoExiste && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setNewUserNome('IAGO RIBEIRO DE SOUZA');
+                    setNewUserEmail('iago@meusacordos.com.br');
+                    setNewUserPassword(`Iago${Math.random().toString(36).slice(2, 10)}!`);
+                    setShowNewUserPassword(true);
+                    toast({
+                      title: 'Dados do IAGO preenchidos',
+                      description: 'Confira e clique em Criar Usuário para ativar o atendente de IA.',
+                    });
+                  }}
+                >
+                  <Bot className="h-4 w-4 mr-1" />
+                  Preencher dados do IAGO (IA)
+                </Button>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -498,7 +525,16 @@ export default function AdminUsuarios() {
                 <TableBody>
                   {filteredUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.nome}</TableCell>
+                      <TableCell className="font-medium">
+                        <span className="flex items-center gap-1.5">
+                          {user.nome}
+                          {ehIago(user.nome) && (
+                            <Badge variant="secondary" className="text-[10px] gap-1">
+                              <Bot className="h-3 w-3" /> IA
+                            </Badge>
+                          )}
+                        </span>
+                      </TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
                         <Badge variant={roleBadgeVariants[user.role]}>
@@ -556,6 +592,18 @@ export default function AdminUsuarios() {
                             >
                               Salvar
                             </Button>
+                            {ehIago(user.nome) && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="h-8"
+                                onClick={() => setIagoUser(user)}
+                                title="Configurar / ensinar o IAGO"
+                              >
+                                <Bot className="h-4 w-4 mr-1" />
+                                Configurar IAGO
+                              </Button>
+                            )}
                             <Button
                               size="icon"
                               variant="outline"
@@ -655,6 +703,13 @@ export default function AdminUsuarios() {
             allUsers={users.map((u) => ({ id: u.id, nome: u.nome, email: u.email }))}
           />
         )}
+
+        <IagoConfigDialog
+          open={!!iagoUser}
+          onOpenChange={(open) => !open && setIagoUser(null)}
+          userId={iagoUser?.id ?? ''}
+          userName={iagoUser?.nome ?? ''}
+        />
 
         <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
           <AlertDialogContent>

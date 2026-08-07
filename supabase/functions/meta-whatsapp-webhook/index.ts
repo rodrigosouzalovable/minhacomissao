@@ -799,7 +799,7 @@ serve(async (req) => {
             }
           }
 
-          // ===== Atendimento automático com IA (somente caixa "IA") =====
+          // ===== Atendimento automático com IA (caixa "IA" + atendente IAGO) =====
           if (!isEcho && contatoIdFinal) {
             const iaTask = (async () => {
               try {
@@ -810,6 +810,15 @@ serve(async (req) => {
                 else console.log('[MetaWebhook] IA', JSON.stringify(data || {}));
               } catch (e: any) {
                 console.error('[MetaWebhook] IA exceção', e?.message || e);
+              }
+              try {
+                const { data, error } = await supabase.functions.invoke('iago-atendimento', {
+                  body: { contato_id: contatoIdFinal, texto },
+                });
+                if (error) console.error('[MetaWebhook] IAGO erro', error.message);
+                else console.log('[MetaWebhook] IAGO', JSON.stringify(data || {}));
+              } catch (e: any) {
+                console.error('[MetaWebhook] IAGO exceção', e?.message || e);
               }
             })();
             // Garante execução mesmo depois de responder à Meta (evita abort no shutdown do isolate)

@@ -163,6 +163,9 @@ Deno.serve(async (req) => {
         await supabase.from('meta_ia_conversas_estado')
           .update({ aguardando_humano: true })
           .eq('contato_id', contato.id);
+        await supabase.from('iago_conversa_estado')
+          .update({ aguardando_humano: true, followup_em: null })
+          .eq('contato_id', contato.id);
 
         // Etiqueta a conversa com o atendente que enviou (se ainda não houver etiqueta de atendente)
         const mAt = String(texto || '').match(/^\*Atendente\s+(.+?):\*/i);
