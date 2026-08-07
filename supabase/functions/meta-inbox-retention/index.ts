@@ -19,10 +19,10 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const corte = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const corte = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     // Contatos candidatos: sem entrada, não fixados, não arquivados,
-    // sem não lidas, com ultima_mensagem_em < 3 dias.
+    // sem não lidas, com ultima_mensagem_em < 24h. Lote por execução (horária).
     const { data: candidatos, error } = await supabase
       .from("meta_whatsapp_contatos")
       .select("id")
@@ -31,7 +31,8 @@ Deno.serve(async (req) => {
       .eq("fixado", false)
       .eq("nao_lido", 0)
       .lt("ultima_mensagem_em", corte)
-      .limit(5000);
+      .order("ultima_mensagem_em", { ascending: true })
+      .limit(3000);
 
     if (error) throw error;
     if (!candidatos?.length) {
