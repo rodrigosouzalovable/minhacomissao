@@ -1686,6 +1686,20 @@ export default function ImportarDevedores() {
           continue;
         }
 
+        // Espelho: baixa/atualiza parcelas que saíram da planilha antes de inserir as novas
+        if (isUmeConsolidado && espelhoCarteira && prepared.layout === 'devedores') {
+          try {
+            const recs = ((prepared.dados as any)?.records ?? []) as DevedorInsertRecord[];
+            const { atualizadas, baixadas } = await sincronizarEspelhoCarteira(recs);
+            if (atualizadas > 0 || baixadas > 0) {
+              toast({ title: 'Carteira sincronizada', description: `${files[i].name}: ${baixadas} baixada(s), ${atualizadas} atualizada(s).` });
+            }
+          } catch (e: any) {
+            console.error('[espelho] erro', e);
+          }
+        }
+
+
         // Create job in DB
         const { data: job, error: jobError } = await supabase
           .from('importacao_jobs' as any)
