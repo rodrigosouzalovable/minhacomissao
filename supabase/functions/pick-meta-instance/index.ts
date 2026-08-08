@@ -111,7 +111,10 @@ Deno.serve(async (req) => {
 
     // Contagem hoje (fallback: enviados_hoje da própria row)
     const candidates: any[] = [];
+    const descartados: string[] = [];
+    const reprovadosGuardrail: any[] = [];
     for (const inst of insts) {
+      const rotulo = inst.nome || inst.phone_number_id || inst.id;
       const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
       const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
       const pausaPorStatus = motivoPausaLower.startsWith('status=');
@@ -119,13 +122,13 @@ Deno.serve(async (req) => {
       if (inst.estado_pool && inst.estado_pool !== 'ativo') {
         // Em modo rajada, ignora pausa por qualidade (só bloqueia restrita ou pausa por status).
         const bloqueia = inst.estado_pool === 'restrita' || !(ignoraQualidade && pausaPorQualidade);
-        if (bloqueia) continue;
+        if (bloqueia) { descartados.push(`${rotulo}: estado do pool = ${inst.estado_pool}`); continue; }
       }
       if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
         const bloqueia = !(ignoraQualidade && pausaPorQualidade);
-        if (bloqueia) continue;
+        if (bloqueia) { descartados.push(`${rotulo}: pausada até ${new Date(inst.pausa_automatica_ate).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (${inst.pausa_automatica_motivo || 'sem motivo'})`); continue; }
         // pausa por status sempre bloqueia
-        if (pausaPorStatus) continue;
+        if (pausaPorStatus) { descartados.push(`${rotulo}: pausada por ${inst.pausa_automatica_motivo}`); continue; }
       }
 
       // Reset diário (telemetria — não bloqueia envio)
@@ -137,33 +140,62 @@ Deno.serve(async (req) => {
         : 0;
       const fase = inst.data_ativacao_api ? faseFromDias(diasAtivo) : 'livre';
 
-      // Guardrails baseados em métricas de ontem
+      // Guardrails baseados em métricas de ontem.
+      // Só bloqueios REAIS de usuário (mo.bloqueadas) reprovam a instância —
+      // falhas técnicas (template, mídia, rede) apenas reduzem o teto de uso.
       const mo = metricaMap.get(inst.id);
-      if (mo && mo.enviadas > 30) {
-        const blockRate = (mo.bloqueadas + mo.falharam) / Math.max(1, mo.enviadas) * 100;
-        if (blockRate > blockMaxPct) continue; // pula: número está tomando muita rejeição
-      }
       let tetoQualidade = 1.0;
-      if (guardrailRatio && mo && mo.enviadas > 30) {
+      let reprovadaGuardrail: string | null = null;
+      if (mo && mo.enviadas > volumeMinGuardrail) {
+        const blockRate = (mo.bloqueadas || 0) / Math.max(1, mo.enviadas) * 100;
+        if (blockRate > blockMaxPct) {
+          reprovadaGuardrail = `${rotulo}: ${blockRate.toFixed(1)}% de bloqueios de usuário ontem (limite ${blockMaxPct}%)`;
+        }
+        const failRate = (mo.falharam || 0) / Math.max(1, mo.enviadas) * 100;
+        if (failRate > blockMaxPct) tetoQualidade = Math.min(tetoQualidade, 0.5); // falha técnica: só reduz ritmo
+      }
+      if (guardrailRatio && mo && mo.enviadas > volumeMinGuardrail) {
         const ratio = mo.inbound / Math.max(1, mo.enviadas) * 100;
         if (ratio < ratioMinPct) tetoQualidade = 0.3; // sem inbound = teto 30% da cota
       }
       const q = pesoQualidade(inst.saude_quality, ignoraQualidade);
-      if (q === 0) continue;
+      if (q === 0) { descartados.push(`${rotulo}: qualidade ${String(inst.saude_quality || 'desconhecida').toUpperCase()}`); continue; }
       if (String(inst.saude_quality || '').toUpperCase() === 'YELLOW') tetoQualidade = Math.min(tetoQualidade, 0.3);
       if (String(inst.saude_quality || '').toUpperCase() === 'RED' && ignoraQualidade) tetoQualidade = Math.min(tetoQualidade, 0.3);
       const tierEfetivo = inst.messaging_limit_manual || inst.saude_tier;
       // Score prioriza chips com menos uso hoje para distribuição no round-robin.
       const score = q * pesoTier(tierEfetivo) * fatorIdade(diasAtivo) * tetoQualidade * (1 / (1 + uso));
-      candidates.push({ inst, score, fase, cota: 999999, uso, diasAtivo });
+      const candidato = { inst, score, fase, cota: 999999, uso, diasAtivo };
+      if (reprovadaGuardrail) {
+        descartados.push(reprovadaGuardrail);
+        reprovadosGuardrail.push({ ...candidato, score: score * 0.3 });
+        continue;
+      }
+      candidates.push(candidato);
     }
 
+    // Fallback: se todo mundo caiu apenas no guardrail interno (e não em
+    // qualidade/pausa/restrição da Meta), usa o melhor com ritmo reduzido.
+    let usouFallbackGuardrail = false;
+    if (!candidates.length && reprovadosGuardrail.length) {
+      reprovadosGuardrail.sort((a, b) => b.score - a.score);
+      candidates.push(reprovadosGuardrail[0]);
+      usouFallbackGuardrail = true;
+    }
 
     if (!candidates.length) {
-      return new Response(JSON.stringify({ success: false, blocked: 'sem_disponivel', error: 'Nenhuma instância disponível (cota, pausa ou qualidade)' }), {
+      return new Response(JSON.stringify({
+        success: false,
+        blocked: 'sem_disponivel',
+        error: descartados.length
+          ? `Nenhuma instância disponível — ${descartados.join(' | ')}`
+          : 'Nenhuma instância disponível (cota, pausa ou qualidade)',
+        motivos: descartados,
+      }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     candidates.sort((a, b) => b.score - a.score);
     // Round-robin estrito: se o chamador passar excluir_id (última instância usada)
