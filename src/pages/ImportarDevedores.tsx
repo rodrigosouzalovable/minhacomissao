@@ -22,6 +22,7 @@ import {
 import * as XLSX from 'xlsx';
 import { calcularComissao } from '@/lib/comissao';
 import { BatimentoCpfsPortalCard } from '@/components/BatimentoCpfsPortalCard';
+import { ConferenciaCarteiraCard } from '@/components/ConferenciaCarteiraCard';
 
 type CredorLayout = 'padrao' | 'montreal' | 'montreal_atualizacao' | 'cobmais' | 'pesquisa' | 'pagamentos' | 'ume_aporte' | 'ume_consolidado';
 
@@ -162,6 +163,93 @@ async function filtrarParcelasNovas<T extends DevedorInsertRecord>(
   return { paraInserir, jaExistentes };
 }
 
+/**
+ * Modo espelho: para cada CPF+contrato presente na planilha,
+ * - atualiza valor das parcelas que continuam na planilha,
+ * - desativa (ativo=false) as parcelas ativas que não vêm mais na planilha (pagas/renegociadas).
+ * CPFs/contratos ausentes do arquivo não são tocados.
+ */
+async function sincronizarEspelhoCarteira(
+  records: DevedorInsertRecord[]
+): Promise<{ atualizadas: number; baixadas: number }> {
+  if (records.length === 0) return { atualizadas: 0, baixadas: 0 };
+
+  const grupos = new Set<string>();
+  const valorPorChave = new Map<string, number>();
+  for (const r of records) {
+    grupos.add(`${String(r.cpf ?? '')}|${r.contrato ?? ''}`);
+    const v = Number((r as any).valor_atualizado ?? (r as any).valor_original ?? 0);
+    valorPorChave.set(dedupeKey(r), v);
+  }
+
+  const cpfs = Array.from(new Set(records.map((r) => String(r.cpf)).filter(Boolean)));
+  const CPF_CHUNK = 200;
+  const PAGE = 1000;
+
+  const idsParaBaixar: string[] = [];
+  const idsPorValor = new Map<number, string[]>();
+
+  for (let i = 0; i < cpfs.length; i += CPF_CHUNK) {
+    const lote = cpfs.slice(i, i + CPF_CHUNK);
+    let from = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data, error } = await (supabase as any)
+        .from('devedores')
+        .select('id, cpf, contrato, descricao, data_vencimento, valor_atualizado')
+        .eq('ativo', true)
+        .in('cpf', lote)
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      for (const row of rows) {
+        const grupo = `${String(row.cpf ?? '')}|${row.contrato ?? ''}`;
+        if (!grupos.has(grupo)) continue; // contrato não veio na planilha: não mexe
+        const k = dedupeKey(row);
+        if (valorPorChave.has(k)) {
+          const novo = valorPorChave.get(k)!;
+          const atual = Number(row.valor_atualizado ?? 0);
+          if (Math.abs(novo - atual) > 0.009) {
+            if (!idsPorValor.has(novo)) idsPorValor.set(novo, []);
+            idsPorValor.get(novo)!.push(row.id);
+          }
+        } else {
+          idsParaBaixar.push(row.id);
+        }
+      }
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+
+  const CHUNK = 200;
+  let atualizadas = 0;
+  for (const [valor, ids] of idsPorValor) {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      const { error } = await (supabase as any)
+        .from('devedores')
+        .update({ valor_original: valor, valor_atualizado: valor })
+        .in('id', slice);
+      if (error) throw error;
+      atualizadas += slice.length;
+    }
+  }
+
+  let baixadas = 0;
+  for (let i = 0; i < idsParaBaixar.length; i += CHUNK) {
+    const slice = idsParaBaixar.slice(i, i + CHUNK);
+    const { error } = await (supabase as any)
+      .from('devedores')
+      .update({ ativo: false })
+      .in('id', slice);
+    if (error) throw error;
+    baixadas += slice.length;
+  }
+
+  return { atualizadas, baixadas };
+}
+
 export default function ImportarDevedores() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -173,6 +261,7 @@ export default function ImportarDevedores() {
   const [imported, setImported] = useState(false);
   const [grouped, setGrouped] = useState(false);
   const [montrealGrouped, setMontrealGrouped] = useState(true);
+  const [espelhoCarteira, setEspelhoCarteira] = useState(true);
   const [importacoes, setImportacoes] = useState<Importacao[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -613,13 +702,19 @@ export default function ImportarDevedores() {
   };
 
   const parseUmeConsolidado = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
-    return dataRows.map((row) => {
+    type Pre = {
+      cpf: string; nome: string; credor: string; contrato: string;
+      numeroParcela: number; valor: number; vencimentoStr: string; vencSort: number;
+    };
+    const pre: Pre[] = [];
+
+    for (const row of dataRows) {
       let cpf = String(row['A'] ?? '').replace(/\D/g, '');
-      if (!cpf) return null;
+      if (!cpf) continue;
       cpf = cpf.padStart(11, '0');
 
       const nome = String(row['B'] ?? '').trim();
-      if (!nome) return null;
+      if (!nome) continue;
 
       const credorRaw = String(row['C'] ?? '').toUpperCase();
       const isAporte = credorRaw.includes('APORTE');
@@ -628,32 +723,59 @@ export default function ImportarDevedores() {
       const contrato = String(row['D'] ?? '').trim();
       const numeroParcela = parseInt(String(row['E'] ?? '0')) || 0;
       const valor = parseNum(row['G']);
-      const valorTotal = parseNum(row['H']);
 
       let vencimentoStr = '';
+      let vencSort = 0;
       const vencRaw = row['F'];
       if (typeof vencRaw === 'number') {
         const dt = XLSX.SSF.parse_date_code(vencRaw);
         if (dt) {
           vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
+          vencSort = dt.y * 10000 + dt.m * 100 + dt.d;
         }
       } else if (vencRaw) {
         vencimentoStr = String(vencRaw);
+        const m = vencimentoStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) vencSort = Number(m[3]) * 10000 + Number(m[2]) * 100 + Number(m[1]);
       }
 
-      return {
-        cpf,
-        nascimento: vencimentoStr, // use nascimento field for date (used by parseDate in handleImport)
-        nome,
-        credor,
-        contrato,
-        atraso: '',
-        descricao: numeroParcela > 0 ? `Parcela ${numeroParcela}` : 'Parcela s/n',
-        valor_original: valor,
-        valor_atualizado: valor,
-      };
-    }).filter(Boolean) as DevedorRow[];
+      pre.push({ cpf, nome, credor, contrato, numeroParcela, valor, vencimentoStr, vencSort });
+    }
+
+    // Parcelas sem número na planilha: deriva a numeração pela ordem de vencimento
+    // dentro do mesmo CPF+contrato (evita gravar "Parcela 0"/"Parcela s/n" duplicadas).
+    const porGrupo = new Map<string, Pre[]>();
+    for (const p of pre) {
+      const k = `${p.cpf}|${p.contrato}`;
+      if (!porGrupo.has(k)) porGrupo.set(k, []);
+      porGrupo.get(k)!.push(p);
+    }
+    for (const grupo of porGrupo.values()) {
+      const semNumero = grupo.filter((p) => p.numeroParcela <= 0);
+      if (semNumero.length === 0) continue;
+      const usados = new Set(grupo.filter((p) => p.numeroParcela > 0).map((p) => p.numeroParcela));
+      semNumero.sort((a, b) => a.vencSort - b.vencSort);
+      let proximo = 1;
+      for (const p of semNumero) {
+        while (usados.has(proximo)) proximo++;
+        p.numeroParcela = proximo;
+        usados.add(proximo);
+      }
+    }
+
+    return pre.map((p) => ({
+      cpf: p.cpf,
+      nascimento: p.vencimentoStr, // use nascimento field for date (used by parseDate in handleImport)
+      nome: p.nome,
+      credor: p.credor,
+      contrato: p.contrato,
+      atraso: '',
+      descricao: `Parcela ${p.numeroParcela}`,
+      valor_original: p.valor,
+      valor_atualizado: p.valor,
+    }));
   };
+
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
@@ -1387,6 +1509,16 @@ export default function ImportarDevedores() {
       telefone: r.telefone || null,
       importado_por: user.id, arquivo_importacao: fileName, importacao_id: importacaoId,
     }));
+    if (isUmeConsolidado && espelhoCarteira) {
+      try {
+        const { atualizadas, baixadas } = await sincronizarEspelhoCarteira(records);
+        if (atualizadas > 0 || baixadas > 0) {
+          toast({ title: 'Carteira sincronizada', description: `${baixadas} parcela(s) baixada(s) e ${atualizadas} atualizada(s) em ${fileName}.` });
+        }
+      } catch (e: any) {
+        toast({ title: 'Erro ao sincronizar carteira', description: e?.message, variant: 'destructive' });
+      }
+    }
     const { paraInserir: recordsStdDedup, jaExistentes: puladosStd } = await filtrarParcelasNovas(records);
     if (puladosStd > 0) {
       toast({ title: 'Parcelas já existentes ignoradas', description: `${puladosStd} linha(s) puladas por já existirem ativas.` });
@@ -1554,6 +1686,20 @@ export default function ImportarDevedores() {
           setFileResults([...results]);
           continue;
         }
+
+        // Espelho: baixa/atualiza parcelas que saíram da planilha antes de inserir as novas
+        if (isUmeConsolidado && espelhoCarteira && prepared.layout === 'devedores') {
+          try {
+            const recs = ((prepared.dados as any)?.records ?? []) as DevedorInsertRecord[];
+            const { atualizadas, baixadas } = await sincronizarEspelhoCarteira(recs);
+            if (atualizadas > 0 || baixadas > 0) {
+              toast({ title: 'Carteira sincronizada', description: `${files[i].name}: ${baixadas} baixada(s), ${atualizadas} atualizada(s).` });
+            }
+          } catch (e: any) {
+            console.error('[espelho] erro', e);
+          }
+        }
+
 
         // Create job in DB
         const { data: job, error: jobError } = await supabase
@@ -1737,6 +1883,17 @@ export default function ImportarDevedores() {
       arquivo_importacao: file?.name || 'unknown',
       importacao_id: importacaoId,
     }));
+
+    if (isUmeConsolidado && espelhoCarteira) {
+      try {
+        const { atualizadas, baixadas } = await sincronizarEspelhoCarteira(records);
+        if (atualizadas > 0 || baixadas > 0) {
+          toast({ title: 'Carteira sincronizada', description: `${baixadas} parcela(s) baixada(s) (pagas/renegociadas) e ${atualizadas} atualizada(s).` });
+        }
+      } catch (e: any) {
+        toast({ title: 'Erro ao sincronizar carteira', description: e?.message, variant: 'destructive' });
+      }
+    }
 
     const { paraInserir: recordsDedup1, jaExistentes: pulados1 } = await filtrarParcelasNovas(records);
     if (pulados1 > 0) {
@@ -2040,6 +2197,19 @@ export default function ImportarDevedores() {
                 Credor: <strong>UME | NOVO MUNDO</strong> (automático)
                 {isUmeAporte && <> — O sistema criará acordos automaticamente para CPFs que ainda não possuem acordo.</>}
                 {isUmeConsolidado && <> — Importa INADIMPLENTES e APORTE com credor diferenciado por linha. Juros calculados automaticamente no portal.</>}
+              </div>
+            )}
+            {isUmeConsolidado && (
+              <div className="flex items-start gap-3 rounded-md border border-border bg-muted/40 p-3">
+                <Switch id="espelho-toggle" checked={espelhoCarteira} onCheckedChange={setEspelhoCarteira} />
+                <Label htmlFor="espelho-toggle" className="cursor-pointer text-sm font-normal leading-snug">
+                  <span className="font-medium">Sincronizar carteira (espelho do Cobmais)</span>
+                  <span className="block text-muted-foreground">
+                    Atualiza os valores das parcelas que continuam na planilha e baixa automaticamente (sem apagar histórico)
+                    as parcelas do mesmo CPF+contrato que não vêm mais no arquivo — pagas ou renegociadas.
+                    CPFs que não estão na planilha não são alterados.
+                  </span>
+                </Label>
               </div>
             )}
             {isMontrealAtualizacao && (
@@ -2754,6 +2924,8 @@ export default function ImportarDevedores() {
         )}
 
         <BatimentoCpfsPortalCard />
+
+        <ConferenciaCarteiraCard />
 
         {/* Histórico de Importações */}
         <Card>
