@@ -613,13 +613,19 @@ export default function ImportarDevedores() {
   };
 
   const parseUmeConsolidado = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
-    return dataRows.map((row) => {
+    type Pre = {
+      cpf: string; nome: string; credor: string; contrato: string;
+      numeroParcela: number; valor: number; vencimentoStr: string; vencSort: number;
+    };
+    const pre: Pre[] = [];
+
+    for (const row of dataRows) {
       let cpf = String(row['A'] ?? '').replace(/\D/g, '');
-      if (!cpf) return null;
+      if (!cpf) continue;
       cpf = cpf.padStart(11, '0');
 
       const nome = String(row['B'] ?? '').trim();
-      if (!nome) return null;
+      if (!nome) continue;
 
       const credorRaw = String(row['C'] ?? '').toUpperCase();
       const isAporte = credorRaw.includes('APORTE');
@@ -628,32 +634,59 @@ export default function ImportarDevedores() {
       const contrato = String(row['D'] ?? '').trim();
       const numeroParcela = parseInt(String(row['E'] ?? '0')) || 0;
       const valor = parseNum(row['G']);
-      const valorTotal = parseNum(row['H']);
 
       let vencimentoStr = '';
+      let vencSort = 0;
       const vencRaw = row['F'];
       if (typeof vencRaw === 'number') {
         const dt = XLSX.SSF.parse_date_code(vencRaw);
         if (dt) {
           vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
+          vencSort = dt.y * 10000 + dt.m * 100 + dt.d;
         }
       } else if (vencRaw) {
         vencimentoStr = String(vencRaw);
+        const m = vencimentoStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) vencSort = Number(m[3]) * 10000 + Number(m[2]) * 100 + Number(m[1]);
       }
 
-      return {
-        cpf,
-        nascimento: vencimentoStr, // use nascimento field for date (used by parseDate in handleImport)
-        nome,
-        credor,
-        contrato,
-        atraso: '',
-        descricao: numeroParcela > 0 ? `Parcela ${numeroParcela}` : 'Parcela s/n',
-        valor_original: valor,
-        valor_atualizado: valor,
-      };
-    }).filter(Boolean) as DevedorRow[];
+      pre.push({ cpf, nome, credor, contrato, numeroParcela, valor, vencimentoStr, vencSort });
+    }
+
+    // Parcelas sem número na planilha: deriva a numeração pela ordem de vencimento
+    // dentro do mesmo CPF+contrato (evita gravar "Parcela 0"/"Parcela s/n" duplicadas).
+    const porGrupo = new Map<string, Pre[]>();
+    for (const p of pre) {
+      const k = `${p.cpf}|${p.contrato}`;
+      if (!porGrupo.has(k)) porGrupo.set(k, []);
+      porGrupo.get(k)!.push(p);
+    }
+    for (const grupo of porGrupo.values()) {
+      const semNumero = grupo.filter((p) => p.numeroParcela <= 0);
+      if (semNumero.length === 0) continue;
+      const usados = new Set(grupo.filter((p) => p.numeroParcela > 0).map((p) => p.numeroParcela));
+      semNumero.sort((a, b) => a.vencSort - b.vencSort);
+      let proximo = 1;
+      for (const p of semNumero) {
+        while (usados.has(proximo)) proximo++;
+        p.numeroParcela = proximo;
+        usados.add(proximo);
+      }
+    }
+
+    return pre.map((p) => ({
+      cpf: p.cpf,
+      nascimento: p.vencimentoStr, // use nascimento field for date (used by parseDate in handleImport)
+      nome: p.nome,
+      credor: p.credor,
+      contrato: p.contrato,
+      atraso: '',
+      descricao: `Parcela ${p.numeroParcela}`,
+      valor_original: p.valor,
+      valor_atualizado: p.valor,
+    }));
   };
+
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
