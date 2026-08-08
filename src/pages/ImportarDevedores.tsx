@@ -1508,6 +1508,16 @@ export default function ImportarDevedores() {
       telefone: r.telefone || null,
       importado_por: user.id, arquivo_importacao: fileName, importacao_id: importacaoId,
     }));
+    if (isUmeConsolidado && espelhoCarteira) {
+      try {
+        const { atualizadas, baixadas } = await sincronizarEspelhoCarteira(records);
+        if (atualizadas > 0 || baixadas > 0) {
+          toast({ title: 'Carteira sincronizada', description: `${baixadas} parcela(s) baixada(s) e ${atualizadas} atualizada(s) em ${fileName}.` });
+        }
+      } catch (e: any) {
+        toast({ title: 'Erro ao sincronizar carteira', description: e?.message, variant: 'destructive' });
+      }
+    }
     const { paraInserir: recordsStdDedup, jaExistentes: puladosStd } = await filtrarParcelasNovas(records);
     if (puladosStd > 0) {
       toast({ title: 'Parcelas já existentes ignoradas', description: `${puladosStd} linha(s) puladas por já existirem ativas.` });
