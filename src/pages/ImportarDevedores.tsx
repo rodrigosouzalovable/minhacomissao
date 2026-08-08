@@ -2924,6 +2924,8 @@ export default function ImportarDevedores() {
 
         <BatimentoCpfsPortalCard />
 
+        <ConferenciaCarteiraCard />
+
         {/* Histórico de Importações */}
         <Card>
           <CardHeader>
