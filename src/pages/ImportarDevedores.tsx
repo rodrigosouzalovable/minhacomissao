@@ -2198,6 +2198,19 @@ export default function ImportarDevedores() {
                 {isUmeConsolidado && <> — Importa INADIMPLENTES e APORTE com credor diferenciado por linha. Juros calculados automaticamente no portal.</>}
               </div>
             )}
+            {isUmeConsolidado && (
+              <div className="flex items-start gap-3 rounded-md border border-border bg-muted/40 p-3">
+                <Switch id="espelho-toggle" checked={espelhoCarteira} onCheckedChange={setEspelhoCarteira} />
+                <Label htmlFor="espelho-toggle" className="cursor-pointer text-sm font-normal leading-snug">
+                  <span className="font-medium">Sincronizar carteira (espelho do Cobmais)</span>
+                  <span className="block text-muted-foreground">
+                    Atualiza os valores das parcelas que continuam na planilha e baixa automaticamente (sem apagar histórico)
+                    as parcelas do mesmo CPF+contrato que não vêm mais no arquivo — pagas ou renegociadas.
+                    CPFs que não estão na planilha não são alterados.
+                  </span>
+                </Label>
+              </div>
+            )}
             {isMontrealAtualizacao && (
               <div className="text-sm text-muted-foreground">
                 Credor: <strong>MONTREAL</strong> (automático) — O sistema cruzará os dados e importará apenas parcelas novas.
