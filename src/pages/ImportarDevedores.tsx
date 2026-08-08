@@ -162,6 +162,93 @@ async function filtrarParcelasNovas<T extends DevedorInsertRecord>(
   return { paraInserir, jaExistentes };
 }
 
+/**
+ * Modo espelho: para cada CPF+contrato presente na planilha,
+ * - atualiza valor das parcelas que continuam na planilha,
+ * - desativa (ativo=false) as parcelas ativas que não vêm mais na planilha (pagas/renegociadas).
+ * CPFs/contratos ausentes do arquivo não são tocados.
+ */
+async function sincronizarEspelhoCarteira(
+  records: DevedorInsertRecord[]
+): Promise<{ atualizadas: number; baixadas: number }> {
+  if (records.length === 0) return { atualizadas: 0, baixadas: 0 };
+
+  const grupos = new Set<string>();
+  const valorPorChave = new Map<string, number>();
+  for (const r of records) {
+    grupos.add(`${String(r.cpf ?? '')}|${r.contrato ?? ''}`);
+    const v = Number((r as any).valor_atualizado ?? (r as any).valor_original ?? 0);
+    valorPorChave.set(dedupeKey(r), v);
+  }
+
+  const cpfs = Array.from(new Set(records.map((r) => String(r.cpf)).filter(Boolean)));
+  const CPF_CHUNK = 200;
+  const PAGE = 1000;
+
+  const idsParaBaixar: string[] = [];
+  const idsPorValor = new Map<number, string[]>();
+
+  for (let i = 0; i < cpfs.length; i += CPF_CHUNK) {
+    const lote = cpfs.slice(i, i + CPF_CHUNK);
+    let from = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data, error } = await (supabase as any)
+        .from('devedores')
+        .select('id, cpf, contrato, descricao, data_vencimento, valor_atualizado')
+        .eq('ativo', true)
+        .in('cpf', lote)
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      for (const row of rows) {
+        const grupo = `${String(row.cpf ?? '')}|${row.contrato ?? ''}`;
+        if (!grupos.has(grupo)) continue; // contrato não veio na planilha: não mexe
+        const k = dedupeKey(row);
+        if (valorPorChave.has(k)) {
+          const novo = valorPorChave.get(k)!;
+          const atual = Number(row.valor_atualizado ?? 0);
+          if (Math.abs(novo - atual) > 0.009) {
+            if (!idsPorValor.has(novo)) idsPorValor.set(novo, []);
+            idsPorValor.get(novo)!.push(row.id);
+          }
+        } else {
+          idsParaBaixar.push(row.id);
+        }
+      }
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+  }
+
+  const CHUNK = 200;
+  let atualizadas = 0;
+  for (const [valor, ids] of idsPorValor) {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      const { error } = await (supabase as any)
+        .from('devedores')
+        .update({ valor_original: valor, valor_atualizado: valor })
+        .in('id', slice);
+      if (error) throw error;
+      atualizadas += slice.length;
+    }
+  }
+
+  let baixadas = 0;
+  for (let i = 0; i < idsParaBaixar.length; i += CHUNK) {
+    const slice = idsParaBaixar.slice(i, i + CHUNK);
+    const { error } = await (supabase as any)
+      .from('devedores')
+      .update({ ativo: false })
+      .in('id', slice);
+    if (error) throw error;
+    baixadas += slice.length;
+  }
+
+  return { atualizadas, baixadas };
+}
+
 export default function ImportarDevedores() {
   const navigate = useNavigate();
   const { user } = useAuth();
