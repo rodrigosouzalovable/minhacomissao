@@ -108,6 +108,8 @@ Deno.serve(async (req) => {
     const guardrailRatio = cfg?.guardrail_ratio_inbound !== false;
     const ratioMinPct = Number(cfg?.guardrail_ratio_min_pct ?? 5);
     const blockMaxPct = Number(cfg?.guardrail_block_rate_max_pct ?? 2);
+    const volumeMinGuardrail = Number(cfg?.guardrail_volume_minimo ?? 50);
+
 
     // Contagem hoje (fallback: enviados_hoje da própria row)
     const candidates: any[] = [];
@@ -221,6 +223,8 @@ Deno.serve(async (req) => {
       enviados_hoje: winner.uso,
       dias_ativo: winner.diasAtivo,
       total_candidatos: candidates.length,
+      fallback_guardrail: usouFallbackGuardrail,
+      motivos_descartes: descartados,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e) {
     return new Response(JSON.stringify({ success: false, error: e instanceof Error ? e.message : 'erro' }), {
