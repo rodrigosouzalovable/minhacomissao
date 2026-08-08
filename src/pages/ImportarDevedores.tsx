@@ -1883,6 +1883,17 @@ export default function ImportarDevedores() {
       importacao_id: importacaoId,
     }));
 
+    if (isUmeConsolidado && espelhoCarteira) {
+      try {
+        const { atualizadas, baixadas } = await sincronizarEspelhoCarteira(records);
+        if (atualizadas > 0 || baixadas > 0) {
+          toast({ title: 'Carteira sincronizada', description: `${baixadas} parcela(s) baixada(s) (pagas/renegociadas) e ${atualizadas} atualizada(s).` });
+        }
+      } catch (e: any) {
+        toast({ title: 'Erro ao sincronizar carteira', description: e?.message, variant: 'destructive' });
+      }
+    }
+
     const { paraInserir: recordsDedup1, jaExistentes: pulados1 } = await filtrarParcelasNovas(records);
     if (pulados1 > 0) {
       toast({ title: 'Parcelas já existentes ignoradas', description: `${pulados1} linha(s) puladas por já existirem ativas.` });
