@@ -1131,6 +1131,9 @@ export default function InboxMeta() {
                       <ContextMenuItem onClick={() => setAcessoFolder({ id: null, nome: 'Padrão' })}>
                         <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
                       </ContextMenuItem>
+                      <ContextMenuItem onClick={() => setConfigFolder({ id: null, nome: 'Padrão' })}>
+                        <Settings2 className="h-4 w-4 mr-2" /> Configurar caixa
+                      </ContextMenuItem>
                     </ContextMenuContent>
                   )}
                 </ContextMenu>
