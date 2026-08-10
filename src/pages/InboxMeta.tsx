@@ -78,7 +78,7 @@ interface MetaMensagem {
   template_botoes?: any[] | null;
 }
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 40;
 const JANELA_24H_MS = 24 * 60 * 60 * 1000;
 const ALERTA_1H_MS = 60 * 60 * 1000;
 
