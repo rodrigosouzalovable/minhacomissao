@@ -3,6 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectGroup, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { amostrasParecemValor, formatarValorBR, type FormatoValor } from "@/lib/valorBR";
+
+const VALOR_HEADER_RX = /(saldo|valor|d[ií]vida|debito|débito|montante|total|parcela|entrada)/i;
 
 // ColRole aceita papéis fixos ("telefone"/"nome"/...) ou uma variável do template ("tplvar:1", "tplvar:nome_completo").
 export type ColRole = string;
