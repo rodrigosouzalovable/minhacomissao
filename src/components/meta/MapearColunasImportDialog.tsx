@@ -188,7 +188,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       fmts[c] = colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
     }
     setFormatoPorColuna(fmts);
-  }, [open, nCols, firstIsHeader, colunasMonetarias]);
+  }, [open, nCols, firstIsHeader, colunasMonetarias, placeholders]);
 
   const setCol = (idx: number, role: string) => {
     setMapping((prev) => {
