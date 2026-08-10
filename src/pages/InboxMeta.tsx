@@ -31,6 +31,8 @@ import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEn
 import { MetaFoldersDialog, type MetaInboxFolder } from '@/components/inbox/meta/MetaFoldersDialog';
 import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcessoDialog';
 import MetaIAConfigDialog from '@/components/inbox/meta/MetaIAConfigDialog';
+import { MetaQualificacaoDialog, type MetaQualificacao } from '@/components/inbox/meta/MetaQualificacaoDialog';
+import { MetaFolderConfigDialog, CAIXA_PADRAO_ID } from '@/components/inbox/meta/MetaFolderConfigDialog';
 
 import { useUserRole } from '@/hooks/useUserRole';
 import {
