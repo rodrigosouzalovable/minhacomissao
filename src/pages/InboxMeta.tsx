@@ -130,6 +130,12 @@ export default function InboxMeta() {
   const [foldersDialogOpen, setFoldersDialogOpen] = useState(false);
   const [acessoFolder, setAcessoFolder] = useState<{ id: string | null; nome: string } | null>(null);
   const [iaConfigOpen, setIaConfigOpen] = useState(false);
+  const [configFolder, setConfigFolder] = useState<{ id: string | null; nome: string } | null>(null);
+  // Qualificação de conversas
+  const [qualificacoes, setQualificacoes] = useState<MetaQualificacao[]>([]);
+  const [qualifPorContato, setQualifPorContato] = useState<Record<string, string>>({});
+  const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
+  const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
