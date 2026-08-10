@@ -78,7 +78,7 @@ interface MetaMensagem {
   template_botoes?: any[] | null;
 }
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 40;
 const JANELA_24H_MS = 24 * 60 * 60 * 1000;
 const ALERTA_1H_MS = 60 * 60 * 1000;
 
@@ -540,41 +540,45 @@ export default function InboxMeta() {
 
 
   // ============== Mensagens ==============
+  // Cache em memória das mensagens por conversa (abertura instantânea ao reabrir)
+  const msgCacheRef = useRef<Map<string, MetaMensagem[]>>(new Map());
+
   const fetchMensagens = useCallback(async (contato: MetaContato, loadMore = false) => {
-    if (loadMore) setCarregandoAnteriores(true); else setCarregandoMsgs(true);
+    const cached = msgCacheRef.current.get(contato.id);
+    if (loadMore) setCarregandoAnteriores(true);
+    else if (!cached?.length) setCarregandoMsgs(true);
     const offset = loadMore ? (paginaAtual + 1) * PAGE_SIZE : 0;
     // Casa pelo sufixo de 8 dígitos para unificar variações com/sem "9" do celular
     const telDigits = String(contato.telefone || '').replace(/\D/g, '');
     const telSuffix = telDigits.length >= 8 ? telDigits.slice(-8) : telDigits;
-    let query = supabase
-      .from('meta_whatsapp_mensagens')
-      .select('*', { count: 'exact' })
-      .eq('instancia_id', contato.instancia_id)
-      .eq('apagada_para_mim', false);
-    query = telSuffix
-      ? query.ilike('telefone', `%${telSuffix}`)
-      : query.eq('telefone', contato.telefone);
-    const { data, count } = await query
-      .order('timestamp_msg', { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1);
-    const lista = ((data as MetaMensagem[]) ?? []).reverse();
+    const { data } = await supabase.rpc('meta_mensagens_thread', {
+      _instancia: contato.instancia_id,
+      _suffix: telSuffix,
+      _limit: PAGE_SIZE,
+      _offset: offset,
+    });
+    const pagina = ((data as MetaMensagem[]) ?? []);
+    const lista = [...pagina].reverse();
     if (loadMore) {
       const container = chatContainerRef.current;
       const oldH = container?.scrollHeight || 0;
       setMensagens(prev => {
         const ids = new Set(prev.map(m => m.id));
-        return [...lista.filter(m => !ids.has(m.id)), ...prev];
+        const merged = [...lista.filter(m => !ids.has(m.id)), ...prev];
+        msgCacheRef.current.set(contato.id, merged);
+        return merged;
       });
       setPaginaAtual(p => p + 1);
-      setTemMaisAnteriores(((paginaAtual + 2) * PAGE_SIZE) < (count ?? 0));
+      setTemMaisAnteriores(pagina.length === PAGE_SIZE);
       requestAnimationFrame(() => {
         if (container) container.scrollTop = container.scrollHeight - oldH;
       });
       setCarregandoAnteriores(false);
     } else {
+      msgCacheRef.current.set(contato.id, lista);
       setMensagens(lista);
       setPaginaAtual(0);
-      setTemMaisAnteriores(PAGE_SIZE < (count ?? 0));
+      setTemMaisAnteriores(pagina.length === PAGE_SIZE);
       setCarregandoMsgs(false);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
       if (contato.nao_lido > 0) {
@@ -585,10 +589,23 @@ export default function InboxMeta() {
   }, [paginaAtual]);
 
   useEffect(() => {
-    if (contatoAtivo) fetchMensagens(contatoAtivo, false);
-    else setMensagens([]);
+    if (contatoAtivo) {
+      // Hidrata na hora com o cache (se houver) e revalida em background
+      const cached = msgCacheRef.current.get(contatoAtivo.id);
+      if (cached?.length) {
+        setMensagens(cached);
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 0);
+      } else {
+        setMensagens([]);
+      }
+      fetchMensagens(contatoAtivo, false);
+    } else setMensagens([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contatoAtivo?.id]);
+
+
+
+
 
   // Refresh saúde da instância em background (no máx 1x a cada 30 min por instância aberta)
   useEffect(() => {
@@ -610,6 +627,11 @@ export default function InboxMeta() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contatoAtivo?.instancia_id]);
+
+  // Mantém o cache em dia com o estado atual da conversa aberta
+  useEffect(() => {
+    if (contatoAtivo && mensagens.length) msgCacheRef.current.set(contatoAtivo.id, mensagens);
+  }, [mensagens, contatoAtivo?.id]);
 
   // Realtime mensagens
   useEffect(() => {
@@ -731,6 +753,26 @@ export default function InboxMeta() {
         return tb - ta;
       });
   }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h]);
+
+  // Prefetch da conversa do topo da lista (caso mais comum)
+  useEffect(() => {
+    const primeiro = contatosFiltrados?.[0];
+    if (!primeiro || contatoAtivo || msgCacheRef.current.has(primeiro.id)) return;
+    const t = setTimeout(async () => {
+      const telDigits = String(primeiro.telefone || '').replace(/\D/g, '');
+      const telSuffix = telDigits.length >= 8 ? telDigits.slice(-8) : telDigits;
+      const { data } = await supabase.rpc('meta_mensagens_thread', {
+        _instancia: primeiro.instancia_id,
+        _suffix: telSuffix,
+        _limit: PAGE_SIZE,
+        _offset: 0,
+      });
+      if (data) msgCacheRef.current.set(primeiro.id, ((data as any[]) as MetaMensagem[]).slice().reverse());
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contatosFiltrados?.[0]?.id, contatoAtivo?.id]);
+
 
   const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
