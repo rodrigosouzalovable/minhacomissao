@@ -1252,6 +1252,7 @@ export default function InboxMeta() {
                       ativo && 'bg-accent',
                       sel && 'bg-primary/15',
                       c.nao_lido > 0 && !ativo && 'bg-emerald-500/5',
+                      qualificacaoAtivaNaCaixa && !qualifPorContato[c.id] && !!c.ultima_msg_entrada_em && !ativo && 'pisca-qualificacao',
                     )}>
                     <div className="min-w-0 space-y-1">
                       <span className={cn(
