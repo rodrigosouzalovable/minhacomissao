@@ -134,6 +134,18 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
   }, [template?.body_text, template?.variaveis]);
 
   const [mapping, setMapping] = useState<ColRole[]>([]);
+  // Formato de saída por coluna: "brl" (R$ 4.607,58), "numero" (4.607,58) ou "raw".
+  const [formatoPorColuna, setFormatoPorColuna] = useState<Record<number, FormatoValor>>({});
+
+  // Colunas cujos valores parecem monetários (habilita o seletor de formato).
+  const colunasMonetarias = useMemo(() => {
+    const set = new Set<number>();
+    for (let c = 0; c < nCols; c++) {
+      const samples = rows.slice(firstIsHeader ? 1 : 0, firstIsHeader ? 11 : 10).map((r) => String((r || [])[c] ?? ""));
+      if (amostrasParecemValor(samples)) set.add(c);
+    }
+    return set;
+  }, [rows, nCols, firstIsHeader]);
 
   useEffect(() => {
     if (!open) return;
@@ -160,7 +172,15 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       if (idx >= 0) initial[idx] = "cpf";
     }
     setMapping(initial);
-  }, [open, nCols, firstIsHeader]);
+
+    // Formato inicial: R$ para colunas monetárias (ou cabeçalho de valor), raw nas demais.
+    const fmts: Record<number, FormatoValor> = {};
+    for (let c = 0; c < nCols; c++) {
+      const headerValor = firstIsHeader && VALOR_HEADER_RX.test(String(firstRow[c] ?? ""));
+      fmts[c] = colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
+    }
+    setFormatoPorColuna(fmts);
+  }, [open, nCols, firstIsHeader, colunasMonetarias]);
 
   const setCol = (idx: number, role: string) => {
     setMapping((prev) => {
@@ -174,7 +194,11 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     });
   };
 
+  const fmtCol = (c: number): FormatoValor => formatoPorColuna[c] ?? "raw";
+  const valorCelula = (c: number, raw: unknown) => formatarValorBR(raw, fmtCol(c));
+
   const preview = firstIsHeader ? rows.slice(1, 6) : rows.slice(0, 5);
+
 
   const colLetter = (i: number) => {
     let s = "";
