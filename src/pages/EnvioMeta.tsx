@@ -25,6 +25,7 @@ import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
+import { splitLinhaEnvio, parseNumeroBR } from "@/lib/valorBR";
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -105,7 +106,7 @@ function parseRecipients(input: string): ClienteRow[] {
   const rows: ClienteRow[] = [];
   const seen = new Set<string>();
   for (const linha of linhas) {
-    const parts = linha.split(/[,;\t]/).map((p) => p.trim());
+    const parts = splitLinhaEnvio(linha);
     const telefone = parts[0] || "";
     const secondAsDoc = normalizeDocument(parts[1] || "");
     const thirdAsDoc = normalizeDocument(parts[2] || "");
@@ -120,7 +121,7 @@ function parseRecipients(input: string): ClienteRow[] {
       nome,
       cpf,
       atraso: parts[3] || "",
-      saldo: parts[4] ? Number(parts[4].replace(",", ".")) : 0,
+      saldo: parseNumeroBR(parts[4]) ?? 0,
     });
   }
   return rows;
@@ -135,7 +136,7 @@ function dedupRecipientsRaw(raw: string): { texto: string; duplicados: number } 
   for (const l of linhas) {
     const trimmed = l.trim();
     if (!trimmed) continue;
-    const tel = trimmed.split(/[,;\t]/)[0]?.trim() || "";
+    const tel = splitLinhaEnvio(trimmed)[0] || "";
     const key = normalizeTelKey(tel);
     if (!key) { out.push(trimmed); continue; }
     if (seen.has(key)) { dup++; continue; }
@@ -290,7 +291,7 @@ export default function EnvioMeta() {
     const linhas = recipientsRaw.split(/\r?\n/).filter((linha) => {
       const trimmed = linha.trim();
       if (!trimmed) return false;
-      const tel = trimmed.split(/[,;\t]/)[0]?.trim() || "";
+      const tel = splitLinhaEnvio(trimmed)[0] || "";
       const key = normalizeTelKey(tel);
       if (!key) return false;
       return !invalidSet.has(key);
@@ -1344,7 +1345,7 @@ export default function EnvioMeta() {
                   </thead>
                   <tbody>
                     {recipientsRaw.split(/\r?\n/).filter(Boolean).map((linha, ri) => {
-                      const cells = linha.split(/[,;\t]/).map((c) => c.trim());
+                      const cells = splitLinhaEnvio(linha);
                       return (
                         <tr key={ri} className="border-b last:border-0 hover:bg-muted/40">
                           {recipientsHeaders.map((_, ci) => (
@@ -1598,7 +1599,7 @@ export default function EnvioMeta() {
                     const colHeaders = usarHeaders ? recipientsHeaders : ["Telefone", "Nome", "CPF/CNPJ", "Atraso", "Saldo"];
                     const dados: Record<string, any>[] = [];
                     for (const linha of linhas) {
-                      const parts = linha.split(/[,;\t]/).map((p) => p.trim());
+                      const parts = splitLinhaEnvio(linha);
                       const tel = parts[0] || "";
                       if (!validSet.has(normalizeTelKey(tel))) continue;
                       const row: Record<string, any> = {};

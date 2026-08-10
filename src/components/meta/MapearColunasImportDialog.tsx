@@ -3,6 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectGroup, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { amostrasParecemValor, formatarValorBR, type FormatoValor } from "@/lib/valorBR";
+
+const VALOR_HEADER_RX = /(saldo|valor|d[ií]vida|debito|débito|montante|total|parcela|entrada)/i;
 
 // ColRole aceita papéis fixos ("telefone"/"nome"/...) ou uma variável do template ("tplvar:1", "tplvar:nome_completo").
 export type ColRole = string;
@@ -131,6 +134,18 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
   }, [template?.body_text, template?.variaveis]);
 
   const [mapping, setMapping] = useState<ColRole[]>([]);
+  // Formato de saída por coluna: "brl" (R$ 4.607,58), "numero" (4.607,58) ou "raw".
+  const [formatoPorColuna, setFormatoPorColuna] = useState<Record<number, FormatoValor>>({});
+
+  // Colunas cujos valores parecem monetários (habilita o seletor de formato).
+  const colunasMonetarias = useMemo(() => {
+    const set = new Set<number>();
+    for (let c = 0; c < nCols; c++) {
+      const samples = rows.slice(firstIsHeader ? 1 : 0, firstIsHeader ? 11 : 10).map((r) => String((r || [])[c] ?? ""));
+      if (amostrasParecemValor(samples)) set.add(c);
+    }
+    return set;
+  }, [rows, nCols, firstIsHeader]);
 
   useEffect(() => {
     if (!open) return;
@@ -157,7 +172,15 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       if (idx >= 0) initial[idx] = "cpf";
     }
     setMapping(initial);
-  }, [open, nCols, firstIsHeader]);
+
+    // Formato inicial: R$ para colunas monetárias (ou cabeçalho de valor), raw nas demais.
+    const fmts: Record<number, FormatoValor> = {};
+    for (let c = 0; c < nCols; c++) {
+      const headerValor = firstIsHeader && VALOR_HEADER_RX.test(String(firstRow[c] ?? ""));
+      fmts[c] = colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
+    }
+    setFormatoPorColuna(fmts);
+  }, [open, nCols, firstIsHeader, colunasMonetarias]);
 
   const setCol = (idx: number, role: string) => {
     setMapping((prev) => {
@@ -171,7 +194,11 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     });
   };
 
+  const fmtCol = (c: number): FormatoValor => formatoPorColuna[c] ?? "raw";
+  const valorCelula = (c: number, raw: unknown) => formatarValorBR(raw, fmtCol(c));
+
   const preview = firstIsHeader ? rows.slice(1, 6) : rows.slice(0, 5);
+
 
   const colLetter = (i: number) => {
     let s = "";
@@ -215,14 +242,19 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     if (idxNome >= 0) cols.push({ header: "Nome", get: (arr) => String(arr[idxNome] ?? "").trim() });
     if (idxCpf >= 0) cols.push({ header: "CPF/CNPJ", get: (arr) => String(arr[idxCpf] ?? "").replace(/\D/g, "") });
     if (idxAtraso >= 0) cols.push({ header: "Atraso", get: (arr) => String(arr[idxAtraso] ?? "").trim() });
-    if (idxSaldo >= 0) cols.push({ header: "Saldo", get: (arr) => String(arr[idxSaldo] ?? "").trim().replace(/[^\d,.-]/g, "").replace(",", ".") });
+    if (idxSaldo >= 0) cols.push({
+      header: "Saldo",
+      get: (arr) => (fmtCol(idxSaldo) === "raw"
+        ? String(arr[idxSaldo] ?? "").trim().replace(/[^\d,.-]/g, "").replace(",", ".")
+        : valorCelula(idxSaldo, arr[idxSaldo])),
+    });
     // Placeholders do template na ordem em que aparecem no corpo.
     for (const pk of placeholders) {
       const col = tplByKey.get(pk);
       if (col == null) continue;
       const ctx = placeholderContext(bodyText, pk);
       const header = ctx ? `{{${pk}}} — ${ctx}` : `{{${pk}}}`;
-      cols.push({ header, get: (arr) => String(arr[col] ?? "").trim() });
+      cols.push({ header, get: (arr) => valorCelula(col, arr[col]) });
     }
 
     const headers = cols.map((c) => c.header);
@@ -247,7 +279,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       for (const pk of placeholders) {
         const col = tplByKey.get(pk);
         if (col == null) continue;
-        const raw = String(arr[col] ?? "").trim();
+        const raw = valorCelula(col, arr[col]);
         if (raw) rowVars[pk] = raw;
       }
       if (Object.keys(rowVars).length > 0) varsByTel[key] = rowVars;
@@ -333,6 +365,21 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
                         )}
                       </SelectContent>
                     </Select>
+                    {(colunasMonetarias.has(c) || fmtCol(c) !== "raw") && (
+                      <Select
+                        value={fmtCol(c)}
+                        onValueChange={(v) => setFormatoPorColuna((p) => ({ ...p, [c]: v as FormatoValor }))}
+                      >
+                        <SelectTrigger className="h-7 mt-1 text-[10px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="brl">R$ 4.607,58</SelectItem>
+                          <SelectItem value="numero">4.607,58</SelectItem>
+                          <SelectItem value="raw">Texto original</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                     {firstIsHeader && (
                       <div className="mt-1 text-[10px] text-muted-foreground truncate" title={String(firstRow[c] ?? "")}>
                         {String(firstRow[c] ?? "") || "—"}
@@ -346,8 +393,8 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
               {preview.map((r, i) => (
                 <tr key={i} className="border-b">
                   {Array.from({ length: nCols }).map((_, c) => (
-                    <td key={c} className="p-2 font-mono truncate max-w-[220px]" title={String((r || [])[c] ?? "")}>
-                      {String((r || [])[c] ?? "")}
+                    <td key={c} className="p-2 font-mono truncate max-w-[220px]" title={valorCelula(c, (r || [])[c])}>
+                      {valorCelula(c, (r || [])[c])}
                     </td>
                   ))}
                 </tr>
