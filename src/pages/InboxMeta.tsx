@@ -1653,6 +1653,30 @@ export default function InboxMeta() {
         onChanged={fetchFolders}
       />
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
+      <MetaFolderConfigDialog
+        open={!!configFolder}
+        onOpenChange={(v) => { if (!v) setConfigFolder(null); }}
+        folderId={configFolder?.id ?? null}
+        folderNome={configFolder?.nome ?? 'Padrão'}
+        qualificacaoAtiva={qualifCaixas[configFolder?.id ?? CAIXA_PADRAO_ID] ?? true}
+        onChanged={fetchQualificacoes}
+      />
+      <MetaQualificacaoDialog
+        open={qualifDialogOpen}
+        onOpenChange={setQualifDialogOpen}
+        contatoId={contatoAtivo?.id ?? null}
+        contatoNome={contatoAtivo?.nome ?? undefined}
+        atualId={contatoAtivo ? (qualifPorContato[contatoAtivo.id] ?? null) : null}
+        qualificacoes={qualificacoes}
+        isAdmin={isAdmin}
+        onQualificar={(cid, qid) => setQualifPorContato(prev => {
+          const next = { ...prev };
+          if (qid) next[cid] = qid; else delete next[cid];
+          return next;
+        })}
+        onQualificacoesChange={fetchQualificacoes}
+      />
+
 
       <MetaNovaConversaDialog
         open={novaConversaOpen}
