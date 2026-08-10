@@ -433,20 +433,30 @@ export function NotificacoesCpfBell() {
             Consultas de CPF {isAdmin && <span className="text-xs text-muted-foreground font-normal">(todos)</span>}
           </div>
           <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs"
-              onClick={baixarExcel}
-              disabled={exportando}
-              title="Baixar todas as consultas em Excel"
-            >
-              <Download className="h-3.5 w-3.5 mr-1" />
-              {exportando
-                ? `Baixando...${exportProgresso ? ` ${exportProgresso.toLocaleString("pt-BR")}` : ""}`
-                : "Excel"}
-
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  disabled={exportando}
+                  title="Baixar relatórios em Excel"
+                >
+                  <Download className="h-3.5 w-3.5 mr-1" />
+                  {exportando
+                    ? `Baixando...${exportProgresso ? ` ${exportProgresso.toLocaleString("pt-BR")}` : ""}`
+                    : "Excel"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onClick={baixarExcel}>
+                  Consultas de CPF ao portal
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={baixarQualificacoes}>
+                  Qualificações lançadas
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {naoLidas > 0 && (
               <Button
                 size="sm"
