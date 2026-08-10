@@ -1160,6 +1160,9 @@ export default function InboxMeta() {
                         <ContextMenuItem onClick={() => setAcessoFolder({ id: f.id, nome: f.nome })}>
                           <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
                         </ContextMenuItem>
+                        <ContextMenuItem onClick={() => setConfigFolder({ id: f.id, nome: f.nome })}>
+                          <Settings2 className="h-4 w-4 mr-2" /> Configurar caixa
+                        </ContextMenuItem>
                         {f.nome.trim().toUpperCase() === 'IA' && (
                           <ContextMenuItem onClick={() => setIaConfigOpen(true)}>
                             <Bot className="h-4 w-4 mr-2" /> Configurar IA
