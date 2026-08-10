@@ -603,24 +603,8 @@ export default function InboxMeta() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contatoAtivo?.id]);
 
-  // Prefetch da conversa do topo da lista (caso mais comum)
-  useEffect(() => {
-    const primeiro = contatosFiltrados?.[0];
-    if (!primeiro || contatoAtivo || msgCacheRef.current.has(primeiro.id)) return;
-    const t = setTimeout(async () => {
-      const telDigits = String(primeiro.telefone || '').replace(/\D/g, '');
-      const telSuffix = telDigits.length >= 8 ? telDigits.slice(-8) : telDigits;
-      const { data } = await supabase.rpc('meta_mensagens_thread', {
-        _instancia: primeiro.instancia_id,
-        _suffix: telSuffix,
-        _limit: PAGE_SIZE,
-        _offset: 0,
-      });
-      if (data) msgCacheRef.current.set(primeiro.id, ((data as MetaMensagem[]) ?? []).slice().reverse());
-    }, 400);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contatosFiltrados?.[0]?.id, contatoAtivo?.id]);
+
+
 
 
   // Refresh saúde da instância em background (no máx 1x a cada 30 min por instância aberta)
