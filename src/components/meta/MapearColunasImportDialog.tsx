@@ -242,14 +242,19 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     if (idxNome >= 0) cols.push({ header: "Nome", get: (arr) => String(arr[idxNome] ?? "").trim() });
     if (idxCpf >= 0) cols.push({ header: "CPF/CNPJ", get: (arr) => String(arr[idxCpf] ?? "").replace(/\D/g, "") });
     if (idxAtraso >= 0) cols.push({ header: "Atraso", get: (arr) => String(arr[idxAtraso] ?? "").trim() });
-    if (idxSaldo >= 0) cols.push({ header: "Saldo", get: (arr) => String(arr[idxSaldo] ?? "").trim().replace(/[^\d,.-]/g, "").replace(",", ".") });
+    if (idxSaldo >= 0) cols.push({
+      header: "Saldo",
+      get: (arr) => (fmtCol(idxSaldo) === "raw"
+        ? String(arr[idxSaldo] ?? "").trim().replace(/[^\d,.-]/g, "").replace(",", ".")
+        : valorCelula(idxSaldo, arr[idxSaldo])),
+    });
     // Placeholders do template na ordem em que aparecem no corpo.
     for (const pk of placeholders) {
       const col = tplByKey.get(pk);
       if (col == null) continue;
       const ctx = placeholderContext(bodyText, pk);
       const header = ctx ? `{{${pk}}} — ${ctx}` : `{{${pk}}}`;
-      cols.push({ header, get: (arr) => String(arr[col] ?? "").trim() });
+      cols.push({ header, get: (arr) => valorCelula(col, arr[col]) });
     }
 
     const headers = cols.map((c) => c.header);
