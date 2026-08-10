@@ -3,6 +3,7 @@
 // Para janelas expiradas, use send-whatsapp-meta com um template HSM.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
+import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
