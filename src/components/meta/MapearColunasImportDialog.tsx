@@ -171,7 +171,15 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       const idx = initial.findIndex((role, c) => role !== "telefone" && columnLooksLikeDocument(rows, c, firstIsHeader));
       if (idx >= 0) initial[idx] = "cpf";
     }
+    // Coluna monetária sem papel: sugere a próxima variável livre do template (ou Saldo).
+    for (let c = 0; c < nCols; c++) {
+      if (initial[c] !== "ignore" || !colunasMonetarias.has(c)) continue;
+      const livre = placeholders.find((k) => !initial.includes(`tplvar:${k}`));
+      if (livre) initial[c] = `tplvar:${livre}`;
+      else if (!initial.includes("saldo")) initial[c] = "saldo";
+    }
     setMapping(initial);
+
 
     // Formato inicial: R$ para colunas monetárias (ou cabeçalho de valor), raw nas demais.
     const fmts: Record<number, FormatoValor> = {};
@@ -180,7 +188,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       fmts[c] = colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
     }
     setFormatoPorColuna(fmts);
-  }, [open, nCols, firstIsHeader, colunasMonetarias]);
+  }, [open, nCols, firstIsHeader, colunasMonetarias, placeholders]);
 
   const setCol = (idx: number, role: string) => {
     setMapping((prev) => {
