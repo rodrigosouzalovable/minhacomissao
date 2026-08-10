@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
           mensagem:
             `🔒 Tentativa de envio de mídia fora da janela 24h (BLOQUEADA)\n\n` +
             `Usuário: ${uid}\n` +
-            `Instância: ${inst.nome || inst.display_phone || inst.id}\n` +
+            `Instância: ${rotuloInstancia(inst)}\n` +
             `Destino: ${to || bsuid}\n` +
             `Tipo: ${type}\n\n` +
             `Enviar agora reclassificaria como MARKETING. Oriente a usar template UTILITY.`,

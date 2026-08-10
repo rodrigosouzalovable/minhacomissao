@@ -791,7 +791,7 @@ Deno.serve(async (req) => {
             tipo: 'meta_instancia_restrita',
             mensagem:
               `🚫 Instância Meta restringida/bloqueada\n\n` +
-              `Instância: *${inst.nome || inst.display_phone || inst.id}*\n` +
+              `Instância: *${rotuloInstancia(inst)}*\n` +
               `Motivo: *${msg}*\n\n` +
               `Pausa automática por 24h. Verifique o Business Manager da Meta.`,
             chaveIdempotencia: chave,

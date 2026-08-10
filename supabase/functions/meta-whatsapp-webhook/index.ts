@@ -309,7 +309,7 @@ serve(async (req) => {
         if (!phoneNumberId) continue;
 
         const { data: inst } = await supabase
-          .from('meta_whatsapp_instances').select('id, user_id, display_phone, access_token')
+          .from('meta_whatsapp_instances').select('id, user_id, display_phone, access_token, nome, meta_verified_name, phone_number_id')
           .eq('phone_number_id', phoneNumberId).maybeSingle();
         if (!inst) continue;
 
@@ -932,7 +932,7 @@ serve(async (req) => {
                   tipo: 'meta_instancia_restrita',
                   mensagem:
                     `🚫 Instância Meta restringida/bloqueada\n\n` +
-                    `Instância: *${inst.nome || inst.display_phone || inst.id}*\n` +
+                    `Instância: *${rotuloInstancia(inst)}*\n` +
                     `Motivo: *${motivo}*${errCode ? ` (#${errCode})` : ''}\n\n` +
                     `Pausa automática por 24h. Verifique o Business Manager da Meta.`,
                   chaveIdempotencia: chave,
