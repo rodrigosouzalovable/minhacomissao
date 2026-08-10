@@ -1,6 +1,7 @@
 // Envia mídia (imagem, documento, áudio, vídeo) pela API oficial Meta dentro da janela 24h.
 // Áudio é enviado via Meta Media API (upload multipart) para evitar rejeição de container webm.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -129,7 +130,7 @@ Deno.serve(async (req) => {
           mensagem:
             `🔒 Tentativa de envio de mídia fora da janela 24h (BLOQUEADA)\n\n` +
             `Usuário: ${uid}\n` +
-            `Instância: ${inst.nome || inst.display_phone || inst.id}\n` +
+            `Instância: ${rotuloInstancia(inst)}\n` +
             `Destino: ${to || bsuid}\n` +
             `Tipo: ${type}\n\n` +
             `Enviar agora reclassificaria como MARKETING. Oriente a usar template UTILITY.`,

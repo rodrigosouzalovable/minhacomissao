@@ -2,6 +2,7 @@
 // vivem no frontend para permitir pausar/retomar/cancelar sem servidor extra.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
+import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -477,6 +478,10 @@ Deno.serve(async (req) => {
       if (bloquear) {
         // Notifica admin (idempotente por template + dia)
         try {
+          const { data: instMarketing } = await supabase
+            .from('meta_whatsapp_instances')
+            .select('id, nome, display_phone, meta_verified_name, phone_number_id')
+            .eq('id', instancia_id).maybeSingle();
           const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
           const chave = `meta_marketing_block_${template.nome_template}_${new Date().toISOString().slice(0,10)}`;
           await notificarAdmin(supabase, {
@@ -486,7 +491,7 @@ Deno.serve(async (req) => {
               `Template: *${template.nome_template}*\n` +
               `Categoria: *MARKETING* (custo alto ~US$0,0625/msg)\n` +
               `Usuário: ${user_id || 'desconhecido'}\n` +
-              `Instância: ${instancia_id}\n\n` +
+              `Instância: ${rotuloInstancia(instMarketing)}\n\n` +
               `Bloqueado pela trava anti-gasto. Para liberar: Configurar Meta → Segurança de Custos.`,
             chaveIdempotencia: chave,
           });
@@ -791,7 +796,7 @@ Deno.serve(async (req) => {
             tipo: 'meta_instancia_restrita',
             mensagem:
               `🚫 Instância Meta restringida/bloqueada\n\n` +
-              `Instância: *${inst.nome || inst.display_phone || inst.id}*\n` +
+              `Instância: *${rotuloInstancia(inst)}*\n` +
               `Motivo: *${msg}*\n\n` +
               `Pausa automática por 24h. Verifique o Business Manager da Meta.`,
             chaveIdempotencia: chave,
