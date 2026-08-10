@@ -31,6 +31,8 @@ import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEn
 import { MetaFoldersDialog, type MetaInboxFolder } from '@/components/inbox/meta/MetaFoldersDialog';
 import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcessoDialog';
 import MetaIAConfigDialog from '@/components/inbox/meta/MetaIAConfigDialog';
+import { MetaQualificacaoDialog, type MetaQualificacao } from '@/components/inbox/meta/MetaQualificacaoDialog';
+import { MetaFolderConfigDialog, CAIXA_PADRAO_ID } from '@/components/inbox/meta/MetaFolderConfigDialog';
 
 import { useUserRole } from '@/hooks/useUserRole';
 import {
@@ -130,6 +132,12 @@ export default function InboxMeta() {
   const [foldersDialogOpen, setFoldersDialogOpen] = useState(false);
   const [acessoFolder, setAcessoFolder] = useState<{ id: string | null; nome: string } | null>(null);
   const [iaConfigOpen, setIaConfigOpen] = useState(false);
+  const [configFolder, setConfigFolder] = useState<{ id: string | null; nome: string } | null>(null);
+  // Qualificação de conversas
+  const [qualificacoes, setQualificacoes] = useState<MetaQualificacao[]>([]);
+  const [qualifPorContato, setQualifPorContato] = useState<Record<string, string>>({});
+  const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
+  const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
@@ -330,6 +338,32 @@ export default function InboxMeta() {
 
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
 
+  const fetchQualificacoes = useCallback(async () => {
+    const { data } = await (supabase as any).from('meta_qualificacoes')
+      .select('id, nome, cor, ordem, ativo').order('ordem');
+    setQualificacoes(((data as any) ?? []) as MetaQualificacao[]);
+    const { data: cx } = await (supabase as any).from('meta_qualificacao_caixa')
+      .select('folder_id, ativo');
+    const map: Record<string, boolean> = {};
+    ((cx as any[]) ?? []).forEach(r => { map[r.folder_id] = !!r.ativo; });
+    setQualifCaixas(map);
+  }, []);
+
+  useEffect(() => { fetchQualificacoes(); }, [fetchQualificacoes]);
+
+  const fetchQualifContatos = useCallback(async (ids: string[]) => {
+    if (!ids.length) { setQualifPorContato({}); return; }
+    const map: Record<string, string> = {};
+    for (let i = 0; i < ids.length; i += 300) {
+      const { data } = await (supabase as any).from('meta_contato_qualificacao')
+        .select('contato_id, qualificacao_id').in('contato_id', ids.slice(i, i + 300));
+      ((data as any[]) ?? []).forEach(r => { map[r.contato_id] = r.qualificacao_id; });
+    }
+    setQualifPorContato(map);
+  }, []);
+
+  const qualificacaoAtivaNaCaixa = qualifCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
+
   // Somente caixas permitidas (RLS já filtra a lista de folders)
   const foldersVisiveis = folders;
 
@@ -449,7 +483,8 @@ export default function InboxMeta() {
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
     fetchContatoEtiquetas(contatoIdsRef.current);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas]);
+    fetchQualifContatos(contatoIdsRef.current);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -1096,6 +1131,9 @@ export default function InboxMeta() {
                       <ContextMenuItem onClick={() => setAcessoFolder({ id: null, nome: 'Padrão' })}>
                         <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
                       </ContextMenuItem>
+                      <ContextMenuItem onClick={() => setConfigFolder({ id: null, nome: 'Padrão' })}>
+                        <Settings2 className="h-4 w-4 mr-2" /> Configurar caixa
+                      </ContextMenuItem>
                     </ContextMenuContent>
                   )}
                 </ContextMenu>
@@ -1121,6 +1159,9 @@ export default function InboxMeta() {
                       <ContextMenuContent>
                         <ContextMenuItem onClick={() => setAcessoFolder({ id: f.id, nome: f.nome })}>
                           <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={() => setConfigFolder({ id: f.id, nome: f.nome })}>
+                          <Settings2 className="h-4 w-4 mr-2" /> Configurar caixa
                         </ContextMenuItem>
                         {f.nome.trim().toUpperCase() === 'IA' && (
                           <ContextMenuItem onClick={() => setIaConfigOpen(true)}>
@@ -1217,6 +1258,7 @@ export default function InboxMeta() {
                       ativo && 'bg-accent',
                       sel && 'bg-primary/15',
                       c.nao_lido > 0 && !ativo && 'bg-emerald-500/5',
+                      qualificacaoAtivaNaCaixa && !qualifPorContato[c.id] && !!c.ultima_msg_entrada_em && !ativo && 'pisca-qualificacao',
                     )}>
                     <div className="min-w-0 space-y-1">
                       <span className={cn(
@@ -1321,19 +1363,43 @@ export default function InboxMeta() {
                   </div>
                 </div>
 
-                {janelaInfo.status === 'aberta' ? (
-                  <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
-                    <Clock className="h-3 w-3" /> Aberta · fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
-                  </Badge>
-                ) : janelaInfo.status === 'alerta' ? (
-                  <Badge variant="outline" className="border-amber-500/60 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1 animate-pulse">
-                    <AlertCircle className="h-3 w-3" /> Janela fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400 gap-1">
-                    <AlertCircle className="h-3 w-3" /> Fechada · envio bloqueado
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {qualificacaoAtivaNaCaixa && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[11px] gap-1"
+                      onClick={() => setQualifDialogOpen(true)}
+                      title="Qualificar esta conversa"
+                    >
+                      {(() => {
+                        const q = qualificacoes.find(x => x.id === qualifPorContato[contatoAtivo.id]);
+                        return (
+                          <>
+                            <span
+                              className="h-2.5 w-2.5 rounded-full"
+                              style={{ backgroundColor: q?.cor ?? 'hsl(var(--muted-foreground))' }}
+                            />
+                            {q ? q.nome : 'Qualificação'}
+                          </>
+                        );
+                      })()}
+                    </Button>
+                  )}
+                  {janelaInfo.status === 'aberta' ? (
+                    <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
+                      <Clock className="h-3 w-3" /> Aberta · fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
+                    </Badge>
+                  ) : janelaInfo.status === 'alerta' ? (
+                    <Badge variant="outline" className="border-amber-500/60 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1 animate-pulse">
+                      <AlertCircle className="h-3 w-3" /> Janela fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400 gap-1">
+                      <AlertCircle className="h-3 w-3" /> Fechada · envio bloqueado
+                    </Badge>
+                  )}
+                </div>
               </div>
 
               <MetaInstanceHealthBanner instancia={instAtiva} />
@@ -1587,6 +1653,30 @@ export default function InboxMeta() {
         onChanged={fetchFolders}
       />
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
+      <MetaFolderConfigDialog
+        open={!!configFolder}
+        onOpenChange={(v) => { if (!v) setConfigFolder(null); }}
+        folderId={configFolder?.id ?? null}
+        folderNome={configFolder?.nome ?? 'Padrão'}
+        qualificacaoAtiva={qualifCaixas[configFolder?.id ?? CAIXA_PADRAO_ID] ?? true}
+        onChanged={fetchQualificacoes}
+      />
+      <MetaQualificacaoDialog
+        open={qualifDialogOpen}
+        onOpenChange={setQualifDialogOpen}
+        contatoId={contatoAtivo?.id ?? null}
+        contatoNome={contatoAtivo?.nome ?? undefined}
+        atualId={contatoAtivo ? (qualifPorContato[contatoAtivo.id] ?? null) : null}
+        qualificacoes={qualificacoes}
+        isAdmin={isAdmin}
+        onQualificar={(cid, qid) => setQualifPorContato(prev => {
+          const next = { ...prev };
+          if (qid) next[cid] = qid; else delete next[cid];
+          return next;
+        })}
+        onQualificacoesChange={fetchQualificacoes}
+      />
+
 
       <MetaNovaConversaDialog
         open={novaConversaOpen}

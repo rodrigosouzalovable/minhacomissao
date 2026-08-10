@@ -328,6 +328,35 @@ Deno.serve(async (req) => {
       }
     }
 
+    // === Qualificações lançadas no dia ===
+    const linhasQualif: string[] = [];
+    try {
+      const { data: quals } = await supabase
+        .from("meta_qualificacoes")
+        .select("id, nome, ordem")
+        .order("ordem", { ascending: true });
+      const qualRows = await fetchAll(
+        () => supabase
+          .from("meta_contato_qualificacao")
+          .select("qualificacao_id, created_at")
+          .gte("created_at", inicioDia)
+          .lte("created_at", fimDia),
+        "created_at",
+      );
+      const contagem = new Map<string, number>();
+      for (const r of (qualRows || []) as any[]) {
+        contagem.set(r.qualificacao_id, (contagem.get(r.qualificacao_id) || 0) + 1);
+      }
+      const totalQualif = (qualRows || []).length;
+      if ((quals || []).length > 0) {
+        linhasQualif.push("");
+        linhasQualif.push(`*🏷️ Qualificações do dia:* ${totalQualif}`);
+        for (const q of (quals || []) as any[]) {
+          linhasQualif.push(`  • ${q.nome}: ${contagem.get(q.id) || 0}`);
+        }
+      }
+    } catch (_e) { /* qualificações opcionais */ }
+
     let enviado: any = { skipped: true };
     if (notificar) {
       const [a, m, d] = dia.split("-");
@@ -358,6 +387,7 @@ Deno.serve(async (req) => {
             "",
             `📄 Acordos lançados: *${totalAcordos}*`,
             `💵 Valor em acordos: *${brl(valorAcordos || tot.valor)}*`,
+            ...linhasQualif,
             ...(alerta3c ? ["", alerta3c] : []),
             "",
             "*Por hora (acion. / CPC / CPC-A):*",
@@ -378,6 +408,7 @@ Deno.serve(async (req) => {
             `🤝 CPC-A: *${tot.cpca}*  (${pct(tot.cpca, tot.cpc)})`,
             `📄 Acordos lançados: *${totalAcordos}*`,
             `💵 Valor em acordos: *${brl(valorAcordos || tot.valor)}*`,
+            ...linhasQualif,
             ...(alerta3c ? ["", alerta3c] : []),
             "",
             "*Por hora (acion. / CPC / CPC-A):*",

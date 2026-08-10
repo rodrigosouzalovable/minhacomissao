@@ -3,6 +3,7 @@ import { Bell, Check, CheckCheck, Copy, Download } from "lucide-react";
 import { exportarParaExcel } from "@/lib/exportExcel";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -336,6 +337,80 @@ export function NotificacoesCpfBell() {
     }
   };
 
+  const baixarQualificacoes = async () => {
+    setExportando(true);
+    setExportProgresso(0);
+    try {
+      const PAGE = 1000;
+      const rows: any[] = [];
+      let from = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { data, error } = await (supabase as any)
+          .from("meta_contato_qualificacao")
+          .select("contato_id, qualificacao_id, user_id, created_at, meta_qualificacoes(nome), meta_whatsapp_contatos(nome, telefone, folder_id)")
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        const pagina = (data as any[]) || [];
+        rows.push(...pagina);
+        setExportProgresso(rows.length);
+        if (pagina.length < PAGE) break;
+        from += PAGE;
+      }
+      if (rows.length === 0) {
+        toast.info("Nenhuma qualificação lançada ainda");
+        return;
+      }
+
+      const { data: pastas } = await (supabase as any).from("meta_inbox_folders").select("id, nome");
+      const pastaMap: Record<string, string> = {};
+      ((pastas as any[]) || []).forEach((p) => { pastaMap[p.id] = p.nome; });
+
+      const userIds = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean) as string[]));
+      const nomeMap: Record<string, string> = {};
+      if (userIds.length) {
+        const { data: profs } = await supabase.from("profiles").select("id, nome, email").in("id", userIds);
+        ((profs as any[]) || []).forEach((p) => { nomeMap[p.id] = p.nome || p.email || p.id.slice(0, 8); });
+      }
+
+      const fmtDT = (iso: string | null) =>
+        iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "";
+
+      const dados = rows.map((r) => ({
+        data_hora: fmtDT(r.created_at),
+        qualificacao: r.meta_qualificacoes?.nome || "",
+        telefone: r.meta_whatsapp_contatos?.telefone || "",
+        nome: r.meta_whatsapp_contatos?.nome || "",
+        caixa: r.meta_whatsapp_contatos?.folder_id
+          ? pastaMap[r.meta_whatsapp_contatos.folder_id] || ""
+          : "Padrão",
+        atendente: r.user_id ? nomeMap[r.user_id] || "" : "",
+      }));
+      dados.sort((a, b) => a.qualificacao.localeCompare(b.qualificacao));
+
+      const hoje = new Date().toISOString().slice(0, 10);
+      await exportarParaExcel(
+        dados,
+        [
+          { chave: "qualificacao", titulo: "Qualificação" },
+          { chave: "telefone", titulo: "Telefone" },
+          { chave: "nome", titulo: "Nome" },
+          { chave: "caixa", titulo: "Caixa de mensagens" },
+          { chave: "atendente", titulo: "Qualificado por" },
+          { chave: "data_hora", titulo: "Data/Hora" },
+        ],
+        `qualificacoes-inbox-meta-${hoje}`
+      );
+      toast.success(`${rows.length} qualificação(ões) exportada(s)`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao exportar qualificações");
+    } finally {
+      setExportando(false);
+    }
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -359,20 +434,30 @@ export function NotificacoesCpfBell() {
             Consultas de CPF {isAdmin && <span className="text-xs text-muted-foreground font-normal">(todos)</span>}
           </div>
           <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs"
-              onClick={baixarExcel}
-              disabled={exportando}
-              title="Baixar todas as consultas em Excel"
-            >
-              <Download className="h-3.5 w-3.5 mr-1" />
-              {exportando
-                ? `Baixando...${exportProgresso ? ` ${exportProgresso.toLocaleString("pt-BR")}` : ""}`
-                : "Excel"}
-
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  disabled={exportando}
+                  title="Baixar relatórios em Excel"
+                >
+                  <Download className="h-3.5 w-3.5 mr-1" />
+                  {exportando
+                    ? `Baixando...${exportProgresso ? ` ${exportProgresso.toLocaleString("pt-BR")}` : ""}`
+                    : "Excel"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onClick={baixarExcel}>
+                  Consultas de CPF ao portal
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={baixarQualificacoes}>
+                  Qualificações lançadas
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {naoLidas > 0 && (
               <Button
                 size="sm"

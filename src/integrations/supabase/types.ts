@@ -3188,6 +3188,45 @@ export type Database = {
           },
         ]
       }
+      meta_contato_qualificacao: {
+        Row: {
+          contato_id: string
+          created_at: string
+          qualificacao_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          contato_id: string
+          created_at?: string
+          qualificacao_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          contato_id?: string
+          created_at?: string
+          qualificacao_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_contato_qualificacao_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: true
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_contato_qualificacao_qualificacao_id_fkey"
+            columns: ["qualificacao_id"]
+            isOneToOne: false
+            referencedRelation: "meta_qualificacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_envio_pool_config: {
         Row: {
           aquecimento_ativo: boolean
@@ -3822,6 +3861,54 @@ export type Database = {
           tipo?: string
           user_id?: string | null
           wa_message_id?: string | null
+        }
+        Relationships: []
+      }
+      meta_qualificacao_caixa: {
+        Row: {
+          ativo: boolean
+          folder_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          folder_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          folder_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meta_qualificacoes: {
+        Row: {
+          ativo: boolean
+          cor: string
+          created_at: string
+          id: string
+          nome: string
+          ordem: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          cor?: string
+          created_at?: string
+          id?: string
+          nome: string
+          ordem?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          cor?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          updated_at?: string
         }
         Relationships: []
       }
