@@ -365,6 +365,21 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
                         )}
                       </SelectContent>
                     </Select>
+                    {(colunasMonetarias.has(c) || fmtCol(c) !== "raw") && (
+                      <Select
+                        value={fmtCol(c)}
+                        onValueChange={(v) => setFormatoPorColuna((p) => ({ ...p, [c]: v as FormatoValor }))}
+                      >
+                        <SelectTrigger className="h-7 mt-1 text-[10px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="brl">R$ 4.607,58</SelectItem>
+                          <SelectItem value="numero">4.607,58</SelectItem>
+                          <SelectItem value="raw">Texto original</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                     {firstIsHeader && (
                       <div className="mt-1 text-[10px] text-muted-foreground truncate" title={String(firstRow[c] ?? "")}>
                         {String(firstRow[c] ?? "") || "—"}
@@ -378,8 +393,8 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
               {preview.map((r, i) => (
                 <tr key={i} className="border-b">
                   {Array.from({ length: nCols }).map((_, c) => (
-                    <td key={c} className="p-2 font-mono truncate max-w-[220px]" title={String((r || [])[c] ?? "")}>
-                      {String((r || [])[c] ?? "")}
+                    <td key={c} className="p-2 font-mono truncate max-w-[220px]" title={valorCelula(c, (r || [])[c])}>
+                      {valorCelula(c, (r || [])[c])}
                     </td>
                   ))}
                 </tr>
