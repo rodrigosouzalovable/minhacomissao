@@ -1357,19 +1357,43 @@ export default function InboxMeta() {
                   </div>
                 </div>
 
-                {janelaInfo.status === 'aberta' ? (
-                  <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
-                    <Clock className="h-3 w-3" /> Aberta · fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
-                  </Badge>
-                ) : janelaInfo.status === 'alerta' ? (
-                  <Badge variant="outline" className="border-amber-500/60 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1 animate-pulse">
-                    <AlertCircle className="h-3 w-3" /> Janela fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400 gap-1">
-                    <AlertCircle className="h-3 w-3" /> Fechada · envio bloqueado
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {qualificacaoAtivaNaCaixa && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[11px] gap-1"
+                      onClick={() => setQualifDialogOpen(true)}
+                      title="Qualificar esta conversa"
+                    >
+                      {(() => {
+                        const q = qualificacoes.find(x => x.id === qualifPorContato[contatoAtivo.id]);
+                        return (
+                          <>
+                            <span
+                              className="h-2.5 w-2.5 rounded-full"
+                              style={{ backgroundColor: q?.cor ?? 'hsl(var(--muted-foreground))' }}
+                            />
+                            {q ? q.nome : 'Qualificação'}
+                          </>
+                        );
+                      })()}
+                    </Button>
+                  )}
+                  {janelaInfo.status === 'aberta' ? (
+                    <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
+                      <Clock className="h-3 w-3" /> Aberta · fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
+                    </Badge>
+                  ) : janelaInfo.status === 'alerta' ? (
+                    <Badge variant="outline" className="border-amber-500/60 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1 animate-pulse">
+                      <AlertCircle className="h-3 w-3" /> Janela fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400 gap-1">
+                      <AlertCircle className="h-3 w-3" /> Fechada · envio bloqueado
+                    </Badge>
+                  )}
+                </div>
               </div>
 
               <MetaInstanceHealthBanner instancia={instAtiva} />
