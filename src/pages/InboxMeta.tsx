@@ -628,6 +628,11 @@ export default function InboxMeta() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contatoAtivo?.instancia_id]);
 
+  // Mantém o cache em dia com o estado atual da conversa aberta
+  useEffect(() => {
+    if (contatoAtivo && mensagens.length) msgCacheRef.current.set(contatoAtivo.id, mensagens);
+  }, [mensagens, contatoAtivo?.id]);
+
   // Realtime mensagens
   useEffect(() => {
     if (!contatoAtivo) return;
