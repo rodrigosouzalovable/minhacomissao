@@ -34,21 +34,28 @@ export function formatarValorBR(raw: unknown, modo: FormatoValor = "brl"): strin
   return modo === "brl" ? `R$ ${fmt}` : fmt;
 }
 
-/** True quando a maioria das amostras parece valor monetário (numérico com centavos). */
+/** True quando a maioria das amostras parece valor monetário (inclui inteiros como 450). */
 export function amostrasParecemValor(samples: unknown[]): boolean {
   const nonEmpty = samples.map((s) => String(s ?? "").trim()).filter(Boolean);
   if (nonEmpty.length === 0) return false;
   const monetarias = nonEmpty.filter((v) => {
+    const s = v.replace(/\s/g, "");
     if (/R\$/i.test(v)) return true;
-    if (!/^-?[\d.,]+$/.test(v.replace(/\s/g, ""))) return false;
+    if (!/^-?[\d.,]+$/.test(s)) return false;
     const n = parseNumeroBR(v);
     if (n == null) return false;
-    const digitos = v.replace(/\D/g, "");
-    // evita telefones/CPFs: precisa ter separador decimal e no máximo 9 dígitos
-    return /[.,]\d{1,2}$/.test(v.replace(/\s/g, "")) && digitos.length <= 9;
+    const digitos = s.replace(/\D/g, "");
+    const temDecimal = /[.,]\d{1,2}$/.test(s);
+    // evita telefones/CPF/CNPJ (10-14 dígitos) quando não há centavos
+    if (!temDecimal && digitos.length >= 10) return false;
+    if (digitos.length > 14) return false;
+    // evita anos (1900-2100) inteiros de 4 dígitos
+    if (!temDecimal && digitos.length === 4 && n >= 1900 && n <= 2100) return false;
+    return true;
   });
   return monetarias.length / nonEmpty.length > 0.6;
 }
+
 
 const SENTINELA = "\u0000";
 
