@@ -760,11 +760,19 @@ serve(async (req) => {
                     });
                   }
                 } else if (atendenteRodizioIds.length > 0) {
-                  // ---- Fallback: rodízio por menor carga (apenas atendentes com permissão ativa) ----
+                  // ---- Rodízio por menor carga DO DIA (BRT), desempate pela ordem da fila ----
+                  // Início do dia no fuso de Brasília (UTC-3)
+                  const agora = new Date();
+                  const brtNow = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
+                  const inicioDiaBRT = new Date(Date.UTC(
+                    brtNow.getUTCFullYear(), brtNow.getUTCMonth(), brtNow.getUTCDate(), 3, 0, 0
+                  )).toISOString();
+
                   const { data: vinculos } = await supabase
                     .from('meta_whatsapp_contato_etiquetas')
                     .select('etiqueta_id')
-                    .in('etiqueta_id', atendenteRodizioIds);
+                    .in('etiqueta_id', atendenteRodizioIds)
+                    .gte('criado_em', inicioDiaBRT);
 
                   const carga: Record<string, number> = {};
                   for (const id of atendenteRodizioIds) carga[id] = 0;
@@ -772,10 +780,23 @@ serve(async (req) => {
                     const eid = (v as any).etiqueta_id;
                     if (eid in carga) carga[eid] += 1;
                   }
+
+                  // Ordem oficial da fila
+                  const { data: filaRows } = await supabase
+                    .from('meta_atendimento_fila')
+                    .select('etiqueta_id, ordem')
+                    .in('etiqueta_id', atendenteRodizioIds);
+                  const ordemFila = new Map<string, number>(
+                    (filaRows || []).map((f: any) => [f.etiqueta_id, Number(f.ordem) || 9999])
+                  );
+
                   const ordenados = [...atendentesRodizio].sort((a: any, b: any) => {
                     const ca = carga[a.id] ?? 0;
                     const cb = carga[b.id] ?? 0;
                     if (ca !== cb) return ca - cb;
+                    const oa = ordemFila.get(a.id) ?? 9999;
+                    const ob = ordemFila.get(b.id) ?? 9999;
+                    if (oa !== ob) return oa - ob;
                     return String(a.nome).localeCompare(String(b.nome));
                   });
                   const escolhido: any = ordenados[0];
