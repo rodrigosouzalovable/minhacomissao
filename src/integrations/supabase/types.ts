@@ -7676,6 +7676,30 @@ export type Database = {
         Args: { _folder: string; _uid: string }
         Returns: boolean
       }
+      meta_mensagens_thread: {
+        Args: {
+          _instancia: string
+          _limit?: number
+          _offset?: number
+          _suffix: string
+        }
+        Returns: {
+          contatos_payload: Json
+          conteudo: string
+          conteudo_citado: string
+          direcao: string
+          id: string
+          instancia_id: string
+          media_url: string
+          status_envio: string
+          telefone: string
+          template_botoes: Json
+          timestamp_msg: string
+          tipo_conteudo: string
+          wa_message_id: string
+          wa_message_id_reply: string
+        }[]
+      }
       meta_metric_bump: {
         Args: { _campo: string; _inc?: number; _instancia_id: string }
         Returns: undefined
