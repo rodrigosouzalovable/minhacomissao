@@ -338,6 +338,32 @@ export default function InboxMeta() {
 
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
 
+  const fetchQualificacoes = useCallback(async () => {
+    const { data } = await (supabase as any).from('meta_qualificacoes')
+      .select('id, nome, cor, ordem, ativo').order('ordem');
+    setQualificacoes(((data as any) ?? []) as MetaQualificacao[]);
+    const { data: cx } = await (supabase as any).from('meta_qualificacao_caixa')
+      .select('folder_id, ativo');
+    const map: Record<string, boolean> = {};
+    ((cx as any[]) ?? []).forEach(r => { map[r.folder_id] = !!r.ativo; });
+    setQualifCaixas(map);
+  }, []);
+
+  useEffect(() => { fetchQualificacoes(); }, [fetchQualificacoes]);
+
+  const fetchQualifContatos = useCallback(async (ids: string[]) => {
+    if (!ids.length) { setQualifPorContato({}); return; }
+    const map: Record<string, string> = {};
+    for (let i = 0; i < ids.length; i += 300) {
+      const { data } = await (supabase as any).from('meta_contato_qualificacao')
+        .select('contato_id, qualificacao_id').in('contato_id', ids.slice(i, i + 300));
+      ((data as any[]) ?? []).forEach(r => { map[r.contato_id] = r.qualificacao_id; });
+    }
+    setQualifPorContato(map);
+  }, []);
+
+  const qualificacaoAtivaNaCaixa = qualifCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
+
   // Somente caixas permitidas (RLS já filtra a lista de folders)
   const foldersVisiveis = folders;
 
