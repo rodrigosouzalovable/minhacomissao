@@ -483,7 +483,8 @@ export default function InboxMeta() {
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
     fetchContatoEtiquetas(contatoIdsRef.current);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas]);
+    fetchQualifContatos(contatoIdsRef.current);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
