@@ -279,7 +279,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       for (const pk of placeholders) {
         const col = tplByKey.get(pk);
         if (col == null) continue;
-        const raw = String(arr[col] ?? "").trim();
+        const raw = valorCelula(col, arr[col]);
         if (raw) rowVars[pk] = raw;
       }
       if (Object.keys(rowVars).length > 0) varsByTel[key] = rowVars;
