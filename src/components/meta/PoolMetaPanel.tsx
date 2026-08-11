@@ -124,6 +124,9 @@ export function PoolMetaPanel() {
         estado_pool: "ativo",
         pausa_automatica_ate: null,
         pausa_automatica_motivo: null,
+        // Retomada manual libera envio mesmo com qualidade YELLOW/RED
+        qualidade_liberada_manual: true,
+        qualidade_liberada_em: new Date().toISOString(),
       })
       .eq("id", inst.id);
     setSavingId(null);
