@@ -59,18 +59,19 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     ensureItensLoaded,
     recarregarItensJob,
     refreshCountersJob,
+    marcarJobAberto,
     refreshStatus,
   } = useEnvioMetaSending();
 
   const job = useMemo(() => jobs.find((j) => j.id === jobId) || null, [jobs, jobId]);
 
-  // Ao abrir o diálogo, sempre força um refetch dos itens (não só a primeira vez).
+  // Enquanto o diálogo está aberto, o contexto pode reler os itens; fechado, não.
   useEffect(() => {
-    if (open && jobId) {
-      ensureItensLoaded(jobId);
-      recarregarItensJob(jobId);
-    }
-  }, [open, jobId, ensureItensLoaded, recarregarItensJob]);
+    if (!open || !jobId) return;
+    marcarJobAberto(jobId, true);
+    recarregarItensJob(jobId);
+    return () => marcarJobAberto(jobId, false);
+  }, [open, jobId, marcarJobAberto, recarregarItensJob]);
 
   // Polling leve enquanto o diálogo está aberto — só refetch quando cache diverge do backend
   // e apenas com a aba visível (economia de CPU do banco).
@@ -86,9 +87,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       const det = getDetalhesJob(jobId);
       const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0);
       if (backend !== cached) recarregarItensJob(jobId);
-    }, 15000);
+    }, 30000);
     return () => clearInterval(t);
   }, [open, jobId, jobs, recarregarItensJob, getDetalhesJob]);
+
 
 
   const [reenviandoErros, setReenviandoErros] = useState(false);
