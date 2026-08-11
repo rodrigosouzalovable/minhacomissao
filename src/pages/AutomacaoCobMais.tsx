@@ -247,7 +247,11 @@ export default function AutomacaoCobMais() {
   useEffect(() => {
     if (!serverUrl) return;
     checkStatus();
-    const interval = setInterval(checkStatus, 10000);
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      checkStatus();
+    }, 30000);
+
     return () => clearInterval(interval);
   }, [serverUrl, checkStatus]);
 

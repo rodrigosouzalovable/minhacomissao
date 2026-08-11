@@ -116,6 +116,8 @@ type Ctx = {
   ensureItensLoaded: (jobId: string) => Promise<void>;
   recarregarItensJob: (jobId: string) => Promise<void>;
   refreshCountersJob: (jobId: string) => Promise<void>;
+  marcarJobAberto: (jobId: string, aberto: boolean) => void;
+
 };
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
@@ -274,33 +276,21 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     return acc;
   }, []);
 
-  const carregarLogs = useCallback(async (jobId: string, desdeIso: string | null, telefones: string[] = []) => {
+  // Uma única consulta por campanha (janela de tempo do job). Antes era fatiada de
+  // 200 em 200 telefones, o que gerava centenas de milhares de chamadas ao banco.
+  const carregarLogs = useCallback(async (jobId: string, desdeIso: string | null, _telefones: string[] = []) => {
     if (!uid) return;
     const desde = desdeIso || new Date(Date.now() - 7 * 86400_000).toISOString();
-    const telKeys = Array.from(new Set(telefones.map(normTel).filter(Boolean)));
     const logs: any[] = [];
-    if (telKeys.length > 0) {
-      for (const chunk of chunkArray(telKeys, 200)) {
-        const { data } = await (supabase as any)
-          .from("meta_whatsapp_envios_log")
-          .select("telefone,status,erro,enviado_em")
-          .eq("user_id", uid)
-          .gte("enviado_em", desde)
-          .in("telefone", chunk)
-          .order("enviado_em", { ascending: false })
-          .limit(1000);
-        if (data?.length) logs.push(...data);
-      }
-    } else {
-      const { data } = await (supabase as any)
-        .from("meta_whatsapp_envios_log")
-        .select("telefone,status,erro,enviado_em")
-        .eq("user_id", uid)
-        .gte("enviado_em", desde)
-        .order("enviado_em", { ascending: false })
-        .limit(500);
-      if (data?.length) logs.push(...data);
-    }
+    const { data } = await (supabase as any)
+      .from("meta_whatsapp_envios_log")
+      .select("telefone,status,erro,enviado_em")
+      .eq("user_id", uid)
+      .gte("enviado_em", desde)
+      .order("enviado_em", { ascending: false })
+      .limit(3000);
+    if (data?.length) logs.push(...data);
+
     const m = new Map<string, { status: DeliveryStatus; erro?: string }>();
     for (const l of logs) {
       const key = normTel(l.telefone);
@@ -382,7 +372,15 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   // com Rajada disparando eventos por segundo, delays baixos matavam a CPU do banco.
   const debounceItensRef = useRef<Map<string, number>>(new Map());
   const debounceJobsRef = useRef<number | null>(null);
+  // Campanhas com diálogo aberto — só elas justificam reler os itens do banco.
+  const openJobsRef = useRef<Set<string>>(new Set());
+  const marcarJobAberto = useCallback((jobId: string, aberto: boolean) => {
+    if (aberto) openJobsRef.current.add(jobId);
+    else openJobsRef.current.delete(jobId);
+  }, []);
   const scheduleCarregarItens = useCallback((jobId: string, delay = 8000) => {
+    // Sem diálogo aberto não há ninguém olhando a lista: evita releituras caras.
+    if (!openJobsRef.current.has(jobId)) return;
     const map = debounceItensRef.current;
     const prev = map.get(jobId);
     if (prev) window.clearTimeout(prev);
@@ -390,10 +388,12 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       map.delete(jobId);
       // Aba em segundo plano: adia — o próximo evento ou o abrir do diálogo dispara refetch.
       if (document.visibilityState !== 'visible') return;
+      if (!openJobsRef.current.has(jobId)) return;
       carregarItensRef.current?.(jobId);
     }, delay);
     map.set(jobId, id);
   }, []);
+
   const scheduleCarregarJobs = useCallback((delay = 2500) => {
     if (debounceJobsRef.current) window.clearTimeout(debounceJobsRef.current);
     debounceJobsRef.current = window.setTimeout(() => {
@@ -720,7 +720,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, refreshCountersJob,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, refreshCountersJob, marcarJobAberto,
       }}
     >
       {children}
