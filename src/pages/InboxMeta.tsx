@@ -47,9 +47,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
+import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
 
 interface MetaInstance {
   id: string; nome: string | null; display_phone: string | null; ativo: boolean;
