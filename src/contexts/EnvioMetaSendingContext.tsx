@@ -372,7 +372,15 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   // com Rajada disparando eventos por segundo, delays baixos matavam a CPU do banco.
   const debounceItensRef = useRef<Map<string, number>>(new Map());
   const debounceJobsRef = useRef<number | null>(null);
+  // Campanhas com diálogo aberto — só elas justificam reler os itens do banco.
+  const openJobsRef = useRef<Set<string>>(new Set());
+  const marcarJobAberto = useCallback((jobId: string, aberto: boolean) => {
+    if (aberto) openJobsRef.current.add(jobId);
+    else openJobsRef.current.delete(jobId);
+  }, []);
   const scheduleCarregarItens = useCallback((jobId: string, delay = 8000) => {
+    // Sem diálogo aberto não há ninguém olhando a lista: evita releituras caras.
+    if (!openJobsRef.current.has(jobId)) return;
     const map = debounceItensRef.current;
     const prev = map.get(jobId);
     if (prev) window.clearTimeout(prev);
@@ -380,10 +388,12 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       map.delete(jobId);
       // Aba em segundo plano: adia — o próximo evento ou o abrir do diálogo dispara refetch.
       if (document.visibilityState !== 'visible') return;
+      if (!openJobsRef.current.has(jobId)) return;
       carregarItensRef.current?.(jobId);
     }, delay);
     map.set(jobId, id);
   }, []);
+
   const scheduleCarregarJobs = useCallback((delay = 2500) => {
     if (debounceJobsRef.current) window.clearTimeout(debounceJobsRef.current);
     debounceJobsRef.current = window.setTimeout(() => {
