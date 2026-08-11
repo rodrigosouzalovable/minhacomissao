@@ -1315,8 +1315,10 @@ serve(async (req) => {
             .from('inbox-media')
             .upload(storagePath, uploadBlob, { contentType: correctMimeType, upsert: false });
           if (!upErr) {
-            const { data: pubData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
-            inboxPermanentMediaUrl = pubData?.publicUrl || null;
+            const { data: signedData } = await supabase.storage
+              .from('inbox-media')
+              .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+            inboxPermanentMediaUrl = signedData?.signedUrl || null;
             console.log(`[INBOX] ✅ Mídia salva no storage: ${storagePath} (${correctMimeType}) via ${downloadStrategy}`);
           } else {
             console.error('[INBOX] Erro upload mídia:', upErr);

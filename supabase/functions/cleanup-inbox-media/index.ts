@@ -38,8 +38,8 @@ Deno.serve(async (req) => {
     const storagePaths: string[] = [];
     for (const msg of expiredMessages) {
       if (msg.media_url) {
-        const match = msg.media_url.match(/\/storage\/v1\/object\/public\/inbox-media\/(.+)/);
-        if (match) storagePaths.push(match[1]);
+        const match = msg.media_url.match(/\/storage\/v1\/object\/(?:public|sign)\/inbox-media\/([^?]+)/);
+        if (match) storagePaths.push(decodeURIComponent(match[1]));
       }
     }
 

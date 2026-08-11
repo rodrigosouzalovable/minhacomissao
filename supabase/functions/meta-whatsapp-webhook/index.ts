@@ -169,8 +169,11 @@ async function baixarMidiaMeta(
       console.error('[MetaWebhook] falha upload mídia', upErr.message);
       return null;
     }
-    const { data: pub } = supabase.storage.from('inbox-media').getPublicUrl(path);
-    return pub?.publicUrl || null;
+    // Bucket privado: URL assinada de 1 ano (mídia é limpa pelo cleanup em 3 dias)
+    const { data: signed } = await supabase.storage
+      .from('inbox-media')
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
+    return signed?.signedUrl || null;
   } catch (e) {
     console.error('[MetaWebhook] erro baixarMidiaMeta', e instanceof Error ? e.message : e);
     return null;
