@@ -116,6 +116,8 @@ type Ctx = {
   ensureItensLoaded: (jobId: string) => Promise<void>;
   recarregarItensJob: (jobId: string) => Promise<void>;
   refreshCountersJob: (jobId: string) => Promise<void>;
+  marcarJobAberto: (jobId: string, aberto: boolean) => void;
+
 };
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
