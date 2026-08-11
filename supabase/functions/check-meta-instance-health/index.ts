@@ -107,13 +107,15 @@ Deno.serve(async (req) => {
 
         let notificarPausa: { motivo: string; alcance: 'numero' | 'waba' } | null = null;
 
-        if (cfg?.auto_pausa_yellow !== false && qual === 'YELLOW' && !inst.pausa_automatica_ate) {
+        const liberadaManual = inst.qualidade_liberada_manual === true;
+
+        if (!liberadaManual && cfg?.auto_pausa_yellow !== false && qual === 'YELLOW' && !inst.pausa_automatica_ate) {
           updatePayload.pausa_automatica_ate = new Date(Date.now() + dur).toISOString();
           updatePayload.pausa_automatica_motivo = 'quality=YELLOW';
           updatePayload.estado_pool = 'pausado';
           notificarPausa = { motivo: `Qualidade caiu para YELLOW (pausado por ${cfg?.duracao_pausa_yellow_horas ?? 48}h)`, alcance: 'numero' };
         }
-        if (cfg?.auto_pausa_red_waba !== false && qual === 'RED' && !inst.pausa_automatica_ate) {
+        if (!liberadaManual && cfg?.auto_pausa_red_waba !== false && qual === 'RED' && !inst.pausa_automatica_ate) {
           updatePayload.pausa_automatica_ate = new Date(Date.now() + dur * 2).toISOString();
           updatePayload.pausa_automatica_motivo = 'quality=RED';
           updatePayload.estado_pool = 'pausado';

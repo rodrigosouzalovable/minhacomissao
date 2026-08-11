@@ -4347,6 +4347,8 @@ export type Database = {
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
           phone_number_id: string
+          qualidade_liberada_em: string | null
+          qualidade_liberada_manual: boolean
           rajada_taxa_atual: number
           rajada_ultimo_ajuste_em: string | null
           rate_limit_ate: string | null
@@ -4397,6 +4399,8 @@ export type Database = {
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id: string
+          qualidade_liberada_em?: string | null
+          qualidade_liberada_manual?: boolean
           rajada_taxa_atual?: number
           rajada_ultimo_ajuste_em?: string | null
           rate_limit_ate?: string | null
@@ -4447,6 +4451,8 @@ export type Database = {
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id?: string
+          qualidade_liberada_em?: string | null
+          qualidade_liberada_manual?: boolean
           rajada_taxa_atual?: number
           rajada_ultimo_ajuste_em?: string | null
           rate_limit_ate?: string | null

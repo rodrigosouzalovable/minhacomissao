@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const { instancia_ids, user_id, excluir_id, ignorar_pausa_qualidade } = await req.json();
-    const ignoraQualidade = ignorar_pausa_qualidade === true;
+    const ignoraQualidadeGlobal = ignorar_pausa_qualidade === true;
     if (!Array.isArray(instancia_ids) || instancia_ids.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'instancia_ids obrigatório' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -120,6 +120,8 @@ Deno.serve(async (req) => {
       const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
       const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
       const pausaPorStatus = motivoPausaLower.startsWith('status=');
+      // Liberação manual (botão "Retomar") ignora bloqueios por qualidade nesta instância.
+      const ignoraQualidade = ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true;
 
       if (inst.estado_pool && inst.estado_pool !== 'ativo') {
         // Em modo rajada, ignora pausa por qualidade (só bloqueia restrita ou pausa por status).
