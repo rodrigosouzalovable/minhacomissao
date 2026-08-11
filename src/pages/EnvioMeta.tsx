@@ -377,7 +377,14 @@ export default function EnvioMeta() {
     }
     setAtivandoPoolId(inst.id);
     const patch: Record<string, any> = isRetomar
-      ? { estado_pool: "ativo", pausa_automatica_ate: null, pausa_automatica_motivo: null }
+      ? {
+          estado_pool: "ativo",
+          pausa_automatica_ate: null,
+          pausa_automatica_motivo: null,
+          // Retomada manual: libera envio mesmo com qualidade YELLOW/RED
+          qualidade_liberada_manual: true,
+          qualidade_liberada_em: new Date().toISOString(),
+        }
       : {
           estado_pool: "ativo",
           data_ativacao_api: new Date().toISOString().slice(0, 10),
