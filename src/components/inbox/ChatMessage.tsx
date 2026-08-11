@@ -12,7 +12,6 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import {
-import { ensureInboxMediaUrl } from '@/lib/inboxMediaUrl';
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -22,6 +21,7 @@ import { ensureInboxMediaUrl } from '@/lib/inboxMediaUrl';
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ensureInboxMediaUrl } from '@/lib/inboxMediaUrl';
 
 interface ContatoCompartilhadoTelefone {
   numero: string;
