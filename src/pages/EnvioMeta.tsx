@@ -590,17 +590,22 @@ export default function EnvioMeta() {
       );
     }
 
-    // Filtro automático: remove instâncias com qualidade RED/YELLOW do disparo,
-    // exceto as que você liberou manualmente clicando em "Retomar".
+    // Filtro automático: só remove instâncias RED/YELLOW que estejam realmente
+    // pausadas/restritas pelo sistema. Se não há pausa ativa (sem botão "Retomar")
+    // ou se você liberou manualmente, o envio é permitido.
     const badQuality = instanciaIds.filter((id) => {
-      const inst = instancias.find((x) => x.id === id);
-      if ((inst as any)?.qualidade_liberada_manual) return false;
-      const q = String(inst?.saude_quality || "").toUpperCase();
-      return q === "RED" || q === "YELLOW";
+      const inst = instancias.find((x) => x.id === id) as any;
+      if (!inst) return false;
+      if (inst.qualidade_liberada_manual) return false;
+      const q = String(inst.saude_quality || "").toUpperCase();
+      if (q !== "RED" && q !== "YELLOW") return false;
+      const pausada = inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date();
+      const restrita = inst.estado_pool === "restrita" || inst.estado_pool === "pausado";
+      return Boolean(pausada || restrita);
     });
     const filteredInstanciaIds = instanciaIds.filter((id) => !badQuality.includes(id));
     if (filteredInstanciaIds.length === 0) {
-      return toast.error("Nenhuma instância disponível. RED/YELLOW são bloqueadas automaticamente — clique em \"Retomar\" na instância para liberar o envio mesmo assim.");
+      return toast.error("Nenhuma instância disponível. As RED/YELLOW pausadas foram bloqueadas — clique em \"Retomar\" na instância para liberar o envio mesmo assim.");
     }
     if (badQuality.length > 0) {
       const nomes = badQuality
