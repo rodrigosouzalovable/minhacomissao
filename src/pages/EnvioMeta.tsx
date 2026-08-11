@@ -590,15 +590,17 @@ export default function EnvioMeta() {
       );
     }
 
-    // Filtro automático: remove instâncias com qualidade RED/YELLOW do disparo
+    // Filtro automático: remove instâncias com qualidade RED/YELLOW do disparo,
+    // exceto as que você liberou manualmente clicando em "Retomar".
     const badQuality = instanciaIds.filter((id) => {
       const inst = instancias.find((x) => x.id === id);
+      if ((inst as any)?.qualidade_liberada_manual) return false;
       const q = String(inst?.saude_quality || "").toUpperCase();
       return q === "RED" || q === "YELLOW";
     });
     const filteredInstanciaIds = instanciaIds.filter((id) => !badQuality.includes(id));
     if (filteredInstanciaIds.length === 0) {
-      return toast.error("Nenhuma instância com qualidade GREEN/UNKNOWN disponível. RED/YELLOW são bloqueadas automaticamente.");
+      return toast.error("Nenhuma instância disponível. RED/YELLOW são bloqueadas automaticamente — clique em \"Retomar\" na instância para liberar o envio mesmo assim.");
     }
     if (badQuality.length > 0) {
       const nomes = badQuality
