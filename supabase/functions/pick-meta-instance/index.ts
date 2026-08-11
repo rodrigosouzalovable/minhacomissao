@@ -120,6 +120,8 @@ Deno.serve(async (req) => {
       const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
       const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
       const pausaPorStatus = motivoPausaLower.startsWith('status=');
+      // Liberação manual (botão "Retomar") ignora bloqueios por qualidade nesta instância.
+      const ignoraQualidade = ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true;
 
       if (inst.estado_pool && inst.estado_pool !== 'ativo') {
         // Em modo rajada, ignora pausa por qualidade (só bloqueia restrita ou pausa por status).
