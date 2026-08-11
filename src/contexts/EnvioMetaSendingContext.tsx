@@ -274,33 +274,21 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     return acc;
   }, []);
 
-  const carregarLogs = useCallback(async (jobId: string, desdeIso: string | null, telefones: string[] = []) => {
+  // Uma única consulta por campanha (janela de tempo do job). Antes era fatiada de
+  // 200 em 200 telefones, o que gerava centenas de milhares de chamadas ao banco.
+  const carregarLogs = useCallback(async (jobId: string, desdeIso: string | null, _telefones: string[] = []) => {
     if (!uid) return;
     const desde = desdeIso || new Date(Date.now() - 7 * 86400_000).toISOString();
-    const telKeys = Array.from(new Set(telefones.map(normTel).filter(Boolean)));
     const logs: any[] = [];
-    if (telKeys.length > 0) {
-      for (const chunk of chunkArray(telKeys, 200)) {
-        const { data } = await (supabase as any)
-          .from("meta_whatsapp_envios_log")
-          .select("telefone,status,erro,enviado_em")
-          .eq("user_id", uid)
-          .gte("enviado_em", desde)
-          .in("telefone", chunk)
-          .order("enviado_em", { ascending: false })
-          .limit(1000);
-        if (data?.length) logs.push(...data);
-      }
-    } else {
-      const { data } = await (supabase as any)
-        .from("meta_whatsapp_envios_log")
-        .select("telefone,status,erro,enviado_em")
-        .eq("user_id", uid)
-        .gte("enviado_em", desde)
-        .order("enviado_em", { ascending: false })
-        .limit(500);
-      if (data?.length) logs.push(...data);
-    }
+    const { data } = await (supabase as any)
+      .from("meta_whatsapp_envios_log")
+      .select("telefone,status,erro,enviado_em")
+      .eq("user_id", uid)
+      .gte("enviado_em", desde)
+      .order("enviado_em", { ascending: false })
+      .limit(3000);
+    if (data?.length) logs.push(...data);
+
     const m = new Map<string, { status: DeliveryStatus; erro?: string }>();
     for (const l of logs) {
       const key = normTel(l.telefone);
