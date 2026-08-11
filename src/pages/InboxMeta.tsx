@@ -904,7 +904,7 @@ export default function InboxMeta() {
           instancia_id: contatoAtivo.instancia_id,
           telefone: contatoAtivo.telefone || undefined,
           bsuid: contatoAtivo.bsuid || undefined,
-          media_url: urlData.publicUrl,
+          media_url: mediaSignedUrl,
           type,
           file_name: file.name,
           caption: caption || undefined,

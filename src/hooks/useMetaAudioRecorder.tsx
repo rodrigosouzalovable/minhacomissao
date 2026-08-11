@@ -206,7 +206,7 @@ export function useMetaAudioRecorder({
             body: {
               instancia_id: instanciaId,
               telefone,
-              media_url: urlData.publicUrl,
+              media_url: audioSignedUrl,
               type: 'audio',
               user_id: userId,
               reply_to_wa_id: replyToWaId,

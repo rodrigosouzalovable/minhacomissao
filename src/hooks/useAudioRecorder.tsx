@@ -89,7 +89,7 @@ export function useAudioRecorder({ instanciaId, telefone, serverUrl, instanceTok
           const { data, error } = await supabase.functions.invoke('send-whatsapp-audio', {
             body: {
               telefone,
-              audio_url: urlData.publicUrl,
+              audio_url: audioSignedUrl,
               uazapi_server_url: serverUrl,
               uazapi_instance_token: instanceToken,
               instancia_id: instanciaId,
