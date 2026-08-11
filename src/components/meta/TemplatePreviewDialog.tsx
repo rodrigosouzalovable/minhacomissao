@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Reply, ExternalLink, Phone, Loader2, Save, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { uploadInboxMedia } from "@/lib/inboxMediaUrl";
 
 type Template = {
   id: string;
@@ -118,12 +119,7 @@ export default function TemplatePreviewDialog({ template, open, onOpenChange, on
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `meta-templates/${template.id}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("inbox-media")
-        .upload(path, file, { contentType: file.type, upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("inbox-media").getPublicUrl(path);
-      const url = pub.publicUrl;
+      const url = await uploadInboxMedia(path, file, file.type);
       setImageUrl(url);
       const count = await persistImagemEmTodasInstancias(url);
       toast.success(`Imagem enviada e salva em ${count} instância(s)`);

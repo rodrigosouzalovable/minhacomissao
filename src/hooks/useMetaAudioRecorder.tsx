@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
 
 interface UseMetaAudioRecorderProps {
   instanciaId: string;
@@ -200,15 +201,12 @@ export function useMetaAudioRecorder({
             return;
           }
           const path = `meta/${instanciaId}/${telefone}/${Date.now()}.${prepared.ext}`;
-          const { error: upErr } = await supabase.storage.from('inbox-media')
-            .upload(path, prepared.blob, { contentType: prepared.contentType });
-          if (upErr) throw upErr;
-          const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(path);
+          const audioSignedUrl = await uploadInboxMedia(path, prepared.blob, prepared.contentType);
           const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {
             body: {
               instancia_id: instanciaId,
               telefone,
-              media_url: urlData.publicUrl,
+              media_url: audioSignedUrl,
               type: 'audio',
               user_id: userId,
               reply_to_wa_id: replyToWaId,

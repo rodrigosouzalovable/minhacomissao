@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { MensagemRapida } from './MensagensRapidasDialog';
 import { cn } from '@/lib/utils';
+import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
 
 interface MediaSentPayload {
   conteudo: string;
@@ -116,17 +117,7 @@ export function ChatInputBar({
       const ext = file.name.split('.').pop() || (isImage ? 'jpg' : 'pdf');
       const fileName = `${instanciaId}/${telefone}/${Date.now()}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('inbox-media')
-        .upload(fileName, file, { contentType: file.type });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from('inbox-media')
-        .getPublicUrl(fileName);
-
-      const publicUrl = urlData.publicUrl;
+      const publicUrl = await uploadInboxMedia(fileName, file, file.type);
 
       const { data, error } = await supabase.functions.invoke('send-whatsapp-media', {
         body: {

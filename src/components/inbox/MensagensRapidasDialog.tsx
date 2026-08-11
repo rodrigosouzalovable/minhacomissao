@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Pencil, Loader2, Upload, X, Archive, ArchiveRestore } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
 
 export interface MensagemRapida {
   id: string;
@@ -92,10 +93,8 @@ export function MensagensRapidasDialog({ open, onOpenChange, userId, onUpdated }
     setUploadingAudio(true);
     try {
       const fileName = `mensagens-rapidas/${userId}/${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage.from('inbox-media').upload(fileName, file, { contentType: file.type });
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(fileName);
-      setAudioUrl(urlData.publicUrl);
+      const signed = await uploadInboxMedia(fileName, file, file.type);
+      setAudioUrl(signed);
     } catch (err: any) {
       toast({ title: 'Erro ao enviar áudio', description: err.message, variant: 'destructive' });
     } finally {

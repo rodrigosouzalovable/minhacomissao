@@ -12,6 +12,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import {
+import { ensureInboxMediaUrl } from '@/lib/inboxMediaUrl';
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -103,7 +104,16 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [showLightbox, setShowLightbox] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<'mim' | 'todos' | null>(null);
-  const lightboxImageSrc = blobUrl || msg.media_url;
+  // Bucket de mídia é privado: reassina URLs antigas/expiradas antes de exibir.
+  const [mediaUrl, setMediaUrl] = useState<string | null>(msg.media_url ?? null);
+  useEffect(() => {
+    let cancelled = false;
+    setMediaUrl(msg.media_url ?? null);
+    if (!msg.media_url) return;
+    ensureInboxMediaUrl(msg.media_url).then((u) => { if (!cancelled && u) setMediaUrl(u); });
+    return () => { cancelled = true; };
+  }, [msg.media_url]);
+  const lightboxImageSrc = blobUrl || mediaUrl;
 
   const closeLightbox = useCallback(() => setShowLightbox(false), []);
 
@@ -115,12 +125,12 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
   }, [showLightbox, closeLightbox]);
 
   useEffect(() => {
-    if (tipo !== 'imagem' || !msg.media_url) return;
+    if (tipo !== 'imagem' || !mediaUrl) return;
     let cancelled = false;
     setImgLoading(true);
     setImgError(false);
 
-    fetch(msg.media_url)
+    fetch(mediaUrl)
       .then(r => {
         if (!r.ok) throw new Error('fetch failed');
         return r.blob();
@@ -139,7 +149,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
           return;
         }
 
-        const mime = getImageMimeFromUrl(msg.media_url!);
+        const mime = getImageMimeFromUrl(mediaUrl!);
         const correctedBlob = blob.type && blob.type !== 'application/octet-stream'
           ? blob
           : new Blob([blob], { type: mime });
@@ -149,20 +159,20 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       .finally(() => { if (!cancelled) setImgLoading(false); });
 
     return () => { cancelled = true; };
-  }, [tipo, msg.media_url]);
+  }, [tipo, mediaUrl]);
 
   useEffect(() => {
-    if (tipo !== 'audio' || !msg.media_url) return;
+    if (tipo !== 'audio' || !mediaUrl) return;
     let cancelled = false;
 
-    fetch(msg.media_url)
+    fetch(mediaUrl)
       .then(r => {
         if (!r.ok) throw new Error('fetch failed');
         return r.blob();
       })
       .then(blob => {
         if (cancelled) return;
-        const mime = getMimeFromUrl(msg.media_url!) || 'audio/ogg';
+        const mime = getMimeFromUrl(mediaUrl!) || 'audio/ogg';
         const correctedBlob = blob.type && blob.type !== 'application/octet-stream'
           ? blob
           : new Blob([blob], { type: mime });
@@ -171,7 +181,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       .catch(() => {});
 
     return () => { cancelled = true; };
-  }, [tipo, msg.media_url]);
+  }, [tipo, mediaUrl]);
 
   useEffect(() => {
     return () => {
@@ -181,17 +191,17 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
   }, [blobUrl, audioBlobUrl]);
 
   const renderContent = () => {
-    if (tipo !== 'texto' && !msg.media_url && msg.conteudo?.includes('Acesse seu WhatsApp')) {
+    if (tipo !== 'texto' && !mediaUrl && msg.conteudo?.includes('Acesse seu WhatsApp')) {
       return <p className="text-xs italic text-muted-foreground">{msg.conteudo}</p>;
     }
 
-    if (tipo !== 'texto' && !msg.media_url) {
+    if (tipo !== 'texto' && !mediaUrl) {
       return <p className="text-xs italic text-muted-foreground">Mídia indisponível</p>;
     }
 
-    if (tipo === 'audio' && msg.media_url) {
-      const src = audioBlobUrl || msg.media_url;
-      const mimeType = getMimeFromUrl(msg.media_url);
+    if (tipo === 'audio' && mediaUrl) {
+      const src = audioBlobUrl || mediaUrl;
+      const mimeType = getMimeFromUrl(mediaUrl);
       return (
         <WhatsAppAudioPlayer
           src={src}
@@ -242,13 +252,13 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       );
     };
 
-    if (tipo === 'imagem' && msg.media_url) {
+    if (tipo === 'imagem' && mediaUrl) {
       const imgNode = imgLoading ? (
         <div className="flex items-center justify-center p-4">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (imgError || !blobUrl) ? (
-        <a href={msg.media_url} target="_blank" rel="noopener noreferrer"
+        <a href={mediaUrl} target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-2 p-3 rounded bg-background/30 hover:bg-background/50 transition">
           <ImageIcon className="h-5 w-5 shrink-0" />
           <span className="text-xs underline">Abrir imagem</span>
@@ -276,11 +286,11 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       );
     }
 
-    if (tipo === 'documento' && msg.media_url) {
+    if (tipo === 'documento' && mediaUrl) {
       return (
         <div className="flex flex-col gap-2">
           <a
-            href={msg.media_url}
+            href={mediaUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 p-2 rounded bg-background/30 hover:bg-background/50 transition"

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
 
 interface UseAudioRecorderProps {
   instanciaId: string;
@@ -83,20 +84,12 @@ export function useAudioRecorder({ instanciaId, telefone, serverUrl, instanceTok
           const ext = recorder.mimeType.includes('ogg') ? 'ogg' : 'webm';
           const fileName = `${instanciaId}/${telefone}/${Date.now()}.${ext}`;
 
-          const { error: uploadError } = await supabase.storage
-            .from('inbox-media')
-            .upload(fileName, blob, { contentType: recorder.mimeType });
-
-          if (uploadError) throw uploadError;
-
-          const { data: urlData } = supabase.storage
-            .from('inbox-media')
-            .getPublicUrl(fileName);
+          const audioSignedUrl = await uploadInboxMedia(fileName, blob, recorder.mimeType);
 
           const { data, error } = await supabase.functions.invoke('send-whatsapp-audio', {
             body: {
               telefone,
-              audio_url: urlData.publicUrl,
+              audio_url: audioSignedUrl,
               uazapi_server_url: serverUrl,
               uazapi_instance_token: instanceToken,
               instancia_id: instanciaId,
