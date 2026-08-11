@@ -47,6 +47,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
 
@@ -896,9 +897,7 @@ export default function InboxMeta() {
     try {
       const ext = file.name.split('.').pop() || 'bin';
       const path = `${contatoAtivo.instancia_id}/${contatoAtivo.telefone || contatoAtivo.bsuid}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('inbox-media').upload(path, file, { contentType: file.type });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(path);
+      const mediaSignedUrl = await uploadInboxMedia(path, file, file.type);
       const type = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'document';
       const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {
         body: {
