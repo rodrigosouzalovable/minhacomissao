@@ -119,6 +119,10 @@ type Ctx = {
   getPaginacaoJob: (jobId: string) => { carregados: number; temMais: boolean };
   refreshCountersJob: (jobId: string) => Promise<void>;
   marcarJobAberto: (jobId: string, aberto: boolean) => void;
+  exportarItensJob: (
+    jobId: string,
+    onProgresso?: (n: number) => void,
+  ) => Promise<Array<{ telefone: string; status: string; instancia?: string; erro?: string; ts?: string; deliveryStatus?: DeliveryStatus; deliveryErro?: string }>>;
 
 
 };
