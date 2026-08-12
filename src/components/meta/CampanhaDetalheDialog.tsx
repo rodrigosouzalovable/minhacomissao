@@ -89,8 +89,11 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       const backend = (j.enviados || 0) + (j.erros || 0);
       const det = getDetalhesJob(jobId);
       const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0);
-      if (backend !== cached) recarregarItensJob(jobId);
+      // Só recarrega a 1ª página enquanto a lista ainda não estourou o limite de 200.
+      // Depois disso o usuário controla via "Carregar mais" / "Atualizar".
+      if (cached < 200 && backend !== cached) recarregarItensJob(jobId);
     }, 30000);
+
     return () => clearInterval(t);
   }, [open, jobId, jobs, recarregarItensJob, getDetalhesJob]);
 
