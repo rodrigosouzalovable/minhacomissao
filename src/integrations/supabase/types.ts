@@ -2889,6 +2889,27 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_atendimento_rodizio_estado: {
+        Row: {
+          atualizado_em: string
+          folder_key: string
+          tenant_id: string
+          ultima_ordem: number | null
+        }
+        Insert: {
+          atualizado_em?: string
+          folder_key: string
+          tenant_id: string
+          ultima_ordem?: number | null
+        }
+        Update: {
+          atualizado_em?: string
+          folder_key?: string
+          tenant_id?: string
+          ultima_ordem?: number | null
+        }
+        Relationships: []
+      }
       meta_billing_alerts: {
         Row: {
           criado_em: string
