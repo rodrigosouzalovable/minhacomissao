@@ -410,6 +410,30 @@ export default function ImportarDevedores() {
     return parseFloat(raw) || 0;
   };
 
+  /**
+   * Remove a primeira linha somente quando ela parece cabeçalho.
+   * Planilhas sem cabeçalho (linha 1 já com CPF/valores) mantêm todos os registros.
+   */
+  const dropCabecalho = (rows: Record<string, unknown>[]): Record<string, unknown>[] => {
+    if (rows.length === 0) return rows;
+    const primeira = rows[0];
+    const valores = Object.values(primeira);
+    const pareceDado = valores.some((v) => {
+      if (v === null || v === undefined || v === '') return false;
+      if (v instanceof Date) return true;
+      if (typeof v === 'number') return true;
+      const s = String(v).trim();
+      const digitos = s.replace(/\D/g, '');
+      // CPF/CNPJ na linha 1 => é dado, não cabeçalho
+      if (digitos.length >= 11 && digitos.length <= 14 && /^[\d.\-/\s]+$/.test(s)) return true;
+      // valor monetário / data em texto
+      if (/^-?R?\$?\s?[\d.,]+$/.test(s) && /\d/.test(s) && digitos.length >= 2) return true;
+      if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(s)) return true;
+      return false;
+    });
+    return pareceDado ? rows : rows.slice(1);
+  };
+
   const getSheetRowsByLetters = (sheet: XLSX.WorkSheet): Record<string, unknown>[] => {
     const cellKeys = Object.keys(sheet).filter((key) => !key.startsWith('!'));
     if (cellKeys.length === 0) return [];
