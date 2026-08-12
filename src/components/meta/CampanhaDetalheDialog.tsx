@@ -489,8 +489,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           <details className="rounded-md border bg-card" open={openEnviados} onToggle={(e) => setOpenEnviados((e.currentTarget as HTMLDetailsElement).open)}>
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between min-h-[36px]">
               <span className="text-green-700 dark:text-green-400">
-                Enviados <span className="text-muted-foreground font-normal">({detalhes.enviados.length})</span>
+                Enviados <span className="text-muted-foreground font-normal">({job.enviados})</span>
               </span>
+
               {detalhes.enviados.length > 0 && (
                 <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.enviados.map((x) => x.telefone), "Enviados"); }}>
