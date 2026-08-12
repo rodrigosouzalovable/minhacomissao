@@ -58,10 +58,13 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     limparJob,
     ensureItensLoaded,
     recarregarItensJob,
+    carregarMaisItensJob,
+    getPaginacaoJob,
     refreshCountersJob,
     marcarJobAberto,
     refreshStatus,
   } = useEnvioMetaSending();
+
 
   const job = useMemo(() => jobs.find((j) => j.id === jobId) || null, [jobs, jobId]);
 
