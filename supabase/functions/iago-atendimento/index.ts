@@ -125,6 +125,8 @@ Deno.serve(async (req) => {
       .order('criado_em', { ascending: false })
       .limit(16);
     const historico = ((msgs || []) as any[]).slice().reverse();
+    const ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
+    const textoAtual = String(ultimaEntrada?.conteudo || texto || '');
     const normalizarTexto = (valor: unknown) => String(valor || '')
       .toLowerCase()
       .normalize('NFD')
@@ -135,6 +137,16 @@ Deno.serve(async (req) => {
       .filter((m) => m.direcao === 'saida')
       .map((m) => normalizarTexto(m.conteudo))
       .filter(Boolean);
+
+    // Se outra mensagem chegou enquanto esta execução aguardava a trava, processa a mais recente.
+    if (ehOptOut(textoAtual)) {
+      await supabase.from('iago_conversa_estado')
+        .update({ optout: true, followup_feito: true, followup_em: null, etapa: 'optout' })
+        .eq('id', estado.id);
+      await finalizarEntrada();
+      console.log('[IAGO] opt-out registrado', { contato_id });
+      return json({ success: true, etapa: 'optout' });
+    }
 
     // ===== Humano assumiu? (saída que não é do IAGO depois do último envio dele) =====
     const idsIA: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
@@ -151,7 +163,7 @@ Deno.serve(async (req) => {
 
     // ===== Contexto financeiro real =====
     let cpf = estado.cpf || '';
-    const docMsg = extrairDoc(texto || '');
+    const docMsg = extrairDoc(textoAtual);
     if (docMsg) cpf = docMsg;
     if (!cpf) cpf = await resolverCpfPorTelefone(supabase, (contato as any).telefone);
 
@@ -191,7 +203,7 @@ Deno.serve(async (req) => {
 
     // ===== Redação da resposta =====
     const resultado = await gerarResposta({
-      cfg, itens, historico, texto: String(texto || ''), proposta, temAcordo: false,
+      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
     });
 
@@ -249,7 +261,7 @@ Deno.serve(async (req) => {
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         (cpf ? `CPF: ${cpfFormatado(cpf)}\n` : '') +
         `Motivo: ${resultado?.motivo || 'dúvida fora do que foi ensinado'}\n` +
-        `Última mensagem do cliente: "${String(texto || '').slice(0, 250)}"\n\n` +
+         `Última mensagem do cliente: "${textoAtual.slice(0, 250)}"\n\n` +
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
     }
 
