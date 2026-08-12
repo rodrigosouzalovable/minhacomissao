@@ -100,6 +100,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
 
   const [reenviandoErros, setReenviandoErros] = useState(false);
+  const [carregandoMais, setCarregandoMais] = useState(false);
+
 
   // Estado local dos <details> — controlado pelo usuário, sem re-forçar a cada polling.
   const [openEnviados, setOpenEnviados] = useState<boolean>(false);
