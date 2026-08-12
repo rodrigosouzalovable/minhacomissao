@@ -94,8 +94,8 @@ interface Importacao {
 }
 
 const DESCRICOES: Record<CredorLayout, string> = {
-  mmp: 'MMP Mundo da Moda — mesmo layout do Padrão: A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido). Configure abaixo os descontos do portal para esse credor.',
-  padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
+  mmp: 'MMP Mundo da Moda — A = CPF (11 dígitos), B = Nome do Cliente, C = Credor, D = Nº do Contrato, E = Nº da Parcela, F = Vencimento da Parcela, G = Valor da Parcela, H = Valor Total do Débito (conferência). Configure abaixo os descontos do portal para esse credor.',
+  padrao: 'A = CPF (11 dígitos), B = Nome do Cliente, C = Credor, D = Nº do Contrato, E = Nº da Parcela, F = Vencimento da Parcela, G = Valor da Parcela, H = Valor Total do Débito (apenas conferência)',
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Atraso (dias), H = Nro Nota, I = Desdob., J = Vlr do Desdobramento, K = Dt. Venc. Inicial',
   montreal_atualizacao: 'Importação inteligente MONTREAL — Cruza com dados existentes e insere apenas parcelas novas. Mesmo layout da planilha Montreal.',
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total, H = Telefone | Aba 2: Telefones (opcional)',
