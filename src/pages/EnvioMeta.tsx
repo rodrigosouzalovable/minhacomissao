@@ -772,8 +772,10 @@ export default function EnvioMeta() {
       },
     });
 
-    // Libera o formulário imediatamente após iniciar. O acompanhamento
-    // da campanha passa a acontecer apenas no botão flutuante "Campanhas".
+    // Só confirma (e limpa o formulário) quando a campanha existe de verdade.
+    // Se falhou, o motivo real já foi exibido e os destinatários continuam na tela.
+    if (!jobIdCriado) return;
+
     setRecipientsRaw("");
     setRecipientsHeaders([]);
     setVarsByTel({});
