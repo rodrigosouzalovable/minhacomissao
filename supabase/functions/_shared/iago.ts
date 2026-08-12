@@ -201,26 +201,70 @@ export interface PropostaCalculada {
   totalParcelado: number;
 }
 
-/** Calcula a proposta usando as regras do sistema (nunca a IA). */
-export async function calcularProposta(supabase: any, cpf: string): Promise<PropostaCalculada | null> {
-  const { data: iaCfgs } = await supabase.from('meta_ia_config').select('*');
-  const iaCfg = (iaCfgs || [])[0] || {};
-  const descAvista = Number(iaCfg.desconto_avista_pct ?? 50);
-  const descParc = Number(iaCfg.desconto_parcelado_pct ?? 30);
-  const maxParc = Number(iaCfg.max_parcelas ?? 24);
-  const parcMin = Number(iaCfg.parcela_minima ?? 100);
+const normalizeCredor = (v: unknown) =>
+  String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
 
+/** Faixas padrão do portal (dias de atraso da parcela mais antiga). */
+function descontoPadrao(dias: number, modalidade: 'avista' | 'parcelado'): number {
+  if (dias <= 0) return 0;
+  if (dias <= 200) return modalidade === 'avista' ? 10 : 0;
+  if (dias <= 300) return modalidade === 'avista' ? 20 : 10;
+  if (dias <= 500) return modalidade === 'avista' ? 30 : 20;
+  return modalidade === 'avista' ? 50 : 30;
+}
+
+/**
+ * Calcula a proposta com as MESMAS regras do portal público de negociação:
+ * dias de atraso da parcela mais antiga + faixas customizadas do credor
+ * (credor_desconto_faixas) com fallback nas faixas padrão. Parcela mínima R$ 100.
+ */
+export async function calcularProposta(supabase: any, cpf: string): Promise<PropostaCalculada | null> {
   const { data: debitos } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpf });
   const lista = (debitos || []) as any[];
   if (!lista.length) return null;
 
   const total = lista.reduce((s, d) => s + Number(d.valor_atualizado || d.valor_original || 0), 0);
+  const credor = String(lista[0]?.credor || 'o credor');
+
+  // Dias de atraso da parcela mais antiga
+  const ts = lista
+    .map((d) => d.data_vencimento)
+    .filter(Boolean)
+    .map((v: string) => new Date(String(v).slice(0, 10) + 'T00:00:00').getTime())
+    .filter((t: number) => !Number.isNaN(t));
+  let dias = 0;
+  if (ts.length) {
+    const hoje = new Date(agoraSP().toDateString()).getTime();
+    dias = Math.max(0, Math.floor((hoje - Math.min(...ts)) / 86400000));
+  }
+
+  // Faixas customizadas do credor
+  const { data: faixas } = await supabase
+    .from('credor_desconto_faixas')
+    .select('dias_de, dias_ate, desc_avista, desc_parcelado')
+    .eq('credor', normalizeCredor(credor))
+    .order('dias_de');
+
+  let descAvista: number;
+  let descParc: number;
+  const lst = (faixas || []) as any[];
+  if (lst.length) {
+    const hit = lst.find((f) => dias >= (Number(f.dias_de) || 0) && (f.dias_ate == null || dias <= Number(f.dias_ate)));
+    descAvista = hit ? Math.max(0, Math.min(100, Number(hit.desc_avista) || 0)) : 0;
+    descParc = hit ? Math.max(0, Math.min(100, Number(hit.desc_parcelado) || 0)) : 0;
+  } else {
+    descAvista = descontoPadrao(dias, 'avista');
+    descParc = descontoPadrao(dias, 'parcelado');
+  }
+
+  const parcMin = 100;
+  const maxParc = 24;
   const valorParcelado = total * (1 - descParc / 100);
 
   const GRADE = [4, 8, 12, 16, 20, 24];
   let ns = GRADE.filter((n) => n <= maxParc && valorParcelado / n >= parcMin);
   if (!ns.length) {
-    for (let i = Math.min(maxParc, 24); i >= 2; i--) {
+    for (let i = maxParc; i >= 2; i--) {
       if (valorParcelado / i >= parcMin) { ns = [i]; break; }
     }
   }
@@ -230,7 +274,7 @@ export async function calcularProposta(supabase: any, cpf: string): Promise<Prop
 
   return {
     total,
-    credor: String(lista[0]?.credor || 'o credor'),
+    credor,
     nomeCliente: String(lista[0]?.nome || ''),
     valorAvista: total * (1 - descAvista / 100),
     descAvistaPct: descAvista,
@@ -239,6 +283,7 @@ export async function calcularProposta(supabase: any, cpf: string): Promise<Prop
     totalParcelado: valorParcelado,
   };
 }
+
 
 /** Chamada ao Lovable AI Gateway. Retorna o texto da resposta. */
 export async function chamarIA(
