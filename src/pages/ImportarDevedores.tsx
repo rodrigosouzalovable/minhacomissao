@@ -410,6 +410,30 @@ export default function ImportarDevedores() {
     return parseFloat(raw) || 0;
   };
 
+  /**
+   * Remove a primeira linha somente quando ela parece cabeçalho.
+   * Planilhas sem cabeçalho (linha 1 já com CPF/valores) mantêm todos os registros.
+   */
+  const dropCabecalho = (rows: Record<string, unknown>[]): Record<string, unknown>[] => {
+    if (rows.length === 0) return rows;
+    const primeira = rows[0];
+    const valores = Object.values(primeira);
+    const pareceDado = valores.some((v) => {
+      if (v === null || v === undefined || v === '') return false;
+      if (v instanceof Date) return true;
+      if (typeof v === 'number') return true;
+      const s = String(v).trim();
+      const digitos = s.replace(/\D/g, '');
+      // CPF/CNPJ na linha 1 => é dado, não cabeçalho
+      if (digitos.length >= 11 && digitos.length <= 14 && /^[\d.\-/\s]+$/.test(s)) return true;
+      // valor monetário / data em texto
+      if (/^-?R?\$?\s?[\d.,]+$/.test(s) && /\d/.test(s) && digitos.length >= 2) return true;
+      if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(s)) return true;
+      return false;
+    });
+    return pareceDado ? rows : rows.slice(1);
+  };
+
   const getSheetRowsByLetters = (sheet: XLSX.WorkSheet): Record<string, unknown>[] => {
     const cellKeys = Object.keys(sheet).filter((key) => !key.startsWith('!'));
     if (cellKeys.length === 0) return [];
@@ -865,11 +889,11 @@ export default function ImportarDevedores() {
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
-    const rows1 = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }).slice(1);
+    const rows1 = dropCabecalho(XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }));
     console.log('[COBMAIS] Total de abas:', workbook.SheetNames.length, '| Linhas aba 1:', rows1.length);
 
     const sheet2 = workbook.SheetNames.length >= 2 ? workbook.Sheets[workbook.SheetNames[1]] : null;
-    const rows2 = sheet2 ? XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet2, { header: 'A' }).slice(1) : [];
+    const rows2 = sheet2 ? dropCabecalho(XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet2, { header: 'A' })) : [];
 
     const cpfRealMap = new Map<string, string>();
     const phoneMap = new Map<string, string>();
@@ -1271,7 +1295,7 @@ export default function ImportarDevedores() {
 
         if (credorSelecionado === 'ume_consolidado') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const dataRows = getSheetRowsByLetters(sheet).slice(1);
+          const dataRows = dropCabecalho(getSheetRowsByLetters(sheet));
           const parsed = parseUmeConsolidado(dataRows);
           setRows(parsed);
           setPagamentoRows([]);
@@ -1282,7 +1306,7 @@ export default function ImportarDevedores() {
           }
         } else if (credorSelecionado === 'ume_aporte') {
           const sheet = findBestSheetForUmeAporte(workbook);
-          const dataRows = getSheetRowsByLetters(sheet).slice(1);
+          const dataRows = dropCabecalho(getSheetRowsByLetters(sheet));
           const parsed = await parseUmeAporte(dataRows);
           setUmeAporteGroups(parsed);
           setRows([]);
@@ -1308,7 +1332,7 @@ export default function ImportarDevedores() {
           }
           console.log('[PAGAMENTOS] Melhor aba:', bestSheetName, '| Linhas:', bestRowCount);
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(bestSheet, { header: 'A' });
-          const dataRows = json.slice(1);
+          const dataRows = dropCabecalho(json);
           const parsed = await parsePagamentos(dataRows);
           setPagamentoRows(parsed);
           setRows([]);
@@ -1320,7 +1344,7 @@ export default function ImportarDevedores() {
         } else if (credorSelecionado === 'montreal_atualizacao') {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-          const dataRows = json.slice(1);
+          const dataRows = dropCabecalho(json);
           const parsed = await parseMontrealAtualizacao(dataRows);
           setMontrealRows(parsed);
           setRows([]);
@@ -1352,7 +1376,7 @@ export default function ImportarDevedores() {
             }
           }
           const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-          const dataRows = json.slice(1);
+          const dataRows = dropCabecalho(json);
           let parsed: DevedorRow[];
           if (credorSelecionado === 'montreal') {
             parsed = parseMontreal(dataRows);
@@ -1406,11 +1430,11 @@ export default function ImportarDevedores() {
 
           if (credorSelecionado === 'ume_consolidado') {
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const dataRows = getSheetRowsByLetters(sheet).slice(1);
+            const dataRows = dropCabecalho(getSheetRowsByLetters(sheet));
             pRows = parseUmeConsolidado(dataRows);
           } else if (credorSelecionado === 'ume_aporte') {
             const sheet = findBestSheetForUmeAporte(workbook);
-            const dataRows = getSheetRowsByLetters(sheet).slice(1);
+            const dataRows = dropCabecalho(getSheetRowsByLetters(sheet));
             pUme = await parseUmeAporte(dataRows);
           } else if (credorSelecionado === 'pagamentos') {
             let bestSheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -1423,11 +1447,11 @@ export default function ImportarDevedores() {
               if (rowCount > bestRowCount) { bestRowCount = rowCount; bestSheet = s; }
             }
             const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(bestSheet, { header: 'A' });
-            pPag = await parsePagamentos(json.slice(1));
+            pPag = await parsePagamentos(dropCabecalho(json));
           } else if (credorSelecionado === 'montreal_atualizacao') {
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
             const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-            pMontreal = await parseMontrealAtualizacao(json.slice(1));
+            pMontreal = await parseMontrealAtualizacao(dropCabecalho(json));
           } else if (credorSelecionado === 'cobmais') {
             pRows = parseCobmais(workbook);
           } else {
@@ -1443,7 +1467,7 @@ export default function ImportarDevedores() {
               }
             }
             const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 'A' });
-            const dataRows = json.slice(1);
+            const dataRows = dropCabecalho(json);
             if (credorSelecionado === 'montreal') pRows = parseMontreal(dataRows);
             else if (credorSelecionado === 'pesquisa') pRows = parsePesquisa(dataRows);
             else pRows = parsePadrao(dataRows);
