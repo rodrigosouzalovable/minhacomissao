@@ -826,6 +826,10 @@ export default function InboxMeta() {
           const fim = new Date(c.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
           if (fim - Date.now() <= 0) return false;
         }
+        if (modoMeusClientes && mcMarcadores.size > 0) {
+          const qid = qualifPorContato[c.id];
+          if (!qid || !mcMarcadores.has(qid)) return false;
+        }
         return true;
       })
       .sort((a, b) => {
