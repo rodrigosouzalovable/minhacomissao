@@ -563,7 +563,21 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                     {e.erro && <div className="text-muted-foreground text-[10px] break-words mt-0.5">Detalhe técnico: {e.erro}</div>}
                   </div>
                 ))}
+                {detalhes.erros.length < job.erros && (
+                  <div className="pt-2 flex items-center justify-between gap-2 font-sans">
+                    <span className="text-[10px] text-muted-foreground">
+                      Mostrando os {detalhes.erros.length} mais recentes de {job.erros}
+                    </span>
+                    {paginacao.temMais && (
+                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={carregandoMais}
+                        onClick={async () => { setCarregandoMais(true); try { await carregarMaisItensJob(job.id); } finally { setCarregandoMais(false); } }}>
+                        {carregandoMais ? "Carregando..." : "Carregar mais"}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
+
             </details>
           )}
 
