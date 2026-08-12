@@ -7392,6 +7392,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      atribuir_atendente_rodizio: {
+        Args: { p_contato_id: string }
+        Returns: string
+      }
       buscar_devedores_por_documento: {
         Args: { p_credor?: string; p_doc: string }
         Returns: {
@@ -7634,6 +7638,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      iago_claim_message: {
+        Args: { p_contato_id: string; p_entrada_id: string }
+        Returns: boolean
+      }
+      iago_finish_message: {
+        Args: { p_contato_id: string; p_entrada_id: string }
+        Returns: undefined
       }
       incrementar_metrica_acionamento: {
         Args: { p_coluna: string; p_data: string; p_hora: string }
