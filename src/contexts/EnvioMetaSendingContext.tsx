@@ -119,6 +119,10 @@ type Ctx = {
   getPaginacaoJob: (jobId: string) => { carregados: number; temMais: boolean };
   refreshCountersJob: (jobId: string) => Promise<void>;
   marcarJobAberto: (jobId: string, aberto: boolean) => void;
+  exportarItensJob: (
+    jobId: string,
+    onProgresso?: (n: number) => void,
+  ) => Promise<Array<{ telefone: string; status: string; instancia?: string; erro?: string; ts?: string; deliveryStatus?: DeliveryStatus; deliveryErro?: string }>>;
 
 
 };
@@ -369,6 +373,71 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     carregados: (itensByJob.get(jobId) || []).length,
     temMais: pagByJob.get(jobId)?.temMais === true,
   }), [itensByJob, pagByJob]);
+
+  // Exportação completa: percorre TODOS os itens do job em páginas de 1.000,
+  // sem gravar no cache visual (a lista da tela continua paginada em 200).
+  const exportarItensJob = useCallback(async (jobId: string, onProgresso?: (n: number) => void) => {
+    const PAGINA = 1000;
+    const todos: any[] = [];
+    for (let offset = 0; ; offset += PAGINA) {
+      const { data, error } = await (supabase as any)
+        .from("envio_meta_job_item")
+        .select("telefone,status,instancia_nome,erro,processado_em")
+        .eq("job_id", jobId)
+        .in("status", ["enviado", "erro"])
+        .order("processado_em", { ascending: false })
+        .range(offset, offset + PAGINA - 1);
+      if (error) break;
+      const pagina = data || [];
+      todos.push(...pagina);
+      onProgresso?.(todos.length);
+      if (pagina.length < PAGINA) break;
+    }
+
+    // Status de entrega para todos os telefones, em lotes
+    const entrega = new Map<string, { status: DeliveryStatus; erro?: string }>();
+    if (uid && todos.length > 0) {
+      const j = jobs.find((x) => x.id === jobId);
+      const desde = j?.iniciado_em || new Date(Date.now() - 30 * 86400_000).toISOString();
+      const unicos = [...new Set(todos.map((r) => normTel(r.telefone)).filter(Boolean))];
+      const LOTE = 300;
+      for (let i = 0; i < unicos.length; i += LOTE) {
+        const lote = unicos.slice(i, i + LOTE);
+        const { data } = await (supabase as any)
+          .from("meta_whatsapp_envios_log")
+          .select("telefone,status,erro,enviado_em")
+          .eq("user_id", uid)
+          .gte("enviado_em", desde)
+          .in("telefone", lote)
+          .order("enviado_em", { ascending: false })
+          .limit(2000);
+        for (const l of data || []) {
+          const key = normTel(l.telefone);
+          if (!key) continue;
+          const st = mapStatusMeta(l.status);
+          const prev = entrega.get(key);
+          if (!prev || rankDelivery(st) > rankDelivery(prev.status)) {
+            entrega.set(key, { status: st, erro: l.erro || undefined });
+          }
+        }
+      }
+    }
+
+    return todos.map((r) => {
+      const d = entrega.get(normTel(r.telefone));
+      return {
+        telefone: r.telefone,
+        status: r.status,
+        instancia: r.instancia_nome || undefined,
+        erro: r.erro || undefined,
+        ts: r.processado_em || undefined,
+        deliveryStatus: d?.status,
+        deliveryErro: d?.erro,
+      };
+    });
+  }, [uid, jobs]);
+
+
 
 
   // Refresh parcial: atualiza APENAS contadores/current do job (não mexe em status/status_motivo).
@@ -770,7 +839,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, marcarJobAberto,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, marcarJobAberto, exportarItensJob,
       }}
     >
       {children}

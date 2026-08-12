@@ -63,6 +63,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     refreshCountersJob,
     marcarJobAberto,
     refreshStatus,
+    exportarItensJob,
   } = useEnvioMetaSending();
 
 
@@ -101,6 +102,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const [reenviandoErros, setReenviandoErros] = useState(false);
   const [carregandoMais, setCarregandoMais] = useState(false);
+  const [exportando, setExportando] = useState<string | null>(null);
+  const [exportProgresso, setExportProgresso] = useState(0);
 
 
   // Estado local dos <details> — controlado pelo usuário, sem re-forçar a cada polling.
@@ -236,74 +239,109 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     }
   };
   const baixarEnviados = async () => {
-    const rows = detalhes.enviados.map((e) => ({
-      telefone: e.telefone,
-      instancia: e.instancia || "",
-      enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
-      status_entrega: deliveryLabel(e.deliveryStatus),
-      erro_entrega: e.deliveryErro || "",
-    }));
-    if (rows.length === 0) { toast.error("Nada para exportar"); return; }
-    await exportarParaExcel(
-      rows,
-      [
-        { chave: "telefone", titulo: "Telefone" },
-        { chave: "instancia", titulo: "Instância" },
-        { chave: "enviado_em", titulo: "Enviado em" },
-        { chave: "status_entrega", titulo: "Status entrega" },
-        { chave: "erro_entrega", titulo: "Erro entrega" },
-      ],
-      `enviados_${sanitize(nome)}_${stamp()}`,
-    );
-    toast.success(`${rows.length} envios exportados`);
+    if (exportando) return;
+    setExportando("enviados");
+    setExportProgresso(0);
+    try {
+      const todos = await exportarItensJob(job.id, setExportProgresso);
+      const rows = todos.filter((e) => e.status === "enviado").map((e) => ({
+        telefone: e.telefone,
+        instancia: e.instancia || "",
+        enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
+        status_entrega: deliveryLabel(e.deliveryStatus),
+        erro_entrega: e.deliveryErro || "",
+      }));
+      if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+      await exportarParaExcel(
+        rows,
+        [
+          { chave: "telefone", titulo: "Telefone" },
+          { chave: "instancia", titulo: "Instância" },
+          { chave: "enviado_em", titulo: "Enviado em" },
+          { chave: "status_entrega", titulo: "Status entrega" },
+          { chave: "erro_entrega", titulo: "Erro entrega" },
+        ],
+        `enviados_${sanitize(nome)}_${stamp()}`,
+      );
+      toast.success(`${rows.length} envios exportados`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao exportar");
+    } finally {
+      setExportando(null);
+    }
   };
   const baixarErros = async () => {
-    const rows = detalhes.erros.map((e) => ({
-      telefone: e.telefone,
-      instancia: e.instancia || "",
-      enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
-      motivo: humanizarErroEnvio(e.erro),
-      erro_tecnico: e.erro || "",
-    }));
-    if (rows.length === 0) { toast.error("Nada para exportar"); return; }
-    await exportarParaExcel(
-      rows,
-      [
-        { chave: "telefone", titulo: "Telefone" },
-        { chave: "instancia", titulo: "Instância" },
-        { chave: "enviado_em", titulo: "Data/Hora" },
-        { chave: "motivo", titulo: "Motivo (amigável)" },
-        { chave: "erro_tecnico", titulo: "Erro técnico" },
-      ],
-      `erros_${sanitize(nome)}_${stamp()}`,
-    );
-    toast.success(`${rows.length} erros exportados`);
+    if (exportando) return;
+    setExportando("erros");
+    setExportProgresso(0);
+    try {
+      const todos = await exportarItensJob(job.id, setExportProgresso);
+      const rows = todos.filter((e) => e.status === "erro").map((e) => ({
+        telefone: e.telefone,
+        instancia: e.instancia || "",
+        enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
+        motivo: humanizarErroEnvio(e.erro),
+        erro_tecnico: e.erro || "",
+      }));
+      if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+      await exportarParaExcel(
+        rows,
+        [
+          { chave: "telefone", titulo: "Telefone" },
+          { chave: "instancia", titulo: "Instância" },
+          { chave: "enviado_em", titulo: "Data/Hora" },
+          { chave: "motivo", titulo: "Motivo (amigável)" },
+          { chave: "erro_tecnico", titulo: "Erro técnico" },
+        ],
+        `erros_${sanitize(nome)}_${stamp()}`,
+      );
+      toast.success(`${rows.length} erros exportados`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao exportar");
+    } finally {
+      setExportando(null);
+    }
   };
   const falhasEntrega = detalhes.enviados.filter(
     (e) => (e.deliveryStatus as string) === "failed" || (e.deliveryStatus as string) === "falhou",
   );
   const baixarFalhasEntrega = async () => {
-    const rows = falhasEntrega.map((e) => ({
-      telefone: e.telefone,
-      instancia: e.instancia || "",
-      enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
-      motivo: humanizarErroEnvio(e.deliveryErro),
-      erro_tecnico: e.deliveryErro || "",
-    }));
-    if (rows.length === 0) { toast.error("Nada para exportar"); return; }
-    await exportarParaExcel(
-      rows,
-      [
-        { chave: "telefone", titulo: "Telefone" },
-        { chave: "instancia", titulo: "Instância" },
-        { chave: "enviado_em", titulo: "Data/Hora" },
-        { chave: "motivo", titulo: "Motivo (amigável)" },
-        { chave: "erro_tecnico", titulo: "Erro técnico" },
-      ],
-      `falhas_entrega_${sanitize(nome)}_${stamp()}`,
-    );
-    toast.success(`${rows.length} falhas exportadas`);
+    if (exportando) return;
+    setExportando("falhas");
+    setExportProgresso(0);
+    try {
+      const todos = await exportarItensJob(job.id, setExportProgresso);
+      const rows = todos
+        .filter((e) => e.status === "enviado" && ((e.deliveryStatus as string) === "failed" || (e.deliveryStatus as string) === "falhou"))
+        .map((e) => ({
+          telefone: e.telefone,
+          instancia: e.instancia || "",
+          enviado_em: e.ts ? new Date(e.ts).toLocaleString("pt-BR") : "",
+          motivo: humanizarErroEnvio(e.deliveryErro),
+          erro_tecnico: e.deliveryErro || "",
+        }));
+      if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+      await exportarParaExcel(
+        rows,
+        [
+          { chave: "telefone", titulo: "Telefone" },
+          { chave: "instancia", titulo: "Instância" },
+          { chave: "enviado_em", titulo: "Data/Hora" },
+          { chave: "motivo", titulo: "Motivo (amigável)" },
+          { chave: "erro_tecnico", titulo: "Erro técnico" },
+        ],
+        `falhas_entrega_${sanitize(nome)}_${stamp()}`,
+      );
+      toast.success(`${rows.length} falhas exportadas`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao exportar");
+    } finally {
+      setExportando(null);
+    }
   };
+  const rotuloBaixar = (tipo: string) =>
+    exportando === tipo ? `Baixando... ${exportProgresso}` : "Baixar Excel";
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -499,8 +537,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.enviados.map((x) => x.telefone), "Enviados"); }}>
                     <Copy className="h-3 w-3 mr-1" /> Copiar
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarEnviados(); }}>
-                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={!!exportando} onClick={(e) => { e.preventDefault(); baixarEnviados(); }}>
+                    <Download className="h-3 w-3 mr-1" /> {rotuloBaixar("enviados")}
                   </Button>
                 </div>
               )}
@@ -544,8 +582,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.erros.map((x) => x.telefone), "Erros"); }}>
                     <Copy className="h-3 w-3 mr-1" /> Copiar
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarErros(); }}>
-                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={!!exportando} onClick={(e) => { e.preventDefault(); baixarErros(); }}>
+                    <Download className="h-3 w-3 mr-1" /> {rotuloBaixar("erros")}
                   </Button>
                 </div>
               </summary>
@@ -592,8 +630,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(falhasEntrega.map((x) => x.telefone), "Falharam na entrega"); }}>
                     <Copy className="h-3 w-3 mr-1" /> Copiar
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarFalhasEntrega(); }}>
-                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={!!exportando} onClick={(e) => { e.preventDefault(); baixarFalhasEntrega(); }}>
+                    <Download className="h-3 w-3 mr-1" /> {rotuloBaixar("falhas")}
                   </Button>
                 </div>
               </summary>
