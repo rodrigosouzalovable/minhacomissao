@@ -139,6 +139,13 @@ export default function InboxMeta() {
   const [qualifPorContato, setQualifPorContato] = useState<Record<string, string>>({});
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
+  // Meus Clientes (conversas com a etiqueta do próprio usuário)
+  const [modoMeusClientes, setModoMeusClientes] = useState(false);
+  const [mcDataIni, setMcDataIni] = useState<Date | undefined>(undefined);
+  const [mcDataFim, setMcDataFim] = useState<Date | undefined>(undefined);
+  const [mcMarcadores, setMcMarcadores] = useState<Set<string>>(new Set());
+  const [minhaEtiquetaId, setMinhaEtiquetaId] = useState<string | null>(null);
+  const [mcMarcadoresOpen, setMcMarcadoresOpen] = useState(false);
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
