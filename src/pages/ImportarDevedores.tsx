@@ -2216,6 +2216,22 @@ export default function ImportarDevedores() {
   const isMontreal = credorSelecionado === 'montreal';
   const isCobmais = credorSelecionado === 'cobmais';
   const isPesquisa = credorSelecionado === 'pesquisa';
+  const isPadraoOuMmp = credorSelecionado === 'padrao' || credorSelecionado === 'mmp';
+  // Conferência da coluna H: soma das parcelas lidas por CPF vs. total informado
+  const conferenciaTotais = (() => {
+    if (!isPadraoOuMmp) return [] as { cpf: string; nome: string; soma: number; total: number }[];
+    const map = new Map<string, { cpf: string; nome: string; soma: number; total: number }>();
+    for (const r of rows) {
+      const cur = map.get(r.cpf);
+      if (!cur) map.set(r.cpf, { cpf: r.cpf, nome: r.nome, soma: r.valor_original, total: r.total_debito ?? 0 });
+      else {
+        cur.soma += r.valor_original;
+        if (!cur.total && r.total_debito) cur.total = r.total_debito;
+      }
+    }
+    return [...map.values()].filter((c) => c.total > 0 && Math.abs(c.total - c.soma) > 0.05);
+  })();
+
 
   // Pagamentos summary
   const pagToUpdate = pagamentoRows.filter(r => r.pagamento_id && !r.ja_pago);
