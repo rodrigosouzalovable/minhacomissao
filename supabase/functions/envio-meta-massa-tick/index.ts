@@ -29,6 +29,14 @@ function delayUsuarioMs(job: any): number {
   return sec * 1000;
 }
 
+// Delay considerado "curto": abaixo disso não vale devolver ao agendador de 10s,
+// pois o arredondamento distorce o ritmo pedido pelo usuário.
+const DELAY_CURTO_MS = 25_000;
+// Orçamento máximo de uma execução em laço (evita função longa demais).
+const ORCAMENTO_MS = 120_000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function encerrarJobSemDisponibilidade(job: any, motivo: string) {
   const { data: transitioned } = await supabase.from('envio_meta_job').update({
     status: 'erro',
