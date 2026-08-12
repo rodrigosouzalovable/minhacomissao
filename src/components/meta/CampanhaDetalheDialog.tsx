@@ -58,10 +58,13 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     limparJob,
     ensureItensLoaded,
     recarregarItensJob,
+    carregarMaisItensJob,
+    getPaginacaoJob,
     refreshCountersJob,
     marcarJobAberto,
     refreshStatus,
   } = useEnvioMetaSending();
+
 
   const job = useMemo(() => jobs.find((j) => j.id === jobId) || null, [jobs, jobId]);
 
@@ -86,14 +89,19 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       const backend = (j.enviados || 0) + (j.erros || 0);
       const det = getDetalhesJob(jobId);
       const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0);
-      if (backend !== cached) recarregarItensJob(jobId);
+      // Só recarrega a 1ª página enquanto a lista ainda não estourou o limite de 200.
+      // Depois disso o usuário controla via "Carregar mais" / "Atualizar".
+      if (cached < 200 && backend !== cached) recarregarItensJob(jobId);
     }, 30000);
+
     return () => clearInterval(t);
   }, [open, jobId, jobs, recarregarItensJob, getDetalhesJob]);
 
 
 
   const [reenviandoErros, setReenviandoErros] = useState(false);
+  const [carregandoMais, setCarregandoMais] = useState(false);
+
 
   // Estado local dos <details> — controlado pelo usuário, sem re-forçar a cada polling.
   const [openEnviados, setOpenEnviados] = useState<boolean>(false);
@@ -121,6 +129,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const detalhes = getDetalhesJob(job.id);
   const resumo = getDeliveryResumoJob(job.id);
   const resultado = getResultadoJob(job.id);
+  const paginacao = getPaginacaoJob(job.id);
+
   const ativa = job.status === "rodando" || job.status === "pausado";
   const pausado = job.status === "pausado";
   const totalProcessado = job.enviados + job.erros;
@@ -481,8 +491,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           <details className="rounded-md border bg-card" open={openEnviados} onToggle={(e) => setOpenEnviados((e.currentTarget as HTMLDetailsElement).open)}>
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between min-h-[36px]">
               <span className="text-green-700 dark:text-green-400">
-                Enviados <span className="text-muted-foreground font-normal">({detalhes.enviados.length})</span>
+                Enviados <span className="text-muted-foreground font-normal">({job.enviados})</span>
               </span>
+
               {detalhes.enviados.length > 0 && (
                 <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.enviados.map((x) => x.telefone), "Enviados"); }}>
@@ -505,6 +516,20 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 </div>
               ))}
               {detalhes.enviados.length === 0 && <div className="text-muted-foreground italic">Nenhum ainda.</div>}
+              {detalhes.enviados.length > 0 && detalhes.enviados.length < job.enviados && (
+                <div className="pt-2 flex items-center justify-between gap-2 font-sans">
+                  <span className="text-[10px] text-muted-foreground">
+                    Mostrando os {detalhes.enviados.length} mais recentes de {job.enviados}
+                  </span>
+                  {paginacao.temMais && (
+                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={carregandoMais}
+                      onClick={async () => { setCarregandoMais(true); try { await carregarMaisItensJob(job.id); } finally { setCarregandoMais(false); } }}>
+                      {carregandoMais ? "Carregando..." : "Carregar mais"}
+                    </Button>
+                  )}
+                </div>
+              )}
+
             </div>
           </details>
 
@@ -513,7 +538,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             <details className="rounded-md border bg-card" open={openErros} onToggle={(e) => setOpenErros((e.currentTarget as HTMLDetailsElement).open)}>
               <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between min-h-[36px]">
                 <span className="text-red-700 dark:text-red-400">
-                  Erros <span className="text-muted-foreground font-normal">({detalhes.erros.length})</span>
+                  Erros <span className="text-muted-foreground font-normal">({job.erros})</span>
                 </span>
                 <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.erros.map((x) => x.telefone), "Erros"); }}>
@@ -538,7 +563,21 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                     {e.erro && <div className="text-muted-foreground text-[10px] break-words mt-0.5">Detalhe técnico: {e.erro}</div>}
                   </div>
                 ))}
+                {detalhes.erros.length < job.erros && (
+                  <div className="pt-2 flex items-center justify-between gap-2 font-sans">
+                    <span className="text-[10px] text-muted-foreground">
+                      Mostrando os {detalhes.erros.length} mais recentes de {job.erros}
+                    </span>
+                    {paginacao.temMais && (
+                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={carregandoMais}
+                        onClick={async () => { setCarregandoMais(true); try { await carregarMaisItensJob(job.id); } finally { setCarregandoMais(false); } }}>
+                        {carregandoMais ? "Carregando..." : "Carregar mais"}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
+
             </details>
           )}
 

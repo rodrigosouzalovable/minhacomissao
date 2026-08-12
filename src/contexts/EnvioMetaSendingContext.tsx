@@ -115,8 +115,11 @@ type Ctx = {
   limparJob: (jobId: string) => Promise<void>;
   ensureItensLoaded: (jobId: string) => Promise<void>;
   recarregarItensJob: (jobId: string) => Promise<void>;
+  carregarMaisItensJob: (jobId: string) => Promise<void>;
+  getPaginacaoJob: (jobId: string) => { carregados: number; temMais: boolean };
   refreshCountersJob: (jobId: string) => Promise<void>;
   marcarJobAberto: (jobId: string, aberto: boolean) => void;
+
 
 };
 
@@ -201,6 +204,9 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   const [jobs, setJobs] = useState<CampanhaJob[]>([]);
   const [itensByJob, setItensByJob] = useState<Map<string, any[]>>(new Map());
+  const [pagByJob, setPagByJob] = useState<Map<string, { temMais: boolean }>>(new Map());
+  const [resumoByJob, setResumoByJob] = useState<Map<string, DeliveryResumo>>(new Map());
+
   const [logByJob, setLogByJob] = useState<Map<string, Map<string, { status: DeliveryStatus; erro?: string }>>>(new Map());
   const [extras, setExtras] = useState<ExtrasMap>(loadExtras());
   const [tick, setTick] = useState(0);
@@ -248,24 +254,49 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     setJobs(arr);
   }, [uid]);
 
-  const carregarItens = useCallback(async (jobId: string): Promise<any[]> => {
-    // Detalhe visual limitado aos 200 eventos mais recentes. Contadores completos
-    // já vivem no job; exportações usam seu fluxo paginado próprio.
+  const PAGINA_ITENS = 200;
+
+  // Detalhe visual paginado: a primeira página traz os 200 eventos mais recentes.
+  // Páginas extras só são baixadas quando o usuário clica em "Carregar mais".
+  const carregarItens = useCallback(async (jobId: string, offset = 0, append = false): Promise<any[]> => {
     const { data, error } = await (supabase as any)
       .from("envio_meta_job_item")
       .select("telefone,status,instancia_nome,erro,processado_em")
       .eq("job_id", jobId)
       .in("status", ["enviado", "erro"])
       .order("processado_em", { ascending: false })
-      .limit(200);
-    const acc = error ? [] : (data || []);
+      .range(offset, offset + PAGINA_ITENS - 1);
+    const pagina = error ? [] : (data || []);
     setItensByJob((prev) => {
       const n = new Map(prev);
-      n.set(jobId, acc);
+      const anteriores = append ? (prev.get(jobId) || []) : [];
+      n.set(jobId, [...anteriores, ...pagina]);
       return n;
     });
-    return acc;
+    setPagByJob((prev) => {
+      const n = new Map(prev);
+      n.set(jobId, { temMais: pagina.length === PAGINA_ITENS });
+      return n;
+    });
+    return pagina;
   }, []);
+
+  const carregarResumoEntrega = useCallback(async (jobId: string) => {
+    const { data, error } = await (supabase as any).rpc("envio_meta_job_delivery_resumo", { _job_id: jobId });
+    if (error || !data) return;
+    setResumoByJob((prev) => {
+      const n = new Map(prev);
+      n.set(jobId, {
+        aceito: Number((data as any).aceito || 0),
+        entregue: Number((data as any).entregue || 0),
+        lida: Number((data as any).lida || 0),
+        falhou: Number((data as any).falhou || 0),
+        aguardando: Number((data as any).aguardando || 0),
+      });
+      return n;
+    });
+  }, []);
+
 
   // Consulta somente os telefones visíveis no detalhe da campanha. Antes baixava
   // até 3.000 logs por abertura, inclusive de outras campanhas na mesma janela.
@@ -315,13 +346,30 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       const j = jobs.find((x) => x.id === jobId);
       await carregarLogs(jobId, j?.iniciado_em || null, rows.map((r) => r.telefone));
     }
-  }, [itensByJob, logByJob, jobs, carregarItens, carregarLogs]);
+    if (!resumoByJob.has(jobId)) await carregarResumoEntrega(jobId);
+  }, [itensByJob, logByJob, jobs, carregarItens, carregarLogs, resumoByJob, carregarResumoEntrega]);
 
   const recarregarItensJob = useCallback(async (jobId: string) => {
     const j = jobs.find((x) => x.id === jobId);
     const rows = await carregarItens(jobId);
     await carregarLogs(jobId, j?.iniciado_em || null, rows.map((r) => r.telefone));
-  }, [jobs, carregarItens, carregarLogs]);
+    await carregarResumoEntrega(jobId);
+  }, [jobs, carregarItens, carregarLogs, carregarResumoEntrega]);
+
+  const carregarMaisItensJob = useCallback(async (jobId: string) => {
+    const j = jobs.find((x) => x.id === jobId);
+    const atuais = itensByJob.get(jobId) || [];
+    const pagina = await carregarItens(jobId, atuais.length, true);
+    if (pagina.length > 0) {
+      await carregarLogs(jobId, j?.iniciado_em || null, pagina.map((r: any) => r.telefone));
+    }
+  }, [jobs, itensByJob, carregarItens, carregarLogs]);
+
+  const getPaginacaoJob = useCallback((jobId: string) => ({
+    carregados: (itensByJob.get(jobId) || []).length,
+    temMais: pagByJob.get(jobId)?.temMais === true,
+  }), [itensByJob, pagByJob]);
+
 
   // Refresh parcial: atualiza APENAS contadores/current do job (não mexe em status/status_motivo).
   // Usado pelo botão "Atualizar" no diálogo — nunca faz o botão "Reativar" aparecer sozinho.
@@ -515,6 +563,10 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   }, [itensByJob, logByJob, extras]);
 
   const getDeliveryResumoJob = useCallback((jobId: string): DeliveryResumo => {
+    // Preferimos a agregação feita no banco (cobre 100% dos envios do job).
+    const agregado = resumoByJob.get(jobId);
+    if (agregado) return agregado;
+    // Fallback local (amostra carregada) caso a agregação ainda não tenha chegado.
     const det = getDetalhesJob(jobId);
     const r: DeliveryResumo = { aceito: 0, entregue: 0, lida: 0, falhou: 0, aguardando: 0 };
     for (const e of det.enviados) {
@@ -526,7 +578,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       else r.aguardando++;
     }
     return r;
-  }, [getDetalhesJob]);
+  }, [getDetalhesJob, resumoByJob]);
+
 
   const getResultadoJob = useCallback((jobId: string): EnvioResultado => {
     const j = jobs.find((x) => x.id === jobId);
@@ -717,7 +770,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, refreshCountersJob, marcarJobAberto,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, marcarJobAberto,
       }}
     >
       {children}
