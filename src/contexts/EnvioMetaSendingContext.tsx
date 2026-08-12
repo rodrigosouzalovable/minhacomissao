@@ -563,6 +563,10 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   }, [itensByJob, logByJob, extras]);
 
   const getDeliveryResumoJob = useCallback((jobId: string): DeliveryResumo => {
+    // Preferimos a agregação feita no banco (cobre 100% dos envios do job).
+    const agregado = resumoByJob.get(jobId);
+    if (agregado) return agregado;
+    // Fallback local (amostra carregada) caso a agregação ainda não tenha chegado.
     const det = getDetalhesJob(jobId);
     const r: DeliveryResumo = { aceito: 0, entregue: 0, lida: 0, falhou: 0, aguardando: 0 };
     for (const e of det.enviados) {
@@ -574,7 +578,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       else r.aguardando++;
     }
     return r;
-  }, [getDetalhesJob]);
+  }, [getDetalhesJob, resumoByJob]);
+
 
   const getResultadoJob = useCallback((jobId: string): EnvioResultado => {
     const j = jobs.find((x) => x.id === jobId);
