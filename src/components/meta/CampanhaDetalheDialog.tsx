@@ -127,6 +127,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const detalhes = getDetalhesJob(job.id);
   const resumo = getDeliveryResumoJob(job.id);
   const resultado = getResultadoJob(job.id);
+  const paginacao = getPaginacaoJob(job.id);
+
   const ativa = job.status === "rodando" || job.status === "pausado";
   const pausado = job.status === "pausado";
   const totalProcessado = job.enviados + job.erros;
