@@ -224,8 +224,8 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal, d
   );
 }
 
-export function getDesconto(faixa: DescontoFaixa, diasAtraso: number): number {
-  return getDescontoPortal(diasAtraso, faixa);
+export function getDesconto(faixa: DescontoFaixa, diasAtraso: number, faixasCredor?: FaixaDescontoCredor[] | null): number {
+  return getDescontoComFaixas(diasAtraso, faixa, faixasCredor);
 }
 
 export function getMinParcelas(faixa: DescontoFaixa): number {
