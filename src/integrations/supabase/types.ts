@@ -7505,6 +7505,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      envio_meta_job_delivery_resumo: {
+        Args: { _job_id: string }
+        Returns: Json
+      }
       envio_meta_job_resumo: { Args: { _job_id: string }; Returns: Json }
       estrategia_liberar_reservas: {
         Args: { p_user_id?: string }
