@@ -752,7 +752,7 @@ export default function EnvioMeta() {
         })
       : clientesFinal;
 
-    await iniciar({
+    const jobIdCriado = await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
       instanciaIds: filteredInstanciaIds,
       instancias: instancias.map((i) => ({ id: i.id, nome: i.nome })),
