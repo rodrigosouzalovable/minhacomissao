@@ -63,6 +63,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     refreshCountersJob,
     marcarJobAberto,
     refreshStatus,
+    exportarItensJob,
   } = useEnvioMetaSending();
 
 
@@ -101,6 +102,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const [reenviandoErros, setReenviandoErros] = useState(false);
   const [carregandoMais, setCarregandoMais] = useState(false);
+  const [exportando, setExportando] = useState<string | null>(null);
+  const [exportProgresso, setExportProgresso] = useState(0);
 
 
   // Estado local dos <details> — controlado pelo usuário, sem re-forçar a cada polling.
