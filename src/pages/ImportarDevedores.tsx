@@ -2966,6 +2966,15 @@ export default function ImportarDevedores() {
                             <TableHead>Total (R$)</TableHead>
                             <TableHead>Telefone</TableHead>
                           </>
+                        ) : isPadraoOuMmp ? (
+                          <>
+                            <TableHead>Cliente</TableHead>
+                            <TableHead>Credor</TableHead>
+                            <TableHead>Contrato</TableHead>
+                            <TableHead>Parcela</TableHead>
+                            <TableHead>Vencimento</TableHead>
+                            <TableHead>Valor (R$)</TableHead>
+                          </>
                         ) : (
                           <>
                             <TableHead>Nascimento</TableHead>
@@ -2976,6 +2985,7 @@ export default function ImportarDevedores() {
                             <TableHead>Risco (R$)</TableHead>
                           </>
                         )}
+
                       </TableRow>
                     </TableHeader>
                     <TableBody>
