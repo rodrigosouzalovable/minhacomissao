@@ -48,7 +48,9 @@ interface DevedorRow {
   telefone?: string;
   telefone2?: string;
   descricao?: string;
+  total_debito?: number;
 }
+
 
 interface PagamentoRow {
   cpf: string;
