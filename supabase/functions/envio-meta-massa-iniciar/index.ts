@@ -76,9 +76,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Filtro server-side: remove instâncias com qualidade RED/YELLOW APENAS no modo serial.
-    // No modo RAJADA, o usuário optou por seguir enviando mesmo com qualidade caindo —
-    // só encerramos uma instância quando a Meta de fato responder banido/restrito.
+    // Filtro server-side: remove apenas instâncias com qualidade RED (bloqueio real).
+    // YELLOW passa a ser permitido — a Meta ainda entrega e o usuário quer disparar.
+    // No modo RAJADA não filtramos nada: só encerramos quando a Meta responder banido/restrito.
     let instanciaIdsFiltradas = instanciaIds;
     if (modoRajada !== true) {
       const { data: instancesRows } = await supabase
@@ -87,23 +87,21 @@ Deno.serve(async (req) => {
         .in('id', instanciaIds);
       const badIds = new Set(
         (instancesRows || [])
-          .filter((r: any) => {
-            const q = String(r.saude_quality || '').toUpperCase();
-            return q === 'RED' || q === 'YELLOW';
-          })
+          .filter((r: any) => String(r.saude_quality || '').toUpperCase() === 'RED')
           .map((r: any) => r.id),
       );
       instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
       if (instanciaIdsFiltradas.length === 0) {
-        console.error('[iniciar] recusado 400: todas as instâncias RED/YELLOW');
+        console.error('[iniciar] recusado 400: todas as instâncias com qualidade RED');
         return new Response(JSON.stringify({
           success: false,
-          error: 'Todas as instâncias selecionadas estão com qualidade RED/YELLOW. Aguarde recuperação ou selecione outras.',
+          error: 'Todas as instâncias selecionadas estão com qualidade RED (bloqueadas pela Meta). Selecione outras instâncias ou use o Modo Rajada.',
         }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
     }
+
 
     // Trava anti-gasto: bloqueia envio em massa de templates MARKETING (custo ~7x utility).
     // Verifica todos os template_ids (por instância + o principal).
