@@ -593,7 +593,7 @@ export default function WhatsAppInbox() {
     }
   }, [contatoAtivo, instancias, carregandoHistorico, fetchMensagens, toast]);
 
-  // Realtime + auto-reconexão + polling incremental para mensagens da conversa aberta
+  // Realtime + auto-reconexão para mensagens da conversa aberta.
   useEffect(() => {
     if (!contatoAtivo) return;
     let cancelled = false;
@@ -647,29 +647,9 @@ export default function WhatsAppInbox() {
     };
     connect();
 
-    // Polling incremental a cada 15s — busca apenas mensagens novas (custo mínimo)
-    const pollMsgs = setInterval(async () => {
-      if (document.visibilityState !== 'visible') return;
-      // Pega timestamp da última mensagem persistida (ignora temp-)
-      const persisted = mensagens.filter(m => !m.id.startsWith('temp-'));
-      const lastTs = persisted.length > 0
-        ? persisted[persisted.length - 1].timestamp_msg
-        : new Date(Date.now() - 60_000).toISOString();
-      const { data } = await supabase
-        .from('whatsapp_mensagens')
-        .select('*')
-        .eq('instancia_id', contatoAtivo.instancia_id)
-        .ilike('telefone_remoto', `%${suffix}`)
-        .gt('timestamp_msg', lastTs)
-        .order('timestamp_msg', { ascending: true })
-        .limit(50);
-      if (data && data.length > 0) {
-        (data as Mensagem[]).forEach(handleNew);
-      }
-    }, 30000);
-
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
+        fetchMensagens();
         if (channel) { supabase.removeChannel(channel); channel = null; }
         if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
         attempt = 0;
@@ -681,11 +661,10 @@ export default function WhatsAppInbox() {
     return () => {
       cancelled = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      clearInterval(pollMsgs);
       document.removeEventListener('visibilitychange', onVisibility);
       if (channel) supabase.removeChannel(channel);
     };
-  }, [contatoAtivo, mensagens]);
+  }, [contatoAtivo, fetchMensagens]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

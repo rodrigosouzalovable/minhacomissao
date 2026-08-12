@@ -1760,6 +1760,8 @@ export type Database = {
           ultima_instancia_id: string | null
           updated_at: string
           user_id: string
+          worker_lock_token: string | null
+          worker_locked_until: string | null
         }
         Insert: {
           atual_instancia?: string | null
@@ -1791,6 +1793,8 @@ export type Database = {
           ultima_instancia_id?: string | null
           updated_at?: string
           user_id: string
+          worker_lock_token?: string | null
+          worker_locked_until?: string | null
         }
         Update: {
           atual_instancia?: string | null
@@ -1822,6 +1826,8 @@ export type Database = {
           ultima_instancia_id?: string | null
           updated_at?: string
           user_id?: string
+          worker_lock_token?: string | null
+          worker_locked_until?: string | null
         }
         Relationships: [
           {
@@ -7486,6 +7492,10 @@ export type Database = {
         Args: { p_importacao_id: string }
         Returns: Json
       }
+      envio_meta_claim_due_job: {
+        Args: { _job_id?: string; _lock_seconds?: number }
+        Returns: Json
+      }
       envio_meta_job_bump: {
         Args: {
           _enviados_inc: number
@@ -7495,6 +7505,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      envio_meta_job_resumo: { Args: { _job_id: string }; Returns: Json }
       estrategia_liberar_reservas: {
         Args: { p_user_id?: string }
         Returns: number
