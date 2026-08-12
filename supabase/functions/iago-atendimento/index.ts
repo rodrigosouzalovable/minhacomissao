@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { contato_id, texto, simular } = body || {};
+    const { contato_id, texto, entrada_id, simular } = body || {};
 
     const cfg = await carregarConfig(supabase);
     if (!cfg) return json({ success: false, skipped: 'sem configuração' });
@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
     }
 
     if (!contato_id) return json({ success: false, error: 'contato_id é obrigatório' }, 400);
+    if (!entrada_id) return json({ success: false, error: 'entrada_id é obrigatório' }, 400);
     if (!cfg.ativo) return json({ success: false, skipped: 'IAGO desligado' });
 
     const iago = await perfilIago(supabase, cfg);
@@ -96,6 +97,25 @@ Deno.serve(async (req) => {
       return json({ success: true, skipped: 'limite diário atingido' });
     }
 
+    // Uma única execução por conversa. Também deduplica reentregas do mesmo webhook.
+    const { data: claimed, error: claimError } = await supabase.rpc('iago_claim_message', {
+      p_contato_id: contato_id,
+      p_entrada_id: String(entrada_id),
+    });
+    if (claimError) throw new Error(`falha ao reservar mensagem: ${claimError.message}`);
+    if (!claimed) return json({ success: true, skipped: 'mensagem duplicada ou conversa em processamento' });
+
+    const finalizarEntrada = async () => {
+      const { error } = await supabase.rpc('iago_finish_message', {
+        p_contato_id: contato_id,
+        p_entrada_id: String(entrada_id),
+      });
+      if (error) console.error('[IAGO] falha ao concluir entrada', error.message);
+    };
+
+    // Pequena janela para incorporar ao histórico mensagens enviadas em sequência pelo cliente.
+    await sleep(1000);
+
     // ===== Histórico da conversa =====
     const { data: msgs } = await supabase
       .from('meta_whatsapp_mensagens')
@@ -115,6 +135,7 @@ Deno.serve(async (req) => {
     if (saidaHumana.length && estado.etapa !== 'inicio') {
       await supabase.from('iago_conversa_estado')
         .update({ aguardando_humano: true, followup_em: null }).eq('id', estado.id);
+      await finalizarEntrada();
       return json({ success: true, skipped: 'humano assumiu' });
     }
 
@@ -154,13 +175,14 @@ Deno.serve(async (req) => {
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Motivo: já possui acordo lançado${atendenteAcordo ? ` (atendente: ${atendenteAcordo})` : ''}\n\n` +
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
+      await finalizarEntrada();
       return json({ success: true, etapa: 'ja_tem_acordo' });
     }
 
     // ===== Redação da resposta =====
     const resultado = await gerarResposta({
       cfg, itens, historico, texto: String(texto || ''), proposta, temAcordo: false,
-      nomeCliente, primeiroToque: estado.etapa === 'inicio',
+      nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
     });
 
     const mensagens: string[] = Array.isArray(resultado?.mensagens)
@@ -210,6 +232,7 @@ Deno.serve(async (req) => {
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
     }
 
+    await finalizarEntrada();
     console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, motivo: resultado?.motivo });
     return json({ success: true, enviadas: mensagens.length, escalar, motivo: resultado?.motivo || null });
   } catch (e: any) {

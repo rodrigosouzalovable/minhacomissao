@@ -771,59 +771,18 @@ serve(async (req) => {
                     });
                   }
                 } else if (atendenteRodizioIds.length > 0) {
-                  // ---- Rodízio por menor carga DO DIA (BRT), desempate pela ordem da fila ----
-                  // Início do dia no fuso de Brasília (UTC-3)
-                  const agora = new Date();
-                  const brtNow = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
-                  const inicioDiaBRT = new Date(Date.UTC(
-                    brtNow.getUTCFullYear(), brtNow.getUTCMonth(), brtNow.getUTCDate(), 3, 0, 0
-                  )).toISOString();
-
-                  const { data: vinculos } = await supabase
-                    .from('meta_whatsapp_contato_etiquetas')
-                    .select('etiqueta_id')
-                    .in('etiqueta_id', atendenteRodizioIds)
-                    .gte('criado_em', inicioDiaBRT);
-
-                  const carga: Record<string, number> = {};
-                  for (const id of atendenteRodizioIds) carga[id] = 0;
-                  for (const v of (vinculos || [])) {
-                    const eid = (v as any).etiqueta_id;
-                    if (eid in carga) carga[eid] += 1;
-                  }
-
-                  // Ordem oficial da fila
-                  const { data: filaRows } = await supabase
-                    .from('meta_atendimento_fila')
-                    .select('etiqueta_id, ordem')
-                    .in('etiqueta_id', atendenteRodizioIds);
-                  const ordemFila = new Map<string, number>(
-                    (filaRows || []).map((f: any) => [f.etiqueta_id, Number(f.ordem) || 9999])
-                  );
-
-                  const ordenados = [...atendentesRodizio].sort((a: any, b: any) => {
-                    const ca = carga[a.id] ?? 0;
-                    const cb = carga[b.id] ?? 0;
-                    if (ca !== cb) return ca - cb;
-                    const oa = ordemFila.get(a.id) ?? 9999;
-                    const ob = ordemFila.get(b.id) ?? 9999;
-                    if (oa !== ob) return oa - ob;
-                    return String(a.nome).localeCompare(String(b.nome));
-                  });
-                  const escolhido: any = ordenados[0];
-                  if (escolhido) {
-                    const { error: linkErr } = await supabase
-                      .from('meta_whatsapp_contato_etiquetas')
-                      .insert({ contato_id: contatoIdFinal, etiqueta_id: escolhido.id, origem: 'auto_atendente' } as any);
-                    if (linkErr) {
-                      const dup = String(linkErr.message || '').toLowerCase().includes('duplicate') || linkErr.code === '23505';
-                      if (!dup) console.error('[MetaWebhook] falha ao atribuir atendente (rodízio)', linkErr.message);
-                    } else {
-                      console.log('[MetaWebhook] atendente atribuido via rodízio', {
-                        contato_id: contatoIdFinal,
-                        atendente: escolhido.nome,
-                      });
-                    }
+                  // Rodízio circular atômico por caixa. A função mantém a ordem da fila
+                  // e não compensa diferenças históricas ou do dia.
+                  const { data: etiquetaEscolhidaId, error: rodizioErr } = await supabase
+                    .rpc('atribuir_atendente_rodizio', { p_contato_id: contatoIdFinal });
+                  if (rodizioErr) {
+                    console.error('[MetaWebhook] falha ao atribuir atendente (rodízio)', rodizioErr.message);
+                  } else if (etiquetaEscolhidaId) {
+                    const escolhido: any = atendentesRodizio.find((a: any) => a.id === etiquetaEscolhidaId);
+                    console.log('[MetaWebhook] atendente atribuido via rodízio circular', {
+                      contato_id: contatoIdFinal,
+                      atendente: escolhido?.nome || etiquetaEscolhidaId,
+                    });
                   }
                 }
               }
@@ -833,7 +792,7 @@ serve(async (req) => {
           }
 
           // ===== Atendimento automático com IA (caixa "IA" + atendente IAGO) =====
-          if (!isEcho && contatoIdFinal) {
+          if (!isEcho && contatoIdFinal && !msgError) {
             const iaTask = (async () => {
               try {
                 const { data, error } = await supabase.functions.invoke('meta-ia-atendimento', {
@@ -846,7 +805,7 @@ serve(async (req) => {
               }
               try {
                 const { data, error } = await supabase.functions.invoke('iago-atendimento', {
-                  body: { contato_id: contatoIdFinal, texto },
+                  body: { contato_id: contatoIdFinal, texto, entrada_id: m.id },
                 });
                 if (error) console.error('[MetaWebhook] IAGO erro', error.message);
                 else console.log('[MetaWebhook] IAGO', JSON.stringify(data || {}));
