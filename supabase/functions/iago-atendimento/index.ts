@@ -105,17 +105,6 @@ Deno.serve(async (req) => {
     if (claimError) throw new Error(`falha ao reservar mensagem: ${claimError.message}`);
     if (!claimed) return json({ success: true, skipped: 'mensagem duplicada ou conversa em processamento' });
 
-    const finalizarEntrada = async () => {
-      const ids = Array.from(new Set([String(entrada_id), ultimaEntradaId].filter(Boolean)));
-      for (const id of ids) {
-        const { error } = await supabase.rpc('iago_finish_message', {
-          p_contato_id: contato_id,
-          p_entrada_id: id,
-        });
-        if (error) console.error('[IAGO] falha ao concluir entrada', error.message);
-      }
-    };
-
     // Pequena janela para incorporar ao histórico mensagens enviadas em sequência pelo cliente.
     await sleep(1000);
 
@@ -131,6 +120,16 @@ Deno.serve(async (req) => {
     const ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
     const textoAtual = String(ultimaEntrada?.conteudo || texto || '');
     const ultimaEntradaId = String(ultimaEntrada?.wa_message_id || entrada_id);
+    const finalizarEntrada = async () => {
+      const ids = Array.from(new Set([String(entrada_id), ultimaEntradaId].filter(Boolean)));
+      for (const id of ids) {
+        const { error } = await supabase.rpc('iago_finish_message', {
+          p_contato_id: contato_id,
+          p_entrada_id: id,
+        });
+        if (error) console.error('[IAGO] falha ao concluir entrada', error.message);
+      }
+    };
     const normalizarTexto = (valor: unknown) => String(valor || '')
       .toLowerCase()
       .normalize('NFD')
