@@ -254,24 +254,49 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     setJobs(arr);
   }, [uid]);
 
-  const carregarItens = useCallback(async (jobId: string): Promise<any[]> => {
-    // Detalhe visual limitado aos 200 eventos mais recentes. Contadores completos
-    // já vivem no job; exportações usam seu fluxo paginado próprio.
+  const PAGINA_ITENS = 200;
+
+  // Detalhe visual paginado: a primeira página traz os 200 eventos mais recentes.
+  // Páginas extras só são baixadas quando o usuário clica em "Carregar mais".
+  const carregarItens = useCallback(async (jobId: string, offset = 0, append = false): Promise<any[]> => {
     const { data, error } = await (supabase as any)
       .from("envio_meta_job_item")
       .select("telefone,status,instancia_nome,erro,processado_em")
       .eq("job_id", jobId)
       .in("status", ["enviado", "erro"])
       .order("processado_em", { ascending: false })
-      .limit(200);
-    const acc = error ? [] : (data || []);
+      .range(offset, offset + PAGINA_ITENS - 1);
+    const pagina = error ? [] : (data || []);
     setItensByJob((prev) => {
       const n = new Map(prev);
-      n.set(jobId, acc);
+      const anteriores = append ? (prev.get(jobId) || []) : [];
+      n.set(jobId, [...anteriores, ...pagina]);
       return n;
     });
-    return acc;
+    setPagByJob((prev) => {
+      const n = new Map(prev);
+      n.set(jobId, { temMais: pagina.length === PAGINA_ITENS });
+      return n;
+    });
+    return pagina;
   }, []);
+
+  const carregarResumoEntrega = useCallback(async (jobId: string) => {
+    const { data, error } = await (supabase as any).rpc("envio_meta_job_delivery_resumo", { _job_id: jobId });
+    if (error || !data) return;
+    setResumoByJob((prev) => {
+      const n = new Map(prev);
+      n.set(jobId, {
+        aceito: Number((data as any).aceito || 0),
+        entregue: Number((data as any).entregue || 0),
+        lida: Number((data as any).lida || 0),
+        falhou: Number((data as any).falhou || 0),
+        aguardando: Number((data as any).aguardando || 0),
+      });
+      return n;
+    });
+  }, []);
+
 
   // Consulta somente os telefones visíveis no detalhe da campanha. Antes baixava
   // até 3.000 logs por abertura, inclusive de outras campanhas na mesma janela.
