@@ -2889,6 +2889,27 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_atendimento_rodizio_estado: {
+        Row: {
+          atualizado_em: string
+          folder_key: string
+          tenant_id: string
+          ultima_ordem: number | null
+        }
+        Insert: {
+          atualizado_em?: string
+          folder_key: string
+          tenant_id: string
+          ultima_ordem?: number | null
+        }
+        Update: {
+          atualizado_em?: string
+          folder_key?: string
+          tenant_id?: string
+          ultima_ordem?: number | null
+        }
+        Relationships: []
+      }
       meta_billing_alerts: {
         Row: {
           criado_em: string
@@ -7392,6 +7413,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      atribuir_atendente_rodizio: {
+        Args: { p_contato_id: string }
+        Returns: string
+      }
       buscar_devedores_por_documento: {
         Args: { p_credor?: string; p_doc: string }
         Returns: {
@@ -7634,6 +7659,14 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      iago_claim_message: {
+        Args: { p_contato_id: string; p_entrada_id: string }
+        Returns: boolean
+      }
+      iago_finish_message: {
+        Args: { p_contato_id: string; p_entrada_id: string }
+        Returns: undefined
       }
       incrementar_metrica_acionamento: {
         Args: { p_coluna: string; p_data: string; p_hora: string }

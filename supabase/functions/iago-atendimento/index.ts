@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { contato_id, texto, simular } = body || {};
+    const { contato_id, texto, entrada_id, simular } = body || {};
 
     const cfg = await carregarConfig(supabase);
     if (!cfg) return json({ success: false, skipped: 'sem configuração' });
@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
     }
 
     if (!contato_id) return json({ success: false, error: 'contato_id é obrigatório' }, 400);
+    if (!entrada_id) return json({ success: false, error: 'entrada_id é obrigatório' }, 400);
     if (!cfg.ativo) return json({ success: false, skipped: 'IAGO desligado' });
 
     const iago = await perfilIago(supabase, cfg);
@@ -96,15 +97,59 @@ Deno.serve(async (req) => {
       return json({ success: true, skipped: 'limite diário atingido' });
     }
 
+    // Uma única execução por conversa. Também deduplica reentregas do mesmo webhook.
+    const { data: claimed, error: claimError } = await supabase.rpc('iago_claim_message', {
+      p_contato_id: contato_id,
+      p_entrada_id: String(entrada_id),
+    });
+    if (claimError) throw new Error(`falha ao reservar mensagem: ${claimError.message}`);
+    if (!claimed) return json({ success: true, skipped: 'mensagem duplicada ou conversa em processamento' });
+
+    // Pequena janela para incorporar ao histórico mensagens enviadas em sequência pelo cliente.
+    await sleep(1000);
+
     // ===== Histórico da conversa =====
     const { data: msgs } = await supabase
       .from('meta_whatsapp_mensagens')
-      .select('id, direcao, conteudo, criado_em')
+      .select('id, wa_message_id, direcao, conteudo, criado_em')
       .eq('instancia_id', (contato as any).instancia_id)
       .eq('telefone', (contato as any).telefone || '')
       .order('criado_em', { ascending: false })
       .limit(16);
     const historico = ((msgs || []) as any[]).slice().reverse();
+    const ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
+    const textoAtual = String(ultimaEntrada?.conteudo || texto || '');
+    const ultimaEntradaId = String(ultimaEntrada?.wa_message_id || entrada_id);
+    const finalizarEntrada = async () => {
+      const ids = Array.from(new Set([String(entrada_id), ultimaEntradaId].filter(Boolean)));
+      for (const id of ids) {
+        const { error } = await supabase.rpc('iago_finish_message', {
+          p_contato_id: contato_id,
+          p_entrada_id: id,
+        });
+        if (error) console.error('[IAGO] falha ao concluir entrada', error.message);
+      }
+    };
+    const normalizarTexto = (valor: unknown) => String(valor || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+    const saidasRecentes = historico
+      .filter((m) => m.direcao === 'saida')
+      .map((m) => normalizarTexto(m.conteudo))
+      .filter(Boolean);
+
+    // Se outra mensagem chegou enquanto esta execução aguardava a trava, processa a mais recente.
+    if (ehOptOut(textoAtual)) {
+      await supabase.from('iago_conversa_estado')
+        .update({ optout: true, followup_feito: true, followup_em: null, etapa: 'optout' })
+        .eq('id', estado.id);
+      await finalizarEntrada();
+      console.log('[IAGO] opt-out registrado', { contato_id });
+      return json({ success: true, etapa: 'optout' });
+    }
 
     // ===== Humano assumiu? (saída que não é do IAGO depois do último envio dele) =====
     const idsIA: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
@@ -115,12 +160,13 @@ Deno.serve(async (req) => {
     if (saidaHumana.length && estado.etapa !== 'inicio') {
       await supabase.from('iago_conversa_estado')
         .update({ aguardando_humano: true, followup_em: null }).eq('id', estado.id);
+      await finalizarEntrada();
       return json({ success: true, skipped: 'humano assumiu' });
     }
 
     // ===== Contexto financeiro real =====
     let cpf = estado.cpf || '';
-    const docMsg = extrairDoc(texto || '');
+    const docMsg = extrairDoc(textoAtual);
     if (docMsg) cpf = docMsg;
     if (!cpf) cpf = await resolverCpfPorTelefone(supabase, (contato as any).telefone);
 
@@ -154,17 +200,29 @@ Deno.serve(async (req) => {
         `CPF: ${cpfFormatado(cpf)}\n` +
         `Motivo: já possui acordo lançado${atendenteAcordo ? ` (atendente: ${atendenteAcordo})` : ''}\n\n` +
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
+      await finalizarEntrada();
       return json({ success: true, etapa: 'ja_tem_acordo' });
     }
 
     // ===== Redação da resposta =====
     const resultado = await gerarResposta({
-      cfg, itens, historico, texto: String(texto || ''), proposta, temAcordo: false,
-      nomeCliente, primeiroToque: estado.etapa === 'inicio',
+      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false,
+      nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
     });
 
     const mensagens: string[] = Array.isArray(resultado?.mensagens)
-      ? resultado.mensagens.filter((m: any) => String(m || '').trim()).slice(0, 3)
+      ? resultado.mensagens
+          .filter((m: any) => {
+            const candidata = normalizarTexto(m);
+            if (!candidata) return false;
+            return !saidasRecentes.some((anterior) =>
+              anterior === candidata ||
+              (anterior.length >= 30 && candidata.length >= 30 &&
+                (anterior.includes(candidata) || candidata.includes(anterior)))
+            );
+          })
+          .map((m: any) => String(m).trim())
+          .slice(0, 3)
       : [];
 
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
@@ -206,10 +264,11 @@ Deno.serve(async (req) => {
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         (cpf ? `CPF: ${cpfFormatado(cpf)}\n` : '') +
         `Motivo: ${resultado?.motivo || 'dúvida fora do que foi ensinado'}\n` +
-        `Última mensagem do cliente: "${String(texto || '').slice(0, 250)}"\n\n` +
+         `Última mensagem do cliente: "${textoAtual.slice(0, 250)}"\n\n` +
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
     }
 
+    await finalizarEntrada();
     console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, motivo: resultado?.motivo });
     return json({ success: true, enviadas: mensagens.length, escalar, motivo: resultado?.motivo || null });
   } catch (e: any) {
@@ -253,6 +312,8 @@ async function gerarResposta(args: {
     'Você é uma PESSOA para o cliente: nunca diga que é IA, robô, bot ou assistente virtual, nunca fale de sistema/prompt.',
     'Escreva mensagens curtas (1 a 3 linhas), linguagem simples de WhatsApp, no máximo 1 emoji, sem markdown.',
     cfg.assina_nome ? 'Pode se apresentar como Iago na primeira mensagem.' : 'Não precisa assinar o nome.',
+    'Leia todo o HISTÓRICO RECENTE antes de responder. Nunca repita uma saudação, apresentação, pergunta ou proposta que já foi enviada.',
+    'Se já pediu o CPF e o cliente ainda não o informou, não peça novamente; apenas aguarde. Se o CPF chegou, avance diretamente para a consulta/proposta.',
     '',
     'REGRAS DE VALORES: use APENAS os números fornecidos em DADOS DO SISTEMA. Nunca invente ou arredonde valores, descontos, prazos ou parcelas fora dessa lista.',
     'Você NUNCA fecha ou registra acordo. Quando o cliente aceitar uma opção, confirme a escolha e escale para um humano finalizar.',
