@@ -106,11 +106,14 @@ Deno.serve(async (req) => {
     if (!claimed) return json({ success: true, skipped: 'mensagem duplicada ou conversa em processamento' });
 
     const finalizarEntrada = async () => {
-      const { error } = await supabase.rpc('iago_finish_message', {
-        p_contato_id: contato_id,
-        p_entrada_id: String(entrada_id),
-      });
-      if (error) console.error('[IAGO] falha ao concluir entrada', error.message);
+      const ids = Array.from(new Set([String(entrada_id), ultimaEntradaId].filter(Boolean)));
+      for (const id of ids) {
+        const { error } = await supabase.rpc('iago_finish_message', {
+          p_contato_id: contato_id,
+          p_entrada_id: id,
+        });
+        if (error) console.error('[IAGO] falha ao concluir entrada', error.message);
+      }
     };
 
     // Pequena janela para incorporar ao histórico mensagens enviadas em sequência pelo cliente.
@@ -119,7 +122,7 @@ Deno.serve(async (req) => {
     // ===== Histórico da conversa =====
     const { data: msgs } = await supabase
       .from('meta_whatsapp_mensagens')
-      .select('id, direcao, conteudo, criado_em')
+      .select('id, wa_message_id, direcao, conteudo, criado_em')
       .eq('instancia_id', (contato as any).instancia_id)
       .eq('telefone', (contato as any).telefone || '')
       .order('criado_em', { ascending: false })
@@ -127,6 +130,7 @@ Deno.serve(async (req) => {
     const historico = ((msgs || []) as any[]).slice().reverse();
     const ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
     const textoAtual = String(ultimaEntrada?.conteudo || texto || '');
+    const ultimaEntradaId = String(ultimaEntrada?.wa_message_id || entrada_id);
     const normalizarTexto = (valor: unknown) => String(valor || '')
       .toLowerCase()
       .normalize('NFD')
