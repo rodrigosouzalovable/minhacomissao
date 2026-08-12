@@ -537,8 +537,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.enviados.map((x) => x.telefone), "Enviados"); }}>
                     <Copy className="h-3 w-3 mr-1" /> Copiar
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarEnviados(); }}>
-                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={!!exportando} onClick={(e) => { e.preventDefault(); baixarEnviados(); }}>
+                    <Download className="h-3 w-3 mr-1" /> {rotuloBaixar("enviados")}
                   </Button>
                 </div>
               )}
@@ -582,8 +582,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(detalhes.erros.map((x) => x.telefone), "Erros"); }}>
                     <Copy className="h-3 w-3 mr-1" /> Copiar
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarErros(); }}>
-                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={!!exportando} onClick={(e) => { e.preventDefault(); baixarErros(); }}>
+                    <Download className="h-3 w-3 mr-1" /> {rotuloBaixar("erros")}
                   </Button>
                 </div>
               </summary>
@@ -630,8 +630,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); copiar(falhasEntrega.map((x) => x.telefone), "Falharam na entrega"); }}>
                     <Copy className="h-3 w-3 mr-1" /> Copiar
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={(e) => { e.preventDefault(); baixarFalhasEntrega(); }}>
-                    <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={!!exportando} onClick={(e) => { e.preventDefault(); baixarFalhasEntrega(); }}>
+                    <Download className="h-3 w-3 mr-1" /> {rotuloBaixar("falhas")}
                   </Button>
                 </div>
               </summary>
