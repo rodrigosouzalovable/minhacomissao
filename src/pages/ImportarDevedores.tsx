@@ -1589,7 +1589,7 @@ export default function ImportarDevedores() {
     const records = rowsToImport.map(r => ({
       nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
-      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
+      descricao: ['montreal', 'ume_consolidado', 'padrao', 'mmp'].includes(credorSelecionado) ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
       data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
@@ -1721,7 +1721,7 @@ export default function ImportarDevedores() {
     const records = rowsToImport.map(r => ({
       nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
-      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
+      descricao: ['montreal', 'ume_consolidado', 'padrao', 'mmp'].includes(credorSelecionado) ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
       data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
@@ -1961,7 +1961,7 @@ export default function ImportarDevedores() {
       valor_original: r.valor_original,
       valor_atualizado: r.valor_atualizado,
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
-      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
+      descricao: ['montreal', 'ume_consolidado', 'padrao', 'mmp'].includes(credorSelecionado) ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
       data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
