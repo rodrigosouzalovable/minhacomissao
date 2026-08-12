@@ -853,6 +853,47 @@ export default function InboxMeta() {
       });
   }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato]);
 
+  // Exportar "Meus Clientes" para Excel (telefones + marcadores)
+  const baixarMeusClientesExcel = useCallback(async () => {
+    if (contatosFiltrados.length === 0) {
+      toast({ title: 'Nada para exportar', description: 'Nenhum cliente na lista atual.' });
+      return;
+    }
+    setMcExportando(true);
+    try {
+      const { exportarParaExcel } = await import('@/lib/exportExcel');
+      const nomeCaixa = (id?: string | null) => (id ? (folders.find(f => f.id === id)?.nome || '—') : 'Padrão');
+      const linhas = contatosFiltrados.map(c => {
+        const q = qualificacoes.find(x => x.id === qualifPorContato[c.id]);
+        return {
+          telefone: formatTelefone(c.telefone || ''),
+          nome: c.nome || nomesCRM[suffix8(c.telefone)] || '',
+          marcador: q?.nome || 'Não qualificado',
+          ultima: c.ultima_mensagem_em ? format(new Date(c.ultima_mensagem_em), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '',
+          caixa: nomeCaixa(c.folder_id),
+        };
+      });
+      await exportarParaExcel(
+        linhas,
+        [
+          { chave: 'telefone', titulo: 'Telefone' },
+          { chave: 'nome', titulo: 'Nome' },
+          { chave: 'marcador', titulo: 'Marcador' },
+          { chave: 'ultima', titulo: 'Última mensagem em' },
+          { chave: 'caixa', titulo: 'Caixa de mensagens' },
+        ],
+        `meus-clientes-${format(new Date(), 'yyyy-MM-dd')}`,
+      );
+      toast({ title: 'Excel gerado', description: `${linhas.length} cliente(s) exportado(s).` });
+    } catch (e: any) {
+      toast({ title: 'Erro ao exportar', description: e?.message || 'Falha ao gerar o Excel', variant: 'destructive' });
+    } finally {
+      setMcExportando(false);
+    }
+  }, [contatosFiltrados, qualificacoes, qualifPorContato, nomesCRM, folders, toast]);
+
+
+
   // Prefetch da conversa do topo da lista (caso mais comum)
   useEffect(() => {
     const primeiro = contatosFiltrados?.[0];
