@@ -752,7 +752,7 @@ export default function EnvioMeta() {
         })
       : clientesFinal;
 
-    await iniciar({
+    const jobIdCriado = await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
       instanciaIds: filteredInstanciaIds,
       instancias: instancias.map((i) => ({ id: i.id, nome: i.nome })),
@@ -772,8 +772,10 @@ export default function EnvioMeta() {
       },
     });
 
-    // Libera o formulário imediatamente após iniciar. O acompanhamento
-    // da campanha passa a acontecer apenas no botão flutuante "Campanhas".
+    // Só confirma (e limpa o formulário) quando a campanha existe de verdade.
+    // Se falhou, o motivo real já foi exibido e os destinatários continuam na tela.
+    if (!jobIdCriado) return;
+
     setRecipientsRaw("");
     setRecipientsHeaders([]);
     setVarsByTel({});

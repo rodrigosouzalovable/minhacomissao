@@ -102,6 +102,8 @@ Deno.serve(async (req) => {
         atual_telefone: null,
         atual_instancia: null,
         proximo_em: null,
+        worker_lock_token: null,
+        worker_locked_until: null,
       }).eq('id', jobId);
       await devolverProcessandoParaFila();
     } else if (acao === 'retomar') {
