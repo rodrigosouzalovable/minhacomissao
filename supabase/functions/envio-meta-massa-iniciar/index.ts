@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
     const auth = req.headers.get('Authorization') || '';
     const jwt = auth.startsWith('Bearer ') ? auth.slice(7) : '';
     if (!jwt) {
+      console.error('[iniciar] recusado: sem Authorization/JWT');
       return new Response(JSON.stringify({ success: false, error: 'não autenticado' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -34,7 +35,8 @@ Deno.serve(async (req) => {
     const { data: userData } = await supabase.auth.getUser(jwt);
     const user = userData?.user;
     if (!user) {
-      return new Response(JSON.stringify({ success: false, error: 'usuário inválido' }), {
+      console.error('[iniciar] recusado 401: token inválido/expirado (auth.getUser falhou)');
+      return new Response(JSON.stringify({ success: false, error: 'Sessão expirada ou inválida. Saia e entre novamente para disparar.' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -56,16 +58,19 @@ Deno.serve(async (req) => {
     const folderId: string | null = typeof body?.folderId === 'string' && body.folderId ? body.folderId : null;
 
     if (!template?.id) {
+      console.error('[iniciar] recusado 400: template obrigatório');
       return new Response(JSON.stringify({ success: false, error: 'template obrigatório' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     if (instanciaIds.length === 0) {
+      console.error('[iniciar] recusado 400: nenhuma instância recebida');
       return new Response(JSON.stringify({ success: false, error: 'ao menos 1 instância' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     if (clientes.length === 0) {
+      console.error('[iniciar] recusado 400: nenhum cliente recebido');
       return new Response(JSON.stringify({ success: false, error: 'ao menos 1 cliente' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -90,6 +95,7 @@ Deno.serve(async (req) => {
       );
       instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
       if (instanciaIdsFiltradas.length === 0) {
+        console.error('[iniciar] recusado 400: todas as instâncias RED/YELLOW');
         return new Response(JSON.stringify({
           success: false,
           error: 'Todas as instâncias selecionadas estão com qualidade RED/YELLOW. Aguarde recuperação ou selecione outras.',
@@ -113,6 +119,7 @@ Deno.serve(async (req) => {
       (t: any) => String(t.categoria || '').toUpperCase() === 'MARKETING',
     );
     if (marketing) {
+      console.error('[iniciar] recusado 400: template MARKETING', marketing.nome_template);
       return new Response(JSON.stringify({
         success: false,
         error: `Envio bloqueado: template "${marketing.nome_template}" é categoria MARKETING (cobrado como marketing pela Meta, ~7x mais caro que utility). Use apenas templates UTILITY para envio em massa.`,
@@ -168,7 +175,8 @@ Deno.serve(async (req) => {
       })
       .select('id')
       .single();
-    if (jobErr) throw jobErr;
+    if (jobErr) { console.error('[iniciar] insert job falhou', jobErr); throw jobErr; }
+    console.log('[iniciar] job criado', job.id, 'clientes:', clientes.length, 'instancias:', instanciaIdsFiltradas.length, 'folder:', folderId);
 
     // Insere itens em lotes de 500 para não estourar payload.
     // Em modo rajada: pré-atribui instância em round-robin para permitir workers paralelos.
