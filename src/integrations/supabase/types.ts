@@ -7765,6 +7765,15 @@ export type Database = {
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       phone_suffix8: { Args: { tel: string }; Returns: string }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
+      portal_faixas_credor: {
+        Args: { _credor: string }
+        Returns: {
+          desc_avista: number
+          desc_parcelado: number
+          dias_ate: number
+          dias_de: number
+        }[]
+      }
       ranking_mensal: {
         Args: { p_mes_ano?: string }
         Returns: {
