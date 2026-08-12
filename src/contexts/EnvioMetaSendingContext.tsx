@@ -249,25 +249,16 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   }, [uid]);
 
   const carregarItens = useCallback(async (jobId: string): Promise<any[]> => {
-    // Paginado — PostgREST tem cap de 1000 por request.
-    // Teto reduzido para 2k linhas: as leituras de 10k eram uma das maiores fontes de carga no banco.
-    const PAGE = 1000;
-    const MAX = 2000;
-    const acc: any[] = [];
-    for (let from = 0; from < MAX; from += PAGE) {
-      const to = from + PAGE - 1;
-      const { data, error } = await (supabase as any)
-        .from("envio_meta_job_item")
-        .select("telefone,status,instancia_nome,erro,processado_em")
-        .eq("job_id", jobId)
-        .in("status", ["enviado", "erro"])
-        .order("processado_em", { ascending: false })
-        .range(from, to);
-      if (error) break;
-      const rows = data || [];
-      acc.push(...rows);
-      if (rows.length < PAGE) break;
-    }
+    // Detalhe visual limitado aos 200 eventos mais recentes. Contadores completos
+    // já vivem no job; exportações usam seu fluxo paginado próprio.
+    const { data, error } = await (supabase as any)
+      .from("envio_meta_job_item")
+      .select("telefone,status,instancia_nome,erro,processado_em")
+      .eq("job_id", jobId)
+      .in("status", ["enviado", "erro"])
+      .order("processado_em", { ascending: false })
+      .limit(200);
+    const acc = error ? [] : (data || []);
     setItensByJob((prev) => {
       const n = new Map(prev);
       n.set(jobId, acc);
@@ -276,23 +267,31 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     return acc;
   }, []);
 
-  // Uma única consulta por campanha (janela de tempo do job). Antes era fatiada de
-  // 200 em 200 telefones, o que gerava centenas de milhares de chamadas ao banco.
-  const carregarLogs = useCallback(async (jobId: string, desdeIso: string | null, _telefones: string[] = []) => {
+  // Consulta somente os telefones visíveis no detalhe da campanha. Antes baixava
+  // até 3.000 logs por abertura, inclusive de outras campanhas na mesma janela.
+  const carregarLogs = useCallback(async (jobId: string, desdeIso: string | null, telefones: string[] = []) => {
     if (!uid) return;
     const desde = desdeIso || new Date(Date.now() - 7 * 86400_000).toISOString();
-    const logs: any[] = [];
+    const normalizados = [...new Set(telefones.map(normTel).filter(Boolean))].slice(0, 200);
+    if (normalizados.length === 0) {
+      setLogByJob((prev) => {
+        const n = new Map(prev);
+        n.set(jobId, new Map());
+        return n;
+      });
+      return;
+    }
     const { data } = await (supabase as any)
       .from("meta_whatsapp_envios_log")
       .select("telefone,status,erro,enviado_em")
       .eq("user_id", uid)
       .gte("enviado_em", desde)
+      .in("telefone", normalizados)
       .order("enviado_em", { ascending: false })
-      .limit(3000);
-    if (data?.length) logs.push(...data);
+      .limit(500);
 
     const m = new Map<string, { status: DeliveryStatus; erro?: string }>();
-    for (const l of logs) {
+    for (const l of data || []) {
       const key = normTel(l.telefone);
       if (!key) continue;
       const st = mapStatusMeta(l.status);
@@ -367,9 +366,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const carregarItensRef = useRef(carregarItens);
   useEffect(() => { carregarItensRef.current = carregarItens; }, [carregarItens]);
 
-  // Debounces por jobId — coalescem bursts de eventos numa única refetch.
-  // Delays elevados (5-8s) porque cada carregarItens lê até 10k linhas em envio_meta_job_item;
-  // com Rajada disparando eventos por segundo, delays baixos matavam a CPU do banco.
+  // Debounces por jobId — coalescem bursts de eventos numa única leitura curta.
   const debounceItensRef = useRef<Map<string, number>>(new Map());
   const debounceJobsRef = useRef<number | null>(null);
   // Campanhas com diálogo aberto — só elas justificam reler os itens do banco.

@@ -214,32 +214,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Modo padrão (anti-ban serial): executa o tick agora e depois em background.
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
-      const firstTick = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({ job_id: job.id, single: true }),
-        signal: ctrl.signal,
-      });
-      clearTimeout(timer);
-      if (!firstTick.ok) throw new Error('primeiro tick falhou');
-    } catch {
-      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({ job_id: job.id, single: true }),
-      }).catch(() => {});
-    }
-
+    // Um único tick inicial. Os próximos são acionados pelo agendamento somente
+    // quando proximo_em vencer; não há worker dormindo nem chamada duplicada.
     fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
       method: 'POST',
       headers: {

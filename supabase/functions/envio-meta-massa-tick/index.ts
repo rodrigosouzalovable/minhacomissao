@@ -1,6 +1,6 @@
-// Tick do envio massa Meta. Chamado pelo pg_cron e por self-invoke.
-// Loop interno respeita o delay configurado pelo usuário (min_seg/max_seg)
-// sem depender do intervalo do cron.
+// Tick curto do envio massa Meta. Cada execução processa no máximo um item por
+// campanha elegível e encerra; o pg_cron agenda o próximo tick sem manter uma
+// função ociosa durante o delay configurado pelo usuário.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -13,29 +13,9 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
-const MAX_WALL_MS = 50_000; // budget por invocação (edge fn tem ~60s)
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-async function fetchJob(id: string) {
-  const { data } = await supabase.from('envio_meta_job').select('*').eq('id', id).maybeSingle();
-  return data;
-}
-
 async function jobEstaRodando(jobId: string) {
   const { data } = await supabase.from('envio_meta_job').select('status').eq('id', jobId).maybeSingle();
   return data?.status === 'rodando';
-}
-
-async function selfInvoke(jobId: string) {
-  if (!(await jobEstaRodando(jobId))) return;
-  fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-    },
-    body: JSON.stringify({ job_id: jobId }),
-  }).catch(() => {});
 }
 
 type ItemResult =
@@ -428,85 +408,44 @@ async function processarItem(job: any): Promise<ItemResult> {
   return { advanced: true, delayMs };
 }
 
-async function rodarJobLoop(jobInicial: any): Promise<{ processados: number; selfInvokeNeeded: boolean; jobId: string }> {
-  const inicio = Date.now();
-  let job = jobInicial;
-  let processados = 0;
-  let selfInvokeNeeded = false;
-
-  while (true) {
-    if (Date.now() - inicio > MAX_WALL_MS) { selfInvokeNeeded = true; break; }
-
-    const r = await processarItem(job);
-    if ('stop' in r && r.stop) break;
-    if ('done' in r && r.done) break;
-
-    if (r.advanced) {
-      processados++;
-      const restante = MAX_WALL_MS - (Date.now() - inicio);
-      if (r.delayMs > restante) { selfInvokeNeeded = true; break; }
-      await sleep(r.delayMs);
-      if (!(await jobEstaRodando(job.id))) break;
-      const refreshed = await fetchJob(job.id);
-      if (!refreshed || refreshed.status !== 'rodando') { job = refreshed; break; }
-      job = refreshed;
-      continue;
-    }
-
-    const waitMs = r.waitMs ?? 5_000;
-    const restante = MAX_WALL_MS - (Date.now() - inicio);
-    if (waitMs > Math.min(restante, 15_000)) { selfInvokeNeeded = true; break; }
-    await sleep(waitMs);
-    if (!(await jobEstaRodando(job.id))) break;
-    const refreshed = await fetchJob(job.id);
-    if (!refreshed || refreshed.status !== 'rodando') { job = refreshed; break; }
-    job = refreshed;
-  }
-
-  return { processados, selfInvokeNeeded: selfInvokeNeeded && !!job && job.status === 'rodando', jobId: jobInicial.id };
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     let body: any = {};
     try { body = await req.json(); } catch {}
     const jobId: string | undefined = body?.job_id;
-    const single = body?.single === true;
-
-    let query = supabase.from('envio_meta_job').select('*').eq('status', 'rodando');
-    if (jobId) query = query.eq('id', jobId);
-    const { data: jobs, error } = await query.order('iniciado_em', { ascending: true }).limit(50);
-    if (error) throw error;
-
     let processadosTotal = 0;
+    let claimedTotal = 0;
+    const maxClaims = jobId ? 1 : 10;
 
-    if (jobs && jobs.length > 0) {
-      if (jobId && jobs.length === 1 && single) {
-        const r = await processarItem(jobs[0]);
-        if ('advanced' in r && r.advanced) processadosTotal++;
-      } else if (jobId && jobs.length === 1) {
-        const r = await rodarJobLoop(jobs[0]);
-        processadosTotal += r.processados;
-        if (r.selfInvokeNeeded) await selfInvoke(r.jobId);
-      } else {
-        for (const job of jobs) {
-          try {
-            const r = await processarItem(job);
-            if ('advanced' in r && r.advanced) {
-              processadosTotal++;
-              await selfInvoke(job.id);
-            } else if (!('done' in r && r.done) && !('stop' in r && r.stop)) {
-              if ((r.waitMs ?? 0) <= 30_000) await selfInvoke(job.id);
-            }
-          } catch (e) {
-            console.error('[tick job]', job.id, e);
-          }
-        }
+    for (let i = 0; i < maxClaims; i++) {
+      const { data: claimed, error: claimError } = await supabase.rpc('envio_meta_claim_due_job', {
+        _job_id: jobId || null,
+        _lock_seconds: 45,
+      });
+      if (claimError) throw claimError;
+      if (!claimed?.id) break;
+      claimedTotal++;
+
+      try {
+        const result = await processarItem(claimed);
+        if (result.advanced) processadosTotal++;
+      } catch (e) {
+        console.error('[tick job]', claimed.id, e);
+      } finally {
+        // Libera somente a trava adquirida por esta execução. Se a função cair,
+        // o TTL da trava permite recuperação automática pelo próximo tick.
+        await supabase
+          .from('envio_meta_job')
+          .update({ worker_lock_token: null, worker_locked_until: null })
+          .eq('id', claimed.id)
+          .eq('worker_lock_token', claimed.worker_lock_token);
       }
+
+      if (jobId) break;
     }
 
-    return new Response(JSON.stringify({ success: true, jobs: jobs?.length ?? 0, processados: processadosTotal }), {
+    return new Response(JSON.stringify({ success: true, jobs: claimedTotal, processados: processadosTotal }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
