@@ -1468,6 +1468,9 @@ export default function InboxMeta() {
                 <Plus className="h-3 w-3" />
               </button>
             </div>
+            </>
+            )}
+
             {selMultipla && (
               <div className="flex items-center gap-1 bg-primary/10 rounded p-1.5">
                 <span className="text-xs flex-1">{selecionados.size} selecionada(s)</span>
