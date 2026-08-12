@@ -48,7 +48,9 @@ interface DevedorRow {
   telefone?: string;
   telefone2?: string;
   descricao?: string;
+  total_debito?: number;
 }
+
 
 interface PagamentoRow {
   cpf: string;
@@ -92,8 +94,8 @@ interface Importacao {
 }
 
 const DESCRICOES: Record<CredorLayout, string> = {
-  mmp: 'MMP Mundo da Moda — mesmo layout do Padrão: A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido). Configure abaixo os descontos do portal para esse credor.',
-  padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
+  mmp: 'MMP Mundo da Moda — A = CPF (11 dígitos), B = Nome do Cliente, C = Credor, D = Nº do Contrato, E = Nº da Parcela, F = Vencimento da Parcela, G = Valor da Parcela, H = Valor Total do Débito (conferência). Configure abaixo os descontos do portal para esse credor.',
+  padrao: 'A = CPF (11 dígitos), B = Nome do Cliente, C = Credor, D = Nº do Contrato, E = Nº da Parcela, F = Vencimento da Parcela, G = Valor da Parcela, H = Valor Total do Débito (apenas conferência)',
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Atraso (dias), H = Nro Nota, I = Desdob., J = Vlr do Desdobramento, K = Dt. Venc. Inicial',
   montreal_atualizacao: 'Importação inteligente MONTREAL — Cruza com dados existentes e insere apenas parcelas novas. Mesmo layout da planilha Montreal.',
   cobmais: 'A = CPF/CNPJ, B = Cliente, C = Contrato, D = Número, E = Vencimento, F = Valor, G = Total, H = Telefone | Aba 2: Telefones (opcional)',
@@ -506,21 +508,87 @@ export default function ImportarDevedores() {
     return digits;
   };
 
+  // Layout por parcela: A=CPF, B=Nome, C=Credor, D=Contrato, E=Nº Parcela,
+  // F=Vencimento, G=Valor da parcela, H=Valor total do débito (só conferência).
   const parsePadrao = (dataRows: Record<string, unknown>[]): DevedorRow[] => {
-    return dataRows.map((row) => {
-      const risco = parseNum(row['G']);
-      return {
-        cpf: normalizeCpfCnpj(row['A']),
-        nascimento: String(row['B'] ?? ''),
-        nome: normalizeNome(row['C']),
-        credor: String(row['D'] ?? ''),
-        contrato: String(row['E'] ?? ''),
-        atraso: String(row['F'] ?? ''),
-        valor_original: risco,
-        valor_atualizado: risco,
-      };
-    }).filter(r => r.cpf.length >= 11);
+    type Pre = {
+      cpf: string; nome: string; credor: string; contrato: string;
+      numeroParcela: number; valor: number; total: number;
+      vencimentoStr: string; vencSort: number;
+    };
+    const pre: Pre[] = [];
+
+    for (const row of dataRows) {
+      const cpf = normalizeCpfCnpj(row['A']);
+      if (cpf.length < 11) continue;
+      const valor = parseNum(row['G']);
+      if (valor <= 0) continue;
+
+      let vencimentoStr = '';
+      let vencSort = 0;
+      const vencRaw = row['F'];
+      if (typeof vencRaw === 'number') {
+        const dt = XLSX.SSF.parse_date_code(vencRaw);
+        if (dt) {
+          vencimentoStr = `${String(dt.d).padStart(2, '0')}/${String(dt.m).padStart(2, '0')}/${dt.y}`;
+          vencSort = dt.y * 10000 + dt.m * 100 + dt.d;
+        }
+      } else if (vencRaw) {
+        vencimentoStr = String(vencRaw).trim();
+        const m = vencimentoStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) {
+          vencimentoStr = m[0];
+          vencSort = Number(m[3]) * 10000 + Number(m[2]) * 100 + Number(m[1]);
+        }
+      }
+
+      pre.push({
+        cpf,
+        nome: normalizeNome(row['B']),
+        credor: String(row['C'] ?? '').trim(),
+        contrato: String(row['D'] ?? '').trim(),
+        numeroParcela: parseInt(String(row['E'] ?? '0').replace(/\D/g, '')) || 0,
+        valor,
+        total: parseNum(row['H']),
+        vencimentoStr,
+        vencSort,
+      });
+    }
+
+    // Parcelas sem número: numera pela ordem de vencimento dentro do mesmo CPF+contrato
+    const porGrupo = new Map<string, Pre[]>();
+    for (const p of pre) {
+      const k = `${p.cpf}|${p.contrato}`;
+      if (!porGrupo.has(k)) porGrupo.set(k, []);
+      porGrupo.get(k)!.push(p);
+    }
+    for (const grupo of porGrupo.values()) {
+      const semNumero = grupo.filter((p) => p.numeroParcela <= 0);
+      if (semNumero.length === 0) continue;
+      const usados = new Set(grupo.filter((p) => p.numeroParcela > 0).map((p) => p.numeroParcela));
+      semNumero.sort((a, b) => a.vencSort - b.vencSort);
+      let proximo = 1;
+      for (const p of semNumero) {
+        while (usados.has(proximo)) proximo++;
+        p.numeroParcela = proximo;
+        usados.add(proximo);
+      }
+    }
+
+    return pre.map((p) => ({
+      cpf: p.cpf,
+      nascimento: p.vencimentoStr, // campo usado por parseDate no handleImport
+      nome: p.nome,
+      credor: p.credor,
+      contrato: p.contrato,
+      atraso: '',
+      descricao: `Parcela ${p.numeroParcela}`,
+      valor_original: p.valor,
+      valor_atualizado: p.valor,
+      total_debito: p.total || undefined,
+    }));
   };
+
 
   const insertTelefonesFromRows = async (importedRows: DevedorRow[], userId: string) => {
     const phoneRecords: { devedor_cpf: string; numero: string; tipo: string; criado_por: string; is_whatsapp: boolean; is_contato: boolean; observacao: string }[] = [];
@@ -1521,7 +1589,7 @@ export default function ImportarDevedores() {
     const records = rowsToImport.map(r => ({
       nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
-      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
+      descricao: ['montreal', 'ume_consolidado', 'padrao', 'mmp'].includes(credorSelecionado) ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
       data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
@@ -1653,7 +1721,7 @@ export default function ImportarDevedores() {
     const records = rowsToImport.map(r => ({
       nome: r.nome, cpf: r.cpf, valor_original: r.valor_original, valor_atualizado: r.valor_atualizado,
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
-      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
+      descricao: ['montreal', 'ume_consolidado', 'padrao', 'mmp'].includes(credorSelecionado) ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
       data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
@@ -1893,7 +1961,7 @@ export default function ImportarDevedores() {
       valor_original: r.valor_original,
       valor_atualizado: r.valor_atualizado,
       credor: credorSelecionado === 'ume_consolidado' ? r.credor : credorFinal,
-      descricao: credorSelecionado === 'montreal' ? (r.descricao || null) : credorSelecionado === 'ume_consolidado' ? (r.descricao || null) : (r.credor || null),
+      descricao: ['montreal', 'ume_consolidado', 'padrao', 'mmp'].includes(credorSelecionado) ? (r.descricao || null) : (r.credor || null),
       contrato: r.contrato || null,
       data_vencimento: (credorSelecionado === 'montreal' || credorSelecionado === 'cobmais') ? parseDate(r.atraso) : parseDate(r.nascimento),
       telefone: r.telefone || null,
@@ -2148,6 +2216,22 @@ export default function ImportarDevedores() {
   const isMontreal = credorSelecionado === 'montreal';
   const isCobmais = credorSelecionado === 'cobmais';
   const isPesquisa = credorSelecionado === 'pesquisa';
+  const isPadraoOuMmp = credorSelecionado === 'padrao' || credorSelecionado === 'mmp';
+  // Conferência da coluna H: soma das parcelas lidas por CPF vs. total informado
+  const conferenciaTotais = (() => {
+    if (!isPadraoOuMmp) return [] as { cpf: string; nome: string; soma: number; total: number }[];
+    const map = new Map<string, { cpf: string; nome: string; soma: number; total: number }>();
+    for (const r of rows) {
+      const cur = map.get(r.cpf);
+      if (!cur) map.set(r.cpf, { cpf: r.cpf, nome: r.nome, soma: r.valor_original, total: r.total_debito ?? 0 });
+      else {
+        cur.soma += r.valor_original;
+        if (!cur.total && r.total_debito) cur.total = r.total_debito;
+      }
+    }
+    return [...map.values()].filter((c) => c.total > 0 && Math.abs(c.total - c.soma) > 0.05);
+  })();
+
 
   // Pagamentos summary
   const pagToUpdate = pagamentoRows.filter(r => r.pagamento_id && !r.ja_pago);
@@ -2882,6 +2966,15 @@ export default function ImportarDevedores() {
                             <TableHead>Total (R$)</TableHead>
                             <TableHead>Telefone</TableHead>
                           </>
+                        ) : isPadraoOuMmp ? (
+                          <>
+                            <TableHead>Cliente</TableHead>
+                            <TableHead>Credor</TableHead>
+                            <TableHead>Contrato</TableHead>
+                            <TableHead>Parcela</TableHead>
+                            <TableHead>Vencimento</TableHead>
+                            <TableHead>Valor (R$)</TableHead>
+                          </>
                         ) : (
                           <>
                             <TableHead>Nascimento</TableHead>
@@ -2892,6 +2985,7 @@ export default function ImportarDevedores() {
                             <TableHead>Risco (R$)</TableHead>
                           </>
                         )}
+
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -2920,6 +3014,15 @@ export default function ImportarDevedores() {
                               <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                               <TableCell>{row.telefone || '-'}</TableCell>
                             </>
+                          ) : isPadraoOuMmp ? (
+                            <>
+                              <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                              <TableCell>{row.credor || '-'}</TableCell>
+                              <TableCell>{row.contrato || '-'}</TableCell>
+                              <TableCell>{(row.descricao || '').replace('Parcela ', '') || '-'}</TableCell>
+                              <TableCell>{row.nascimento || '-'}</TableCell>
+                              <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                            </>
                           ) : (
                             <>
                               <TableCell>{row.nascimento || '-'}</TableCell>
@@ -2934,11 +3037,27 @@ export default function ImportarDevedores() {
                       ))}
                     </TableBody>
                   </Table>
+                  {isPadraoOuMmp && conferenciaTotais.length > 0 && (
+                    <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+                      <p className="font-medium mb-1">
+                        Conferência da coluna H: {conferenciaTotais.length} CPF(s) com soma das parcelas diferente do valor total informado
+                      </p>
+                      <ul className="space-y-0.5">
+                        {conferenciaTotais.slice(0, 8).map((c) => (
+                          <li key={c.cpf} className="font-mono">
+                            {c.cpf} — parcelas {c.soma.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} vs total {c.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </li>
+                        ))}
+                      </ul>
+                      {conferenciaTotais.length > 8 && <p className="mt-1 text-muted-foreground">e mais {conferenciaTotais.length - 8}…</p>}
+                    </div>
+                  )}
                   {rows.length > 50 && (
                     <p className="text-sm text-muted-foreground text-center py-2">
                       Mostrando 50 de {rows.length} registros
                     </p>
                   )}
+
                 </div>
               )}
             </CardContent>
