@@ -115,8 +115,11 @@ type Ctx = {
   limparJob: (jobId: string) => Promise<void>;
   ensureItensLoaded: (jobId: string) => Promise<void>;
   recarregarItensJob: (jobId: string) => Promise<void>;
+  carregarMaisItensJob: (jobId: string) => Promise<void>;
+  getPaginacaoJob: (jobId: string) => { carregados: number; temMais: boolean };
   refreshCountersJob: (jobId: string) => Promise<void>;
   marcarJobAberto: (jobId: string, aberto: boolean) => void;
+
 
 };
 
