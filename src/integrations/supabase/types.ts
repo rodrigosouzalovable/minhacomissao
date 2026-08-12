@@ -1509,6 +1509,39 @@ export type Database = {
         }
         Relationships: []
       }
+      credor_desconto_faixas: {
+        Row: {
+          created_at: string
+          credor: string
+          desc_avista: number
+          desc_parcelado: number
+          dias_ate: number | null
+          dias_de: number
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credor: string
+          desc_avista?: number
+          desc_parcelado?: number
+          dias_ate?: number | null
+          dias_de?: number
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credor?: string
+          desc_avista?: number
+          desc_parcelado?: number
+          dias_ate?: number | null
+          dias_de?: number
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       credor_relatorio_config: {
         Row: {
           ativo: boolean

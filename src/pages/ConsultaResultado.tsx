@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ArrowLeft, MessageCircle, FileText, Phone, AlertCircle, CalendarIcon, Check, Shield, Lock, Clock, ChevronDown, TrendingDown, Sparkles } from 'lucide-react';
 import DiscountTierSelector, { type DescontoFaixa, getDesconto, getMinParcelas, getMaxParcelasFaixa } from '@/components/negociacao/DiscountTierSelector';
 import { getCredorConfig, isValidCredorSlug } from '@/lib/credorConfig';
-import { getDiasAtraso, getDescontoMaximoPortal } from '@/lib/descontoPortal';
+import { getDiasAtraso, getDescontoMaximoPortal, normalizeCredor, type FaixaDescontoCredor } from '@/lib/descontoPortal';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -82,6 +82,7 @@ export default function ConsultaResultado() {
   const [faixaEscolhida, setFaixaEscolhida] = useState<DescontoFaixa | undefined>(undefined);
   const [acordoExistente, setAcordoExistente] = useState<{ status: string; criadoEm: string; funcionarioNome: string } | null>(null);
   const [parcelasAcordo, setParcelasAcordo] = useState<ParcelaAcordo[]>([]);
+  const [faixasCredor, setFaixasCredor] = useState<FaixaDescontoCredor[] | null>(null);
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
 
@@ -151,9 +152,43 @@ export default function ConsultaResultado() {
     fetchDebitos();
   }, [cpf]);
 
+  // Credor predominante (maior valor em aberto) define a tabela de descontos aplicada
+  useEffect(() => {
+    let cancelado = false;
+    async function carregarFaixas() {
+      if (debitos.length === 0) {
+        setFaixasCredor(null);
+        return;
+      }
+      const porCredor = new Map<string, number>();
+      for (const d of debitos) {
+        const key = normalizeCredor(d.credor);
+        if (!key) continue;
+        const valor = Number(d.valor_atualizado || d.valor_original || 0);
+        porCredor.set(key, (porCredor.get(key) || 0) + valor);
+      }
+      const predominante = [...porCredor.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+      if (!predominante) {
+        setFaixasCredor(null);
+        return;
+      }
+      const { data, error } = await (supabase as any)
+        .from('credor_desconto_faixas')
+        .select('dias_de,dias_ate,desc_avista,desc_parcelado')
+        .eq('credor', predominante)
+        .order('dias_de', { ascending: true });
+      if (cancelado) return;
+      setFaixasCredor(!error && data && data.length > 0 ? (data as FaixaDescontoCredor[]) : null);
+    }
+    carregarFaixas();
+    return () => {
+      cancelado = true;
+    };
+  }, [debitos]);
+
   // Dias em atraso a partir da parcela mais antiga
   const diasAtraso = getDiasAtraso(debitos);
-  const descontoMaximo = getDescontoMaximoPortal(diasAtraso);
+  const descontoMaximo = getDescontoMaximoPortal(diasAtraso, faixasCredor);
 
   // Valor total: soma direta dos valores originais (sem juros)
   const valorTotal = debitos.reduce((acc, d) => acc + Number(d.valor_original || 0), 0);
@@ -173,7 +208,7 @@ export default function ConsultaResultado() {
 
   const getValorComDesconto = (neg: NegociacaoState) => {
     if (!neg.descontoFaixa) return valorTotal;
-    const desconto = getDesconto(neg.descontoFaixa, diasAtraso);
+    const desconto = getDesconto(neg.descontoFaixa, diasAtraso, faixasCredor);
     return valorTotal * (1 - desconto / 100);
   };
 
@@ -222,7 +257,7 @@ export default function ConsultaResultado() {
   const gerarWhatsappLink = (neg: NegociacaoState) => {
     const valorParcela = getValorParcela(neg);
     const valorDesc = getValorComDesconto(neg);
-    const desconto = neg.descontoFaixa ? getDesconto(neg.descontoFaixa, diasAtraso) : 0;
+    const desconto = neg.descontoFaixa ? getDesconto(neg.descontoFaixa, diasAtraso, faixasCredor) : 0;
     const dataFormatada = neg.dataPrimeiroPagamento
       ? format(neg.dataPrimeiroPagamento, 'dd/MM/yyyy', { locale: ptBR })
       : '';
@@ -617,6 +652,7 @@ export default function ConsultaResultado() {
                             }}
                             valorTotal={valorTotal}
                             diasAtraso={diasAtraso}
+                            faixasCredor={faixasCredor}
                           />
 
                           {negociacao && (
@@ -639,7 +675,7 @@ export default function ConsultaResultado() {
                                 <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full" style={{ background: '#00a86b22', border: '1px solid #00a86b44' }}>
                                   <TrendingDown className="h-3.5 w-3.5" style={{ color: '#00a86b' }} />
                                   <p className="text-xs font-bold" style={{ color: '#00a86b' }}>
-                                    Você economiza {formatCurrency(valorTotal - getValorComDesconto(negociacao))} ({getDesconto('parcelado', diasAtraso)}%)
+                                    Você economiza {formatCurrency(valorTotal - getValorComDesconto(negociacao))} ({getDesconto('parcelado', diasAtraso, faixasCredor)}%)
                                   </p>
                                 </div>
                               </div>
@@ -747,7 +783,7 @@ export default function ConsultaResultado() {
                                     Resumo da negociação
                                   </p>
                                   <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>
-                                    Desconto: {getDesconto('parcelado', diasAtraso)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
+                                    Desconto: {getDesconto('parcelado', diasAtraso, faixasCredor)}% — <span style={{ textDecoration: 'line-through', color: '#ff6b6b' }}>{formatCurrency(valorTotal)}</span> → <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{formatCurrency(getValorComDesconto(negociacao))}</span>
                                   </p>
                                   {negociacao.entrada > 0 && (
                                     <p className="text-sm mb-1" style={{ color: '#ffffffcc' }}>Entrada: {formatCurrency(negociacao.entrada)}</p>

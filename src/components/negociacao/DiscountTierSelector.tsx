@@ -1,5 +1,5 @@
 import { Star, Zap, Lock, TrendingDown } from 'lucide-react';
-import { getDescontoPortal } from '@/lib/descontoPortal';
+import { getDescontoComFaixas, type FaixaDescontoCredor } from '@/lib/descontoPortal';
 
 export type DescontoFaixa = 'avista' | 'parcelado';
 
@@ -14,11 +14,12 @@ interface DiscountTierSelectorProps {
   onSelect: (faixa: DescontoFaixa) => void;
   valorTotal: number;
   diasAtraso: number;
+  faixasCredor?: FaixaDescontoCredor[] | null;
 }
 
-export default function DiscountTierSelector({ selected, onSelect, valorTotal, diasAtraso }: DiscountTierSelectorProps) {
-  const descAvista = getDescontoPortal(diasAtraso, 'avista');
-  const descParcelado = getDescontoPortal(diasAtraso, 'parcelado');
+export default function DiscountTierSelector({ selected, onSelect, valorTotal, diasAtraso, faixasCredor }: DiscountTierSelectorProps) {
+  const descAvista = getDescontoComFaixas(diasAtraso, 'avista', faixasCredor);
+  const descParcelado = getDescontoComFaixas(diasAtraso, 'parcelado', faixasCredor);
 
   const avistaValor = valorTotal * (1 - descAvista / 100);
   const avistaEconomia = valorTotal - avistaValor;
@@ -223,8 +224,8 @@ export default function DiscountTierSelector({ selected, onSelect, valorTotal, d
   );
 }
 
-export function getDesconto(faixa: DescontoFaixa, diasAtraso: number): number {
-  return getDescontoPortal(diasAtraso, faixa);
+export function getDesconto(faixa: DescontoFaixa, diasAtraso: number, faixasCredor?: FaixaDescontoCredor[] | null): number {
+  return getDescontoComFaixas(diasAtraso, faixa, faixasCredor);
 }
 
 export function getMinParcelas(faixa: DescontoFaixa): number {

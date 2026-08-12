@@ -32,6 +32,49 @@ export function getDescontoPortal(dias: number, modalidade: ModalidadePortal): n
   return modalidade === 'avista' ? 50 : 30;
 }
 
-export function getDescontoMaximoPortal(dias: number): number {
-  return getDescontoPortal(dias, 'avista');
+// ---------------------------------------------------------------------------
+// Faixas customizadas por credor (tabela credor_desconto_faixas)
+// ---------------------------------------------------------------------------
+
+export interface FaixaDescontoCredor {
+  dias_de: number;
+  dias_ate: number | null; // null = sem limite
+  desc_avista: number;
+  desc_parcelado: number;
+}
+
+/** Normaliza o nome do credor para comparação/gravação. */
+export function normalizeCredor(v: string | null | undefined): string {
+  return String(v ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+/**
+ * Desconto considerando faixas customizadas do credor.
+ * Se não houver faixas cadastradas, cai nas regras padrão do sistema.
+ */
+export function getDescontoComFaixas(
+  dias: number,
+  modalidade: ModalidadePortal,
+  faixas?: FaixaDescontoCredor[] | null
+): number {
+  if (!faixas || faixas.length === 0) return getDescontoPortal(dias, modalidade);
+  const d = Math.max(0, dias);
+  const hit = faixas.find(
+    (f) => d >= (f.dias_de ?? 0) && (f.dias_ate == null || d <= f.dias_ate)
+  );
+  if (!hit) return 0;
+  const v = modalidade === 'avista' ? hit.desc_avista : hit.desc_parcelado;
+  return Math.max(0, Math.min(100, Number(v) || 0));
+}
+
+export function getDescontoMaximoPortal(
+  dias: number,
+  faixas?: FaixaDescontoCredor[] | null
+): number {
+  return getDescontoComFaixas(dias, 'avista', faixas);
 }
