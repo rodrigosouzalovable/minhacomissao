@@ -840,7 +840,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato]);
 
   // Prefetch da conversa do topo da lista (caso mais comum)
   useEffect(() => {
