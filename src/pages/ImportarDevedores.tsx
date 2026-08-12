@@ -2212,7 +2212,7 @@ export default function ImportarDevedores() {
               </div>
             )}
             {credorParaDescontos && (
-              <DescontosCredorEditor credor={credorParaDescontos} titulo={credorParaDescontos} />
+              <DescontosCredorEditor key={credorParaDescontos} credor={credorParaDescontos} titulo={credorParaDescontos} />
             )}
             {(isPagamentos || isUmeAporte || isUmeConsolidado) && (
               <div className="text-sm text-muted-foreground">
