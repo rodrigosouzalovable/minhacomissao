@@ -889,7 +889,7 @@ export default function ImportarDevedores() {
 
   const parseCobmais = (workbook: XLSX.WorkBook): DevedorRow[] => {
     const sheet1 = workbook.Sheets[workbook.SheetNames[0]];
-    const rows1 = XLSX.utils.dropCabecalho(XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: "A" }));
+    const rows1 = dropCabecalho(XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet1, { header: 'A' }));
     console.log('[COBMAIS] Total de abas:', workbook.SheetNames.length, '| Linhas aba 1:', rows1.length);
 
     const sheet2 = workbook.SheetNames.length >= 2 ? workbook.Sheets[workbook.SheetNames[1]] : null;
