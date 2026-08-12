@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import DescontosCredorEditor from '@/components/portal/DescontosCredorEditor';
+import DescontosCredorCard from '@/components/portal/DescontosCredorCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -2211,7 +2212,7 @@ export default function ImportarDevedores() {
               </div>
             )}
             {credorParaDescontos && (
-              <DescontosCredorEditor credor={credorParaDescontos} titulo={credorParaDescontos} />
+              <DescontosCredorEditor key={credorParaDescontos} credor={credorParaDescontos} titulo={credorParaDescontos} />
             )}
             {(isPagamentos || isUmeAporte || isUmeConsolidado) && (
               <div className="text-sm text-muted-foreground">
@@ -2943,6 +2944,8 @@ export default function ImportarDevedores() {
             </CardContent>
           </Card>
         )}
+
+        <DescontosCredorCard />
 
         <BatimentoCpfsPortalCard />
 
