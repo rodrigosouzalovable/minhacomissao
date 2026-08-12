@@ -204,6 +204,9 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   const [jobs, setJobs] = useState<CampanhaJob[]>([]);
   const [itensByJob, setItensByJob] = useState<Map<string, any[]>>(new Map());
+  const [pagByJob, setPagByJob] = useState<Map<string, { temMais: boolean }>>(new Map());
+  const [resumoByJob, setResumoByJob] = useState<Map<string, DeliveryResumo>>(new Map());
+
   const [logByJob, setLogByJob] = useState<Map<string, Map<string, { status: DeliveryStatus; erro?: string }>>>(new Map());
   const [extras, setExtras] = useState<ExtrasMap>(loadExtras());
   const [tick, setTick] = useState(0);
