@@ -50,6 +50,7 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
 import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 
 interface MetaInstance {
   id: string; nome: string | null; display_phone: string | null; ativo: boolean;
