@@ -2944,6 +2944,8 @@ export default function ImportarDevedores() {
           </Card>
         )}
 
+        <DescontosCredorCard />
+
         <BatimentoCpfsPortalCard />
 
         <ConferenciaCarteiraCard />
