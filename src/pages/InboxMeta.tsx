@@ -425,6 +425,29 @@ export default function InboxMeta() {
     });
   }, [etiquetasAtivas, nomesAtendenteCaixa]);
 
+  // Etiqueta "Atendente: <meu nome>" do usuário logado (para "Meus Clientes")
+  useEffect(() => {
+    if (!user || etiquetas.length === 0) return;
+    let cancelado = false;
+    (async () => {
+      const { data } = await supabase.from('profiles').select('nome').eq('id', user.id).maybeSingle();
+      if (cancelado) return;
+      const meuNome = norm(String((data as any)?.nome || '').trim());
+      if (!meuNome) { setMinhaEtiquetaId(null); return; }
+      const apelido = norm(atendenteNome);
+      const cand = etiquetas.find((e) => {
+        const nome = String(e.nome || '').trim();
+        if (!/^atendente:/i.test(nome)) return false;
+        const puro = norm(nome.replace(/^atendente:\s*/i, '').trim());
+        if (!puro) return false;
+        return puro === meuNome || meuNome.startsWith(puro) || puro.startsWith(meuNome) ||
+          (!!apelido && (puro === apelido || puro.startsWith(apelido)));
+      });
+      setMinhaEtiquetaId(cand?.id ?? null);
+    })();
+    return () => { cancelado = true; };
+  }, [user, etiquetas, atendenteNome]);
+
 
   // Paginação da lista de conversas: lote inicial leve + "carregar mais"
   const PAGE_CONTATOS = 300;
