@@ -1391,7 +1391,19 @@ export default function InboxMeta() {
                       )}
                     </PopoverContent>
                   </Popover>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-7 text-[11px]"
+                    disabled={mcExportando}
+                    onClick={baixarMeusClientesExcel}
+                  >
+                    {mcExportando
+                      ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Gerando...</>
+                      : <><Download className="h-3 w-3 mr-1" /> Baixar Excel ({contatosFiltrados.length})</>}
+                  </Button>
                 </div>
+
               )}
             </div>
             {/* Caixas de mensagens */}
