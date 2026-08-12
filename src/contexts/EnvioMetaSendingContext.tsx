@@ -221,30 +221,32 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const autoResumeAtRef = useRef<Map<string, number>>(new Map()); // jobId -> last auto-resume ts
   const sessionRefreshRef = useRef<Promise<string> | null>(null);
 
-  const invokeControle = useCallback(async (jobId: string, acao: string) => {
-    // A API de autenticação rejeita corretamente JWTs cuja sessão foi revogada.
-    // Renova a sessão antes do comando e envia explicitamente o token recém-emitido,
-    // evitando que o Functions client reutilize um access token obsoleto do storage.
+  // A API de autenticação rejeita corretamente JWTs cuja sessão foi revogada.
+  // Renova a sessão antes do comando e devolve o token recém-emitido, evitando
+  // que o Functions client reutilize um access token obsoleto do storage.
+  const refreshAccessToken = useCallback(async (): Promise<string> => {
     if (!sessionRefreshRef.current) {
       sessionRefreshRef.current = (async () => {
         const { data, error } = await supabase.auth.refreshSession();
         const accessToken = data.session?.access_token;
         if (error || !accessToken) {
-          await supabase.auth.signOut();
-          throw new Error("Sua sessão expirou. Entre novamente para controlar a campanha.");
+          throw new Error("Sua sessão expirou. Entre novamente para continuar.");
         }
         return accessToken;
       })().finally(() => {
         sessionRefreshRef.current = null;
       });
     }
+    return sessionRefreshRef.current;
+  }, []);
 
-    const accessToken = await sessionRefreshRef.current;
+  const invokeControle = useCallback(async (jobId: string, acao: string) => {
+    const accessToken = await refreshAccessToken();
     return supabase.functions.invoke("envio-meta-massa-control", {
       body: { job_id: jobId, acao },
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-  }, []);
+  }, [refreshAccessToken]);
 
   const carregarJobs = useCallback(async () => {
     if (!uid) { setJobs([]); setItensByJob(new Map()); setLogByJob(new Map()); return; }
