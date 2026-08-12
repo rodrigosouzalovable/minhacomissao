@@ -50,6 +50,7 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
 import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 
 interface MetaInstance {
   id: string; nome: string | null; display_phone: string | null; ativo: boolean;
@@ -139,6 +140,13 @@ export default function InboxMeta() {
   const [qualifPorContato, setQualifPorContato] = useState<Record<string, string>>({});
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
+  // Meus Clientes (conversas com a etiqueta do próprio usuário)
+  const [modoMeusClientes, setModoMeusClientes] = useState(false);
+  const [mcDataIni, setMcDataIni] = useState<Date | undefined>(undefined);
+  const [mcDataFim, setMcDataFim] = useState<Date | undefined>(undefined);
+  const [mcMarcadores, setMcMarcadores] = useState<Set<string>>(new Set());
+  const [minhaEtiquetaId, setMinhaEtiquetaId] = useState<string | null>(null);
+  const [mcMarcadoresOpen, setMcMarcadoresOpen] = useState(false);
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
@@ -418,6 +426,29 @@ export default function InboxMeta() {
     });
   }, [etiquetasAtivas, nomesAtendenteCaixa]);
 
+  // Etiqueta "Atendente: <meu nome>" do usuário logado (para "Meus Clientes")
+  useEffect(() => {
+    if (!user || etiquetas.length === 0) return;
+    let cancelado = false;
+    (async () => {
+      const { data } = await supabase.from('profiles').select('nome').eq('id', user.id).maybeSingle();
+      if (cancelado) return;
+      const meuNome = norm(String((data as any)?.nome || '').trim());
+      if (!meuNome) { setMinhaEtiquetaId(null); return; }
+      const apelido = norm(atendenteNome);
+      const cand = etiquetas.find((e) => {
+        const nome = String(e.nome || '').trim();
+        if (!/^atendente:/i.test(nome)) return false;
+        const puro = norm(nome.replace(/^atendente:\s*/i, '').trim());
+        if (!puro) return false;
+        return puro === meuNome || meuNome.startsWith(puro) || puro.startsWith(meuNome) ||
+          (!!apelido && (puro === apelido || puro.startsWith(apelido)));
+      });
+      setMinhaEtiquetaId(cand?.id ?? null);
+    })();
+    return () => { cancelado = true; };
+  }, [user, etiquetas, atendenteNome]);
+
 
   // Paginação da lista de conversas: lote inicial leve + "carregar mais"
   const PAGE_CONTATOS = 300;
@@ -427,11 +458,64 @@ export default function InboxMeta() {
   const [carregandoMais, setCarregandoMais] = useState(false);
 
   // Troca de caixa/instância/aba/busca volta ao primeiro lote
-  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId]);
+  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim]);
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
     const selectCols = 'id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado, folder_id';
+
+    // ===== Modo "Meus Clientes": todo o histórico com a etiqueta do usuário =====
+    if (modoMeusClientes) {
+      if (!minhaEtiquetaId) {
+        setContatos([]);
+        contatoIdsRef.current = [];
+        return;
+      }
+      const vinculos: string[] = [];
+      const PAG = 1000;
+      for (let p = 0; p < 20; p++) {
+        const { data: vs } = await supabase
+          .from('meta_whatsapp_contato_etiquetas')
+          .select('contato_id')
+          .eq('etiqueta_id', minhaEtiquetaId)
+          .range(p * PAG, p * PAG + PAG - 1);
+        const arr = ((vs as any[]) ?? []).map(v => v.contato_id).filter(Boolean);
+        vinculos.push(...arr);
+        if (arr.length < PAG) break;
+      }
+      const ids = Array.from(new Set(vinculos));
+      if (ids.length === 0) {
+        setContatos([]);
+        contatoIdsRef.current = [];
+        return;
+      }
+      const iniIso = mcDataIni ? new Date(new Date(mcDataIni).setHours(0, 0, 0, 0)).toISOString() : null;
+      const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
+      const acumulado: MetaContato[] = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        let qc = supabase.from('meta_whatsapp_contatos')
+          .select(selectCols)
+          .in('id', ids.slice(i, i + 200))
+          .order('ultima_mensagem_em', { ascending: false, nullsFirst: false });
+        if (filtroInstancia !== 'todas') qc = qc.eq('instancia_id', filtroInstancia);
+        if (iniIso) qc = qc.gte('ultima_mensagem_em', iniIso);
+        if (fimIso) qc = qc.lte('ultima_mensagem_em', fimIso);
+        const { data: parte } = await qc;
+        acumulado.push(...((parte as MetaContato[]) ?? []));
+      }
+      acumulado.sort((a, b) => {
+        const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
+        const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
+        return tb - ta;
+      });
+      const lista = acumulado.slice(0, limiteContatos);
+      setContatos(lista);
+      contatoIdsRef.current = lista.map(c => c.id);
+      fetchContatoEtiquetas(contatoIdsRef.current);
+      fetchQualifContatos(contatoIdsRef.current);
+      return;
+    }
+
     // Lista base paginada (usa idx_meta_wa_contatos_arq_ult).
     let q = supabase.from('meta_whatsapp_contatos')
       .select(selectCols)
@@ -485,7 +569,7 @@ export default function InboxMeta() {
     // Etiquetas apenas dos contatos que entraram na lista
     fetchContatoEtiquetas(contatoIdsRef.current);
     fetchQualifContatos(contatoIdsRef.current);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -743,6 +827,10 @@ export default function InboxMeta() {
           const fim = new Date(c.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
           if (fim - Date.now() <= 0) return false;
         }
+        if (modoMeusClientes && mcMarcadores.size > 0) {
+          const qid = qualifPorContato[c.id];
+          if (!qid || !mcMarcadores.has(qid)) return false;
+        }
         return true;
       })
       .sort((a, b) => {
@@ -753,7 +841,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato]);
 
   // Prefetch da conversa do topo da lista (caso mais comum)
   useEffect(() => {
@@ -1150,6 +1238,97 @@ export default function InboxMeta() {
                 className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'nao_lidas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
                 Não lidas
               </button>
+            </div>
+            {/* Meus Clientes */}
+            <div className="space-y-1.5">
+              <Button
+                variant={modoMeusClientes ? 'default' : 'outline'}
+                size="sm"
+                className="w-full h-8 text-xs"
+                onClick={() => setModoMeusClientes(v => !v)}
+                title="Todas as conversas com a minha etiqueta de atendente"
+              >
+                <Users className="h-3.5 w-3.5 mr-1" /> Meus Clientes
+              </Button>
+              {modoMeusClientes && (
+                <div className="space-y-1.5 rounded border border-dashed p-2">
+                  {!minhaEtiquetaId && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Nenhuma etiqueta de atendente encontrada para o seu login.
+                    </p>
+                  )}
+                  <div className="flex items-center gap-1">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px] justify-start">
+                          {mcDataIni ? format(mcDataIni, 'dd/MM/yy') : 'Data inicial'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarPicker mode="single" selected={mcDataIni} onSelect={setMcDataIni} initialFocus locale={ptBR} className="p-3 pointer-events-auto" />
+                      </PopoverContent>
+                    </Popover>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px] justify-start">
+                          {mcDataFim ? format(mcDataFim, 'dd/MM/yy') : 'Data final'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarPicker mode="single" selected={mcDataFim} onSelect={setMcDataFim} initialFocus locale={ptBR} className="p-3 pointer-events-auto" />
+                      </PopoverContent>
+                    </Popover>
+                    {(mcDataIni || mcDataFim) && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setMcDataIni(undefined); setMcDataFim(undefined); }} title="Limpar datas">
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <Popover open={mcMarcadoresOpen} onOpenChange={setMcMarcadoresOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full h-7 text-[11px] justify-between">
+                        <span>
+                          {mcMarcadores.size === 0 ? 'Todos os marcadores' : `${mcMarcadores.size} marcador(es)`}
+                        </span>
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-2" align="start">
+                      <div className="space-y-1 max-h-60 overflow-y-auto">
+                        {qualificacoes.filter(q => q.ativo).length === 0 && (
+                          <p className="text-[11px] text-muted-foreground">Nenhuma qualificação ativa.</p>
+                        )}
+                        {qualificacoes.filter(q => q.ativo).map(q => {
+                          const on = mcMarcadores.has(q.id);
+                          return (
+                            <button
+                              key={q.id}
+                              onClick={() => setMcMarcadores(prev => {
+                                const n = new Set(prev);
+                                if (n.has(q.id)) n.delete(q.id); else n.add(q.id);
+                                return n;
+                              })}
+                              className={cn(
+                                'flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent',
+                                on && 'bg-primary/10',
+                              )}
+                            >
+                              {on ? <CheckSquare className="h-3.5 w-3.5 text-primary" /> : <Square className="h-3.5 w-3.5 text-muted-foreground" />}
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: q.cor }} />
+                              <span className="truncate">{q.nome}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {mcMarcadores.size > 0 && (
+                        <Button variant="ghost" size="sm" className="w-full h-7 text-[11px] mt-1" onClick={() => setMcMarcadores(new Set())}>
+                          Limpar marcadores
+                        </Button>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
             </div>
             {/* Caixas de mensagens */}
             <div className="flex flex-wrap items-center gap-1">
