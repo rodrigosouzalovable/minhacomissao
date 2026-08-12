@@ -95,7 +95,7 @@ type Ctx = {
   resultado: EnvioResultado;
   templateNome: string | null;
   restantes: number;
-  iniciar: (p: IniciarParams) => Promise<void>;
+  iniciar: (p: IniciarParams) => Promise<string | null>;
   togglePausa: () => void;
   cancelar: () => void;
   reativar: () => void;
@@ -659,9 +659,12 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     return null;
   }, [jobs]);
 
-  const iniciar = useCallback(async (p: IniciarParams) => {
-    if (!uid) { toast.error("Faça login para iniciar o envio"); return; }
+  const iniciar = useCallback(async (p: IniciarParams): Promise<string | null> => {
+    if (!uid) { toast.error("Faça login para iniciar o envio"); return null; }
     try {
+      // Renova a sessão antes de disparar: um access token obsoleto fazia a função
+      // responder 401 e a campanha nunca era criada (sem aviso claro na tela).
+      const accessToken = await refreshAccessToken();
       const { data, error } = await supabase.functions.invoke("envio-meta-massa-iniciar", {
         body: {
           template: p.template,
@@ -675,11 +678,24 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           msgsPorSegundo: p.msgsPorSegundo,
           folderId: p.folderId ?? null,
         },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (error) throw error;
+      if (error) {
+        // Erros HTTP do Functions client escondem o corpo — tenta extrair a mensagem real.
+        let detalhe = error.message || "falha ao iniciar";
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            if (body?.error) detalhe = body.error;
+          }
+        } catch { /* mantém a mensagem original */ }
+        throw new Error(detalhe);
+      }
       if (!data?.success) throw new Error(data?.error || "Falha ao iniciar envio");
 
       const jobId = data.job_id as string;
+      if (!jobId) throw new Error("A campanha não foi criada (sem job_id). Tente novamente.");
       if (p.onAfterEnvio) onAfterRef.current[jobId] = p.onAfterEnvio;
       setExtras((prev) => {
         const next = { ...prev, [jobId]: { semWhatsapp: p.semWhatsapp ?? [], erroValidacao: p.erroValidacao ?? [] } };
@@ -687,25 +703,37 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         return next;
       });
       setLastStartedId(jobId);
-      toast.success("Campanha iniciada — roda em paralelo às demais");
       carregarJobs();
+      return jobId;
     } catch (e: any) {
       toast.error("Erro ao iniciar envio: " + (e?.message || e));
+      return null;
     }
-  }, [uid, carregarJobs]);
+  }, [uid, carregarJobs, refreshAccessToken]);
 
   const togglePausaJob = useCallback(async (jobId: string) => {
-    const j = jobs.find((x) => x.id === jobId);
-    if (!j) return;
-    const acao = j.status === "rodando" ? "pausar" : "retomar";
+    // Decide a ação pelo status ATUAL no servidor, não pelo status desenhado na tela.
+    const { data: atual } = await (supabase as any)
+      .from("envio_meta_job")
+      .select("status")
+      .eq("id", jobId)
+      .maybeSingle();
+    const statusServidor = atual?.status ?? jobs.find((x) => x.id === jobId)?.status;
+    if (!statusServidor) return;
+    const acao = statusServidor === "rodando" ? "pausar" : "retomar";
     try {
       const { data, error } = await invokeControle(jobId, acao);
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Falha");
+      // Reflete imediatamente na UI (sem esperar o próximo refresh/realtime)
+      const novoStatus = acao === "pausar" ? "pausado" : "rodando";
+      setJobs((prev) => prev.map((x) => (x.id === jobId ? { ...x, status: novoStatus } : x)));
+      if (acao === "pausar") autoResumeAtRef.current.delete(jobId);
       toast.info(acao === "pausar" ? "Campanha pausada" : "Campanha retomada");
       carregarJobs();
     } catch (e: any) {
       toast.error("Erro: " + (e?.message || e));
+      carregarJobs();
     }
   }, [jobs, carregarJobs, invokeControle]);
 
