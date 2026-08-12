@@ -147,6 +147,16 @@ export default function InboxMeta() {
   const [mcMarcadores, setMcMarcadores] = useState<Set<string>>(new Set());
   const [minhaEtiquetaId, setMinhaEtiquetaId] = useState<string | null>(null);
   const [mcMarcadoresOpen, setMcMarcadoresOpen] = useState(false);
+  const [mcExportando, setMcExportando] = useState(false);
+  // Minimizar/maximizar os filtros da lista
+  const [filtrosRecolhidos, setFiltrosRecolhidos] = useState<boolean>(() => {
+    try { return localStorage.getItem('inbox-meta-filtros-recolhidos') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('inbox-meta-filtros-recolhidos', filtrosRecolhidos ? '1' : '0'); } catch { /* noop */ }
+  }, [filtrosRecolhidos]);
+
+
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
