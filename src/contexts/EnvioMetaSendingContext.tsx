@@ -346,13 +346,30 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       const j = jobs.find((x) => x.id === jobId);
       await carregarLogs(jobId, j?.iniciado_em || null, rows.map((r) => r.telefone));
     }
-  }, [itensByJob, logByJob, jobs, carregarItens, carregarLogs]);
+    if (!resumoByJob.has(jobId)) await carregarResumoEntrega(jobId);
+  }, [itensByJob, logByJob, jobs, carregarItens, carregarLogs, resumoByJob, carregarResumoEntrega]);
 
   const recarregarItensJob = useCallback(async (jobId: string) => {
     const j = jobs.find((x) => x.id === jobId);
     const rows = await carregarItens(jobId);
     await carregarLogs(jobId, j?.iniciado_em || null, rows.map((r) => r.telefone));
-  }, [jobs, carregarItens, carregarLogs]);
+    await carregarResumoEntrega(jobId);
+  }, [jobs, carregarItens, carregarLogs, carregarResumoEntrega]);
+
+  const carregarMaisItensJob = useCallback(async (jobId: string) => {
+    const j = jobs.find((x) => x.id === jobId);
+    const atuais = itensByJob.get(jobId) || [];
+    const pagina = await carregarItens(jobId, atuais.length, true);
+    if (pagina.length > 0) {
+      await carregarLogs(jobId, j?.iniciado_em || null, pagina.map((r: any) => r.telefone));
+    }
+  }, [jobs, itensByJob, carregarItens, carregarLogs]);
+
+  const getPaginacaoJob = useCallback((jobId: string) => ({
+    carregados: (itensByJob.get(jobId) || []).length,
+    temMais: pagByJob.get(jobId)?.temMais === true,
+  }), [itensByJob, pagByJob]);
+
 
   // Refresh parcial: atualiza APENAS contadores/current do job (não mexe em status/status_motivo).
   // Usado pelo botão "Atualizar" no diálogo — nunca faz o botão "Reativar" aparecer sozinho.
