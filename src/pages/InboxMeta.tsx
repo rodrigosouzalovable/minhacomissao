@@ -1280,18 +1280,6 @@ export default function InboxMeta() {
                 <Clock className={cn('h-3.5 w-3.5', !filtroJanela24h && 'text-green-600')} />
               </Button>
             </div>
-            <div className="flex justify-end">
-              <button
-                onClick={() => setFiltrosRecolhidos(v => !v)}
-                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-accent"
-                title={filtrosRecolhidos ? 'Mostrar filtros e caixas' : 'Minimizar filtros e caixas'}
-              >
-                {filtrosRecolhidos ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-                {filtrosRecolhidos ? 'Mostrar filtros' : 'Minimizar filtros'}
-              </button>
-            </div>
-            {!filtrosRecolhidos && (
-            <>
             {/* Tabs */}
 
             <div className="flex gap-1 bg-muted/40 p-0.5 rounded">
