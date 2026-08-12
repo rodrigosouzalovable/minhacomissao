@@ -1151,7 +1151,19 @@ export default function InboxMeta() {
       <div className="flex h-[calc(100vh-4rem)] gap-0 overflow-hidden bg-background text-foreground">
         {/* Sidebar */}
         <div className="w-full sm:w-[360px] sm:min-w-[360px] sm:max-w-[360px] border-r flex flex-col bg-card overflow-hidden">
-          <div className="p-3 border-b space-y-2">
+          <div className={cn('border-b space-y-2', filtrosRecolhidos ? 'p-2' : 'p-3')}>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setFiltrosRecolhidos(v => !v)}
+                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-accent"
+                title={filtrosRecolhidos ? 'Mostrar filtros e caixas' : 'Minimizar filtros e caixas'}
+              >
+                {filtrosRecolhidos ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                {filtrosRecolhidos ? 'Mostrar filtros' : 'Minimizar filtros'}
+              </button>
+            </div>
+            {!filtrosRecolhidos && (
+            <>
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
               <h2 className="text-sm font-semibold flex-1">Inbox API Oficial Meta</h2>
@@ -1268,18 +1280,6 @@ export default function InboxMeta() {
                 <Clock className={cn('h-3.5 w-3.5', !filtroJanela24h && 'text-green-600')} />
               </Button>
             </div>
-            <div className="flex justify-end">
-              <button
-                onClick={() => setFiltrosRecolhidos(v => !v)}
-                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-accent"
-                title={filtrosRecolhidos ? 'Mostrar filtros e caixas' : 'Minimizar filtros e caixas'}
-              >
-                {filtrosRecolhidos ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-                {filtrosRecolhidos ? 'Mostrar filtros' : 'Minimizar filtros'}
-              </button>
-            </div>
-            {!filtrosRecolhidos && (
-            <>
             {/* Tabs */}
 
             <div className="flex gap-1 bg-muted/40 p-0.5 rounded">
