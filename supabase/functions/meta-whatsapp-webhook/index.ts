@@ -543,15 +543,23 @@ serve(async (req) => {
           }
           if (!isEcho && contatoIdFinal) {
             try {
+              // Todas as etiquetas "Atendente:%" — independente de quem criou a etiqueta.
+              // (Etiquetas criadas por outro login, como a do IAGO, também entram no rodízio.)
               const { data: atendentesRaw } = await supabase
                 .from('meta_whatsapp_etiquetas')
-                .select('id, nome')
-                .eq('user_id', inst.user_id)
+                .select('id, nome, user_id')
                 .ilike('nome', 'Atendente:%');
 
-              // Todas as etiquetas de atendente (usadas para checar se contato já tem uma)
-              const atendentes = atendentesRaw || [];
+              // Deduplica por nome (prefere a etiqueta do dono da instância)
+              const porNome = new Map<string, any>();
+              for (const a of (atendentesRaw || [])) {
+                const k = String((a as any).nome || '').trim().toLowerCase();
+                const atual = porNome.get(k);
+                if (!atual || (a as any).user_id === inst.user_id) porNome.set(k, a);
+              }
+              const atendentes = Array.from(porNome.values());
               const atendenteIds = atendentes.map((a: any) => a.id);
+
 
               // ---- Responsáveis da caixa de mensagens da conversa ----
               const permitidosCaixa = new Set<string>();
