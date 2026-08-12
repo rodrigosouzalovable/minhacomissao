@@ -29,6 +29,14 @@ function delayUsuarioMs(job: any): number {
   return sec * 1000;
 }
 
+// Delay considerado "curto": abaixo disso não vale devolver ao agendador de 10s,
+// pois o arredondamento distorce o ritmo pedido pelo usuário.
+const DELAY_CURTO_MS = 25_000;
+// Orçamento máximo de uma execução em laço (evita função longa demais).
+const ORCAMENTO_MS = 120_000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function encerrarJobSemDisponibilidade(job: any, motivo: string) {
   const { data: transitioned } = await supabase.from('envio_meta_job').update({
     status: 'erro',
@@ -430,6 +438,34 @@ Deno.serve(async (req) => {
       try {
         const result = await processarItem(claimed);
         if (result.advanced) processadosTotal++;
+
+        // Delay curto (ex.: 10–15s) é menor que a granularidade do agendador
+        // (10s), o que arredondava o ritmo real para ~20s. Neste caso a própria
+        // execução aguarda o delay exato e envia o próximo item, respeitando ao
+        // milissegundo o intervalo configurado pelo usuário.
+        if (result.advanced) {
+          const inicioLoop = Date.now();
+          let delayMs = result.delayMs;
+          while (delayMs > 0 && delayMs <= DELAY_CURTO_MS && Date.now() - inicioLoop + delayMs < ORCAMENTO_MS) {
+            await sleep(delayMs);
+
+            // Renova a trava para que outro tick não roube a campanha no meio do laço.
+            const { data: renovado } = await supabase
+              .from('envio_meta_job')
+              .update({ worker_locked_until: new Date(Date.now() + 45_000).toISOString() })
+              .eq('id', claimed.id)
+              .eq('worker_lock_token', claimed.worker_lock_token)
+              .eq('status', 'rodando')
+              .select('*')
+              .maybeSingle();
+            if (!renovado) break; // pausado, cancelado, concluído ou trava perdida
+
+            const proximo = await processarItem({ ...renovado, worker_lock_token: claimed.worker_lock_token });
+            if (!proximo.advanced) break;
+            processadosTotal++;
+            delayMs = proximo.delayMs;
+          }
+        }
       } catch (e) {
         console.error('[tick job]', claimed.id, e);
       } finally {
