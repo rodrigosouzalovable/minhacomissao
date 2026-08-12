@@ -172,11 +172,9 @@ export default function ConsultaResultado() {
         setFaixasCredor(null);
         return;
       }
-      const { data, error } = await (supabase as any)
-        .from('credor_desconto_faixas')
-        .select('dias_de,dias_ate,desc_avista,desc_parcelado')
-        .eq('credor', predominante)
-        .order('dias_de', { ascending: true });
+      const { data, error } = await (supabase as any).rpc('portal_faixas_credor', {
+        _credor: predominante,
+      });
       if (cancelado) return;
       setFaixasCredor(!error && data && data.length > 0 ? (data as FaixaDescontoCredor[]) : null);
     }
