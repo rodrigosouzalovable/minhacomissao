@@ -3014,6 +3014,15 @@ export default function ImportarDevedores() {
                               <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                               <TableCell>{row.telefone || '-'}</TableCell>
                             </>
+                          ) : isPadraoOuMmp ? (
+                            <>
+                              <TableCell>{row.nome || <span className="text-destructive"><AlertCircle className="h-3 w-3 inline" /> Vazio</span>}</TableCell>
+                              <TableCell>{row.credor || '-'}</TableCell>
+                              <TableCell>{row.contrato || '-'}</TableCell>
+                              <TableCell>{(row.descricao || '').replace('Parcela ', '') || '-'}</TableCell>
+                              <TableCell>{row.nascimento || '-'}</TableCell>
+                              <TableCell>{row.valor_original.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                            </>
                           ) : (
                             <>
                               <TableCell>{row.nascimento || '-'}</TableCell>
@@ -3028,11 +3037,27 @@ export default function ImportarDevedores() {
                       ))}
                     </TableBody>
                   </Table>
+                  {isPadraoOuMmp && conferenciaTotais.length > 0 && (
+                    <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+                      <p className="font-medium mb-1">
+                        Conferência da coluna H: {conferenciaTotais.length} CPF(s) com soma das parcelas diferente do valor total informado
+                      </p>
+                      <ul className="space-y-0.5">
+                        {conferenciaTotais.slice(0, 8).map((c) => (
+                          <li key={c.cpf} className="font-mono">
+                            {c.cpf} — parcelas {c.soma.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} vs total {c.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </li>
+                        ))}
+                      </ul>
+                      {conferenciaTotais.length > 8 && <p className="mt-1 text-muted-foreground">e mais {conferenciaTotais.length - 8}…</p>}
+                    </div>
+                  )}
                   {rows.length > 50 && (
                     <p className="text-sm text-muted-foreground text-center py-2">
                       Mostrando 50 de {rows.length} registros
                     </p>
                   )}
+
                 </div>
               )}
             </CardContent>
