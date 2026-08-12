@@ -314,6 +314,15 @@ export default function ImportarDevedores() {
   const isUmeAporte = credorSelecionado === 'ume_aporte';
   const isUmeConsolidado = credorSelecionado === 'ume_consolidado';
   const isMmp = credorSelecionado === 'mmp';
+  const credorAutomatico =
+    credorSelecionado === 'pagamentos' || credorSelecionado === 'ume_aporte' || credorSelecionado === 'ume_consolidado'
+      ? 'UME | NOVO MUNDO'
+      : credorSelecionado === 'montreal_atualizacao'
+        ? 'MONTREAL'
+        : null;
+  const credorParaDescontos = (
+    credorAutomatico ?? (credorDestino === 'outro' ? credorOutro.trim() : credorDestino)
+  ).trim();
 
   const fetchImportacoes = useCallback(async () => {
     setLoadingHistory(true);
@@ -2201,8 +2210,8 @@ export default function ImportarDevedores() {
                 )}
               </div>
             )}
-            {isMmp && (
-              <DescontosCredorEditor credor={CREDOR_MMP} titulo="MMP Mundo da Moda" />
+            {credorParaDescontos && (
+              <DescontosCredorEditor credor={credorParaDescontos} titulo={credorParaDescontos} />
             )}
             {(isPagamentos || isUmeAporte || isUmeConsolidado) && (
               <div className="text-sm text-muted-foreground">
