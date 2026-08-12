@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
+import DescontosCredorEditor from '@/components/portal/DescontosCredorEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -24,7 +25,9 @@ import { calcularComissao } from '@/lib/comissao';
 import { BatimentoCpfsPortalCard } from '@/components/BatimentoCpfsPortalCard';
 import { ConferenciaCarteiraCard } from '@/components/ConferenciaCarteiraCard';
 
-type CredorLayout = 'padrao' | 'montreal' | 'montreal_atualizacao' | 'cobmais' | 'pesquisa' | 'pagamentos' | 'ume_aporte' | 'ume_consolidado';
+const CREDOR_MMP = 'MMP MUNDO DA MODA';
+
+type CredorLayout = 'padrao' | 'mmp' | 'montreal' | 'montreal_atualizacao' | 'cobmais' | 'pesquisa' | 'pagamentos' | 'ume_aporte' | 'ume_consolidado';
 
 type MontrealRowStatus = 'existe' | 'nova_parcela' | 'cliente_novo';
 
@@ -88,6 +91,7 @@ interface Importacao {
 }
 
 const DESCRICOES: Record<CredorLayout, string> = {
+  mmp: 'MMP Mundo da Moda — mesmo layout do Padrão: A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido). Configure abaixo os descontos do portal para esse credor.',
   padrao: 'A = CPF/CNPJ, B = Nascimento, C = Cliente, D = Credor, E = Contrato, F = Atraso, G = Risco (valor devido)',
   montreal: 'A = Parceiro, B = Razão Social, C = CNPJ/CPF, D = Fone1, E = Fone2, F = Apelido, G = Atraso (dias), H = Nro Nota, I = Desdob., J = Vlr do Desdobramento, K = Dt. Venc. Inicial',
   montreal_atualizacao: 'Importação inteligente MONTREAL — Cruza com dados existentes e insere apenas parcelas novas. Mesmo layout da planilha Montreal.',
@@ -292,7 +296,7 @@ export default function ImportarDevedores() {
   const [montrealRows, setMontrealRows] = useState<MontrealAtualizacaoRow[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const CREDORES_OPCOES = ['MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
+  const CREDORES_OPCOES = ['MMP MUNDO DA MODA', 'MUNDO DA MODA', 'UME | NOVO MUNDO', 'MONTREAL'];
 
   // Multi-file batch state
   const [files, setFiles] = useState<File[]>([]);
@@ -309,6 +313,7 @@ export default function ImportarDevedores() {
   const isMontrealAtualizacao = credorSelecionado === 'montreal_atualizacao';
   const isUmeAporte = credorSelecionado === 'ume_aporte';
   const isUmeConsolidado = credorSelecionado === 'ume_consolidado';
+  const isMmp = credorSelecionado === 'mmp';
 
   const fetchImportacoes = useCallback(async () => {
     setLoadingHistory(true);
@@ -370,6 +375,9 @@ export default function ImportarDevedores() {
     setImported(false);
     setPagamentoImported(false);
     setUmeAporteImported(false);
+    if (value === 'mmp') {
+      setCredorDestino(CREDOR_MMP);
+    }
     if (value === 'pagamentos') {
       setCredorDestino('UME | NOVO MUNDO');
     }
@@ -2160,6 +2168,7 @@ export default function ImportarDevedores() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="padrao">Padrão</SelectItem>
+                  <SelectItem value="mmp">MMP Mundo da Moda</SelectItem>
                   <SelectItem value="montreal">MONTREAL</SelectItem>
                   <SelectItem value="montreal_atualizacao">MONTREAL (Atualização)</SelectItem>
                    <SelectItem value="cobmais">COBMAIS</SelectItem>
@@ -2191,6 +2200,9 @@ export default function ImportarDevedores() {
                   />
                 )}
               </div>
+            )}
+            {isMmp && (
+              <DescontosCredorEditor credor={CREDOR_MMP} titulo="MMP Mundo da Moda" />
             )}
             {(isPagamentos || isUmeAporte || isUmeConsolidado) && (
               <div className="text-sm text-muted-foreground">
