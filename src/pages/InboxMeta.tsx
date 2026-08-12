@@ -1238,6 +1238,97 @@ export default function InboxMeta() {
                 Não lidas
               </button>
             </div>
+            {/* Meus Clientes */}
+            <div className="space-y-1.5">
+              <Button
+                variant={modoMeusClientes ? 'default' : 'outline'}
+                size="sm"
+                className="w-full h-8 text-xs"
+                onClick={() => setModoMeusClientes(v => !v)}
+                title="Todas as conversas com a minha etiqueta de atendente"
+              >
+                <Users className="h-3.5 w-3.5 mr-1" /> Meus Clientes
+              </Button>
+              {modoMeusClientes && (
+                <div className="space-y-1.5 rounded border border-dashed p-2">
+                  {!minhaEtiquetaId && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Nenhuma etiqueta de atendente encontrada para o seu login.
+                    </p>
+                  )}
+                  <div className="flex items-center gap-1">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px] justify-start">
+                          {mcDataIni ? format(mcDataIni, 'dd/MM/yy') : 'Data inicial'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarPicker mode="single" selected={mcDataIni} onSelect={setMcDataIni} initialFocus locale={ptBR} className="p-3 pointer-events-auto" />
+                      </PopoverContent>
+                    </Popover>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px] justify-start">
+                          {mcDataFim ? format(mcDataFim, 'dd/MM/yy') : 'Data final'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarPicker mode="single" selected={mcDataFim} onSelect={setMcDataFim} initialFocus locale={ptBR} className="p-3 pointer-events-auto" />
+                      </PopoverContent>
+                    </Popover>
+                    {(mcDataIni || mcDataFim) && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setMcDataIni(undefined); setMcDataFim(undefined); }} title="Limpar datas">
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <Popover open={mcMarcadoresOpen} onOpenChange={setMcMarcadoresOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full h-7 text-[11px] justify-between">
+                        <span>
+                          {mcMarcadores.size === 0 ? 'Todos os marcadores' : `${mcMarcadores.size} marcador(es)`}
+                        </span>
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-2" align="start">
+                      <div className="space-y-1 max-h-60 overflow-y-auto">
+                        {qualificacoes.filter(q => q.ativo).length === 0 && (
+                          <p className="text-[11px] text-muted-foreground">Nenhuma qualificação ativa.</p>
+                        )}
+                        {qualificacoes.filter(q => q.ativo).map(q => {
+                          const on = mcMarcadores.has(q.id);
+                          return (
+                            <button
+                              key={q.id}
+                              onClick={() => setMcMarcadores(prev => {
+                                const n = new Set(prev);
+                                if (n.has(q.id)) n.delete(q.id); else n.add(q.id);
+                                return n;
+                              })}
+                              className={cn(
+                                'flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent',
+                                on && 'bg-primary/10',
+                              )}
+                            >
+                              {on ? <CheckSquare className="h-3.5 w-3.5 text-primary" /> : <Square className="h-3.5 w-3.5 text-muted-foreground" />}
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: q.cor }} />
+                              <span className="truncate">{q.nome}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {mcMarcadores.size > 0 && (
+                        <Button variant="ghost" size="sm" className="w-full h-7 text-[11px] mt-1" onClick={() => setMcMarcadores(new Set())}>
+                          Limpar marcadores
+                        </Button>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
+            </div>
             {/* Caixas de mensagens */}
             <div className="flex flex-wrap items-center gap-1">
               {podeVerPadrao && (
