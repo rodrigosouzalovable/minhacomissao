@@ -12,7 +12,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot,
+  Bot, Download, ChevronUp,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -147,6 +147,16 @@ export default function InboxMeta() {
   const [mcMarcadores, setMcMarcadores] = useState<Set<string>>(new Set());
   const [minhaEtiquetaId, setMinhaEtiquetaId] = useState<string | null>(null);
   const [mcMarcadoresOpen, setMcMarcadoresOpen] = useState(false);
+  const [mcExportando, setMcExportando] = useState(false);
+  // Minimizar/maximizar os filtros da lista
+  const [filtrosRecolhidos, setFiltrosRecolhidos] = useState<boolean>(() => {
+    try { return localStorage.getItem('inbox-meta-filtros-recolhidos') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('inbox-meta-filtros-recolhidos', filtrosRecolhidos ? '1' : '0'); } catch { /* noop */ }
+  }, [filtrosRecolhidos]);
+
+
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
@@ -843,6 +853,47 @@ export default function InboxMeta() {
       });
   }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato]);
 
+  // Exportar "Meus Clientes" para Excel (telefones + marcadores)
+  const baixarMeusClientesExcel = useCallback(async () => {
+    if (contatosFiltrados.length === 0) {
+      toast({ title: 'Nada para exportar', description: 'Nenhum cliente na lista atual.' });
+      return;
+    }
+    setMcExportando(true);
+    try {
+      const { exportarParaExcel } = await import('@/lib/exportExcel');
+      const nomeCaixa = (id?: string | null) => (id ? (folders.find(f => f.id === id)?.nome || '—') : 'Padrão');
+      const linhas = contatosFiltrados.map(c => {
+        const q = qualificacoes.find(x => x.id === qualifPorContato[c.id]);
+        return {
+          telefone: formatTelefone(c.telefone || ''),
+          nome: c.nome || nomesCRM[suffix8(c.telefone)] || '',
+          marcador: q?.nome || 'Não qualificado',
+          ultima: c.ultima_mensagem_em ? format(new Date(c.ultima_mensagem_em), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '',
+          caixa: nomeCaixa(c.folder_id),
+        };
+      });
+      await exportarParaExcel(
+        linhas,
+        [
+          { chave: 'telefone', titulo: 'Telefone' },
+          { chave: 'nome', titulo: 'Nome' },
+          { chave: 'marcador', titulo: 'Marcador' },
+          { chave: 'ultima', titulo: 'Última mensagem em' },
+          { chave: 'caixa', titulo: 'Caixa de mensagens' },
+        ],
+        `meus-clientes-${format(new Date(), 'yyyy-MM-dd')}`,
+      );
+      toast({ title: 'Excel gerado', description: `${linhas.length} cliente(s) exportado(s).` });
+    } catch (e: any) {
+      toast({ title: 'Erro ao exportar', description: e?.message || 'Falha ao gerar o Excel', variant: 'destructive' });
+    } finally {
+      setMcExportando(false);
+    }
+  }, [contatosFiltrados, qualificacoes, qualifPorContato, nomesCRM, folders, toast]);
+
+
+
   // Prefetch da conversa do topo da lista (caso mais comum)
   useEffect(() => {
     const primeiro = contatosFiltrados?.[0];
@@ -1217,7 +1268,20 @@ export default function InboxMeta() {
                 <Clock className={cn('h-3.5 w-3.5', !filtroJanela24h && 'text-green-600')} />
               </Button>
             </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setFiltrosRecolhidos(v => !v)}
+                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-accent"
+                title={filtrosRecolhidos ? 'Mostrar filtros e caixas' : 'Minimizar filtros e caixas'}
+              >
+                {filtrosRecolhidos ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                {filtrosRecolhidos ? 'Mostrar filtros' : 'Minimizar filtros'}
+              </button>
+            </div>
+            {!filtrosRecolhidos && (
+            <>
             {/* Tabs */}
+
             <div className="flex gap-1 bg-muted/40 p-0.5 rounded">
               <button onClick={() => setAbaAtiva('conversas')}
                 className={cn('flex-1 text-xs py-1 rounded transition', abaAtiva === 'conversas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
@@ -1327,7 +1391,19 @@ export default function InboxMeta() {
                       )}
                     </PopoverContent>
                   </Popover>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-7 text-[11px]"
+                    disabled={mcExportando}
+                    onClick={baixarMeusClientesExcel}
+                  >
+                    {mcExportando
+                      ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Gerando...</>
+                      : <><Download className="h-3 w-3 mr-1" /> Baixar Excel ({contatosFiltrados.length})</>}
+                  </Button>
                 </div>
+
               )}
             </div>
             {/* Caixas de mensagens */}
@@ -1417,6 +1493,9 @@ export default function InboxMeta() {
                 <Plus className="h-3 w-3" />
               </button>
             </div>
+            </>
+            )}
+
             {selMultipla && (
               <div className="flex items-center gap-1 bg-primary/10 rounded p-1.5">
                 <span className="text-xs flex-1">{selecionados.size} selecionada(s)</span>
