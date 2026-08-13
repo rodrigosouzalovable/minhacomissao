@@ -7815,6 +7815,21 @@ export type Database = {
           user_id: string
         }[]
       }
+      relatorio_ume_acionamentos: {
+        Args: { _data: string }
+        Returns: {
+          acionamento: string
+          agente: string
+          assessoria: string
+          cpf: string
+          data_hora: string
+          email: string
+          ocorrencia: string
+          ordem_ts: string
+          origem: string
+          telefone: string
+        }[]
+      }
       tresc_limpar_cache_antigo: { Args: never; Returns: number }
       user_can_access_tenant: {
         Args: { _tenant: string; _uid: string }

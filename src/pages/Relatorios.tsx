@@ -11,6 +11,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
 import { Plus, RotateCcw, Download, CalendarIcon, Trophy, Pencil, RefreshCw } from 'lucide-react';
 import { FunilAcionamentosCard } from '@/components/relatorios/FunilAcionamentosCard';
+import { ArquivoDiarioUmeCard } from '@/components/relatorios/ArquivoDiarioUmeCard';
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
@@ -382,6 +383,8 @@ export default function Relatorios() {
           cpca={totais.cpca}
           valor={totais.valor}
         />
+
+        {isAdmin && <ArquivoDiarioUmeCard />}
 
         {/* Card meta */}
         <Card>
