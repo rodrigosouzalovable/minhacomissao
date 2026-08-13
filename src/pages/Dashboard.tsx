@@ -24,6 +24,8 @@ import { MuralTop3 } from '@/components/MuralTop3';
 import { MetaSemanalCard } from '@/components/MetaSemanalCard';
 import { RecordePessoalCard } from '@/components/RecordePessoalCard';
 import { ConfigMotivacaoDialog } from '@/components/ConfigMotivacaoDialog';
+import { HistoricoMesesCard } from '@/components/HistoricoMesesCard';
+
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -166,8 +168,11 @@ export default function Dashboard() {
           </div>
         </div>
 
+        <HistoricoMesesCard />
+
         {!isAdmin && (
           <>
+
             <FraseDoDiaBanner />
             <MuralTop3 />
             <MetaMesBanner />
