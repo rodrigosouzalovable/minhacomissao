@@ -166,8 +166,11 @@ export default function Dashboard() {
           </div>
         </div>
 
+        <HistoricoMesesCard />
+
         {!isAdmin && (
           <>
+
             <FraseDoDiaBanner />
             <MuralTop3 />
             <MetaMesBanner />
