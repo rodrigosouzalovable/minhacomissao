@@ -384,6 +384,8 @@ export default function Relatorios() {
           valor={totais.valor}
         />
 
+        {isAdmin && <ArquivoDiarioUmeCard />}
+
         {/* Card meta */}
         <Card>
           <CardContent className="pt-6 space-y-3">
