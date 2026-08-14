@@ -1531,7 +1531,7 @@ export default function InboxMeta() {
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
                     <button
-                      onClick={() => setCurrentFolderId(null)}
+                      onClick={() => { escolhaManualFolderRef.current = true; setCurrentFolderId(null); }}
                       className={cn(
                         'text-[11px] px-2 py-1 rounded border transition',
                         currentFolderId === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-accent',
@@ -1559,7 +1559,7 @@ export default function InboxMeta() {
                   <ContextMenu key={f.id}>
                     <ContextMenuTrigger asChild>
                       <button
-                        onClick={() => setCurrentFolderId(f.id)}
+                        onClick={() => { escolhaManualFolderRef.current = true; setCurrentFolderId(f.id); }}
                         className={cn(
                           'text-[11px] px-2 py-1 rounded border transition',
                           currentFolderId === f.id ? 'text-white border-transparent' : 'bg-muted/40 border-transparent hover:bg-accent',
