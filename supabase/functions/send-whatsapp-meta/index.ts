@@ -686,16 +686,19 @@ Deno.serve(async (req) => {
           contatoIdFinal = (novo as any)?.id ?? null;
         }
 
-        // Aplicar etiqueta "Atendente: {nome}%" ao contato — APENAS se já existir.
-        // Vale o ATENDENTE NOMEADO na mensagem, não o remetente técnico do disparo.
-        if (atendenteNome && contatoIdFinal) {
+        // Etiqueta de atendente NÃO é aplicada em conversa nova (primeiro contato nosso).
+        // Só em reabertura por atendente e apenas se a conversa ainda não tiver atendente:
+        // a conversa pertence a quem atender primeiro.
+        if (atendenteNome && contatoIdFinal && ex) {
           await aplicarEtiquetaAtendente(supabase, {
             contatoId: contatoIdFinal,
             atendenteNome,
             ownerUserId: inst.user_id,
+            somenteSeSemEtiqueta: true,
             logPrefix: '[send-whatsapp-meta]',
           });
         }
+
 
       } catch (_) { /* não bloqueia o envio */ }
 
