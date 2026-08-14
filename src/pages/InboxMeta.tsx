@@ -67,6 +67,7 @@ interface MetaContato {
   id: string; instancia_id: string; telefone: string; nome: string | null; cpf?: string | null;
   ultima_mensagem: string | null; ultima_mensagem_em: string | null;
   ultima_msg_entrada_em: string | null; nao_lido: number;
+  sla_dispensado_em?: string | null;
   fixado: boolean; arquivado: boolean;
   // Meta 2026 — WhatsApp Username + BSUID
   bsuid?: string | null;
@@ -531,7 +532,7 @@ export default function InboxMeta() {
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
-    const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado, folder_id';
+    const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id';
 
     // ===== Modo "Meus Clientes": todo o histórico com a etiqueta do usuário =====
     if (modoMeusClientes) {
@@ -991,16 +992,30 @@ export default function InboxMeta() {
   }, [nowTick]);
 
   // Tempo que o cliente está aguardando resposta (última mensagem da conversa é do cliente)
-  const computeEspera = useCallback((ultimaEntradaIso?: string | null, ultimaMsgIso?: string | null) => {
+  const computeEspera = useCallback((ultimaEntradaIso?: string | null, ultimaMsgIso?: string | null, dispensadoIso?: string | null) => {
     if (!ultimaEntradaIso) return { nivel: 'ok' as const, min: 0 };
     const tEntrada = new Date(ultimaEntradaIso).getTime();
     const tUltima = ultimaMsgIso ? new Date(ultimaMsgIso).getTime() : 0;
     if (tUltima > tEntrada) return { nivel: 'ok' as const, min: 0 };
+    // Marcado como "não precisa resposta" para esta última mensagem do cliente
+    const tDisp = dispensadoIso ? new Date(dispensadoIso).getTime() : 0;
+    if (tDisp >= tEntrada) return { nivel: 'ok' as const, min: 0 };
     const min = Math.floor((nowTick - tEntrada) / 60_000);
     if (min >= 30) return { nivel: 'critico' as const, min };
     if (min >= 15) return { nivel: 'alerta' as const, min };
     return { nivel: 'ok' as const, min };
   }, [nowTick]);
+
+  // Marcar/desmarcar "não precisa resposta" (dispensa o alerta de tempo até nova mensagem do cliente)
+  const handleDispensarResposta = useCallback(async (contatoId: string, dispensar: boolean) => {
+    const valor = dispensar ? new Date().toISOString() : null;
+    setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, sla_dispensado_em: valor } : c));
+    setContatoAtivo(prev => prev && prev.id === contatoId ? { ...prev, sla_dispensado_em: valor } : prev);
+    const { error } = await (supabase as any).from('meta_whatsapp_contatos')
+      .update({ sla_dispensado_em: valor }).eq('id', contatoId);
+    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+  }, [toast]);
+
 
 
   const janelaInfo = useMemo(() => {
@@ -1606,7 +1621,7 @@ export default function InboxMeta() {
               });
               const sel = selecionados.has(c.id);
               const jan = computeJanela(c.ultima_msg_entrada_em);
-              const esp = computeEspera(c.ultima_msg_entrada_em, c.ultima_mensagem_em);
+              const esp = computeEspera(c.ultima_msg_entrada_em, c.ultima_mensagem_em, c.sla_dispensado_em);
               return (
                 <MetaConversaContextMenu
                   key={c.id}
@@ -1802,6 +1817,23 @@ export default function InboxMeta() {
                   >
                     <FileText className="h-3.5 w-3.5" /> Modelo
                   </Button>
+
+                  {(() => {
+                    const dispensado = !!contatoAtivo.sla_dispensado_em && !!contatoAtivo.ultima_msg_entrada_em
+                      && new Date(contatoAtivo.sla_dispensado_em).getTime() >= new Date(contatoAtivo.ultima_msg_entrada_em).getTime();
+                    return (
+                      <Button
+                        size="sm"
+                        variant={dispensado ? 'secondary' : 'outline'}
+                        className="h-7 gap-1.5 text-xs"
+                        onClick={() => handleDispensarResposta(contatoAtivo.id, !dispensado)}
+                        title="Marcar que este cliente não precisa de resposta (remove o alerta de tempo)"
+                      >
+                        {dispensado ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                        Não precisa resposta
+                      </Button>
+                    );
+                  })()}
 
                   {janelaInfo.status === 'aberta' ? (
                     <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
