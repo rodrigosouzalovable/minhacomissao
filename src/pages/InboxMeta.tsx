@@ -408,6 +408,7 @@ export default function InboxMeta() {
     // Caixa Padrão: visível só para admin ou usuários atribuídos a ela.
     if (isAdmin) {
       setPodeVerPadrao(true);
+      setPadraoVerificado(true);
     } else {
       const { data: dm } = await (supabase as any)
         .from('meta_inbox_default_members')
@@ -415,6 +416,7 @@ export default function InboxMeta() {
         .eq('user_id', user.id)
         .maybeSingle();
       setPodeVerPadrao(!!dm);
+      setPadraoVerificado(true);
     }
   }, [user, isAdmin]);
 
