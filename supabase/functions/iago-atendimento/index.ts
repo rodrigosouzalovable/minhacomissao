@@ -4,9 +4,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
-  ehOptOut, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
-  avisarEmergencia, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
+  ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
+  avisarEmergencia, etiquetarAguardandoHumano, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
 } from '../_shared/iago.ts';
+
+const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
 
 const hojeSP = () => agoraSP().toISOString().slice(0, 10);
 
