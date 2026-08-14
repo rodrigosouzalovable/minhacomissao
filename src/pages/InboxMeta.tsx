@@ -1611,7 +1611,7 @@ export default function InboxMeta() {
               });
               const sel = selecionados.has(c.id);
               const jan = computeJanela(c.ultima_msg_entrada_em);
-              const esp = computeEspera(c.ultima_msg_entrada_em, c.ultima_mensagem_em);
+              const esp = computeEspera(c.ultima_msg_entrada_em, c.ultima_mensagem_em, c.sla_dispensado_em);
               return (
                 <MetaConversaContextMenu
                   key={c.id}
