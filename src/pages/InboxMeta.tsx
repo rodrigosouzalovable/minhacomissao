@@ -532,7 +532,7 @@ export default function InboxMeta() {
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
-    const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado, folder_id';
+    const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id';
 
     // ===== Modo "Meus Clientes": todo o histórico com a etiqueta do usuário =====
     if (modoMeusClientes) {
