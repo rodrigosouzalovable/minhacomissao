@@ -47,8 +47,7 @@ export function ehOptOut(texto: string): boolean {
 export function ehNumeroErrado(texto: string): boolean {
   const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (!t.trim()) return false;
-  return /(nao\s*(sou|e)\s*(o|a|essa|esse|est[ae])?\s*\w*|nao\s*e\s*(o\s*)?meu\s*(nome|numero)|numero\s*errado|telefone\s*errado|pessoa\s*errada|nao\s*conhe(c|ss)o|voce\s*errou\s*o\s*numero|(e|foi)\s*engano|ligou\s*errado|nao\s*e\s*comigo|aqui\s*(quem\s*fala\s*)?(e|nao\s*e))/.test(t)
-    && /(nao\s*sou|nao\s*e\s*meu|nao\s*e\s*o\s*meu|numero\s*errado|telefone\s*errado|pessoa\s*errada|nao\s*conhe(c|ss)o|engano|ligou\s*errado|nao\s*e\s*comigo)/.test(t);
+  return /(nao\s*(sou|e)\s+(o|a|ele|ela|essa|esse|est[ae])\b|nao\s*sou\s*(eu|essa|esse)\b|nao\s*e\s*(o\s*)?meu\s*(nome|numero)|numero\s*errado|telefone\s*errado|pessoa\s*errada|nao\s*conhe(c|ss)o|errou\s*o\s*numero|(e|foi)\s*engano|numero\s*trocado|nao\s*e\s*comigo|nao\s*mora\s*(mais\s*)?aqui)/.test(t);
 }
 
 /** Extrai CPF/CNPJ tolerando máscara e texto ao redor. */
