@@ -222,6 +222,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/ir/boleto" element={<RedirectBoleto />} />
             <Route path="/ir/verificar-proposta-odres" element={<RedirectVerificarProposta />} />
+            <Route path="/pix/:id" element={<PixPublico />} />
             {/* Tenant routes (multi-tenant) — MUST come before /:creditor to avoid clash */}
             <Route path="/avatusbarbearia" element={<TenantLayout />}>
               <Route index element={<Navigate to="envio-meta" replace />} />
