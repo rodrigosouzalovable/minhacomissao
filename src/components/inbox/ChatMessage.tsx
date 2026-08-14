@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ensureInboxMediaUrl } from '@/lib/inboxMediaUrl';
+import { extrairPix } from '@/lib/pixCode';
 
 interface ContatoCompartilhadoTelefone {
   numero: string;
