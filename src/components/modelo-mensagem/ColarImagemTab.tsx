@@ -7,17 +7,26 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Upload, Copy, Trash2, Sparkles, ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { renderMensagem, type ClienteImportado } from '@/lib/parseCobmaisPlanilha';
 
+export const TEMPLATE_PADRAO = `Meu nome é {nome_usuario} falo referente à loja Novo Mundo.
+
+Identificamos algumas parcelas em atraso que totalizam *R$ {total_atraso}*.
+
+💰 E hoje temos uma condições especiais para você:
+
+✅ *À VISTA* com {desconto_vista_pct}% de desconto:
+
+   R$ {valor_quitacao}
+
+{opcoes_parcelado}
+
+*Qual opção é melhor para você? Que dia consegue realizar o pagamento?*`;
+
 interface Props {
-  template: string;
-  descVistaGlobal: number;
-  descParceladoGlobal: number;
-  parceladoQtdGlobal: number;
-  template2?: string;
-  descVistaGlobal2?: number;
-  descParceladoGlobal2?: number;
-  parceladoQtdGlobal2?: number;
+  /** Compacta o layout (usado no diálogo do Inbox). */
+  compact?: boolean;
 }
 
 interface CamposExtraidos {
@@ -33,21 +42,60 @@ const EMPTY: CamposExtraidos = {
   nome: '', cpf: '', contrato: '', dias_atraso: '', qtd_parcelas_atraso: '1', total_atraso: '',
 };
 
-export function ColarImagemTab({
-  template, descVistaGlobal, descParceladoGlobal, parceladoQtdGlobal,
-  template2, descVistaGlobal2, descParceladoGlobal2, parceladoQtdGlobal2,
-}: Props) {
-  const hasModelo2 = template2 !== undefined;
-  const [modelo, setModelo] = useState<1 | 2>(1);
-  const tpl = modelo === 2 && template2 !== undefined ? template2 : template;
-  const dv = modelo === 2 && descVistaGlobal2 !== undefined ? descVistaGlobal2 : descVistaGlobal;
-  const dp = modelo === 2 && descParceladoGlobal2 !== undefined ? descParceladoGlobal2 : descParceladoGlobal;
-  const pq = modelo === 2 && parceladoQtdGlobal2 !== undefined ? parceladoQtdGlobal2 : parceladoQtdGlobal;
+export function ColarImagemTab({ compact }: Props) {
+  const { user } = useAuth();
+
+  const [template, setTemplate] = useState(TEMPLATE_PADRAO);
+  const [descVista, setDescVista] = useState(50);
+  const [descParcelado, setDescParcelado] = useState(30);
+  const [nomeUsuario, setNomeUsuario] = useState('');
+  const [hydrated, setHydrated] = useState(false);
 
   const [imageData, setImageData] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [campos, setCampos] = useState<CamposExtraidos>(EMPTY);
   const dropRef = useRef<HTMLDivElement>(null);
+
+  // Carrega template + descontos salvos e o nome do usuário
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const [{ data: tpl }, { data: prof }] = await Promise.all([
+        supabase
+          .from('modelo_mensagem_template' as any)
+          .select('template, desconto_padrao, desconto_parcelado_padrao')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase.from('profiles').select('nome').eq('id', user.id).maybeSingle(),
+      ]);
+      if (cancelled) return;
+      const d = tpl as any;
+      if (d?.template) setTemplate(d.template);
+      if (d?.desconto_padrao != null) setDescVista(Number(d.desconto_padrao));
+      if (d?.desconto_parcelado_padrao != null) setDescParcelado(Number(d.desconto_parcelado_padrao));
+      setNomeUsuario(String((prof as any)?.nome || ''));
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Salva os descontos (debounce)
+  useEffect(() => {
+    if (!user || !hydrated) return;
+    const t = setTimeout(() => {
+      supabase
+        .from('modelo_mensagem_template' as any)
+        .upsert({
+          user_id: user.id,
+          template,
+          desconto_padrao: descVista,
+          desconto_parcelado_padrao: descParcelado,
+        }, { onConflict: 'user_id' })
+        .then(({ error }) => { if (error) console.error('[modelo_mensagem_template] upsert', error); });
+    }, 700);
+    return () => clearTimeout(t);
+  }, [descVista, descParcelado, template, user, hydrated]);
 
   // Listener global de paste
   useEffect(() => {
@@ -134,23 +182,24 @@ export function ColarImagemTab({
         valor: 0,
       })),
     };
-    return renderMensagem(tpl, {
+    return renderMensagem(template, {
       cliente,
-      descontoVistaPct: dv,
-      parceladoQtd: pq,
-      descontoParceladoPct: dp,
+      descontoVistaPct: descVista,
+      parceladoQtd: 0,
+      descontoParceladoPct: descParcelado,
+      nomeUsuario,
     });
-  }, [campos, tpl, dv, dp, pq]);
+  }, [campos, template, descVista, descParcelado, nomeUsuario]);
 
   const copiar = async (txt: string, label: string) => {
     await navigator.clipboard.writeText(txt);
     toast.success(`${label} copiado!`);
   };
 
-  const podeGerar = campos.nome && campos.total_atraso;
+  const podeGerar = !!campos.nome && !!campos.total_atraso;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className={`grid grid-cols-1 ${compact ? '' : 'lg:grid-cols-2'} gap-4`}>
       {/* Coluna esquerda — imagem */}
       <Card>
         <CardContent className="p-4 space-y-3">
@@ -167,10 +216,10 @@ export function ColarImagemTab({
             ref={dropRef}
             onDrop={onDrop}
             onDragOver={(e) => e.preventDefault()}
-            className="border-2 border-dashed rounded-lg p-4 min-h-[260px] flex flex-col items-center justify-center bg-muted/30"
+            className={`border-2 border-dashed rounded-lg p-4 ${compact ? 'min-h-[160px]' : 'min-h-[260px]'} flex flex-col items-center justify-center bg-muted/30`}
           >
             {imageData ? (
-              <img src={imageData} alt="Preview" className="max-h-[400px] max-w-full rounded" />
+              <img src={imageData} alt="Preview" className={`${compact ? 'max-h-[220px]' : 'max-h-[400px]'} max-w-full rounded`} />
             ) : (
               <div className="text-center text-sm text-muted-foreground space-y-2">
                 <ImageIcon className="h-10 w-10 mx-auto opacity-50" />
@@ -188,20 +237,22 @@ export function ColarImagemTab({
               className="hidden"
               onChange={(e) => e.target.files?.[0] && loadFile(e.target.files[0])}
             />
-            <Button variant="outline" onClick={() => document.getElementById('img-modelo-input')?.click()}>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => document.getElementById('img-modelo-input')?.click()}
+            >
               <Upload className="h-4 w-4 mr-2" /> Selecionar arquivo
             </Button>
-            <Button onClick={extrair} disabled={!imageData || loading} className="flex-1">
-              {loading
-                ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                : <Sparkles className="h-4 w-4 mr-2" />}
+            <Button className="flex-1" disabled={!imageData || loading} onClick={extrair}>
+              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
               Extrair dados
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Coluna direita — campos + mensagem */}
+      {/* Coluna direita — campos + descontos + mensagem */}
       <Card>
         <CardContent className="p-4 space-y-3">
           <Label className="text-sm font-medium">2. Confira / ajuste os dados</Label>
@@ -237,28 +288,28 @@ export function ColarImagemTab({
           </div>
 
           <div className="pt-2 border-t space-y-2">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <Label className="text-sm font-medium">Mensagem gerada</Label>
-                {hasModelo2 && (
-                  <div className="flex rounded-md border overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setModelo(1)}
-                      className={`px-2 py-0.5 text-xs ${modelo === 1 ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
-                    >
-                      Modelo 1 ({descVistaGlobal}% / {descParceladoGlobal}%)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModelo(2)}
-                      className={`px-2 py-0.5 text-xs border-l ${modelo === 2 ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
-                    >
-                      Modelo 2 ({descVistaGlobal2}% / {descParceladoGlobal2}%)
-                    </button>
-                  </div>
-                )}
+            <Label className="text-sm font-medium">Descontos</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">% à vista</Label>
+                <Input type="number" min={0} max={100} value={descVista}
+                  onChange={(e) => setDescVista(Number(e.target.value))} />
               </div>
+              <div>
+                <Label className="text-xs">% parcelado</Label>
+                <Input type="number" min={0} max={100} value={descParcelado}
+                  onChange={(e) => setDescParcelado(Number(e.target.value))} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Os descontos ficam salvos para os próximos atendimentos. Parcelamento exibe 2x, 4x, 8x, 12x, 16x, 20x e 24x —
+              opções com parcela menor que R$ 100 são ocultadas; se nenhuma couber, só o valor à vista é enviado.
+            </p>
+          </div>
+
+          <div className="pt-2 border-t space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <Label className="text-sm font-medium">Mensagem gerada</Label>
               <div className="flex gap-1">
                 {campos.nome && (
                   <Button size="sm" variant="ghost" onClick={() => copiar(campos.nome, 'Nome')}>
@@ -275,7 +326,7 @@ export function ColarImagemTab({
             <Textarea
               value={podeGerar ? mensagem : ''}
               readOnly
-              className="min-h-[200px] font-mono text-xs"
+              className={`${compact ? 'min-h-[160px]' : 'min-h-[200px]'} font-mono text-xs`}
               placeholder="Preencha os campos para gerar a mensagem..."
             />
             <Button
