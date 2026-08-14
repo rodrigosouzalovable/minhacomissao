@@ -1940,6 +1940,7 @@ export default function InboxMeta() {
                                   conteudo_citado: m.conteudo_citado,
                                   contatos_payload: (m as any).contatos_payload ?? null,
                                   template_botoes: (m as any).template_botoes ?? null,
+                                  transcricao: (m as any).transcricao ?? null,
                                 } as any}
                                 formatMsgTime={formatMsgTime}
                                 possivelmenteNaoEntregue={naoEntregue}
