@@ -107,6 +107,31 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [showLightbox, setShowLightbox] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<'mim' | 'todos' | null>(null);
+  const [transcricao, setTranscricao] = useState<string | null>(msg.transcricao ?? null);
+  const [transcrevendo, setTranscrevendo] = useState(false);
+  useEffect(() => { setTranscricao(msg.transcricao ?? null); }, [msg.transcricao]);
+
+  const transcreverAudio = async () => {
+    if (transcrevendo) return;
+    setTranscrevendo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-transcrever-audio', {
+        body: { mensagem_id: msg.id },
+      });
+      const texto = String((data as any)?.transcricao || '').trim();
+      if (texto) {
+        setTranscricao(texto);
+      } else {
+        const detalhe = String((data as any)?.error || error?.message || 'Não foi possível transcrever este áudio.');
+        toast({ title: 'Transcrição indisponível', description: detalhe, variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Erro ao transcrever', description: e?.message || 'Tente novamente.', variant: 'destructive' });
+    } finally {
+      setTranscrevendo(false);
+    }
+  };
+
   // Bucket de mídia é privado: reassina URLs antigas/expiradas antes de exibir.
   const [mediaUrl, setMediaUrl] = useState<string | null>(msg.media_url ?? null);
   useEffect(() => {
