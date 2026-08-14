@@ -219,6 +219,9 @@ export default function InboxMeta() {
 
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
+  const [padraoVerificado, setPadraoVerificado] = useState(false);
+  // Marca quando o usuário escolhe manualmente uma caixa (evita voltar para Padrão depois)
+  const escolhaManualFolderRef = useRef(false);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
 
   
@@ -405,6 +408,7 @@ export default function InboxMeta() {
     // Caixa Padrão: visível só para admin ou usuários atribuídos a ela.
     if (isAdmin) {
       setPodeVerPadrao(true);
+      setPadraoVerificado(true);
     } else {
       const { data: dm } = await (supabase as any)
         .from('meta_inbox_default_members')
@@ -412,6 +416,7 @@ export default function InboxMeta() {
         .eq('user_id', user.id)
         .maybeSingle();
       setPodeVerPadrao(!!dm);
+      setPadraoVerificado(true);
     }
   }, [user, isAdmin]);
 
@@ -450,15 +455,20 @@ export default function InboxMeta() {
   const foldersVisiveis = folders;
 
   // Se a caixa ativa não é permitida, cai na primeira permitida.
+  // Só age depois de confirmar a permissão da caixa Padrão (evita trocar de caixa durante o carregamento).
   useEffect(() => {
+    if (!padraoVerificado) return;
     if (currentFolderId === null) {
       if (!podeVerPadrao && foldersVisiveis.length > 0) setCurrentFolderId(foldersVisiveis[0].id);
       return;
     }
     if (!foldersVisiveis.some((f) => f.id === currentFolderId)) {
       setCurrentFolderId(podeVerPadrao ? null : (foldersVisiveis[0]?.id ?? null));
+      return;
     }
-  }, [podeVerPadrao, foldersVisiveis, currentFolderId]);
+    // Voltou a ter acesso ao Padrão e o usuário ainda não escolheu caixa manualmente → volta ao Padrão
+    if (podeVerPadrao && !escolhaManualFolderRef.current) setCurrentFolderId(null);
+  }, [padraoVerificado, podeVerPadrao, foldersVisiveis, currentFolderId]);
 
   // Atendentes responsáveis pela caixa ativa: nomes permitidos para etiqueta
   const [nomesAtendenteCaixa, setNomesAtendenteCaixa] = useState<Set<string> | null>(null);
@@ -1521,7 +1531,7 @@ export default function InboxMeta() {
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
                     <button
-                      onClick={() => setCurrentFolderId(null)}
+                      onClick={() => { escolhaManualFolderRef.current = true; setCurrentFolderId(null); }}
                       className={cn(
                         'text-[11px] px-2 py-1 rounded border transition',
                         currentFolderId === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-accent',
@@ -1549,7 +1559,7 @@ export default function InboxMeta() {
                   <ContextMenu key={f.id}>
                     <ContextMenuTrigger asChild>
                       <button
-                        onClick={() => setCurrentFolderId(f.id)}
+                        onClick={() => { escolhaManualFolderRef.current = true; setCurrentFolderId(f.id); }}
                         className={cn(
                           'text-[11px] px-2 py-1 rounded border transition',
                           currentFolderId === f.id ? 'text-white border-transparent' : 'bg-muted/40 border-transparent hover:bg-accent',
