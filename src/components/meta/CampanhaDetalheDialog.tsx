@@ -400,10 +400,15 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             {eta && (
               <div className="text-xs rounded border bg-muted/40 px-2 py-1.5 space-y-0.5">
                 {eta.tipo === "final" ? (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>Duração total: <strong>{eta.duracao}</strong></span>
-                  </div>
+                  <>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>Duração total: <strong>{eta.duracao}</strong></span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      {eta.config} • Teórico: <strong>{eta.teorico}</strong>
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -412,10 +417,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                         Restam <strong>{eta.restantes}</strong> envios • Ritmo: <strong>{eta.ritmo}</strong>
                       </span>
                     </div>
+                    <div className="text-muted-foreground">
+                      {eta.config} • Teórico: <strong>{eta.teorico}</strong>
+                    </div>
                     <div>
                       Tempo estimado: <strong>~{eta.duracao}</strong> • Previsão de término:{" "}
                       <strong>{eta.termino}</strong>
                     </div>
+
                     <div className="text-[11px] text-muted-foreground">
                       {pausado
                         ? "Pausada — a contagem recomeça ao continuar. Estimativa aproximada."
