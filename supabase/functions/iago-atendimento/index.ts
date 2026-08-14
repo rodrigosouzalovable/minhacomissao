@@ -6,6 +6,7 @@ import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
   avisarEmergencia, etiquetarAguardandoHumano, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
+  classificarDataPagamento, detectarEscolha, respostaPagamentoHoje,
 } from '../_shared/iago.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
@@ -434,8 +435,8 @@ Deno.serve(async (req) => {
 
 
     await finalizarEntrada();
-    console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, motivo: resultado?.motivo });
-    return json({ success: true, enviadas: mensagens.length, escalar, motivo: resultado?.motivo || null });
+    console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo });
+    return json({ success: true, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo: motivo || null });
   } catch (e: any) {
     console.error('[IAGO] erro', e?.message || e);
     return json({ success: false, error: String(e?.message || e) }, 500);
@@ -455,10 +456,15 @@ async function gerarResposta(args: {
   cpfIdentificado?: boolean;
   cpfPorTelefone?: boolean;
   multiplosCandidatos?: boolean;
-}): Promise<{ mensagens: string[]; escalar: boolean; motivo: string }> {
+  etapaNegociacao?: string;
+  escolhaAnterior?: string;
+}): Promise<{
+  mensagens: string[]; escalar: boolean; motivo: string;
+  escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
+}> {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
-    cpfIdentificado, cpfPorTelefone, multiplosCandidatos,
+    cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
   } = args;
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
@@ -530,8 +536,19 @@ async function gerarResposta(args: {
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
       : '',
 
-    'Você NUNCA fecha ou registra acordo. Quando o cliente aceitar uma opção, confirme a escolha e escale para um humano finalizar.',
-    'Escale para humano (escalar=true) quando: o cliente aceitar uma proposta; pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
+    'Você NUNCA fecha ou registra acordo.',
+    'FLUXO OBRIGATÓRIO APÓS A ESCOLHA:',
+    '1) O cliente escolheu à vista ou um parcelamento: confirme a escolha em uma frase curta e pergunte "Você consegue realizar o pagamento hoje?". NÃO fale de especialista/transferência nesta etapa (escalar=false).',
+    '2) Se o cliente disser que NÃO consegue hoje: pergunte "Que dia você consegue realizar o pagamento?" (escalar=false).',
+    '3) Se o cliente informar um dia AINDA DENTRO do mês atual (ou "hoje"): confirme a data e escale (escalar=true).',
+    '4) Se o cliente informar "mês que vem" ou qualquer data fora do mês atual: NÃO prometa o prazo; diga apenas que um colega vai continuar o atendimento e escale (escalar=true).',
+    'Nunca repita a pergunta "consegue pagar hoje?" se ela já está no HISTÓRICO RECENTE — nesse caso pergunte a data.',
+    etapaNegociacao === 'escolha_feita'
+      ? `ETAPA ATUAL: você já perguntou se ele consegue pagar hoje${escolhaAnterior ? ` (opção escolhida: ${escolhaAnterior})` : ''}. Interprete a resposta dele agora.`
+      : etapaNegociacao === 'aguardando_data'
+        ? `ETAPA ATUAL: você já perguntou que dia ele consegue pagar${escolhaAnterior ? ` (opção escolhida: ${escolhaAnterior})` : ''}. Interprete a data informada.`
+        : '',
+    'Escale para humano (escalar=true) quando: a data do pagamento estiver definida (ou fora do mês); o cliente pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
     '',
     instrucoes ? `INSTRUÇÕES DO ADMINISTRADOR:\n${instrucoes}` : '',
     qa ? `PERGUNTAS E RESPOSTAS PRONTAS:\n${qa}` : '',
@@ -540,7 +557,10 @@ async function gerarResposta(args: {
     cfg.instrucoes_gerais ? `OBSERVAÇÕES GERAIS:\n${cfg.instrucoes_gerais}` : '',
     '',
     'Responda SOMENTE com JSON válido no formato:',
-    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":""}',
+    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":""}',
+    'escolha = forma de pagamento escolhida pelo cliente ("à vista" ou "12x"), vazio se ele ainda não escolheu.',
+    'pagamento_hoje = "sim", "nao" ou "" conforme a resposta dele sobre pagar hoje.',
+    'data_pagamento = o dia informado pelo cliente exatamente como ele disse ("dia 20", "20/08", "mês que vem"), vazio se não informou.',
     'mensagens = de 1 a 2 mensagens curtas a enviar agora (vazio só se escalar=true e nada deva ser dito).',
     'Quando escalar=true, envie uma mensagem curta avisando que um colega vai continuar o atendimento e preencha "motivo" em português.',
   ].filter(Boolean).join('\n');
@@ -567,6 +587,9 @@ async function gerarResposta(args: {
         mensagens: Array.isArray(parsed.mensagens) ? parsed.mensagens.map((m: any) => String(m)) : [],
         escalar: !!parsed.escalar,
         motivo: String(parsed.motivo || ''),
+        escolha: String(parsed.escolha || ''),
+        pagamento_hoje: String(parsed.pagamento_hoje || ''),
+        data_pagamento: String(parsed.data_pagamento || ''),
       };
     }
     const txt = String(out || '').trim();
