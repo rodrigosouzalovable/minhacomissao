@@ -323,19 +323,12 @@ export async function calcularProposta(supabase: any, cpf: string): Promise<Prop
   }
 
   const parcMin = 100;
-  const maxParc = 24;
   const valorParcelado = total * (1 - descParc / 100);
 
-  const GRADE = [4, 8, 12, 16, 20, 24];
-  let ns = GRADE.filter((n) => n <= maxParc && valorParcelado / n >= parcMin);
-  if (!ns.length) {
-    for (let i = maxParc; i >= 2; i--) {
-      if (valorParcelado / i >= parcMin) { ns = [i]; break; }
-    }
-  }
-  const opcoes = ns.length
-    ? ns.map((n) => ({ parcelas: n, valorParcela: valorParcelado / n }))
-    : [{ parcelas: 1, valorParcela: valorParcelado }];
+  const GRADE = [2, 4, 8, 12, 16, 20, 24];
+  const ns = GRADE.filter((n) => valorParcelado / n >= parcMin);
+  const opcoes = ns.map((n) => ({ parcelas: n, valorParcela: valorParcelado / n }));
+
 
   return {
     total,
