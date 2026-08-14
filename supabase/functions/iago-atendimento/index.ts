@@ -60,6 +60,19 @@ Deno.serve(async (req) => {
     const atende = await iagoAtendeCaixa(supabase, iago.id, (contato as any).folder_id ?? null);
     if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
 
+    // ===== Credor definido na caixa (sobrepõe o credor vindo dos débitos) =====
+    const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
+    let credorCaixa = '';
+    {
+      const { data: cr } = await supabase
+        .from('meta_inbox_folder_credores')
+        .select('nome')
+        .eq('folder_id', (contato as any).folder_id ?? CAIXA_PADRAO_ID)
+        .eq('ativo', true)
+        .maybeSingle();
+      credorCaixa = String((cr as any)?.nome || '').trim();
+    }
+
     // ===== A conversa é do IAGO? (etiqueta de atendente) =====
     const tags = await etiquetasAtendente(supabase, contato_id);
     const nomeIago = String(iago.nome || '').trim().toLowerCase();
