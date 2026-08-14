@@ -5,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
-  avisarEmergencia, etiquetarAguardandoHumano, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
+  avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
 } from '../_shared/iago.ts';
 
