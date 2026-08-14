@@ -32,6 +32,7 @@ const Retornos = lazy(() => import("./pages/Retornos"));
 const Auditoria = lazy(() => import("./pages/Auditoria"));
 const Financeiro = lazy(() => import("./pages/Financeiro"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const PixPublico = lazy(() => import("./pages/PixPublico"));
 const PortalConsulta = lazy(() => import("./pages/PortalConsulta"));
 const ConsultaResultado = lazy(() => import("./pages/ConsultaResultado"));
 const ImportarDevedores = lazy(() => import("./pages/ImportarDevedores"));
