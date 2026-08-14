@@ -1080,7 +1080,6 @@ export default function InboxMeta() {
               conteudo_citado: i === 0 ? replySnap : undefined,
             },
 
-            },
           });
           if (error) throw new Error(error.message);
           if (!data?.success) throw new Error(data?.error || 'Falha');
