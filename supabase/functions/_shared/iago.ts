@@ -36,6 +36,7 @@ export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export const NOME_IAGO = 'IAGO RIBEIRO DE SOUZA';
 export const ETIQUETA_HUMANO = 'Aguardando Humano';
+export const ETIQUETA_ACORDO_FECHADO = 'ACORDO FECHADO';
 
 /** Cliente pediu para não ser mais contatado => IAGO fica em silêncio para sempre. */
 export function ehOptOut(texto: string): boolean {
