@@ -1130,9 +1130,19 @@ export default function EnvioMeta() {
                   </DropdownMenuCheckboxItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmFiltro(bmsDisponiveis.map((b) => b.id)); }}>
-                  Selecionar todas
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    const todas = bmsDisponiveis.map((b) => b.id);
+                    const tudoMarcado = todas.length > 0 && todas.every((id) => bmFiltro.includes(id));
+                    setBmFiltro(tudoMarcado ? [] : todas);
+                  }}
+                >
+                  {bmsDisponiveis.length > 0 && bmsDisponiveis.every((b) => bmFiltro.includes(b.id))
+                    ? "Desmarcar todas"
+                    : "Selecionar todas"}
                 </DropdownMenuItem>
+
                 <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmFiltro([]); }}>
                   Limpar filtro
                 </DropdownMenuItem>
