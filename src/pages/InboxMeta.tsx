@@ -1078,8 +1078,8 @@ export default function InboxMeta() {
               user_id: user?.id,
               reply_to_wa_id: i === 0 ? replyTo : undefined,
               conteudo_citado: i === 0 ? replySnap : undefined,
-              botao_url: fila[i].botaoUrl || undefined,
-              botao_texto: fila[i].botaoUrl ? 'Copiar código Pix' : undefined,
+            },
+
             },
           });
           if (error) throw new Error(error.message);
