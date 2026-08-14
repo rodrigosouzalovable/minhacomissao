@@ -1679,6 +1679,13 @@ export default function InboxMeta() {
                     {contatoAtivo.telefone && (
                       <CopyButton value={telefoneSemDDI(contatoAtivo.telefone)} label="Telefone" />
                     )}
+                    {cpfDoContato && (
+                      <>
+                        <span>·</span>
+                        <span className="font-medium text-foreground/80">CPF {formatDoc(cpfDoContato)}</span>
+                        <CopyButton value={cpfDoContato} label="CPF" />
+                      </>
+                    )}
                     <span>· via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}</span>
                   </div>
                 </div>
