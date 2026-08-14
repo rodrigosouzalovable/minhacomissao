@@ -231,14 +231,34 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       const src = audioBlobUrl || mediaUrl;
       const mimeType = getMimeFromUrl(mediaUrl);
       return (
-        <WhatsAppAudioPlayer
-          src={src}
-          isSaida={isSaida}
-          messageId={msg.id}
-          mimeType={mimeType}
-        />
+        <div className="space-y-1.5">
+          <WhatsAppAudioPlayer
+            src={src}
+            isSaida={isSaida}
+            messageId={msg.id}
+            mimeType={mimeType}
+          />
+          {transcricao ? (
+            <div className="pt-1 border-t border-border/40">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Transcrição automática</p>
+              <p className="text-xs whitespace-pre-wrap break-words">{transcricao}</p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={transcreverAudio}
+              disabled={transcrevendo}
+              className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] font-medium rounded hover:bg-background/60 transition disabled:opacity-60"
+            >
+              {transcrevendo
+                ? <><Loader2 className="h-3 w-3 animate-spin" /> Transcrevendo…</>
+                : <><FileText className="h-3 w-3" /> Transcrever áudio</>}
+            </button>
+          )}
+        </div>
       );
     }
+
 
     // Botão "Copiar código Pix" quando a mensagem contém um payload Pix Copia e Cola
     const renderPix = () => {
