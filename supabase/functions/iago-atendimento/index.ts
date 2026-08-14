@@ -423,7 +423,9 @@ async function gerarResposta(args: {
     'PROIBIDO citar "a proposta que te mandei" (ou equivalente) se nenhum valor/proposta aparece no HISTÓRICO RECENTE. Só fale de proposta enviada se ela realmente foi enviada antes.',
 
     cpfPorTelefone && nomeCliente
-      ? `CONFIRMAÇÃO LEVE: na primeira mensagem confirme a identidade pelo nome, ex.: "Falo com ${primeiroNome(nomeCliente)}?" e já siga a conversa. Se o cliente disser que não é essa pessoa ou negar a identidade, escale para humano (escalar=true) sem informar valores.`
+      ? `CONFIRMAÇÃO LEVE: na primeira mensagem confirme a identidade pelo nome, ex.: "Falo com ${primeiroNome(nomeCliente)}?" e já siga a conversa.`
+      : '',
+    'IDENTIDADE NEGADA: se o cliente disser que não é a pessoa procurada, que é número errado/engano ou que não conhece essa pessoa, responda APENAS uma mensagem curta agradecendo e encerrando o contato (ex.: "Entendi, obrigado pela atenção e desculpe o incômodo!"). Nesse caso é PROIBIDO pedir CPF, citar o credor/empresa, valores ou proposta. Use escalar=false.'
       : '',
     cpfPorTelefone && multiplosCandidatos
       ? 'ATENÇÃO: este telefone está vinculado a mais de um cadastro. Confirme o nome do cliente ANTES de apresentar qualquer valor ou proposta.'
