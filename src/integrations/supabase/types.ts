@@ -4237,6 +4237,7 @@ export type Database = {
           arquivado: boolean
           atualizado_em: string
           bsuid: string | null
+          cpf: string | null
           criado_em: string
           fixado: boolean
           folder_id: string | null
@@ -4259,6 +4260,7 @@ export type Database = {
           arquivado?: boolean
           atualizado_em?: string
           bsuid?: string | null
+          cpf?: string | null
           criado_em?: string
           fixado?: boolean
           folder_id?: string | null
@@ -4281,6 +4283,7 @@ export type Database = {
           arquivado?: boolean
           atualizado_em?: string
           bsuid?: string | null
+          cpf?: string | null
           criado_em?: string
           fixado?: boolean
           folder_id?: string | null
