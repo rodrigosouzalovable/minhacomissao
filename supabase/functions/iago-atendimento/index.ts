@@ -456,6 +456,7 @@ Deno.serve(async (req) => {
         `Cliente: ${nomeCliente || '(sem nome)'}\n` +
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         (cpf ? `CPF: ${cpfFormatado(cpf)}\n` : '') +
+        (credorCaixa ? `Credor: ${credorCaixa}\n` : '') +
         (escolha ? `Opção escolhida: ${escolha}\n` : '') +
         (dataAcordada ? `Pagamento: ${dataAcordada}\n` : '') +
         `Motivo: ${motivo || 'dúvida fora do que foi ensinado'}\n` +
