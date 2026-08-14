@@ -269,7 +269,7 @@ function buildOpcoesParcelado(total: number, descPct: number): string {
 
 
 export function renderMensagem(tpl: string, ctx: RenderCtx): string {
-  const { cliente, descontoVistaPct, parceladoQtd, descontoParceladoPct } = ctx;
+  const { cliente, descontoVistaPct, parceladoQtd, descontoParceladoPct, nomeUsuario } = ctx;
   const total = cliente.totalAtraso || 0;
   const qtdAberto = cliente.parcelas.length || 1;
   const valorParcelaAberto = total / qtdAberto;
