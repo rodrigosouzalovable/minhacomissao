@@ -33,6 +33,7 @@ import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcesso
 import MetaIAConfigDialog from '@/components/inbox/meta/MetaIAConfigDialog';
 import { MetaQualificacaoDialog, type MetaQualificacao } from '@/components/inbox/meta/MetaQualificacaoDialog';
 import { MetaFolderConfigDialog, CAIXA_PADRAO_ID } from '@/components/inbox/meta/MetaFolderConfigDialog';
+import { CopyButton } from '@/components/CopyButton';
 
 import { useUserRole } from '@/hooks/useUserRole';
 import {
@@ -1657,8 +1658,12 @@ export default function InboxMeta() {
                       <Badge variant="outline" className="text-[10px] py-0 h-4" title={contatoAtivo.bsuid}>BSUID</Badge>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.bsuid || '—')} · via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}
+                  <div className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                    {contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.bsuid || '—')}
+                    {contatoAtivo.telefone && (
+                      <CopyButton value={contatoAtivo.telefone} label="Telefone" />
+                    )}
+                    <span>· via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}</span>
                   </div>
                 </div>
 
