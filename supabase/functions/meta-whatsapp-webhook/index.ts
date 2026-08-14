@@ -911,7 +911,7 @@ serve(async (req) => {
             const iaTask = (async () => {
               try {
                 const { data, error } = await supabase.functions.invoke('meta-ia-atendimento', {
-                  body: { contato_id: contatoIdFinal, texto },
+                  body: { contato_id: contatoIdFinal, texto: textoParaIA },
                 });
                 if (error) console.error('[MetaWebhook] IA erro', error.message);
                 else console.log('[MetaWebhook] IA', JSON.stringify(data || {}));
@@ -920,7 +920,7 @@ serve(async (req) => {
               }
               try {
                 const { data, error } = await supabase.functions.invoke('iago-atendimento', {
-                  body: { contato_id: contatoIdFinal, texto, entrada_id: m.id },
+                  body: { contato_id: contatoIdFinal, texto: textoParaIA, entrada_id: m.id },
                 });
                 if (error) console.error('[MetaWebhook] IAGO erro', error.message);
                 else console.log('[MetaWebhook] IAGO', JSON.stringify(data || {}));
