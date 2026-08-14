@@ -38,6 +38,13 @@ export function MetaFolderConfigDialog({
   const [novoCredor, setNovoCredor] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Plantão do IAGO
+  const [plantaoAtivo, setPlantaoAtivo] = useState(false);
+  const [horaInicio, setHoraInicio] = useState('17:00');
+  const [horaFim, setHoraFim] = useState('08:00');
+  const [fimSemana24h, setFimSemana24h] = useState(true);
+  const [plantaoBusy, setPlantaoBusy] = useState(false);
+
   useEffect(() => { if (open) setAtivo(qualificacaoAtiva); }, [open, qualificacaoAtiva]);
 
   const carregarCredores = useCallback(async () => {
@@ -54,6 +61,48 @@ export function MetaFolderConfigDialog({
   }, [alvo, toast]);
 
   useEffect(() => { if (open) carregarCredores(); }, [open, carregarCredores]);
+
+  const carregarPlantao = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from('meta_inbox_folder_iago_janela')
+      .select('ativo, hora_inicio, hora_fim, fim_semana_24h')
+      .eq('folder_id', alvo)
+      .maybeSingle();
+    setPlantaoAtivo(!!data?.ativo);
+    setHoraInicio(String(data?.hora_inicio || '17:00').slice(0, 5));
+    setHoraFim(String(data?.hora_fim || '08:00').slice(0, 5));
+    setFimSemana24h(data?.fim_semana_24h !== false);
+  }, [alvo]);
+
+  useEffect(() => { if (open) carregarPlantao(); }, [open, carregarPlantao]);
+
+  const salvarPlantao = async (patch: {
+    ativo?: boolean; hora_inicio?: string; hora_fim?: string; fim_semana_24h?: boolean;
+  }) => {
+    const payload = {
+      folder_id: alvo,
+      ativo: patch.ativo ?? plantaoAtivo,
+      hora_inicio: patch.hora_inicio ?? horaInicio,
+      hora_fim: patch.hora_fim ?? horaFim,
+      fim_semana_24h: patch.fim_semana_24h ?? fimSemana24h,
+      updated_at: new Date().toISOString(),
+    };
+    setPlantaoBusy(true);
+    const { error } = await (supabase as any)
+      .from('meta_inbox_folder_iago_janela')
+      .upsert(payload, { onConflict: 'folder_id' });
+    setPlantaoBusy(false);
+    if (error) {
+      toast({ title: 'Erro ao salvar plantão', description: error.message, variant: 'destructive' });
+      carregarPlantao();
+      return;
+    }
+    setPlantaoAtivo(payload.ativo);
+    setHoraInicio(payload.hora_inicio);
+    setHoraFim(payload.hora_fim);
+    setFimSemana24h(payload.fim_semana_24h);
+  };
+
 
   const salvar = async (valor: boolean) => {
     setAtivo(valor);
