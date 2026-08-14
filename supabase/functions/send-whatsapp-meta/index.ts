@@ -657,7 +657,11 @@ Deno.serve(async (req) => {
         } as any);
         let contatoIdFinal: string | null = null;
         const cpfDigits = String((cliente as any)?.cpf ?? '').replace(/\D/g, '');
-        const cpfValido = cpfDigits.length === 11 || cpfDigits.length === 14 ? cpfDigits : null;
+        // Excel remove zeros à esquerda: recompõe CPF (11) / CNPJ (14).
+        const cpfValido = (cpfDigits.length >= 8 && cpfDigits.length <= 11)
+          ? cpfDigits.padStart(11, '0')
+          : ((cpfDigits.length >= 12 && cpfDigits.length <= 14) ? cpfDigits.padStart(14, '0') : null);
+
         const { data: ex } = await supabase
           .from('meta_whatsapp_contatos')
           .select('id, cpf')
