@@ -136,6 +136,18 @@ export default function InboxMeta() {
     if (tel.length < 8) return;
     const suf = tel.slice(-8);
     (async () => {
+      // 1) CPF já gravado em outra conversa do mesmo telefone (outra instância/caixa)
+      const { data: outros } = await supabase
+        .from('meta_whatsapp_contatos')
+        .select('cpf, atualizado_em')
+        .like('telefone', `%${suf}`)
+        .not('cpf', 'is', null)
+        .order('atualizado_em', { ascending: false })
+        .limit(1);
+      if (cancelado) return;
+      const dOutro = String((outros || [])[0]?.cpf ?? '').replace(/\D/g, '');
+      if (dOutro.length === 11 || dOutro.length === 14) { setCpfPorTelefone(dOutro); return; }
+      // 2) Base de telefones vinculados ao CPF
       const { data } = await supabase
         .from('devedor_telefones')
         .select('devedor_cpf, ativo')
@@ -146,6 +158,7 @@ export default function InboxMeta() {
       const d = String((melhor as any)?.devedor_cpf ?? '').replace(/\D/g, '');
       if (d.length === 11 || d.length === 14) setCpfPorTelefone(d);
     })();
+
     return () => { cancelado = true; };
   }, [contatoAtivo?.id, contatoAtivo?.telefone, cpfContatoDigits]);
   const [mensagens, setMensagens] = useState<MetaMensagem[]>([]);
