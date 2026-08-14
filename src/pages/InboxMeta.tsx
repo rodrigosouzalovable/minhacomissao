@@ -83,6 +83,7 @@ interface MetaMensagem {
   media_url?: string | null; wa_message_id?: string | null; status_envio?: string | null;
   wa_message_id_reply?: string | null; conteudo_citado?: string | null;
   contatos_payload?: any[] | null;
+  transcricao?: string | null;
   template_botoes?: any[] | null;
 }
 
