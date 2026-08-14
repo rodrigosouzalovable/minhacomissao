@@ -785,12 +785,12 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
   }, [jobs, carregarJobs, reativarJobInterno]);
 
-  // Auto-retomada: se um job caiu para erro/concluido/cancelado mas ainda tem restantes
-  // e o usuário NÃO cancelou manualmente, reativa sozinho (cooldown de 60s por job).
+  // Auto-retomada: só para jobs que caíram por erro/conclusão prematura.
+  // Campanhas CANCELADAS nunca são retomadas automaticamente — só via "Reativar".
   useEffect(() => {
     const now = Date.now();
     for (const j of jobs) {
-      if (!["erro", "concluido", "cancelado"].includes(j.status)) continue;
+      if (!["erro", "concluido"].includes(j.status)) continue;
       if (j.restantes <= 0) continue;
       if (manuallyCanceledRef.current.has(j.id)) continue;
       const last = autoResumeAtRef.current.get(j.id) || 0;
