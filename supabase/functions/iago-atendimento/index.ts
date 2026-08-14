@@ -96,8 +96,8 @@ Deno.serve(async (req) => {
     if (!estado) return json({ success: false, error: 'falha ao criar estado' }, 500);
 
     // ===== Plantão: conversa recém-assumida de um atendente humano =====
-    // Zera o "aguardando humano" e usa o momento da transferência como corte,
-    // para as mensagens antigas do humano não silenciarem o IAGO.
+    // Libera o "aguardando humano", mas NÃO apaga o corte: mensagens humanas
+    // recentes continuam valendo (regra dos 10 minutos mais abaixo).
     try {
       const { data: transf } = await supabase
         .from('iago_plantao_transferencia')
@@ -110,8 +110,8 @@ Deno.serve(async (req) => {
         const novoContexto = {
           ...((estado as any).contexto || {}),
           plantao_assumido_em: assumidoEm,
-          ultimo_envio_ia: assumidoEm,
         };
+
         const { data: atualizado } = await supabase
           .from('iago_conversa_estado')
           .update({ aguardando_humano: false, contexto: novoContexto })
