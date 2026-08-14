@@ -121,6 +121,33 @@ export default function InboxMeta() {
   const [filtroInstancia, setFiltroInstancia] = useState<string>('todas');
   const [contatos, setContatos] = useState<MetaContato[]>([]);
   const [contatoAtivo, setContatoAtivo] = useState<MetaContato | null>(null);
+  // CPF do contato: prioriza o gravado na conversa (planilha do Envio Meta);
+  // se não houver, tenta resolver pelo telefone (últimos 8 dígitos).
+  const [cpfPorTelefone, setCpfPorTelefone] = useState<string | null>(null);
+  const cpfContatoDigits = String(contatoAtivo?.cpf ?? '').replace(/\D/g, '');
+  const cpfDoContato = (cpfContatoDigits.length === 11 || cpfContatoDigits.length === 14)
+    ? cpfContatoDigits
+    : cpfPorTelefone;
+  useEffect(() => {
+    let cancelado = false;
+    setCpfPorTelefone(null);
+    const tel = String(contatoAtivo?.telefone ?? '').replace(/\D/g, '');
+    if (cpfContatoDigits.length === 11 || cpfContatoDigits.length === 14) return;
+    if (tel.length < 8) return;
+    const suf = tel.slice(-8);
+    (async () => {
+      const { data } = await supabase
+        .from('devedor_telefones')
+        .select('devedor_cpf, ativo')
+        .ilike('numero', `%${suf}`)
+        .limit(5);
+      if (cancelado) return;
+      const melhor = (data || []).find((r: any) => r.ativo) || (data || [])[0];
+      const d = String((melhor as any)?.devedor_cpf ?? '').replace(/\D/g, '');
+      if (d.length === 11 || d.length === 14) setCpfPorTelefone(d);
+    })();
+    return () => { cancelado = true; };
+  }, [contatoAtivo?.id, contatoAtivo?.telefone, cpfContatoDigits]);
   const [mensagens, setMensagens] = useState<MetaMensagem[]>([]);
   const [busca, setBusca] = useState('');
   const [buscaDebounced, setBuscaDebounced] = useState('');
