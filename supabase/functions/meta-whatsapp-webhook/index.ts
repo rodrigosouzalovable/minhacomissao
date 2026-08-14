@@ -720,20 +720,26 @@ serve(async (req) => {
                     });
                   }
                 } else if (atendenteRodizioIds.length > 0) {
-                  // Rodízio circular atômico por caixa. A função mantém a ordem da fila
-                  // e não compensa diferenças históricas ou do dia.
+                  // A fila circular por caixa continua girando, mas somente a IA (IAGO)
+                  // recebe etiqueta automática. Vez de humano: fila avança e a conversa
+                  // fica livre para o primeiro atendente que atender.
                   const { data: etiquetaEscolhidaId, error: rodizioErr } = await supabase
-                    .rpc('atribuir_atendente_rodizio', { p_contato_id: contatoIdFinal });
+                    .rpc('atribuir_atendente_rodizio', { p_contato_id: contatoIdFinal, p_somente_ia: true });
                   if (rodizioErr) {
                     console.error('[MetaWebhook] falha ao atribuir atendente (rodízio)', rodizioErr.message);
                   } else if (etiquetaEscolhidaId) {
                     const escolhido: any = atendentesRodizio.find((a: any) => a.id === etiquetaEscolhidaId);
-                    console.log('[MetaWebhook] atendente atribuido via rodízio circular', {
+                    console.log('[MetaWebhook] etiqueta atribuida via rodízio (IA)', {
                       contato_id: contatoIdFinal,
                       atendente: escolhido?.nome || etiquetaEscolhidaId,
                     });
+                  } else {
+                    console.log('[MetaWebhook] vez de atendente humano: conversa fica sem etiqueta até ser atendida', {
+                      contato_id: contatoIdFinal,
+                    });
                   }
                 }
+
               }
             } catch (e: any) {
               console.error('[MetaWebhook] erro na atribuição de atendente', e?.message || e);
