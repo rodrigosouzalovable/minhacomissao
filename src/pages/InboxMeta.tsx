@@ -1039,12 +1039,28 @@ export default function InboxMeta() {
       return;
     }
 
-    // Código Pix vai sempre em mensagem própria e sem o prefixo do atendente:
-    // é assim que o WhatsApp do cliente exibe o botão "Copiar código Pix".
+    // Código Pix vai sempre em mensagem própria e sem o prefixo do atendente,
+    // acompanhado de um botão "Copiar código Pix" (link) para o cliente copiar no WhatsApp.
     const { resto, pix } = separarPix(raw);
-    const fila: string[] = pix
-      ? [...(resto ? [formatarMensagemAtendente(resto)] : []), pix]
-      : [formatarMensagemAtendente(raw)];
+
+    let pixBotaoUrl: string | null = null;
+    if (pix) {
+      try {
+        const linkId = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+        const { error: linkErr } = await supabase.from('pix_links').insert({
+          id: linkId,
+          codigo: pix,
+          telefone: contatoAtivo.telefone || null,
+          instancia_id: contatoAtivo.instancia_id,
+          user_id: user?.id || null,
+        } as any);
+        if (!linkErr) pixBotaoUrl = `${window.location.origin}/pix/${linkId}`;
+      } catch { /* segue sem botão */ }
+    }
+
+    const fila: { texto: string; botaoUrl?: string | null }[] = pix
+      ? [...(resto ? [{ texto: formatarMensagemAtendente(resto) }] : []), { texto: pix, botaoUrl: pixBotaoUrl }]
+      : [{ texto: formatarMensagemAtendente(raw) }];
 
     setEnviando(true);
     const replyTo = respondendo?.wa_message_id;
@@ -1053,7 +1069,7 @@ export default function InboxMeta() {
 
     try {
       for (let i = 0; i < fila.length; i++) {
-        const t = fila[i];
+        const t = fila[i].texto;
         const tempId = `temp-${Date.now()}-${i}`;
         const tempMsg: MetaMensagem = {
           id: tempId, instancia_id: contatoAtivo.instancia_id, telefone: contatoAtivo.telefone,
@@ -1074,6 +1090,8 @@ export default function InboxMeta() {
               user_id: user?.id,
               reply_to_wa_id: i === 0 ? replyTo : undefined,
               conteudo_citado: i === 0 ? replySnap : undefined,
+              botao_url: fila[i].botaoUrl || undefined,
+              botao_texto: fila[i].botaoUrl ? 'Copiar código Pix' : undefined,
             },
           });
           if (error) throw new Error(error.message);
