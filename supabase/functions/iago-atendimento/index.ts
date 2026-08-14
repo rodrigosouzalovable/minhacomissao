@@ -235,7 +235,9 @@ Deno.serve(async (req) => {
     const resultado = await gerarResposta({
       cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
+      cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
     });
+
 
     const mensagens: string[] = Array.isArray(resultado?.mensagens)
       ? resultado.mensagens
