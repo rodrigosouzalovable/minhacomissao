@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.atribuir_atendente_rodizio(uuid);
