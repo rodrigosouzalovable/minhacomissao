@@ -60,6 +60,19 @@ Deno.serve(async (req) => {
     const atende = await iagoAtendeCaixa(supabase, iago.id, (contato as any).folder_id ?? null);
     if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
 
+    // ===== Credor definido na caixa (sobrepõe o credor vindo dos débitos) =====
+    const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
+    let credorCaixa = '';
+    {
+      const { data: cr } = await supabase
+        .from('meta_inbox_folder_credores')
+        .select('nome')
+        .eq('folder_id', (contato as any).folder_id ?? CAIXA_PADRAO_ID)
+        .eq('ativo', true)
+        .maybeSingle();
+      credorCaixa = String((cr as any)?.nome || '').trim();
+    }
+
     // ===== A conversa é do IAGO? (etiqueta de atendente) =====
     const tags = await etiquetasAtendente(supabase, contato_id);
     const nomeIago = String(iago.nome || '').trim().toLowerCase();
@@ -206,7 +219,7 @@ Deno.serve(async (req) => {
 
     // ===== Redação da resposta =====
     const resultado = await gerarResposta({
-      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false,
+      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
     });
 
@@ -286,25 +299,30 @@ async function gerarResposta(args: {
   temAcordo: boolean;
   nomeCliente: string;
   primeiroToque: boolean;
+  credorCaixa?: string;
 }): Promise<{ mensagens: string[]; escalar: boolean; motivo: string }> {
-  const { cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque } = args;
+  const { cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa } = args;
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
   const qa = itens.filter((i) => i.tipo === 'qa').map((i) => `P: ${i.gatilho}\nR: ${i.conteudo}`).join('\n\n');
   const proibidos = blocoConhecimento(itens, 'proibido');
   const aprendizados = blocoConhecimento(itens, 'aprendizado');
 
+  const credorFinal = String(credorCaixa || proposta?.credor || '').trim();
+
   const dados = proposta
     ? [
         `Cliente: ${nomeCliente || '(sem nome)'}`,
-        `Credor: ${proposta.credor}`,
+        `Credor: ${credorFinal}`,
         `Dívida atualizada: ${fmtBRL(proposta.total)}`,
         `À vista com ${proposta.descAvistaPct}% de desconto: ${fmtBRL(proposta.valorAvista)}`,
         `Parcelado com ${proposta.descParceladoPct}% de desconto (total ${fmtBRL(proposta.totalParcelado)}):`,
         ...proposta.opcoes.map((o: any) => `  • ${o.parcelas}x de ${fmtBRL(o.valorParcela)}`),
         'Parcela mínima permitida: R$ 100,00. Primeira parcela/entrada em até 10 dias.',
       ].join('\n')
-    : 'Ainda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.';
+    : (credorFinal
+        ? `Credor desta negociação: ${credorFinal}.\nAinda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.`
+        : 'Ainda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.');
 
   const system = [
     `Você é ${cfg.persona_nome || 'Iago'}, atendente de cobrança da equipe, conversando por WhatsApp.`,
@@ -316,6 +334,9 @@ async function gerarResposta(args: {
     'Se já pediu o CPF e o cliente ainda não o informou, não peça novamente; apenas aguarde. Se o CPF chegou, avance diretamente para a consulta/proposta.',
     '',
     'REGRAS DE VALORES: use APENAS os números fornecidos em DADOS DO SISTEMA. Nunca invente ou arredonde valores, descontos, prazos ou parcelas fora dessa lista.',
+    credorFinal
+      ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
+      : '',
     'Você NUNCA fecha ou registra acordo. Quando o cliente aceitar uma opção, confirme a escolha e escale para um humano finalizar.',
     'Escale para humano (escalar=true) quando: o cliente aceitar uma proposta; pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
     '',
