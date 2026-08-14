@@ -1037,40 +1037,53 @@ export default function InboxMeta() {
       toast({ title: 'Janela 24h fechada', description: 'Envie um template UTILITY em Envio Meta para reabrir. Texto livre agora custaria como MARKETING.', variant: 'destructive' });
       return;
     }
-    const t = formatarMensagemAtendente(raw);
+
+    // Código Pix vai sempre em mensagem própria e sem o prefixo do atendente:
+    // é assim que o WhatsApp do cliente exibe o botão "Copiar código Pix".
+    const { resto, pix } = separarPix(raw);
+    const fila: string[] = pix
+      ? [...(resto ? [formatarMensagemAtendente(resto)] : []), pix]
+      : [formatarMensagemAtendente(raw)];
+
     setEnviando(true);
-    const tempId = `temp-${Date.now()}`;
-    const tempMsg: MetaMensagem = {
-      id: tempId, instancia_id: contatoAtivo.instancia_id, telefone: contatoAtivo.telefone,
-      conteudo: t, direcao: 'saida', timestamp_msg: new Date().toISOString(),
-      tipo_conteudo: 'texto', status_envio: 'enviando',
-      wa_message_id_reply: respondendo?.wa_message_id || null,
-      conteudo_citado: respondendo?.conteudo || null,
-    };
-    setMensagens(prev => [...prev, tempMsg]);
     const replyTo = respondendo?.wa_message_id;
     const replySnap = respondendo?.conteudo;
     setRespondendo(null);
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-text', {
-        body: {
-          instancia_id: contatoAtivo.instancia_id,
-          telefone: contatoAtivo.telefone || undefined,
-          bsuid: contatoAtivo.bsuid || undefined,
-          texto: t,
-          user_id: user?.id,
-          reply_to_wa_id: replyTo,
-          conteudo_citado: replySnap,
-        },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || 'Falha');
-      setMensagens(prev => prev.filter(m => m.id !== tempId));
-    } catch (e: any) {
-      setMensagens(prev => prev.map(m => m.id === tempId ? { ...m, status_envio: 'erro' } : m));
-      toast({ title: 'Erro ao enviar', description: e.message, variant: 'destructive' });
+      for (let i = 0; i < fila.length; i++) {
+        const t = fila[i];
+        const tempId = `temp-${Date.now()}-${i}`;
+        const tempMsg: MetaMensagem = {
+          id: tempId, instancia_id: contatoAtivo.instancia_id, telefone: contatoAtivo.telefone,
+          conteudo: t, direcao: 'saida', timestamp_msg: new Date().toISOString(),
+          tipo_conteudo: 'texto', status_envio: 'enviando',
+          wa_message_id_reply: i === 0 ? (replyTo || null) : null,
+          conteudo_citado: i === 0 ? (replySnap || null) : null,
+        };
+        setMensagens(prev => [...prev, tempMsg]);
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
+        try {
+          const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-text', {
+            body: {
+              instancia_id: contatoAtivo.instancia_id,
+              telefone: contatoAtivo.telefone || undefined,
+              bsuid: contatoAtivo.bsuid || undefined,
+              texto: t,
+              user_id: user?.id,
+              reply_to_wa_id: i === 0 ? replyTo : undefined,
+              conteudo_citado: i === 0 ? replySnap : undefined,
+            },
+          });
+          if (error) throw new Error(error.message);
+          if (!data?.success) throw new Error(data?.error || 'Falha');
+          setMensagens(prev => prev.filter(m => m.id !== tempId));
+        } catch (e: any) {
+          setMensagens(prev => prev.map(m => m.id === tempId ? { ...m, status_envio: 'erro' } : m));
+          toast({ title: 'Erro ao enviar', description: e.message, variant: 'destructive' });
+          break;
+        }
+      }
     } finally {
       setEnviando(false);
     }
