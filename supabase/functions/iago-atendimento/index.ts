@@ -6,7 +6,7 @@ import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
   avisarEmergencia, etiquetarAguardandoHumano, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
-  classificarDataPagamento, detectarEscolha, respostaPagamentoHoje,
+  classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
 } from '../_shared/iago.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
@@ -602,7 +602,10 @@ async function gerarResposta(args: {
       ? 'ATENÇÃO: este telefone está vinculado a mais de um cadastro. Confirme o nome do cliente ANTES de apresentar qualquer valor ou proposta.'
       : '',
     '',
+    contextoDataHoje(),
+    '',
     'REGRAS DE VALORES: use APENAS os números fornecidos em DADOS DO SISTEMA. Nunca invente ou arredonde valores, descontos, prazos ou parcelas fora dessa lista.',
+
     credorFinal
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
       : '',
@@ -631,7 +634,9 @@ async function gerarResposta(args: {
     '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":""}',
     'escolha = forma de pagamento escolhida pelo cliente ("à vista" ou "12x"), vazio se ele ainda não escolheu.',
     'pagamento_hoje = "sim", "nao" ou "" conforme a resposta dele sobre pagar hoje.',
-    'data_pagamento = o dia informado pelo cliente exatamente como ele disse ("dia 20", "20/08", "mês que vem"), vazio se não informou.',
+    'data_pagamento = a data que o cliente informou, JÁ RESOLVIDA no formato YYYY-MM-DD usando a lista de datas acima (ex.: "segunda" ou "segunda que vem" => a data da próxima segunda-feira). Use "mes_que_vem" quando ele falar de outro mês sem dia, e vazio se não informou nada.',
+    'Se o cliente informar a data na mesma frase da negativa ("não, consigo segunda"), considere a data informada e NÃO repita a pergunta.',
+
     'mensagens = de 1 a 2 mensagens curtas a enviar agora (vazio só se escalar=true e nada deva ser dito).',
     'Quando escalar=true, envie uma mensagem curta avisando que um colega vai continuar o atendimento e preencha "motivo" em português.',
   ].filter(Boolean).join('\n');
