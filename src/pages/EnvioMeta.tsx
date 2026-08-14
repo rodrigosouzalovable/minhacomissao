@@ -98,8 +98,12 @@ function normalizeTelKey(t: string): string {
 
 function normalizeDocument(value: string): string {
   const d = String(value || "").replace(/\D/g, "");
-  return d.length === 11 || d.length === 14 ? d : "";
+  // Excel remove zeros à esquerda: recompõe CPF (11) / CNPJ (14).
+  if (d.length >= 8 && d.length <= 11) return d.padStart(11, "0");
+  if (d.length >= 12 && d.length <= 14) return d.padStart(14, "0");
+  return "";
 }
+
 
 function parseRecipients(input: string): ClienteRow[] {
   const linhas = input.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
