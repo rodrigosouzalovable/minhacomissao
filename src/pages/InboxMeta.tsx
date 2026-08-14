@@ -1664,7 +1664,7 @@ export default function InboxMeta() {
                   <div className="text-xs text-muted-foreground truncate flex items-center gap-1">
                     {contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.bsuid || '—')}
                     {contatoAtivo.telefone && (
-                      <CopyButton value={contatoAtivo.telefone} label="Telefone" />
+                      <CopyButton value={telefoneSemDDI(contatoAtivo.telefone)} label="Telefone" />
                     )}
                     <span>· via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}</span>
                   </div>
