@@ -5,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
-  avisarEmergencia, enviarTexto, resolverCpfPorTelefone, calcularProposta, chamarIA, extrairJson,
+  avisarEmergencia, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
 } from '../_shared/iago.ts';
 
 const hojeSP = () => agoraSP().toISOString().slice(0, 10);
@@ -181,7 +181,20 @@ Deno.serve(async (req) => {
     let cpf = estado.cpf || '';
     const docMsg = extrairDoc(textoAtual);
     if (docMsg) cpf = docMsg;
-    if (!cpf) cpf = await resolverCpfPorTelefone(supabase, (contato as any).telefone);
+    let cpfPorTelefone = false;
+    let nomePorTelefone = '';
+    let multiplosCandidatos = false;
+    if (!cpf) {
+      const res = await resolverTelefone(supabase, (contato as any).telefone);
+      if (res.cpf) {
+        cpf = res.cpf;
+        cpfPorTelefone = true;
+        nomePorTelefone = res.nome;
+        multiplosCandidatos = res.candidatos.length > 1;
+        // grava já na primeira interação para não perder a identificação
+        await supabase.from('iago_conversa_estado').update({ cpf }).eq('id', estado.id);
+      }
+    }
 
     let temAcordo = false;
     let proposta = null as Awaited<ReturnType<typeof calcularProposta>>;
@@ -199,7 +212,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    const nomeCliente = proposta?.nomeCliente || (contato as any).nome || '';
+    const nomeCliente = proposta?.nomeCliente || nomePorTelefone || (contato as any).nome || '';
+
 
     // ===== Cliente já tem acordo => humano assume =====
     if (temAcordo) {
@@ -221,7 +235,9 @@ Deno.serve(async (req) => {
     const resultado = await gerarResposta({
       cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
+      cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
     });
+
 
     const mensagens: string[] = Array.isArray(resultado?.mensagens)
       ? resultado.mensagens
@@ -300,8 +316,14 @@ async function gerarResposta(args: {
   nomeCliente: string;
   primeiroToque: boolean;
   credorCaixa?: string;
+  cpfIdentificado?: boolean;
+  cpfPorTelefone?: boolean;
+  multiplosCandidatos?: boolean;
 }): Promise<{ mensagens: string[]; escalar: boolean; motivo: string }> {
-  const { cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa } = args;
+  const {
+    cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
+    cpfIdentificado, cpfPorTelefone, multiplosCandidatos,
+  } = args;
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
   const qa = itens.filter((i) => i.tipo === 'qa').map((i) => `P: ${i.gatilho}\nR: ${i.conteudo}`).join('\n\n');
@@ -309,6 +331,10 @@ async function gerarResposta(args: {
   const aprendizados = blocoConhecimento(itens, 'aprendizado');
 
   const credorFinal = String(credorCaixa || proposta?.credor || '').trim();
+
+  const semDebito = cpfIdentificado
+    ? 'Já identifiquei o cliente pelo telefone, mas não há débitos em aberto para ele. NÃO peça o CPF: informe que não localizou débitos em aberto e escale para um humano conferir (escalar=true).'
+    : 'Ainda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.';
 
   const dados = proposta
     ? [
@@ -320,9 +346,7 @@ async function gerarResposta(args: {
         ...proposta.opcoes.map((o: any) => `  • ${o.parcelas}x de ${fmtBRL(o.valorParcela)}`),
         'Parcela mínima permitida: R$ 100,00. Primeira parcela/entrada em até 10 dias.',
       ].join('\n')
-    : (credorFinal
-        ? `Credor desta negociação: ${credorFinal}.\nAinda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.`
-        : 'Ainda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.');
+    : (credorFinal ? `Credor desta negociação: ${credorFinal}.\n${semDebito}` : semDebito);
 
   const system = [
     `Você é ${cfg.persona_nome || 'Iago'}, atendente de cobrança da equipe, conversando por WhatsApp.`,
@@ -331,12 +355,21 @@ async function gerarResposta(args: {
     'Escreva mensagens curtas (1 a 3 linhas), linguagem simples de WhatsApp, no máximo 1 emoji, sem markdown.',
     cfg.assina_nome ? 'Pode se apresentar como Iago na primeira mensagem.' : 'Não precisa assinar o nome.',
     'Leia todo o HISTÓRICO RECENTE antes de responder. Nunca repita uma saudação, apresentação, pergunta ou proposta que já foi enviada.',
-    'Se já pediu o CPF e o cliente ainda não o informou, não peça novamente; apenas aguarde. Se o CPF chegou, avance diretamente para a consulta/proposta.',
+    cpfIdentificado
+      ? 'IDENTIFICAÇÃO: o cliente JÁ está identificado no sistema. É PROIBIDO pedir CPF, documento ou dados de cadastro. Siga direto para a negociação com os dados de DADOS DO SISTEMA.'
+      : 'Se já pediu o CPF e o cliente ainda não o informou, não peça novamente; apenas aguarde. Se o CPF chegou, avance diretamente para a consulta/proposta.',
+    cpfPorTelefone && nomeCliente
+      ? `CONFIRMAÇÃO LEVE: na primeira mensagem confirme a identidade pelo nome, ex.: "Falo com ${primeiroNome(nomeCliente)}?" e já siga a conversa. Se o cliente disser que não é essa pessoa ou negar a identidade, escale para humano (escalar=true) sem informar valores.`
+      : '',
+    cpfPorTelefone && multiplosCandidatos
+      ? 'ATENÇÃO: este telefone está vinculado a mais de um cadastro. Confirme o nome do cliente ANTES de apresentar qualquer valor ou proposta.'
+      : '',
     '',
     'REGRAS DE VALORES: use APENAS os números fornecidos em DADOS DO SISTEMA. Nunca invente ou arredonde valores, descontos, prazos ou parcelas fora dessa lista.',
     credorFinal
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
       : '',
+
     'Você NUNCA fecha ou registra acordo. Quando o cliente aceitar uma opção, confirme a escolha e escale para um humano finalizar.',
     'Escale para humano (escalar=true) quando: o cliente aceitar uma proposta; pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
     '',
