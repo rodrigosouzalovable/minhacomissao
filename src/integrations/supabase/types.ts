@@ -7890,6 +7890,7 @@ export type Database = {
           template_botoes: Json
           timestamp_msg: string
           tipo_conteudo: string
+          transcricao: string
           wa_message_id: string
           wa_message_id_reply: string
         }[]
