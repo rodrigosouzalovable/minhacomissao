@@ -58,6 +58,7 @@ interface Mensagem {
   status_envio?: string | null;
   template_botoes?: TemplateBotao[] | null;
   contatos_payload?: ContatoCompartilhado[] | null;
+  transcricao?: string | null;
 }
 
 interface ChatMessageProps {
