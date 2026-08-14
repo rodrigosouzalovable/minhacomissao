@@ -174,21 +174,86 @@ export async function enviarTexto(
   return (data as any)?.mensagem_id || null;
 }
 
-/** Resolve o CPF do cliente pelo telefone (sufixo de 8 dígitos). */
-export async function resolverCpfPorTelefone(supabase: any, telefone: string | null): Promise<string> {
-  const suf = sufixo8(telefone);
-  if (suf.length !== 8) return '';
-  const { data: devs } = await supabase
-    .from('devedores').select('cpf').eq('ativo', true)
-    .ilike('telefone', `%${suf}`).order('criado_em', { ascending: false }).limit(1);
-  if ((devs || []).length) return soDigitos((devs as any)[0].cpf);
-
-  const { data: tels } = await supabase
-    .from('devedor_telefones').select('devedor_cpf').eq('ativo', true)
-    .ilike('numero', `%${suf}`).limit(1);
-  if ((tels || []).length) return soDigitos((tels as any)[0].devedor_cpf);
-  return '';
+export interface CandidatoTelefone {
+  cpf: string;
+  nome: string;
+  ativo: boolean;
+  temAcordo: boolean;
+  temDebito: boolean;
 }
+
+export interface ResolucaoTelefone {
+  cpf: string;
+  nome: string;
+  candidatos: CandidatoTelefone[];
+}
+
+/**
+ * Resolve o(s) CPF(s) do cliente pelo telefone (sufixo de 8 dígitos).
+ * Fontes: devedor_telefones, devedores e acordos. Prioriza:
+ * acordo ativo > débito em aberto > registro ativo > mais recente.
+ */
+export async function resolverTelefone(supabase: any, telefone: string | null): Promise<ResolucaoTelefone> {
+  const vazio: ResolucaoTelefone = { cpf: '', nome: '', candidatos: [] };
+  const suf = sufixo8(telefone);
+  if (suf.length !== 8) return vazio;
+
+  const mapa = new Map<string, CandidatoTelefone>();
+  const push = (cpfRaw: unknown, nome: unknown, ativo: boolean, extra?: Partial<CandidatoTelefone>) => {
+    const cpf = soDigitos(cpfRaw);
+    if (cpf.length !== 11) return;
+    const atual = mapa.get(cpf) || { cpf, nome: '', ativo: false, temAcordo: false, temDebito: false };
+    mapa.set(cpf, {
+      ...atual,
+      nome: atual.nome || String(nome || '').trim(),
+      ativo: atual.ativo || ativo,
+      temAcordo: atual.temAcordo || !!extra?.temAcordo,
+      temDebito: atual.temDebito || !!extra?.temDebito,
+    });
+  };
+
+  const [tels, devs, acs] = await Promise.all([
+    supabase.from('devedor_telefones').select('devedor_cpf, ativo').ilike('numero', `%${suf}`).limit(20),
+    supabase.from('devedores').select('cpf, nome, ativo').ilike('telefone', `%${suf}`)
+      .order('criado_em', { ascending: false }).limit(40),
+    supabase.from('acordos').select('cliente_cpf, cliente_nome').ilike('cliente_telefone', `%${suf}`).limit(20),
+  ]);
+
+  for (const t of (tels?.data || []) as any[]) push(t.devedor_cpf, '', t.ativo !== false);
+  for (const d of (devs?.data || []) as any[]) {
+    push(d.cpf, d.nome, d.ativo !== false, { temDebito: d.ativo !== false });
+  }
+  for (const a of (acs?.data || []) as any[]) push(a.cliente_cpf, a.cliente_nome, true, { temAcordo: true });
+
+  const candidatos = Array.from(mapa.values());
+  if (!candidatos.length) return vazio;
+
+  // Completa nome/débito para CPFs vindos apenas da lista de telefones
+  const semNome = candidatos.filter((c) => !c.nome).map((c) => c.cpf);
+  if (semNome.length) {
+    const { data: extras } = await supabase
+      .from('devedores').select('cpf, nome, ativo').in('cpf', semNome).limit(200);
+    for (const e of (extras || []) as any[]) {
+      const c = mapa.get(soDigitos(e.cpf));
+      if (c) {
+        c.nome = c.nome || String(e.nome || '').trim();
+        c.temDebito = c.temDebito || e.ativo !== false;
+      }
+    }
+  }
+
+  const score = (c: CandidatoTelefone) =>
+    (c.temAcordo ? 8 : 0) + (c.temDebito ? 4 : 0) + (c.ativo ? 2 : 0) + (c.nome ? 1 : 0);
+  const ordenados = Array.from(mapa.values()).sort((a, b) => score(b) - score(a));
+  return { cpf: ordenados[0].cpf, nome: ordenados[0].nome, candidatos: ordenados };
+}
+
+/** Compatibilidade: retorna apenas o CPF resolvido. */
+export async function resolverCpfPorTelefone(supabase: any, telefone: string | null): Promise<string> {
+  const r = await resolverTelefone(supabase, telefone);
+  return r.cpf;
+}
+
 
 export interface PropostaCalculada {
   total: number;
