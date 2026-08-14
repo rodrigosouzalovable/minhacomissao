@@ -1006,6 +1006,16 @@ export default function InboxMeta() {
     return { nivel: 'ok' as const, min };
   }, [nowTick]);
 
+  // Marcar/desmarcar "não precisa resposta" (dispensa o alerta de tempo até nova mensagem do cliente)
+  const handleDispensarResposta = useCallback(async (contatoId: string, dispensar: boolean) => {
+    const valor = dispensar ? new Date().toISOString() : null;
+    setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, sla_dispensado_em: valor } : c));
+    setContatoAtivo(prev => prev && prev.id === contatoId ? { ...prev, sla_dispensado_em: valor } : prev);
+    const { error } = await (supabase as any).from('meta_whatsapp_contatos')
+      .update({ sla_dispensado_em: valor }).eq('id', contatoId);
+    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+  }, [toast]);
+
 
 
   const janelaInfo = useMemo(() => {
