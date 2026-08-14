@@ -23,15 +23,15 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   contatoId: string | null;
   contatoNome?: string;
-  atualId: string | null;
+  atuais: string[];
   qualificacoes: MetaQualificacao[];
   isAdmin: boolean;
-  onQualificar: (contatoId: string, qualificacaoId: string | null) => void;
+  onQualificar: (contatoId: string, qualificacaoIds: string[]) => void;
   onQualificacoesChange: () => void;
 }
 
 export function MetaQualificacaoDialog({
-  open, onOpenChange, contatoId, contatoNome, atualId, qualificacoes, isAdmin,
+  open, onOpenChange, contatoId, contatoNome, atuais, qualificacoes, isAdmin,
   onQualificar, onQualificacoesChange,
 }: Props) {
   const { toast } = useToast();
@@ -46,13 +46,14 @@ export function MetaQualificacaoDialog({
 
   const marcar = async (qualificacaoId: string) => {
     if (!contatoId) return;
+    const jaTem = atuais.includes(qualificacaoId);
     setSalvando(true);
     try {
-      if (atualId === qualificacaoId) {
+      if (jaTem) {
         const { error } = await (supabase as any).from('meta_contato_qualificacao')
-          .delete().eq('contato_id', contatoId);
+          .delete().eq('contato_id', contatoId).eq('qualificacao_id', qualificacaoId);
         if (error) throw error;
-        onQualificar(contatoId, null);
+        onQualificar(contatoId, atuais.filter(id => id !== qualificacaoId));
       } else {
         const { data: sess } = await supabase.auth.getUser();
         const { error } = await (supabase as any).from('meta_contato_qualificacao')
@@ -61,11 +62,10 @@ export function MetaQualificacaoDialog({
             qualificacao_id: qualificacaoId,
             user_id: sess?.user?.id ?? null,
             updated_at: new Date().toISOString(),
-          }, { onConflict: 'contato_id' });
+          }, { onConflict: 'contato_id,qualificacao_id' });
         if (error) throw error;
-        onQualificar(contatoId, qualificacaoId);
+        onQualificar(contatoId, [...atuais, qualificacaoId]);
       }
-      onOpenChange(false);
     } catch (e: any) {
       toast({ title: 'Erro ao qualificar', description: e.message, variant: 'destructive' });
     } finally {
@@ -120,7 +120,7 @@ export function MetaQualificacaoDialog({
           <DialogDescription>
             {modoConfig
               ? 'Crie, renomeie, ative/inative ou exclua os tipos de qualificação.'
-              : contatoNome || 'Selecione como qualificar esta conversa.'}
+              : contatoNome || 'Selecione uma ou mais qualificações para esta conversa.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -137,23 +137,21 @@ export function MetaQualificacaoDialog({
                   onClick={() => marcar(q.id)}
                   className={cn(
                     'flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-accent',
-                    atualId === q.id && 'border-primary bg-primary/10',
+                    atuais.includes(q.id) && 'border-primary bg-primary/10',
                   )}
                 >
                   <span className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: q.cor }} />
                     {q.nome}
                   </span>
-                  {atualId === q.id && <Check className="h-4 w-4 text-primary" />}
+                  {atuais.includes(q.id) && <Check className="h-4 w-4 text-primary" />}
                 </button>
               ))}
             </div>
             {salvando && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            {atualId && (
-              <p className="text-xs text-muted-foreground">
-                Clique na qualificação atual para remover a marcação.
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              Você pode marcar várias qualificações. Clique em uma marcada para removê-la.
+            </p>
             {isAdmin && (
               <Button variant="outline" size="sm" className="w-full" onClick={() => setModoConfig(true)}>
                 <Settings className="h-4 w-4 mr-2" /> Gerenciar qualificações

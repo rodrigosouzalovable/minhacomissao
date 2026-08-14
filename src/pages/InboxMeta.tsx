@@ -141,7 +141,7 @@ export default function InboxMeta() {
   const [configFolder, setConfigFolder] = useState<{ id: string | null; nome: string } | null>(null);
   // Qualificação de conversas
   const [qualificacoes, setQualificacoes] = useState<MetaQualificacao[]>([]);
-  const [qualifPorContato, setQualifPorContato] = useState<Record<string, string>>({});
+  const [qualifPorContato, setQualifPorContato] = useState<Record<string, string[]>>({});
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
   // Meus Clientes (conversas com a etiqueta do próprio usuário)
@@ -376,11 +376,14 @@ export default function InboxMeta() {
 
   const fetchQualifContatos = useCallback(async (ids: string[]) => {
     if (!ids.length) { setQualifPorContato({}); return; }
-    const map: Record<string, string> = {};
+    const map: Record<string, string[]> = {};
     for (let i = 0; i < ids.length; i += 300) {
       const { data } = await (supabase as any).from('meta_contato_qualificacao')
         .select('contato_id, qualificacao_id').in('contato_id', ids.slice(i, i + 300));
-      ((data as any[]) ?? []).forEach(r => { map[r.contato_id] = r.qualificacao_id; });
+      ((data as any[]) ?? []).forEach(r => {
+        if (!map[r.contato_id]) map[r.contato_id] = [];
+        if (r.qualificacao_id) map[r.contato_id].push(r.qualificacao_id);
+      });
     }
     setQualifPorContato(map);
   }, []);
@@ -842,8 +845,8 @@ export default function InboxMeta() {
           if (fim - Date.now() <= 0) return false;
         }
         if (modoMeusClientes && mcMarcadores.size > 0) {
-          const qid = qualifPorContato[c.id];
-          if (!qid || !mcMarcadores.has(qid)) return false;
+          const qids = qualifPorContato[c.id] ?? [];
+          if (!qids.some(id => mcMarcadores.has(id))) return false;
         }
         return true;
       })
@@ -868,11 +871,13 @@ export default function InboxMeta() {
       const { exportarParaExcel } = await import('@/lib/exportExcel');
       const nomeCaixa = (id?: string | null) => (id ? (folders.find(f => f.id === id)?.nome || '—') : 'Padrão');
       const linhas = contatosFiltrados.map(c => {
-        const q = qualificacoes.find(x => x.id === qualifPorContato[c.id]);
+        const qs = (qualifPorContato[c.id] ?? [])
+          .map(id => qualificacoes.find(x => x.id === id)?.nome)
+          .filter(Boolean) as string[];
         return {
           telefone: formatTelefone(c.telefone || ''),
           nome: c.nome || nomesCRM[suffix8(c.telefone)] || '',
-          marcador: q?.nome || 'Não qualificado',
+          marcador: qs.length ? qs.join(', ') : 'Não qualificado',
           ultima: c.ultima_mensagem_em ? format(new Date(c.ultima_mensagem_em), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '',
           caixa: nomeCaixa(c.folder_id),
         };
@@ -1561,7 +1566,7 @@ export default function InboxMeta() {
                       ativo && 'bg-accent',
                       sel && 'bg-primary/15',
                       c.nao_lido > 0 && !ativo && 'bg-emerald-500/5',
-                      qualificacaoAtivaNaCaixa && !qualifPorContato[c.id] && !!c.ultima_msg_entrada_em && !ativo && 'pisca-qualificacao',
+                      qualificacaoAtivaNaCaixa && !(qualifPorContato[c.id]?.length) && !!c.ultima_msg_entrada_em && !ativo && 'pisca-qualificacao',
                     )}>
                     <div className="min-w-0 space-y-1">
                       <span className={cn(
@@ -1680,14 +1685,32 @@ export default function InboxMeta() {
                       title="Qualificar esta conversa"
                     >
                       {(() => {
-                        const q = qualificacoes.find(x => x.id === qualifPorContato[contatoAtivo.id]);
+                        const qs = (qualifPorContato[contatoAtivo.id] ?? [])
+                          .map(id => qualificacoes.find(x => x.id === id))
+                          .filter(Boolean) as MetaQualificacao[];
                         return (
                           <>
-                            <span
-                              className="h-2.5 w-2.5 rounded-full"
-                              style={{ backgroundColor: q?.cor ?? 'hsl(var(--muted-foreground))' }}
-                            />
-                            {q ? q.nome : 'Qualificação'}
+                            {qs.length > 0 ? (
+                              <span className="flex items-center -space-x-1">
+                                {qs.map(q => (
+                                  <span
+                                    key={q.id}
+                                    className="h-2.5 w-2.5 rounded-full ring-1 ring-background"
+                                    style={{ backgroundColor: q.cor }}
+                                  />
+                                ))}
+                              </span>
+                            ) : (
+                              <span
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{ backgroundColor: 'hsl(var(--muted-foreground))' }}
+                              />
+                            )}
+                            {qs.length === 0
+                              ? 'Qualificação'
+                              : qs.length === 1
+                                ? qs[0].nome
+                                : `${qs[0].nome} +${qs.length - 1}`}
                           </>
                         );
                       })()}
@@ -1973,12 +1996,12 @@ export default function InboxMeta() {
         onOpenChange={setQualifDialogOpen}
         contatoId={contatoAtivo?.id ?? null}
         contatoNome={contatoAtivo?.nome ?? undefined}
-        atualId={contatoAtivo ? (qualifPorContato[contatoAtivo.id] ?? null) : null}
+        atuais={contatoAtivo ? (qualifPorContato[contatoAtivo.id] ?? []) : []}
         qualificacoes={qualificacoes}
         isAdmin={isAdmin}
-        onQualificar={(cid, qid) => setQualifPorContato(prev => {
+        onQualificar={(cid, qids) => setQualifPorContato(prev => {
           const next = { ...prev };
-          if (qid) next[cid] = qid; else delete next[cid];
+          if (qids.length) next[cid] = qids; else delete next[cid];
           return next;
         })}
         onQualificacoesChange={fetchQualificacoes}
