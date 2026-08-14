@@ -192,6 +192,8 @@ export default function InboxMeta() {
   const [qualifPorContato, setQualifPorContato] = useState<Record<string, string[]>>({});
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
+  const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
+
   // Meus Clientes (conversas com a etiqueta do próprio usuário)
   const [modoMeusClientes, setModoMeusClientes] = useState(false);
   const [mcDataIni, setMcDataIni] = useState<Date | undefined>(undefined);
