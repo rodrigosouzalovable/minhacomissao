@@ -392,6 +392,7 @@ Deno.serve(async (req) => {
     }
 
     let fallbackMsg = '';
+    let acordoFechado = false;
     if (escolha) {
       const dataBruta = String((resultado as any)?.data_pagamento || '').trim();
       const dataInfo = classificarDataPagamento(dataBruta || textoAtual);
@@ -400,10 +401,12 @@ Deno.serve(async (req) => {
       if (dataResolvida?.classe === 'hoje' || (pagamentoHoje === 'sim' && !dataResolvida)) {
         escalar = true;
         dataAcordada = 'hoje';
+        acordoFechado = true;
         motivo = `cliente escolheu ${escolha} e vai pagar hoje`;
       } else if (dataResolvida?.classe === 'dentro_do_mes') {
         escalar = true;
         dataAcordada = dataResolvida.label;
+        acordoFechado = true;
         motivo = `cliente escolheu ${escolha} e vai pagar em ${dataResolvida.label}`;
       } else if (dataResolvida?.classe === 'fora_do_mes') {
         escalar = true;
