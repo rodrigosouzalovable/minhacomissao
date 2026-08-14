@@ -541,7 +541,25 @@ serve(async (req) => {
               .eq('id', contatoIdFinal)
               .maybeSingle();
             _folderIdContato = (_cFolder as any)?.folder_id ?? null;
+
+            // Regra: todo atendimento fica na caixa Padrão. Conversas marcadas na
+            // caixa "IA" (legado) são devolvidas para a Padrão ao receber mensagem.
+            if (_folderIdContato) {
+              const { data: _fIa } = await supabase
+                .from('meta_inbox_folders')
+                .select('id, nome')
+                .eq('id', _folderIdContato)
+                .maybeSingle();
+              if (String((_fIa as any)?.nome || '').trim().toUpperCase() === 'IA') {
+                await supabase.from('meta_whatsapp_contatos')
+                  .update({ folder_id: null })
+                  .eq('id', contatoIdFinal);
+                _folderIdContato = null;
+                console.log('[MetaWebhook] conversa movida da caixa IA para Padrão', { contatoIdFinal });
+              }
+            }
           }
+
           if (!isEcho && contatoIdFinal) {
             try {
               // Todas as etiquetas "Atendente:%" — independente de quem criou a etiqueta.
