@@ -2052,6 +2052,8 @@ export default function InboxMeta() {
         onChanged={fetchFolders}
       />
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
+      <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} />
+
       <MetaFolderConfigDialog
         open={!!configFolder}
         onOpenChange={(v) => { if (!v) setConfigFolder(null); }}
