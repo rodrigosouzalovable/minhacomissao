@@ -5,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
-  avisarEmergencia, enviarTexto, resolverCpfPorTelefone, calcularProposta, chamarIA, extrairJson,
+  avisarEmergencia, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
 } from '../_shared/iago.ts';
 
 const hojeSP = () => agoraSP().toISOString().slice(0, 10);
