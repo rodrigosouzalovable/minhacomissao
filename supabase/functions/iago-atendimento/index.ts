@@ -264,6 +264,9 @@ Deno.serve(async (req) => {
 
     const agoraIso = new Date().toISOString();
     const escalar = !!resultado?.escalar;
+    // Proposta considerada enviada apenas quando valores reais foram para o cliente.
+    const propostaEnviada = !!estado.contexto?.proposta_enviada
+      || (!!proposta && mensagens.some((m) => /r\$\s*\d/i.test(String(m))));
     const followupEm = !escalar && cfg.followup_ativo && !estado.followup_feito && mensagens.length
       ? new Date(Date.now() + Math.max(1, Number(cfg.followup_horas ?? 2)) * 3600 * 1000).toISOString()
       : null;
@@ -283,7 +286,9 @@ Deno.serve(async (req) => {
         msgs_ia: [...idsIA, ...novosIds].slice(-30),
         ultimo_envio_ia: new Date(Date.now() + 2000).toISOString(),
         ultimo_motivo: resultado?.motivo || null,
+        proposta_enviada: propostaEnviada,
       },
+
     }).eq('id', estado.id);
 
     if (escalar) {
