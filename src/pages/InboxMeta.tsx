@@ -28,6 +28,7 @@ import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/me
 import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
 import { ReabrirComTemplateDialog } from '@/components/inbox/meta/ReabrirComTemplateDialog';
 import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
+import { AvisosIagoBell } from '@/components/inbox/meta/AvisosIagoBell';
 import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
 import { MetaFoldersDialog, type MetaInboxFolder } from '@/components/inbox/meta/MetaFoldersDialog';
 import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcessoDialog';
