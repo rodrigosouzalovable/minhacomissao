@@ -298,7 +298,7 @@ Deno.serve(async (req) => {
 
 
 
-    const mensagens: string[] = Array.isArray(resultado?.mensagens)
+    let mensagens: string[] = Array.isArray(resultado?.mensagens)
       ? resultado.mensagens
           .filter((m: any) => {
             const candidata = normalizarTexto(m);
@@ -313,6 +313,73 @@ Deno.serve(async (req) => {
           .slice(0, 3)
       : [];
 
+    // ===== Escolha da forma de pagamento => confirmar a DATA antes de chamar humano =====
+    let escalar = !!resultado?.escalar;
+    let motivo = String(resultado?.motivo || '');
+    let etapaNova = escalar ? 'aguardando_humano' : (proposta ? 'proposta' : 'conversando');
+    let dataAcordada: string | null = ctxAnterior.data_pagamento || null;
+    let reperguntouData = !!ctxAnterior.reperguntou_data;
+
+    const escolhaIA = String((resultado as any)?.escolha || '').trim();
+    const escolha = escolhaIA || detectarEscolha(textoAtual) || escolhaAnterior;
+
+    const hojeIA = String((resultado as any)?.pagamento_hoje || '').toLowerCase();
+    let pagamentoHoje: 'sim' | 'nao' | 'indefinido' =
+      hojeIA === 'sim' || hojeIA === 'nao' ? (hojeIA as 'sim' | 'nao') : 'indefinido';
+    if (pagamentoHoje === 'indefinido' && (etapaAnterior === 'escolha_feita' || escolhaIA || escolhaAnterior)) {
+      pagamentoHoje = respostaPagamentoHoje(textoAtual);
+    }
+
+    let fallbackMsg = '';
+    if (escolha) {
+      const dataBruta = String((resultado as any)?.data_pagamento || '').trim();
+      const dataInfo = classificarDataPagamento(dataBruta || textoAtual);
+      const dataResolvida = dataInfo.classe === 'indefinido' ? null : dataInfo;
+
+      if (dataResolvida?.classe === 'hoje' || (pagamentoHoje === 'sim' && !dataResolvida)) {
+        escalar = true;
+        dataAcordada = 'hoje';
+        motivo = `cliente escolheu ${escolha} e vai pagar hoje`;
+      } else if (dataResolvida?.classe === 'dentro_do_mes') {
+        escalar = true;
+        dataAcordada = dataResolvida.label;
+        motivo = `cliente escolheu ${escolha} e vai pagar em ${dataResolvida.label}`;
+      } else if (dataResolvida?.classe === 'fora_do_mes') {
+        escalar = true;
+        dataAcordada = dataResolvida.label;
+        motivo = `cliente escolheu ${escolha}, mas informou data FORA do mês atual (${dataResolvida.label})`;
+      } else if (pagamentoHoje === 'nao' || etapaAnterior === 'aguardando_data') {
+        if (etapaAnterior === 'aguardando_data' && reperguntouData) {
+          escalar = true;
+          motivo = `cliente escolheu ${escolha} mas não definiu a data do pagamento`;
+        } else {
+          escalar = false;
+          etapaNova = 'aguardando_data';
+          reperguntouData = etapaAnterior === 'aguardando_data';
+          fallbackMsg = 'Sem problema! Que dia você consegue realizar o pagamento?';
+        }
+      } else if (etapaAnterior !== 'escolha_feita') {
+        escalar = false;
+        etapaNova = 'escolha_feita';
+        const pn = primeiroNome(nomeCliente);
+        fallbackMsg = `Perfeito${pn ? `, ${pn}` : ''}! Escolha anotada. Você consegue realizar o pagamento hoje?`;
+      } else {
+        escalar = false;
+        etapaNova = 'escolha_feita';
+      }
+    }
+    if (escalar) etapaNova = 'aguardando_humano';
+
+    // Não deixa a IA prometer transferência quando ainda falta confirmar a data.
+    if (!escalar && fallbackMsg) {
+      const transferencia = /(especialista|colega|transferir|transfiro|outro atendente|vou passar)/i;
+      mensagens = mensagens.filter((m) => !transferencia.test(m));
+      const perguntou = etapaNova === 'aguardando_data' ? /(que dia|qual dia|quando)/i : /hoje/i;
+      if (!mensagens.some((m) => perguntou.test(m))) {
+        mensagens = [...mensagens.slice(0, 1), fallbackMsg];
+      }
+    }
+
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
     const novosIds: string[] = [];
     for (let i = 0; i < mensagens.length; i++) {
@@ -322,7 +389,6 @@ Deno.serve(async (req) => {
     }
 
     const agoraIso = new Date().toISOString();
-    const escalar = !!resultado?.escalar;
     // Proposta considerada enviada apenas quando valores reais foram para o cliente.
     const propostaEnviada = !!estado.contexto?.proposta_enviada
       || (!!proposta && mensagens.some((m) => /r\$\s*\d/i.test(String(m))));
@@ -332,7 +398,7 @@ Deno.serve(async (req) => {
 
     await supabase.from('iago_conversa_estado').update({
       cpf: cpf || null,
-      etapa: escalar ? 'aguardando_humano' : (proposta ? 'proposta' : 'conversando'),
+      etapa: etapaNova,
       aguardando_humano: escalar,
       msgs_dia: dia,
       msgs_hoje: msgsHoje + mensagens.length,
@@ -344,8 +410,11 @@ Deno.serve(async (req) => {
         ...(estado.contexto || {}),
         msgs_ia: [...idsIA, ...novosIds].slice(-30),
         ultimo_envio_ia: new Date(Date.now() + 2000).toISOString(),
-        ultimo_motivo: resultado?.motivo || null,
+        ultimo_motivo: motivo || null,
         proposta_enviada: propostaEnviada,
+        opcao_escolhida: escolha || null,
+        data_pagamento: dataAcordada,
+        reperguntou_data: reperguntouData,
       },
 
     }).eq('id', estado.id);
@@ -356,10 +425,13 @@ Deno.serve(async (req) => {
         `Cliente: ${nomeCliente || '(sem nome)'}\n` +
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         (cpf ? `CPF: ${cpfFormatado(cpf)}\n` : '') +
-        `Motivo: ${resultado?.motivo || 'dúvida fora do que foi ensinado'}\n` +
+        (escolha ? `Opção escolhida: ${escolha}\n` : '') +
+        (dataAcordada ? `Pagamento: ${dataAcordada}\n` : '') +
+        `Motivo: ${motivo || 'dúvida fora do que foi ensinado'}\n` +
          `Última mensagem do cliente: "${textoAtual.slice(0, 250)}"\n\n` +
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
     }
+
 
     await finalizarEntrada();
     console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, motivo: resultado?.motivo });
