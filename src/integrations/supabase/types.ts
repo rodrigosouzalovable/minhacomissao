@@ -7441,7 +7441,7 @@ export type Database = {
         }[]
       }
       atribuir_atendente_rodizio: {
-        Args: { p_contato_id: string; p_somente_ia?: boolean }
+        Args: { p_contato_id: string }
         Returns: string
       }
       buscar_devedores_por_documento: {
