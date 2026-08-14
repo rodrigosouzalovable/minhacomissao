@@ -6,6 +6,7 @@ import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
   avisarEmergencia, etiquetarAguardandoHumano, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
+  classificarDataPagamento, detectarEscolha, respostaPagamentoHoje,
 } from '../_shared/iago.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
@@ -285,14 +286,20 @@ Deno.serve(async (req) => {
     }
 
     // ===== Redação da resposta =====
+    const ctxAnterior = (estado.contexto || {}) as any;
+    const escolhaAnterior = String(ctxAnterior.opcao_escolhida || '');
+    const etapaAnterior = String(estado.etapa || 'inicio');
+
     const resultado = await gerarResposta({
       cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
+      etapaNegociacao: etapaAnterior, escolhaAnterior,
     });
 
 
-    const mensagens: string[] = Array.isArray(resultado?.mensagens)
+
+    let mensagens: string[] = Array.isArray(resultado?.mensagens)
       ? resultado.mensagens
           .filter((m: any) => {
             const candidata = normalizarTexto(m);
@@ -307,6 +314,73 @@ Deno.serve(async (req) => {
           .slice(0, 3)
       : [];
 
+    // ===== Escolha da forma de pagamento => confirmar a DATA antes de chamar humano =====
+    let escalar = !!resultado?.escalar;
+    let motivo = String(resultado?.motivo || '');
+    let etapaNova = escalar ? 'aguardando_humano' : (proposta ? 'proposta' : 'conversando');
+    let dataAcordada: string | null = ctxAnterior.data_pagamento || null;
+    let reperguntouData = !!ctxAnterior.reperguntou_data;
+
+    const escolhaIA = String((resultado as any)?.escolha || '').trim();
+    const escolha = escolhaIA || detectarEscolha(textoAtual) || escolhaAnterior;
+
+    const hojeIA = String((resultado as any)?.pagamento_hoje || '').toLowerCase();
+    let pagamentoHoje: 'sim' | 'nao' | 'indefinido' =
+      hojeIA === 'sim' || hojeIA === 'nao' ? (hojeIA as 'sim' | 'nao') : 'indefinido';
+    if (pagamentoHoje === 'indefinido' && (etapaAnterior === 'escolha_feita' || escolhaIA || escolhaAnterior)) {
+      pagamentoHoje = respostaPagamentoHoje(textoAtual);
+    }
+
+    let fallbackMsg = '';
+    if (escolha) {
+      const dataBruta = String((resultado as any)?.data_pagamento || '').trim();
+      const dataInfo = classificarDataPagamento(dataBruta || textoAtual);
+      const dataResolvida = dataInfo.classe === 'indefinido' ? null : dataInfo;
+
+      if (dataResolvida?.classe === 'hoje' || (pagamentoHoje === 'sim' && !dataResolvida)) {
+        escalar = true;
+        dataAcordada = 'hoje';
+        motivo = `cliente escolheu ${escolha} e vai pagar hoje`;
+      } else if (dataResolvida?.classe === 'dentro_do_mes') {
+        escalar = true;
+        dataAcordada = dataResolvida.label;
+        motivo = `cliente escolheu ${escolha} e vai pagar em ${dataResolvida.label}`;
+      } else if (dataResolvida?.classe === 'fora_do_mes') {
+        escalar = true;
+        dataAcordada = dataResolvida.label;
+        motivo = `cliente escolheu ${escolha}, mas informou data FORA do mês atual (${dataResolvida.label})`;
+      } else if (pagamentoHoje === 'nao' || etapaAnterior === 'aguardando_data') {
+        if (etapaAnterior === 'aguardando_data' && reperguntouData) {
+          escalar = true;
+          motivo = `cliente escolheu ${escolha} mas não definiu a data do pagamento`;
+        } else {
+          escalar = false;
+          etapaNova = 'aguardando_data';
+          reperguntouData = etapaAnterior === 'aguardando_data';
+          fallbackMsg = 'Sem problema! Que dia você consegue realizar o pagamento?';
+        }
+      } else if (etapaAnterior !== 'escolha_feita') {
+        escalar = false;
+        etapaNova = 'escolha_feita';
+        const pn = primeiroNome(nomeCliente);
+        fallbackMsg = `Perfeito${pn ? `, ${pn}` : ''}! Escolha anotada. Você consegue realizar o pagamento hoje?`;
+      } else {
+        escalar = false;
+        etapaNova = 'escolha_feita';
+      }
+    }
+    if (escalar) etapaNova = 'aguardando_humano';
+
+    // Não deixa a IA prometer transferência quando ainda falta confirmar a data.
+    if (!escalar && fallbackMsg) {
+      const transferencia = /(especialista|colega|transferir|transfiro|outro atendente|vou passar)/i;
+      mensagens = mensagens.filter((m) => !transferencia.test(m));
+      const perguntou = etapaNova === 'aguardando_data' ? /(que dia|qual dia|quando)/i : /hoje/i;
+      if (!mensagens.some((m) => perguntou.test(m))) {
+        mensagens = [...mensagens.slice(0, 1), fallbackMsg];
+      }
+    }
+
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
     const novosIds: string[] = [];
     for (let i = 0; i < mensagens.length; i++) {
@@ -316,7 +390,6 @@ Deno.serve(async (req) => {
     }
 
     const agoraIso = new Date().toISOString();
-    const escalar = !!resultado?.escalar;
     // Proposta considerada enviada apenas quando valores reais foram para o cliente.
     const propostaEnviada = !!estado.contexto?.proposta_enviada
       || (!!proposta && mensagens.some((m) => /r\$\s*\d/i.test(String(m))));
@@ -326,7 +399,7 @@ Deno.serve(async (req) => {
 
     await supabase.from('iago_conversa_estado').update({
       cpf: cpf || null,
-      etapa: escalar ? 'aguardando_humano' : (proposta ? 'proposta' : 'conversando'),
+      etapa: etapaNova,
       aguardando_humano: escalar,
       msgs_dia: dia,
       msgs_hoje: msgsHoje + mensagens.length,
@@ -338,8 +411,11 @@ Deno.serve(async (req) => {
         ...(estado.contexto || {}),
         msgs_ia: [...idsIA, ...novosIds].slice(-30),
         ultimo_envio_ia: new Date(Date.now() + 2000).toISOString(),
-        ultimo_motivo: resultado?.motivo || null,
+        ultimo_motivo: motivo || null,
         proposta_enviada: propostaEnviada,
+        opcao_escolhida: escolha || null,
+        data_pagamento: dataAcordada,
+        reperguntou_data: reperguntouData,
       },
 
     }).eq('id', estado.id);
@@ -350,14 +426,17 @@ Deno.serve(async (req) => {
         `Cliente: ${nomeCliente || '(sem nome)'}\n` +
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         (cpf ? `CPF: ${cpfFormatado(cpf)}\n` : '') +
-        `Motivo: ${resultado?.motivo || 'dúvida fora do que foi ensinado'}\n` +
+        (escolha ? `Opção escolhida: ${escolha}\n` : '') +
+        (dataAcordada ? `Pagamento: ${dataAcordada}\n` : '') +
+        `Motivo: ${motivo || 'dúvida fora do que foi ensinado'}\n` +
          `Última mensagem do cliente: "${textoAtual.slice(0, 250)}"\n\n` +
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
     }
 
+
     await finalizarEntrada();
-    console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, motivo: resultado?.motivo });
-    return json({ success: true, enviadas: mensagens.length, escalar, motivo: resultado?.motivo || null });
+    console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo });
+    return json({ success: true, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo: motivo || null });
   } catch (e: any) {
     console.error('[IAGO] erro', e?.message || e);
     return json({ success: false, error: String(e?.message || e) }, 500);
@@ -377,10 +456,15 @@ async function gerarResposta(args: {
   cpfIdentificado?: boolean;
   cpfPorTelefone?: boolean;
   multiplosCandidatos?: boolean;
-}): Promise<{ mensagens: string[]; escalar: boolean; motivo: string }> {
+  etapaNegociacao?: string;
+  escolhaAnterior?: string;
+}): Promise<{
+  mensagens: string[]; escalar: boolean; motivo: string;
+  escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
+}> {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
-    cpfIdentificado, cpfPorTelefone, multiplosCandidatos,
+    cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
   } = args;
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
@@ -452,8 +536,19 @@ async function gerarResposta(args: {
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
       : '',
 
-    'Você NUNCA fecha ou registra acordo. Quando o cliente aceitar uma opção, confirme a escolha e escale para um humano finalizar.',
-    'Escale para humano (escalar=true) quando: o cliente aceitar uma proposta; pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
+    'Você NUNCA fecha ou registra acordo.',
+    'FLUXO OBRIGATÓRIO APÓS A ESCOLHA:',
+    '1) O cliente escolheu à vista ou um parcelamento: confirme a escolha em uma frase curta e pergunte "Você consegue realizar o pagamento hoje?". NÃO fale de especialista/transferência nesta etapa (escalar=false).',
+    '2) Se o cliente disser que NÃO consegue hoje: pergunte "Que dia você consegue realizar o pagamento?" (escalar=false).',
+    '3) Se o cliente informar um dia AINDA DENTRO do mês atual (ou "hoje"): confirme a data e escale (escalar=true).',
+    '4) Se o cliente informar "mês que vem" ou qualquer data fora do mês atual: NÃO prometa o prazo; diga apenas que um colega vai continuar o atendimento e escale (escalar=true).',
+    'Nunca repita a pergunta "consegue pagar hoje?" se ela já está no HISTÓRICO RECENTE — nesse caso pergunte a data.',
+    etapaNegociacao === 'escolha_feita'
+      ? `ETAPA ATUAL: você já perguntou se ele consegue pagar hoje${escolhaAnterior ? ` (opção escolhida: ${escolhaAnterior})` : ''}. Interprete a resposta dele agora.`
+      : etapaNegociacao === 'aguardando_data'
+        ? `ETAPA ATUAL: você já perguntou que dia ele consegue pagar${escolhaAnterior ? ` (opção escolhida: ${escolhaAnterior})` : ''}. Interprete a data informada.`
+        : '',
+    'Escale para humano (escalar=true) quando: a data do pagamento estiver definida (ou fora do mês); o cliente pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
     '',
     instrucoes ? `INSTRUÇÕES DO ADMINISTRADOR:\n${instrucoes}` : '',
     qa ? `PERGUNTAS E RESPOSTAS PRONTAS:\n${qa}` : '',
@@ -462,7 +557,10 @@ async function gerarResposta(args: {
     cfg.instrucoes_gerais ? `OBSERVAÇÕES GERAIS:\n${cfg.instrucoes_gerais}` : '',
     '',
     'Responda SOMENTE com JSON válido no formato:',
-    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":""}',
+    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":""}',
+    'escolha = forma de pagamento escolhida pelo cliente ("à vista" ou "12x"), vazio se ele ainda não escolheu.',
+    'pagamento_hoje = "sim", "nao" ou "" conforme a resposta dele sobre pagar hoje.',
+    'data_pagamento = o dia informado pelo cliente exatamente como ele disse ("dia 20", "20/08", "mês que vem"), vazio se não informou.',
     'mensagens = de 1 a 2 mensagens curtas a enviar agora (vazio só se escalar=true e nada deva ser dito).',
     'Quando escalar=true, envie uma mensagem curta avisando que um colega vai continuar o atendimento e preencha "motivo" em português.',
   ].filter(Boolean).join('\n');
@@ -489,6 +587,9 @@ async function gerarResposta(args: {
         mensagens: Array.isArray(parsed.mensagens) ? parsed.mensagens.map((m: any) => String(m)) : [],
         escalar: !!parsed.escalar,
         motivo: String(parsed.motivo || ''),
+        escolha: String(parsed.escolha || ''),
+        pagamento_hoje: String(parsed.pagamento_hoje || ''),
+        data_pagamento: String(parsed.data_pagamento || ''),
       };
     }
     const txt = String(out || '').trim();

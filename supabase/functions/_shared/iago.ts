@@ -394,3 +394,119 @@ export function extrairJson(txt: string): any {
   if (ini < 0 || fim < ini) return null;
   try { return JSON.parse(cru.slice(ini, fim + 1)); } catch { return null; }
 }
+
+
+// ===================== Data do pagamento =====================
+
+export type ClasseData = 'hoje' | 'dentro_do_mes' | 'fora_do_mes' | 'indefinido';
+
+export interface DataPagamento {
+  classe: ClasseData;
+  dataIso: string | null;
+  label: string;
+}
+
+const MESES = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+
+const norm = (v: unknown) =>
+  String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const fmtData = (d: Date) =>
+  `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+const isoLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * Interpreta a data que o cliente informou ("hoje", "dia 20", "20/08",
+ * "semana que vem", "mês que vem") em relação ao horário de São Paulo e
+ * classifica em hoje / dentro do mês atual / fora do mês atual.
+ */
+export function classificarDataPagamento(texto: string): DataPagamento {
+  const t = norm(texto).replace(/\s+/g, ' ').trim();
+  const indef: DataPagamento = { classe: 'indefinido', dataIso: null, label: '' };
+  if (!t) return indef;
+
+  const hoje = agoraSP();
+  hoje.setHours(0, 0, 0, 0);
+
+  const classificar = (d: Date): DataPagamento => {
+    d.setHours(0, 0, 0, 0);
+    const mesmoDia = d.getTime() === hoje.getTime();
+    const mesmoMes = d.getFullYear() === hoje.getFullYear() && d.getMonth() === hoje.getMonth();
+    return {
+      classe: mesmoDia ? 'hoje' : mesmoMes ? 'dentro_do_mes' : 'fora_do_mes',
+      dataIso: isoLocal(d),
+      label: mesmoDia ? 'hoje' : fmtData(d),
+    };
+  };
+
+  if (/(mes que vem|proximo mes|mes seguinte|outro mes|mes vem|virada do mes|inicio do mes que vem)/.test(t)) {
+    return { classe: 'fora_do_mes', dataIso: null, label: 'mês que vem' };
+  }
+  if (/\bhoje\b|\bagora\b|\bja\b(?! nao)/.test(t)) return classificar(new Date(hoje));
+  if (/\bamanha\b/.test(t)) {
+    const d = new Date(hoje); d.setDate(d.getDate() + 1); return classificar(d);
+  }
+  if (/(depois de amanha)/.test(t)) {
+    const d = new Date(hoje); d.setDate(d.getDate() + 2); return classificar(d);
+  }
+  if (/(semana que vem|proxima semana)/.test(t)) {
+    const d = new Date(hoje); d.setDate(d.getDate() + 7); return classificar(d);
+  }
+
+  // 20/08, 20/08/2026, 20-08
+  const md = t.match(/\b(\d{1,2})\s*[\/\-.]\s*(\d{1,2})(?:\s*[\/\-.]\s*(\d{2,4}))?\b/);
+  if (md) {
+    const dia = Number(md[1]); const mes = Number(md[2]) - 1;
+    let ano = md[3] ? Number(md[3]) : hoje.getFullYear();
+    if (ano < 100) ano += 2000;
+    if (dia >= 1 && dia <= 31 && mes >= 0 && mes <= 11) return classificar(new Date(ano, mes, dia));
+  }
+
+  // 20 de agosto / agosto dia 20
+  const mesNome = MESES.findIndex((m) => new RegExp(`\\b${m}\\b`).test(t));
+  if (mesNome >= 0) {
+    const dm = t.match(/\b(\d{1,2})\b/);
+    const dia = dm ? Number(dm[1]) : 1;
+    const ano = mesNome < hoje.getMonth() ? hoje.getFullYear() + 1 : hoje.getFullYear();
+    if (dia >= 1 && dia <= 31) return classificar(new Date(ano, mesNome, dia));
+  }
+
+  // "dia 20", "no 20", "20"
+  const dd = t.match(/\bdia\s*(\d{1,2})\b/) || t.match(/^(\d{1,2})$/) || t.match(/\bno\s*(\d{1,2})\b/);
+  if (dd) {
+    const dia = Number(dd[1]);
+    if (dia >= 1 && dia <= 31) {
+      const noMes = new Date(hoje.getFullYear(), hoje.getMonth(), dia);
+      if (noMes.getMonth() === hoje.getMonth() && noMes.getTime() >= hoje.getTime()) return classificar(noMes);
+      const prox = new Date(hoje.getFullYear(), hoje.getMonth() + 1, dia);
+      return classificar(prox);
+    }
+  }
+
+  return indef;
+}
+
+/** Detecta que o cliente escolheu uma forma de pagamento (à vista ou Nx). */
+export function detectarEscolha(texto: string): string {
+  const t = norm(texto).replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  if (/(a vista|avista|pagar tudo|valor total de uma vez|de uma vez)/.test(t)) return 'à vista';
+  const m = t.match(/\b(\d{1,2})\s*(x|vezes|parcelas?|parcelado em)\b/) || t.match(/\b(\d{1,2})\s*parcelas? de\b/);
+  if (m) {
+    const n = Number(m[1]);
+    if (n >= 2 && n <= 24) return `${n}x`;
+  }
+  if (/(quero|prefiro|fico com|pode ser) o? ?parcelad/.test(t)) return 'parcelado';
+  return '';
+}
+
+/** Resposta do cliente à pergunta "consegue pagar hoje?". */
+export function respostaPagamentoHoje(texto: string): 'sim' | 'nao' | 'indefinido' {
+  const t = norm(texto).replace(/\s+/g, ' ').trim();
+  if (!t) return 'indefinido';
+  if (/\b(nao|nao da|nao consigo|nao tenho|impossivel|so depois|somente depois|infelizmente nao)\b/.test(t)) return 'nao';
+  if (/\b(sim|consigo|hoje|claro|pode ser|vou pagar|posso|ok|beleza|isso)\b/.test(t)) return 'sim';
+  return 'indefinido';
+}
