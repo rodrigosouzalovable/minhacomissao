@@ -1091,18 +1091,32 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
+              title="Seleciona apenas instâncias conectadas com qualidade GREEN ou sem qualidade conhecida. Yellow/Red devem ser escolhidas manualmente."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
-                const visIds = instanciasVisiveis.map((i) => i.id);
-                const todasMarcadas = visIds.every((id) => instanciaIds.includes(id));
+                const boasInstancias = instanciasVisiveis.filter((i) => {
+                  const status = (i.saude_status || "").toUpperCase();
+                  const qual = (i.saude_quality || "").toUpperCase();
+                  return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED";
+                });
+                const boaIds = boasInstancias.map((i) => i.id);
+                const todasMarcadas = boaIds.length > 0 && boaIds.every((id) => instanciaIds.includes(id));
                 if (todasMarcadas) {
-                  setInstanciaIds((prev) => prev.filter((id) => !visIds.includes(id)));
+                  setInstanciaIds((prev) => prev.filter((id) => !boaIds.includes(id)));
                 } else {
-                  setInstanciaIds((prev) => Array.from(new Set([...prev, ...visIds])));
+                  setInstanciaIds((prev) => Array.from(new Set([...prev, ...boaIds])));
                 }
               }}
             >
-              {instanciasVisiveis.length > 0 && instanciasVisiveis.every((i) => instanciaIds.includes(i.id)) ? "Limpar seleção" : "Selecionar todas"}
+              {instanciasVisiveis.length > 0 && instanciasVisiveis
+                .filter((i) => {
+                  const status = (i.saude_status || "").toUpperCase();
+                  const qual = (i.saude_quality || "").toUpperCase();
+                  return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED";
+                })
+                .every((i) => instanciaIds.includes(i.id))
+                ? "Limpar seleção"
+                : "Selecionar todas"}
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
               {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
