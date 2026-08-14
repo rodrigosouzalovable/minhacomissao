@@ -2501,6 +2501,36 @@ export type Database = {
         }
         Relationships: []
       }
+      iago_plantao_transferencia: {
+        Row: {
+          assumido_em: string
+          contato_id: string
+          created_at: string
+          devolvido_em: string | null
+          etiqueta_original_id: string
+          folder_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assumido_em?: string
+          contato_id: string
+          created_at?: string
+          devolvido_em?: string | null
+          etiqueta_original_id: string
+          folder_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assumido_em?: string
+          contato_id?: string
+          created_at?: string
+          devolvido_em?: string | null
+          etiqueta_original_id?: string
+          folder_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       importacao_jobs: {
         Row: {
           atualizado_em: string
