@@ -19,3 +19,4 @@ IAGO RIBEIRO DE SOUZA é um usuário real do sistema que atende como humano no I
 Tabelas: `iago_config`, `iago_conhecimento` (instrucao | qa | proibido | aprendizado), `iago_conversa_estado`.
 Functions: `iago-atendimento` (chamada pelo `meta-whatsapp-webhook`), `iago-followup-tick` (cron */15 das 11-22 UTC), `iago-aprender` (cron diário 06:30 UTC, resume conversas que viraram acordo).
 UI: Usuários > linha do IAGO > "Configurar IAGO" (`src/components/admin/IagoConfigDialog.tsx`), abas Personalidade / Ensinar / Perguntas / Nunca fazer / Aprendizado / Follow-up / Testar.
+- Número errado / identidade negada ("não sou o X", "número errado", "é engano", "não conheço"): `ehNumeroErrado` detecta antes de qualquer consulta ou chamada de IA. O IAGO envia só uma mensagem educada de encerramento (sem CPF, sem credor, sem valores), grava `etapa='numero_errado'`, cancela follow-up, marca `aguardando_humano=true` e aplica a etiqueta "Aguardando Humano". Sem aviso no WhatsApp.
