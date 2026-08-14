@@ -1771,6 +1771,16 @@ export default function InboxMeta() {
                       })()}
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={() => setModeloMsgOpen(true)}
+                    title="Gerar mensagem de negociação (Modelo Mensagem)"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Modelo
+                  </Button>
+
                   {janelaInfo.status === 'aberta' ? (
                     <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
                       <Clock className="h-3 w-3" /> Aberta · fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
