@@ -28,6 +28,7 @@ import { MetaMensagensRapidasDialog, MetaMsgRapida } from '@/components/inbox/me
 import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
 import { ReabrirComTemplateDialog } from '@/components/inbox/meta/ReabrirComTemplateDialog';
 import { NotificacoesCpfBell } from '@/components/inbox/meta/NotificacoesCpfBell';
+import { AvisosIagoBell } from '@/components/inbox/meta/AvisosIagoBell';
 import { ConfirmarEnvioArquivoDialog } from '@/components/inbox/meta/ConfirmarEnvioArquivoDialog';
 import { MetaFoldersDialog, type MetaInboxFolder } from '@/components/inbox/meta/MetaFoldersDialog';
 import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcessoDialog';
@@ -1290,6 +1291,7 @@ export default function InboxMeta() {
               <h2 className="text-sm font-semibold flex-1">Inbox API Oficial Meta</h2>
               <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">Oficial</Badge>
               <NotificacoesCpfBell />
+              <AvisosIagoBell />
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={toggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo escuro'}>
                 {tema === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>

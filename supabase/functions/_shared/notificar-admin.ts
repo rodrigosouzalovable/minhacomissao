@@ -37,15 +37,44 @@ const isRetryableInstanceError = (text: string, status: number) => {
   );
 };
 
+/**
+ * Avalia a resposta do provedor de forma estruturada.
+ * Antes bastava a palavra "error" no corpo para marcar falha — o que dava
+ * falso positivo em respostas de sucesso que trazem blocos de metadados
+ * (ex.: new_chat_message_capping / reachout_timelock).
+ */
 const hasProviderError = (text: string) => {
-  const normalized = text.toLowerCase();
-  return (
-    normalized.includes('"error":true') ||
-    normalized.includes('"success":false') ||
-    normalized.includes("falha") ||
-    normalized.includes("error")
-  );
+  const bruto = String(text || "").trim();
+  if (!bruto) return false;
+
+  let data: any = null;
+  try {
+    data = JSON.parse(bruto);
+  } catch (_) {
+    // Não é JSON: só considera erro se for uma mensagem de erro explícita
+    const n = bruto.toLowerCase();
+    return n.includes("error") || n.includes("falha") || n.includes("not allowed");
+  }
+
+  if (!data || typeof data !== "object") return false;
+
+  // Indicadores explícitos de sucesso (id da mensagem devolvido pelo provedor)
+  const idMsg =
+    data.id ?? data.messageid ?? data.messageId ?? data.key?.id ?? data.message?.id ?? data.data?.id;
+  const explicitOk = data.success === true || data.status === "success" || data.sent === true;
+  const explicitErr =
+    data.error === true ||
+    data.success === false ||
+    (typeof data.error === "string" && data.error.trim() !== "") ||
+    (data.error && typeof data.error === "object") ||
+    (typeof data.code === "number" && data.code >= 400) ||
+    (typeof data.message === "string" && /not allowed|unauthorized|forbidden|invalid|fail/i.test(data.message));
+
+  if (explicitErr) return true;
+  if (explicitOk || idMsg) return false;
+  return false;
 };
+
 
 const uazUrl = (base: string, path: string, query?: Record<string, string>) => {
   const url = new URL(`${base.replace(/\/+$/, "")}${path}`);
@@ -120,6 +149,45 @@ const checkInstanceConnected = async (inst: any) => {
 
   return false;
 };
+
+/**
+ * Fallback: envia o aviso pela API Oficial da Meta (send-whatsapp-meta-text).
+ * Só entrega se existir janela de 24h aberta com o número do admin — usado
+ * apenas quando nenhuma instância comum conseguiu entregar.
+ */
+const tentarViaMetaOficial = async (
+  supabase: SupabaseClient,
+  numeroFinal: string,
+  texto: string,
+): Promise<{ ok: boolean; erro?: string }> => {
+  try {
+    const sufixo = numeroFinal.slice(-8);
+    const { data: contatos } = await supabase
+      .from("meta_whatsapp_contatos")
+      .select("instancia_id, telefone, ultima_msg_entrada_em")
+      .ilike("telefone", `%${sufixo}`)
+      .not("ultima_msg_entrada_em", "is", null)
+      .order("ultima_msg_entrada_em", { ascending: false })
+      .limit(5);
+
+    const limite = Date.now() - 24 * 60 * 60 * 1000;
+    const alvo = (contatos || []).find(
+      (c: any) => new Date(c.ultima_msg_entrada_em).getTime() > limite,
+    );
+    if (!alvo) return { ok: false, erro: "sem_janela_24h" };
+
+    const { data, error } = await supabase.functions.invoke("send-whatsapp-meta-text", {
+      body: { instancia_id: (alvo as any).instancia_id, telefone: (alvo as any).telefone, texto, origem: "sistema" },
+    });
+    if (error) return { ok: false, erro: String(error.message).slice(0, 300) };
+    if (!(data as any)?.success) return { ok: false, erro: String((data as any)?.error || "falha").slice(0, 300) };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, erro: String(e).slice(0, 300) };
+  }
+};
+
+
 
 export async function notificarAdmin(
   supabase: SupabaseClient,
@@ -240,7 +308,7 @@ export async function notificarAdmin(
               return { ok: true };
             }
 
-            ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.substring(0, 200);
+            ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.substring(0, 1000);
             errosTentativas.push(ultimoErro);
             if (res.status === 405) continue;
             if (!isRetryableInstanceError(respText, res.status)) break;
@@ -248,10 +316,24 @@ export async function notificarAdmin(
           if (timer) clearTimeout(timer);
         } catch (e) {
           if (timer) clearTimeout(timer);
-          ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.substring(0, 200);
+          ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.substring(0, 1000);
           errosTentativas.push(ultimoErro);
         }
       }
+
+      // Último recurso: tenta pela API Oficial da Meta (só entrega se houver janela de 24h aberta)
+      const viaMeta = await tentarViaMetaOficial(supabase, numeroFinal, mensagemFinal);
+      if (viaMeta.ok) {
+        await supabase.from("admin_notificacoes_log").insert({
+          tipo: params.tipo,
+          chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numeroFinal}` : null,
+          mensagem: `[${numeroFinal}] ${params.mensagem}`,
+          status: "enviado",
+          erro_detalhe: `fallback_meta_oficial; uazapi: ${errosTentativas.slice(-3).join(" | ")}`.slice(0, 4000),
+        });
+        return { ok: true };
+      }
+      if (viaMeta.erro) errosTentativas.push(`meta_oficial: ${viaMeta.erro}`);
 
       const erroFinal = errosTentativas.slice(-10).join(" | ") || ultimoErro;
       await supabase.from("admin_notificacoes_log").insert({
@@ -272,7 +354,7 @@ export async function notificarAdmin(
     if (resultados.some((r) => r.ok)) return { success: true };
     return {
       success: false,
-      error: resultados.map((r) => r.erro).filter(Boolean).join(" || ").substring(0, 400),
+      error: resultados.map((r) => r.erro).filter(Boolean).join(" || ").substring(0, 1000),
       fallback: true,
     };
   } catch (e) {
