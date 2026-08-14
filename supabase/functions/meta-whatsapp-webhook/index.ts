@@ -818,50 +818,7 @@ serve(async (req) => {
                     });
                   }
                 } else if (atendenteRodizioIds.length > 0) {
-                  // ---- Plantão do IAGO: dentro da janela configurada na caixa, ele assume ----
-                  let etiquetaIagoId: string | null = null;
-                  try {
-                    const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
-                    const { data: janela } = await supabase
-                      .from('meta_inbox_folder_iago_janela')
-                      .select('ativo, hora_inicio, hora_fim, fim_semana_24h')
-                      .eq('folder_id', _folderIdContato ?? CAIXA_PADRAO_ID)
-                      .maybeSingle();
-                    if ((janela as any)?.ativo) {
-                      const agoraSP = new Date(Date.now() - 3 * 60 * 60 * 1000);
-                      const minutos = agoraSP.getUTCHours() * 60 + agoraSP.getUTCMinutes();
-                      const dia = agoraSP.getUTCDay(); // 0 dom, 6 sáb
-                      const toMin = (v: any) => {
-                        const [h, m] = String(v || '00:00').split(':');
-                        return (Number(h) || 0) * 60 + (Number(m) || 0);
-                      };
-                      const ini = toMin((janela as any).hora_inicio);
-                      const fim = toMin((janela as any).hora_fim);
-                      const naJanela = ini === fim
-                        ? true
-                        : (ini < fim ? (minutos >= ini && minutos < fim) : (minutos >= ini || minutos < fim));
-                      const fimDeSemana24h = (janela as any).fim_semana_24h !== false && (dia === 0 || dia === 6);
-                      if (naJanela || fimDeSemana24h) {
-                        const { data: iagoCfg } = await supabase
-                          .from('iago_config').select('user_id').limit(1).maybeSingle();
-                        let nomeIago = '';
-                        if ((iagoCfg as any)?.user_id) {
-                          const { data: pi } = await supabase
-                            .from('profiles').select('nome').eq('id', (iagoCfg as any).user_id).maybeSingle();
-                          nomeIago = String((pi as any)?.nome || '').trim().toLowerCase();
-                        }
-                        if (!nomeIago) nomeIago = 'iago';
-                        const cand = atendentesRodizio.find((a: any) => {
-                          const n = String(a.nome || '').replace(/^atendente:\s*/i, '').trim().toLowerCase();
-                          return n === nomeIago || n.startsWith('iago');
-                        });
-                        if (cand) etiquetaIagoId = (cand as any).id;
-                        else console.log('[MetaWebhook] plantão IAGO ativo, mas etiqueta do IAGO não está elegível nesta caixa');
-                      }
-                    }
-                  } catch (e: any) {
-                    console.error('[MetaWebhook] erro no plantão do IAGO', e?.message || e);
-                  }
+
 
                   if (etiquetaIagoId) {
                     const { error: iagoErr } = await supabase
