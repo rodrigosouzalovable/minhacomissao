@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ensureInboxMediaUrl } from '@/lib/inboxMediaUrl';
 import { extrairPix } from '@/lib/pixCode';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ContatoCompartilhadoTelefone {
   numero: string;
@@ -57,6 +58,7 @@ interface Mensagem {
   status_envio?: string | null;
   template_botoes?: TemplateBotao[] | null;
   contatos_payload?: ContatoCompartilhado[] | null;
+  transcricao?: string | null;
 }
 
 interface ChatMessageProps {
@@ -105,6 +107,31 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [showLightbox, setShowLightbox] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<'mim' | 'todos' | null>(null);
+  const [transcricao, setTranscricao] = useState<string | null>(msg.transcricao ?? null);
+  const [transcrevendo, setTranscrevendo] = useState(false);
+  useEffect(() => { setTranscricao(msg.transcricao ?? null); }, [msg.transcricao]);
+
+  const transcreverAudio = async () => {
+    if (transcrevendo) return;
+    setTranscrevendo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-transcrever-audio', {
+        body: { mensagem_id: msg.id },
+      });
+      const texto = String((data as any)?.transcricao || '').trim();
+      if (texto) {
+        setTranscricao(texto);
+      } else {
+        const detalhe = String((data as any)?.error || error?.message || 'Não foi possível transcrever este áudio.');
+        toast({ title: 'Transcrição indisponível', description: detalhe, variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Erro ao transcrever', description: e?.message || 'Tente novamente.', variant: 'destructive' });
+    } finally {
+      setTranscrevendo(false);
+    }
+  };
+
   // Bucket de mídia é privado: reassina URLs antigas/expiradas antes de exibir.
   const [mediaUrl, setMediaUrl] = useState<string | null>(msg.media_url ?? null);
   useEffect(() => {
@@ -204,14 +231,34 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       const src = audioBlobUrl || mediaUrl;
       const mimeType = getMimeFromUrl(mediaUrl);
       return (
-        <WhatsAppAudioPlayer
-          src={src}
-          isSaida={isSaida}
-          messageId={msg.id}
-          mimeType={mimeType}
-        />
+        <div className="space-y-1.5">
+          <WhatsAppAudioPlayer
+            src={src}
+            isSaida={isSaida}
+            messageId={msg.id}
+            mimeType={mimeType}
+          />
+          {transcricao ? (
+            <div className="pt-1 border-t border-border/40">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Transcrição automática</p>
+              <p className="text-xs whitespace-pre-wrap break-words">{transcricao}</p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={transcreverAudio}
+              disabled={transcrevendo}
+              className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] font-medium rounded hover:bg-background/60 transition disabled:opacity-60"
+            >
+              {transcrevendo
+                ? <><Loader2 className="h-3 w-3 animate-spin" /> Transcrevendo…</>
+                : <><FileText className="h-3 w-3" /> Transcrever áudio</>}
+            </button>
+          )}
+        </div>
       );
     }
+
 
     // Botão "Copiar código Pix" quando a mensagem contém um payload Pix Copia e Cola
     const renderPix = () => {

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
+import { etiquetarAguardandoHumano } from '../_shared/iago.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -855,12 +856,62 @@ serve(async (req) => {
             }
           }
 
+          // ===== Transcrição de áudio (somente caixas onde o IAGO atende) =====
+          // O IAGO não entende "[Áudio]"; transcrevemos antes de acioná-lo.
+          let textoParaIA = texto;
+          let audioSemTranscricao = false;
+          if (!isEcho && !msgError && contatoIdFinal && tipo === 'audio' && mediaUrl) {
+            try {
+              const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
+              const folderKey = _folderIdContato ?? CAIXA_PADRAO_ID;
+              const [{ data: janelaIago }, { data: credorPasta }] = await Promise.all([
+                supabase.from('meta_inbox_folder_iago_janela')
+                  .select('ativo').eq('folder_id', folderKey).maybeSingle(),
+                supabase.from('meta_inbox_folder_credores')
+                  .select('folder_id').eq('folder_id', folderKey).maybeSingle(),
+              ]);
+              const pastaComIago = !!(janelaIago as any)?.ativo || !!(credorPasta as any)?.folder_id;
+
+              if (pastaComIago) {
+                const { data: msgSalva } = await supabase
+                  .from('meta_whatsapp_mensagens')
+                  .select('id')
+                  .eq('instancia_id', inst.id)
+                  .eq('wa_message_id', m.id)
+                  .maybeSingle();
+                if ((msgSalva as any)?.id) {
+                  const { data: tr, error: trErr } = await supabase.functions.invoke('meta-transcrever-audio', {
+                    body: { mensagem_id: (msgSalva as any).id },
+                  });
+                  const transcricao = String((tr as any)?.transcricao || '').trim();
+                  if (transcricao) {
+                    textoParaIA = transcricao;
+                    console.log('[MetaWebhook] áudio transcrito', { mensagem_id: (msgSalva as any).id });
+                  } else {
+                    audioSemTranscricao = true;
+                    console.error('[MetaWebhook] falha na transcrição do áudio', trErr?.message || JSON.stringify(tr || {}));
+                  }
+                } else {
+                  audioSemTranscricao = true;
+                }
+              }
+            } catch (e: any) {
+              audioSemTranscricao = true;
+              console.error('[MetaWebhook] exceção na transcrição de áudio', e?.message || e);
+            }
+
+            if (audioSemTranscricao) {
+              // Sem entender o áudio o IAGO não deve responder: humano precisa ouvir.
+              await etiquetarAguardandoHumano(supabase, contatoIdFinal);
+            }
+          }
+
           // ===== Atendimento automático com IA (caixa "IA" + atendente IAGO) =====
-          if (!isEcho && contatoIdFinal && !msgError) {
+          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao) {
             const iaTask = (async () => {
               try {
                 const { data, error } = await supabase.functions.invoke('meta-ia-atendimento', {
-                  body: { contato_id: contatoIdFinal, texto },
+                  body: { contato_id: contatoIdFinal, texto: textoParaIA },
                 });
                 if (error) console.error('[MetaWebhook] IA erro', error.message);
                 else console.log('[MetaWebhook] IA', JSON.stringify(data || {}));
@@ -869,7 +920,7 @@ serve(async (req) => {
               }
               try {
                 const { data, error } = await supabase.functions.invoke('iago-atendimento', {
-                  body: { contato_id: contatoIdFinal, texto, entrada_id: m.id },
+                  body: { contato_id: contatoIdFinal, texto: textoParaIA, entrada_id: m.id },
                 });
                 if (error) console.error('[MetaWebhook] IAGO erro', error.message);
                 else console.log('[MetaWebhook] IAGO', JSON.stringify(data || {}));

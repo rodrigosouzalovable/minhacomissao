@@ -126,15 +126,32 @@ Deno.serve(async (req) => {
     // ===== Histórico da conversa =====
     const { data: msgs } = await supabase
       .from('meta_whatsapp_mensagens')
-      .select('id, wa_message_id, direcao, conteudo, criado_em')
+      .select('id, wa_message_id, direcao, conteudo, criado_em, tipo_conteudo, transcricao')
       .eq('instancia_id', (contato as any).instancia_id)
       .eq('telefone', (contato as any).telefone || '')
       .order('criado_em', { ascending: false })
       .limit(16);
-    const historico = ((msgs || []) as any[]).slice().reverse();
+    // Áudio: usa a transcrição como se o cliente tivesse digitado.
+    const conteudoLegivel = (m: any) => String(m?.transcricao || m?.conteudo || '').trim();
+    const historico = ((msgs || []) as any[]).slice().reverse()
+      .map((m) => ({ ...m, conteudo: conteudoLegivel(m) }));
     const ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
     const textoAtual = String(ultimaEntrada?.conteudo || texto || '');
     const ultimaEntradaId = String(ultimaEntrada?.wa_message_id || entrada_id);
+
+    // Mídia que o IAGO não consegue interpretar (áudio sem transcrição, imagem, documento):
+    // não responde nada em cima disso — o atendente humano precisa ver.
+    const semConteudoUtil = /^\[(áudio|audio|imagem|vídeo|video|documento)\]$/i.test(textoAtual.trim());
+    if (semConteudoUtil) {
+      await etiquetarAguardandoHumano(supabase, contato_id);
+      await supabase.rpc('iago_finish_message', {
+        p_contato_id: contato_id,
+        p_entrada_id: String(entrada_id || ultimaEntradaId),
+      });
+      console.log('[IAGO] mídia sem texto legível — escalado para humano', { contato_id });
+      return json({ success: true, skipped: 'midia_sem_texto' });
+    }
+
     const finalizarEntrada = async () => {
       const ids = Array.from(new Set([String(entrada_id), ultimaEntradaId].filter(Boolean)));
       for (const id of ids) {

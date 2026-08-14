@@ -4632,6 +4632,8 @@ export type Database = {
           tenant_id: string
           timestamp_msg: string
           tipo_conteudo: string
+          transcricao: string | null
+          transcricao_status: string | null
           user_id: string
           wa_message_id: string | null
           wa_message_id_reply: string | null
@@ -4656,6 +4658,8 @@ export type Database = {
           tenant_id?: string
           timestamp_msg?: string
           tipo_conteudo?: string
+          transcricao?: string | null
+          transcricao_status?: string | null
           user_id: string
           wa_message_id?: string | null
           wa_message_id_reply?: string | null
@@ -4680,6 +4684,8 @@ export type Database = {
           tenant_id?: string
           timestamp_msg?: string
           tipo_conteudo?: string
+          transcricao?: string | null
+          transcricao_status?: string | null
           user_id?: string
           wa_message_id?: string | null
           wa_message_id_reply?: string | null
@@ -7884,6 +7890,7 @@ export type Database = {
           template_botoes: Json
           timestamp_msg: string
           tipo_conteudo: string
+          transcricao: string
           wa_message_id: string
           wa_message_id_reply: string
         }[]

@@ -83,6 +83,7 @@ interface MetaMensagem {
   media_url?: string | null; wa_message_id?: string | null; status_envio?: string | null;
   wa_message_id_reply?: string | null; conteudo_citado?: string | null;
   contatos_payload?: any[] | null;
+  transcricao?: string | null;
   template_botoes?: any[] | null;
 }
 
@@ -1939,6 +1940,7 @@ export default function InboxMeta() {
                                   conteudo_citado: m.conteudo_citado,
                                   contatos_payload: (m as any).contatos_payload ?? null,
                                   template_botoes: (m as any).template_botoes ?? null,
+                                  transcricao: (m as any).transcricao ?? null,
                                 } as any}
                                 formatMsgTime={formatMsgTime}
                                 possivelmenteNaoEntregue={naoEntregue}
