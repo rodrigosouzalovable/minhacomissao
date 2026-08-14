@@ -181,7 +181,20 @@ Deno.serve(async (req) => {
     let cpf = estado.cpf || '';
     const docMsg = extrairDoc(textoAtual);
     if (docMsg) cpf = docMsg;
-    if (!cpf) cpf = await resolverCpfPorTelefone(supabase, (contato as any).telefone);
+    let cpfPorTelefone = false;
+    let nomePorTelefone = '';
+    let multiplosCandidatos = false;
+    if (!cpf) {
+      const res = await resolverTelefone(supabase, (contato as any).telefone);
+      if (res.cpf) {
+        cpf = res.cpf;
+        cpfPorTelefone = true;
+        nomePorTelefone = res.nome;
+        multiplosCandidatos = res.candidatos.length > 1;
+        // grava já na primeira interação para não perder a identificação
+        await supabase.from('iago_conversa_estado').update({ cpf }).eq('id', estado.id);
+      }
+    }
 
     let temAcordo = false;
     let proposta = null as Awaited<ReturnType<typeof calcularProposta>>;
@@ -199,7 +212,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    const nomeCliente = proposta?.nomeCliente || (contato as any).nome || '';
+    const nomeCliente = proposta?.nomeCliente || nomePorTelefone || (contato as any).nome || '';
+
 
     // ===== Cliente já tem acordo => humano assume =====
     if (temAcordo) {
