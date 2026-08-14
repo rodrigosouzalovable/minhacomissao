@@ -285,11 +285,17 @@ Deno.serve(async (req) => {
     }
 
     // ===== Redação da resposta =====
+    const ctxAnterior = (estado.contexto || {}) as any;
+    const escolhaAnterior = String(ctxAnterior.opcao_escolhida || '');
+    const etapaAnterior = String(estado.etapa || 'inicio');
+
     const resultado = await gerarResposta({
       cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
+      etapaNegociacao: etapaAnterior, escolhaAnterior,
     });
+
 
 
     const mensagens: string[] = Array.isArray(resultado?.mensagens)
