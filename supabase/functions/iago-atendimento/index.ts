@@ -95,6 +95,36 @@ Deno.serve(async (req) => {
     }
     if (!estado) return json({ success: false, error: 'falha ao criar estado' }, 500);
 
+    // ===== Plantão: conversa recém-assumida de um atendente humano =====
+    // Zera o "aguardando humano" e usa o momento da transferência como corte,
+    // para as mensagens antigas do humano não silenciarem o IAGO.
+    try {
+      const { data: transf } = await supabase
+        .from('iago_plantao_transferencia')
+        .select('assumido_em')
+        .eq('contato_id', contato_id)
+        .is('devolvido_em', null)
+        .maybeSingle();
+      const assumidoEm = String((transf as any)?.assumido_em || '');
+      if (assumidoEm && String((estado as any).contexto?.plantao_assumido_em || '') !== assumidoEm) {
+        const novoContexto = {
+          ...((estado as any).contexto || {}),
+          plantao_assumido_em: assumidoEm,
+          ultimo_envio_ia: assumidoEm,
+        };
+        const { data: atualizado } = await supabase
+          .from('iago_conversa_estado')
+          .update({ aguardando_humano: false, contexto: novoContexto })
+          .eq('id', (estado as any).id)
+          .select('*')
+          .maybeSingle();
+        if (atualizado) estado = atualizado;
+        console.log('[IAGO] conversa assumida no plantão — estado liberado', { contato_id });
+      }
+    } catch (e: any) {
+      console.error('[IAGO] falha ao verificar transferência de plantão', e?.message || e);
+    }
+
     // ===== "BLOQUEAR CONTATO" => silêncio definitivo =====
     if (ehOptOut(texto || '')) {
       await supabase.from('iago_conversa_estado')
