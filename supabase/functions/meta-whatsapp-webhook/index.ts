@@ -880,19 +880,36 @@ serve(async (req) => {
                   .eq('wa_message_id', m.id)
                   .maybeSingle();
                 if ((msgSalva as any)?.id) {
-                  const { data: tr, error: trErr } = await supabase.functions.invoke('meta-transcrever-audio', {
-                    body: { mensagem_id: (msgSalva as any).id },
-                  });
-                  const transcricao = String((tr as any)?.transcricao || '').trim();
-                  if (transcricao) {
-                    textoParaIA = transcricao;
-                    console.log('[MetaWebhook] áudio transcrito', { mensagem_id: (msgSalva as any).id });
-                  } else {
+                  const duracaoSegundos = Number(m?.audio?.duration || 0) || 0;
+                  if (duracaoSegundos > 30) {
                     audioSemTranscricao = true;
-                    console.error('[MetaWebhook] falha na transcrição do áudio', trErr?.message || JSON.stringify(tr || {}));
+                    console.log('[MetaWebhook] áudio acima de 30s — escalado para humano', {
+                      mensagem_id: (msgSalva as any).id, duracao_segundos: duracaoSegundos,
+                    });
+                    await supabase.from('meta_whatsapp_mensagens')
+                      .update({ transcricao_status: 'muito_longo' })
+                      .eq('id', (msgSalva as any).id);
+                  } else {
+                    const { data: tr, error: trErr } = await supabase.functions.invoke('meta-transcrever-audio', {
+                      body: { mensagem_id: (msgSalva as any).id, duracao_segundos: duracaoSegundos || undefined },
+                    });
+                    const transcricao = String((tr as any)?.transcricao || '').trim();
+                    if (transcricao) {
+                      textoParaIA = transcricao;
+                      console.log('[MetaWebhook] áudio transcrito', { mensagem_id: (msgSalva as any).id });
+                    } else {
+                      audioSemTranscricao = true;
+                      const detalhe = trErr?.message || JSON.stringify(tr || {});
+                      if (/muito_longo|30 segundos/i.test(detalhe)) {
+                        console.log('[MetaWebhook] áudio acima de 30s (tamanho) — escalado para humano', { detalhe });
+                      } else {
+                        console.error('[MetaWebhook] falha na transcrição do áudio', detalhe);
+                      }
+                    }
                   }
                 } else {
                   audioSemTranscricao = true;
+                  console.error('[MetaWebhook] mensagem de áudio não encontrada para transcrever', { wa_message_id: m.id });
                 }
               }
             } catch (e: any) {
