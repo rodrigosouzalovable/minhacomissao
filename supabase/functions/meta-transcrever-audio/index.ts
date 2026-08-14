@@ -150,77 +150,107 @@ Deno.serve(async (req) => {
       return json({ error: "LOVABLE_API_KEY não configurada" }, 500);
     }
 
-    const payload = {
+    const audioB64 = toBase64(bytes);
+
+    const montarPayload = (system: string, instrucao: string) => ({
       model: MODELO_TRANSCRICAO,
       messages: [
-        {
-          role: "system",
-          content:
-            "Você transcreve áudios de clientes em português do Brasil. Responda APENAS com o texto falado, sem comentários, sem aspas e sem formatação. Se não houver fala audível, responda exatamente: SEM_FALA",
-        },
+        { role: "system", content: system },
         {
           role: "user",
           content: [
-            { type: "text", text: "Transcreva este áudio:" },
-            { type: "input_audio", input_audio: { data: toBase64(bytes), format } },
+            { type: "text", text: instrucao },
+            { type: "input_audio", input_audio: { data: audioB64, format } },
           ],
         },
       ],
+    });
+
+    // Retorna { texto } em sucesso ou { erroResposta } quando deve abortar.
+    const chamarIA = async (payload: unknown, passe: string) => {
+      let aiRes: Response | null = null;
+      let ultimoErro = "";
+      for (let tentativa = 1; tentativa <= 2; tentativa++) {
+        try {
+          const tAI = Date.now();
+          aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+          console.log("[transcrever-audio] resposta do gateway", {
+            passe, tentativa, status: aiRes.status, ms: Date.now() - tAI,
+          });
+          if (aiRes.ok) break;
+          if (aiRes.status !== 429 && aiRes.status < 500) break;
+          ultimoErro = `status ${aiRes.status}`;
+        } catch (e: any) {
+          ultimoErro = e?.message || "falha de rede";
+          console.error("[transcrever-audio] exceção na chamada de IA", { passe, tentativa, erro: ultimoErro });
+          aiRes = null;
+        }
+        if (tentativa === 1) await sleep(1500);
+      }
+
+      if (!aiRes) {
+        await marcarStatus("erro");
+        return { erroResposta: json({ error: "Falha ao transcrever o áudio.", details: ultimoErro }, 502) };
+      }
+
+      if (!aiRes.ok) {
+        const detalhe = await aiRes.text().catch(() => "");
+        console.error("[transcrever-audio] gateway erro", passe, aiRes.status, detalhe.slice(0, 500));
+        await marcarStatus("erro");
+        const msgErro = aiRes.status === 429
+          ? "Muitas requisições de IA. Tente novamente em alguns segundos."
+          : aiRes.status === 402
+            ? "Créditos de IA esgotados."
+            : "Falha ao transcrever o áudio.";
+        return { erroResposta: json({ error: msgErro, status: aiRes.status, details: detalhe }, aiRes.status) };
+      }
+
+      const result = await aiRes.json().catch(() => ({}));
+      return { texto: String((result as any)?.choices?.[0]?.message?.content || "").trim() };
     };
 
-    // Uma tentativa extra para falhas temporárias (429 / 5xx / rede).
-    let aiRes: Response | null = null;
-    let ultimoErro = "";
-    for (let tentativa = 1; tentativa <= 2; tentativa++) {
-      try {
-        const tAI = Date.now();
-        aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-        console.log("[transcrever-audio] resposta do gateway", {
-          tentativa, status: aiRes.status, ms: Date.now() - tAI,
-        });
-        if (aiRes.ok) break;
-        if (aiRes.status !== 429 && aiRes.status < 500) break;
-        ultimoErro = `status ${aiRes.status}`;
-      } catch (e: any) {
-        ultimoErro = e?.message || "falha de rede";
-        console.error("[transcrever-audio] exceção na chamada de IA", { tentativa, erro: ultimoErro });
-        aiRes = null;
-      }
-      if (tentativa === 1) await sleep(1500);
-    }
+    const p1 = await chamarIA(
+      montarPayload(
+        "Você transcreve áudios de clientes em português do Brasil. Responda APENAS com o texto falado, sem comentários, sem aspas e sem formatação. Se não houver fala audível, responda exatamente: SEM_FALA",
+        "Transcreva este áudio:",
+      ),
+      "1",
+    );
+    if (p1.erroResposta) return p1.erroResposta;
+    let texto = p1.texto || "";
 
-    if (!aiRes) {
-      await marcarStatus("erro");
-      return json({ error: "Falha ao transcrever o áudio.", details: ultimoErro }, 502);
+    // Áudios curtos ou com fala baixa às vezes voltam vazios na primeira passada:
+    // tenta de novo com instrução mais tolerante antes de desistir.
+    if (!texto || /^sem_fala$/i.test(texto)) {
+      console.log("[transcrever-audio] primeira passada sem fala — segunda tentativa tolerante", {
+        mensagem_id: mensagemId, bytes: bytes.length, format,
+      });
+      const p2 = await chamarIA(
+        montarPayload(
+          "Você transcreve áudios curtos de clientes em português do Brasil, mesmo com ruído, volume baixo ou apenas uma ou duas palavras (ex.: 'oi', 'à vista', 'parcelado', 'sim'). Escreva o melhor palpite do que foi dito, APENAS o texto falado, sem comentários. Só responda SEM_FALA se realmente não houver nenhuma voz.",
+          "Transcreva este áudio curto, mesmo que a qualidade seja baixa:",
+        ),
+        "2",
+      );
+      if (p2.erroResposta) return p2.erroResposta;
+      texto = p2.texto || "";
     }
-
-    if (!aiRes.ok) {
-      const detalhe = await aiRes.text().catch(() => "");
-      console.error("[transcrever-audio] gateway erro", aiRes.status, detalhe.slice(0, 500));
-      await marcarStatus("erro");
-      const msgErro = aiRes.status === 429
-        ? "Muitas requisições de IA. Tente novamente em alguns segundos."
-        : aiRes.status === 402
-          ? "Créditos de IA esgotados."
-          : "Falha ao transcrever o áudio.";
-      return json({ error: msgErro, status: aiRes.status, details: detalhe }, aiRes.status);
-    }
-
-    const result = await aiRes.json();
-    const texto = String(result?.choices?.[0]?.message?.content || "").trim();
 
     if (!texto || /^sem_fala$/i.test(texto)) {
-      console.log("[transcrever-audio] sem fala audível", { mensagem_id: mensagemId });
+      console.log("[transcrever-audio] sem fala audível após 2 passadas", {
+        mensagem_id: mensagemId, bytes: bytes.length, format,
+      });
       await marcarStatus("erro");
       return json({ error: "não foi possível entender o áudio" }, 422);
     }
+
 
     const { error: upErr } = await admin
       .from("meta_whatsapp_mensagens")
