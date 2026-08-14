@@ -10,6 +10,8 @@ IAGO RIBEIRO DE SOUZA é um usuário real do sistema que atende como humano no I
 - Atendimento 24h/7 dias. Nunca se identifica como IA/robô. Nunca lança acordo.
 - Valores sempre calculados pelo sistema (débitos + `meta_ia_config`: desconto à vista, 30% parcelado, grade 4x/8x/12x/16x/20x/24x, parcela mínima R$ 100).
 - Follow-up: **um único** toque, `followup_horas` (padrão 2h) depois, só entre 08h e 19h BRT e dentro da janela de 24h da Meta. Cliente respondeu = follow-up cancelado.
+- Follow-up lê o histórico da conversa: só usa o texto "viu a proposta que te mandei" se valores realmente foram enviados (`contexto.proposta_enviada` ou "R$" em saída). Sem proposta, o texto é gerado pela IA a partir do histórico (retoma o CPF/motivo, cita o credor da caixa) e é cancelado se repetiria algo já enviado.
+
 - "BLOQUEAR CONTATO" (e variações) → `optout=true`, silêncio definitivo, sem follow-up.
 - Não sabe responder / assunto proibido / cliente aceitou proposta / já tem acordo → etiqueta "Aguardando Humano", `aguardando_humano=true` e aviso aos contatos de emergência (`meta_ia_contatos_emergencia`).
 - Mensagem de atendente humano na conversa desliga o IAGO ali (`send-whatsapp-meta-text` com `origem !== 'ia'`).
