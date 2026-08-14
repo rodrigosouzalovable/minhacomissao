@@ -309,6 +309,7 @@ Deno.serve(async (req) => {
         `Cliente: ${nomeCliente || '(sem nome)'}\n` +
         `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
         `CPF: ${cpfFormatado(cpf)}\n` +
+        (credorCaixa ? `Credor: ${credorCaixa}\n` : '') +
         `Motivo: já possui acordo lançado${atendenteAcordo ? ` (atendente: ${atendenteAcordo})` : ''}\n\n` +
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
       await finalizarEntrada();
