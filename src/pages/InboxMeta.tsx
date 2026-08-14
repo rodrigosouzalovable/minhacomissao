@@ -1808,6 +1808,23 @@ export default function InboxMeta() {
                     <FileText className="h-3.5 w-3.5" /> Modelo
                   </Button>
 
+                  {(() => {
+                    const dispensado = !!contatoAtivo.sla_dispensado_em && !!contatoAtivo.ultima_msg_entrada_em
+                      && new Date(contatoAtivo.sla_dispensado_em).getTime() >= new Date(contatoAtivo.ultima_msg_entrada_em).getTime();
+                    return (
+                      <Button
+                        size="sm"
+                        variant={dispensado ? 'secondary' : 'outline'}
+                        className="h-7 gap-1.5 text-xs"
+                        onClick={() => handleDispensarResposta(contatoAtivo.id, !dispensado)}
+                        title="Marcar que este cliente não precisa de resposta (remove o alerta de tempo)"
+                      >
+                        {dispensado ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                        Não precisa resposta
+                      </Button>
+                    );
+                  })()}
+
                   {janelaInfo.status === 'aberta' ? (
                     <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
                       <Clock className="h-3 w-3" /> Aberta · fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
