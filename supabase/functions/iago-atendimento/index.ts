@@ -5,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
-  avisarEmergencia, etiquetarAguardandoHumano, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
+  avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
 } from '../_shared/iago.ts';
 
@@ -392,6 +392,7 @@ Deno.serve(async (req) => {
     }
 
     let fallbackMsg = '';
+    let acordoFechado = false;
     if (escolha) {
       const dataBruta = String((resultado as any)?.data_pagamento || '').trim();
       const dataInfo = classificarDataPagamento(dataBruta || textoAtual);
@@ -400,10 +401,12 @@ Deno.serve(async (req) => {
       if (dataResolvida?.classe === 'hoje' || (pagamentoHoje === 'sim' && !dataResolvida)) {
         escalar = true;
         dataAcordada = 'hoje';
+        acordoFechado = true;
         motivo = `cliente escolheu ${escolha} e vai pagar hoje`;
       } else if (dataResolvida?.classe === 'dentro_do_mes') {
         escalar = true;
         dataAcordada = dataResolvida.label;
+        acordoFechado = true;
         motivo = `cliente escolheu ${escolha} e vai pagar em ${dataResolvida.label}`;
       } else if (dataResolvida?.classe === 'fora_do_mes') {
         escalar = true;
@@ -490,6 +493,9 @@ Deno.serve(async (req) => {
 
     if (escalar) {
       await etiquetarAguardandoHumano(supabase, contato_id);
+      if (acordoFechado) await etiquetarAcordoFechado(supabase, contato_id);
+
+
 
       await avisarEmergencia(supabase,
         `👤 *IAGO — preciso de um humano*\n\n` +

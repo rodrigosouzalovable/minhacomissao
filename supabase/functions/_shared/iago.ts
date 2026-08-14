@@ -36,6 +36,7 @@ export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export const NOME_IAGO = 'IAGO RIBEIRO DE SOUZA';
 export const ETIQUETA_HUMANO = 'Aguardando Humano';
+export const ETIQUETA_ACORDO_FECHADO = 'ACORDO FECHADO';
 
 /** Cliente pediu para não ser mais contatado => IAGO fica em silêncio para sempre. */
 export function ehOptOut(texto: string): boolean {
@@ -141,6 +142,30 @@ export async function etiquetarAguardandoHumano(supabase: any, contatoId: string
     );
   } catch (e: any) {
     console.error('[IAGO] falha ao etiquetar Aguardando Humano', e?.message || e);
+  }
+}
+
+/** Aplica a etiqueta existente "ACORDO FECHADO" (nunca cria). */
+export async function etiquetarAcordoFechado(supabase: any, contatoId: string) {
+  try {
+    const { data: et } = await supabase
+      .from('meta_whatsapp_etiquetas')
+      .select('id')
+      .ilike('nome', ETIQUETA_ACORDO_FECHADO)
+      .limit(1)
+      .maybeSingle();
+
+    if (!et?.id) {
+      console.log('[IAGO] etiqueta ACORDO FECHADO inexistente — ignorando');
+      return;
+    }
+
+    await supabase.from('meta_whatsapp_contato_etiquetas').upsert(
+      { contato_id: contatoId, etiqueta_id: (et as any).id, origem: 'manual' },
+      { onConflict: 'contato_id,etiqueta_id', ignoreDuplicates: true },
+    );
+  } catch (e: any) {
+    console.error('[IAGO] falha ao etiquetar ACORDO FECHADO', e?.message || e);
   }
 }
 
