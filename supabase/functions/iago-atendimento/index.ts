@@ -634,7 +634,9 @@ async function gerarResposta(args: {
     '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":""}',
     'escolha = forma de pagamento escolhida pelo cliente ("à vista" ou "12x"), vazio se ele ainda não escolheu.',
     'pagamento_hoje = "sim", "nao" ou "" conforme a resposta dele sobre pagar hoje.',
-    'data_pagamento = o dia informado pelo cliente exatamente como ele disse ("dia 20", "20/08", "mês que vem"), vazio se não informou.',
+    'data_pagamento = a data que o cliente informou, JÁ RESOLVIDA no formato YYYY-MM-DD usando a lista de datas acima (ex.: "segunda" ou "segunda que vem" => a data da próxima segunda-feira). Use "mes_que_vem" quando ele falar de outro mês sem dia, e vazio se não informou nada.',
+    'Se o cliente informar a data na mesma frase da negativa ("não, consigo segunda"), considere a data informada e NÃO repita a pergunta.',
+
     'mensagens = de 1 a 2 mensagens curtas a enviar agora (vazio só se escalar=true e nada deva ser dito).',
     'Quando escalar=true, envie uma mensagem curta avisando que um colega vai continuar o atendimento e preencha "motivo" em português.',
   ].filter(Boolean).join('\n');
