@@ -990,6 +990,19 @@ export default function InboxMeta() {
     return { status: 'aberta' as const, fim, msRestante };
   }, [nowTick]);
 
+  // Tempo que o cliente está aguardando resposta (última mensagem da conversa é do cliente)
+  const computeEspera = useCallback((ultimaEntradaIso?: string | null, ultimaMsgIso?: string | null) => {
+    if (!ultimaEntradaIso) return { nivel: 'ok' as const, min: 0 };
+    const tEntrada = new Date(ultimaEntradaIso).getTime();
+    const tUltima = ultimaMsgIso ? new Date(ultimaMsgIso).getTime() : 0;
+    if (tUltima > tEntrada) return { nivel: 'ok' as const, min: 0 };
+    const min = Math.floor((nowTick - tEntrada) / 60_000);
+    if (min >= 30) return { nivel: 'critico' as const, min };
+    if (min >= 15) return { nivel: 'alerta' as const, min };
+    return { nivel: 'ok' as const, min };
+  }, [nowTick]);
+
+
   const janelaInfo = useMemo(() => {
     const j = computeJanela(contatoAtivo?.ultima_msg_entrada_em);
     return {
@@ -1593,6 +1606,7 @@ export default function InboxMeta() {
               });
               const sel = selecionados.has(c.id);
               const jan = computeJanela(c.ultima_msg_entrada_em);
+              const esp = computeEspera(c.ultima_msg_entrada_em, c.ultima_mensagem_em);
               return (
                 <MetaConversaContextMenu
                   key={c.id}
@@ -1613,13 +1627,17 @@ export default function InboxMeta() {
                   <button
                     onClick={() => selMultipla ? toggleSel(c.id) : setContatoAtivo(c)}
                     onDoubleClick={() => { if (!selMultipla) { setSelMultipla(true); toggleSel(c.id); } }}
+                    title={esp.nivel !== 'ok' ? `Cliente aguardando resposta há ${esp.min}min` : undefined}
                     className={cn(
                       'relative block w-full max-w-full min-h-[76px] text-left px-3 py-3 pr-14 border-b hover:bg-accent/50 transition overflow-hidden',
                       ativo && 'bg-accent',
                       sel && 'bg-primary/15',
                       c.nao_lido > 0 && !ativo && 'bg-emerald-500/5',
-                      qualificacaoAtivaNaCaixa && !(qualifPorContato[c.id]?.length) && !!c.ultima_msg_entrada_em && !ativo && 'pisca-qualificacao',
+                      qualificacaoAtivaNaCaixa && !(qualifPorContato[c.id]?.length) && !!c.ultima_msg_entrada_em && !ativo && 'borda-nao-qualificada',
+                      !ativo && esp.nivel === 'alerta' && 'pisca-sla-amarelo',
+                      !ativo && esp.nivel === 'critico' && 'pisca-sla-vermelho',
                     )}>
+
                     <div className="min-w-0 space-y-1">
                       <span className={cn(
                         'text-sm truncate flex items-center gap-1',
