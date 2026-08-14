@@ -269,7 +269,7 @@ export async function notificarAdmin(
               return { ok: true };
             }
 
-            ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.substring(0, 200);
+            ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.substring(0, 1000);
             errosTentativas.push(ultimoErro);
             if (res.status === 405) continue;
             if (!isRetryableInstanceError(respText, res.status)) break;
@@ -277,10 +277,24 @@ export async function notificarAdmin(
           if (timer) clearTimeout(timer);
         } catch (e) {
           if (timer) clearTimeout(timer);
-          ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.substring(0, 200);
+          ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.substring(0, 1000);
           errosTentativas.push(ultimoErro);
         }
       }
+
+      // Último recurso: tenta pela API Oficial da Meta (só entrega se houver janela de 24h aberta)
+      const viaMeta = await tentarViaMetaOficial(supabase, numeroFinal, mensagemFinal);
+      if (viaMeta.ok) {
+        await supabase.from("admin_notificacoes_log").insert({
+          tipo: params.tipo,
+          chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numeroFinal}` : null,
+          mensagem: `[${numeroFinal}] ${params.mensagem}`,
+          status: "enviado",
+          erro_detalhe: `fallback_meta_oficial; uazapi: ${errosTentativas.slice(-3).join(" | ")}`.slice(0, 4000),
+        });
+        return { ok: true };
+      }
+      if (viaMeta.erro) errosTentativas.push(`meta_oficial: ${viaMeta.erro}`);
 
       const erroFinal = errosTentativas.slice(-10).join(" | ") || ultimoErro;
       await supabase.from("admin_notificacoes_log").insert({
@@ -301,7 +315,7 @@ export async function notificarAdmin(
     if (resultados.some((r) => r.ok)) return { success: true };
     return {
       success: false,
-      error: resultados.map((r) => r.erro).filter(Boolean).join(" || ").substring(0, 400),
+      error: resultados.map((r) => r.erro).filter(Boolean).join(" || ").substring(0, 1000),
       fallback: true,
     };
   } catch (e) {
