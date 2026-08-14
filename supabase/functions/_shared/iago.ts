@@ -470,12 +470,29 @@ export function contextoDataHoje(): string {
  * classifica em hoje / dentro do mês atual / fora do mês atual.
  */
 export function classificarDataPagamento(texto: string): DataPagamento {
-  const t = norm(texto).replace(/\s+/g, ' ').trim();
+  const t = norm(texto).replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
   const indef: DataPagamento = { classe: 'indefinido', dataIso: null, label: '' };
   if (!t) return indef;
 
   const hoje = agoraSP();
   hoje.setHours(0, 0, 0, 0);
+
+  // Data já resolvida pela IA no formato ISO (2026-08-17)
+  const iso = t.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) {
+    const d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+    if (!Number.isNaN(d.getTime())) {
+      d.setHours(0, 0, 0, 0);
+      const mesmoDia = d.getTime() === hoje.getTime();
+      const mesmoMes = d.getFullYear() === hoje.getFullYear() && d.getMonth() === hoje.getMonth();
+      return {
+        classe: mesmoDia ? 'hoje' : mesmoMes ? 'dentro_do_mes' : 'fora_do_mes',
+        dataIso: isoLocal(d),
+        label: mesmoDia ? 'hoje' : `${DIAS_SEMANA[d.getDay()]}, dia ${fmtData(d)}`,
+      };
+    }
+  }
+
 
   const classificar = (d: Date): DataPagamento => {
     d.setHours(0, 0, 0, 0);
