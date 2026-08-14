@@ -122,11 +122,16 @@ async function notificarConclusao(jobId: string, statusFinal: 'concluido' | 'err
       }
     }
 
+    // Campanha cancelada/pausada pelo usuário não gera aviso
+    if (job.status === 'cancelado' || job.status === 'pausado') return;
+
     const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
     await notificarAdmin(supabase, {
       tipo: 'envio_meta_concluido',
       mensagem: msg,
-      chaveIdempotencia: `envio_meta_job_${statusFinal}_${jobId}`,
+      // Uma única mensagem por campanha, independente do desfecho
+      chaveIdempotencia: `envio_meta_job_fim_${jobId}`,
+      umaVezPorChave: true,
     });
   } catch (e) {
     console.error('[tick] notificarConclusao falhou:', String(e).slice(0, 300));

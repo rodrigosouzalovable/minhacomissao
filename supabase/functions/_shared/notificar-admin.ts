@@ -6,6 +6,8 @@ export interface NotificarAdminParams {
   tipo: string;
   mensagem: string;
   chaveIdempotencia?: string;
+  /** Envia no máximo 1 vez por chave, mesmo que a tentativa anterior tenha falhado */
+  umaVezPorChave?: boolean;
   forcarFlag?: keyof FlagsToggle;
   /** Se informado, envia para estes números em vez do admin_phone padrão */
   destinatarios?: string[];
@@ -207,13 +209,15 @@ export async function notificarAdmin(
     }
 
     if (params.chaveIdempotencia) {
-      const { data: ja } = await supabase
+      let q = supabase
         .from("admin_notificacoes_log")
         .select("id")
         .eq("tipo", params.tipo)
-        .like("chave_idempotencia", `${params.chaveIdempotencia}%`)
-        .eq("status", "enviado")
-        .limit(1);
+        .like("chave_idempotencia", `${params.chaveIdempotencia}%`);
+      // Por padrão só bloqueia se já foi entregue; com umaVezPorChave qualquer
+      // tentativa registrada (inclusive com erro) impede o reenvio.
+      if (!params.umaVezPorChave) q = q.eq("status", "enviado");
+      const { data: ja } = await q.limit(1);
       if (ja?.length) return { success: false, skipped: "ja_enviado" };
     }
 
