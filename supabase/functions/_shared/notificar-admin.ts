@@ -150,6 +150,45 @@ const checkInstanceConnected = async (inst: any) => {
   return false;
 };
 
+/**
+ * Fallback: envia o aviso pela API Oficial da Meta (send-whatsapp-meta-text).
+ * Só entrega se existir janela de 24h aberta com o número do admin — usado
+ * apenas quando nenhuma instância comum conseguiu entregar.
+ */
+const tentarViaMetaOficial = async (
+  supabase: SupabaseClient,
+  numeroFinal: string,
+  texto: string,
+): Promise<{ ok: boolean; erro?: string }> => {
+  try {
+    const sufixo = numeroFinal.slice(-8);
+    const { data: contatos } = await supabase
+      .from("meta_whatsapp_contatos")
+      .select("instancia_id, telefone, ultima_msg_entrada_em")
+      .ilike("telefone", `%${sufixo}`)
+      .not("ultima_msg_entrada_em", "is", null)
+      .order("ultima_msg_entrada_em", { ascending: false })
+      .limit(5);
+
+    const limite = Date.now() - 24 * 60 * 60 * 1000;
+    const alvo = (contatos || []).find(
+      (c: any) => new Date(c.ultima_msg_entrada_em).getTime() > limite,
+    );
+    if (!alvo) return { ok: false, erro: "sem_janela_24h" };
+
+    const { data, error } = await supabase.functions.invoke("send-whatsapp-meta-text", {
+      body: { instancia_id: (alvo as any).instancia_id, telefone: (alvo as any).telefone, texto, origem: "sistema" },
+    });
+    if (error) return { ok: false, erro: String(error.message).slice(0, 300) };
+    if (!(data as any)?.success) return { ok: false, erro: String((data as any)?.error || "falha").slice(0, 300) };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, erro: String(e).slice(0, 300) };
+  }
+};
+
+
+
 export async function notificarAdmin(
   supabase: SupabaseClient,
   params: NotificarAdminParams,
