@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     // ===== Contato / caixa =====
     const { data: contato } = await supabase
       .from('meta_whatsapp_contatos')
-      .select('id, instancia_id, telefone, bsuid, nome, folder_id')
+      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id')
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
@@ -184,6 +184,16 @@ Deno.serve(async (req) => {
     let cpfPorTelefone = false;
     let nomePorTelefone = '';
     let multiplosCandidatos = false;
+    // Prioridade 1: CPF gravado na conversa (veio da planilha do Envio Meta)
+    if (!cpf) {
+      const cpfContato = soDigitos(String((contato as any).cpf || ''));
+      if (cpfContato.length === 11 || cpfContato.length === 14) {
+        cpf = cpfContato;
+        cpfPorTelefone = true;
+        await supabase.from('iago_conversa_estado').update({ cpf }).eq('id', estado.id);
+      }
+    }
+    // Prioridade 2: identificação pelo telefone
     if (!cpf) {
       const res = await resolverTelefone(supabase, (contato as any).telefone);
       if (res.cpf) {

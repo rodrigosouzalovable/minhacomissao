@@ -656,9 +656,11 @@ Deno.serve(async (req) => {
           template_botoes: templateBotoes,
         } as any);
         let contatoIdFinal: string | null = null;
+        const cpfDigits = String((cliente as any)?.cpf ?? '').replace(/\D/g, '');
+        const cpfValido = cpfDigits.length === 11 || cpfDigits.length === 14 ? cpfDigits : null;
         const { data: ex } = await supabase
           .from('meta_whatsapp_contatos')
-          .select('id')
+          .select('id, cpf')
           .eq('instancia_id', inst.id)
           .eq('telefone', tel)
           .maybeSingle();
@@ -672,6 +674,8 @@ Deno.serve(async (req) => {
             arquivado: false,
           };
           if (folder_id) updContato.folder_id = folder_id;
+          // Só preenche o CPF quando vier da planilha; nunca sobrescreve com vazio.
+          if (cpfValido) updContato.cpf = cpfValido;
           await supabase.from('meta_whatsapp_contatos').update(updContato).eq('id', ex.id);
         } else {
           const { data: novo } = await supabase.from('meta_whatsapp_contatos').insert({
@@ -679,12 +683,14 @@ Deno.serve(async (req) => {
             instancia_id: inst.id,
             telefone: tel,
             nome: (cliente.nome || '').trim() || null,
+            cpf: cpfValido,
             ultima_mensagem: preview,
             ultima_mensagem_em: nowIso,
             folder_id: folder_id || null,
           } as any).select('id').maybeSingle();
           contatoIdFinal = (novo as any)?.id ?? null;
         }
+
 
         // Aplicar etiqueta "Atendente: {nome}%" ao contato — APENAS se já existir.
         // Vale o ATENDENTE NOMEADO na mensagem, não o remetente técnico do disparo.

@@ -62,7 +62,7 @@ interface MetaInstance {
   saude_checked_at?: string | null;
 }
 interface MetaContato {
-  id: string; instancia_id: string; telefone: string; nome: string | null;
+  id: string; instancia_id: string; telefone: string; nome: string | null; cpf?: string | null;
   ultima_mensagem: string | null; ultima_mensagem_em: string | null;
   ultima_msg_entrada_em: string | null; nao_lido: number;
   fixado: boolean; arquivado: boolean;
@@ -94,6 +94,14 @@ function formatTelefone(t: string) {
 function telefoneSemDDI(t: string) {
   return t.replace(/\D/g, '').replace(/^55/, '');
 }
+/** 11 dígitos -> 000.000.000-00 | 14 dígitos -> 00.000.000/0000-00 */
+function formatDoc(raw?: string | null) {
+  const d = String(raw ?? '').replace(/\D/g, '');
+  if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  return d || '';
+}
+
 function formatMsgTime(ts: string) { try { return format(new Date(ts), 'HH:mm', { locale: ptBR }); } catch { return ''; } }
 function formatContatoTime(ts: string | null) {
   if (!ts) return '';
@@ -113,6 +121,33 @@ export default function InboxMeta() {
   const [filtroInstancia, setFiltroInstancia] = useState<string>('todas');
   const [contatos, setContatos] = useState<MetaContato[]>([]);
   const [contatoAtivo, setContatoAtivo] = useState<MetaContato | null>(null);
+  // CPF do contato: prioriza o gravado na conversa (planilha do Envio Meta);
+  // se não houver, tenta resolver pelo telefone (últimos 8 dígitos).
+  const [cpfPorTelefone, setCpfPorTelefone] = useState<string | null>(null);
+  const cpfContatoDigits = String(contatoAtivo?.cpf ?? '').replace(/\D/g, '');
+  const cpfDoContato = (cpfContatoDigits.length === 11 || cpfContatoDigits.length === 14)
+    ? cpfContatoDigits
+    : cpfPorTelefone;
+  useEffect(() => {
+    let cancelado = false;
+    setCpfPorTelefone(null);
+    const tel = String(contatoAtivo?.telefone ?? '').replace(/\D/g, '');
+    if (cpfContatoDigits.length === 11 || cpfContatoDigits.length === 14) return;
+    if (tel.length < 8) return;
+    const suf = tel.slice(-8);
+    (async () => {
+      const { data } = await supabase
+        .from('devedor_telefones')
+        .select('devedor_cpf, ativo')
+        .ilike('numero', `%${suf}`)
+        .limit(5);
+      if (cancelado) return;
+      const melhor = (data || []).find((r: any) => r.ativo) || (data || [])[0];
+      const d = String((melhor as any)?.devedor_cpf ?? '').replace(/\D/g, '');
+      if (d.length === 11 || d.length === 14) setCpfPorTelefone(d);
+    })();
+    return () => { cancelado = true; };
+  }, [contatoAtivo?.id, contatoAtivo?.telefone, cpfContatoDigits]);
   const [mensagens, setMensagens] = useState<MetaMensagem[]>([]);
   const [busca, setBusca] = useState('');
   const [buscaDebounced, setBuscaDebounced] = useState('');
@@ -479,7 +514,7 @@ export default function InboxMeta() {
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
-    const selectCols = 'id, instancia_id, telefone, nome, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado, folder_id';
+    const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, nao_lido, fixado, arquivado, folder_id';
 
     // ===== Modo "Meus Clientes": todo o histórico com a etiqueta do usuário =====
     if (modoMeusClientes) {
@@ -1670,6 +1705,13 @@ export default function InboxMeta() {
                     {contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.bsuid || '—')}
                     {contatoAtivo.telefone && (
                       <CopyButton value={telefoneSemDDI(contatoAtivo.telefone)} label="Telefone" />
+                    )}
+                    {cpfDoContato && (
+                      <>
+                        <span>·</span>
+                        <span className="font-medium text-foreground/80">CPF {formatDoc(cpfDoContato)}</span>
+                        <CopyButton value={cpfDoContato} label="CPF" />
+                      </>
                     )}
                     <span>· via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}</span>
                   </div>
