@@ -694,60 +694,9 @@ serve(async (req) => {
                   }
                 }
 
-                // ---- Match por quem realmente iniciou/atendeu a conversa ----
-                // Prioriza o nome do atendente no texto ("*Atendente X:*"); fallback: user_id do remetente.
-                if (!atendenteAcordoId) {
-                  try {
-                    const { data: ultimaSaida } = await supabase
-                      .from('meta_whatsapp_mensagens')
-                      .select('user_id, conteudo, criado_em')
-                      .eq('instancia_id', inst.id)
-                      .eq('telefone', outroLado || '')
-                      .eq('direcao', 'saida')
-                      .order('criado_em', { ascending: false })
-                      .limit(1)
-                      .maybeSingle();
+                // Nenhum match por "quem iniciou a conversa": a etiqueta passa a ser
+                // de quem atender primeiro (aplicada no envio da resposta do atendente).
 
-                    // 1) Nome do atendente escrito no próprio texto da mensagem
-                    let nomeRem = '';
-                    const m = String((ultimaSaida as any)?.conteudo || '')
-                      .match(/^\s*\*?\s*Atendente\s+([^:*\n]+?)\s*:?\s*\*?\s*(?:\n|$)/i);
-                    if (m) nomeRem = String(m[1] || '').trim();
-
-                    // 2) Fallback: usuário que enviou
-                    const remetenteId = (ultimaSaida as any)?.user_id;
-                    if (!nomeRem && remetenteId) {
-                      const { data: profRem } = await supabase
-                        .from('profiles')
-                        .select('nome')
-                        .eq('id', remetenteId)
-                        .maybeSingle();
-                      nomeRem = String((profRem as any)?.nome || '').trim();
-                    }
-
-                    if (nomeRem) {
-                      const alvo = `atendente: ${nomeRem}`.toLowerCase();
-                      let jaExiste = (atendentes || []).find((a: any) =>
-                        String(a.nome).trim().toLowerCase() === alvo
-                      );
-                      if (!jaExiste) {
-                        // Nome parcial ("Wallace" -> "Atendente: Wallace Maciel"): só aceita match único
-                        const cands = (atendentes || []).filter((a: any) =>
-                          String(a.nome).trim().toLowerCase().startsWith(alvo)
-                        );
-                        if (cands.length === 1) jaExiste = cands[0];
-                      }
-                      if (jaExiste && etiquetaElegivel((jaExiste as any).nome)) {
-                        atendenteAcordoId = (jaExiste as any).id;
-                        atendenteAcordoNome = `${(jaExiste as any).nome} (iniciou a conversa)`;
-                      } else {
-                        console.log('[MetaWebhook] remetente não elegível/sem etiqueta:', nomeRem);
-                      }
-                    }
-                  } catch (e: any) {
-                    console.error('[MetaWebhook] erro match remetente', e?.message || e);
-                  }
-                }
 
 
 
