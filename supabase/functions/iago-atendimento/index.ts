@@ -6,7 +6,7 @@ import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
   avisarEmergencia, etiquetarAguardandoHumano, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
-  classificarDataPagamento, detectarEscolha, respostaPagamentoHoje,
+  classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
 } from '../_shared/iago.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
