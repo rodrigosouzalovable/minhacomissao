@@ -94,6 +94,14 @@ function formatTelefone(t: string) {
 function telefoneSemDDI(t: string) {
   return t.replace(/\D/g, '').replace(/^55/, '');
 }
+/** 11 dígitos -> 000.000.000-00 | 14 dígitos -> 00.000.000/0000-00 */
+function formatDoc(raw?: string | null) {
+  const d = String(raw ?? '').replace(/\D/g, '');
+  if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  return d || '';
+}
+
 function formatMsgTime(ts: string) { try { return format(new Date(ts), 'HH:mm', { locale: ptBR }); } catch { return ''; } }
 function formatContatoTime(ts: string | null) {
   if (!ts) return '';
