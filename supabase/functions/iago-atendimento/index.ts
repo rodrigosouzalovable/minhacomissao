@@ -489,6 +489,8 @@ Deno.serve(async (req) => {
     }).eq('id', estado.id);
 
     if (escalar) {
+      await etiquetarAguardandoHumano(supabase, contato_id);
+
       await avisarEmergencia(supabase,
         `👤 *IAGO — preciso de um humano*\n\n` +
         `Cliente: ${nomeCliente || '(sem nome)'}\n` +
