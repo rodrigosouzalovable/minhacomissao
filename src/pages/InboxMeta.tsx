@@ -1041,28 +1041,14 @@ export default function InboxMeta() {
       return;
     }
 
-    // Código Pix vai sempre em mensagem própria e sem o prefixo do atendente,
-    // acompanhado de um botão "Copiar código Pix" (link) para o cliente copiar no WhatsApp.
+    // Código Pix vai sempre em mensagem própria, sozinho e sem o prefixo do atendente:
+    // é assim que o WhatsApp reconhece o código e exibe o botão nativo "Copiar código Pix".
     const { resto, pix } = separarPix(raw);
 
-    let pixBotaoUrl: string | null = null;
-    if (pix) {
-      try {
-        const linkId = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
-        const { error: linkErr } = await supabase.from('pix_links').insert({
-          id: linkId,
-          codigo: pix,
-          telefone: contatoAtivo.telefone || null,
-          instancia_id: contatoAtivo.instancia_id,
-          user_id: user?.id || null,
-        } as any);
-        if (!linkErr) pixBotaoUrl = `${window.location.origin}/pix/${linkId}`;
-      } catch { /* segue sem botão */ }
-    }
-
-    const fila: { texto: string; botaoUrl?: string | null }[] = pix
-      ? [...(resto ? [{ texto: formatarMensagemAtendente(resto) }] : []), { texto: pix, botaoUrl: pixBotaoUrl }]
+    const fila: { texto: string }[] = pix
+      ? [...(resto ? [{ texto: formatarMensagemAtendente(resto) }] : []), { texto: pix }]
       : [{ texto: formatarMensagemAtendente(raw) }];
+
 
     setEnviando(true);
     const replyTo = respondendo?.wa_message_id;
@@ -1092,9 +1078,8 @@ export default function InboxMeta() {
               user_id: user?.id,
               reply_to_wa_id: i === 0 ? replyTo : undefined,
               conteudo_citado: i === 0 ? replySnap : undefined,
-              botao_url: fila[i].botaoUrl || undefined,
-              botao_texto: fila[i].botaoUrl ? 'Copiar código Pix' : undefined,
             },
+
           });
           if (error) throw new Error(error.message);
           if (!data?.success) throw new Error(data?.error || 'Falha');
