@@ -144,6 +144,30 @@ export async function etiquetarAguardandoHumano(supabase: any, contatoId: string
   }
 }
 
+/** Aplica a etiqueta existente "ACORDO FECHADO" (nunca cria). */
+export async function etiquetarAcordoFechado(supabase: any, contatoId: string) {
+  try {
+    const { data: et } = await supabase
+      .from('meta_whatsapp_etiquetas')
+      .select('id')
+      .ilike('nome', ETIQUETA_ACORDO_FECHADO)
+      .limit(1)
+      .maybeSingle();
+
+    if (!et?.id) {
+      console.log('[IAGO] etiqueta ACORDO FECHADO inexistente — ignorando');
+      return;
+    }
+
+    await supabase.from('meta_whatsapp_contato_etiquetas').upsert(
+      { contato_id: contatoId, etiqueta_id: (et as any).id, origem: 'manual' },
+      { onConflict: 'contato_id,etiqueta_id', ignoreDuplicates: true },
+    );
+  } catch (e: any) {
+    console.error('[IAGO] falha ao etiquetar ACORDO FECHADO', e?.message || e);
+  }
+}
+
 export async function avisarEmergencia(supabase: any, mensagem: string, contatoId?: string) {
   if (contatoId) await etiquetarAguardandoHumano(supabase, contatoId);
 
