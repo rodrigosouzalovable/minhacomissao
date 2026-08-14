@@ -437,7 +437,7 @@ export function classificarDataPagamento(texto: string): DataPagamento {
     return {
       classe: mesmoDia ? 'hoje' : mesmoMes ? 'dentro_do_mes' : 'fora_do_mes',
       dataIso: isoLocal(d),
-      label: mesmoDia ? 'hoje' : fmtData(d),
+      label: mesmoDia ? 'hoje' : `${DIAS_SEMANA[d.getDay()]}, dia ${fmtData(d)}`,
     };
   };
 
@@ -451,9 +451,23 @@ export function classificarDataPagamento(texto: string): DataPagamento {
   if (/(depois de amanha)/.test(t)) {
     const d = new Date(hoje); d.setDate(d.getDate() + 2); return classificar(d);
   }
+
+  // Dia da semana: "segunda", "segunda-feira", "seg", "sexta que vem", "sábado"
+  const diaSemana = detectarDiaSemana(t);
+  if (diaSemana !== null) {
+    const { idx, proxima } = diaSemana;
+    const d = new Date(hoje);
+    let delta = (idx - hoje.getDay() + 7) % 7;
+    if (delta === 0) delta = 7; // "segunda" dito na segunda = próxima segunda
+    if (proxima && delta < 7 && idx <= hoje.getDay()) delta += 7;
+    d.setDate(d.getDate() + delta);
+    return classificar(d);
+  }
+
   if (/(semana que vem|proxima semana)/.test(t)) {
     const d = new Date(hoje); d.setDate(d.getDate() + 7); return classificar(d);
   }
+
 
   // 20/08, 20/08/2026, 20-08
   const md = t.match(/\b(\d{1,2})\s*[\/\-.]\s*(\d{1,2})(?:\s*[\/\-.]\s*(\d{2,4}))?\b/);
