@@ -34,6 +34,8 @@ import MetaIAConfigDialog from '@/components/inbox/meta/MetaIAConfigDialog';
 import { MetaQualificacaoDialog, type MetaQualificacao } from '@/components/inbox/meta/MetaQualificacaoDialog';
 import { MetaFolderConfigDialog, CAIXA_PADRAO_ID } from '@/components/inbox/meta/MetaFolderConfigDialog';
 import { CopyButton } from '@/components/CopyButton';
+import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
+
 
 import { useUserRole } from '@/hooks/useUserRole';
 import {
