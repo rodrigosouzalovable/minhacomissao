@@ -62,16 +62,30 @@ Deno.serve(async (req) => {
     if (!mensagemId) return json({ error: "mensagem_id é obrigatório" }, 400);
 
     const authHeader = req.headers.get("Authorization") || "";
-    if (!authHeader) return json({ error: "não autenticado" }, 401);
+    if (!authHeader) {
+      console.error("[transcrever-audio] chamada sem Authorization", { mensagem_id: mensagemId });
+      return json({ error: "não autenticado" }, 401);
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    // Client com o token de quem chamou: usuário passa pela RLS, webhook usa service role.
-    const caller = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    admin = createClient(supabaseUrl, serviceKey);
 
-    console.log("[transcrever-audio] início", { mensagem_id: mensagemId, duracao_segundos: duracaoInformada || null });
+    // Chamada interna (webhook/cron) usa service role e ignora RLS; chamada de
+    // usuário passa pelas políticas de acesso normalmente.
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const chamadaInterna = token === serviceKey;
+    const caller = chamadaInterna
+      ? admin
+      : createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+
+    console.log("[transcrever-audio] início", {
+      mensagem_id: mensagemId,
+      duracao_segundos: duracaoInformada || null,
+      interna: chamadaInterna,
+    });
 
     const { data: msg, error: msgErr } = await caller
       .from("meta_whatsapp_mensagens")
@@ -79,8 +93,17 @@ Deno.serve(async (req) => {
       .eq("id", mensagemId)
       .maybeSingle();
 
-    if (msgErr) return json({ error: msgErr.message }, 403);
-    if (!msg) return json({ error: "mensagem não encontrada ou sem acesso" }, 404);
+    if (msgErr) {
+      console.error("[transcrever-audio] erro ao ler mensagem", msgErr.message);
+      await marcarStatus("erro");
+      return json({ error: msgErr.message }, 403);
+    }
+    if (!msg) {
+      console.error("[transcrever-audio] mensagem não encontrada/sem acesso", { mensagem_id: mensagemId });
+      await marcarStatus("erro");
+      return json({ error: "mensagem não encontrada ou sem acesso" }, 404);
+    }
+
 
     // Idempotente: já transcrita, devolve o que está salvo.
     if (msg.transcricao) {
