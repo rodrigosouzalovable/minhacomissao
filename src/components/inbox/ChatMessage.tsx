@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ensureInboxMediaUrl } from '@/lib/inboxMediaUrl';
 import { extrairPix } from '@/lib/pixCode';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ContatoCompartilhadoTelefone {
   numero: string;
