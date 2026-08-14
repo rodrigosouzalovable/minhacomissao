@@ -43,6 +43,14 @@ export function ehOptOut(texto: string): boolean {
   return /(bloquear\s*contato|bloquear|me\s*bloqueia|nao\s*quero\s*mais\s*receber|nao\s*quero\s*receber|sair\s*da\s*lista|descadastr|para\s*de\s*me\s*mandar|pare\s*de\s*me\s*enviar|remover\s*meu\s*numero)/.test(t);
 }
 
+/** Cliente avisou que não é a pessoa procurada / número errado. */
+export function ehNumeroErrado(texto: string): boolean {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!t.trim()) return false;
+  return /(nao\s*(sou|e)\s*(o|a|essa|esse|est[ae])?\s*\w*|nao\s*e\s*(o\s*)?meu\s*(nome|numero)|numero\s*errado|telefone\s*errado|pessoa\s*errada|nao\s*conhe(c|ss)o|voce\s*errou\s*o\s*numero|(e|foi)\s*engano|ligou\s*errado|nao\s*e\s*comigo|aqui\s*(quem\s*fala\s*)?(e|nao\s*e))/.test(t)
+    && /(nao\s*sou|nao\s*e\s*meu|nao\s*e\s*o\s*meu|numero\s*errado|telefone\s*errado|pessoa\s*errada|nao\s*conhe(c|ss)o|engano|ligou\s*errado|nao\s*e\s*comigo)/.test(t);
+}
+
 /** Extrai CPF/CNPJ tolerando máscara e texto ao redor. */
 export function extrairDoc(texto: string): string {
   const t = String(texto || '');
