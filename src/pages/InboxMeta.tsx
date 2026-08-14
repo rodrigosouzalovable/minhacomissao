@@ -219,6 +219,9 @@ export default function InboxMeta() {
 
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
+  const [padraoVerificado, setPadraoVerificado] = useState(false);
+  // Marca quando o usuário escolhe manualmente uma caixa (evita voltar para Padrão depois)
+  const escolhaManualFolderRef = useRef(false);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
 
   
