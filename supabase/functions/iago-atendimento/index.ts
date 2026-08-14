@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
 
     // ===== Redação da resposta =====
     const resultado = await gerarResposta({
-      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false,
+      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
     });
 
