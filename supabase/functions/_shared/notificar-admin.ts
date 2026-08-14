@@ -6,6 +6,8 @@ export interface NotificarAdminParams {
   tipo: string;
   mensagem: string;
   chaveIdempotencia?: string;
+  /** Envia no máximo 1 vez por chave, mesmo que a tentativa anterior tenha falhado */
+  umaVezPorChave?: boolean;
   forcarFlag?: keyof FlagsToggle;
   /** Se informado, envia para estes números em vez do admin_phone padrão */
   destinatarios?: string[];
