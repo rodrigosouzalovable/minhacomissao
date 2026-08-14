@@ -62,7 +62,7 @@ interface MetaInstance {
   saude_checked_at?: string | null;
 }
 interface MetaContato {
-  id: string; instancia_id: string; telefone: string; nome: string | null;
+  id: string; instancia_id: string; telefone: string; nome: string | null; cpf?: string | null;
   ultima_mensagem: string | null; ultima_mensagem_em: string | null;
   ultima_msg_entrada_em: string | null; nao_lido: number;
   fixado: boolean; arquivado: boolean;
