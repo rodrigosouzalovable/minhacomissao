@@ -299,25 +299,30 @@ async function gerarResposta(args: {
   temAcordo: boolean;
   nomeCliente: string;
   primeiroToque: boolean;
+  credorCaixa?: string;
 }): Promise<{ mensagens: string[]; escalar: boolean; motivo: string }> {
-  const { cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque } = args;
+  const { cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa } = args;
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
   const qa = itens.filter((i) => i.tipo === 'qa').map((i) => `P: ${i.gatilho}\nR: ${i.conteudo}`).join('\n\n');
   const proibidos = blocoConhecimento(itens, 'proibido');
   const aprendizados = blocoConhecimento(itens, 'aprendizado');
 
+  const credorFinal = String(credorCaixa || proposta?.credor || '').trim();
+
   const dados = proposta
     ? [
         `Cliente: ${nomeCliente || '(sem nome)'}`,
-        `Credor: ${proposta.credor}`,
+        `Credor: ${credorFinal}`,
         `Dívida atualizada: ${fmtBRL(proposta.total)}`,
         `À vista com ${proposta.descAvistaPct}% de desconto: ${fmtBRL(proposta.valorAvista)}`,
         `Parcelado com ${proposta.descParceladoPct}% de desconto (total ${fmtBRL(proposta.totalParcelado)}):`,
         ...proposta.opcoes.map((o: any) => `  • ${o.parcelas}x de ${fmtBRL(o.valorParcela)}`),
         'Parcela mínima permitida: R$ 100,00. Primeira parcela/entrada em até 10 dias.',
       ].join('\n')
-    : 'Ainda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.';
+    : (credorFinal
+        ? `Credor desta negociação: ${credorFinal}.\nAinda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.`
+        : 'Ainda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.');
 
   const system = [
     `Você é ${cfg.persona_nome || 'Iago'}, atendente de cobrança da equipe, conversando por WhatsApp.`,
