@@ -106,22 +106,54 @@ Deno.serve(async (req) => {
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const body: any = {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: useBsuid ? bsuid : to,
-      type: 'text',
-      text: { preview_url: false, body: String(texto).slice(0, 4096) },
+    const montarBody = (comBotao: boolean) => {
+      const b: any = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: useBsuid ? bsuid : to,
+      };
+      if (comBotao) {
+        // Botão de link (cta_url) — usado para o "Copiar código Pix" no WhatsApp do cliente
+        b.type = 'interactive';
+        b.interactive = {
+          type: 'cta_url',
+          body: { text: String(texto).slice(0, 1024) },
+          action: {
+            name: 'cta_url',
+            parameters: {
+              display_text: String(botao_texto || 'Copiar código Pix').slice(0, 20),
+              url: botao_url,
+            },
+          },
+        };
+      } else {
+        b.type = 'text';
+        b.text = { preview_url: false, body: String(texto).slice(0, 4096) };
+      }
+      if (reply_to_wa_id) b.context = { message_id: reply_to_wa_id };
+      return b;
     };
-    if (reply_to_wa_id) body.context = { message_id: reply_to_wa_id };
 
-    const res = await fetch(`https://graph.facebook.com/v21.0/${inst.phone_number_id}/messages`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const enviarGraph = async (payload: any) => {
+      const r = await fetch(`https://graph.facebook.com/v21.0/${inst.phone_number_id}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json().catch(() => ({}));
+      return { ok: r.ok, status: r.status, json: j };
+    };
 
-    const data = await res.json().catch(() => ({}));
+    const querBotao = !!botao_url && /^https:\/\//i.test(String(botao_url));
+    let res = await enviarGraph(montarBody(querBotao));
+    let data = res.json;
+
+    // Fallback: se a Meta recusar o interativo, reenvia como texto simples
+    if (!res.ok && querBotao) {
+      console.log('[send-whatsapp-meta-text] cta_url recusado, fallback texto:', data?.error?.message);
+      res = await enviarGraph(montarBody(false));
+      data = res.json;
+    }
 
     if (!res.ok) {
       const erro = data?.error?.message || `HTTP ${res.status}`;
