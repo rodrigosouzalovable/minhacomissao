@@ -3648,6 +3648,33 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_inbox_folder_credores: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          folder_id: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          folder_id: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          folder_id?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meta_inbox_folder_members: {
         Row: {
           created_at: string
