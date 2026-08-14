@@ -441,6 +441,14 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Dúvida que ele não sabe responder / assunto proibido: NÃO envia nada.
+    // Apenas escala para humano (etiqueta + aviso) para não dar resposta errada.
+    if (escalouPorDuvida && !escolha) {
+      mensagens = [];
+      console.log('[IAGO] escalada por dúvida — nenhuma mensagem enviada', { contato_id, motivo });
+    }
+
+
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
     const novosIds: string[] = [];
     for (let i = 0; i < mensagens.length; i++) {
