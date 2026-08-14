@@ -212,6 +212,26 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       );
     }
 
+    // Botão "Copiar código Pix" quando a mensagem contém um payload Pix Copia e Cola
+    const renderPix = () => {
+      const codigo = extrairPix(msg.conteudo);
+      if (!codigo) return null;
+      return (
+        <div className="mt-2 pt-1.5 border-t border-border/40">
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(codigo);
+              toast({ title: 'Código Pix copiado' });
+            }}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded hover:bg-background/60 transition"
+          >
+            <Copy className="h-3.5 w-3.5" /> Copiar código Pix
+          </button>
+        </div>
+      );
+    };
+
     // Renderiza a lista de botões do template (URL / QUICK_REPLY / PHONE_NUMBER)
     const renderBotoes = () => {
       const botoes = msg.template_botoes;
