@@ -38,6 +38,13 @@ export function MetaFolderConfigDialog({
   const [novoCredor, setNovoCredor] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Plantão do IAGO
+  const [plantaoAtivo, setPlantaoAtivo] = useState(false);
+  const [horaInicio, setHoraInicio] = useState('17:00');
+  const [horaFim, setHoraFim] = useState('08:00');
+  const [fimSemana24h, setFimSemana24h] = useState(true);
+  const [plantaoBusy, setPlantaoBusy] = useState(false);
+
   useEffect(() => { if (open) setAtivo(qualificacaoAtiva); }, [open, qualificacaoAtiva]);
 
   const carregarCredores = useCallback(async () => {
@@ -54,6 +61,48 @@ export function MetaFolderConfigDialog({
   }, [alvo, toast]);
 
   useEffect(() => { if (open) carregarCredores(); }, [open, carregarCredores]);
+
+  const carregarPlantao = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from('meta_inbox_folder_iago_janela')
+      .select('ativo, hora_inicio, hora_fim, fim_semana_24h')
+      .eq('folder_id', alvo)
+      .maybeSingle();
+    setPlantaoAtivo(!!data?.ativo);
+    setHoraInicio(String(data?.hora_inicio || '17:00').slice(0, 5));
+    setHoraFim(String(data?.hora_fim || '08:00').slice(0, 5));
+    setFimSemana24h(data?.fim_semana_24h !== false);
+  }, [alvo]);
+
+  useEffect(() => { if (open) carregarPlantao(); }, [open, carregarPlantao]);
+
+  const salvarPlantao = async (patch: {
+    ativo?: boolean; hora_inicio?: string; hora_fim?: string; fim_semana_24h?: boolean;
+  }) => {
+    const payload = {
+      folder_id: alvo,
+      ativo: patch.ativo ?? plantaoAtivo,
+      hora_inicio: patch.hora_inicio ?? horaInicio,
+      hora_fim: patch.hora_fim ?? horaFim,
+      fim_semana_24h: patch.fim_semana_24h ?? fimSemana24h,
+      updated_at: new Date().toISOString(),
+    };
+    setPlantaoBusy(true);
+    const { error } = await (supabase as any)
+      .from('meta_inbox_folder_iago_janela')
+      .upsert(payload, { onConflict: 'folder_id' });
+    setPlantaoBusy(false);
+    if (error) {
+      toast({ title: 'Erro ao salvar plantão', description: error.message, variant: 'destructive' });
+      carregarPlantao();
+      return;
+    }
+    setPlantaoAtivo(payload.ativo);
+    setHoraInicio(payload.hora_inicio);
+    setHoraFim(payload.hora_fim);
+    setFimSemana24h(payload.fim_semana_24h);
+  };
+
 
   const salvar = async (valor: boolean) => {
     setAtivo(valor);
@@ -145,6 +194,64 @@ export function MetaFolderConfigDialog({
           </div>
           <Switch checked={ativo} disabled={salvando} onCheckedChange={salvar} />
         </div>
+
+        <div className="space-y-3 rounded-md border p-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label className="text-sm">Plantão do IAGO</Label>
+              <p className="text-xs text-muted-foreground">
+                No horário definido, o IAGO assume automaticamente todos os novos clientes desta caixa
+                (em vez do rodízio dos atendentes).
+              </p>
+            </div>
+            <Switch
+              checked={plantaoAtivo}
+              disabled={plantaoBusy}
+              onCheckedChange={(v) => salvarPlantao({ ativo: v })}
+              aria-label="Ativar plantão do IAGO"
+            />
+          </div>
+
+          <div className="flex items-end gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Início</Label>
+              <Input
+                type="time"
+                value={horaInicio}
+                disabled={plantaoBusy}
+                onChange={(e) => setHoraInicio(e.target.value)}
+                onBlur={(e) => salvarPlantao({ hora_inicio: e.target.value })}
+                className="h-9 w-28"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Fim</Label>
+              <Input
+                type="time"
+                value={horaFim}
+                disabled={plantaoBusy}
+                onChange={(e) => setHoraFim(e.target.value)}
+                onBlur={(e) => salvarPlantao({ hora_fim: e.target.value })}
+                className="h-9 w-28"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Horário de Brasília. Janela que vira a madrugada é aceita (ex.: 17:00 → 08:00).
+          </p>
+
+          <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
+            <span className="text-sm">Sábado e domingo 24h</span>
+            <Switch
+              checked={fimSemana24h}
+              disabled={plantaoBusy}
+              onCheckedChange={(v) => salvarPlantao({ fim_semana_24h: v })}
+              aria-label="IAGO atende 24h nos fins de semana"
+            />
+          </div>
+        </div>
+
+
 
         <div className="space-y-3 rounded-md border p-3">
           <div className="space-y-0.5">

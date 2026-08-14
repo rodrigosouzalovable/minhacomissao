@@ -3675,6 +3675,36 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_inbox_folder_iago_janela: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          fim_semana_24h: boolean
+          folder_id: string
+          hora_fim: string
+          hora_inicio: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          fim_semana_24h?: boolean
+          folder_id: string
+          hora_fim?: string
+          hora_inicio?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          fim_semana_24h?: boolean
+          folder_id?: string
+          hora_fim?: string
+          hora_inicio?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meta_inbox_folder_members: {
         Row: {
           created_at: string
