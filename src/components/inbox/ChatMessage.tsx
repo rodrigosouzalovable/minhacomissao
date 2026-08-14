@@ -393,6 +393,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
     return (
       <div className="flex flex-col">
         <p className="whitespace-pre-wrap break-words select-text cursor-text">{msg.conteudo}</p>
+        {renderPix()}
         {renderBotoes()}
       </div>
     );
