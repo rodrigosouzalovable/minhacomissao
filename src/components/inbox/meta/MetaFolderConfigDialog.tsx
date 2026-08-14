@@ -196,6 +196,64 @@ export function MetaFolderConfigDialog({
         </div>
 
         <div className="space-y-3 rounded-md border p-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label className="text-sm">Plantão do IAGO</Label>
+              <p className="text-xs text-muted-foreground">
+                No horário definido, o IAGO assume automaticamente todos os novos clientes desta caixa
+                (em vez do rodízio dos atendentes).
+              </p>
+            </div>
+            <Switch
+              checked={plantaoAtivo}
+              disabled={plantaoBusy}
+              onCheckedChange={(v) => salvarPlantao({ ativo: v })}
+              aria-label="Ativar plantão do IAGO"
+            />
+          </div>
+
+          <div className="flex items-end gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Início</Label>
+              <Input
+                type="time"
+                value={horaInicio}
+                disabled={plantaoBusy}
+                onChange={(e) => setHoraInicio(e.target.value)}
+                onBlur={(e) => salvarPlantao({ hora_inicio: e.target.value })}
+                className="h-9 w-28"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Fim</Label>
+              <Input
+                type="time"
+                value={horaFim}
+                disabled={plantaoBusy}
+                onChange={(e) => setHoraFim(e.target.value)}
+                onBlur={(e) => salvarPlantao({ hora_fim: e.target.value })}
+                className="h-9 w-28"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Horário de Brasília. Janela que vira a madrugada é aceita (ex.: 17:00 → 08:00).
+          </p>
+
+          <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
+            <span className="text-sm">Sábado e domingo 24h</span>
+            <Switch
+              checked={fimSemana24h}
+              disabled={plantaoBusy}
+              onCheckedChange={(v) => salvarPlantao({ fim_semana_24h: v })}
+              aria-label="IAGO atende 24h nos fins de semana"
+            />
+          </div>
+        </div>
+
+
+
+        <div className="space-y-3 rounded-md border p-3">
           <div className="space-y-0.5">
             <Label className="text-sm">Credor da caixa</Label>
             <p className="text-xs text-muted-foreground">
