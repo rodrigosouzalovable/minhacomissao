@@ -96,8 +96,8 @@ Deno.serve(async (req) => {
     if (!estado) return json({ success: false, error: 'falha ao criar estado' }, 500);
 
     // ===== Plantão: conversa recém-assumida de um atendente humano =====
-    // Zera o "aguardando humano" e usa o momento da transferência como corte,
-    // para as mensagens antigas do humano não silenciarem o IAGO.
+    // Libera o "aguardando humano", mas NÃO apaga o corte: mensagens humanas
+    // recentes continuam valendo (regra dos 10 minutos mais abaixo).
     try {
       const { data: transf } = await supabase
         .from('iago_plantao_transferencia')
@@ -110,8 +110,8 @@ Deno.serve(async (req) => {
         const novoContexto = {
           ...((estado as any).contexto || {}),
           plantao_assumido_em: assumidoEm,
-          ultimo_envio_ia: assumidoEm,
         };
+
         const { data: atualizado } = await supabase
           .from('iago_conversa_estado')
           .update({ aguardando_humano: false, contexto: novoContexto })
@@ -238,18 +238,45 @@ Deno.serve(async (req) => {
 
 
 
-    // ===== Humano assumiu? (saída que não é do IAGO depois do último envio dele) =====
+    // ===== Humano respondeu? (saída que não é do IAGO depois do último envio dele) =====
+    // Regra: enquanto a resposta humana tiver menos de 10 minutos, o IAGO fica calado.
+    // Passados os 10 minutos sem nova interação humana, ele volta a atender.
     const idsIA: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
     const corte = String(estado.contexto?.ultimo_envio_ia || estado.created_at);
     const saidaHumana = historico.filter(
       (m) => m.direcao === 'saida' && !idsIA.includes(m.id) && String(m.criado_em) > corte,
     );
     if (saidaHumana.length && estado.etapa !== 'inicio') {
-      await supabase.from('iago_conversa_estado')
-        .update({ aguardando_humano: true, followup_em: null }).eq('id', estado.id);
-      await finalizarEntrada();
-      return json({ success: true, skipped: 'humano assumiu' });
+      const ultimaHumana = saidaHumana.reduce(
+        (acc, m) => (String(m.criado_em) > String(acc.criado_em) ? m : acc),
+        saidaHumana[0],
+      );
+      const idadeMs = Date.now() - new Date(String(ultimaHumana.criado_em)).getTime();
+      const JANELA_HUMANA_MS = 10 * 60 * 1000;
+      if (idadeMs < JANELA_HUMANA_MS) {
+        await supabase.from('iago_conversa_estado')
+          .update({ followup_em: null }).eq('id', estado.id);
+        await finalizarEntrada();
+        console.log('[IAGO] humano respondeu há pouco — IAGO calado', {
+          contato_id, minutos: Math.round(idadeMs / 60000),
+        });
+        return json({ success: true, skipped: 'humano respondeu nos últimos 10 min' });
+      }
+      // Mais de 10 min sem interação humana: assume a conversa a partir dessa saída.
+      const novoCorte = String(ultimaHumana.criado_em);
+      const { data: liberado } = await supabase
+        .from('iago_conversa_estado')
+        .update({
+          aguardando_humano: false,
+          contexto: { ...(estado.contexto || {}), ultimo_envio_ia: novoCorte },
+        })
+        .eq('id', estado.id)
+        .select('*')
+        .maybeSingle();
+      if (liberado) estado = liberado;
+      console.log('[IAGO] humano inativo há mais de 10 min — IAGO retoma', { contato_id });
     }
+
 
     // ===== Contexto financeiro real =====
     let cpf = estado.cpf || '';
@@ -347,6 +374,8 @@ Deno.serve(async (req) => {
 
     // ===== Escolha da forma de pagamento => confirmar a DATA antes de chamar humano =====
     let escalar = !!resultado?.escalar;
+    const escalouPorDuvida = !!resultado?.escalar;
+
     let motivo = String(resultado?.motivo || '');
     let etapaNova = escalar ? 'aguardando_humano' : (proposta ? 'proposta' : 'conversando');
     let dataAcordada: string | null = ctxAnterior.data_pagamento || null;
@@ -412,6 +441,14 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Dúvida que ele não sabe responder / assunto proibido: NÃO envia nada.
+    // Apenas escala para humano (etiqueta + aviso) para não dar resposta errada.
+    if (escalouPorDuvida && !escolha) {
+      mensagens = [];
+      console.log('[IAGO] escalada por dúvida — nenhuma mensagem enviada', { contato_id, motivo });
+    }
+
+
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
     const novosIds: string[] = [];
     for (let i = 0; i < mensagens.length; i++) {
@@ -452,6 +489,8 @@ Deno.serve(async (req) => {
     }).eq('id', estado.id);
 
     if (escalar) {
+      await etiquetarAguardandoHumano(supabase, contato_id);
+
       await avisarEmergencia(supabase,
         `👤 *IAGO — preciso de um humano*\n\n` +
         `Cliente: ${nomeCliente || '(sem nome)'}\n` +
