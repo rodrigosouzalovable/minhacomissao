@@ -222,7 +222,9 @@ export interface RenderCtx {
   descontoVistaPct: number;
   parceladoQtd: number;
   descontoParceladoPct: number;
+  nomeUsuario?: string;
 }
+
 
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
