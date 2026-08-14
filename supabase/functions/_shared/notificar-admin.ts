@@ -37,15 +37,44 @@ const isRetryableInstanceError = (text: string, status: number) => {
   );
 };
 
+/**
+ * Avalia a resposta do provedor de forma estruturada.
+ * Antes bastava a palavra "error" no corpo para marcar falha — o que dava
+ * falso positivo em respostas de sucesso que trazem blocos de metadados
+ * (ex.: new_chat_message_capping / reachout_timelock).
+ */
 const hasProviderError = (text: string) => {
-  const normalized = text.toLowerCase();
-  return (
-    normalized.includes('"error":true') ||
-    normalized.includes('"success":false') ||
-    normalized.includes("falha") ||
-    normalized.includes("error")
-  );
+  const bruto = String(text || "").trim();
+  if (!bruto) return false;
+
+  let data: any = null;
+  try {
+    data = JSON.parse(bruto);
+  } catch (_) {
+    // Não é JSON: só considera erro se for uma mensagem de erro explícita
+    const n = bruto.toLowerCase();
+    return n.includes("error") || n.includes("falha") || n.includes("not allowed");
+  }
+
+  if (!data || typeof data !== "object") return false;
+
+  // Indicadores explícitos de sucesso (id da mensagem devolvido pelo provedor)
+  const idMsg =
+    data.id ?? data.messageid ?? data.messageId ?? data.key?.id ?? data.message?.id ?? data.data?.id;
+  const explicitOk = data.success === true || data.status === "success" || data.sent === true;
+  const explicitErr =
+    data.error === true ||
+    data.success === false ||
+    (typeof data.error === "string" && data.error.trim() !== "") ||
+    (data.error && typeof data.error === "object") ||
+    (typeof data.code === "number" && data.code >= 400) ||
+    (typeof data.message === "string" && /not allowed|unauthorized|forbidden|invalid|fail/i.test(data.message));
+
+  if (explicitErr) return true;
+  if (explicitOk || idMsg) return false;
+  return false;
 };
+
 
 const uazUrl = (base: string, path: string, query?: Record<string, string>) => {
   const url = new URL(`${base.replace(/\/+$/, "")}${path}`);
