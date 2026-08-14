@@ -91,6 +91,9 @@ function formatTelefone(t: string) {
   if (d.length >= 12) return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
   return t;
 }
+function telefoneSemDDI(t: string) {
+  return t.replace(/\D/g, '').replace(/^55/, '');
+}
 function formatMsgTime(ts: string) { try { return format(new Date(ts), 'HH:mm', { locale: ptBR }); } catch { return ''; } }
 function formatContatoTime(ts: string | null) {
   if (!ts) return '';
@@ -1661,7 +1664,7 @@ export default function InboxMeta() {
                   <div className="text-xs text-muted-foreground truncate flex items-center gap-1">
                     {contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.bsuid || '—')}
                     {contatoAtivo.telefone && (
-                      <CopyButton value={contatoAtivo.telefone} label="Telefone" />
+                      <CopyButton value={telefoneSemDDI(contatoAtivo.telefone)} label="Telefone" />
                     )}
                     <span>· via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}</span>
                   </div>
