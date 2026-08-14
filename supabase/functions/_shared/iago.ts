@@ -140,6 +140,18 @@ export async function etiquetarAguardandoHumano(supabase: any, contatoId: string
 export async function avisarEmergencia(supabase: any, mensagem: string, contatoId?: string) {
   if (contatoId) await etiquetarAguardandoHumano(supabase, contatoId);
 
+  // Registro interno (painel/sino) — nunca depende da entrega no WhatsApp
+  try {
+    await supabase.from('admin_notificacoes_log').insert({
+      tipo: 'iago_humano_painel',
+      chave_idempotencia: contatoId ? `iago:${contatoId}:${Date.now()}` : null,
+      mensagem,
+      status: 'interno',
+    });
+  } catch (e: any) {
+    console.error('[IAGO] falha ao registrar aviso interno', e?.message || e);
+  }
+
   const { data: contatos } = await supabase
     .from('meta_ia_contatos_emergencia').select('telefone').eq('ativo', true);
   const destinatarios = (contatos || [])
@@ -154,6 +166,7 @@ export async function avisarEmergencia(supabase: any, mensagem: string, contatoI
   if (!res.success) console.error('[IAGO] falha ao avisar emergência', (res as any).error || (res as any).skipped);
   return res;
 }
+
 
 export async function enviarTexto(
   supabase: any,
