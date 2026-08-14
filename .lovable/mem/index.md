@@ -4,3 +4,5 @@
 - [Storage Mídia Privado](mem://technical/whatsapp/storage-public-access) — Bucket inbox-media é PRIVADO; usar URLs assinadas (1 ano) para exibir e para Meta/UAZAPI baixarem
 - [Plantão IAGO por Caixa](mem://features/whatsapp/iago-plantao-caixa) — Janela horária por caixa em que o IAGO assume todos os novos clientes (default 17h-08h, fds 24h)
 - [Entrega Avisos IAGO](mem://features/whatsapp/iago-aviso-humano-entrega) — Validação real da resposta do provedor, fallback Meta oficial, sino interno admin e reenvio de pendentes
+- [Data de Pagamento IAGO](mem://features/whatsapp/iago-confirmacao-data-pagamento) — Após a escolha: pergunta se paga hoje, depois que dia; data fora do mês escala para humano
+
