@@ -222,7 +222,9 @@ export interface RenderCtx {
   descontoVistaPct: number;
   parceladoQtd: number;
   descontoParceladoPct: number;
+  nomeUsuario?: string;
 }
+
 
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -252,21 +254,22 @@ function titleCaseFirst(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+export const GRADE_PARCELAS = [2, 4, 8, 12, 16, 20, 24];
+export const PARCELA_MINIMA = 100;
+
 function buildOpcoesParcelado(total: number, descPct: number): string {
   const valorTotal = total * (1 - (descPct || 0) / 100);
-  const candidatos = [4, 8, 12, 15];
-  const escolhidos = candidatos.filter((n) => n >= 2 && valorTotal / n >= 100);
+  const escolhidos = GRADE_PARCELAS.filter((n) => valorTotal / n >= PARCELA_MINIMA);
   if (escolhidos.length === 0) return '';
-  return escolhidos
-    .map((n) => {
-      const parcela = valorTotal / n;
-      return `✅ *PARCELADO* em ${n}x de ${fmtBRL(parcela)}\n   (total R$ ${fmtBRL(valorTotal)}, ${descPct}% de desconto)`;
-    })
-    .join('\n\n');
+  const linhas = escolhidos
+    .map((n) => `   ${n}x de R$ ${fmtBRL(valorTotal / n)}`)
+    .join('\n');
+  return `✅ *PARCELADO* com ${descPct}% de desconto (total R$ ${fmtBRL(valorTotal)}):\n\n${linhas}`;
 }
 
+
 export function renderMensagem(tpl: string, ctx: RenderCtx): string {
-  const { cliente, descontoVistaPct, parceladoQtd, descontoParceladoPct } = ctx;
+  const { cliente, descontoVistaPct, parceladoQtd, descontoParceladoPct, nomeUsuario } = ctx;
   const total = cliente.totalAtraso || 0;
   const qtdAberto = cliente.parcelas.length || 1;
   const valorParcelaAberto = total / qtdAberto;
@@ -282,7 +285,9 @@ export function renderMensagem(tpl: string, ctx: RenderCtx): string {
   const primeiroNomeRaw = (cliente.nome || '').trim().split(/\s+/)[0] || cliente.nome || '';
 
   const map: Record<string, string> = {
+    '{nome_usuario}': toTitleCasePt(nomeUsuario || ''),
     '{nome}': toTitleCasePt(cliente.nome),
+
     '{primeiro_nome}': titleCaseFirst(primeiroNomeRaw),
     '{cpf}': cliente.cpf,
     '{contrato}': cliente.contrato,

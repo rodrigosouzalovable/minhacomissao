@@ -34,6 +34,8 @@ import MetaIAConfigDialog from '@/components/inbox/meta/MetaIAConfigDialog';
 import { MetaQualificacaoDialog, type MetaQualificacao } from '@/components/inbox/meta/MetaQualificacaoDialog';
 import { MetaFolderConfigDialog, CAIXA_PADRAO_ID } from '@/components/inbox/meta/MetaFolderConfigDialog';
 import { CopyButton } from '@/components/CopyButton';
+import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
+
 
 import { useUserRole } from '@/hooks/useUserRole';
 import {
@@ -192,6 +194,8 @@ export default function InboxMeta() {
   const [qualifPorContato, setQualifPorContato] = useState<Record<string, string[]>>({});
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
+  const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
+
   // Meus Clientes (conversas com a etiqueta do próprio usuário)
   const [modoMeusClientes, setModoMeusClientes] = useState(false);
   const [mcDataIni, setMcDataIni] = useState<Date | undefined>(undefined);
@@ -1771,6 +1775,16 @@ export default function InboxMeta() {
                       })()}
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={() => setModeloMsgOpen(true)}
+                    title="Gerar mensagem de negociação (Modelo Mensagem)"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Modelo
+                  </Button>
+
                   {janelaInfo.status === 'aberta' ? (
                     <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
                       <Clock className="h-3 w-3" /> Aberta · fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
@@ -2038,6 +2052,8 @@ export default function InboxMeta() {
         onChanged={fetchFolders}
       />
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
+      <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} />
+
       <MetaFolderConfigDialog
         open={!!configFolder}
         onOpenChange={(v) => { if (!v) setConfigFolder(null); }}

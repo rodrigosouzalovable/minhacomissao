@@ -8,7 +8,7 @@ IAGO RIBEIRO DE SOUZA é um usuário real do sistema que atende como humano no I
 
 - Atua somente nas caixas em que estiver marcado em "Atendentes desta caixa" (`meta_inbox_folder_members` / `meta_inbox_default_members`) E na conversa que tiver a etiqueta `Atendente: IAGO...`. Conversa de outro atendente ou sem etiqueta: não responde.
 - Atendimento 24h/7 dias. Nunca se identifica como IA/robô. Nunca lança acordo.
-- Valores sempre calculados pelo sistema (débitos + `meta_ia_config`: desconto à vista, 30% parcelado, grade 4x/8x/12x/16x/20x/24x, parcela mínima R$ 100).
+- Valores sempre calculados pelo sistema (débitos + `meta_ia_config`: desconto à vista, 30% parcelado, grade 2x/4x/8x/12x/16x/20x/24x, parcela mínima R$ 100 — se nenhuma parcela alcança R$ 100, oferece só o à vista). Proposta enviada no mesmo formato da aba Modelo Mensagem (à vista em destaque + lista de parcelas + pergunta final).
 - Follow-up: **um único** toque, `followup_horas` (padrão 2h) depois, só entre 08h e 19h BRT e dentro da janela de 24h da Meta. Cliente respondeu = follow-up cancelado.
 - Follow-up lê o histórico da conversa: só usa o texto "viu a proposta que te mandei" se valores realmente foram enviados (`contexto.proposta_enviada` ou "R$" em saída). Sem proposta, o texto é gerado pela IA a partir do histórico (retoma o CPF/motivo, cita o credor da caixa) e é cancelado se repetiria algo já enviado.
 
