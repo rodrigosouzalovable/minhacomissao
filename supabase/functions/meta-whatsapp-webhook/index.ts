@@ -1004,16 +1004,37 @@ serve(async (req) => {
                       .update({ transcricao_status: 'muito_longo' })
                       .eq('id', (msgSalva as any).id);
                   } else {
-                    const { data: tr, error: trErr } = await supabase.functions.invoke('meta-transcrever-audio', {
-                      body: { mensagem_id: (msgSalva as any).id, duracao_segundos: duracaoSegundos || undefined },
-                    });
-                    const transcricao = String((tr as any)?.transcricao || '').trim();
+                    // fetch direto (service role) para conseguir ler status + corpo do erro;
+                    // functions.invoke esconde o motivo real da falha.
+                    let transcricao = '';
+                    let detalhe = '';
+                    try {
+                      const rTr = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/meta-transcrever-audio`, {
+                        method: 'POST',
+                        headers: {
+                          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                          apikey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          mensagem_id: (msgSalva as any).id,
+                          duracao_segundos: duracaoSegundos || undefined,
+                        }),
+                      });
+                      const bodyTxt = await rTr.text().catch(() => '');
+                      if (rTr.ok) {
+                        try { transcricao = String(JSON.parse(bodyTxt)?.transcricao || '').trim(); } catch (_) { /* ignore */ }
+                      }
+                      if (!transcricao) detalhe = `status ${rTr.status} — ${bodyTxt.slice(0, 500)}`;
+                    } catch (e: any) {
+                      detalhe = e?.message || 'falha de rede na transcrição';
+                    }
+
                     if (transcricao) {
                       textoParaIA = transcricao;
                       console.log('[MetaWebhook] áudio transcrito', { mensagem_id: (msgSalva as any).id });
                     } else {
                       audioSemTranscricao = true;
-                      const detalhe = trErr?.message || JSON.stringify(tr || {});
                       if (/muito_longo|30 segundos/i.test(detalhe)) {
                         console.log('[MetaWebhook] áudio acima de 30s (tamanho) — escalado para humano', { detalhe });
                       } else {
@@ -1021,6 +1042,7 @@ serve(async (req) => {
                       }
                     }
                   }
+
                 } else {
                   audioSemTranscricao = true;
                   console.error('[MetaWebhook] mensagem de áudio não encontrada para transcrever', { wa_message_id: m.id });
