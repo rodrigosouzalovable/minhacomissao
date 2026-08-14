@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     // ===== Contato / caixa =====
     const { data: contato } = await supabase
       .from('meta_whatsapp_contatos')
-      .select('id, instancia_id, telefone, bsuid, nome, folder_id')
+      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id')
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
