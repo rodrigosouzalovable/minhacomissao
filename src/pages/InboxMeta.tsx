@@ -455,15 +455,20 @@ export default function InboxMeta() {
   const foldersVisiveis = folders;
 
   // Se a caixa ativa não é permitida, cai na primeira permitida.
+  // Só age depois de confirmar a permissão da caixa Padrão (evita trocar de caixa durante o carregamento).
   useEffect(() => {
+    if (!padraoVerificado) return;
     if (currentFolderId === null) {
       if (!podeVerPadrao && foldersVisiveis.length > 0) setCurrentFolderId(foldersVisiveis[0].id);
       return;
     }
     if (!foldersVisiveis.some((f) => f.id === currentFolderId)) {
       setCurrentFolderId(podeVerPadrao ? null : (foldersVisiveis[0]?.id ?? null));
+      return;
     }
-  }, [podeVerPadrao, foldersVisiveis, currentFolderId]);
+    // Voltou a ter acesso ao Padrão e o usuário ainda não escolheu caixa manualmente → volta ao Padrão
+    if (podeVerPadrao && !escolhaManualFolderRef.current) setCurrentFolderId(null);
+  }, [padraoVerificado, podeVerPadrao, foldersVisiveis, currentFolderId]);
 
   // Atendentes responsáveis pela caixa ativa: nomes permitidos para etiqueta
   const [nomesAtendenteCaixa, setNomesAtendenteCaixa] = useState<Set<string> | null>(null);
