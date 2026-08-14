@@ -992,16 +992,20 @@ export default function InboxMeta() {
   }, [nowTick]);
 
   // Tempo que o cliente está aguardando resposta (última mensagem da conversa é do cliente)
-  const computeEspera = useCallback((ultimaEntradaIso?: string | null, ultimaMsgIso?: string | null) => {
+  const computeEspera = useCallback((ultimaEntradaIso?: string | null, ultimaMsgIso?: string | null, dispensadoIso?: string | null) => {
     if (!ultimaEntradaIso) return { nivel: 'ok' as const, min: 0 };
     const tEntrada = new Date(ultimaEntradaIso).getTime();
     const tUltima = ultimaMsgIso ? new Date(ultimaMsgIso).getTime() : 0;
     if (tUltima > tEntrada) return { nivel: 'ok' as const, min: 0 };
+    // Marcado como "não precisa resposta" para esta última mensagem do cliente
+    const tDisp = dispensadoIso ? new Date(dispensadoIso).getTime() : 0;
+    if (tDisp >= tEntrada) return { nivel: 'ok' as const, min: 0 };
     const min = Math.floor((nowTick - tEntrada) / 60_000);
     if (min >= 30) return { nivel: 'critico' as const, min };
     if (min >= 15) return { nivel: 'alerta' as const, min };
     return { nivel: 'ok' as const, min };
   }, [nowTick]);
+
 
 
   const janelaInfo = useMemo(() => {
