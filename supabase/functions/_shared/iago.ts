@@ -408,6 +408,32 @@ export interface DataPagamento {
 
 const MESES = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 
+const DIAS_SEMANA = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+
+/** Palavras que identificam cada dia da semana (0 = domingo). */
+const DIAS_SEMANA_RE: Array<[number, RegExp]> = [
+  [0, /\b(domingo|dom)\b/],
+  [1, /\b(segunda(?:\s*-?\s*feira)?|seg)\b/],
+  [2, /\b(terca(?:\s*-?\s*feira)?|ter)\b/],
+  [3, /\b(quarta(?:\s*-?\s*feira)?|qua)\b/],
+  [4, /\b(quinta(?:\s*-?\s*feira)?|qui)\b/],
+  [5, /\b(sexta(?:\s*-?\s*feira)?|sex)\b/],
+  [6, /\b(sabado|sab)\b/],
+];
+
+/** Detecta menção a um dia da semana no texto já normalizado. */
+function detectarDiaSemana(t: string): { idx: number; proxima: boolean } | null {
+  // Evita confundir com ordinais ("segunda parcela", "terceira vez")
+  if (/\b(segunda|terca|quarta|quinta|sexta)\s+(parcela|vez|opcao|semana)\b/.test(t)) return null;
+  for (const [idx, re] of DIAS_SEMANA_RE) {
+    if (re.test(t)) {
+      const proxima = /(que vem|proxim|seguinte)/.test(t);
+      return { idx, proxima };
+    }
+  }
+  return null;
+}
+
 const norm = (v: unknown) =>
   String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -416,6 +442,27 @@ const fmtData = (d: Date) =>
 
 const isoLocal = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * Texto com a data de hoje (fuso São Paulo) e os próximos 7 dias, para que a IA
+ * nunca precise calcular datas por conta própria.
+ */
+export function contextoDataHoje(): string {
+  const hoje = agoraSP();
+  hoje.setHours(0, 0, 0, 0);
+  const linhas: string[] = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(hoje);
+    d.setDate(d.getDate() + i);
+    linhas.push(`${DIAS_SEMANA[d.getDay()]} = ${isoLocal(d)} (${fmtData(d)})`);
+  }
+  return [
+    `HOJE é ${DIAS_SEMANA[hoje.getDay()]}, ${fmtData(hoje)}/${hoje.getFullYear()} (${isoLocal(hoje)}).`,
+    `Próximos dias: ${linhas.join('; ')}.`,
+    'Use SEMPRE essas datas para interpretar "segunda", "sexta", "amanhã", "semana que vem". Nunca invente outra data.',
+  ].join('\n');
+}
+
 
 /**
  * Interpreta a data que o cliente informou ("hoje", "dia 20", "20/08",
