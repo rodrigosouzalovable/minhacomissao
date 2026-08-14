@@ -302,6 +302,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
               {msg.conteudo}
             </p>
           )}
+          {renderPix()}
           {renderBotoes()}
         </div>
       );
