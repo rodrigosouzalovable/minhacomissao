@@ -602,7 +602,10 @@ async function gerarResposta(args: {
       ? 'ATENÇÃO: este telefone está vinculado a mais de um cadastro. Confirme o nome do cliente ANTES de apresentar qualquer valor ou proposta.'
       : '',
     '',
+    contextoDataHoje(),
+    '',
     'REGRAS DE VALORES: use APENAS os números fornecidos em DADOS DO SISTEMA. Nunca invente ou arredonde valores, descontos, prazos ou parcelas fora dessa lista.',
+
     credorFinal
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
       : '',
