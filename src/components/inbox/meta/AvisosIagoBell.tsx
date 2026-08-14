@@ -28,13 +28,13 @@ function tempoRelativo(iso: string) {
  * Não depende da entrega no WhatsApp. Carrega ao abrir (sem polling).
  */
 export function AvisosIagoBell() {
-  const { isAdmin, isGestor } = useUserRole() as any;
+  const { isAdmin } = useUserRole() as any;
   const [open, setOpen] = useState(false);
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [loading, setLoading] = useState(false);
   const [lidoEm, setLidoEm] = useState<number>(() => Number(localStorage.getItem(LIDO_KEY) || 0));
 
-  const podeVer = !!isAdmin || !!isGestor;
+  const podeVer = !!isAdmin;
 
   const carregar = useCallback(async () => {
     if (!podeVer) return;
