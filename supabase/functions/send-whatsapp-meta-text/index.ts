@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { instancia_id, telefone, bsuid, texto, user_id, reply_to_wa_id, conteudo_citado, origem } = await req.json();
+    const { instancia_id, telefone, bsuid, texto, user_id, reply_to_wa_id, conteudo_citado, origem, botao_url, botao_texto } = await req.json();
     if (!instancia_id || (!telefone && !bsuid) || !texto) {
       return new Response(JSON.stringify({ success: false, error: 'instancia_id, (telefone ou bsuid) e texto são obrigatórios' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
