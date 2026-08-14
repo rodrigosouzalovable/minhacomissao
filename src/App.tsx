@@ -32,6 +32,7 @@ const Retornos = lazy(() => import("./pages/Retornos"));
 const Auditoria = lazy(() => import("./pages/Auditoria"));
 const Financeiro = lazy(() => import("./pages/Financeiro"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const PixPublico = lazy(() => import("./pages/PixPublico"));
 const PortalConsulta = lazy(() => import("./pages/PortalConsulta"));
 const ConsultaResultado = lazy(() => import("./pages/ConsultaResultado"));
 const ImportarDevedores = lazy(() => import("./pages/ImportarDevedores"));
@@ -221,6 +222,7 @@ const App = () => (
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/ir/boleto" element={<RedirectBoleto />} />
             <Route path="/ir/verificar-proposta-odres" element={<RedirectVerificarProposta />} />
+            <Route path="/pix/:id" element={<PixPublico />} />
             {/* Tenant routes (multi-tenant) — MUST come before /:creditor to avoid clash */}
             <Route path="/avatusbarbearia" element={<TenantLayout />}>
               <Route index element={<Navigate to="envio-meta" replace />} />

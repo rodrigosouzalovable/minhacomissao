@@ -5117,6 +5117,36 @@ export type Database = {
           },
         ]
       }
+      pix_links: {
+        Row: {
+          codigo: string
+          criado_em: string
+          expira_em: string
+          id: string
+          instancia_id: string | null
+          telefone: string | null
+          user_id: string | null
+        }
+        Insert: {
+          codigo: string
+          criado_em?: string
+          expira_em?: string
+          id: string
+          instancia_id?: string | null
+          telefone?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          codigo?: string
+          criado_em?: string
+          expira_em?: string
+          id?: string
+          instancia_id?: string | null
+          telefone?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       premios_semanais: {
         Row: {
           atingido_em: string
@@ -7692,6 +7722,13 @@ export type Database = {
           saude_status: string
         }[]
       }
+      get_pix_link: {
+        Args: { p_id: string }
+        Returns: {
+          codigo: string
+          criado_em: string
+        }[]
+      }
       get_table_ddl: { Args: { p_table: string }; Returns: string }
       gm_incrementar_uso: { Args: { qtd?: number }; Returns: number }
       gm_mes_atual: { Args: never; Returns: string }
@@ -7776,6 +7813,7 @@ export type Database = {
       is_admin_user: { Args: { uid: string }; Returns: boolean }
       is_consultoria_admin: { Args: { _uid: string }; Returns: boolean }
       is_consultoria_aluno: { Args: { _uid: string }; Returns: boolean }
+      limpar_pix_links_expirados: { Args: never; Returns: number }
       listar_credores_distintos: {
         Args: never
         Returns: {
