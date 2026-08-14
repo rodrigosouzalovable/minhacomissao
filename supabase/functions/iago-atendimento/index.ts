@@ -4,9 +4,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
-  ehOptOut, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
-  avisarEmergencia, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
+  ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
+  avisarEmergencia, etiquetarAguardandoHumano, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
 } from '../_shared/iago.ts';
+
+const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
 
 const hojeSP = () => agoraSP().toISOString().slice(0, 10);
 
@@ -163,6 +165,30 @@ Deno.serve(async (req) => {
       console.log('[IAGO] opt-out registrado', { contato_id });
       return json({ success: true, etapa: 'optout' });
     }
+
+    // ===== "não sou essa pessoa / número errado" => agradece e encerra =====
+    if (ehNumeroErrado(textoAtual)) {
+      try {
+        await enviarTexto(supabase, contato, MSG_NUMERO_ERRADO);
+      } catch (e: any) {
+        console.error('[IAGO] falha ao enviar encerramento de número errado', e?.message || e);
+      }
+      await supabase.from('iago_conversa_estado').update({
+        etapa: 'numero_errado',
+        aguardando_humano: true,
+        followup_em: null,
+        followup_feito: true,
+        ultima_msg_em: new Date().toISOString(),
+        ultima_msg_cliente_em: new Date().toISOString(),
+        contexto: { ...(estado.contexto || {}), ultimo_motivo: 'cliente informou que não é a pessoa procurada' },
+      }).eq('id', estado.id);
+      await etiquetarAguardandoHumano(supabase, contato_id);
+      await finalizarEntrada();
+      console.log('[IAGO] número errado — conversa encerrada', { contato_id });
+      return json({ success: true, etapa: 'numero_errado' });
+    }
+
+
 
     // ===== Humano assumiu? (saída que não é do IAGO depois do último envio dele) =====
     const idsIA: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
@@ -397,8 +423,9 @@ async function gerarResposta(args: {
     'PROIBIDO citar "a proposta que te mandei" (ou equivalente) se nenhum valor/proposta aparece no HISTÓRICO RECENTE. Só fale de proposta enviada se ela realmente foi enviada antes.',
 
     cpfPorTelefone && nomeCliente
-      ? `CONFIRMAÇÃO LEVE: na primeira mensagem confirme a identidade pelo nome, ex.: "Falo com ${primeiroNome(nomeCliente)}?" e já siga a conversa. Se o cliente disser que não é essa pessoa ou negar a identidade, escale para humano (escalar=true) sem informar valores.`
+      ? `CONFIRMAÇÃO LEVE: na primeira mensagem confirme a identidade pelo nome, ex.: "Falo com ${primeiroNome(nomeCliente)}?" e já siga a conversa.`
       : '',
+    'IDENTIDADE NEGADA: se o cliente disser que não é a pessoa procurada, que é número errado/engano ou que não conhece essa pessoa, responda APENAS uma mensagem curta agradecendo e encerrando o contato (ex.: "Entendi, obrigado pela atenção e desculpe o incômodo!"). Nesse caso é PROIBIDO pedir CPF, citar o credor/empresa, valores ou proposta. Use escalar=false.',
     cpfPorTelefone && multiplosCandidatos
       ? 'ATENÇÃO: este telefone está vinculado a mais de um cadastro. Confirme o nome do cliente ANTES de apresentar qualquer valor ou proposta.'
       : '',
