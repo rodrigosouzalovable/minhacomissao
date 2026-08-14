@@ -146,29 +146,36 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const eta = (() => {
     const restantes = Math.max(0, job.total - totalProcessado);
 
-    // Campanha finalizada: mostra a duração real.
-    if (!ativa) {
-      if (!job.iniciado_em) return null;
-      const fim = job.concluido_em ? new Date(job.concluido_em).getTime() : Date.now();
-      const seg = Math.max(0, Math.round((fim - new Date(job.iniciado_em).getTime()) / 1000));
-      return { tipo: "final" as const, duracao: formatDuracao(seg) };
-    }
-    if (restantes === 0) return null;
-
     const instTotal = job.instancia_ids?.length || 1;
     const bloqueadas = job.instancias_bloqueadas_run?.length || 0;
     const instAtivas = Math.max(1, instTotal - bloqueadas);
 
     // Ritmo teórico conforme as configurações da campanha.
     let segPorMsgTeorico: number;
+    let config: string;
     if (job.modo_rajada) {
-      const taxa = Math.max(0.1, (job.msgs_por_segundo || 30) * instAtivas);
+      const mps = job.msgs_por_segundo || 30;
+      const taxa = Math.max(0.1, mps * instAtivas);
       segPorMsgTeorico = 1 / taxa;
+      config = `Rajada: ${mps} msg/s × ${instAtivas} instância${instAtivas > 1 ? "s" : ""}`;
     } else {
       const lo = Math.max(1, job.min_seg ?? 30);
       const hi = Math.max(lo, job.max_seg ?? 90);
       segPorMsgTeorico = (lo + hi) / 2;
+      config = `Delay configurado: ${lo}–${hi}s (aleatório por envio)`;
     }
+    const teorico = segPorMsgTeorico < 1
+      ? `~${(1 / segPorMsgTeorico).toFixed(1)} msg/s`
+      : `~1 msg / ${segPorMsgTeorico.toFixed(1).replace(".", ",").replace(",0", "")}s`;
+
+    // Campanha finalizada: mostra a duração real.
+    if (!ativa) {
+      if (!job.iniciado_em) return null;
+      const fim = job.concluido_em ? new Date(job.concluido_em).getTime() : Date.now();
+      const seg = Math.max(0, Math.round((fim - new Date(job.iniciado_em).getTime()) / 1000));
+      return { tipo: "final" as const, duracao: formatDuracao(seg), config, teorico };
+    }
+    if (restantes === 0) return null;
 
     // Ritmo real observado (mais fiel quando já há histórico suficiente).
     let segPorMsg = segPorMsgTeorico;
@@ -190,8 +197,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       ? `~${(1 / segPorMsg).toFixed(1)} msg/s`
       : `~1 msg / ${Math.round(segPorMsg)}s`;
 
-    return { tipo: "previsao" as const, restantes, ritmo, duracao: formatDuracao(segRestantes), termino };
+    return { tipo: "previsao" as const, restantes, ritmo, duracao: formatDuracao(segRestantes), termino, config, teorico };
   })();
+
 
 
 
@@ -392,10 +400,15 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             {eta && (
               <div className="text-xs rounded border bg-muted/40 px-2 py-1.5 space-y-0.5">
                 {eta.tipo === "final" ? (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>Duração total: <strong>{eta.duracao}</strong></span>
-                  </div>
+                  <>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>Duração total: <strong>{eta.duracao}</strong></span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      {eta.config} • Teórico: <strong>{eta.teorico}</strong>
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -404,10 +417,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                         Restam <strong>{eta.restantes}</strong> envios • Ritmo: <strong>{eta.ritmo}</strong>
                       </span>
                     </div>
+                    <div className="text-muted-foreground">
+                      {eta.config} • Teórico: <strong>{eta.teorico}</strong>
+                    </div>
                     <div>
                       Tempo estimado: <strong>~{eta.duracao}</strong> • Previsão de término:{" "}
                       <strong>{eta.termino}</strong>
                     </div>
+
                     <div className="text-[11px] text-muted-foreground">
                       {pausado
                         ? "Pausada — a contagem recomeça ao continuar. Estimativa aproximada."
