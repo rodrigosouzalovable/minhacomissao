@@ -7,6 +7,8 @@ import {
   ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
+  carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
+
 } from '../_shared/iago.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
@@ -209,6 +211,16 @@ Deno.serve(async (req) => {
         if (error) console.error('[IAGO] falha ao concluir entrada', error.message);
       }
     };
+
+    // Qualificações ativas (carregadas uma única vez, sob demanda)
+    let qualsCache: QualificacaoIA[] | null = null;
+    const quals = async () => (qualsCache ??= await carregarQualificacoesDisponiveis(supabase));
+    /** Aplica a qualificação por nome; ignora silenciosamente se não estiver cadastrada. */
+    const qualificar = async (nome: string, motivoNome?: string) => {
+      if (!nome) return false;
+      return await qualificarConversa(supabase, contato_id, iago.id, nome, motivoNome, await quals());
+    };
+
     const normalizarTexto = (valor: unknown) => String(valor || '')
       .toLowerCase()
       .normalize('NFD')
@@ -225,7 +237,9 @@ Deno.serve(async (req) => {
       await supabase.from('iago_conversa_estado')
         .update({ optout: true, followup_feito: true, followup_em: null, etapa: 'optout' })
         .eq('id', estado.id);
+      await qualificar('Sem interesse');
       await finalizarEntrada();
+
       console.log('[IAGO] opt-out registrado', { contato_id });
       return json({ success: true, etapa: 'optout' });
     }
@@ -247,7 +261,9 @@ Deno.serve(async (req) => {
         contexto: { ...(estado.contexto || {}), ultimo_motivo: 'cliente informou que não é a pessoa procurada' },
       }).eq('id', estado.id);
       await etiquetarAguardandoHumano(supabase, contato_id);
+      await qualificar('Não é o Cliente');
       await finalizarEntrada();
+
       console.log('[IAGO] número errado — conversa encerrada', { contato_id });
       return json({ success: true, etapa: 'numero_errado' });
     }
@@ -369,6 +385,8 @@ Deno.serve(async (req) => {
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
+      qualificacoes: await quals(),
+
     });
 
 
@@ -537,8 +555,20 @@ Deno.serve(async (req) => {
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
     }
 
+    // ===== Qualificação da conversa pelo próprio IAGO =====
+    // Casos determinísticos primeiro; depois o que a IA escolheu (só nomes cadastrados).
+    const alegaPagamento = ehComprovante || /(j[áa] paguei|paguei|efetuei o pagamento|comprovante)/i.test(textoAtual);
+    if (acordoFechado) {
+      await qualificar('Acordo Fechado');
+    } else if (alegaPagamento) {
+      const ok = await qualificar('Alega Pagamento');
+      if (!ok) await qualificar('Já pagou');
+    } else if (resultado?.qualificacao) {
+      await qualificar(String(resultado.qualificacao), String(resultado.qualificacao_motivo || '') || undefined);
+    }
 
     await finalizarEntrada();
+
     console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo });
     return json({ success: true, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo: motivo || null });
   } catch (e: any) {
@@ -563,15 +593,18 @@ async function gerarResposta(args: {
   etapaNegociacao?: string;
   escolhaAnterior?: string;
   imagemCtx?: { descricao: string; classificacao: string } | null;
+  qualificacoes?: QualificacaoIA[];
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
+  qualificacao?: string; qualificacao_motivo?: string;
 }> {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx,
+    imagemCtx, qualificacoes,
   } = args;
+
 
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
@@ -680,8 +713,17 @@ async function gerarResposta(args: {
     aprendizados ? `APRENDIZADOS DAS NEGOCIAÇÕES REAIS DA EQUIPE:\n${aprendizados}` : '',
     cfg.instrucoes_gerais ? `OBSERVAÇÕES GERAIS:\n${cfg.instrucoes_gerais}` : '',
     '',
+    (qualificacoes?.length
+      ? [
+        'QUALIFICAÇÃO DA CONVERSA: você também classifica o cliente, como um atendente faz. Use EXATAMENTE um dos nomes abaixo (nunca invente outro nome):',
+        qualificacoes.map((q) => `- ${q.nome}${q.motivos.length ? ` (motivos: ${q.motivos.map((m) => m.nome).join(' | ')})` : ''}`).join('\n'),
+        'Escolha a que melhor descreve a situação atual do cliente e pode mudar em relação à anterior conforme a conversa evolui (ex.: passou a aguardar boleto, ficou sem interesse, fechou acordo).',
+        'Se não tiver certeza, deixe "qualificacao" vazio — é melhor não qualificar do que qualificar errado. Só preencha "qualificacao_motivo" com um motivo da lista da qualificação escolhida.',
+      ].join('\n')
+      : ''),
+    '',
     'Responda SOMENTE com JSON válido no formato:',
-    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":""}',
+    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":"","qualificacao":"","qualificacao_motivo":""}',
     'escolha = forma de pagamento escolhida pelo cliente ("à vista" ou "12x"), vazio se ele ainda não escolheu.',
     'pagamento_hoje = "sim", "nao" ou "" conforme a resposta dele sobre pagar hoje.',
     'data_pagamento = a data que o cliente informou, JÁ RESOLVIDA no formato YYYY-MM-DD usando a lista de datas acima (ex.: "segunda" ou "segunda que vem" => a data da próxima segunda-feira). Use "mes_que_vem" quando ele falar de outro mês sem dia, e vazio se não informou nada.',
@@ -689,6 +731,7 @@ async function gerarResposta(args: {
 
     'mensagens = de 1 a 2 mensagens curtas a enviar agora (vazio só se escalar=true e nada deva ser dito).',
     'Quando escalar=true, envie uma mensagem curta avisando que um colega vai continuar o atendimento e preencha "motivo" em português.',
+
   ].filter(Boolean).join('\n');
 
   const conversa = historico.length

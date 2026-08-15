@@ -145,6 +145,85 @@ export async function etiquetarAguardandoHumano(supabase: any, contatoId: string
   }
 }
 
+export interface QualificacaoIA {
+  id: string;
+  nome: string;
+  motivos: { id: string; nome: string }[];
+}
+
+/** Qualificações ativas (primárias + motivos ativos) para a IA escolher. */
+export async function carregarQualificacoesDisponiveis(supabase: any): Promise<QualificacaoIA[]> {
+  const { data } = await supabase
+    .from('meta_qualificacoes')
+    .select('id, nome, parent_id, ativo, ordem')
+    .eq('ativo', true)
+    .order('ordem');
+  const linhas = (data || []) as any[];
+  const primarias = linhas.filter((q) => !q.parent_id);
+  return primarias.map((p) => ({
+    id: p.id,
+    nome: p.nome,
+    motivos: linhas.filter((m) => m.parent_id === p.id).map((m) => ({ id: m.id, nome: m.nome })),
+  }));
+}
+
+const norm = (s: string) =>
+  String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+
+/**
+ * Aplica a qualificação escolhida pelo IAGO (só nomes já cadastrados e ativos).
+ * Substitui a qualificação anterior do contato — ele pode trocar quando a conversa evolui.
+ */
+export async function qualificarConversa(
+  supabase: any,
+  contatoId: string,
+  iagoUserId: string | null,
+  nomeQualificacao: string,
+  nomeMotivo?: string,
+  disponiveis?: QualificacaoIA[],
+) {
+  try {
+    const alvo = norm(nomeQualificacao);
+    if (!contatoId || !alvo) return false;
+    const lista = disponiveis ?? (await carregarQualificacoesDisponiveis(supabase));
+    const primaria = lista.find((q) => norm(q.nome) === alvo)
+      ?? lista.find((q) => norm(q.nome).includes(alvo) || alvo.includes(norm(q.nome)));
+    if (!primaria) {
+      console.log('[IAGO] qualificação inexistente — ignorando', nomeQualificacao);
+      return false;
+    }
+    const motivo = nomeMotivo
+      ? primaria.motivos.find((m) => norm(m.nome) === norm(nomeMotivo))
+      : null;
+    const ids = [primaria.id, ...(motivo ? [motivo.id] : [])];
+
+    // Remove as qualificações anteriores (permite trocar de qualificação)
+    const todosIds = lista.flatMap((q) => [q.id, ...q.motivos.map((m) => m.id)]);
+    const remover = todosIds.filter((id) => !ids.includes(id));
+    if (remover.length) {
+      await supabase.from('meta_contato_qualificacao')
+        .delete().eq('contato_id', contatoId).in('qualificacao_id', remover);
+    }
+
+    const agora = new Date().toISOString();
+    await supabase.from('meta_contato_qualificacao').upsert(
+      ids.map((id) => ({
+        contato_id: contatoId,
+        qualificacao_id: id,
+        user_id: iagoUserId,
+        updated_at: agora,
+      })),
+      { onConflict: 'contato_id,qualificacao_id' },
+    );
+    console.log('[IAGO] qualificou conversa', { contatoId, qualificacao: primaria.nome, motivo: motivo?.nome || null });
+    return true;
+  } catch (e: any) {
+    console.error('[IAGO] falha ao qualificar conversa', e?.message || e);
+    return false;
+  }
+}
+
+
 /** Aplica a etiqueta existente "ACORDO FECHADO" (nunca cria). */
 export async function etiquetarAcordoFechado(supabase: any, contatoId: string) {
   try {

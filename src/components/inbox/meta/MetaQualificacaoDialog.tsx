@@ -186,11 +186,12 @@ export function MetaQualificacaoDialog({
   const paiEscolha = escolhendoMotivosDe ? qualificacoes.find(q => q.id === escolhendoMotivosDe) : null;
 
   const editorLista = (itens: MetaQualificacao[], parentId: string | null) => (
-    <div className="space-y-3">
-      <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="space-y-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
         {itens.length === 0 && (
           <p className="text-sm text-muted-foreground">Nenhum item cadastrado ainda.</p>
         )}
+
         {itens.map(q => (
           <div key={q.id} className="flex items-center gap-2">
             <input
@@ -230,7 +231,7 @@ export function MetaQualificacaoDialog({
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-2 border-t pt-3">
+      <div className="flex shrink-0 items-center gap-2 border-t pt-3">
         <input
           type="color"
           value={novaCor}
@@ -265,8 +266,9 @@ export function MetaQualificacaoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[85svh] flex flex-col overflow-hidden gap-3">
+        <DialogHeader className="shrink-0">
+
           <DialogTitle className="flex items-center gap-2">
             {(modoConfig || paiConfig || paiEscolha) && (
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={voltar}>
@@ -287,8 +289,9 @@ export function MetaQualificacaoDialog({
         </DialogHeader>
 
         {paiEscolha ? (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-2 max-h-[45vh] overflow-y-auto pr-1">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="grid grid-cols-1 gap-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
+
               {motivosAtivos(paiEscolha.id).map(m => {
                 const on = motivosSel.includes(m.id);
                 return (
@@ -296,7 +299,7 @@ export function MetaQualificacaoDialog({
                     key={m.id}
                     onClick={() => setMotivosSel(prev => on ? prev.filter(x => x !== m.id) : [...prev, m.id])}
                     className={cn(
-                      'flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-accent',
+                      'flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm transition hover:bg-accent',
                       on && 'border-primary bg-primary/10',
                     )}
                   >
@@ -310,7 +313,8 @@ export function MetaQualificacaoDialog({
               })}
             </div>
             <Button
-              className="w-full"
+              className="w-full shrink-0"
+
               size="sm"
               disabled={salvando || motivosSel.length === 0}
               onClick={() => gravar(paiEscolha.id, motivosSel)}
@@ -326,11 +330,12 @@ export function MetaQualificacaoDialog({
         ) : modoConfig ? (
           editorLista(primarias, null)
         ) : (
-          <div className="space-y-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
             {ativas.length === 0 && (
               <p className="text-sm text-muted-foreground">Nenhuma qualificação ativa.</p>
             )}
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-1 gap-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
+
               {ativas.map(q => {
                 const marcada = atuais.includes(q.id);
                 const mots = motivosMarcados(q.id);
@@ -340,7 +345,7 @@ export function MetaQualificacaoDialog({
                     <ContextMenuTrigger asChild>
                       <div
                         className={cn(
-                          'flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-accent cursor-pointer',
+                          'flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm transition hover:bg-accent cursor-pointer',
                           marcada && 'border-primary bg-primary/10',
                         )}
                         onClick={() => { if (!salvando) clicarPrimaria(q); }}
@@ -387,16 +392,19 @@ export function MetaQualificacaoDialog({
                 );
               })}
             </div>
-            {salvando && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <p className="text-xs text-muted-foreground">
-              Você pode marcar várias qualificações. Clique em uma marcada para removê-la.
-              {isAdmin && ' Clique com o botão direito para configurar os motivos.'}
-            </p>
-            {isAdmin && (
-              <Button variant="outline" size="sm" className="w-full" onClick={() => setModoConfig(true)}>
-                <Settings className="h-4 w-4 mr-2" /> Gerenciar qualificações
-              </Button>
-            )}
+            <div className="shrink-0 space-y-2 border-t pt-3">
+              {salvando && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              <p className="text-xs text-muted-foreground">
+                Você pode marcar várias qualificações. Clique em uma marcada para removê-la.
+                {isAdmin && ' Clique com o botão direito para configurar os motivos.'}
+              </p>
+              {isAdmin && (
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setModoConfig(true)}>
+                  <Settings className="h-4 w-4 mr-2" /> Gerenciar qualificações
+                </Button>
+              )}
+            </div>
+
           </div>
         )}
       </DialogContent>
