@@ -289,8 +289,9 @@ export function MetaQualificacaoDialog({
         </DialogHeader>
 
         {paiEscolha ? (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-2 max-h-[45vh] overflow-y-auto pr-1">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="grid grid-cols-1 gap-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
+
               {motivosAtivos(paiEscolha.id).map(m => {
                 const on = motivosSel.includes(m.id);
                 return (
