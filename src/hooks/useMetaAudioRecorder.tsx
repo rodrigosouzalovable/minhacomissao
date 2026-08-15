@@ -234,18 +234,24 @@ export function useMetaAudioRecorder({
           let prepared: { blob: Blob; ext: 'ogg' | 'mp4' | 'm4a' | 'aac' | 'mp3'; contentType: string };
           try {
             prepared = await ensureMetaAudio(rawBlob, rec.mimeType || 'audio/ogg');
-          } catch (convErr) {
+          } catch (convErr: any) {
             console.error('[useMetaAudioRecorder] falha ao preparar áudio', { convErr, mimeType: rec.mimeType });
             toast({
               title: 'Não foi possível preparar o áudio',
-              description: `Formato "${rec.mimeType || 'desconhecido'}" — falha na conversão. Tente Chrome/Edge atualizado.`,
+              description: `${convErr?.message || 'Falha na conversão'} (formato "${rec.mimeType || 'desconhecido'}").`,
               variant: 'destructive',
             });
             resolve();
             return;
           }
           const path = `meta/${instanciaId}/${telefone}/${Date.now()}.${prepared.ext}`;
-          const audioSignedUrl = await uploadInboxMedia(path, prepared.blob, prepared.contentType);
+          let audioSignedUrl: string;
+          try {
+            audioSignedUrl = await uploadInboxMedia(path, prepared.blob, prepared.contentType);
+          } catch (upErr: any) {
+            throw new Error(`Falha ao salvar o áudio: ${upErr?.message || 'erro no upload'}`);
+          }
+
           const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {
             body: {
               instancia_id: instanciaId,
