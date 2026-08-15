@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Send, Pause, Play, Square, Trash2 } from "lucide-react";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import CampanhaDetalheDialog from "./CampanhaDetalheDialog";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ function statusLabel(s: string) {
 
 export default function CampanhasFlutuante() {
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { parceiroMeta, isLoading: permLoading } = useUserPermissions();
   const { jobs, jobsAtivos, togglePausaJob, cancelarJob, limparJob } = useEnvioMetaSending();
   const [open, setOpen] = useState(false);
   const [dialogJobId, setDialogJobId] = useState<string | null>(null);
@@ -34,7 +36,8 @@ export default function CampanhasFlutuante() {
     ["concluido", "cancelado", "erro"].includes(j.status),
   );
 
-  if (roleLoading || !isAdmin) return null;
+  if (roleLoading || permLoading) return null;
+  if (!isAdmin && !parceiroMeta) return null;
   if (jobsAtivos.length === 0 && finalizadasRecentes.length === 0) return null;
 
   const excluirCampanha = async (id: string, nome: string) => {
