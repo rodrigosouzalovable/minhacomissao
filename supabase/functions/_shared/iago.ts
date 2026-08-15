@@ -167,8 +167,8 @@ export async function carregarQualificacoesDisponiveis(supabase: any): Promise<Q
   }));
 }
 
-const norm = (s: string) =>
-  String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const norm = (s: unknown) =>
+  String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 
 /**
  * Aplica a qualificação escolhida pelo IAGO (só nomes já cadastrados e ativos).
