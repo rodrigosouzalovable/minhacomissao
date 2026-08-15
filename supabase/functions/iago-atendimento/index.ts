@@ -237,7 +237,9 @@ Deno.serve(async (req) => {
       await supabase.from('iago_conversa_estado')
         .update({ optout: true, followup_feito: true, followup_em: null, etapa: 'optout' })
         .eq('id', estado.id);
+      await qualificar('Sem interesse');
       await finalizarEntrada();
+
       console.log('[IAGO] opt-out registrado', { contato_id });
       return json({ success: true, etapa: 'optout' });
     }
