@@ -350,6 +350,61 @@ export function EditPermissionsDialog({
               ))}
             </div>
 
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">Parceiro com números próprios</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Ao ativar, este login vê e usa apenas os números Meta vinculados abaixo, sem nenhum acesso aos demais números.
+                  </p>
+                </div>
+                <Switch checked={parceiroMeta} onCheckedChange={setParceiroMeta} />
+              </div>
+
+              {parceiroMeta && (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Buscar número ou nome..."
+                    value={buscaInstancia}
+                    onChange={(e) => setBuscaInstancia(e.target.value)}
+                  />
+                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                    {(allInstances ?? [])
+                      .filter((i: any) => {
+                        const q = buscaInstancia.trim().toLowerCase();
+                        if (!q) return true;
+                        return (
+                          (i.nome ?? '').toLowerCase().includes(q) ||
+                          (i.display_phone ?? '').toLowerCase().includes(q)
+                        );
+                      })
+                      .map((i: any) => (
+                        <div key={i.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`inst-${i.id}`}
+                            checked={instanciasParceiro.includes(i.id)}
+                            onCheckedChange={() =>
+                              setInstanciasParceiro((prev) =>
+                                prev.includes(i.id) ? prev.filter((x) => x !== i.id) : [...prev, i.id]
+                              )
+                            }
+                          />
+                          <label htmlFor={`inst-${i.id}`} className="text-sm cursor-pointer">
+                            {i.nome}{' '}
+                            <span className="text-xs text-muted-foreground">{i.display_phone}</span>
+                          </label>
+                        </div>
+                      ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {instanciasParceiro.length} número(s) vinculado(s). Novos números cadastrados por ele são vinculados automaticamente.
+                  </p>
+                </div>
+              )}
+            </div>
+
+
+
 
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium">Visível no Ranking</Label>
