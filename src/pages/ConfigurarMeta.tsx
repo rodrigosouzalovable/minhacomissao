@@ -103,6 +103,37 @@ export default function ConfigurarMeta() {
   const [editPhoneValue, setEditPhoneValue] = useState("");
   const [verificandoWebhooks, setVerificandoWebhooks] = useState(false);
 
+  // Aba BMs: seleção múltipla de Business Managers
+  const [bmPickerOpen, setBmPickerOpen] = useState(false);
+  const [bmBusca, setBmBusca] = useState("");
+  const [bmSel, setBmSel] = useState<Set<string>>(new Set());
+  const toggleBmSel = (key: string) =>
+    setBmSel((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  const gruposBm = [
+    ...bms
+      .filter((b) => bmSel.has(b.id))
+      .map((b) => ({
+        key: b.id,
+        nome: b.nome,
+        business_id: b.business_id,
+        instancias: instancias.filter((i) => i.meta_bm_id === b.id),
+      })),
+    ...(bmSel.has("__none__")
+      ? [{
+          key: "__none__",
+          nome: "Sem BM vinculada",
+          business_id: null as string | null,
+          instancias: instancias.filter((i) => !i.meta_bm_id),
+        }]
+      : []),
+  ];
+
+
+
   // Importação de PDF de fatura Meta
   const pag = useMetaInstancePagamentos();
   const conciliacao = useMetaBillingConciliacao(instancias, pag.pagamentos);
