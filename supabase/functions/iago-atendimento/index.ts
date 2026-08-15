@@ -509,9 +509,11 @@ Deno.serve(async (req) => {
     // Proposta considerada enviada apenas quando valores reais foram para o cliente.
     const propostaEnviada = !!estado.contexto?.proposta_enviada
       || (!!proposta && mensagens.some((m) => /r\$\s*\d/i.test(String(m))));
-    const followupEm = !escalar && cfg.followup_ativo && !estado.followup_feito && mensagens.length
+    // O cliente respondeu: a janela de 24h reabriu, então as etapas de follow-up recomeçam.
+    const followupEm = !escalar && cfg.followup_ativo && mensagens.length
       ? new Date(Date.now() + Math.max(1, Number(cfg.followup_horas ?? 2)) * 3600 * 1000).toISOString()
       : null;
+
 
     await supabase.from('iago_conversa_estado').update({
       cpf: cpf || null,
