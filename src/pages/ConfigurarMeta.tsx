@@ -318,8 +318,12 @@ export default function ConfigurarMeta() {
 
   useEffect(() => {
     carregar();
-    carregarToken();
   }, []);
+
+  useEffect(() => {
+    carregarToken();
+  }, [parceiroMeta]);
+
 
   const copiar = (txt: string, label = "Copiado!") => {
     navigator.clipboard.writeText(txt);
