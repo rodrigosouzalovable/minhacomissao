@@ -832,8 +832,6 @@ export default function ConfigurarMeta() {
         <TabsList>
           <TabsTrigger value="instancias">Instâncias ({instanciasFiltradas.length})</TabsTrigger>
           <TabsTrigger value="templates">Templates HSM ({templates.length})</TabsTrigger>
-          <TabsTrigger value="bms">BMs ({bms.length})</TabsTrigger>
-
         </TabsList>
 
         <TabsContent value="instancias">
