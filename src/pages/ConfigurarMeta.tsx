@@ -913,7 +913,7 @@ export default function ConfigurarMeta() {
                     {bmSel.size > 0 ? `BMs (${bmSel.size})` : "BMs"}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-auto">
+                <DropdownMenuContent align="end" className="max-w-[90vw] max-h-[70vh] overflow-auto">
                   <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {bms.map((bm) => (
