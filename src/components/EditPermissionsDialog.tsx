@@ -55,7 +55,43 @@ export function EditPermissionsDialog({
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
   const [podeMarcarPago, setPodeMarcarPago] = useState(false);
   const [atendeInboxMeta, setAtendeInboxMeta] = useState(true);
+  const [parceiroMeta, setParceiroMeta] = useState(false);
+  const [instanciasParceiro, setInstanciasParceiro] = useState<string[]>([]);
+  const [buscaInstancia, setBuscaInstancia] = useState('');
   const [selectedTenants, setSelectedTenants] = useState<string[]>([]);
+
+  const { data: allInstances } = useQuery({
+    queryKey: ['meta-instances-parceiro-picker'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_whatsapp_instances' as any)
+        .select('id, nome, display_phone')
+        .order('nome');
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: open,
+  });
+
+  const { data: vinculosParceiro } = useQuery({
+    queryKey: ['meta-instance-parceiros', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_instance_parceiros' as any)
+        .select('instancia_id')
+        .eq('user_id', userId);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: open && !!userId,
+  });
+
+  useEffect(() => {
+    if (vinculosParceiro) {
+      setInstanciasParceiro(vinculosParceiro.map((r: any) => r.instancia_id));
+    }
+  }, [vinculosParceiro]);
+
 
   const { data: allTenants } = useQuery({
     queryKey: ['tenants-all'],
