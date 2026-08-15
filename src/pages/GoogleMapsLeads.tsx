@@ -142,7 +142,41 @@ export default function GoogleMapsLeads() {
     },
   });
 
-  const leadsFiltrados = (leads ?? []).filter((l) => (somenteComTel ? !!l.telefone : true));
+  const leadsBase = (leads ?? []).filter((l) => (somenteComTel ? !!l.telefone : true));
+  const leadsFiltrados = leadsBase.filter((l) => (somenteComWhats ? l.tem_whatsapp === true : true));
+  const totComWhats = leadsBase.filter((l) => l.tem_whatsapp === true).length;
+  const totSemWhats = leadsBase.filter((l) => l.tem_whatsapp === false).length;
+  const totNaoVerif = leadsBase.filter((l) => l.tem_whatsapp === null && !!l.telefone).length;
+
+  async function verificarWhatsapp(buscaId: string, silencioso = false) {
+    setVerificandoWhats(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-maps-verificar-whatsapp", {
+        body: { busca_id: buscaId },
+      });
+      if (error) {
+        const payload = await getFunctionErrorPayload(error);
+        if (!silencioso) toast.error("Falha ao verificar WhatsApp: " + getFunctionErrorMessage(payload));
+        return;
+      }
+      if (data?.error === "sem_instancia") {
+        toast.warning(data.message ?? "Nenhuma instância WhatsApp conectada para verificar");
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["gm-leads", buscaId] });
+      if (data?.verificados) {
+        toast.success(
+          `WhatsApp verificado: ✅ ${data.com_whatsapp} com • ❌ ${data.sem_whatsapp} sem${data.erros ? ` • ⚠️ ${data.erros} erro(s)` : ""}`,
+        );
+      } else if (!silencioso) {
+        toast.message("Nenhum número novo para verificar");
+      }
+    } catch (e) {
+      if (!silencioso) toast.error("Falha ao verificar WhatsApp: " + (e instanceof Error ? e.message : "erro"));
+    } finally {
+      setVerificandoWhats(false);
+    }
+  }
 
   async function buscar() {
     if (!categoria.trim() || !localizacao.trim()) {
@@ -174,9 +208,16 @@ export default function GoogleMapsLeads() {
       setBuscaSel(data.busca_id);
       qc.invalidateQueries({ queryKey: ["gm-buscas"] });
       refetchLimite();
+      // Verificação automática de WhatsApp dos telefones encontrados
+      if (data?.busca_id) void verificarWhatsapp(data.busca_id, true);
     } catch (e) {
       const message = e instanceof Error ? e.message : "erro";
       toast.error("Falha na busca: " + message);
+    } finally {
+      setBuscando(false);
+    }
+  }
+
     } finally {
       setBuscando(false);
     }
