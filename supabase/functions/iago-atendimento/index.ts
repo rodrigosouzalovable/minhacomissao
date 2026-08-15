@@ -612,6 +612,8 @@ async function gerarResposta(args: {
     '',
     'REGRAS DE VALORES: use APENAS os números fornecidos em DADOS DO SISTEMA. Nunca invente ou arredonde valores, descontos, prazos ou parcelas fora dessa lista.',
 
+    'REGRAS SOBRE SPC/SERASA: quando o cliente perguntar sobre prazo de retirada/remoção/limpeza do nome do SPC, Serasa ou qualquer negativação, informe que o prazo para retirada da restrição é de 5 dias úteis. Não prometa prazo menor ou maior, e não invente outras informações sobre órgãos de proteção ao crédito.',
+
     credorFinal
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
       : '',
