@@ -555,8 +555,20 @@ Deno.serve(async (req) => {
         `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
     }
 
+    // ===== Qualificação da conversa pelo próprio IAGO =====
+    // Casos determinísticos primeiro; depois o que a IA escolheu (só nomes cadastrados).
+    const alegaPagamento = ehComprovante || /(j[áa] paguei|paguei|efetuei o pagamento|comprovante)/i.test(textoAtual);
+    if (acordoFechado) {
+      await qualificar('Acordo Fechado');
+    } else if (alegaPagamento) {
+      const ok = await qualificar('Alega Pagamento');
+      if (!ok) await qualificar('Já pagou');
+    } else if (resultado?.qualificacao) {
+      await qualificar(String(resultado.qualificacao), String(resultado.qualificacao_motivo || '') || undefined);
+    }
 
     await finalizarEntrada();
+
     console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo });
     return json({ success: true, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo: motivo || null });
   } catch (e: any) {
