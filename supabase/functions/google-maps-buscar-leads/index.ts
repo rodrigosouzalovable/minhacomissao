@@ -191,6 +191,16 @@ Deno.serve(async (req) => {
       .eq("id", 1)
       .maybeSingle();
     const chavePropria = (cfg?.api_key ?? "").trim() || null;
+    if (!chavePropria && (!LOVABLE_API_KEY || !GOOGLE_MAPS_API_KEY)) {
+      await supabase
+        .from("google_maps_buscas")
+        .update({ status: "erro", erro: "Nenhuma chave da Places API (New) configurada" })
+        .eq("id", busca.id);
+      return new Response(
+        JSON.stringify({ error: "Google Maps não configurado", message: "Cadastre a chave da Places API (New) na tela Google Maps Leads." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const endpoint = chavePropria
       ? "https://places.googleapis.com/v1/places:searchText"
