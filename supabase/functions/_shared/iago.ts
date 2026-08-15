@@ -167,8 +167,8 @@ export async function carregarQualificacoesDisponiveis(supabase: any): Promise<Q
   }));
 }
 
-const norm = (s: string) =>
-  String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const norm = (s: unknown) =>
+  String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 
 /**
  * Aplica a qualificação escolhida pelo IAGO (só nomes já cadastrados e ativos).
@@ -538,8 +538,6 @@ function detectarDiaSemana(t: string): { idx: number; proxima: boolean } | null 
   return null;
 }
 
-const norm = (v: unknown) =>
-  String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const fmtData = (d: Date) =>
   `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
