@@ -188,6 +188,8 @@ export function EditPermissionsDialog({
             recebe_consulta_cpf: recebeConsultaCpf,
             pode_marcar_pago_global: podeMarcarPago,
             atende_inbox_meta: atendeInboxMeta,
+            parceiro_meta: parceiroMeta,
+
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
