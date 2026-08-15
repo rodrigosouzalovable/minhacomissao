@@ -481,3 +481,141 @@ export default function GoogleMapsLeads() {
     </AppLayout>
   );
 }
+
+interface ChaveStatus {
+  tem_chave: boolean;
+  sufixo: string | null;
+  atualizado_em: string | null;
+}
+
+function ChaveApiCard() {
+  const qc = useQueryClient();
+  const [novaChave, setNovaChave] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [testando, setTestando] = useState(false);
+  const [resultadoTeste, setResultadoTeste] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const { data: status } = useQuery({
+    queryKey: ["gm-chave-status"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("google-maps-chave", { body: { action: "status" } });
+      if (error) throw error;
+      return data as ChaveStatus;
+    },
+  });
+
+  async function chamar(action: string, extra: Record<string, unknown> = {}) {
+    const { data, error } = await supabase.functions.invoke("google-maps-chave", { body: { action, ...extra } });
+    if (error) {
+      const payload = await getFunctionErrorPayload(error);
+      throw new Error(getFunctionErrorMessage(payload));
+    }
+    return data as any;
+  }
+
+  async function salvar() {
+    if (!novaChave.trim()) {
+      toast.error("Cole a chave da Places API (New)");
+      return;
+    }
+    setSalvando(true);
+    setResultadoTeste(null);
+    try {
+      await chamar("salvar", { api_key: novaChave.trim() });
+      setNovaChave("");
+      toast.success("Chave salva. As buscas passarão a usar essa chave.");
+      qc.invalidateQueries({ queryKey: ["gm-chave-status"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao salvar chave");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function testar() {
+    setTestando(true);
+    setResultadoTeste(null);
+    try {
+      const r = await chamar("testar", novaChave.trim() ? { api_key: novaChave.trim() } : {});
+      setResultadoTeste({ ok: !!r.ok, message: r.message ?? (r.ok ? "Chave válida" : "Falha no teste") });
+      if (r.ok) toast.success("Chave válida");
+      else toast.error(r.message ?? "Chave recusada pelo Google");
+      qc.invalidateQueries({ queryKey: ["gm-limite"] });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha no teste";
+      setResultadoTeste({ ok: false, message: msg });
+      toast.error(msg);
+    } finally {
+      setTestando(false);
+    }
+  }
+
+  async function remover() {
+    if (!confirm("Remover a chave própria e voltar a usar a conexão padrão?")) return;
+    try {
+      await chamar("remover");
+      setResultadoTeste(null);
+      toast.success("Chave removida");
+      qc.invalidateQueries({ queryKey: ["gm-chave-status"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao remover");
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <KeyRound className="h-4 w-4 text-primary" />
+          Chave da Places API (New)
+          {status && (
+            <Badge variant={status.tem_chave ? "secondary" : "outline"}>
+              {status.tem_chave ? `Configurada ····${status.sufixo}` : "Usando conexão padrão"}
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-end">
+          <div className="space-y-1.5">
+            <Label htmlFor="gm-chave">Chave de API do Google Cloud</Label>
+            <Input
+              id="gm-chave"
+              type="password"
+              autoComplete="off"
+              placeholder={status?.tem_chave ? "Cole uma nova chave para substituir" : "AIza..."}
+              value={novaChave}
+              onChange={(e) => setNovaChave(e.target.value)}
+              maxLength={200}
+            />
+          </div>
+          <Button onClick={salvar} disabled={salvando || !novaChave.trim()}>
+            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar chave"}
+          </Button>
+          <Button variant="outline" onClick={testar} disabled={testando || (!novaChave.trim() && !status?.tem_chave)}>
+            {testando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Testar chave"}
+          </Button>
+          {status?.tem_chave && (
+            <Button variant="ghost" onClick={remover} className="text-destructive">
+              <Trash2 className="h-4 w-4 mr-1" /> Remover
+            </Button>
+          )}
+        </div>
+
+        {resultadoTeste && (
+          <Alert variant={resultadoTeste.ok ? "default" : "destructive"}>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>{resultadoTeste.ok ? "Chave funcionando" : "Chave recusada"}</AlertTitle>
+            <AlertDescription>{resultadoTeste.message}</AlertDescription>
+          </Alert>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          A chave fica guardada apenas no backend (nunca é exibida de volta). Para uso no servidor, ela precisa ter a
+          Places API (New) permitida e "Restrições de aplicativo" como "Nenhuma" (ou IPs liberados). O teste consome 1
+          consulta do contador mensal.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
