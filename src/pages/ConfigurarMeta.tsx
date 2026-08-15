@@ -913,7 +913,7 @@ export default function ConfigurarMeta() {
                     {bmSel.size > 0 ? `BMs (${bmSel.size})` : "BMs"}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-auto">
+                <DropdownMenuContent align="end" className="max-w-[90vw] max-h-[70vh] overflow-auto">
                   <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {bms.map((bm) => (
@@ -923,7 +923,7 @@ export default function ConfigurarMeta() {
                       onCheckedChange={() => toggleBmSel(bm.id)}
                       onSelect={(e) => e.preventDefault()}
                     >
-                      <span className="truncate">{bm.nome}</span>
+                      <span className="whitespace-nowrap">{bm.nome}</span>
                       <span className="ml-auto pl-2 text-xs text-muted-foreground">
                         {instancias.filter((i) => i.meta_bm_id === bm.id).length}
                       </span>
@@ -934,7 +934,7 @@ export default function ConfigurarMeta() {
                     onCheckedChange={() => toggleBmSel("__none__")}
                     onSelect={(e) => e.preventDefault()}
                   >
-                    <span className="truncate text-muted-foreground">Sem BM vinculada</span>
+                    <span className="whitespace-nowrap text-muted-foreground">Sem BM vinculada</span>
                     <span className="ml-auto pl-2 text-xs text-muted-foreground">
                       {instancias.filter((i) => !i.meta_bm_id).length}
                     </span>
