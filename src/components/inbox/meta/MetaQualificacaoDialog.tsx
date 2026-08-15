@@ -345,7 +345,7 @@ export function MetaQualificacaoDialog({
                     <ContextMenuTrigger asChild>
                       <div
                         className={cn(
-                          'flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-accent cursor-pointer',
+                          'flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm transition hover:bg-accent cursor-pointer',
                           marcada && 'border-primary bg-primary/10',
                         )}
                         onClick={() => { if (!salvando) clicarPrimaria(q); }}
