@@ -186,11 +186,12 @@ export function MetaQualificacaoDialog({
   const paiEscolha = escolhendoMotivosDe ? qualificacoes.find(q => q.id === escolhendoMotivosDe) : null;
 
   const editorLista = (itens: MetaQualificacao[], parentId: string | null) => (
-    <div className="space-y-3">
-      <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="space-y-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
         {itens.length === 0 && (
           <p className="text-sm text-muted-foreground">Nenhum item cadastrado ainda.</p>
         )}
+
         {itens.map(q => (
           <div key={q.id} className="flex items-center gap-2">
             <input
