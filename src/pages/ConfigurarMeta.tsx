@@ -1097,32 +1097,19 @@ export default function ConfigurarMeta() {
                       {/* Identificação: rótulo em cima, valor embaixo */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                         <div className="flex flex-col min-w-0">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Telefone</span>
-                          {editPhoneId === inst.id ? (
-                            <div className="flex items-center gap-1">
-                              <Input
-                                value={editPhoneValue}
-                                onChange={(e) => setEditPhoneValue(e.target.value)}
-                                className="h-7 text-xs w-full sm:w-40"
-                                placeholder="5562..."
-                              />
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => salvarDisplayPhone(inst)}>OK</Button>
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setEditPhoneId(null); setEditPhoneValue(""); }}>✕</Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs font-medium">{inst.display_phone || "—"}</span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground"
-                                onClick={() => { setEditPhoneId(inst.id); setEditPhoneValue(inst.display_phone || ""); }}
-                              >
-                                editar
-                              </Button>
-                            </div>
-                          )}
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Templates</span>
+                          {(() => {
+                            const c = templatesPorInstancia[inst.id] || { total: 0, aprovados: 0 };
+                            return (
+                              <span className="text-xs font-medium" title={`${c.aprovados} aprovados de ${c.total} sincronizados`}>
+                                {c.total} {c.total > 0 && (
+                                  <span className="text-muted-foreground font-normal">· {c.aprovados} aprovados</span>
+                                )}
+                              </span>
+                            );
+                          })()}
                         </div>
+
                         <div className="flex flex-col min-w-0">
                           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Phone ID</span>
                           <span className="text-xs font-mono truncate" title={inst.phone_number_id}>{inst.phone_number_id}</span>
