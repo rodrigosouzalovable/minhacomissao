@@ -15,8 +15,6 @@ import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
-import CustosDetalhadosDialog from "@/components/meta/CustosDetalhadosDialog";
-import MetaBillingConciliacaoCard from "@/components/meta/MetaBillingConciliacaoCard";
 import { DollarSign, FileText, CreditCard, Upload } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
@@ -96,7 +94,6 @@ export default function ConfigurarMeta() {
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
-  const [custosOpen, setCustosOpen] = useState(false);
   const [bms, setBms] = useState<BM[]>([]);
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
@@ -819,7 +816,6 @@ export default function ConfigurarMeta() {
         </TabsList>
 
         <TabsContent value="instancias">
-          <MetaBillingConciliacaoCard conciliacao={conciliacao} />
 
           {/* Input escondido para importar PDF */}
           <input
