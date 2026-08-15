@@ -299,7 +299,7 @@ export function MetaQualificacaoDialog({
                     key={m.id}
                     onClick={() => setMotivosSel(prev => on ? prev.filter(x => x !== m.id) : [...prev, m.id])}
                     className={cn(
-                      'flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-accent',
+                      'flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-sm transition hover:bg-accent',
                       on && 'border-primary bg-primary/10',
                     )}
                   >
