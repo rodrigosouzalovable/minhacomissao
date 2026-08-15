@@ -11,9 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, X, Power, AlertTriangle, ExternalLink, Pencil, Building2 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -103,9 +101,7 @@ export default function ConfigurarMeta() {
   const [editPhoneValue, setEditPhoneValue] = useState("");
   const [verificandoWebhooks, setVerificandoWebhooks] = useState(false);
 
-  // Aba BMs: seleção múltipla de Business Managers
-  const [bmPickerOpen, setBmPickerOpen] = useState(false);
-  const [bmBusca, setBmBusca] = useState("");
+  // Filtro de Business Managers (usado dentro da aba Instâncias)
   const [bmSel, setBmSel] = useState<Set<string>>(new Set());
   const toggleBmSel = (key: string) =>
     setBmSel((prev) => {
@@ -836,8 +832,6 @@ export default function ConfigurarMeta() {
         <TabsList>
           <TabsTrigger value="instancias">Instâncias ({instanciasFiltradas.length})</TabsTrigger>
           <TabsTrigger value="templates">Templates HSM ({templates.length})</TabsTrigger>
-          <TabsTrigger value="bms">BMs ({bms.length})</TabsTrigger>
-
         </TabsList>
 
         <TabsContent value="instancias">
@@ -912,6 +906,57 @@ export default function ConfigurarMeta() {
                 )}
                 Verificar saúde dos webhooks
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={bms.length === 0}>
+                    <Building2 className="h-4 w-4 mr-2" />
+                    {bmSel.size > 0 ? `BMs (${bmSel.size})` : "BMs"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-auto">
+                  <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {bms.map((bm) => (
+                    <DropdownMenuCheckboxItem
+                      key={bm.id}
+                      checked={bmSel.has(bm.id)}
+                      onCheckedChange={() => toggleBmSel(bm.id)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span className="truncate">{bm.nome}</span>
+                      <span className="ml-auto pl-2 text-xs text-muted-foreground">
+                        {instancias.filter((i) => i.meta_bm_id === bm.id).length}
+                      </span>
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuCheckboxItem
+                    checked={bmSel.has("__none__")}
+                    onCheckedChange={() => toggleBmSel("__none__")}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <span className="truncate text-muted-foreground">Sem BM vinculada</span>
+                    <span className="ml-auto pl-2 text-xs text-muted-foreground">
+                      {instancias.filter((i) => !i.meta_bm_id).length}
+                    </span>
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      const todas = bms.map((b) => b.id);
+                      const tudoMarcado = todas.length > 0 && todas.every((id) => bmSel.has(id)) && !bmSel.has("__none__");
+                      setBmSel(tudoMarcado ? new Set() : new Set([...todas, "__none__"]));
+                    }}
+                  >
+                    {bms.length > 0 && bms.every((b) => bmSel.has(b.id)) && bmSel.has("__none__")
+                      ? "Desmarcar todas"
+                      : "Selecionar todas"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmSel(new Set()); }}>
+                    Limpar filtro
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button onClick={() => setDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" /> Nova instância
               </Button>
@@ -1409,142 +1454,6 @@ export default function ConfigurarMeta() {
             </>
 
           )}
-        </TabsContent>
-
-        <TabsContent value="bms">
-          <Card>
-            <CardContent className="p-6 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-medium">Filtrar instâncias por Business Manager</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Selecione uma ou mais BMs. Os WhatsApps vinculados serão exibidos na aba "Instâncias".
-                  </p>
-                </div>
-                <Popover open={bmPickerOpen} onOpenChange={setBmPickerOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline">
-                      <Building2 className="h-4 w-4 mr-2" />
-                      Selecionar BMs
-                      {bmSel.size > 0 && (
-                        <Badge variant="secondary" className="ml-2">{bmSel.size}</Badge>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[420px] p-0" align="end">
-                    <div className="p-3 border-b space-y-2">
-                      <Input
-                        placeholder="Buscar BM..."
-                        value={bmBusca}
-                        onChange={(e) => setBmBusca(e.target.value)}
-                        className="h-9"
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="h-8 text-xs flex-1"
-                          onClick={() => setBmSel(new Set(bms.map((b) => b.id)))}
-                        >
-                          Selecionar todas
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-xs flex-1"
-                          onClick={() => setBmSel(new Set())}
-                        >
-                          Limpar
-                        </Button>
-                      </div>
-                    </div>
-                    <ScrollArea className="h-[480px]">
-                      <div className="p-2">
-                        {bms
-                          .filter((b) => (b.nome || "").toLowerCase().includes(bmBusca.trim().toLowerCase()))
-                          .map((b) => (
-                            <label
-                              key={b.id}
-                              className="flex items-start gap-3 rounded-md px-3 py-2 hover:bg-muted cursor-pointer"
-                            >
-                              <Checkbox
-                                checked={bmSel.has(b.id)}
-                                onCheckedChange={() => toggleBmSel(b.id)}
-                                className="mt-0.5"
-                              />
-                              <span className="min-w-0">
-                                <span className="block text-sm truncate">{b.nome}</span>
-                                <span className="block text-[11px] text-muted-foreground font-mono truncate">
-                                  {b.business_id || "sem Business ID"}
-                                </span>
-                              </span>
-                            </label>
-                          ))}
-                        <label className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-muted cursor-pointer border-t mt-1 pt-2">
-                          <Checkbox checked={bmSel.has("__none__")} onCheckedChange={() => toggleBmSel("__none__")} />
-                          <span className="text-sm text-muted-foreground">Sem BM vinculada</span>
-                        </label>
-                      </div>
-                    </ScrollArea>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {bmSel.size > 0 ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-muted-foreground">BMs selecionadas:</span>
-                  {bms
-                    .filter((b) => bmSel.has(b.id))
-                    .map((b) => (
-                      <Badge key={b.id} variant="outline" className="gap-1 pr-1">
-                        <Building2 className="h-3 w-3" />
-                        {b.nome}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-4 w-4 p-0 ml-1"
-                          onClick={() => toggleBmSel(b.id)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </Badge>
-                    ))}
-                  {bmSel.has("__none__") && (
-                    <Badge variant="outline" className="gap-1 pr-1">
-                      Sem BM vinculada
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-4 w-4 p-0 ml-1"
-                        onClick={() => toggleBmSel("__none__")}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-xs"
-                    onClick={() => setBmSel(new Set())}
-                  >
-                    Limpar seleção
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma BM selecionada. Clique em "Selecionar BMs" para começar.
-                </p>
-              )}
-
-              {bmSel.size > 0 && (
-                <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                  {instanciasFiltradas.length} WhatsApp(s) encontrado(s) na(s) BM(s) selecionada(s). 
-                  Vá para a aba "Instâncias" para visualizar e gerenciar.
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </TabsContent>
 
       </Tabs>
