@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     }
 
     // Instância UAZAPI conectada para validar
-    const { data: instancias } = await admin
+    const { data: instancias, error: instErr } = await admin
       .from("user_whatsapp_instances")
       .select("id, nome, server_url, instance_token, ativo, tipo, ordem")
       .eq("ativo", true)
