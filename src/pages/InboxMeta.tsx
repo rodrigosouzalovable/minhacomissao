@@ -1009,11 +1009,11 @@ export default function InboxMeta() {
   }, [contatosFiltrados?.[0]?.id, contatoAtivo?.id]);
 
 
-  const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNowTick(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
+
 
   const computeJanela = useCallback((ultimaEntradaIso?: string | null) => {
     if (!ultimaEntradaIso) return { status: 'fechada' as const, fim: 0, msRestante: 0 };
