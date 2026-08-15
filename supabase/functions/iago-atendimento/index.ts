@@ -167,12 +167,27 @@ Deno.serve(async (req) => {
     const historico = ((msgs || []) as any[]).slice().reverse()
       .map((m) => ({ ...m, conteudo: conteudoLegivel(m) }));
     const ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
-    const textoAtual = String(ultimaEntrada?.conteudo || texto || '');
+    // Imagem: o webhook já mandou a leitura feita pela IA (descrição + classificação).
+    const imagemCtx = (body?.imagem_contexto && String(body.imagem_contexto.descricao || '').trim())
+      ? {
+        descricao: String(body.imagem_contexto.descricao).trim().slice(0, 600),
+        classificacao: String(body.imagem_contexto.classificacao || 'documento').toLowerCase(),
+      }
+      : null;
+    let textoAtual = String(ultimaEntrada?.conteudo || texto || '');
     const ultimaEntradaId = String(ultimaEntrada?.wa_message_id || entrada_id);
+    if (imagemCtx) {
+      const legenda = /^\[imagem\]$/i.test(textoAtual.trim()) ? '' : textoAtual.trim();
+      textoAtual = [
+        legenda,
+        `[imagem enviada pelo cliente — ${imagemCtx.classificacao}: ${imagemCtx.descricao}]`,
+      ].filter(Boolean).join('\n');
+    }
 
     // Mídia que o IAGO não consegue interpretar (áudio sem transcrição, imagem, documento):
     // não responde nada em cima disso — o atendente humano precisa ver.
-    const semConteudoUtil = /^\[(áudio|audio|imagem|vídeo|video|documento)\]$/i.test(textoAtual.trim());
+    const semConteudoUtil = !imagemCtx
+      && /^\[(áudio|audio|imagem|vídeo|video|documento)\]$/i.test(textoAtual.trim());
     if (semConteudoUtil) {
       await etiquetarAguardandoHumano(supabase, contato_id);
       await supabase.rpc('iago_finish_message', {
@@ -182,6 +197,7 @@ Deno.serve(async (req) => {
       console.log('[IAGO] mídia sem texto legível — escalado para humano', { contato_id });
       return json({ success: true, skipped: 'midia_sem_texto' });
     }
+
 
     const finalizarEntrada = async () => {
       const ids = Array.from(new Set([String(entrada_id), ultimaEntradaId].filter(Boolean)));
@@ -352,7 +368,7 @@ Deno.serve(async (req) => {
       cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
-      etapaNegociacao: etapaAnterior, escolhaAnterior,
+      etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
     });
 
 
@@ -432,6 +448,16 @@ Deno.serve(async (req) => {
         etapaNova = 'escolha_feita';
       }
     }
+    // Comprovante de pagamento: sempre agradece e passa para um humano validar.
+    const ehComprovante = imagemCtx?.classificacao === 'comprovante';
+    if (ehComprovante) {
+      escalar = true;
+      if (!motivo) motivo = 'cliente enviou comprovante de pagamento';
+      if (!mensagens.length) {
+        const pn = primeiroNome(nomeCliente);
+        mensagens = [`Recebi${pn ? `, ${pn}` : ''}! Vou encaminhar seu comprovante para a equipe validar o pagamento e já te damos retorno. 🙏`];
+      }
+    }
     if (escalar) etapaNova = 'aguardando_humano';
 
     // Não deixa a IA prometer transferência quando ainda falta confirmar a data.
@@ -446,10 +472,11 @@ Deno.serve(async (req) => {
 
     // Dúvida que ele não sabe responder / assunto proibido: NÃO envia nada.
     // Apenas escala para humano (etiqueta + aviso) para não dar resposta errada.
-    if (escalouPorDuvida && !escolha) {
+    if (escalouPorDuvida && !escolha && !ehComprovante) {
       mensagens = [];
       console.log('[IAGO] escalada por dúvida — nenhuma mensagem enviada', { contato_id, motivo });
     }
+
 
 
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
@@ -535,6 +562,7 @@ async function gerarResposta(args: {
   multiplosCandidatos?: boolean;
   etapaNegociacao?: string;
   escolhaAnterior?: string;
+  imagemCtx?: { descricao: string; classificacao: string } | null;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
@@ -542,7 +570,9 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
+    imagemCtx,
   } = args;
+
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
   const qa = itens.filter((i) => i.tipo === 'qa').map((i) => `P: ${i.gatilho}\nR: ${i.conteudo}`).join('\n\n');
@@ -613,6 +643,18 @@ async function gerarResposta(args: {
     'REGRAS DE VALORES: use APENAS os números fornecidos em DADOS DO SISTEMA. Nunca invente ou arredonde valores, descontos, prazos ou parcelas fora dessa lista.',
 
     'REGRAS SOBRE SPC/SERASA: quando o cliente perguntar sobre prazo de retirada/remoção/limpeza do nome do SPC, Serasa ou qualquer negativação, informe que o prazo para retirada da restrição é de 5 dias úteis. Não prometa prazo menor ou maior, e não invente outras informações sobre órgãos de proteção ao crédito.',
+
+    imagemCtx
+      ? [
+        'IMAGEM ENVIADA PELO CLIENTE: a mensagem atual contém a leitura de uma imagem feita pelo sistema (entre colchetes). NUNCA diga que "não consegue ver imagens" nem que é um robô; comente naturalmente o que a imagem mostra, sem citar essa leitura técnica.',
+        imagemCtx.classificacao === 'comprovante'
+          ? 'ESTA IMAGEM É UM COMPROVANTE DE PAGAMENTO: agradeça, diga que vai encaminhar para a equipe validar o pagamento e que logo darão retorno. É PROIBIDO confirmar que o pagamento foi identificado/baixado, dar quitação ou prometer retirada do nome por conta desse comprovante. Use escalar=true com motivo "cliente enviou comprovante de pagamento".'
+          : imagemCtx.classificacao === 'irrelevante'
+            ? 'ESTA IMAGEM NÃO TEM RELAÇÃO COM A COBRANÇA (foto, figurinha, mensagem de bom dia): responda em uma frase curta e educada e retome o assunto da negociação (escalar=false).'
+            : 'ESTA IMAGEM É UM DOCUMENTO/PRINT: use o que está escrito nela para responder o cliente, sem inventar dados que não aparecem na leitura. Se ela pedir uma decisão que você não pode tomar, escale (escalar=true).',
+      ].join('\n')
+      : '',
+
 
     credorFinal
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
