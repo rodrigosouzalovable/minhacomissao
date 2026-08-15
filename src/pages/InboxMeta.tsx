@@ -424,7 +424,7 @@ export default function InboxMeta() {
 
   const fetchQualificacoes = useCallback(async () => {
     const { data } = await (supabase as any).from('meta_qualificacoes')
-      .select('id, nome, cor, ordem, ativo').order('ordem');
+      .select('id, nome, cor, ordem, ativo, parent_id').order('ordem');
     setQualificacoes(((data as any) ?? []) as MetaQualificacao[]);
     const { data: cx } = await (supabase as any).from('meta_qualificacao_caixa')
       .select('folder_id, ativo');
@@ -937,9 +937,12 @@ export default function InboxMeta() {
       const { exportarParaExcel } = await import('@/lib/exportExcel');
       const nomeCaixa = (id?: string | null) => (id ? (folders.find(f => f.id === id)?.nome || '—') : 'Padrão');
       const linhas = contatosFiltrados.map(c => {
-        const qs = (qualifPorContato[c.id] ?? [])
-          .map(id => qualificacoes.find(x => x.id === id)?.nome)
-          .filter(Boolean) as string[];
+        const ids = qualifPorContato[c.id] ?? [];
+        const sel = ids.map(id => qualificacoes.find(x => x.id === id)).filter(Boolean) as MetaQualificacao[];
+        const qs = sel.filter(q => !q.parent_id).map(p => {
+          const mots = sel.filter(m => m.parent_id === p.id).map(m => m.nome);
+          return mots.length ? `${p.nome} (${mots.join(', ')})` : p.nome;
+        });
         return {
           telefone: formatTelefone(c.telefone || ''),
           nome: c.nome || nomesCRM[suffix8(c.telefone)] || '',
@@ -1478,10 +1481,13 @@ export default function InboxMeta() {
                     </PopoverTrigger>
                     <PopoverContent className="w-56 p-2" align="start">
                       <div className="space-y-1 max-h-60 overflow-y-auto">
-                        {qualificacoes.filter(q => q.ativo).length === 0 && (
+                        {qualificacoes.filter(q => q.ativo && !q.parent_id).length === 0 && (
                           <p className="text-[11px] text-muted-foreground">Nenhuma qualificação ativa.</p>
                         )}
-                        {qualificacoes.filter(q => q.ativo).map(q => {
+                        {qualificacoes.filter(q => q.ativo && !q.parent_id).flatMap(p => [
+                          p,
+                          ...qualificacoes.filter(m => m.ativo && m.parent_id === p.id),
+                        ]).map(q => {
                           const on = mcMarcadores.has(q.id);
                           return (
                             <button
@@ -1494,6 +1500,7 @@ export default function InboxMeta() {
                               className={cn(
                                 'flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent',
                                 on && 'bg-primary/10',
+                                q.parent_id && 'pl-5',
                               )}
                             >
                               {on ? <CheckSquare className="h-3.5 w-3.5 text-primary" /> : <Square className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -1807,9 +1814,14 @@ export default function InboxMeta() {
                       title="Qualificar esta conversa"
                     >
                       {(() => {
-                        const qs = (qualifPorContato[contatoAtivo.id] ?? [])
+                        const sel = (qualifPorContato[contatoAtivo.id] ?? [])
                           .map(id => qualificacoes.find(x => x.id === id))
                           .filter(Boolean) as MetaQualificacao[];
+                        const qs = sel.filter(q => !q.parent_id);
+                        const rotulo = (p: MetaQualificacao) => {
+                          const mots = sel.filter(m => m.parent_id === p.id).map(m => m.nome);
+                          return mots.length ? `${p.nome} (${mots.join(', ')})` : p.nome;
+                        };
                         return (
                           <>
                             {qs.length > 0 ? (
@@ -1831,8 +1843,8 @@ export default function InboxMeta() {
                             {qs.length === 0
                               ? 'Qualificação'
                               : qs.length === 1
-                                ? qs[0].nome
-                                : `${qs[0].nome} +${qs.length - 1}`}
+                                ? rotulo(qs[0])
+                                : `${rotulo(qs[0])} +${qs.length - 1}`}
                           </>
                         );
                       })()}

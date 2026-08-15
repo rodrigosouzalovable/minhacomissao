@@ -333,7 +333,7 @@ Deno.serve(async (req) => {
     try {
       const { data: quals } = await supabase
         .from("meta_qualificacoes")
-        .select("id, nome, ordem")
+        .select("id, nome, ordem, parent_id")
         .order("ordem", { ascending: true });
       const qualRows = await fetchAll(
         () => supabase
@@ -347,12 +347,18 @@ Deno.serve(async (req) => {
       for (const r of (qualRows || []) as any[]) {
         contagem.set(r.qualificacao_id, (contagem.get(r.qualificacao_id) || 0) + 1);
       }
-      const totalQualif = (qualRows || []).length;
-      if ((quals || []).length > 0) {
+      const todas = ((quals || []) as any[]);
+      const primarias = todas.filter((q) => !q.parent_id);
+      const totalQualif = primarias.reduce((s, q) => s + (contagem.get(q.id) || 0), 0);
+      if (primarias.length > 0) {
         linhasQualif.push("");
         linhasQualif.push(`*🏷️ Qualificações do dia:* ${totalQualif}`);
-        for (const q of (quals || []) as any[]) {
+        for (const q of primarias) {
           linhasQualif.push(`  • ${q.nome}: ${contagem.get(q.id) || 0}`);
+          for (const m of todas.filter((x) => x.parent_id === q.id)) {
+            const n = contagem.get(m.id) || 0;
+            if (n > 0) linhasQualif.push(`      - ${m.nome}: ${n}`);
+          }
         }
       }
     } catch (_e) { /* qualificações opcionais */ }
