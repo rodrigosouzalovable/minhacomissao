@@ -368,7 +368,7 @@ Deno.serve(async (req) => {
       cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
-      etapaNegociacao: etapaAnterior, escolhaAnterior,
+      etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
     });
 
 
