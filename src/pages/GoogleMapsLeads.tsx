@@ -473,5 +473,6 @@ export default function GoogleMapsLeads() {
         </Card>
       </div>
     </div>
+    </AppLayout>
   );
 }
