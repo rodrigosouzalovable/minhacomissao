@@ -551,6 +551,7 @@ async function gerarResposta(args: {
   multiplosCandidatos?: boolean;
   etapaNegociacao?: string;
   escolhaAnterior?: string;
+  imagemCtx?: { descricao: string; classificacao: string } | null;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
@@ -558,7 +559,9 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
+    imagemCtx,
   } = args;
+
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
   const qa = itens.filter((i) => i.tipo === 'qa').map((i) => `P: ${i.gatilho}\nR: ${i.conteudo}`).join('\n\n');
