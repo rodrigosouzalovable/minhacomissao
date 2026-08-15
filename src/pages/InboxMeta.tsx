@@ -882,6 +882,8 @@ export default function InboxMeta() {
     })();
   }, [contatos]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [nowTick, setNowTick] = useState(Date.now());
+
   const contatosFiltrados = useMemo(() => {
     const bRaw = busca.trim();
     const b = norm(bRaw);
