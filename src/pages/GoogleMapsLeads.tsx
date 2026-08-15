@@ -229,12 +229,13 @@ export default function GoogleMapsLeads() {
       Nome: l.nome,
       Telefone: l.telefone ?? "",
       "Telefone Internacional": l.telefone_internacional ?? "",
-      Endereço: l.endereco ?? "",
+      WhatsApp: l.tem_whatsapp === true ? "Sim" : l.tem_whatsapp === false ? "Não" : "Não verificado",
       Categoria: l.categoria ?? "",
       Site: l.site ?? "",
       Avaliação: l.avaliacao ?? "",
       "Nº Avaliações": l.total_avaliacoes ?? "",
     }));
+
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Leads");
