@@ -1065,8 +1065,8 @@ export default function ConfigurarMeta() {
                             <CreditCard className="h-3 w-3 mr-1" /> Faturamento
                           </Button>
                           <Button
-
                             size="sm"
+
                             variant="outline"
                             onClick={() => reinscreverWebhook(inst)}
                             disabled={reinscrevendo === inst.id || !inst.waba_id}
