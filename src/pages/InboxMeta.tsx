@@ -12,7 +12,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot, Download, ChevronUp,
+  Bot, Download, ChevronUp, ArrowLeft,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -1269,9 +1269,12 @@ export default function InboxMeta() {
   return (
     <AppLayout>
       <div className={cn(tema === 'dark' && 'dark')}>
-      <div className="flex h-[calc(100vh-4rem)] gap-0 overflow-hidden bg-background text-foreground">
+      <div className="flex h-[calc(100dvh-4rem)] gap-0 overflow-hidden bg-background text-foreground">
         {/* Sidebar */}
-        <div className="w-full sm:w-[360px] sm:min-w-[360px] sm:max-w-[360px] border-r flex flex-col bg-card overflow-hidden">
+        <div className={cn(
+          'w-full sm:w-[360px] sm:min-w-[360px] sm:max-w-[360px] border-r flex-col bg-card overflow-hidden',
+          contatoAtivo ? 'hidden sm:flex' : 'flex',
+        )}>
           <div className={cn('border-b space-y-2', filtrosRecolhidos ? 'p-2' : 'p-3')}>
             <div className="flex justify-end">
               <button
