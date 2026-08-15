@@ -254,6 +254,10 @@ export default function GoogleMapsLeads() {
         </div>
       </div>
 
+      <ChaveApiCard />
+
+
+
       {limite && (() => {
         const pctBar = Math.min(100, (limite.consumo_atual / Math.max(limite.limite_maximo, 1)) * 100);
         const cor =
