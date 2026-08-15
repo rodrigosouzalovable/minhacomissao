@@ -295,8 +295,9 @@ Deno.serve(async (req) => {
       if (insErr) throw insErr;
     }
 
-    // Estimativa de custo: Text Search (Pro/Enterprise SKU c/ phone) ~ US$0.032 por resultado retornado
-    const custo = +(trimmed.length * 0.032).toFixed(4);
+    // Estimativa de custo: Text Search (Pro) ~ US$0.032 POR REQUISIÇÃO (página de até 20 resultados),
+    // não por resultado. A franquia gratuita mensal do SKU pode zerar esse valor na fatura do Google.
+    const custo = +(Math.max(pages, 1) * 0.032).toFixed(4);
 
     await supabase
       .from("google_maps_buscas")
