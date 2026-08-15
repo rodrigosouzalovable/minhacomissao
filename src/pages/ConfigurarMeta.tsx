@@ -722,10 +722,13 @@ export default function ConfigurarMeta() {
             </div>
           </div>
           <div>
-            <Label>Verify Token (compartilhado)</Label>
+            <Label>{parceiroMeta ? "Verify Token (seu token)" : "Verify Token (compartilhado)"}</Label>
             <p className="text-xs text-muted-foreground mt-1">
-              Cole esse valor no campo "Verify Token" do webhook na HookCloud.
+              {parceiroMeta
+                ? "Este token é exclusivo dos seus números. Cole esse valor no campo \"Verify Token\" do webhook na Meta/HookCloud."
+                : "Cole esse valor no campo \"Verify Token\" do webhook na HookCloud."}
             </p>
+
             <div className="flex gap-2 mt-1 flex-wrap">
               <Input
                 value={verifyToken}
