@@ -40,7 +40,10 @@ interface Lead {
   site: string | null;
   avaliacao: number | null;
   total_avaliacoes: number | null;
+  tem_whatsapp: boolean | null;
+  whatsapp_verificado_em: string | null;
 }
+
 
 interface Busca {
   id: string;
