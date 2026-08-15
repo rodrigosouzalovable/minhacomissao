@@ -167,12 +167,27 @@ Deno.serve(async (req) => {
     const historico = ((msgs || []) as any[]).slice().reverse()
       .map((m) => ({ ...m, conteudo: conteudoLegivel(m) }));
     const ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
-    const textoAtual = String(ultimaEntrada?.conteudo || texto || '');
+    // Imagem: o webhook já mandou a leitura feita pela IA (descrição + classificação).
+    const imagemCtx = (body?.imagem_contexto && String(body.imagem_contexto.descricao || '').trim())
+      ? {
+        descricao: String(body.imagem_contexto.descricao).trim().slice(0, 600),
+        classificacao: String(body.imagem_contexto.classificacao || 'documento').toLowerCase(),
+      }
+      : null;
+    let textoAtual = String(ultimaEntrada?.conteudo || texto || '');
     const ultimaEntradaId = String(ultimaEntrada?.wa_message_id || entrada_id);
+    if (imagemCtx) {
+      const legenda = /^\[imagem\]$/i.test(textoAtual.trim()) ? '' : textoAtual.trim();
+      textoAtual = [
+        legenda,
+        `[imagem enviada pelo cliente — ${imagemCtx.classificacao}: ${imagemCtx.descricao}]`,
+      ].filter(Boolean).join('\n');
+    }
 
     // Mídia que o IAGO não consegue interpretar (áudio sem transcrição, imagem, documento):
     // não responde nada em cima disso — o atendente humano precisa ver.
-    const semConteudoUtil = /^\[(áudio|audio|imagem|vídeo|video|documento)\]$/i.test(textoAtual.trim());
+    const semConteudoUtil = !imagemCtx
+      && /^\[(áudio|audio|imagem|vídeo|video|documento)\]$/i.test(textoAtual.trim());
     if (semConteudoUtil) {
       await etiquetarAguardandoHumano(supabase, contato_id);
       await supabase.rpc('iago_finish_message', {
@@ -182,6 +197,7 @@ Deno.serve(async (req) => {
       console.log('[IAGO] mídia sem texto legível — escalado para humano', { contato_id });
       return json({ success: true, skipped: 'midia_sem_texto' });
     }
+
 
     const finalizarEntrada = async () => {
       const ids = Array.from(new Set([String(entrada_id), ultimaEntradaId].filter(Boolean)));
