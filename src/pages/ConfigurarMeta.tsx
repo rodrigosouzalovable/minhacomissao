@@ -132,6 +132,13 @@ export default function ConfigurarMeta() {
       : []),
   ];
 
+  const instanciasFiltradas = (() => {
+    if (bmSel.size === 0) return instancias;
+    return instancias.filter((i) =>
+      (i.meta_bm_id && bmSel.has(i.meta_bm_id)) || (!i.meta_bm_id && bmSel.has("__none__"))
+    );
+  })();
+
 
 
   // Importação de PDF de fatura Meta
