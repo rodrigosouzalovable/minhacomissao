@@ -113,25 +113,6 @@ export default function ConfigurarMeta() {
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
-  const gruposBm = [
-    ...bms
-      .filter((b) => bmSel.has(b.id))
-      .map((b) => ({
-        key: b.id,
-        nome: b.nome,
-        business_id: b.business_id,
-        instancias: instancias.filter((i) => i.meta_bm_id === b.id),
-      })),
-    ...(bmSel.has("__none__")
-      ? [{
-          key: "__none__",
-          nome: "Sem BM vinculada",
-          business_id: null as string | null,
-          instancias: instancias.filter((i) => !i.meta_bm_id),
-        }]
-      : []),
-  ];
-
   const instanciasFiltradas = (() => {
     if (bmSel.size === 0) return instancias;
     return instancias.filter((i) =>
