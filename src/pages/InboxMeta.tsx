@@ -882,6 +882,8 @@ export default function InboxMeta() {
     })();
   }, [contatos]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [nowTick, setNowTick] = useState(Date.now());
+
   const contatosFiltrados = useMemo(() => {
     const bRaw = busca.trim();
     const b = norm(bRaw);
@@ -920,11 +922,28 @@ export default function InboxMeta() {
         const rank = (c: MetaContato) => (c.fixado ? 0 : 1);
         const ra = rank(a), rb = rank(b);
         if (ra !== rb) return ra - rb;
+        // Alertas de espera sobem: vermelho (30min+) > amarelo (15-30min) > resto
+        const espera = (c: MetaContato) => {
+          if (!c.ultima_msg_entrada_em) return { rank: 2, t: 0 };
+          const tEntrada = new Date(c.ultima_msg_entrada_em).getTime();
+          const tUltima = c.ultima_mensagem_em ? new Date(c.ultima_mensagem_em).getTime() : 0;
+          if (tUltima > tEntrada) return { rank: 2, t: 0 };
+          const tDisp = c.sla_dispensado_em ? new Date(c.sla_dispensado_em).getTime() : 0;
+          if (tDisp >= tEntrada) return { rank: 2, t: 0 };
+          const min = Math.floor((nowTick - tEntrada) / 60_000);
+          if (min >= 30) return { rank: 0, t: tEntrada };
+          if (min >= 15) return { rank: 1, t: tEntrada };
+          return { rank: 2, t: 0 };
+        };
+        const ea = espera(a), eb = espera(b);
+        if (ea.rank !== eb.rank) return ea.rank - eb.rank;
+        if (ea.rank !== 2) return ea.t - eb.t; // espera mais antiga primeiro
         const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato, nowTick]);
+
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
   const baixarMeusClientesExcel = useCallback(async () => {
@@ -992,11 +1011,11 @@ export default function InboxMeta() {
   }, [contatosFiltrados?.[0]?.id, contatoAtivo?.id]);
 
 
-  const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNowTick(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
+
 
   const computeJanela = useCallback((ultimaEntradaIso?: string | null) => {
     if (!ultimaEntradaIso) return { status: 'fechada' as const, fim: 0, msRestante: 0 };
