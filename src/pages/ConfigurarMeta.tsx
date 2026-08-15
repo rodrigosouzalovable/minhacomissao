@@ -15,8 +15,6 @@ import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
-import CustosDetalhadosDialog from "@/components/meta/CustosDetalhadosDialog";
-import MetaBillingConciliacaoCard from "@/components/meta/MetaBillingConciliacaoCard";
 import { DollarSign, FileText, CreditCard, Upload } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
@@ -96,7 +94,6 @@ export default function ConfigurarMeta() {
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
-  const [custosOpen, setCustosOpen] = useState(false);
   const [bms, setBms] = useState<BM[]>([]);
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
@@ -683,26 +680,8 @@ export default function ConfigurarMeta() {
         </p>
       </div>
 
-      <Card className="mb-6 border-primary/40 bg-primary/5">
-        <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-3">
-            <div className="rounded-lg bg-primary/10 p-2">
-              <DollarSign className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <div className="font-semibold">Custos detalhados dos envios</div>
-              <p className="text-sm text-muted-foreground">
-                Veja o custo de cada dia, cada conversa e cada mensagem enviada pela API oficial da Meta.
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => setCustosOpen(true)}>
-            <DollarSign className="h-4 w-4 mr-2" /> Ver custos detalhados
-          </Button>
-        </CardContent>
-      </Card>
 
-      <CustosDetalhadosDialog open={custosOpen} onOpenChange={setCustosOpen} />
+
 
       <MetaGuardrailCard />
 
@@ -837,7 +816,6 @@ export default function ConfigurarMeta() {
         </TabsList>
 
         <TabsContent value="instancias">
-          <MetaBillingConciliacaoCard conciliacao={conciliacao} />
 
           {/* Input escondido para importar PDF */}
           <input
