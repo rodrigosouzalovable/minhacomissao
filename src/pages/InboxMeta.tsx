@@ -12,7 +12,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot, Download, ChevronUp,
+  Bot, Download, ChevronUp, ArrowLeft,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -1269,9 +1269,12 @@ export default function InboxMeta() {
   return (
     <AppLayout>
       <div className={cn(tema === 'dark' && 'dark')}>
-      <div className="flex h-[calc(100vh-4rem)] gap-0 overflow-hidden bg-background text-foreground">
+      <div className="flex h-[calc(100dvh-4rem)] gap-0 overflow-hidden bg-background text-foreground">
         {/* Sidebar */}
-        <div className="w-full sm:w-[360px] sm:min-w-[360px] sm:max-w-[360px] border-r flex flex-col bg-card overflow-hidden">
+        <div className={cn(
+          'w-full sm:w-[360px] sm:min-w-[360px] sm:max-w-[360px] border-r flex-col bg-card overflow-hidden',
+          contatoAtivo ? 'hidden sm:flex' : 'flex',
+        )}>
           <div className={cn('border-b space-y-2', filtrosRecolhidos ? 'p-2' : 'p-3')}>
             <div className="flex justify-end">
               <button
@@ -1763,7 +1766,10 @@ export default function InboxMeta() {
         </div>
 
         {/* Painel da conversa */}
-        <div className="flex-1 flex flex-col bg-background min-w-0"
+        <div className={cn(
+            'flex-1 flex-col bg-background min-w-0',
+            contatoAtivo ? 'flex' : 'hidden sm:flex',
+          )}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => {
@@ -1777,8 +1783,18 @@ export default function InboxMeta() {
             </div>
           ) : (
             <>
-              <div className="p-3 border-b flex items-center justify-between bg-card">
-                <div className="min-w-0">
+              <div className="p-2 sm:p-3 border-b flex flex-wrap items-start justify-between gap-2 bg-card">
+                <div className="min-w-0 flex-1 flex items-start gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0 sm:hidden -ml-1"
+                    onClick={() => setContatoAtivo(null)}
+                    title="Voltar para conversas"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="min-w-0">
                   <div className="text-sm font-semibold truncate flex items-center gap-2">
                     {contatoAtivo.nome || (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.whatsapp_username ? `@${contatoAtivo.whatsapp_username}` : 'Contato sem telefone'))}
                     {contatoAtivo.whatsapp_username && (
@@ -1802,9 +1818,10 @@ export default function InboxMeta() {
                     )}
                     <span>· via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}</span>
                   </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
                   {qualificacaoAtivaNaCaixa && (
                     <Button
                       variant="outline"
