@@ -853,7 +853,7 @@ export default function ConfigurarMeta() {
 
       <Tabs defaultValue="instancias">
         <TabsList>
-          <TabsTrigger value="instancias">Instâncias ({instancias.length})</TabsTrigger>
+          <TabsTrigger value="instancias">Instâncias ({instanciasFiltradas.length})</TabsTrigger>
           <TabsTrigger value="templates">Templates HSM ({templates.length})</TabsTrigger>
           <TabsTrigger value="bms">BMs ({bms.length})</TabsTrigger>
 
@@ -870,31 +870,81 @@ export default function ConfigurarMeta() {
             onChange={onPdfSelected}
           />
 
-          <div className="flex justify-end gap-2 mb-3">
-            <Button
-              variant="outline"
-              onClick={verificarSaudeWebhooks}
-              disabled={verificandoWebhooks}
-              title="Verifica todos os webhooks na Meta, reinscreve os que estiverem incorretos e detecta possíveis mensagens perdidas"
-            >
-              {verificandoWebhooks ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {bmSel.size === 0 ? (
+                <span className="text-xs text-muted-foreground">Mostrando todas as instâncias.</span>
               ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <>
+                  <span className="text-xs text-muted-foreground">Filtrado por:</span>
+                  {bms
+                    .filter((b) => bmSel.has(b.id))
+                    .map((b) => (
+                      <Badge key={b.id} variant="outline" className="gap-1 pr-1">
+                        <Building2 className="h-3 w-3" />
+                        {b.nome}
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-4 w-4 p-0 ml-1"
+                          onClick={() => toggleBmSel(b.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  {bmSel.has("__none__") && (
+                    <Badge variant="outline" className="gap-1 pr-1">
+                      Sem BM vinculada
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-4 w-4 p-0 ml-1"
+                        onClick={() => toggleBmSel("__none__")}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    onClick={() => setBmSel(new Set())}
+                  >
+                    Limpar filtro
+                  </Button>
+                </>
               )}
-              Verificar saúde dos webhooks
-            </Button>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" /> Nova instância
-            </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={verificarSaudeWebhooks}
+                disabled={verificandoWebhooks}
+                title="Verifica todos os webhooks na Meta, reinscreve os que estiverem incorretos e detecta possíveis mensagens perdidas"
+              >
+                {verificandoWebhooks ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Verificar saúde dos webhooks
+              </Button>
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" /> Nova instância
+              </Button>
+            </div>
           </div>
 
 
           {loading ? (
             <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
-          ) : instancias.length === 0 ? (
+          ) : instanciasFiltradas.length === 0 ? (
             <Card><CardContent className="p-8 text-center text-muted-foreground">
-              Nenhuma instância. Clique em "Nova instância" para começar.
+              {bmSel.size > 0
+                ? "Nenhuma instância encontrada para as BMs selecionadas."
+                : "Nenhuma instância. Clique em \"Nova instância\" para começar."}
             </CardContent></Card>
           ) : (
             <div className="space-y-3">
