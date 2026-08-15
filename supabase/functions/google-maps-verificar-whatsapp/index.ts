@@ -56,33 +56,71 @@ Deno.serve(async (req) => {
     }
 
     // Instância UAZAPI conectada para validar
-    const { data: instancias } = await admin
+    const { data: instancias, error: instErr } = await admin
       .from("user_whatsapp_instances")
-      .select("id, nome, server_url, instance_token, ativo, status")
+      .select("id, nome, server_url, instance_token, ativo, tipo, ordem")
       .eq("ativo", true)
       .not("server_url", "is", null)
       .not("instance_token", "is", null)
-      .order("nome");
+      .order("ordem", { ascending: true, nullsFirst: false });
 
-    const validador = (instancias ?? []).find(
-      (i: Record<string, unknown>) =>
-        String(i.status ?? "").toLowerCase().includes("connect") ||
-        String(i.status ?? "").toLowerCase() === "open",
-    ) ?? (instancias ?? [])[0];
+    if (instErr) console.error("erro ao listar instâncias:", instErr.message);
+
+    const candidatas = instancias ?? [];
+    let validador: Record<string, unknown> | null = null;
+    const motivos: string[] = [];
+
+    for (const inst of candidatas) {
+      const url = String(inst.server_url).replace(/\/+$/, "");
+      const tk = String(inst.instance_token);
+      try {
+        const ctl = new AbortController();
+        const to = setTimeout(() => ctl.abort(), 12000);
+        const r = await fetch(`${url}/instance/status`, {
+          headers: { token: tk },
+          signal: ctl.signal,
+        });
+        clearTimeout(to);
+        const txt = await r.text();
+        console.log(`status ${inst.nome}: HTTP ${r.status} ${txt.slice(0, 200)}`);
+        let conectado = false;
+        try {
+          const d = JSON.parse(txt) as Record<string, any>;
+          const st = String(d?.instance?.status ?? d?.status ?? "").toLowerCase();
+          conectado =
+            d?.status?.connected === true ||
+            d?.connected === true ||
+            st.includes("connect") ||
+            st === "open";
+        } catch {
+          conectado = false;
+        }
+        if (conectado) {
+          validador = inst;
+          break;
+        }
+        motivos.push(`${inst.nome}: desconectada`);
+      } catch (e) {
+        motivos.push(`${inst.nome}: ${e instanceof Error ? e.message : "falha"}`);
+      }
+    }
 
     if (!validador) {
       return json(
         {
           error: "sem_instancia",
-          message:
-            "Nenhuma instância WhatsApp (UAZAPI) conectada disponível para verificar os números. Conecte uma instância e tente novamente.",
+          message: candidatas.length
+            ? `Nenhuma instância WhatsApp (UAZAPI) respondeu como conectada. Detalhes: ${motivos.join(" | ")}`
+            : "Nenhuma instância WhatsApp (UAZAPI) ativa cadastrada. Conecte uma instância e tente novamente.",
         },
         200,
       );
     }
 
+    console.log(`instância validadora: ${validador.nome}`);
     const cleanUrl = String(validador.server_url).replace(/\/+$/, "");
     const token = String(validador.instance_token);
+
 
     const comWhats: string[] = [];
     const semWhats: string[] = [];
