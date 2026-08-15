@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Clipboard, KeyRound, Loader2, Download, MapPin, Phone, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Clipboard, KeyRound, Loader2, Download, MapPin, MessageCircle, Phone, Search, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 
 interface FunctionErrorPayload {
