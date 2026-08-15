@@ -231,7 +231,7 @@ export function MetaQualificacaoDialog({
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-2 border-t pt-3">
+      <div className="flex shrink-0 items-center gap-2 border-t pt-3">
         <input
           type="color"
           value={novaCor}
