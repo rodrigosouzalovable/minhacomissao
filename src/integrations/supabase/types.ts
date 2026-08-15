@@ -2363,6 +2363,10 @@ export type Database = {
           followup_hora_inicio: number
           followup_horas: number
           followup_texto: string
+          followup2_ativo: boolean
+          followup2_horas: number
+          followup3_ativo: boolean
+          followup3_horas: number
           id: string
           instrucoes_gerais: string
           limite_msgs_dia: number
@@ -2382,6 +2386,10 @@ export type Database = {
           followup_hora_inicio?: number
           followup_horas?: number
           followup_texto?: string
+          followup2_ativo?: boolean
+          followup2_horas?: number
+          followup3_ativo?: boolean
+          followup3_horas?: number
           id?: string
           instrucoes_gerais?: string
           limite_msgs_dia?: number
@@ -2401,6 +2409,10 @@ export type Database = {
           followup_hora_inicio?: number
           followup_horas?: number
           followup_texto?: string
+          followup2_ativo?: boolean
+          followup2_horas?: number
+          followup3_ativo?: boolean
+          followup3_horas?: number
           id?: string
           instrucoes_gerais?: string
           limite_msgs_dia?: number
@@ -2453,6 +2465,7 @@ export type Database = {
           created_at: string
           etapa: string
           followup_em: string | null
+          followup_etapa: number
           followup_feito: boolean
           id: string
           msgs_dia: string | null
@@ -2471,6 +2484,7 @@ export type Database = {
           created_at?: string
           etapa?: string
           followup_em?: string | null
+          followup_etapa?: number
           followup_feito?: boolean
           id?: string
           msgs_dia?: string | null
@@ -2489,6 +2503,7 @@ export type Database = {
           created_at?: string
           etapa?: string
           followup_em?: string | null
+          followup_etapa?: number
           followup_feito?: boolean
           id?: string
           msgs_dia?: string | null
