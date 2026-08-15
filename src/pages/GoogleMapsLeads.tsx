@@ -89,7 +89,10 @@ export default function GoogleMapsLeads() {
   const [buscando, setBuscando] = useState(false);
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
   const [somenteComTel, setSomenteComTel] = useState(true);
+  const [somenteComWhats, setSomenteComWhats] = useState(false);
+  const [verificandoWhats, setVerificandoWhats] = useState(false);
   const [erroBusca, setErroBusca] = useState<FunctionErrorPayload | null>(null);
+
 
   const { data: limite, refetch: refetchLimite } = useQuery({
     queryKey: ["gm-limite"],
