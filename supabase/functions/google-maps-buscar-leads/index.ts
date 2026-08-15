@@ -96,12 +96,8 @@ Deno.serve(async (req) => {
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const GOOGLE_MAPS_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY");
-    if (!LOVABLE_API_KEY || !GOOGLE_MAPS_API_KEY) {
-      return new Response(JSON.stringify({ error: "Google Maps não configurado" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Se não houver conexão padrão, ainda pode funcionar com a chave própria (validada mais abaixo).
+
 
     const supabaseUrl = getEnvOrThrow("SUPABASE_URL");
     const serviceRoleKey = getEnvOrThrow("SUPABASE_SERVICE_ROLE_KEY");
