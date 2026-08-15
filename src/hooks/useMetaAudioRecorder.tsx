@@ -159,14 +159,14 @@ export function useMetaAudioRecorder({
   const iniciarGravacao = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Ordem preferida: MP4/AAC, que a API oficial aceita nativamente. WebM só
-      // fica como fallback e será convertido para OGG/OPUS antes do envio.
+      // Gravamos em WebM/OPUS quando disponível (decodifica melhor no Web Audio)
+      // e convertemos para MP3 antes do envio, pois a Meta recusa WebM e fMP4.
       const candidatos = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
         'audio/mp4;codecs=mp4a.40.2',
         'audio/mp4',
         'audio/aac',
-        'audio/webm;codecs=opus',
-        'audio/webm',
       ];
       let rec: MediaRecorder | null = null;
       for (const mimeType of candidatos) {
