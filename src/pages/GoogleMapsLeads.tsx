@@ -218,10 +218,7 @@ export default function GoogleMapsLeads() {
     }
   }
 
-    } finally {
-      setBuscando(false);
-    }
-  }
+
 
   function exportarExcel() {
     if (!leadsFiltrados.length) {
