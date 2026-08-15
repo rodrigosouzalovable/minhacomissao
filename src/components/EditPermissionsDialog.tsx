@@ -58,6 +58,7 @@ export function EditPermissionsDialog({
   const [podeMarcarPago, setPodeMarcarPago] = useState(false);
   const [atendeInboxMeta, setAtendeInboxMeta] = useState(true);
   const [parceiroMeta, setParceiroMeta] = useState(false);
+  const [veCampanhas, setVeCampanhas] = useState(false);
   const [instanciasParceiro, setInstanciasParceiro] = useState<string[]>([]);
   const [buscaInstancia, setBuscaInstancia] = useState('');
   const [selectedTenants, setSelectedTenants] = useState<string[]>([]);
@@ -154,6 +155,7 @@ export function EditPermissionsDialog({
       setPodeMarcarPago((permissions as any).pode_marcar_pago_global ?? false);
       setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? true);
       setParceiroMeta((permissions as any).parceiro_meta ?? false);
+      setVeCampanhas((permissions as any).ve_campanhas ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
@@ -166,6 +168,7 @@ export function EditPermissionsDialog({
       setPodeMarcarPago(false);
       setAtendeInboxMeta(true);
       setParceiroMeta(false);
+      setVeCampanhas(false);
 
     }
   }, [permissions, open]);
@@ -191,6 +194,7 @@ export function EditPermissionsDialog({
             pode_marcar_pago_global: podeMarcarPago,
             atende_inbox_meta: atendeInboxMeta,
             parceiro_meta: parceiroMeta,
+            ve_campanhas: veCampanhas,
 
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
