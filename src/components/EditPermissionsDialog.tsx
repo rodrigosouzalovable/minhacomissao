@@ -227,10 +227,32 @@ export function EditPermissionsDialog({
           .in('tenant_id', toRemove);
         if (error) throw error;
       }
+
+      // Sync vínculos de instâncias Meta (modo parceiro)
+      const vincAtuais = new Set((vinculosParceiro ?? []).map((r: any) => r.instancia_id));
+      const vincDesejados = new Set(parceiroMeta ? instanciasParceiro : []);
+      const vincAdd = [...vincDesejados].filter((id) => !vincAtuais.has(id));
+      const vincRemove = [...vincAtuais].filter((id) => !vincDesejados.has(id));
+      if (vincAdd.length > 0) {
+        const { error } = await supabase
+          .from('meta_instance_parceiros' as any)
+          .insert(vincAdd.map((instancia_id) => ({ instancia_id, user_id: userId })));
+        if (error) throw error;
+      }
+      if (vincRemove.length > 0) {
+        const { error } = await supabase
+          .from('meta_instance_parceiros' as any)
+          .delete()
+          .eq('user_id', userId)
+          .in('instancia_id', vincRemove);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
       queryClient.invalidateQueries({ queryKey: ['tenant-members'] });
+      queryClient.invalidateQueries({ queryKey: ['meta-instance-parceiros'] });
+
       onOpenChange(false);
       toast({
         title: 'Permissões salvas',
