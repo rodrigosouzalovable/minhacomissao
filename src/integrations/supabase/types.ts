@@ -4249,6 +4249,24 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_webhook_tokens: {
+        Row: {
+          atualizado_em: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       meta_whatsapp_config: {
         Row: {
           atualizado_em: string
