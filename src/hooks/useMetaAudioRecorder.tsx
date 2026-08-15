@@ -102,19 +102,14 @@ async function ensureMetaAudio(
   mimeType: string,
 ): Promise<{ blob: Blob; ext: 'ogg' | 'mp4' | 'm4a' | 'aac' | 'mp3'; contentType: string }> {
   const native = normalizeAudioMime(mimeType);
-  // Meta aceita MP4/AAC/MP3 nativamente. Não passe por conversão nesses casos.
-  if (native.contentType !== 'audio/webm' && native.contentType !== 'audio/ogg') {
-    const ext = native.ext === 'webm' || native.ext === 'ogg' ? 'm4a' : native.ext;
-    return { blob: new Blob([blob], { type: native.contentType }), ext, contentType: native.contentType };
-  }
 
-  // WebM (Chrome/Edge) não é aceito pela Meta e OGG do navegador já foi descartado
-  // silenciosamente pelo WhatsApp: nos dois casos convertemos para MP3 no navegador.
+  // A Meta recusa o MP4 fragmentado gerado pelo MediaRecorder ("Media upload error")
+  // e também o WebM/OGG do navegador. Sempre re-codificamos para MP3, que é aceito.
   try {
     const mp3 = await withTimeout(encodeToMp3(blob), 60000, 'Conversão do áudio');
     return { blob: mp3, ext: 'mp3', contentType: 'audio/mpeg' };
   } catch (mp3Err) {
-    console.warn('[useMetaAudioRecorder] falha na conversão MP3, tentando ffmpeg', mp3Err);
+    console.warn('[useMetaAudioRecorder] falha na conversão MP3, tentando ffmpeg', mp3Err, native.contentType);
   }
 
   // Último recurso: ffmpeg.wasm (pode falhar em navegadores sem memória compartilhada).
