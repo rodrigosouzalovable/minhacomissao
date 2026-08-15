@@ -948,7 +948,7 @@ export default function ConfigurarMeta() {
             </CardContent></Card>
           ) : (
             <div className="space-y-3">
-              {instancias.map((inst) => (
+              {instanciasFiltradas.map((inst) => (
                 <Card key={inst.id}>
                   <CardContent className="p-4">
                     <div className="flex flex-col gap-3">
