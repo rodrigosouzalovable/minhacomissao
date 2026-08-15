@@ -906,6 +906,57 @@ export default function ConfigurarMeta() {
                 )}
                 Verificar saúde dos webhooks
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={bms.length === 0}>
+                    <Building2 className="h-4 w-4 mr-2" />
+                    {bmSel.size > 0 ? `BMs (${bmSel.size})` : "BMs"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-auto">
+                  <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {bms.map((bm) => (
+                    <DropdownMenuCheckboxItem
+                      key={bm.id}
+                      checked={bmSel.has(bm.id)}
+                      onCheckedChange={() => toggleBmSel(bm.id)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span className="truncate">{bm.nome}</span>
+                      <span className="ml-auto pl-2 text-xs text-muted-foreground">
+                        {instancias.filter((i) => i.meta_bm_id === bm.id).length}
+                      </span>
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  <DropdownMenuCheckboxItem
+                    checked={bmSel.has("__none__")}
+                    onCheckedChange={() => toggleBmSel("__none__")}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <span className="truncate text-muted-foreground">Sem BM vinculada</span>
+                    <span className="ml-auto pl-2 text-xs text-muted-foreground">
+                      {instancias.filter((i) => !i.meta_bm_id).length}
+                    </span>
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      const todas = bms.map((b) => b.id);
+                      const tudoMarcado = todas.length > 0 && todas.every((id) => bmSel.has(id)) && !bmSel.has("__none__");
+                      setBmSel(tudoMarcado ? new Set() : new Set([...todas, "__none__"]));
+                    }}
+                  >
+                    {bms.length > 0 && bms.every((b) => bmSel.has(b.id)) && bmSel.has("__none__")
+                      ? "Desmarcar todas"
+                      : "Selecionar todas"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmSel(new Set()); }}>
+                    Limpar filtro
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button onClick={() => setDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" /> Nova instância
               </Button>
