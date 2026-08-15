@@ -348,7 +348,7 @@ export function NotificacoesCpfBell() {
       while (true) {
         const { data, error } = await (supabase as any)
           .from("meta_contato_qualificacao")
-          .select("contato_id, qualificacao_id, user_id, created_at, meta_qualificacoes(nome), meta_whatsapp_contatos(nome, telefone, folder_id)")
+          .select("contato_id, qualificacao_id, user_id, created_at, meta_qualificacoes(nome, parent_id), meta_whatsapp_contatos(nome, telefone, folder_id)")
           .order("created_at", { ascending: false })
           .range(from, from + PAGE - 1);
         if (error) throw error;
@@ -377,23 +377,42 @@ export function NotificacoesCpfBell() {
       const fmtDT = (iso: string | null) =>
         iso ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "";
 
-      const dados = rows.map((r) => ({
-        data_hora: fmtDT(r.created_at),
-        qualificacao: r.meta_qualificacoes?.nome || "",
-        telefone: r.meta_whatsapp_contatos?.telefone || "",
-        nome: r.meta_whatsapp_contatos?.nome || "",
-        caixa: r.meta_whatsapp_contatos?.folder_id
-          ? pastaMap[r.meta_whatsapp_contatos.folder_id] || ""
-          : "Padrão",
-        atendente: r.user_id ? nomeMap[r.user_id] || "" : "",
-      }));
-      dados.sort((a, b) => a.qualificacao.localeCompare(b.qualificacao));
+      // Agrupa por conversa: primárias em uma linha, motivos vinculados na coluna "Motivo"
+      const porContato: Record<string, any[]> = {};
+      rows.forEach((r) => {
+        if (!porContato[r.contato_id]) porContato[r.contato_id] = [];
+        porContato[r.contato_id].push(r);
+      });
+
+      const dados: any[] = [];
+      Object.values(porContato).forEach((lista) => {
+        const primarias = lista.filter((r) => !r.meta_qualificacoes?.parent_id);
+        primarias.forEach((p) => {
+          const motivos = lista
+            .filter((m) => m.meta_qualificacoes?.parent_id === p.qualificacao_id)
+            .map((m) => m.meta_qualificacoes?.nome)
+            .filter(Boolean);
+          dados.push({
+            data_hora: fmtDT(p.created_at),
+            qualificacao: p.meta_qualificacoes?.nome || "",
+            motivo: motivos.join(", "),
+            telefone: p.meta_whatsapp_contatos?.telefone || "",
+            nome: p.meta_whatsapp_contatos?.nome || "",
+            caixa: p.meta_whatsapp_contatos?.folder_id
+              ? pastaMap[p.meta_whatsapp_contatos.folder_id] || ""
+              : "Padrão",
+            atendente: p.user_id ? nomeMap[p.user_id] || "" : "",
+          });
+        });
+      });
+      dados.sort((a, b) => a.qualificacao.localeCompare(b.qualificacao) || a.motivo.localeCompare(b.motivo));
 
       const hoje = new Date().toISOString().slice(0, 10);
       await exportarParaExcel(
         dados,
         [
           { chave: "qualificacao", titulo: "Qualificação" },
+          { chave: "motivo", titulo: "Motivo" },
           { chave: "telefone", titulo: "Telefone" },
           { chave: "nome", titulo: "Nome" },
           { chave: "caixa", titulo: "Caixa de mensagens" },
