@@ -330,11 +330,12 @@ export function MetaQualificacaoDialog({
         ) : modoConfig ? (
           editorLista(primarias, null)
         ) : (
-          <div className="space-y-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
             {ativas.length === 0 && (
               <p className="text-sm text-muted-foreground">Nenhuma qualificação ativa.</p>
             )}
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-1 gap-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
+
               {ativas.map(q => {
                 const marcada = atuais.includes(q.id);
                 const mots = motivosMarcados(q.id);
