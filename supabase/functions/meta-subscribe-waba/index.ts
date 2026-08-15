@@ -15,15 +15,11 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { data: config, error: configError } = await supabase
-      .from('meta_whatsapp_config')
-      .select('valor')
-      .eq('chave', 'webhook_verify_token')
-      .maybeSingle();
+    const tokenResolver = await criarTokenResolver(supabase);
+    if (!tokenResolver.global) {
+      console.warn('[SubscribeWaba] Verify Token global não configurado');
+    }
 
-    if (configError) throw configError;
-    const verifyToken = config?.valor;
-    if (!verifyToken) throw new Error('Verify Token compartilhado não configurado');
 
     const body = await req.json().catch(() => ({}));
     const targetId = body?.instancia_id as string | undefined;
