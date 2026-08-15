@@ -21,10 +21,8 @@ Deno.serve(async (req) => {
     const targetId: string | undefined = body?.instancia_id;
     const forceNotify: boolean = !!body?.notify;
 
-    const { data: cfg } = await supabase
-      .from("meta_whatsapp_config").select("valor").eq("chave", "webhook_verify_token").maybeSingle();
-    const verifyToken = cfg?.valor;
-    if (!verifyToken) throw new Error("Verify Token não configurado");
+    const tokenResolver = await criarTokenResolver(supabase);
+
 
     const q = supabase
       .from("meta_whatsapp_instances")
