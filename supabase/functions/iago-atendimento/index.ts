@@ -524,7 +524,9 @@ Deno.serve(async (req) => {
       ultima_msg_em: agoraIso,
       ultima_msg_cliente_em: agoraIso,
       followup_em: followupEm,
-      followup_feito: escalar ? true : estado.followup_feito,
+      followup_feito: escalar ? true : false,
+      followup_etapa: escalar ? 3 : 0,
+
       contexto: {
         ...(estado.contexto || {}),
         msgs_ia: [...idsIA, ...novosIds].slice(-30),
