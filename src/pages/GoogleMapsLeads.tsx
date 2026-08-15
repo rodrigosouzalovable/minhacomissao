@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Clipboard, KeyRound, Loader2, Download, MapPin, Phone, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Clipboard, KeyRound, Loader2, Download, MapPin, MessageCircle, Phone, Search, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 
 interface FunctionErrorPayload {
@@ -40,7 +40,10 @@ interface Lead {
   site: string | null;
   avaliacao: number | null;
   total_avaliacoes: number | null;
+  tem_whatsapp: boolean | null;
+  whatsapp_verificado_em: string | null;
 }
+
 
 interface Busca {
   id: string;
@@ -86,7 +89,10 @@ export default function GoogleMapsLeads() {
   const [buscando, setBuscando] = useState(false);
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
   const [somenteComTel, setSomenteComTel] = useState(true);
+  const [somenteComWhats, setSomenteComWhats] = useState(false);
+  const [verificandoWhats, setVerificandoWhats] = useState(false);
   const [erroBusca, setErroBusca] = useState<FunctionErrorPayload | null>(null);
+
 
   const { data: limite, refetch: refetchLimite } = useQuery({
     queryKey: ["gm-limite"],
@@ -136,7 +142,41 @@ export default function GoogleMapsLeads() {
     },
   });
 
-  const leadsFiltrados = (leads ?? []).filter((l) => (somenteComTel ? !!l.telefone : true));
+  const leadsBase = (leads ?? []).filter((l) => (somenteComTel ? !!l.telefone : true));
+  const leadsFiltrados = leadsBase.filter((l) => (somenteComWhats ? l.tem_whatsapp === true : true));
+  const totComWhats = leadsBase.filter((l) => l.tem_whatsapp === true).length;
+  const totSemWhats = leadsBase.filter((l) => l.tem_whatsapp === false).length;
+  const totNaoVerif = leadsBase.filter((l) => l.tem_whatsapp === null && !!l.telefone).length;
+
+  async function verificarWhatsapp(buscaId: string, silencioso = false) {
+    setVerificandoWhats(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-maps-verificar-whatsapp", {
+        body: { busca_id: buscaId },
+      });
+      if (error) {
+        const payload = await getFunctionErrorPayload(error);
+        if (!silencioso) toast.error("Falha ao verificar WhatsApp: " + getFunctionErrorMessage(payload));
+        return;
+      }
+      if (data?.error === "sem_instancia") {
+        toast.warning(data.message ?? "Nenhuma instância WhatsApp conectada para verificar");
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["gm-leads", buscaId] });
+      if (data?.verificados) {
+        toast.success(
+          `WhatsApp verificado: ✅ ${data.com_whatsapp} com • ❌ ${data.sem_whatsapp} sem${data.erros ? ` • ⚠️ ${data.erros} erro(s)` : ""}`,
+        );
+      } else if (!silencioso) {
+        toast.message("Nenhum número novo para verificar");
+      }
+    } catch (e) {
+      if (!silencioso) toast.error("Falha ao verificar WhatsApp: " + (e instanceof Error ? e.message : "erro"));
+    } finally {
+      setVerificandoWhats(false);
+    }
+  }
 
   async function buscar() {
     if (!categoria.trim() || !localizacao.trim()) {
@@ -168,6 +208,8 @@ export default function GoogleMapsLeads() {
       setBuscaSel(data.busca_id);
       qc.invalidateQueries({ queryKey: ["gm-buscas"] });
       refetchLimite();
+      // Verificação automática de WhatsApp dos telefones encontrados
+      if (data?.busca_id) void verificarWhatsapp(data.busca_id, true);
     } catch (e) {
       const message = e instanceof Error ? e.message : "erro";
       toast.error("Falha na busca: " + message);
@@ -175,6 +217,8 @@ export default function GoogleMapsLeads() {
       setBuscando(false);
     }
   }
+
+
 
   function exportarExcel() {
     if (!leadsFiltrados.length) {
@@ -185,12 +229,13 @@ export default function GoogleMapsLeads() {
       Nome: l.nome,
       Telefone: l.telefone ?? "",
       "Telefone Internacional": l.telefone_internacional ?? "",
-      Endereço: l.endereco ?? "",
+      WhatsApp: l.tem_whatsapp === true ? "Sim" : l.tem_whatsapp === false ? "Não" : "Não verificado",
       Categoria: l.categoria ?? "",
       Site: l.site ?? "",
       Avaliação: l.avaliacao ?? "",
       "Nº Avaliações": l.total_avaliacoes ?? "",
     }));
+
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Leads");
@@ -416,25 +461,54 @@ export default function GoogleMapsLeads() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">
-              Leads {buscaSel ? `(${leadsFiltrados.length})` : ""}
-            </CardTitle>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={somenteComTel}
-                  onCheckedChange={(v) => setSomenteComTel(!!v)}
-                />
-                Só com telefone
-              </label>
-              <Button size="sm" variant="outline" onClick={copiarTelefones} disabled={!leadsFiltrados.length}>
-                <Phone className="h-4 w-4 mr-2" /> Copiar telefones
-              </Button>
-              <Button size="sm" onClick={exportarExcel} disabled={!leadsFiltrados.length}>
-                <Download className="h-4 w-4 mr-2" /> Exportar Excel
-              </Button>
+          <CardHeader className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="text-base">
+                Leads {buscaSel ? `(${leadsFiltrados.length})` : ""}
+              </CardTitle>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={somenteComTel} onCheckedChange={(v) => setSomenteComTel(!!v)} />
+                  Só com telefone
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={somenteComWhats} onCheckedChange={(v) => setSomenteComWhats(!!v)} />
+                  Só com WhatsApp
+                </label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => buscaSel && verificarWhatsapp(buscaSel)}
+                  disabled={!buscaSel || verificandoWhats}
+                >
+                  {verificandoWhats ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                  )}
+                  Verificar WhatsApp
+                </Button>
+                <Button size="sm" variant="outline" onClick={copiarTelefones} disabled={!leadsFiltrados.length}>
+                  <Phone className="h-4 w-4 mr-2" /> Copiar telefones
+                </Button>
+                <Button size="sm" onClick={exportarExcel} disabled={!leadsFiltrados.length}>
+                  <Download className="h-4 w-4 mr-2" /> Exportar Excel
+                </Button>
+              </div>
             </div>
+            {buscaSel && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                  {totComWhats} com WhatsApp
+                </Badge>
+                <Badge variant="secondary">{totSemWhats} sem WhatsApp</Badge>
+                {totNaoVerif > 0 && (
+                  <Badge variant="outline" className="border-amber-500 text-amber-600">
+                    {totNaoVerif} não verificado(s)
+                  </Badge>
+                )}
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {!buscaSel && <p className="text-sm text-muted-foreground">Selecione uma busca ou crie uma nova.</p>}
@@ -445,7 +519,7 @@ export default function GoogleMapsLeads() {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>Telefone</TableHead>
-                      <TableHead>Endereço</TableHead>
+                      <TableHead>WhatsApp</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead className="text-right">⭐</TableHead>
                     </TableRow>
@@ -457,8 +531,20 @@ export default function GoogleMapsLeads() {
                         <TableCell className="font-mono text-xs">
                           {l.telefone_internacional ?? l.telefone ?? "—"}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[280px] truncate">
-                          {l.endereco ?? "—"}
+                        <TableCell className="text-xs">
+                          {!l.telefone ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : l.tem_whatsapp === true ? (
+                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                              <MessageCircle className="h-3 w-3 mr-1" /> Sim
+                            </Badge>
+                          ) : l.tem_whatsapp === false ? (
+                            <Badge variant="secondary">Não</Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600">
+                              ?
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-xs">{l.categoria ?? "—"}</TableCell>
                         <TableCell className="text-right text-xs">
@@ -466,6 +552,7 @@ export default function GoogleMapsLeads() {
                         </TableCell>
                       </TableRow>
                     ))}
+
                     {!leadsFiltrados.length && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">

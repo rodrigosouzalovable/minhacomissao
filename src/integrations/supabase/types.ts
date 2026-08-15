@@ -2263,8 +2263,10 @@ export type Database = {
           site: string | null
           telefone: string | null
           telefone_internacional: string | null
+          tem_whatsapp: boolean | null
           total_avaliacoes: number | null
           user_id: string
+          whatsapp_verificado_em: string | null
         }
         Insert: {
           avaliacao?: number | null
@@ -2281,8 +2283,10 @@ export type Database = {
           site?: string | null
           telefone?: string | null
           telefone_internacional?: string | null
+          tem_whatsapp?: boolean | null
           total_avaliacoes?: number | null
           user_id: string
+          whatsapp_verificado_em?: string | null
         }
         Update: {
           avaliacao?: number | null
@@ -2299,8 +2303,10 @@ export type Database = {
           site?: string | null
           telefone?: string | null
           telefone_internacional?: string | null
+          tem_whatsapp?: boolean | null
           total_avaliacoes?: number | null
           user_id?: string
+          whatsapp_verificado_em?: string | null
         }
         Relationships: [
           {
