@@ -101,9 +101,7 @@ export default function ConfigurarMeta() {
   const [editPhoneValue, setEditPhoneValue] = useState("");
   const [verificandoWebhooks, setVerificandoWebhooks] = useState(false);
 
-  // Aba BMs: seleção múltipla de Business Managers
-  const [bmPickerOpen, setBmPickerOpen] = useState(false);
-  const [bmBusca, setBmBusca] = useState("");
+  // Filtro de Business Managers (usado dentro da aba Instâncias)
   const [bmSel, setBmSel] = useState<Set<string>>(new Set());
   const toggleBmSel = (key: string) =>
     setBmSel((prev) => {
