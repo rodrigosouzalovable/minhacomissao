@@ -38,7 +38,7 @@ export default function CampanhasFlutuante() {
 
   if (roleLoading || permLoading) return null;
   if (!isAdmin && !parceiroMeta && !veCampanhas) return null;
-  if (jobsAtivos.length === 0 && finalizadasRecentes.length === 0) return null;
+
 
   const excluirCampanha = async (id: string, nome: string) => {
     if (!confirm(`Excluir a campanha "${nome}"?\n\nO histórico será removido do painel. Essa ação não pode ser desfeita.`)) return;
