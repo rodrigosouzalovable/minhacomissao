@@ -151,6 +151,7 @@ export function EditPermissionsDialog({
       setRecebeConsultaCpf((permissions as any).recebe_consulta_cpf ?? false);
       setPodeMarcarPago((permissions as any).pode_marcar_pago_global ?? false);
       setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? true);
+      setParceiroMeta((permissions as any).parceiro_meta ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
@@ -162,6 +163,8 @@ export function EditPermissionsDialog({
       setRecebeConsultaCpf(false);
       setPodeMarcarPago(false);
       setAtendeInboxMeta(true);
+      setParceiroMeta(false);
+
     }
   }, [permissions, open]);
 
