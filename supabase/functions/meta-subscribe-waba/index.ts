@@ -44,10 +44,15 @@ Deno.serve(async (req) => {
         webhook_url: webhookUrl,
       };
       try {
+        const verifyToken = tokenResolver.paraInstancia(inst.id);
+        if (!verifyToken) throw new Error('Verify Token não configurado para esta instância');
+        out.token_parceiro = tokenResolver.ehParceiro(inst.id);
+
         // 1) Subscribe app à WABA forçando o callback correto do sistema.
         const params = new URLSearchParams();
         params.set('override_callback_uri', webhookUrl);
         params.set('verify_token', verifyToken);
+
 
         const subRes = await fetch(
           `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}/subscribed_apps`,
