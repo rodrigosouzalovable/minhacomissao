@@ -713,8 +713,17 @@ async function gerarResposta(args: {
     aprendizados ? `APRENDIZADOS DAS NEGOCIAÇÕES REAIS DA EQUIPE:\n${aprendizados}` : '',
     cfg.instrucoes_gerais ? `OBSERVAÇÕES GERAIS:\n${cfg.instrucoes_gerais}` : '',
     '',
+    (qualificacoes?.length
+      ? [
+        'QUALIFICAÇÃO DA CONVERSA: você também classifica o cliente, como um atendente faz. Use EXATAMENTE um dos nomes abaixo (nunca invente outro nome):',
+        qualificacoes.map((q) => `- ${q.nome}${q.motivos.length ? ` (motivos: ${q.motivos.map((m) => m.nome).join(' | ')})` : ''}`).join('\n'),
+        'Escolha a que melhor descreve a situação atual do cliente e pode mudar em relação à anterior conforme a conversa evolui (ex.: passou a aguardar boleto, ficou sem interesse, fechou acordo).',
+        'Se não tiver certeza, deixe "qualificacao" vazio — é melhor não qualificar do que qualificar errado. Só preencha "qualificacao_motivo" com um motivo da lista da qualificação escolhida.',
+      ].join('\n')
+      : ''),
+    '',
     'Responda SOMENTE com JSON válido no formato:',
-    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":""}',
+    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":"","qualificacao":"","qualificacao_motivo":""}',
     'escolha = forma de pagamento escolhida pelo cliente ("à vista" ou "12x"), vazio se ele ainda não escolheu.',
     'pagamento_hoje = "sim", "nao" ou "" conforme a resposta dele sobre pagar hoje.',
     'data_pagamento = a data que o cliente informou, JÁ RESOLVIDA no formato YYYY-MM-DD usando a lista de datas acima (ex.: "segunda" ou "segunda que vem" => a data da próxima segunda-feira). Use "mes_que_vem" quando ele falar de outro mês sem dia, e vazio se não informou nada.',
@@ -722,6 +731,7 @@ async function gerarResposta(args: {
 
     'mensagens = de 1 a 2 mensagens curtas a enviar agora (vazio só se escalar=true e nada deva ser dito).',
     'Quando escalar=true, envie uma mensagem curta avisando que um colega vai continuar o atendimento e preencha "motivo" em português.',
+
   ].filter(Boolean).join('\n');
 
   const conversa = historico.length
