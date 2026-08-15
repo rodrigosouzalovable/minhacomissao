@@ -96,12 +96,8 @@ Deno.serve(async (req) => {
   try {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const GOOGLE_MAPS_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY");
-    if (!LOVABLE_API_KEY || !GOOGLE_MAPS_API_KEY) {
-      return new Response(JSON.stringify({ error: "Google Maps não configurado" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Se não houver conexão padrão, ainda pode funcionar com a chave própria (validada mais abaixo).
+
 
     const supabaseUrl = getEnvOrThrow("SUPABASE_URL");
     const serviceRoleKey = getEnvOrThrow("SUPABASE_SERVICE_ROLE_KEY");
@@ -188,6 +184,31 @@ Deno.serve(async (req) => {
     let pageToken: string | undefined;
     let pages = 0;
 
+    // Chave própria da Places API (New), se configurada na tela Google Maps Leads
+    const { data: cfg } = await supabase
+      .from("google_maps_config")
+      .select("api_key")
+      .eq("id", 1)
+      .maybeSingle();
+    const chavePropria = (cfg?.api_key ?? "").trim() || null;
+    if (!chavePropria && (!LOVABLE_API_KEY || !GOOGLE_MAPS_API_KEY)) {
+      await supabase
+        .from("google_maps_buscas")
+        .update({ status: "erro", erro: "Nenhuma chave da Places API (New) configurada" })
+        .eq("id", busca.id);
+      return new Response(
+        JSON.stringify({ error: "Google Maps não configurado", message: "Cadastre a chave da Places API (New) na tela Google Maps Leads." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const endpoint = chavePropria
+      ? "https://places.googleapis.com/v1/places:searchText"
+      : `${GATEWAY_URL}/places/v1/places:searchText`;
+    const authHeaders: Record<string, string> = chavePropria
+      ? { "X-Goog-Api-Key": chavePropria }
+      : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
+
     while (collected.length < maxRes && pages < 3) {
       const reqBody: any = {
         textQuery,
@@ -197,11 +218,10 @@ Deno.serve(async (req) => {
       };
       if (pageToken) reqBody.pageToken = pageToken;
 
-      const resp = await fetch(`${GATEWAY_URL}/places/v1/places:searchText`, {
+      const resp = await fetch(endpoint, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY,
+          ...authHeaders,
           "Content-Type": "application/json",
           // Só cobramos o que precisamos: id/nome/telefone/endereco/local + avaliação básica
           "X-Goog-FieldMask":

@@ -2226,6 +2226,27 @@ export type Database = {
         }
         Relationships: []
       }
+      google_maps_config: {
+        Row: {
+          api_key: string | null
+          id: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          id?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       google_maps_leads: {
         Row: {
           avaliacao: number | null
