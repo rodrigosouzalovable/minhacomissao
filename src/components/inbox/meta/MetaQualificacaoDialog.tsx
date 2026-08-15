@@ -392,16 +392,19 @@ export function MetaQualificacaoDialog({
                 );
               })}
             </div>
-            {salvando && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <p className="text-xs text-muted-foreground">
-              Você pode marcar várias qualificações. Clique em uma marcada para removê-la.
-              {isAdmin && ' Clique com o botão direito para configurar os motivos.'}
-            </p>
-            {isAdmin && (
-              <Button variant="outline" size="sm" className="w-full" onClick={() => setModoConfig(true)}>
-                <Settings className="h-4 w-4 mr-2" /> Gerenciar qualificações
-              </Button>
-            )}
+            <div className="shrink-0 space-y-2 border-t pt-3">
+              {salvando && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              <p className="text-xs text-muted-foreground">
+                Você pode marcar várias qualificações. Clique em uma marcada para removê-la.
+                {isAdmin && ' Clique com o botão direito para configurar os motivos.'}
+              </p>
+              {isAdmin && (
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setModoConfig(true)}>
+                  <Settings className="h-4 w-4 mr-2" /> Gerenciar qualificações
+                </Button>
+              )}
+            </div>
+
           </div>
         )}
       </DialogContent>
