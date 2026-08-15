@@ -1079,14 +1079,7 @@ export default function ConfigurarMeta() {
                             )}
                           </Button>
                           <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => diagnosticar(inst)}
-                            disabled={diagnosticando === inst.id}
-                            title="Consultar Meta: name_status, quality, verificação e subscribed_apps"
-                          >
-                            {diagnosticando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "🔎 Diagnosticar"}
-                          </Button>
+
                           <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
                             {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
                           </Button>
