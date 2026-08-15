@@ -1385,19 +1385,19 @@ export default function ConfigurarMeta() {
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[320px] p-0" align="start">
-                <div className="p-2 border-b space-y-2">
+              <PopoverContent className="w-[420px] p-0" align="start">
+                <div className="p-3 border-b space-y-2">
                   <Input
                     placeholder="Buscar BM..."
                     value={bmBusca}
                     onChange={(e) => setBmBusca(e.target.value)}
-                    className="h-8"
+                    className="h-9"
                   />
                   <div className="flex gap-2">
                     <Button
                       size="sm"
                       variant="secondary"
-                      className="h-7 text-xs flex-1"
+                      className="h-8 text-xs flex-1"
                       onClick={() => setBmSel(new Set(bms.map((b) => b.id)))}
                     >
                       Selecionar todas
@@ -1405,21 +1405,21 @@ export default function ConfigurarMeta() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 text-xs flex-1"
+                      className="h-8 text-xs flex-1"
                       onClick={() => setBmSel(new Set())}
                     >
                       Limpar
                     </Button>
                   </div>
                 </div>
-                <ScrollArea className="max-h-[300px]">
-                  <div className="p-1">
+                <ScrollArea className="h-[480px]">
+                  <div className="p-2">
                     {bms
                       .filter((b) => (b.nome || "").toLowerCase().includes(bmBusca.trim().toLowerCase()))
                       .map((b) => (
                         <label
                           key={b.id}
-                          className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted cursor-pointer"
+                          className="flex items-start gap-3 rounded-md px-3 py-2 hover:bg-muted cursor-pointer"
                         >
                           <Checkbox
                             checked={bmSel.has(b.id)}
@@ -1434,7 +1434,7 @@ export default function ConfigurarMeta() {
                           </span>
                         </label>
                       ))}
-                    <label className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted cursor-pointer border-t mt-1 pt-2">
+                    <label className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-muted cursor-pointer border-t mt-1 pt-2">
                       <Checkbox checked={bmSel.has("__none__")} onCheckedChange={() => toggleBmSel("__none__")} />
                       <span className="text-sm text-muted-foreground">Sem BM vinculada</span>
                     </label>
