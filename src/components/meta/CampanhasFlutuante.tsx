@@ -25,6 +25,7 @@ function statusLabel(s: string) {
 
 export default function CampanhasFlutuante() {
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { parceiroMeta, isLoading: permLoading } = useUserPermissions();
   const { jobs, jobsAtivos, togglePausaJob, cancelarJob, limparJob } = useEnvioMetaSending();
   const [open, setOpen] = useState(false);
   const [dialogJobId, setDialogJobId] = useState<string | null>(null);
