@@ -211,6 +211,16 @@ Deno.serve(async (req) => {
         if (error) console.error('[IAGO] falha ao concluir entrada', error.message);
       }
     };
+
+    // Qualificações ativas (carregadas uma única vez, sob demanda)
+    let qualsCache: QualificacaoIA[] | null = null;
+    const quals = async () => (qualsCache ??= await carregarQualificacoesDisponiveis(supabase));
+    /** Aplica a qualificação por nome; ignora silenciosamente se não estiver cadastrada. */
+    const qualificar = async (nome: string, motivoNome?: string) => {
+      if (!nome) return false;
+      return await qualificarConversa(supabase, contato_id, iago.id, nome, motivoNome, await quals());
+    };
+
     const normalizarTexto = (valor: unknown) => String(valor || '')
       .toLowerCase()
       .normalize('NFD')
