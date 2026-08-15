@@ -167,6 +167,13 @@ export default function CampanhasFlutuante() {
                 })}
               </div>
             )}
+
+            {jobsAtivos.length === 0 && finalizadasRecentes.length === 0 && (
+              <div className="p-4 text-center text-xs text-muted-foreground">
+                Nenhuma campanha ainda — inicie um disparo na aba Envio Meta.
+              </div>
+            )}
+
           </PopoverContent>
         </Popover>
       </div>
