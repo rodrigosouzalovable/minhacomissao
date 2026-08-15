@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -261,6 +261,19 @@ export default function ConfigurarMeta() {
     access_token: "",
     tier_diario: "250",
   });
+
+  const templatesPorInstancia = useMemo(() => {
+    const map: Record<string, { total: number; aprovados: number }> = {};
+    for (const t of templates) {
+      const key = (t as any).instancia_id as string;
+      if (!key) continue;
+      if (!map[key]) map[key] = { total: 0, aprovados: 0 };
+      map[key].total++;
+      if (String((t as any).status || "").toLowerCase() === "approved") map[key].aprovados++;
+    }
+    return map;
+  }, [templates]);
+
 
   const carregar = async () => {
     setLoading(true);
@@ -1066,22 +1079,7 @@ export default function ConfigurarMeta() {
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
-                            onClick={() => abrirImportPdf(inst.id)}
-                            disabled={parsingPdf}
-                            title="Importar PDF de fatura e registrar valor pago"
-                          >
-                            {parsingPdf && importInstId === inst.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <><Upload className="h-3 w-3 mr-1" />Importar fatura</>
-                            )}
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => testar(inst)} disabled={testando === inst.id}>
-                            {testando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar"}
-                          </Button>
-                          <Button
-                            size="sm"
+
                             variant="outline"
                             onClick={() => reinscreverWebhook(inst)}
                             disabled={reinscrevendo === inst.id || !inst.waba_id}
@@ -1093,15 +1091,7 @@ export default function ConfigurarMeta() {
                               <><RefreshCw className="h-3 w-3 mr-1" />Webhook</>
                             )}
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => diagnosticar(inst)}
-                            disabled={diagnosticando === inst.id}
-                            title="Consultar Meta: name_status, quality, verificação e subscribed_apps"
-                          >
-                            {diagnosticando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "🔎 Diagnosticar"}
-                          </Button>
+
                           <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
                             {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
                           </Button>
@@ -1120,32 +1110,19 @@ export default function ConfigurarMeta() {
                       {/* Identificação: rótulo em cima, valor embaixo */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                         <div className="flex flex-col min-w-0">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Telefone</span>
-                          {editPhoneId === inst.id ? (
-                            <div className="flex items-center gap-1">
-                              <Input
-                                value={editPhoneValue}
-                                onChange={(e) => setEditPhoneValue(e.target.value)}
-                                className="h-7 text-xs w-full sm:w-40"
-                                placeholder="5562..."
-                              />
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => salvarDisplayPhone(inst)}>OK</Button>
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setEditPhoneId(null); setEditPhoneValue(""); }}>✕</Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs font-medium">{inst.display_phone || "—"}</span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground"
-                                onClick={() => { setEditPhoneId(inst.id); setEditPhoneValue(inst.display_phone || ""); }}
-                              >
-                                editar
-                              </Button>
-                            </div>
-                          )}
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Templates</span>
+                          {(() => {
+                            const c = templatesPorInstancia[inst.id] || { total: 0, aprovados: 0 };
+                            return (
+                              <span className="text-xs font-medium" title={`${c.aprovados} aprovados de ${c.total} sincronizados`}>
+                                {c.total} {c.total > 0 && (
+                                  <span className="text-muted-foreground font-normal">· {c.aprovados} aprovados</span>
+                                )}
+                              </span>
+                            );
+                          })()}
                         </div>
+
                         <div className="flex flex-col min-w-0">
                           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Phone ID</span>
                           <span className="text-xs font-mono truncate" title={inst.phone_number_id}>{inst.phone_number_id}</span>
@@ -1219,118 +1196,6 @@ export default function ConfigurarMeta() {
                         </Button>
                       </div>
 
-                      {/* Faturas Meta importadas — histórico + total */}
-                      <div className="pt-3 border-t border-border/60">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2 text-xs flex-wrap">
-                            <FileText className="h-3.5 w-3.5 text-emerald-600" />
-                            <span className="font-semibold">Faturas importadas:</span>
-                            <span className="font-bold text-emerald-700">
-                              US$ {pag.totalPorInstancia(inst.id).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                            <span className="text-muted-foreground">
-                              ({pag.porInstancia(inst.id).filter((p) => (p.status || "aprovado") === "aprovado").length})
-                            </span>
-                            {pag.countPendentePorInstancia(inst.id) > 0 && (
-                              <span
-                                className="text-amber-700 dark:text-amber-400 text-[11px] font-medium"
-                                title="Cobranças em status Pendente na Meta — geralmente autorizações de verificação de cartão (US$25) que costumam ser estornadas em 5-15 dias. Não somam no total."
-                              >
-                                · Pendente: US$ {pag.totalPendentePorInstancia(inst.id).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                {" "}({pag.countPendentePorInstancia(inst.id)})
-                              </span>
-                            )}
-                          </div>
-                          {pag.porInstancia(inst.id).length > 0 && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs"
-                              onClick={() => setShowHistId(showHistId === inst.id ? null : inst.id)}
-                            >
-                              {showHistId === inst.id ? "Ocultar histórico" : "Ver histórico"}
-                            </Button>
-                          )}
-                        </div>
-                        {showHistId === inst.id && (
-                          <div className="mt-2 rounded-md border border-border/60 overflow-hidden">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="text-xs">Data</TableHead>
-                                  <TableHead className="text-xs">Referência</TableHead>
-                                  <TableHead className="text-xs">Status</TableHead>
-                                  <TableHead className="text-xs text-right">Valor (US$)</TableHead>
-                                  <TableHead className="w-20"></TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {pag.porInstancia(inst.id).map((p) => {
-                                  const st = (p.status || "aprovado") as "aprovado" | "pendente" | "falhou";
-                                  return (
-                                  <TableRow key={p.id} className={st === "pendente" ? "opacity-70" : ""}>
-                                    <TableCell className="text-xs">
-                                      {new Date(p.data_transacao + "T00:00:00").toLocaleDateString("pt-BR")}
-                                    </TableCell>
-                                    <TableCell className="text-xs font-mono">{p.numero_referencia}</TableCell>
-                                    <TableCell className="text-xs">
-                                      {st === "pendente" ? (
-                                        <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400 text-[10px]">Pendente</Badge>
-                                      ) : st === "falhou" ? (
-                                        <Badge variant="outline" className="border-destructive text-destructive text-[10px]">Falhou</Badge>
-                                      ) : (
-                                        <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-400 text-[10px]">Aprovada</Badge>
-                                      )}
-                                    </TableCell>
-                                    <TableCell className={`text-xs text-right font-medium ${st !== "aprovado" ? "line-through text-muted-foreground" : ""}`}>
-                                      {Number(p.valor_usd).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="flex items-center justify-end gap-1">
-                                        {st === "pendente" && (
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-6 px-1.5 text-[10px]"
-                                            title="Marcar como Aprovada — passa a somar no total"
-                                            onClick={async () => {
-                                              try {
-                                                await pag.atualizarStatus.mutateAsync({ id: p.id, status: "aprovado" });
-                                                toast.success("Fatura marcada como Aprovada");
-                                              } catch (e: any) {
-                                                toast.error(e?.message || "Erro");
-                                              }
-                                            }}
-                                          >
-                                            <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-600" /> Aprovar
-                                          </Button>
-                                        )}
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="h-6 w-6 p-0"
-                                          onClick={async () => {
-                                            if (!confirm("Excluir este registro?")) return;
-                                            try {
-                                              await pag.remover.mutateAsync(p.id);
-                                              toast.success("Removido");
-                                            } catch (e: any) {
-                                              toast.error(e?.message || "Erro");
-                                            }
-                                          }}
-                                        >
-                                          <Trash2 className="h-3 w-3 text-destructive" />
-                                        </Button>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
