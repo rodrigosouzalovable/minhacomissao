@@ -268,7 +268,7 @@ export default function GoogleMapsLeads() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center justify-between">
-                <span>Consumo do mês: {limite.consumo_atual} de {limite.limite_maximo} consultas</span>
+                <span>Consumo do mês: {limite.consumo_atual} de {limite.limite_maximo} requisições Places (unidade que o Google usa para cobrar e para a franquia gratuita)</span>
                 <Badge variant={limite.nivel === "bloqueado" ? "destructive" : "secondary"}>
                   {limite.percentual_consumido.toFixed(1)}%
                 </Badge>
@@ -289,7 +289,7 @@ export default function GoogleMapsLeads() {
                 </Alert>
               )}
               <p className="text-xs text-muted-foreground">
-                Bloqueio automático em {limite.limite_bloqueio} consultas • O contador reinicia em {limite.data_reset_br}
+                Bloqueio automático em {limite.limite_bloqueio} requisições • O contador reinicia em {limite.data_reset_br}
               </p>
             </CardContent>
           </Card>
@@ -327,9 +327,12 @@ export default function GoogleMapsLeads() {
               onChange={(e) => setMaxResultados(Number(e.target.value) || 60)}
             />
           </div>
-          <div className="md:col-span-4 flex items-center justify-between">
+          <div className="md:col-span-4 flex items-center justify-between gap-4">
             <p className="text-xs text-muted-foreground">
-              Custo estimado: ~US$ {(maxResultados * 0.032).toFixed(2)} nesta busca (Text Search Pro).
+              {(() => {
+                const reqs = Math.max(1, Math.ceil((Number(maxResultados) || 20) / 20));
+                return `Estimativa: ${reqs} requisição${reqs > 1 ? "ões" : ""} Places (até 20 resultados cada) × ~US$ 0,032 = ~US$ ${(reqs * 0.032).toFixed(3)} (Text Search Pro). O Google cobra por requisição, não por resultado, e a franquia gratuita mensal do SKU pode zerar esse valor.`;
+              })()}
             </p>
             <Button onClick={buscar} disabled={buscando || limite?.nivel === "bloqueado"} title={limite?.nivel === "bloqueado" ? limite.mensagem : undefined}>
               {buscando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
