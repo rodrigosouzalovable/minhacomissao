@@ -1171,8 +1171,14 @@ serve(async (req) => {
               }
               try {
                 const { data, error } = await supabase.functions.invoke('iago-atendimento', {
-                  body: { contato_id: contatoIdFinal, texto: textoParaIA, entrada_id: m.id },
+                  body: {
+                    contato_id: contatoIdFinal,
+                    texto: textoParaIA,
+                    entrada_id: m.id,
+                    imagem_contexto: imagemContexto,
+                  },
                 });
+
                 if (error) console.error('[MetaWebhook] IAGO erro', error.message);
                 else console.log('[MetaWebhook] IAGO', JSON.stringify(data || {}));
               } catch (e: any) {
