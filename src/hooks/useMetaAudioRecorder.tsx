@@ -61,20 +61,63 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
+/** Decodifica o áudio com o próprio navegador e re-codifica em MP3 (aceito pela Meta). */
+async function encodeToMp3(blob: Blob): Promise<Blob> {
+  const { Mp3Encoder } = await import('@breezystack/lamejs');
+  const AudioCtx: typeof AudioContext =
+    (window as any).AudioContext || (window as any).webkitAudioContext;
+  if (!AudioCtx) throw new Error('Navegador sem suporte a Web Audio');
+  const ctx = new AudioCtx();
+  try {
+    const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const ch0 = decoded.getChannelData(0);
+    const ch1 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : null;
+    const len = ch0.length;
+    const pcm = new Int16Array(len);
+    for (let i = 0; i < len; i++) {
+      const sample = ch1 ? (ch0[i] + ch1[i]) / 2 : ch0[i];
+      const clamped = Math.max(-1, Math.min(1, sample));
+      pcm[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+    }
+    const encoder = new Mp3Encoder(1, decoded.sampleRate, 64);
+    const parts: Uint8Array[] = [];
+    const blockSize = 1152;
+    for (let i = 0; i < pcm.length; i += blockSize) {
+      const chunk = pcm.subarray(i, i + blockSize);
+      const buf = encoder.encodeBuffer(chunk);
+      if (buf.length > 0) parts.push(new Uint8Array(buf));
+    }
+    const tail = encoder.flush();
+    if (tail.length > 0) parts.push(new Uint8Array(tail));
+    const out = new Blob(parts as unknown as BlobPart[], { type: 'audio/mpeg' });
+    if (out.size === 0) throw new Error('Conversão gerou arquivo vazio');
+    return out;
+  } finally {
+    try { await ctx.close(); } catch { /* noop */ }
+  }
+}
+
 async function ensureMetaAudio(
   blob: Blob,
   mimeType: string,
 ): Promise<{ blob: Blob; ext: 'ogg' | 'mp4' | 'm4a' | 'aac' | 'mp3'; contentType: string }> {
   const native = normalizeAudioMime(mimeType);
-  // Meta aceita MP4/AAC/MP3 nativamente. Não passe pelo ffmpeg nesses casos:
-  // era aqui que o áudio ficava “gravado, mas não enviado” quando o wasm travava.
+  // Meta aceita MP4/AAC/MP3 nativamente. Não passe por conversão nesses casos.
   if (native.contentType !== 'audio/webm' && native.contentType !== 'audio/ogg') {
     const ext = native.ext === 'webm' || native.ext === 'ogg' ? 'm4a' : native.ext;
     return { blob: new Blob([blob], { type: native.contentType }), ext, contentType: native.contentType };
   }
 
-  // OGG gravado direto pelo navegador já causou descarte silencioso no WhatsApp;
-  // WebM não é aceito pela Meta. Nesses dois casos normalizamos para OGG/OPUS.
+  // WebM (Chrome/Edge) não é aceito pela Meta e OGG do navegador já foi descartado
+  // silenciosamente pelo WhatsApp: nos dois casos convertemos para MP3 no navegador.
+  try {
+    const mp3 = await withTimeout(encodeToMp3(blob), 60000, 'Conversão do áudio');
+    return { blob: mp3, ext: 'mp3', contentType: 'audio/mpeg' };
+  } catch (mp3Err) {
+    console.warn('[useMetaAudioRecorder] falha na conversão MP3, tentando ffmpeg', mp3Err);
+  }
+
+  // Último recurso: ffmpeg.wasm (pode falhar em navegadores sem memória compartilhada).
   const ffmpeg = await withTimeout(getFFmpeg(), 30000, 'Carregamento do conversor de áudio');
   const lower = (mimeType || '').toLowerCase();
   const inExt = lower.includes('webm')
@@ -103,6 +146,7 @@ async function ensureMetaAudio(
   try { await ffmpeg.deleteFile(inName); await ffmpeg.deleteFile(outName); } catch { /* noop */ }
   return { blob: out, ext: 'ogg', contentType: 'audio/ogg' };
 }
+
 
 
 export function useMetaAudioRecorder({
@@ -190,18 +234,24 @@ export function useMetaAudioRecorder({
           let prepared: { blob: Blob; ext: 'ogg' | 'mp4' | 'm4a' | 'aac' | 'mp3'; contentType: string };
           try {
             prepared = await ensureMetaAudio(rawBlob, rec.mimeType || 'audio/ogg');
-          } catch (convErr) {
+          } catch (convErr: any) {
             console.error('[useMetaAudioRecorder] falha ao preparar áudio', { convErr, mimeType: rec.mimeType });
             toast({
               title: 'Não foi possível preparar o áudio',
-              description: `Formato "${rec.mimeType || 'desconhecido'}" — falha na conversão. Tente Chrome/Edge atualizado.`,
+              description: `${convErr?.message || 'Falha na conversão'} (formato "${rec.mimeType || 'desconhecido'}").`,
               variant: 'destructive',
             });
             resolve();
             return;
           }
           const path = `meta/${instanciaId}/${telefone}/${Date.now()}.${prepared.ext}`;
-          const audioSignedUrl = await uploadInboxMedia(path, prepared.blob, prepared.contentType);
+          let audioSignedUrl: string;
+          try {
+            audioSignedUrl = await uploadInboxMedia(path, prepared.blob, prepared.contentType);
+          } catch (upErr: any) {
+            throw new Error(`Falha ao salvar o áudio: ${upErr?.message || 'erro no upload'}`);
+          }
+
           const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {
             body: {
               instancia_id: instanciaId,
