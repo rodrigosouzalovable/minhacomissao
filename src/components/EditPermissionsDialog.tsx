@@ -352,6 +352,16 @@ export function EditPermissionsDialog({
               ))}
             </div>
 
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label className="text-sm font-medium">Ver painel de Campanhas</Label>
+                <p className="text-xs text-muted-foreground">
+                  Libera o botão flutuante "Campanhas" para acompanhar os próprios disparos.
+                </p>
+              </div>
+              <Switch checked={veCampanhas} onCheckedChange={setVeCampanhas} />
+            </div>
+
             <div className="space-y-3 rounded-md border p-3">
               <div className="flex items-center justify-between">
                 <div>
