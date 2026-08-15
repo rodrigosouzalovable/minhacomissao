@@ -221,20 +221,16 @@ export default function GoogleMapsLeads() {
 
 
   function exportarExcel() {
-    if (!leadsFiltrados.length) {
-      toast.error("Nada para exportar");
+    const comWhats = leadsBase.filter((l) => l.tem_whatsapp === true);
+    if (!comWhats.length) {
+      toast.error("Nenhum lead com WhatsApp confirmado. Rode a verificação de WhatsApp antes de exportar.");
       return;
     }
-    const rows = leadsFiltrados.map((l) => ({
+    const rows = comWhats.map((l) => ({
       Nome: l.nome,
-      Telefone: l.telefone ?? "",
-      "Telefone Internacional": l.telefone_internacional ?? "",
-      WhatsApp: l.tem_whatsapp === true ? "Sim" : l.tem_whatsapp === false ? "Não" : "Não verificado",
-      Categoria: l.categoria ?? "",
-      Site: l.site ?? "",
-      Avaliação: l.avaliacao ?? "",
-      "Nº Avaliações": l.total_avaliacoes ?? "",
+      Telefone: l.telefone_internacional ?? l.telefone ?? "",
     }));
+
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
