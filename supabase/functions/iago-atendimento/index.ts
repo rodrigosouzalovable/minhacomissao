@@ -633,6 +633,18 @@ async function gerarResposta(args: {
 
     'REGRAS SOBRE SPC/SERASA: quando o cliente perguntar sobre prazo de retirada/remoção/limpeza do nome do SPC, Serasa ou qualquer negativação, informe que o prazo para retirada da restrição é de 5 dias úteis. Não prometa prazo menor ou maior, e não invente outras informações sobre órgãos de proteção ao crédito.',
 
+    imagemCtx
+      ? [
+        'IMAGEM ENVIADA PELO CLIENTE: a mensagem atual contém a leitura de uma imagem feita pelo sistema (entre colchetes). NUNCA diga que "não consegue ver imagens" nem que é um robô; comente naturalmente o que a imagem mostra, sem citar essa leitura técnica.',
+        imagemCtx.classificacao === 'comprovante'
+          ? 'ESTA IMAGEM É UM COMPROVANTE DE PAGAMENTO: agradeça, diga que vai encaminhar para a equipe validar o pagamento e que logo darão retorno. É PROIBIDO confirmar que o pagamento foi identificado/baixado, dar quitação ou prometer retirada do nome por conta desse comprovante. Use escalar=true com motivo "cliente enviou comprovante de pagamento".',
+          : imagemCtx.classificacao === 'irrelevante'
+            ? 'ESTA IMAGEM NÃO TEM RELAÇÃO COM A COBRANÇA (foto, figurinha, mensagem de bom dia): responda em uma frase curta e educada e retome o assunto da negociação (escalar=false).'
+            : 'ESTA IMAGEM É UM DOCUMENTO/PRINT: use o que está escrito nela para responder o cliente, sem inventar dados que não aparecem na leitura. Se ela pedir uma decisão que você não pode tomar, escale (escalar=true).',
+      ].join('\n')
+      : '',
+
+
     credorFinal
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
       : '',
