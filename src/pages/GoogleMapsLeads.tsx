@@ -461,25 +461,54 @@ export default function GoogleMapsLeads() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">
-              Leads {buscaSel ? `(${leadsFiltrados.length})` : ""}
-            </CardTitle>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={somenteComTel}
-                  onCheckedChange={(v) => setSomenteComTel(!!v)}
-                />
-                Só com telefone
-              </label>
-              <Button size="sm" variant="outline" onClick={copiarTelefones} disabled={!leadsFiltrados.length}>
-                <Phone className="h-4 w-4 mr-2" /> Copiar telefones
-              </Button>
-              <Button size="sm" onClick={exportarExcel} disabled={!leadsFiltrados.length}>
-                <Download className="h-4 w-4 mr-2" /> Exportar Excel
-              </Button>
+          <CardHeader className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="text-base">
+                Leads {buscaSel ? `(${leadsFiltrados.length})` : ""}
+              </CardTitle>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={somenteComTel} onCheckedChange={(v) => setSomenteComTel(!!v)} />
+                  Só com telefone
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={somenteComWhats} onCheckedChange={(v) => setSomenteComWhats(!!v)} />
+                  Só com WhatsApp
+                </label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => buscaSel && verificarWhatsapp(buscaSel)}
+                  disabled={!buscaSel || verificandoWhats}
+                >
+                  {verificandoWhats ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                  )}
+                  Verificar WhatsApp
+                </Button>
+                <Button size="sm" variant="outline" onClick={copiarTelefones} disabled={!leadsFiltrados.length}>
+                  <Phone className="h-4 w-4 mr-2" /> Copiar telefones
+                </Button>
+                <Button size="sm" onClick={exportarExcel} disabled={!leadsFiltrados.length}>
+                  <Download className="h-4 w-4 mr-2" /> Exportar Excel
+                </Button>
+              </div>
             </div>
+            {buscaSel && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                  {totComWhats} com WhatsApp
+                </Badge>
+                <Badge variant="secondary">{totSemWhats} sem WhatsApp</Badge>
+                {totNaoVerif > 0 && (
+                  <Badge variant="outline" className="border-amber-500 text-amber-600">
+                    {totNaoVerif} não verificado(s)
+                  </Badge>
+                )}
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {!buscaSel && <p className="text-sm text-muted-foreground">Selecione uma busca ou crie uma nova.</p>}
@@ -490,7 +519,7 @@ export default function GoogleMapsLeads() {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>Telefone</TableHead>
-                      <TableHead>Endereço</TableHead>
+                      <TableHead>WhatsApp</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead className="text-right">⭐</TableHead>
                     </TableRow>
@@ -502,8 +531,20 @@ export default function GoogleMapsLeads() {
                         <TableCell className="font-mono text-xs">
                           {l.telefone_internacional ?? l.telefone ?? "—"}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[280px] truncate">
-                          {l.endereco ?? "—"}
+                        <TableCell className="text-xs">
+                          {!l.telefone ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : l.tem_whatsapp === true ? (
+                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                              <MessageCircle className="h-3 w-3 mr-1" /> Sim
+                            </Badge>
+                          ) : l.tem_whatsapp === false ? (
+                            <Badge variant="secondary">Não</Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600">
+                              ?
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-xs">{l.categoria ?? "—"}</TableCell>
                         <TableCell className="text-right text-xs">
@@ -511,6 +552,7 @@ export default function GoogleMapsLeads() {
                         </TableCell>
                       </TableRow>
                     ))}
+
                     {!leadsFiltrados.length && (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">
