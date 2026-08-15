@@ -7,6 +7,8 @@ import {
   ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
+  carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
+
 } from '../_shared/iago.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
