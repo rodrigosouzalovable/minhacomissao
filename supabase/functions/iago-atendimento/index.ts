@@ -261,7 +261,9 @@ Deno.serve(async (req) => {
         contexto: { ...(estado.contexto || {}), ultimo_motivo: 'cliente informou que não é a pessoa procurada' },
       }).eq('id', estado.id);
       await etiquetarAguardandoHumano(supabase, contato_id);
+      await qualificar('Não é o Cliente');
       await finalizarEntrada();
+
       console.log('[IAGO] número errado — conversa encerrada', { contato_id });
       return json({ success: true, etapa: 'numero_errado' });
     }
