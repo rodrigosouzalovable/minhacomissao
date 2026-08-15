@@ -1065,22 +1065,7 @@ export default function ConfigurarMeta() {
                             <CreditCard className="h-3 w-3 mr-1" /> Faturamento
                           </Button>
                           <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => abrirImportPdf(inst.id)}
-                            disabled={parsingPdf}
-                            title="Importar PDF de fatura e registrar valor pago"
-                          >
-                            {parsingPdf && importInstId === inst.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <><Upload className="h-3 w-3 mr-1" />Importar fatura</>
-                            )}
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => testar(inst)} disabled={testando === inst.id}>
-                            {testando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar"}
-                          </Button>
-                          <Button
+
                             size="sm"
                             variant="outline"
                             onClick={() => reinscreverWebhook(inst)}
