@@ -3891,6 +3891,32 @@ export type Database = {
           },
         ]
       }
+      meta_instance_parceiros: {
+        Row: {
+          criado_em: string
+          instancia_id: string
+          user_id: string
+        }
+        Insert: {
+          criado_em?: string
+          instancia_id: string
+          user_id: string
+        }
+        Update: {
+          criado_em?: string
+          instancia_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_instance_parceiros_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_lembrete_config: {
         Row: {
           ativo: boolean
@@ -5897,6 +5923,7 @@ export type Database = {
           criado_em: string
           id: string
           inbox_compartilhado: boolean
+          parceiro_meta: boolean
           permite_cpf_duplicado: boolean
           pode_excluir_acordos: boolean
           pode_marcar_pago_global: boolean
@@ -5914,6 +5941,7 @@ export type Database = {
           criado_em?: string
           id?: string
           inbox_compartilhado?: boolean
+          parceiro_meta?: boolean
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean
           pode_marcar_pago_global?: boolean
@@ -5931,6 +5959,7 @@ export type Database = {
           criado_em?: string
           id?: string
           inbox_compartilhado?: boolean
+          parceiro_meta?: boolean
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean
           pode_marcar_pago_global?: boolean
@@ -7849,6 +7878,7 @@ export type Database = {
       is_admin_user: { Args: { uid: string }; Returns: boolean }
       is_consultoria_admin: { Args: { _uid: string }; Returns: boolean }
       is_consultoria_aluno: { Args: { _uid: string }; Returns: boolean }
+      is_parceiro_meta: { Args: { _uid: string }; Returns: boolean }
       limpar_pix_links_expirados: { Args: never; Returns: number }
       listar_credores_distintos: {
         Args: never
@@ -7934,8 +7964,16 @@ export type Database = {
         Returns: number
       }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
+      parceiro_tem_instancia: {
+        Args: { _instancia: string; _uid: string }
+        Returns: boolean
+      }
       phone_suffix8: { Args: { tel: string }; Returns: string }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
+      pode_ver_instancia_meta: {
+        Args: { _instancia: string; _uid: string }
+        Returns: boolean
+      }
       portal_faixas_credor: {
         Args: { _credor: string }
         Returns: {

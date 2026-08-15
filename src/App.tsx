@@ -274,7 +274,7 @@ const App = () => (
             <Route path="/admin/envio-meta" element={<PermissionRoute><EnvioMeta /></PermissionRoute>} />
             <Route path="/admin/inbox-meta" element={<PermissionRoute><InboxMeta /></PermissionRoute>} />
             <Route path="/admin/meta-billing" element={<AdminRoute><MetaBilling /></AdminRoute>} />
-            <Route path="/admin/meta-templates" element={<AdminRoute><MetaTemplates /></AdminRoute>} />
+            <Route path="/admin/meta-templates" element={<PermissionRoute><MetaTemplates /></PermissionRoute>} />
             <Route path="/admin/cotacoes" element={<AdminRoute><Cotacoes /></AdminRoute>} />
             <Route path="/admin/lembrete-meta" element={<AdminRoute><LembreteMeta /></AdminRoute>} />
             <Route path="/admin/google-maps-leads" element={<AdminRoute><GoogleMapsLeads /></AdminRoute>} />

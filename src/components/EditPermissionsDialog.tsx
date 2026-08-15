@@ -13,6 +13,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+
 import { useAuth } from '@/hooks/useAuth';
 import { navItems } from '@/components/layout/AppLayout';
 
@@ -55,7 +57,43 @@ export function EditPermissionsDialog({
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
   const [podeMarcarPago, setPodeMarcarPago] = useState(false);
   const [atendeInboxMeta, setAtendeInboxMeta] = useState(true);
+  const [parceiroMeta, setParceiroMeta] = useState(false);
+  const [instanciasParceiro, setInstanciasParceiro] = useState<string[]>([]);
+  const [buscaInstancia, setBuscaInstancia] = useState('');
   const [selectedTenants, setSelectedTenants] = useState<string[]>([]);
+
+  const { data: allInstances } = useQuery({
+    queryKey: ['meta-instances-parceiro-picker'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_whatsapp_instances' as any)
+        .select('id, nome, display_phone')
+        .order('nome');
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: open,
+  });
+
+  const { data: vinculosParceiro } = useQuery({
+    queryKey: ['meta-instance-parceiros', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_instance_parceiros' as any)
+        .select('instancia_id')
+        .eq('user_id', userId);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: open && !!userId,
+  });
+
+  useEffect(() => {
+    if (vinculosParceiro) {
+      setInstanciasParceiro(vinculosParceiro.map((r: any) => r.instancia_id));
+    }
+  }, [vinculosParceiro]);
+
 
   const { data: allTenants } = useQuery({
     queryKey: ['tenants-all'],
@@ -115,6 +153,7 @@ export function EditPermissionsDialog({
       setRecebeConsultaCpf((permissions as any).recebe_consulta_cpf ?? false);
       setPodeMarcarPago((permissions as any).pode_marcar_pago_global ?? false);
       setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? true);
+      setParceiroMeta((permissions as any).parceiro_meta ?? false);
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
@@ -126,6 +165,8 @@ export function EditPermissionsDialog({
       setRecebeConsultaCpf(false);
       setPodeMarcarPago(false);
       setAtendeInboxMeta(true);
+      setParceiroMeta(false);
+
     }
   }, [permissions, open]);
 
@@ -149,6 +190,8 @@ export function EditPermissionsDialog({
             recebe_consulta_cpf: recebeConsultaCpf,
             pode_marcar_pago_global: podeMarcarPago,
             atende_inbox_meta: atendeInboxMeta,
+            parceiro_meta: parceiroMeta,
+
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
       if (permissions) {
@@ -186,10 +229,32 @@ export function EditPermissionsDialog({
           .in('tenant_id', toRemove);
         if (error) throw error;
       }
+
+      // Sync vínculos de instâncias Meta (modo parceiro)
+      const vincAtuais = new Set((vinculosParceiro ?? []).map((r: any) => r.instancia_id));
+      const vincDesejados = new Set(parceiroMeta ? instanciasParceiro : []);
+      const vincAdd = [...vincDesejados].filter((id) => !vincAtuais.has(id));
+      const vincRemove = [...vincAtuais].filter((id) => !vincDesejados.has(id));
+      if (vincAdd.length > 0) {
+        const { error } = await supabase
+          .from('meta_instance_parceiros' as any)
+          .insert(vincAdd.map((instancia_id) => ({ instancia_id, user_id: userId })));
+        if (error) throw error;
+      }
+      if (vincRemove.length > 0) {
+        const { error } = await supabase
+          .from('meta_instance_parceiros' as any)
+          .delete()
+          .eq('user_id', userId)
+          .in('instancia_id', vincRemove);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
       queryClient.invalidateQueries({ queryKey: ['tenant-members'] });
+      queryClient.invalidateQueries({ queryKey: ['meta-instance-parceiros'] });
+
       onOpenChange(false);
       toast({
         title: 'Permissões salvas',
@@ -286,6 +351,61 @@ export function EditPermissionsDialog({
                 </div>
               ))}
             </div>
+
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">Parceiro com números próprios</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Ao ativar, este login vê e usa apenas os números Meta vinculados abaixo, sem nenhum acesso aos demais números.
+                  </p>
+                </div>
+                <Switch checked={parceiroMeta} onCheckedChange={setParceiroMeta} />
+              </div>
+
+              {parceiroMeta && (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Buscar número ou nome..."
+                    value={buscaInstancia}
+                    onChange={(e) => setBuscaInstancia(e.target.value)}
+                  />
+                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                    {(allInstances ?? [])
+                      .filter((i: any) => {
+                        const q = buscaInstancia.trim().toLowerCase();
+                        if (!q) return true;
+                        return (
+                          (i.nome ?? '').toLowerCase().includes(q) ||
+                          (i.display_phone ?? '').toLowerCase().includes(q)
+                        );
+                      })
+                      .map((i: any) => (
+                        <div key={i.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`inst-${i.id}`}
+                            checked={instanciasParceiro.includes(i.id)}
+                            onCheckedChange={() =>
+                              setInstanciasParceiro((prev) =>
+                                prev.includes(i.id) ? prev.filter((x) => x !== i.id) : [...prev, i.id]
+                              )
+                            }
+                          />
+                          <label htmlFor={`inst-${i.id}`} className="text-sm cursor-pointer">
+                            {i.nome}{' '}
+                            <span className="text-xs text-muted-foreground">{i.display_phone}</span>
+                          </label>
+                        </div>
+                      ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {instanciasParceiro.length} número(s) vinculado(s). Novos números cadastrados por ele são vinculados automaticamente.
+                  </p>
+                </div>
+              )}
+            </div>
+
+
 
 
             <div className="flex items-center justify-between">
