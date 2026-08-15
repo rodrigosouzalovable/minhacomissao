@@ -593,15 +593,18 @@ async function gerarResposta(args: {
   etapaNegociacao?: string;
   escolhaAnterior?: string;
   imagemCtx?: { descricao: string; classificacao: string } | null;
+  qualificacoes?: QualificacaoIA[];
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
+  qualificacao?: string; qualificacao_motivo?: string;
 }> {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx,
+    imagemCtx, qualificacoes,
   } = args;
+
 
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
