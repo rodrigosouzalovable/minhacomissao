@@ -201,10 +201,23 @@ serve(async (req) => {
 
     const expected = config?.valor;
 
-    if (mode === 'subscribe' && token === expected && challenge) {
+    let ok = mode === 'subscribe' && !!challenge && !!token && token === expected;
+
+    // Tokens próprios de parceiros (cada parceiro tem o seu)
+    if (!ok && mode === 'subscribe' && challenge && token) {
+      const { data: parceiro } = await supabase
+        .from('meta_webhook_tokens')
+        .select('user_id')
+        .eq('token', token)
+        .maybeSingle();
+      ok = !!parceiro;
+    }
+
+    if (ok) {
       return new Response(challenge, { status: 200, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
     }
     return new Response('forbidden', { status: 403, headers: corsHeaders });
+
   }
 
   try {
