@@ -10,7 +10,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, AlertTriangle, ExternalLink, Pencil } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, Power, AlertTriangle, ExternalLink, Pencil, Building2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
@@ -98,6 +102,37 @@ export default function ConfigurarMeta() {
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
   const [verificandoWebhooks, setVerificandoWebhooks] = useState(false);
+
+  // Aba BMs: seleção múltipla de Business Managers
+  const [bmPickerOpen, setBmPickerOpen] = useState(false);
+  const [bmBusca, setBmBusca] = useState("");
+  const [bmSel, setBmSel] = useState<Set<string>>(new Set());
+  const toggleBmSel = (key: string) =>
+    setBmSel((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  const gruposBm = [
+    ...bms
+      .filter((b) => bmSel.has(b.id))
+      .map((b) => ({
+        key: b.id,
+        nome: b.nome,
+        business_id: b.business_id,
+        instancias: instancias.filter((i) => i.meta_bm_id === b.id),
+      })),
+    ...(bmSel.has("__none__")
+      ? [{
+          key: "__none__",
+          nome: "Sem BM vinculada",
+          business_id: null as string | null,
+          instancias: instancias.filter((i) => !i.meta_bm_id),
+        }]
+      : []),
+  ];
+
+
 
   // Importação de PDF de fatura Meta
   const pag = useMetaInstancePagamentos();
@@ -813,6 +848,8 @@ export default function ConfigurarMeta() {
         <TabsList>
           <TabsTrigger value="instancias">Instâncias ({instancias.length})</TabsTrigger>
           <TabsTrigger value="templates">Templates HSM ({templates.length})</TabsTrigger>
+          <TabsTrigger value="bms">BMs ({bms.length})</TabsTrigger>
+
         </TabsList>
 
         <TabsContent value="instancias">
@@ -1335,6 +1372,155 @@ export default function ConfigurarMeta() {
 
           )}
         </TabsContent>
+
+        <TabsContent value="bms">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <Popover open={bmPickerOpen} onOpenChange={setBmPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline">
+                  <Building2 className="h-4 w-4 mr-2" />
+                  Selecionar BMs
+                  {bmSel.size > 0 && (
+                    <Badge variant="secondary" className="ml-2">{bmSel.size}</Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[320px] p-0" align="start">
+                <div className="p-2 border-b space-y-2">
+                  <Input
+                    placeholder="Buscar BM..."
+                    value={bmBusca}
+                    onChange={(e) => setBmBusca(e.target.value)}
+                    className="h-8"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 text-xs flex-1"
+                      onClick={() => setBmSel(new Set(bms.map((b) => b.id)))}
+                    >
+                      Selecionar todas
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs flex-1"
+                      onClick={() => setBmSel(new Set())}
+                    >
+                      Limpar
+                    </Button>
+                  </div>
+                </div>
+                <ScrollArea className="max-h-[300px]">
+                  <div className="p-1">
+                    {bms
+                      .filter((b) => (b.nome || "").toLowerCase().includes(bmBusca.trim().toLowerCase()))
+                      .map((b) => (
+                        <label
+                          key={b.id}
+                          className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={bmSel.has(b.id)}
+                            onCheckedChange={() => toggleBmSel(b.id)}
+                            className="mt-0.5"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm truncate">{b.nome}</span>
+                            <span className="block text-[11px] text-muted-foreground font-mono truncate">
+                              {b.business_id || "sem Business ID"}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    <label className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted cursor-pointer border-t mt-1 pt-2">
+                      <Checkbox checked={bmSel.has("__none__")} onCheckedChange={() => toggleBmSel("__none__")} />
+                      <span className="text-sm text-muted-foreground">Sem BM vinculada</span>
+                    </label>
+                  </div>
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
+            {bmSel.size > 0 && (
+              <span className="text-xs text-muted-foreground">
+                {gruposBm.reduce((acc, g) => acc + g.instancias.length, 0)} WhatsApp(s) nas BMs selecionadas
+              </span>
+            )}
+          </div>
+
+          {bmSel.size === 0 ? (
+            <Card><CardContent className="p-8 text-center text-muted-foreground text-sm">
+              Selecione uma ou mais BMs para ver os WhatsApps conectados a elas.
+            </CardContent></Card>
+          ) : (
+            <div className="space-y-3">
+              {gruposBm.map((g) => (
+                <Card key={g.key}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+                      <Building2 className="h-4 w-4 text-amber-600" />
+                      {g.nome}
+                      {g.business_id && (
+                        <span className="text-[11px] font-mono text-muted-foreground">{g.business_id}</span>
+                      )}
+                      <Badge variant="secondary">{g.instancias.length} número(s)</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    {g.instancias.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Nenhum WhatsApp vinculado.</p>
+                    ) : (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {g.instancias.map((inst) => {
+                          const q = (inst.saude_quality || "").toUpperCase();
+                          const qCls =
+                            q === "GREEN" ? "border-green-500/50 text-green-600"
+                            : q === "YELLOW" ? "border-yellow-500/50 text-yellow-600"
+                            : q === "RED" ? "border-destructive/50 text-destructive"
+                            : "border-dashed text-muted-foreground";
+                          const qLabel =
+                            q === "GREEN" ? "Qualidade alta"
+                            : q === "YELLOW" ? "Qualidade média"
+                            : q === "RED" ? "Qualidade baixa"
+                            : "Qualidade desconhecida";
+                          return (
+                            <div key={inst.id} className="flex items-start gap-2 rounded-md border p-2">
+                              <Avatar className="h-8 w-8 flex-shrink-0">
+                                <AvatarImage src={inst.meta_profile_pic_url || undefined} alt={`Foto de perfil de ${inst.meta_verified_name || inst.nome}`} />
+                                <AvatarFallback className="text-[10px]">
+                                  {(inst.meta_verified_name || inst.nome || "?").slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium truncate">{inst.nome}</div>
+                                {inst.meta_verified_name && (
+                                  <div className="text-[11px] text-muted-foreground truncate">Meta: {inst.meta_verified_name}</div>
+                                )}
+                                {inst.display_phone && (
+                                  <div className="text-[11px] font-mono text-muted-foreground truncate">{inst.display_phone}</div>
+                                )}
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {inst.ativo ? (
+                                    <Badge className="bg-green-600 text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Ativa</Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-[10px]"><XCircle className="h-3 w-3 mr-1" />Inativa</Badge>
+                                  )}
+                                  <Badge variant="outline" className={`text-[10px] ${qCls}`}>{qLabel}</Badge>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
       </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
