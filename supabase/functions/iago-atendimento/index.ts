@@ -448,6 +448,16 @@ Deno.serve(async (req) => {
         etapaNova = 'escolha_feita';
       }
     }
+    // Comprovante de pagamento: sempre agradece e passa para um humano validar.
+    const ehComprovante = imagemCtx?.classificacao === 'comprovante';
+    if (ehComprovante) {
+      escalar = true;
+      if (!motivo) motivo = 'cliente enviou comprovante de pagamento';
+      if (!mensagens.length) {
+        const pn = primeiroNome(nomeCliente);
+        mensagens = [`Recebi${pn ? `, ${pn}` : ''}! Vou encaminhar seu comprovante para a equipe validar o pagamento e já te damos retorno. 🙏`];
+      }
+    }
     if (escalar) etapaNova = 'aguardando_humano';
 
     // Não deixa a IA prometer transferência quando ainda falta confirmar a data.
@@ -462,10 +472,11 @@ Deno.serve(async (req) => {
 
     // Dúvida que ele não sabe responder / assunto proibido: NÃO envia nada.
     // Apenas escala para humano (etiqueta + aviso) para não dar resposta errada.
-    if (escalouPorDuvida && !escolha) {
+    if (escalouPorDuvida && !escolha && !ehComprovante) {
       mensagens = [];
       console.log('[IAGO] escalada por dúvida — nenhuma mensagem enviada', { contato_id, motivo });
     }
+
 
 
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
