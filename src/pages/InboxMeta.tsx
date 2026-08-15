@@ -1766,7 +1766,10 @@ export default function InboxMeta() {
         </div>
 
         {/* Painel da conversa */}
-        <div className="flex-1 flex flex-col bg-background min-w-0"
+        <div className={cn(
+            'flex-1 flex-col bg-background min-w-0',
+            contatoAtivo ? 'flex' : 'hidden sm:flex',
+          )}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => {
@@ -1780,8 +1783,18 @@ export default function InboxMeta() {
             </div>
           ) : (
             <>
-              <div className="p-3 border-b flex items-center justify-between bg-card">
-                <div className="min-w-0">
+              <div className="p-2 sm:p-3 border-b flex flex-wrap items-start justify-between gap-2 bg-card">
+                <div className="min-w-0 flex-1 flex items-start gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0 sm:hidden -ml-1"
+                    onClick={() => setContatoAtivo(null)}
+                    title="Voltar para conversas"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="min-w-0">
                   <div className="text-sm font-semibold truncate flex items-center gap-2">
                     {contatoAtivo.nome || (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.whatsapp_username ? `@${contatoAtivo.whatsapp_username}` : 'Contato sem telefone'))}
                     {contatoAtivo.whatsapp_username && (
