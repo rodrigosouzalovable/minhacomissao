@@ -313,7 +313,8 @@ export function MetaQualificacaoDialog({
               })}
             </div>
             <Button
-              className="w-full"
+              className="w-full shrink-0"
+
               size="sm"
               disabled={salvando || motivosSel.length === 0}
               onClick={() => gravar(paiEscolha.id, motivosSel)}
