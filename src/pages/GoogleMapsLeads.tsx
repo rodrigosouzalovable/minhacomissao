@@ -268,7 +268,7 @@ export default function GoogleMapsLeads() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center justify-between">
-                <span>Consumo do mês: {limite.consumo_atual} de {limite.limite_maximo} consultas</span>
+                <span>Consumo do mês: {limite.consumo_atual} de {limite.limite_maximo} requisições Places (unidade que o Google usa para cobrar e para a franquia gratuita)</span>
                 <Badge variant={limite.nivel === "bloqueado" ? "destructive" : "secondary"}>
                   {limite.percentual_consumido.toFixed(1)}%
                 </Badge>
