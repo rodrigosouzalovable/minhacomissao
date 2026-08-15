@@ -424,7 +424,7 @@ export default function InboxMeta() {
 
   const fetchQualificacoes = useCallback(async () => {
     const { data } = await (supabase as any).from('meta_qualificacoes')
-      .select('id, nome, cor, ordem, ativo').order('ordem');
+      .select('id, nome, cor, ordem, ativo, parent_id').order('ordem');
     setQualificacoes(((data as any) ?? []) as MetaQualificacao[]);
     const { data: cx } = await (supabase as any).from('meta_qualificacao_caixa')
       .select('folder_id, ativo');
@@ -937,9 +937,12 @@ export default function InboxMeta() {
       const { exportarParaExcel } = await import('@/lib/exportExcel');
       const nomeCaixa = (id?: string | null) => (id ? (folders.find(f => f.id === id)?.nome || '—') : 'Padrão');
       const linhas = contatosFiltrados.map(c => {
-        const qs = (qualifPorContato[c.id] ?? [])
-          .map(id => qualificacoes.find(x => x.id === id)?.nome)
-          .filter(Boolean) as string[];
+        const ids = qualifPorContato[c.id] ?? [];
+        const sel = ids.map(id => qualificacoes.find(x => x.id === id)).filter(Boolean) as MetaQualificacao[];
+        const qs = sel.filter(q => !q.parent_id).map(p => {
+          const mots = sel.filter(m => m.parent_id === p.id).map(m => m.nome);
+          return mots.length ? `${p.nome} (${mots.join(', ')})` : p.nome;
+        });
         return {
           telefone: formatTelefone(c.telefone || ''),
           nome: c.nome || nomesCRM[suffix8(c.telefone)] || '',
