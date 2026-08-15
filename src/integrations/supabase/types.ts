@@ -5947,6 +5947,7 @@ export type Database = {
           pode_marcar_pago_global: boolean
           recebe_consulta_cpf: boolean | null
           user_id: string
+          ve_campanhas: boolean
           visivel_ranking: boolean
         }
         Insert: {
@@ -5965,6 +5966,7 @@ export type Database = {
           pode_marcar_pago_global?: boolean
           recebe_consulta_cpf?: boolean | null
           user_id: string
+          ve_campanhas?: boolean
           visivel_ranking?: boolean
         }
         Update: {
@@ -5983,6 +5985,7 @@ export type Database = {
           pode_marcar_pago_global?: boolean
           recebe_consulta_cpf?: boolean | null
           user_id?: string
+          ve_campanhas?: boolean
           visivel_ranking?: boolean
         }
         Relationships: []

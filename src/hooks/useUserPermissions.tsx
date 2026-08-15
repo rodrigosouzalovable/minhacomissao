@@ -31,6 +31,7 @@ export function useUserPermissions() {
     podeMarcarPagoGlobal: (permissions as any)?.pode_marcar_pago_global ?? false,
     atendeInboxMeta: (permissions as any)?.atende_inbox_meta ?? true,
     parceiroMeta: (permissions as any)?.parceiro_meta ?? false,
+    veCampanhas: (permissions as any)?.ve_campanhas ?? false,
 
     isLoading,
   };
