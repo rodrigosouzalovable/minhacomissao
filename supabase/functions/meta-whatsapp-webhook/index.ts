@@ -1072,8 +1072,93 @@ serve(async (req) => {
             }
           }
 
+          // ===== Leitura de imagem (somente caixas onde o IAGO atende) =====
+          // O IAGO não entende "[Imagem]": a IA descreve o conteúdo antes de acioná-lo.
+          let imagemContexto: { descricao: string; classificacao: string } | null = null;
+          let imagemSemLeitura = false;
+          if (!isEcho && !msgError && contatoIdFinal && tipo === 'imagem' && mediaUrl) {
+            try {
+              const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
+              const folderKey = _folderIdContato ?? CAIXA_PADRAO_ID;
+              const [{ data: janelaIagoImg }, { data: credorPastaImg }] = await Promise.all([
+                supabase.from('meta_inbox_folder_iago_janela')
+                  .select('ativo').eq('folder_id', folderKey).maybeSingle(),
+                supabase.from('meta_inbox_folder_credores')
+                  .select('folder_id').eq('folder_id', folderKey).maybeSingle(),
+              ]);
+              const pastaComIagoImg = !!(janelaIagoImg as any)?.ativo || !!(credorPastaImg as any)?.folder_id;
+
+              if (pastaComIagoImg) {
+                const { data: msgSalvaImg } = await supabase
+                  .from('meta_whatsapp_mensagens')
+                  .select('id')
+                  .eq('instancia_id', inst.id)
+                  .eq('wa_message_id', m.id)
+                  .maybeSingle();
+
+                if ((msgSalvaImg as any)?.id) {
+                  let detalhe = '';
+                  try {
+                    const rImg = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/meta-descrever-imagem`, {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                        apikey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({ mensagem_id: (msgSalvaImg as any).id }),
+                    });
+                    const bodyTxt = await rImg.text().catch(() => '');
+                    if (rImg.ok) {
+                      try {
+                        const parsed = JSON.parse(bodyTxt);
+                        const descricao = String(parsed?.descricao || '').trim();
+                        if (descricao) {
+                          imagemContexto = {
+                            descricao,
+                            classificacao: String(parsed?.classificacao || 'documento'),
+                          };
+                        }
+                      } catch (_) { /* ignore */ }
+                    }
+                    if (!imagemContexto) detalhe = `status ${rImg.status} — ${bodyTxt.slice(0, 500)}`;
+                  } catch (e: any) {
+                    detalhe = e?.message || 'falha de rede na leitura da imagem';
+                  }
+
+                  if (imagemContexto) {
+                    const legenda = String(texto || '').trim();
+                    const legendaUtil = legenda && !/^\[imagem\]$/i.test(legenda) ? legenda : '';
+                    textoParaIA = [
+                      legendaUtil,
+                      `[imagem enviada pelo cliente — ${imagemContexto.classificacao}: ${imagemContexto.descricao}]`,
+                    ].filter(Boolean).join('\n');
+                    console.log('[MetaWebhook] imagem descrita', {
+                      mensagem_id: (msgSalvaImg as any).id, classificacao: imagemContexto.classificacao,
+                    });
+                  } else {
+                    imagemSemLeitura = true;
+                    console.error('[MetaWebhook] falha na leitura da imagem', detalhe);
+                  }
+                } else {
+                  imagemSemLeitura = true;
+                  console.error('[MetaWebhook] mensagem de imagem não encontrada para descrever', { wa_message_id: m.id });
+                }
+              }
+            } catch (e: any) {
+              imagemSemLeitura = true;
+              console.error('[MetaWebhook] exceção na leitura da imagem', e?.message || e);
+            }
+
+            if (imagemSemLeitura) {
+              // Sem entender a imagem o IAGO não responde: humano precisa olhar.
+              await etiquetarAguardandoHumano(supabase, contatoIdFinal);
+            }
+          }
+
           // ===== Atendimento automático com IA (caixa "IA" + atendente IAGO) =====
-          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao) {
+          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao && !imagemSemLeitura) {
+
             const iaTask = (async () => {
               try {
                 const { data, error } = await supabase.functions.invoke('meta-ia-atendimento', {
