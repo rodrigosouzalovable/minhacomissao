@@ -21,6 +21,8 @@ import { DollarSign, FileText, CreditCard, Upload } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
 const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
@@ -83,7 +85,9 @@ type Template = {
 
 
 export default function ConfigurarMeta() {
+  const { parceiroMeta } = useUserPermissions();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
+
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -256,6 +260,17 @@ export default function ConfigurarMeta() {
   };
 
   const carregarToken = async () => {
+    if (parceiroMeta) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("meta_webhook_tokens" as any)
+        .select("token")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (data) setVerifyToken((data as any).token);
+      return;
+    }
     const { data } = await supabase
       .from("meta_whatsapp_config")
       .select("valor")
@@ -270,9 +285,27 @@ export default function ConfigurarMeta() {
       return;
     }
     setSavingToken(true);
-    const { error } = await supabase
-      .from("meta_whatsapp_config")
-      .upsert({ chave: "webhook_verify_token", valor: novoToken.trim() }, { onConflict: "chave" });
+    let error: any = null;
+    if (parceiroMeta) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setSavingToken(false);
+        toast.error("Sessão expirada, entre novamente");
+        return;
+      }
+      const res = await supabase
+        .from("meta_webhook_tokens" as any)
+        .upsert(
+          { user_id: user.id, token: novoToken.trim(), atualizado_em: new Date().toISOString() },
+          { onConflict: "user_id" },
+        );
+      error = res.error;
+    } else {
+      const res = await supabase
+        .from("meta_whatsapp_config")
+        .upsert({ chave: "webhook_verify_token", valor: novoToken.trim() }, { onConflict: "chave" });
+      error = res.error;
+    }
     if (error) {
       toast.error("Erro ao salvar token: " + error.message);
     } else {
@@ -282,10 +315,15 @@ export default function ConfigurarMeta() {
     setSavingToken(false);
   };
 
+
   useEffect(() => {
     carregar();
-    carregarToken();
   }, []);
+
+  useEffect(() => {
+    carregarToken();
+  }, [parceiroMeta]);
+
 
   const copiar = (txt: string, label = "Copiado!") => {
     navigator.clipboard.writeText(txt);
@@ -684,10 +722,13 @@ export default function ConfigurarMeta() {
             </div>
           </div>
           <div>
-            <Label>Verify Token (compartilhado)</Label>
+            <Label>{parceiroMeta ? "Verify Token (seu token)" : "Verify Token (compartilhado)"}</Label>
             <p className="text-xs text-muted-foreground mt-1">
-              Cole esse valor no campo "Verify Token" do webhook na HookCloud.
+              {parceiroMeta
+                ? "Este token é exclusivo dos seus números. Cole esse valor no campo \"Verify Token\" do webhook na Meta/HookCloud."
+                : "Cole esse valor no campo \"Verify Token\" do webhook na HookCloud."}
             </p>
+
             <div className="flex gap-2 mt-1 flex-wrap">
               <Input
                 value={verifyToken}

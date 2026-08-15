@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { criarTokenResolver } from '../_shared/webhook-token.ts';
+
 
 const GRAPH_VERSION = 'v21.0';
 
@@ -15,15 +17,11 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { data: config, error: configError } = await supabase
-      .from('meta_whatsapp_config')
-      .select('valor')
-      .eq('chave', 'webhook_verify_token')
-      .maybeSingle();
+    const tokenResolver = await criarTokenResolver(supabase);
+    if (!tokenResolver.global) {
+      console.warn('[SubscribeWaba] Verify Token global não configurado');
+    }
 
-    if (configError) throw configError;
-    const verifyToken = config?.valor;
-    if (!verifyToken) throw new Error('Verify Token compartilhado não configurado');
 
     const body = await req.json().catch(() => ({}));
     const targetId = body?.instancia_id as string | undefined;
@@ -46,10 +44,15 @@ Deno.serve(async (req) => {
         webhook_url: webhookUrl,
       };
       try {
+        const verifyToken = tokenResolver.paraInstancia(inst.id);
+        if (!verifyToken) throw new Error('Verify Token não configurado para esta instância');
+        out.token_parceiro = tokenResolver.ehParceiro(inst.id);
+
         // 1) Subscribe app à WABA forçando o callback correto do sistema.
         const params = new URLSearchParams();
         params.set('override_callback_uri', webhookUrl);
         params.set('verify_token', verifyToken);
+
 
         const subRes = await fetch(
           `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}/subscribed_apps`,

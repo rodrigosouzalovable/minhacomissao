@@ -6,6 +6,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
+import { criarTokenResolver } from "../_shared/webhook-token.ts";
+
 
 const GRAPH_VERSION = "v21.0";
 
@@ -21,10 +23,8 @@ Deno.serve(async (req) => {
     const targetId: string | undefined = body?.instancia_id;
     const forceNotify: boolean = !!body?.notify;
 
-    const { data: cfg } = await supabase
-      .from("meta_whatsapp_config").select("valor").eq("chave", "webhook_verify_token").maybeSingle();
-    const verifyToken = cfg?.valor;
-    if (!verifyToken) throw new Error("Verify Token não configurado");
+    const tokenResolver = await criarTokenResolver(supabase);
+
 
     const q = supabase
       .from("meta_whatsapp_instances")
@@ -66,9 +66,12 @@ Deno.serve(async (req) => {
 
         // 2) Reinscreve se ausente ou apontando para outro serviço.
         if (!apps.length || !callbackOk) {
+          const verifyToken = tokenResolver.paraInstancia(inst.id);
+          if (!verifyToken) throw new Error("Verify Token não configurado para esta instância");
           const params = new URLSearchParams();
           params.set("override_callback_uri", webhookUrl);
           params.set("verify_token", verifyToken);
+
           const subRes = await fetch(
             `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}/subscribed_apps`,
             {
