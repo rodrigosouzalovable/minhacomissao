@@ -83,7 +83,9 @@ type Template = {
 
 
 export default function ConfigurarMeta() {
+  const { parceiroMeta } = useUserPermissions();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
+
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
