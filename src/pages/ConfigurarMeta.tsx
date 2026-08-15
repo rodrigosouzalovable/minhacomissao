@@ -262,6 +262,19 @@ export default function ConfigurarMeta() {
     tier_diario: "250",
   });
 
+  const templatesPorInstancia = useMemo(() => {
+    const map: Record<string, { total: number; aprovados: number }> = {};
+    for (const t of templates) {
+      const key = (t as any).instancia_id as string;
+      if (!key) continue;
+      if (!map[key]) map[key] = { total: 0, aprovados: 0 };
+      map[key].total++;
+      if (String((t as any).status || "").toLowerCase() === "approved") map[key].aprovados++;
+    }
+    return map;
+  }, [templates]);
+
+
   const carregar = async () => {
     setLoading(true);
     const [i, t, b] = await Promise.all([
