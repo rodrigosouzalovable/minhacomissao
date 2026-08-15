@@ -385,6 +385,8 @@ Deno.serve(async (req) => {
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
+      qualificacoes: await quals(),
+
     });
 
 
