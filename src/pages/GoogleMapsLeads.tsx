@@ -289,7 +289,7 @@ export default function GoogleMapsLeads() {
                 </Alert>
               )}
               <p className="text-xs text-muted-foreground">
-                Bloqueio automático em {limite.limite_bloqueio} consultas • O contador reinicia em {limite.data_reset_br}
+                Bloqueio automático em {limite.limite_bloqueio} requisições • O contador reinicia em {limite.data_reset_br}
               </p>
             </CardContent>
           </Card>
