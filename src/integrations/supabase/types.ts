@@ -4063,6 +4063,7 @@ export type Database = {
           id: string
           nome: string
           ordem: number
+          parent_id: string | null
           updated_at: string
         }
         Insert: {
@@ -4072,6 +4073,7 @@ export type Database = {
           id?: string
           nome: string
           ordem?: number
+          parent_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -4081,9 +4083,18 @@ export type Database = {
           id?: string
           nome?: string
           ordem?: number
+          parent_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "meta_qualificacoes_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "meta_qualificacoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meta_templates_instancia: {
         Row: {

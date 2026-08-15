@@ -1,0 +1,2 @@
+ALTER TABLE public.meta_qualificacoes ADD COLUMN IF NOT EXISTS parent_id uuid REFERENCES public.meta_qualificacoes(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS meta_qualificacoes_parent_id_idx ON public.meta_qualificacoes(parent_id);
