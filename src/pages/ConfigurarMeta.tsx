@@ -256,6 +256,17 @@ export default function ConfigurarMeta() {
   };
 
   const carregarToken = async () => {
+    if (parceiroMeta) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("meta_webhook_tokens" as any)
+        .select("token")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (data) setVerifyToken((data as any).token);
+      return;
+    }
     const { data } = await supabase
       .from("meta_whatsapp_config")
       .select("valor")
@@ -270,9 +281,27 @@ export default function ConfigurarMeta() {
       return;
     }
     setSavingToken(true);
-    const { error } = await supabase
-      .from("meta_whatsapp_config")
-      .upsert({ chave: "webhook_verify_token", valor: novoToken.trim() }, { onConflict: "chave" });
+    let error: any = null;
+    if (parceiroMeta) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setSavingToken(false);
+        toast.error("Sessão expirada, entre novamente");
+        return;
+      }
+      const res = await supabase
+        .from("meta_webhook_tokens" as any)
+        .upsert(
+          { user_id: user.id, token: novoToken.trim(), atualizado_em: new Date().toISOString() },
+          { onConflict: "user_id" },
+        );
+      error = res.error;
+    } else {
+      const res = await supabase
+        .from("meta_whatsapp_config")
+        .upsert({ chave: "webhook_verify_token", valor: novoToken.trim() }, { onConflict: "chave" });
+      error = res.error;
+    }
     if (error) {
       toast.error("Erro ao salvar token: " + error.message);
     } else {
@@ -281,6 +310,7 @@ export default function ConfigurarMeta() {
     }
     setSavingToken(false);
   };
+
 
   useEffect(() => {
     carregar();
