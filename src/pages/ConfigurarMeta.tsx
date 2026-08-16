@@ -93,6 +93,7 @@ export default function ConfigurarMeta() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [testando, setTestando] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState<string | null>(null);
+  const [sincPerfil, setSincPerfil] = useState<string | null>(null);
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
@@ -606,6 +607,26 @@ export default function ConfigurarMeta() {
     setSincronizando(null);
   };
 
+  const sincronizarPerfil = async (inst: Instancia) => {
+    setSincPerfil(inst.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-sync-perfil-instancias", {
+        body: { instancia_id: inst.id },
+      });
+      if (error) throw error;
+      const r = (data as any)?.results?.[0] || {};
+      if (r.error || r.perfil_error || r.foto_error) {
+        toast.warning(`Perfil atualizado com aviso: ${r.error || r.perfil_error || r.foto_error}`);
+      } else {
+        toast.success("Perfil e foto sincronizados");
+      }
+      await carregar();
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    }
+    setSincPerfil(null);
+  };
+
   const sincronizarTodos = async () => {
     setSincronizando("__all__");
     let total = 0;
@@ -1095,6 +1116,16 @@ export default function ConfigurarMeta() {
                           <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
                             {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => sincronizarPerfil(inst)}
+                            disabled={sincPerfil === inst.id}
+                            title="Atualizar nome oficial, foto de perfil e 'sobre' desta instância na Meta"
+                          >
+                            {sincPerfil === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Sincronizar perfil</>}
+                          </Button>
+
                           <Button size="sm" variant="ghost" onClick={() => abrirEdicao(inst)} title="Editar informações da instância">
                             <Pencil className="h-3 w-3" />
                           </Button>
