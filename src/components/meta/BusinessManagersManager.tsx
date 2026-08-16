@@ -397,14 +397,17 @@ export default function BusinessManagersManager() {
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="outline" size="sm"
-                      onClick={() => definirPadrao(bm)}
-                      disabled={bm.padrao}
-                      title="Definir como BM padrão"
-                    >
-                      {bm.padrao ? <Star className="w-4 h-4" /> : <StarOff className="w-4 h-4" />}
-                    </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="outline" size="sm"
+                        onClick={() => definirPadrao(bm)}
+                        disabled={bm.padrao}
+                        title="Definir como BM padrão"
+                      >
+                        {bm.padrao ? <Star className="w-4 h-4" /> : <StarOff className="w-4 h-4" />}
+                      </Button>
+                    )}
+
                     <Button variant="outline" size="sm" onClick={() => excluir(bm)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
