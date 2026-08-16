@@ -86,7 +86,7 @@ type Template = {
 
 
 export default function ConfigurarMeta() {
-  const { cotaDaBm } = useBmCotas();
+  const { cotaDaBm, recarregar: recarregarCotas } = useBmCotas();
   const { parceiroMeta } = useUserPermissions();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
 
@@ -687,8 +687,10 @@ export default function ConfigurarMeta() {
       : { messaging_limit_manual: valor, messaging_limit_source: "manual" };
     const { error } = await (supabase as any).from("meta_whatsapp_instances").update(patch).eq("id", inst.id);
     if (error) { toast.error(error.message); return; }
-    toast.success(valor === "__auto__" ? "Override removido — usando sync automático" : `Tier definido: ${valor.replace("TIER_", "")}`);
+    toast.success(valor === "__auto__" ? "Override removido — usando sync automático" : `Tier definido: ${valor.replace("TIER_", "")} — cota da BM atualizada`);
     carregar();
+    recarregarCotas();
+
   };
 
   const sincronizarSaude = async (inst: Instancia) => {

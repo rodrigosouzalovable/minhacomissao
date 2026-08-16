@@ -3182,6 +3182,7 @@ export type Database = {
           tenant_id: string
           tier_diario: number
           tier_ilimitado: boolean
+          tier_manual: boolean
         }
         Insert: {
           app_id: string
@@ -3196,6 +3197,7 @@ export type Database = {
           tenant_id?: string
           tier_diario?: number
           tier_ilimitado?: boolean
+          tier_manual?: boolean
         }
         Update: {
           app_id?: string
@@ -3210,6 +3212,7 @@ export type Database = {
           tenant_id?: string
           tier_diario?: number
           tier_ilimitado?: boolean
+          tier_manual?: boolean
         }
         Relationships: []
       }
@@ -8055,6 +8058,7 @@ export type Database = {
         Args: { _folder?: string }
         Returns: number
       }
+      meta_tier_valor: { Args: { t: string }; Returns: number }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       parceiro_tem_instancia: {
         Args: { _instancia: string; _uid: string }

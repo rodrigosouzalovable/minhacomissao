@@ -22,6 +22,8 @@ interface BM {
   padrao: boolean;
   tier_diario: number | null;
   tier_ilimitado: boolean | null;
+  tier_manual?: boolean | null;
+
   criado_em: string;
 }
 
@@ -162,9 +164,9 @@ export default function BusinessManagersManager() {
       toast.error("Informe o limite diário da BM (ou marque como ilimitado)");
       return;
     }
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("meta_business_managers")
-      .update({ tier_diario: valor, tier_ilimitado: tierIlimitado })
+      .update({ tier_diario: valor, tier_ilimitado: tierIlimitado, tier_manual: true })
       .eq("id", bm.id);
     if (error) return toast.error(error.message);
     toast.success(`Limite da BM "${bm.nome}" atualizado — vale para todos os WhatsApps vinculados`);
@@ -172,11 +174,24 @@ export default function BusinessManagersManager() {
     await Promise.all([load(), recarregarCotas()]);
   }
 
-  function iniciarTier(bm: BM) {
-    setTierEditId(bm.id);
-    setTierValor(String(bm.tier_diario ?? 0));
-    setTierIlimitado(bm.tier_ilimitado === true);
+  async function usarTierAutomatico(bm: BM) {
+    const { error } = await (supabase as any)
+      .from("meta_business_managers")
+      .update({ tier_manual: false, tier_ilimitado: false })
+      .eq("id", bm.id);
+    if (error) return toast.error(error.message);
+    toast.success(`Limite da BM "${bm.nome}" agora segue o maior tier dos WhatsApps vinculados`);
+    setTierEditId(null);
+    await Promise.all([load(), recarregarCotas()]);
   }
+
+  function iniciarTier(bm: BM) {
+    const c = cotaDaBm(bm.id);
+    setTierEditId(bm.id);
+    setTierValor(String(c?.tier_diario ?? bm.tier_diario ?? 0));
+    setTierIlimitado((c?.tier_ilimitado ?? bm.tier_ilimitado) === true);
+  }
+
 
   function cancelarEdicao() {
     setEditingId(null);
@@ -307,8 +322,9 @@ export default function BusinessManagersManager() {
                         )}
                         {(() => {
                           const c = cotaDaBm(bm.id);
-                          const ilimitado = bm.tier_ilimitado === true;
-                          const tier = Number(bm.tier_diario ?? 0);
+                          const manual = bm.tier_manual === true;
+                          const ilimitado = (c?.tier_ilimitado ?? bm.tier_ilimitado) === true;
+                          const tier = Number(c?.tier_diario ?? bm.tier_diario ?? 0);
                           const usados = c?.enviados_24h ?? 0;
                           const pct = ilimitado || tier <= 0 ? 0 : Math.min(100, Math.round((usados / tier) * 100));
                           return (
@@ -329,6 +345,9 @@ export default function BusinessManagersManager() {
                                   <Button size="sm" onClick={() => salvarTier(bm)}>
                                     <Check className="h-4 w-4 mr-1" /> Salvar limite
                                   </Button>
+                                  <Button size="sm" variant="secondary" onClick={() => usarTierAutomatico(bm)}>
+                                    Automático (tier dos WhatsApps)
+                                  </Button>
                                   <Button size="sm" variant="ghost" onClick={() => setTierEditId(null)}>
                                     <X className="h-4 w-4 mr-1" /> Cancelar
                                   </Button>
@@ -342,6 +361,9 @@ export default function BusinessManagersManager() {
                                         ? `Tier ${tier}/dia · ${usados} usadas · ${Math.max(tier - usados, 0)} restantes`
                                         : "Tier não definido"}
                                   </Badge>
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {manual ? "manual" : "automático"}
+                                  </Badge>
                                   <Button size="sm" variant="outline" className="h-7" onClick={() => iniciarTier(bm)}>
                                     <Gauge className="h-3.5 w-3.5 mr-1" /> Definir tier
                                   </Button>
@@ -350,7 +372,9 @@ export default function BusinessManagersManager() {
                               {!ilimitado && tier > 0 && <Progress value={pct} className="h-1.5" />}
                               <p className="text-[11px] text-muted-foreground">
                                 Limite compartilhado por todos os WhatsApps desta BM (janela móvel de 24h).
+                                {!manual && " Segue o maior tier configurado nos WhatsApps vinculados."}
                               </p>
+
                             </div>
                           );
                         })()}
