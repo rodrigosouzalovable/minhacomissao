@@ -369,10 +369,12 @@ export function EditPermissionsDialog({
             <div className="space-y-3 rounded-md border p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-sm font-medium">Parceiro com números próprios</Label>
+                  <Label className="text-sm font-medium">Parceiro Meta</Label>
                   <p className="text-xs text-muted-foreground">
-                    Ao ativar, este login vê e usa apenas os números Meta vinculados abaixo, sem nenhum acesso aos demais números.
+                    Ao ativar, este login vê e usa apenas os números Meta vinculados abaixo (sem acesso aos demais)
+                    e pode cadastrar suas próprias Business Managers e novos WhatsApps.
                   </p>
+
                 </div>
                 <Switch checked={parceiroMeta} onCheckedChange={setParceiroMeta} />
               </div>

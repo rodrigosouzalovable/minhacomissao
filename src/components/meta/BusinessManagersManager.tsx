@@ -10,7 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Star, StarOff, Pencil, Check, X, Gauge } from "lucide-react";
 import { useBmCotas } from "@/hooks/useBmCotas";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Progress } from "@/components/ui/progress";
+
 
 interface BM {
   id: string;
@@ -32,6 +34,9 @@ export default function BusinessManagersManager() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const { cotaDaBm, recarregar: recarregarCotas } = useBmCotas();
+  const { role } = useUserRole();
+  const isAdmin = role === "admin";
+
   const [tierEditId, setTierEditId] = useState<string | null>(null);
   const [tierValor, setTierValor] = useState("");
   const [tierIlimitado, setTierIlimitado] = useState(false);
@@ -76,7 +81,7 @@ export default function BusinessManagersManager() {
       business_id: businessId.trim() || null,
       descricao: descricao.trim() || null,
       ativo: true,
-      padrao: items.length === 0, // primeira vira padrão
+      padrao: isAdmin && items.length === 0, // primeira do admin vira padrão
     });
     setSaving(false);
     if (error) {
@@ -392,14 +397,17 @@ export default function BusinessManagersManager() {
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="outline" size="sm"
-                      onClick={() => definirPadrao(bm)}
-                      disabled={bm.padrao}
-                      title="Definir como BM padrão"
-                    >
-                      {bm.padrao ? <Star className="w-4 h-4" /> : <StarOff className="w-4 h-4" />}
-                    </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="outline" size="sm"
+                        onClick={() => definirPadrao(bm)}
+                        disabled={bm.padrao}
+                        title="Definir como BM padrão"
+                      >
+                        {bm.padrao ? <Star className="w-4 h-4" /> : <StarOff className="w-4 h-4" />}
+                      </Button>
+                    )}
+
                     <Button variant="outline" size="sm" onClick={() => excluir(bm)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
