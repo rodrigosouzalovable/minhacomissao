@@ -1116,6 +1116,16 @@ export default function ConfigurarMeta() {
                           <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
                             {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => sincronizarPerfil(inst)}
+                            disabled={sincPerfil === inst.id}
+                            title="Atualizar nome oficial, foto de perfil e 'sobre' desta instância na Meta"
+                          >
+                            {sincPerfil === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Sincronizar perfil</>}
+                          </Button>
+
                           <Button size="sm" variant="ghost" onClick={() => abrirEdicao(inst)} title="Editar informações da instância">
                             <Pencil className="h-3 w-3" />
                           </Button>
