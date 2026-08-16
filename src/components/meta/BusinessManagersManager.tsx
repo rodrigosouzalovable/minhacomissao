@@ -164,9 +164,9 @@ export default function BusinessManagersManager() {
       toast.error("Informe o limite diário da BM (ou marque como ilimitado)");
       return;
     }
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("meta_business_managers")
-      .update({ tier_diario: valor, tier_ilimitado: tierIlimitado })
+      .update({ tier_diario: valor, tier_ilimitado: tierIlimitado, tier_manual: true })
       .eq("id", bm.id);
     if (error) return toast.error(error.message);
     toast.success(`Limite da BM "${bm.nome}" atualizado — vale para todos os WhatsApps vinculados`);
@@ -174,11 +174,24 @@ export default function BusinessManagersManager() {
     await Promise.all([load(), recarregarCotas()]);
   }
 
-  function iniciarTier(bm: BM) {
-    setTierEditId(bm.id);
-    setTierValor(String(bm.tier_diario ?? 0));
-    setTierIlimitado(bm.tier_ilimitado === true);
+  async function usarTierAutomatico(bm: BM) {
+    const { error } = await (supabase as any)
+      .from("meta_business_managers")
+      .update({ tier_manual: false, tier_ilimitado: false })
+      .eq("id", bm.id);
+    if (error) return toast.error(error.message);
+    toast.success(`Limite da BM "${bm.nome}" agora segue o maior tier dos WhatsApps vinculados`);
+    setTierEditId(null);
+    await Promise.all([load(), recarregarCotas()]);
   }
+
+  function iniciarTier(bm: BM) {
+    const c = cotaDaBm(bm.id);
+    setTierEditId(bm.id);
+    setTierValor(String(c?.tier_diario ?? bm.tier_diario ?? 0));
+    setTierIlimitado((c?.tier_ilimitado ?? bm.tier_ilimitado) === true);
+  }
+
 
   function cancelarEdicao() {
     setEditingId(null);
