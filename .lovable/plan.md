@@ -1,34 +1,29 @@
-# Liberar cadastro de BMs e WhatsApps para o Guilherme
+# Corrigir cadastro de novo WhatsApp pelo login parceiro (Guilherme)
 
-## Causa do erro (verificado no banco)
+## Diagnóstico
 
-- O login do Guilherme (`guilherme@gmail.com`) é `funcionario` e está marcado como **parceiro Meta**, com acesso às abas Inbox Meta, Envio Meta, Templates e API Oficial Meta.
-- A tabela de Business Managers só aceita cadastro/edição/exclusão de **admin** (as regras de acesso exigem papel admin no insert). Por isso a mensagem "new row violates row-level security policy for table meta_business_managers".
-- Para WhatsApps ele já consegue cadastrar (a regra permite quando o registro é do próprio usuário), mas hoje uma instância recém-criada por parceiro não aparece de volta na lista dele, porque a visualização de parceiro depende de um vínculo (`meta_instance_parceiros`) que não é criado automaticamente.
+O cadastro em si é permitido, o que falha é a leitura da linha recém-criada.
 
-## O que será feito
+- O formulário insere a instância já com `user_id` = o próprio Guilherme e pede o `id` de volta (`insert ... select`).
+- As regras de leitura de `meta_whatsapp_instances` para usuários em "Modo parceiro" só liberam linhas que já tenham vínculo na tabela `meta_instance_parceiros`.
+- O vínculo automático é criado por gatilhos `AFTER INSERT`, que rodam **depois** da devolução da linha. Resultado: no instante do retorno o parceiro ainda não tem permissão de ver a própria linha e o banco responde "new row violates row-level security policy for table meta_whatsapp_instances".
 
-1. **Cadastro de BMs liberado para parceiros Meta**, de forma isolada:
-   - Cada BM passa a guardar quem a cadastrou.
-   - O Guilherme pode criar, ver, editar e excluir **apenas as BMs cadastradas por ele**.
-   - Ele continua sem ver as BMs da empresa (Facebook Edna, FB 17, BM Rodrigo Ribeiro), a não ser que tenha algum WhatsApp vinculado a elas.
-   - Admins continuam vendo e gerenciando tudo.
-   - O botão de "BM padrão" fica restrito a admin (evita que um parceiro troque a BM padrão da empresa).
+Isso explica por que admins conseguem cadastrar e o Guilherme não, e por que as instâncias já existentes dele funcionam (o vínculo já existe).
 
-2. **Cadastro de WhatsApps sem limite**, vinculado automaticamente a ele:
-   - Ao cadastrar uma instância, o vínculo de parceiro é criado na hora, então ela aparece imediatamente na lista dele e nas abas Envio Meta/Inbox.
-   - Ninguém além dele e dos admins vê essas instâncias.
+## Correção
 
-3. **Tela API Oficial Meta**: o bloco de Business Managers passa a ficar visível para parceiros (hoje é área de admin), mostrando só as BMs dele, sem a ação de tornar padrão.
+Uma migração ajustando a política de leitura/gestão para que o parceiro sempre veja as instâncias das quais ele é o dono (`user_id = auth.uid()`), além das vinculadas a ele.
+
+Efeito prático:
+- Guilherme cadastra o novo número normalmente e ele aparece na hora.
+- Guilherme continua vendo **apenas** os números dele (os seus têm outro dono e nenhum vínculo com ele).
+- Nada muda para admins e para os demais usuários.
 
 ## Detalhes técnicos
 
-- Migração:
-  - `meta_business_managers`: nova coluna `criado_por uuid` (preenchida por trigger com `auth.uid()` no insert).
-  - Novas políticas para `authenticated`: insert quando `is_parceiro_meta(auth.uid())` e `criado_por = auth.uid()`; select/update/delete de parceiro restritos a `criado_por = auth.uid()`. Políticas de admin permanecem.
-  - Proteção de `padrao`: trigger que rejeita marcar `padrao = true` quando o usuário não é admin.
-  - Trigger `AFTER INSERT` em `meta_whatsapp_instances`: se o criador é parceiro Meta, insere a linha correspondente em `meta_instance_parceiros` (idempotente).
-- Frontend:
-  - `ConfigurarMeta.tsx`: exibir a seção/aba de Business Managers também para usuários com `parceiro_meta`.
-  - `BusinessManagersManager.tsx`: esconder a ação "tornar padrão" para não-admins; manter o restante do fluxo.
-- Sem novos crons, polling ou Realtime — nenhum impacto de custo no Cloud.
+Migração em `meta_whatsapp_instances`:
+- Recriar `Users manage own meta instances` com `USING (has_role(auth.uid(),'admin') OR (auth.uid() = user_id))`, removendo a exigência de vínculo para o próprio dono (o `WITH CHECK` continua igual).
+- Recriar `meta_instances_parceiro_select` como `is_parceiro_meta(auth.uid()) AND (parceiro_tem_instancia(auth.uid(), id) OR auth.uid() = user_id)`; mesmo ajuste em `meta_instances_parceiro_update` / `meta_instances_parceiro_delete` para o parceiro poder editar/remover o que ele mesmo cadastrou.
+- Manter `NOT is_parceiro_meta(...)` nas políticas de pasta/inbox compartilhado/tenant, preservando o isolamento atual.
+
+Verificação: cadastrar um número de teste com um login parceiro e confirmar que ele aparece só para esse login, depois removê-lo.
