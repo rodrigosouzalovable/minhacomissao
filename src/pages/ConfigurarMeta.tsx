@@ -86,7 +86,7 @@ type Template = {
 
 
 export default function ConfigurarMeta() {
-  const { cotaDaBm } = useBmCotas();
+  const { cotaDaBm, recarregar: recarregarCotas } = useBmCotas();
   const { parceiroMeta } = useUserPermissions();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
 
