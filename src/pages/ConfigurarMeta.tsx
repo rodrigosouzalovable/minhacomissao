@@ -607,6 +607,26 @@ export default function ConfigurarMeta() {
     setSincronizando(null);
   };
 
+  const sincronizarPerfil = async (inst: Instancia) => {
+    setSincPerfil(inst.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-sync-perfil-instancias", {
+        body: { instancia_id: inst.id },
+      });
+      if (error) throw error;
+      const r = (data as any)?.results?.[0] || {};
+      if (r.error || r.perfil_error || r.foto_error) {
+        toast.warning(`Perfil atualizado com aviso: ${r.error || r.perfil_error || r.foto_error}`);
+      } else {
+        toast.success("Perfil e foto sincronizados");
+      }
+      await carregar();
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    }
+    setSincPerfil(null);
+  };
+
   const sincronizarTodos = async () => {
     setSincronizando("__all__");
     let total = 0;
