@@ -34,6 +34,9 @@ export default function BusinessManagersManager() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const { cotaDaBm, recarregar: recarregarCotas } = useBmCotas();
+  const { role } = useUserRole();
+  const isAdmin = role === "admin";
+
   const [tierEditId, setTierEditId] = useState<string | null>(null);
   const [tierValor, setTierValor] = useState("");
   const [tierIlimitado, setTierIlimitado] = useState(false);
