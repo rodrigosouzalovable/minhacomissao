@@ -3,6 +3,7 @@
 // imagem é copiada para o bucket privado "meta-perfis" e gravamos uma URL assinada
 // de longa duração na instância.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,8 +37,11 @@ Deno.serve(async (req) => {
       .select('id, nome, phone_number_id, access_token, display_phone')
       .eq('ativo', true);
     if (instanciaId) query = query.eq('id', instanciaId);
-    const { data: instancias, error } = await query;
+    const { data: instanciasRaw, error } = await query;
     if (error) throw error;
+
+    const permitidas = await idsInstanciasPermitidas(req, supabase);
+    const instancias = filtrarInstancias(instanciasRaw as any[], permitidas);
 
     const results: any[] = [];
 

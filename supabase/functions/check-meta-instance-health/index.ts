@@ -2,6 +2,7 @@
 // Retorna status (CONNECTED/FLAGGED/RESTRICTED/etc), quality_rating, tier,
 // e ban_info da WABA. Persiste snapshot em meta_whatsapp_instances.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,8 +31,11 @@ Deno.serve(async (req) => {
 
     let query = supabase.from('meta_whatsapp_instances').select('*').eq('ativo', true);
     if (instanciaId) query = query.eq('id', instanciaId);
-    const { data: instancias, error } = await query;
+    const { data: instanciasRaw, error } = await query;
     if (error) throw error;
+
+    const permitidas = await idsInstanciasPermitidas(req, supabase);
+    const instancias = filtrarInstancias(instanciasRaw as any[], permitidas);
 
     const results: any[] = [];
     for (const inst of instancias || []) {
