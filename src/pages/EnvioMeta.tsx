@@ -621,6 +621,41 @@ export default function EnvioMeta() {
       toast.warning(`${badQuality.length} instância(s) RED/YELLOW removidas automaticamente: ${nomes}`);
     }
 
+    // Cota por BM (janela de 24h): remove instâncias de BMs já esgotadas
+    await recarregarCotas();
+    const semCota = filteredInstanciaIds.filter((id) => {
+      const inst = instancias.find((x) => x.id === id) as any;
+      return inst ? bmSemSaldo(inst.meta_bm_id) : false;
+    });
+    if (semCota.length > 0) {
+      const nomesBm = Array.from(new Set(semCota.map((id) => {
+        const inst = instancias.find((x) => x.id === id) as any;
+        return inst?.meta_bm_id ? (bmNomes[inst.meta_bm_id] || "BM") : "BM";
+      }))).join(", ");
+      toast.warning(`${semCota.length} instância(s) removidas: cota de 24h esgotada na(s) BM(s) ${nomesBm}.`);
+    }
+    const instanciasComCota = filteredInstanciaIds.filter((id) => !semCota.includes(id));
+    if (instanciasComCota.length === 0) {
+      return toast.error("Nenhuma instância disponível: a cota de 24h das BMs selecionadas está esgotada.");
+    }
+
+    // Aviso de saldo total das BMs envolvidas
+    const bmsEnvolvidas = new Set<string>();
+    for (const id of instanciasComCota) {
+      const inst = instancias.find((x) => x.id === id) as any;
+      if (inst?.meta_bm_id) bmsEnvolvidas.add(inst.meta_bm_id);
+    }
+    let saldoTotalBm = 0;
+    let temIlimitada = false;
+    for (const bmId of bmsEnvolvidas) {
+      const c = cotaDaBm(bmId);
+      if (!c) { temIlimitada = true; continue; }
+      if (c.tier_ilimitado) { temIlimitada = true; continue; }
+      saldoTotalBm += c.restantes;
+    }
+
+
+
     if (instanciasIncompatíveis.length > 0) {
       const incompativelFiltrado = instanciasIncompatíveis.filter((i) => filteredInstanciaIds.includes(i.id));
       if (incompativelFiltrado.length > 0) {
