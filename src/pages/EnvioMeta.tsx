@@ -1292,8 +1292,15 @@ export default function EnvioMeta() {
                   </div>
                 ) : (
                   <>
-                    <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
-                      {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
+                    <Badge
+                      variant={semSaldoBm ? "destructive" : "secondary"}
+                      title={cotaBm ? `Cota compartilhada da BM ${cotaBm.nome} (janela de 24h)` : "Instância sem BM vinculada"}
+                    >
+                      {!cotaBm
+                        ? "sem BM"
+                        : cotaBm.tier_ilimitado
+                          ? "ilimitado"
+                          : `${cotaBm.restantes} restantes (BM)`}
                     </Badge>
                     {(i.estado_pool || "aguardando_templates") !== "ativo" && (
                       <Button
