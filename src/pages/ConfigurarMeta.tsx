@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useBmCotas } from "@/hooks/useBmCotas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,6 +86,7 @@ type Template = {
 
 
 export default function ConfigurarMeta() {
+  const { cotaDaBm } = useBmCotas();
   const { parceiroMeta } = useUserPermissions();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
 
@@ -1190,6 +1192,20 @@ export default function ConfigurarMeta() {
                         {bms.length === 0 && (
                           <span className="text-[10px] text-muted-foreground">Cadastre BMs em "Business Managers" para vincular</span>
                         )}
+                        {(() => {
+                          const c = cotaDaBm(inst.meta_bm_id);
+                          if (!c) return null;
+                          return (
+                            <Badge variant={!c.tier_ilimitado && c.enviados_24h >= c.tier_diario ? "destructive" : "secondary"} className="text-[10px]">
+                              {c.tier_ilimitado
+                                ? `Cota da BM: ilimitada · ${c.enviados_24h} em 24h`
+                                : `Cota da BM: ${c.enviados_24h}/${c.tier_diario} em 24h · ${c.restantes} restantes`}
+                            </Badge>
+                          );
+                        })()}
+                        <span className="text-[10px] text-muted-foreground w-full">
+                          O limite diário de disparos é definido na BM e compartilhado por todos os WhatsApps vinculados a ela.
+                        </span>
                       </div>
 
                       {/* Limite de mensagens */}
