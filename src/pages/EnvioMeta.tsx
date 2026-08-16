@@ -29,6 +29,7 @@ import { splitLinhaEnvio, parseNumeroBR } from "@/lib/valorBR";
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useBmCotas } from "@/hooks/useBmCotas";
 
 
 
