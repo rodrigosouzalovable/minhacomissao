@@ -112,12 +112,17 @@ Deno.serve(async (req) => {
     const volumeMinGuardrail = Number(cfg?.guardrail_volume_minimo ?? 50);
 
 
+    // Cotas por BM (janela móvel de 24h)
+    const cotasBm = await carregarCotasBm(supabase);
+
     // Contagem hoje (fallback: enviados_hoje da própria row)
     const candidates: any[] = [];
     const descartados: string[] = [];
     const reprovadosGuardrail: any[] = [];
     for (const inst of insts) {
       const rotulo = inst.nome || inst.phone_number_id || inst.id;
+      const motivoBm = motivoBloqueioBm(cotasBm, inst.meta_bm_id);
+      if (motivoBm) { descartados.push(`${rotulo}: ${motivoBm}`); continue; }
       const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
       const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
       const pausaPorStatus = motivoPausaLower.startsWith('status=');
