@@ -657,7 +657,7 @@ export default function EnvioMeta() {
 
 
     if (instanciasIncompatíveis.length > 0) {
-      const incompativelFiltrado = instanciasIncompatíveis.filter((i) => filteredInstanciaIds.includes(i.id));
+      const incompativelFiltrado = instanciasIncompatíveis.filter((i) => instanciasComCota.includes(i.id));
       if (incompativelFiltrado.length > 0) {
         return toast.error(
           `Este template não está aprovado em: ${incompativelFiltrado.map((i) => i.nome).join(", ")}. Remova essas instâncias ou sincronize/aprove o template nelas.`,
@@ -676,7 +676,7 @@ export default function EnvioMeta() {
 
     // Fallback: se todas as instâncias marcadas estão fora do pool e há 1 destinatário só,
     // dispara em modo teste automaticamente (bypassa ramp-up / horário / domingo).
-    const todasForaPool = filteredInstanciaIds.every((id) => {
+    const todasForaPool = instanciasComCota.every((id) => {
       const inst = instancias.find((x) => x.id === id);
       return (inst?.estado_pool || "aguardando_templates") !== "ativo";
     });
@@ -734,7 +734,7 @@ export default function EnvioMeta() {
           `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
           `⚠️ ${totalErr} erros de validação (descartados)\n` +
           (dedup.duplicados > 0 ? `🔁 ${dedup.duplicados} duplicado(s) removido(s)\n` : "") +
-          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${filteredInstanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
+          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciasComCota.length} instância(s), com delay ${lo}-${hi}s?`
         );
         if (!ok) { setValidando(false); return; }
 
@@ -751,7 +751,7 @@ export default function EnvioMeta() {
         : "";
       const delayLinha = modoRajada ? `${Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1))} msg/s por instância` : `delay ${lo}-${hi}s`;
       if (!confirm(
-        `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com ${delayLinha}?` +
+        `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
     
@@ -768,7 +768,7 @@ export default function EnvioMeta() {
     // Mapa instância -> template_id específico daquela instância (mesmo nome/idioma)
     const templateIdByInstance: Record<string, string> = {};
     for (const r of templateGroup.rows) {
-      if (r.status === "approved" && filteredInstanciaIds.includes(r.instancia_id)) {
+      if (r.status === "approved" && instanciasComCota.includes(r.instancia_id)) {
         templateIdByInstance[r.instancia_id] = r.id;
       }
     }
@@ -776,7 +776,7 @@ export default function EnvioMeta() {
     // ✅ Confirmação de custo — mostra R$ estimado e exige digitação do valor
     const okCusto = await pedirConfirmacaoCusto(
       clientesFinal.map((c) => c.telefone),
-      filteredInstanciaIds,
+      instanciasComCota,
       templateGroup.categoria,
     );
     if (!okCusto) return;
@@ -795,7 +795,7 @@ export default function EnvioMeta() {
 
     const jobIdCriado = await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
-      instanciaIds: filteredInstanciaIds,
+      instanciaIds: instanciasComCota,
       instancias: instancias.map((i) => ({ id: i.id, nome: i.nome })),
       clientes: clientesComVars,
       minSec: lo,
