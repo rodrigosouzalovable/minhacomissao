@@ -511,6 +511,22 @@ Deno.serve(async (req) => {
       .from('meta_whatsapp_instances').select('*').eq('id', instancia_id).eq('ativo', true).maybeSingle();
     if (!inst) throw new Error('Instância Meta não encontrada/ativa');
 
+    // ===== Cota da BM (janela móvel de 24h) =====
+    if (!isTeste && inst.meta_bm_id) {
+      const cotas = await carregarCotasBm(supabase);
+      const motivoBm = motivoBloqueioBm(cotas, inst.meta_bm_id);
+      if (motivoBm) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Envio bloqueado: ${motivoBm}`,
+          bm_quota_blocked: true,
+          bm_id: inst.meta_bm_id,
+          instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
+
     // ===== Pool checks =====
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
 
