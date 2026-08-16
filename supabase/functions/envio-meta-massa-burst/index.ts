@@ -263,7 +263,7 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
     if (resp?.template_paused) {
       return { id: item.id, kind: 'template_paused', erro: resp?.error || 'Template pausado pela Meta' };
     }
-    if (resp?.instance_restricted) {
+    if (resp?.instance_restricted || resp?.bm_quota_blocked) {
       return { id: item.id, kind: 'restricted', erro: resp?.error || 'instância restringida' };
     }
     // Fallback: detecta template pausado (#132015) mesmo quando o send-whatsapp-meta
