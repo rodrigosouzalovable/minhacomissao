@@ -3,6 +3,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
+import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
