@@ -22,6 +22,8 @@ interface BM {
   padrao: boolean;
   tier_diario: number | null;
   tier_ilimitado: boolean | null;
+  tier_manual?: boolean | null;
+
   criado_em: string;
 }
 
