@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { criarTokenResolver } from '../_shared/webhook-token.ts';
+import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 
 
 const GRAPH_VERSION = 'v21.0';
@@ -29,10 +30,14 @@ Deno.serve(async (req) => {
     const q = supabase
       .from('meta_whatsapp_instances')
       .select('id, nome, waba_id, phone_number_id, access_token, ativo');
-    const { data: instancias, error } = targetId
+    const { data: instanciasRaw, error } = targetId
       ? await q.eq('id', targetId)
       : await q.eq('ativo', true);
     if (error) throw error;
+
+    const permitidas = await idsInstanciasPermitidas(req, supabase);
+    const instancias = filtrarInstancias(instanciasRaw as any[], permitidas);
+
 
     const resultados: any[] = [];
     for (const inst of instancias || []) {
