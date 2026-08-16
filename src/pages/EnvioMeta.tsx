@@ -29,6 +29,7 @@ import { splitLinhaEnvio, parseNumeroBR } from "@/lib/valorBR";
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useBmCotas } from "@/hooks/useBmCotas";
 
 
 
@@ -555,6 +556,7 @@ export default function EnvioMeta() {
   }, [templateGroup, instanciaIds]);
 
   const SEM_BM = "__sem_bm__";
+  const { cotaDaBm, semSaldo: bmSemSaldo, recarregar: recarregarCotas } = useBmCotas();
   const bmsDisponiveis = useMemo(() => {
     const map = new Map<string, { id: string; nome: string; qtd: number }>();
     for (const i of instancias) {
@@ -619,8 +621,43 @@ export default function EnvioMeta() {
       toast.warning(`${badQuality.length} instância(s) RED/YELLOW removidas automaticamente: ${nomes}`);
     }
 
+    // Cota por BM (janela de 24h): remove instâncias de BMs já esgotadas
+    await recarregarCotas();
+    const semCota = filteredInstanciaIds.filter((id) => {
+      const inst = instancias.find((x) => x.id === id) as any;
+      return inst ? bmSemSaldo(inst.meta_bm_id) : false;
+    });
+    if (semCota.length > 0) {
+      const nomesBm = Array.from(new Set(semCota.map((id) => {
+        const inst = instancias.find((x) => x.id === id) as any;
+        return inst?.meta_bm_id ? (bmNomes[inst.meta_bm_id] || "BM") : "BM";
+      }))).join(", ");
+      toast.warning(`${semCota.length} instância(s) removidas: cota de 24h esgotada na(s) BM(s) ${nomesBm}.`);
+    }
+    const instanciasComCota = filteredInstanciaIds.filter((id) => !semCota.includes(id));
+    if (instanciasComCota.length === 0) {
+      return toast.error("Nenhuma instância disponível: a cota de 24h das BMs selecionadas está esgotada.");
+    }
+
+    // Aviso de saldo total das BMs envolvidas
+    const bmsEnvolvidas = new Set<string>();
+    for (const id of instanciasComCota) {
+      const inst = instancias.find((x) => x.id === id) as any;
+      if (inst?.meta_bm_id) bmsEnvolvidas.add(inst.meta_bm_id);
+    }
+    let saldoTotalBm = 0;
+    let temIlimitada = false;
+    for (const bmId of bmsEnvolvidas) {
+      const c = cotaDaBm(bmId);
+      if (!c) { temIlimitada = true; continue; }
+      if (c.tier_ilimitado) { temIlimitada = true; continue; }
+      saldoTotalBm += c.restantes;
+    }
+
+
+
     if (instanciasIncompatíveis.length > 0) {
-      const incompativelFiltrado = instanciasIncompatíveis.filter((i) => filteredInstanciaIds.includes(i.id));
+      const incompativelFiltrado = instanciasIncompatíveis.filter((i) => instanciasComCota.includes(i.id));
       if (incompativelFiltrado.length > 0) {
         return toast.error(
           `Este template não está aprovado em: ${incompativelFiltrado.map((i) => i.nome).join(", ")}. Remova essas instâncias ou sincronize/aprove o template nelas.`,
@@ -639,7 +676,7 @@ export default function EnvioMeta() {
 
     // Fallback: se todas as instâncias marcadas estão fora do pool e há 1 destinatário só,
     // dispara em modo teste automaticamente (bypassa ramp-up / horário / domingo).
-    const todasForaPool = filteredInstanciaIds.every((id) => {
+    const todasForaPool = instanciasComCota.every((id) => {
       const inst = instancias.find((x) => x.id === id);
       return (inst?.estado_pool || "aguardando_templates") !== "ativo";
     });
@@ -697,7 +734,7 @@ export default function EnvioMeta() {
           `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
           `⚠️ ${totalErr} erros de validação (descartados)\n` +
           (dedup.duplicados > 0 ? `🔁 ${dedup.duplicados} duplicado(s) removido(s)\n` : "") +
-          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${filteredInstanciaIds.length} instância(s), com delay ${lo}-${hi}s?`
+          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciasComCota.length} instância(s), com delay ${lo}-${hi}s?`
         );
         if (!ok) { setValidando(false); return; }
 
@@ -709,12 +746,15 @@ export default function EnvioMeta() {
       }
       setValidando(false);
     } else {
-      const bloco = modoRajada
-        ? `MODO RAJADA CONTROLADA — envio paralelo por instância, com limite seguro de mensagens por segundo.\n\n`
+      const avisoCota = !temIlimitada && bmsEnvolvidas.size > 0 && recipientsDedup.length > saldoTotalBm
+        ? `⚠️ Saldo das BMs em 24h: ${saldoTotalBm} mensagens. A lista tem ${recipientsDedup.length} contatos — o excedente será bloqueado até a cota renovar.\n\n`
         : "";
+      const bloco = avisoCota + (modoRajada
+        ? `MODO RAJADA CONTROLADA — envio paralelo por instância, com limite seguro de mensagens por segundo.\n\n`
+        : "");
       const delayLinha = modoRajada ? `${Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1))} msg/s por instância` : `delay ${lo}-${hi}s`;
       if (!confirm(
-        `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${filteredInstanciaIds.length} instância(s), com ${delayLinha}?` +
+        `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
     
@@ -731,7 +771,7 @@ export default function EnvioMeta() {
     // Mapa instância -> template_id específico daquela instância (mesmo nome/idioma)
     const templateIdByInstance: Record<string, string> = {};
     for (const r of templateGroup.rows) {
-      if (r.status === "approved" && filteredInstanciaIds.includes(r.instancia_id)) {
+      if (r.status === "approved" && instanciasComCota.includes(r.instancia_id)) {
         templateIdByInstance[r.instancia_id] = r.id;
       }
     }
@@ -739,7 +779,7 @@ export default function EnvioMeta() {
     // ✅ Confirmação de custo — mostra R$ estimado e exige digitação do valor
     const okCusto = await pedirConfirmacaoCusto(
       clientesFinal.map((c) => c.telefone),
-      filteredInstanciaIds,
+      instanciasComCota,
       templateGroup.categoria,
     );
     if (!okCusto) return;
@@ -758,7 +798,7 @@ export default function EnvioMeta() {
 
     const jobIdCriado = await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
-      instanciaIds: filteredInstanciaIds,
+      instanciaIds: instanciasComCota,
       instancias: instancias.map((i) => ({ id: i.id, nome: i.nome })),
       clientes: clientesComVars,
       minSec: lo,
@@ -1094,11 +1134,11 @@ export default function EnvioMeta() {
               title="Seleciona apenas instâncias conectadas com qualidade GREEN ou sem qualidade conhecida. Yellow/Red devem ser escolhidas manualmente."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
-                const boasInstancias = instanciasVisiveis.filter((i) => {
-                  const status = (i.saude_status || "").toUpperCase();
-                  const qual = (i.saude_quality || "").toUpperCase();
-                  return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED";
-                });
+                 const boasInstancias = instanciasVisiveis.filter((i) => {
+                   const status = (i.saude_status || "").toUpperCase();
+                   const qual = (i.saude_quality || "").toUpperCase();
+                   return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED" && !bmSemSaldo(i.meta_bm_id);
+                 });
                 const boaIds = boasInstancias.map((i) => i.id);
                 const todasMarcadas = boaIds.length > 0 && boaIds.every((id) => instanciaIds.includes(id));
                 if (todasMarcadas) {
@@ -1112,7 +1152,7 @@ export default function EnvioMeta() {
                 .filter((i) => {
                   const status = (i.saude_status || "").toUpperCase();
                   const qual = (i.saude_quality || "").toUpperCase();
-                  return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED";
+                  return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED" && !bmSemSaldo(i.meta_bm_id);
                 })
                 .every((i) => instanciaIds.includes(i.id))
                 ? "Limpar seleção"
@@ -1136,7 +1176,10 @@ export default function EnvioMeta() {
               <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-auto">
                 <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {bmsDisponiveis.map((bm) => (
+                {bmsDisponiveis.map((bm) => {
+                  const c = bm.id === SEM_BM ? null : cotaDaBm(bm.id);
+                  const esgotada = bm.id !== SEM_BM && bmSemSaldo(bm.id);
+                  return (
                   <DropdownMenuCheckboxItem
                     key={bm.id}
                     checked={bmFiltro.includes(bm.id)}
@@ -1144,9 +1187,16 @@ export default function EnvioMeta() {
                     onSelect={(e) => e.preventDefault()}
                   >
                     <span className="truncate">{bm.nome}</span>
-                    <span className="ml-auto pl-2 text-xs text-muted-foreground">{bm.qtd}</span>
+                    <span className={`ml-auto pl-2 text-xs ${esgotada ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                      {c
+                        ? c.tier_ilimitado
+                          ? `${bm.qtd} • ∞`
+                          : `${bm.qtd} • ${c.enviados_24h}/${c.tier_diario}`
+                        : bm.qtd}
+                    </span>
                   </DropdownMenuCheckboxItem>
-                ))}
+                  );
+                })}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={(e) => {
@@ -1183,12 +1233,16 @@ export default function EnvioMeta() {
           <div className="space-y-2">
             {instanciasVisiveis.map((i) => {
               const isEditing = editingId === i.id;
+              const cotaBm = cotaDaBm(i.meta_bm_id);
+              const semSaldoBm = bmSemSaldo(i.meta_bm_id);
               return (
-              <label key={i.id} className="flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer">
+              <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm ? "opacity-60 border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
+                  disabled={semSaldoBm}
                   onCheckedChange={() => toggleInstancia(i.id)}
                 />
+
                 <Avatar className="h-9 w-9 flex-shrink-0">
                   <AvatarImage src={i.meta_profile_pic_url || undefined} alt={`Foto de perfil de ${i.meta_verified_name || i.nome}`} />
                   <AvatarFallback className="text-[11px]">
@@ -1228,7 +1282,10 @@ export default function EnvioMeta() {
                       )}
 
                       <div className="text-xs text-muted-foreground">
-                        {i.display_phone ? `${i.display_phone} • ` : ""}BM: {i.meta_bm_id ? (bmNomes[i.meta_bm_id] || "—") : "não vinculada"} • {i.enviados_hoje}/{i.tier_diario} hoje
+                        {i.display_phone ? `${i.display_phone} • ` : ""}BM: {i.meta_bm_id ? (bmNomes[i.meta_bm_id] || "—") : "não vinculada"}
+                        {cotaBm
+                          ? ` • ${cotaBm.tier_ilimitado ? `${cotaBm.enviados_24h} enviadas (BM ilimitada)` : `${cotaBm.enviados_24h}/${cotaBm.tier_diario} da BM em 24h`}`
+                          : " • sem cota de BM"}
                       </div>
                       {(i.saude_status || i.saude_quality) && (
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
@@ -1283,8 +1340,15 @@ export default function EnvioMeta() {
                   </div>
                 ) : (
                   <>
-                    <Badge variant={i.enviados_hoje >= i.tier_diario ? "destructive" : "secondary"}>
-                      {Math.max(i.tier_diario - i.enviados_hoje, 0)} restantes
+                    <Badge
+                      variant={semSaldoBm ? "destructive" : "secondary"}
+                      title={cotaBm ? `Cota compartilhada da BM ${cotaBm.nome} (janela de 24h)` : "Instância sem BM vinculada"}
+                    >
+                      {!cotaBm
+                        ? "sem BM"
+                        : cotaBm.tier_ilimitado
+                          ? "ilimitado"
+                          : `${cotaBm.restantes} restantes (BM)`}
                     </Badge>
                     {(i.estado_pool || "aguardando_templates") !== "ativo" && (
                       <Button

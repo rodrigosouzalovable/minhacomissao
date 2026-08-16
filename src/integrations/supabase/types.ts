@@ -3180,6 +3180,8 @@ export type Database = {
           nome: string
           padrao: boolean
           tenant_id: string
+          tier_diario: number
+          tier_ilimitado: boolean
         }
         Insert: {
           app_id: string
@@ -3192,6 +3194,8 @@ export type Database = {
           nome: string
           padrao?: boolean
           tenant_id?: string
+          tier_diario?: number
+          tier_ilimitado?: boolean
         }
         Update: {
           app_id?: string
@@ -3204,6 +3208,8 @@ export type Database = {
           nome?: string
           padrao?: boolean
           tenant_id?: string
+          tier_diario?: number
+          tier_ilimitado?: boolean
         }
         Relationships: []
       }
@@ -7992,6 +7998,18 @@ export type Database = {
         }[]
       }
       master_tenant_id: { Args: never; Returns: string }
+      meta_bm_uso_24h: {
+        Args: never
+        Returns: {
+          bm_id: string
+          enviados_24h: number
+          instancias: number
+          nome: string
+          restantes: number
+          tier_diario: number
+          tier_ilimitado: boolean
+        }[]
+      }
       meta_envios_resumo: {
         Args: { _ate?: string; _uid?: string }
         Returns: Json

@@ -8,7 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Star, StarOff, Pencil, Check, X } from "lucide-react";
+import { Loader2, Plus, Trash2, Star, StarOff, Pencil, Check, X, Gauge } from "lucide-react";
+import { useBmCotas } from "@/hooks/useBmCotas";
+import { Progress } from "@/components/ui/progress";
 
 interface BM {
   id: string;
@@ -18,6 +20,8 @@ interface BM {
   descricao: string | null;
   ativo: boolean;
   padrao: boolean;
+  tier_diario: number | null;
+  tier_ilimitado: boolean | null;
   criado_em: string;
 }
 
@@ -25,6 +29,10 @@ export default function BusinessManagersManager() {
   const [items, setItems] = useState<BM[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { cotaDaBm, recarregar: recarregarCotas } = useBmCotas();
+  const [tierEditId, setTierEditId] = useState<string | null>(null);
+  const [tierValor, setTierValor] = useState("");
+  const [tierIlimitado, setTierIlimitado] = useState(false);
 
   const [nome, setNome] = useState("");
   const [appId, setAppId] = useState("");
@@ -146,6 +154,28 @@ export default function BusinessManagersManager() {
     setEditAppId(bm.app_id || "");
     setEditBusinessId(bm.business_id || "");
     setEditDescricao(bm.descricao || "");
+  }
+
+  async function salvarTier(bm: BM) {
+    const valor = Math.max(0, Number(tierValor.replace(/\D/g, "")) || 0);
+    if (!tierIlimitado && valor === 0) {
+      toast.error("Informe o limite diário da BM (ou marque como ilimitado)");
+      return;
+    }
+    const { error } = await supabase
+      .from("meta_business_managers")
+      .update({ tier_diario: valor, tier_ilimitado: tierIlimitado })
+      .eq("id", bm.id);
+    if (error) return toast.error(error.message);
+    toast.success(`Limite da BM "${bm.nome}" atualizado — vale para todos os WhatsApps vinculados`);
+    setTierEditId(null);
+    await Promise.all([load(), recarregarCotas()]);
+  }
+
+  function iniciarTier(bm: BM) {
+    setTierEditId(bm.id);
+    setTierValor(String(bm.tier_diario ?? 0));
+    setTierIlimitado(bm.tier_ilimitado === true);
   }
 
   function cancelarEdicao() {
@@ -275,6 +305,55 @@ export default function BusinessManagersManager() {
                         {bm.descricao && (
                           <p className="text-xs text-muted-foreground mt-1">{bm.descricao}</p>
                         )}
+                        {(() => {
+                          const c = cotaDaBm(bm.id);
+                          const ilimitado = bm.tier_ilimitado === true;
+                          const tier = Number(bm.tier_diario ?? 0);
+                          const usados = c?.enviados_24h ?? 0;
+                          const pct = ilimitado || tier <= 0 ? 0 : Math.min(100, Math.round((usados / tier) * 100));
+                          return (
+                            <div className="mt-2 space-y-1">
+                              {tierEditId === bm.id ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Input
+                                    value={tierValor}
+                                    onChange={(e) => setTierValor(e.target.value.replace(/\D/g, ""))}
+                                    disabled={tierIlimitado}
+                                    className="h-8 w-28 text-sm"
+                                    placeholder="Ex.: 2000"
+                                  />
+                                  <label className="flex items-center gap-1 text-xs">
+                                    Ilimitado
+                                    <Switch checked={tierIlimitado} onCheckedChange={setTierIlimitado} />
+                                  </label>
+                                  <Button size="sm" onClick={() => salvarTier(bm)}>
+                                    <Check className="h-4 w-4 mr-1" /> Salvar limite
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={() => setTierEditId(null)}>
+                                    <X className="h-4 w-4 mr-1" /> Cancelar
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 text-xs">
+                                  <Badge variant={!ilimitado && tier > 0 && usados >= tier ? "destructive" : "secondary"}>
+                                    {ilimitado
+                                      ? `Tier ilimitado · ${usados} enviadas em 24h`
+                                      : tier > 0
+                                        ? `Tier ${tier}/dia · ${usados} usadas · ${Math.max(tier - usados, 0)} restantes`
+                                        : "Tier não definido"}
+                                  </Badge>
+                                  <Button size="sm" variant="outline" className="h-7" onClick={() => iniciarTier(bm)}>
+                                    <Gauge className="h-3.5 w-3.5 mr-1" /> Definir tier
+                                  </Button>
+                                </div>
+                              )}
+                              {!ilimitado && tier > 0 && <Progress value={pct} className="h-1.5" />}
+                              <p className="text-[11px] text-muted-foreground">
+                                Limite compartilhado por todos os WhatsApps desta BM (janela móvel de 24h).
+                              </p>
+                            </div>
+                          );
+                        })()}
                       </>
                     )}
                   </div>

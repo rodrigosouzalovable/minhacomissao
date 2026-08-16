@@ -269,7 +269,7 @@ async function processarItem(job: any): Promise<ItemResult> {
       body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null }),
     }).then((r) => r.json());
 
-    if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused) {
+    if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused || sendResp?.bm_quota_blocked) {
       await supabase.from('envio_meta_job_item')
         .update({ status: 'pendente', instancia_id: null, instancia_nome: null })
         .eq('id', pend.id);
