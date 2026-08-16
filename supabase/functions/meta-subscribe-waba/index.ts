@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { criarTokenResolver } from '../_shared/webhook-token.ts';
+import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 
 
 const GRAPH_VERSION = 'v21.0';
