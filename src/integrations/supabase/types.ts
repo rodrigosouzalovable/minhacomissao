@@ -3175,6 +3175,7 @@ export type Database = {
           atualizado_em: string
           business_id: string | null
           criado_em: string
+          criado_por: string | null
           descricao: string | null
           id: string
           nome: string
@@ -3190,6 +3191,7 @@ export type Database = {
           atualizado_em?: string
           business_id?: string | null
           criado_em?: string
+          criado_por?: string | null
           descricao?: string | null
           id?: string
           nome: string
@@ -3205,6 +3207,7 @@ export type Database = {
           atualizado_em?: string
           business_id?: string | null
           criado_em?: string
+          criado_por?: string | null
           descricao?: string | null
           id?: string
           nome?: string
