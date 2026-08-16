@@ -746,9 +746,12 @@ export default function EnvioMeta() {
       }
       setValidando(false);
     } else {
-      const bloco = modoRajada
-        ? `MODO RAJADA CONTROLADA — envio paralelo por instância, com limite seguro de mensagens por segundo.\n\n`
+      const avisoCota = !temIlimitada && bmsEnvolvidas.size > 0 && recipientsDedup.length > saldoTotalBm
+        ? `⚠️ Saldo das BMs em 24h: ${saldoTotalBm} mensagens. A lista tem ${recipientsDedup.length} contatos — o excedente será bloqueado até a cota renovar.\n\n`
         : "";
+      const bloco = avisoCota + (modoRajada
+        ? `MODO RAJADA CONTROLADA — envio paralelo por instância, com limite seguro de mensagens por segundo.\n\n`
+        : "");
       const delayLinha = modoRajada ? `${Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1))} msg/s por instância` : `delay ${lo}-${hi}s`;
       if (!confirm(
         `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
