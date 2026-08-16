@@ -1138,7 +1138,10 @@ export default function EnvioMeta() {
               <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-auto">
                 <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {bmsDisponiveis.map((bm) => (
+                {bmsDisponiveis.map((bm) => {
+                  const c = bm.id === SEM_BM ? null : cotaDaBm(bm.id);
+                  const esgotada = bm.id !== SEM_BM && bmSemSaldo(bm.id);
+                  return (
                   <DropdownMenuCheckboxItem
                     key={bm.id}
                     checked={bmFiltro.includes(bm.id)}
@@ -1146,9 +1149,16 @@ export default function EnvioMeta() {
                     onSelect={(e) => e.preventDefault()}
                   >
                     <span className="truncate">{bm.nome}</span>
-                    <span className="ml-auto pl-2 text-xs text-muted-foreground">{bm.qtd}</span>
+                    <span className={`ml-auto pl-2 text-xs ${esgotada ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                      {c
+                        ? c.tier_ilimitado
+                          ? `${bm.qtd} • ∞`
+                          : `${bm.qtd} • ${c.enviados_24h}/${c.tier_diario}`
+                        : bm.qtd}
+                    </span>
                   </DropdownMenuCheckboxItem>
-                ))}
+                  );
+                })}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={(e) => {
