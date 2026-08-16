@@ -2,6 +2,7 @@
 // Regras: só considera estado_pool='ativo', não pausada, dentro do horário e cota.
 // Fórmula: quality × tier × idade × (1 - uso_hoje/cota_efetiva)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
