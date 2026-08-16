@@ -1185,12 +1185,16 @@ export default function EnvioMeta() {
           <div className="space-y-2">
             {instanciasVisiveis.map((i) => {
               const isEditing = editingId === i.id;
+              const cotaBm = cotaDaBm(i.meta_bm_id);
+              const semSaldoBm = bmSemSaldo(i.meta_bm_id);
               return (
-              <label key={i.id} className="flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer">
+              <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm ? "opacity-60 border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
+                  disabled={semSaldoBm}
                   onCheckedChange={() => toggleInstancia(i.id)}
                 />
+
                 <Avatar className="h-9 w-9 flex-shrink-0">
                   <AvatarImage src={i.meta_profile_pic_url || undefined} alt={`Foto de perfil de ${i.meta_verified_name || i.nome}`} />
                   <AvatarFallback className="text-[11px]">
