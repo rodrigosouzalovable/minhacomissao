@@ -556,6 +556,7 @@ export default function EnvioMeta() {
   }, [templateGroup, instanciaIds]);
 
   const SEM_BM = "__sem_bm__";
+  const { cotaDaBm, semSaldo: bmSemSaldo, recarregar: recarregarCotas } = useBmCotas();
   const bmsDisponiveis = useMemo(() => {
     const map = new Map<string, { id: string; nome: string; qtd: number }>();
     for (const i of instancias) {
