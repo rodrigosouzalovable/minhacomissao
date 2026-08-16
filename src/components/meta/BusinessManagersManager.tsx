@@ -81,7 +81,7 @@ export default function BusinessManagersManager() {
       business_id: businessId.trim() || null,
       descricao: descricao.trim() || null,
       ativo: true,
-      padrao: items.length === 0, // primeira vira padrão
+      padrao: isAdmin && items.length === 0, // primeira do admin vira padrão
     });
     setSaving(false);
     if (error) {
