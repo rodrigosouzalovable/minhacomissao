@@ -1234,7 +1234,10 @@ export default function EnvioMeta() {
                       )}
 
                       <div className="text-xs text-muted-foreground">
-                        {i.display_phone ? `${i.display_phone} • ` : ""}BM: {i.meta_bm_id ? (bmNomes[i.meta_bm_id] || "—") : "não vinculada"} • {i.enviados_hoje}/{i.tier_diario} hoje
+                        {i.display_phone ? `${i.display_phone} • ` : ""}BM: {i.meta_bm_id ? (bmNomes[i.meta_bm_id] || "—") : "não vinculada"}
+                        {cotaBm
+                          ? ` • ${cotaBm.tier_ilimitado ? `${cotaBm.enviados_24h} enviadas (BM ilimitada)` : `${cotaBm.enviados_24h}/${cotaBm.tier_diario} da BM em 24h`}`
+                          : " • sem cota de BM"}
                       </div>
                       {(i.saude_status || i.saude_quality) && (
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
