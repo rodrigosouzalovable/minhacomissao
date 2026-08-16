@@ -1114,7 +1114,7 @@ export default function EnvioMeta() {
                 .filter((i) => {
                   const status = (i.saude_status || "").toUpperCase();
                   const qual = (i.saude_quality || "").toUpperCase();
-                  return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED";
+                  return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED" && !bmSemSaldo(i.meta_bm_id);
                 })
                 .every((i) => instanciaIds.includes(i.id))
                 ? "Limpar seleção"
