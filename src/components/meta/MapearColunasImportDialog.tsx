@@ -389,7 +389,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
                       </Select>
                     )}
                     {firstIsHeader && (
-                      <div className="mt-1 text-[10px] text-muted-foreground truncate" title={String(firstRow[c] ?? "")}>
+                      <div className="mt-1 text-[10px] text-muted-foreground whitespace-pre-wrap break-words max-w-[360px]" title={String(firstRow[c] ?? "")}>
                         {String(firstRow[c] ?? "") || "—"}
                       </div>
                     )}
@@ -401,7 +401,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
               {preview.map((r, i) => (
                 <tr key={i} className="border-b">
                   {Array.from({ length: nCols }).map((_, c) => (
-                    <td key={c} className="p-2 font-mono truncate max-w-[220px]" title={valorCelula(c, (r || [])[c])}>
+                    <td key={c} className="p-2 font-mono align-top whitespace-pre-wrap break-words max-w-[420px]" title={valorCelula(c, (r || [])[c])}>
                       {valorCelula(c, (r || [])[c])}
                     </td>
                   ))}
