@@ -268,6 +268,39 @@ Deno.serve(async (req) => {
       return json({ success: true, etapa: 'numero_errado' });
     }
 
+    // ===== Cliente/familiar informou falecimento => condolências e encerra (sem follow-up) =====
+    if (ehFalecido(textoAtual)) {
+      const jaCondoleu = historico.some(
+        (m: any) => m.direcao === 'saida' && /sinto\s*muito/i.test(String(m.conteudo || '')),
+      );
+      if (!jaCondoleu) {
+        try {
+          await enviarTexto(supabase, contato, MSG_FALECIDO);
+        } catch (e: any) {
+          console.error('[IAGO] falha ao enviar condolências', e?.message || e);
+        }
+      }
+      await supabase.from('iago_conversa_estado').update({
+        etapa: 'falecido',
+        aguardando_humano: true,
+        followup_em: null,
+        followup_feito: true,
+        followup_etapa: 3,
+        ultima_msg_em: new Date().toISOString(),
+        ultima_msg_cliente_em: new Date().toISOString(),
+        contexto: { ...(estado.contexto || {}), ultimo_motivo: 'cliente informou falecimento do titular' },
+      }).eq('id', estado.id);
+      await etiquetarAguardandoHumano(supabase, contato_id);
+      const okQual = await qualificar('Falecido');
+      if (!okQual) await qualificar('Não é o Cliente');
+      await finalizarEntrada();
+
+      console.log('[IAGO] falecimento informado — conversa encerrada', { contato_id });
+      return json({ success: true, etapa: 'falecido' });
+    }
+
+
+
 
 
     // ===== Humano respondeu? (saída que não é do IAGO depois do último envio dele) =====
