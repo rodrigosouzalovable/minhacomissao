@@ -56,6 +56,27 @@ export type Database = {
         }
         Relationships: []
       }
+      acionamento_telefone_cpf: {
+        Row: {
+          atualizado_em: string
+          cpf: string
+          origem: string
+          telefone_sufixo: string
+        }
+        Insert: {
+          atualizado_em?: string
+          cpf: string
+          origem?: string
+          telefone_sufixo: string
+        }
+        Update: {
+          atualizado_em?: string
+          cpf?: string
+          origem?: string
+          telefone_sufixo?: string
+        }
+        Relationships: []
+      }
       acordos: {
         Row: {
           atualizado_em: string
@@ -7644,6 +7665,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acionamento_vincular_telefone_cpf: {
+        Args: { _pares: Json }
+        Returns: number
+      }
       acordos_parcelas_resumo: {
         Args: { p_acordo_ids: string[] }
         Returns: {
@@ -8113,6 +8138,15 @@ export type Database = {
           ordem_ts: string
           origem: string
           telefone: string
+        }[]
+      }
+      relatorio_ume_cobertura: {
+        Args: { _data: string }
+        Returns: {
+          atribuidos: number
+          fonte: string
+          sem_vinculo: number
+          total: number
         }[]
       }
       tresc_limpar_cache_antigo: { Args: never; Returns: number }
