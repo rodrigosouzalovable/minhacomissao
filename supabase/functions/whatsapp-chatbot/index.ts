@@ -2307,6 +2307,14 @@ serve(async (req) => {
       });
     }
 
+    // Se o IAGO assumiu a conversa (número espelhado no Inbox Meta), o chatbot
+    // legado não responde para evitar duas respostas no mesmo cliente.
+    if (iagoAssumiu) {
+      return new Response(JSON.stringify({ success: true, ignored: true, reason: 'iago_atendendo' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // --- CARREGAR REGRAS CUSTOMIZADAS E TEMPLATES ---
     const { data: regrasCustomizadas } = await supabase
       .from('chatbot_regras')
