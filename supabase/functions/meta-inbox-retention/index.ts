@@ -29,10 +29,10 @@ Deno.serve(async (req) => {
     // Até 6 passadas de 1000 (limite do Data API) por execução horária
     for (let passada = 0; passada < 6; passada++) {
       // Contatos candidatos: sem entrada, não fixados, não arquivados,
-      // sem não lidas, com ultima_mensagem_em < 24h.
+      // sem não lidas, com ultima_mensagem_em < 3 dias.
       const { data: candidatos, error } = await supabase
         .from("meta_whatsapp_contatos")
-        .select("id")
+        .select("id, instancia_id, telefone")
         .is("ultima_msg_entrada_em", null)
         .eq("arquivado", false)
         .eq("fixado", false)
@@ -52,9 +52,32 @@ Deno.serve(async (req) => {
         .select("contato_id")
         .in("contato_id", ids);
       const bloqueados = new Set((comEtiq || []).map((r: any) => r.contato_id));
+
+      // Rede de proteção: se existir QUALQUER mensagem de entrada real dessa
+      // conversa (mesma instância, sufixo de 8 dígitos), nunca arquiva.
+      for (let i = 0; i < candidatos.length; i += 200) {
+        const bloco = candidatos.slice(i, i + 200).filter((c: any) => !bloqueados.has(c.id) && c.telefone);
+        if (bloco.length === 0) continue;
+        const sufixos = bloco.map((c: any) => String(c.telefone).replace(/\D/g, "").slice(-8));
+        const { data: entradas } = await supabase
+          .from("meta_whatsapp_mensagens")
+          .select("instancia_id, telefone")
+          .eq("direcao", "entrada")
+          .in("instancia_id", Array.from(new Set(bloco.map((c: any) => c.instancia_id))))
+          .or(sufixos.map((s: string) => `telefone.ilike.%${s}`).join(","));
+        const chaves = new Set(
+          (entradas || []).map((m: any) => `${m.instancia_id}|${String(m.telefone || "").replace(/\D/g, "").slice(-8)}`),
+        );
+        for (const c of bloco) {
+          const k = `${c.instancia_id}|${String(c.telefone).replace(/\D/g, "").slice(-8)}`;
+          if (chaves.has(k)) bloqueados.add(c.id);
+        }
+      }
+
       bloqueadosTotal += bloqueados.size;
       const paraArquivar = ids.filter((id) => !bloqueados.has(id));
       if (paraArquivar.length === 0) break; // só restaram protegidos
+
 
       for (let i = 0; i < paraArquivar.length; i += 500) {
         const slice = paraArquivar.slice(i, i + 500);
