@@ -412,13 +412,22 @@ export default function InboxMeta() {
     } else {
       const { data: dm } = await (supabase as any)
         .from('meta_inbox_default_members')
-        .select('user_id')
+        .select('user_id, admin')
         .eq('user_id', user.id)
         .maybeSingle();
       setPodeVerPadrao(!!dm);
+      setAdminPadrao(!!(dm as any)?.admin);
       setPadraoVerificado(true);
     }
+    // Caixas onde o usuário é admin da própria caixa
+    const { data: adm } = await (supabase as any)
+      .from('meta_inbox_folder_members')
+      .select('folder_id')
+      .eq('user_id', user.id)
+      .eq('admin', true);
+    setAdminCaixas(new Set(((adm as any[]) ?? []).map((r) => r.folder_id as string)));
   }, [user, isAdmin]);
+
 
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
 
