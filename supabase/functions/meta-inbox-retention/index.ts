@@ -1,7 +1,8 @@
 // Retenção do Inbox Meta:
 // Arquiva (não apaga) conversas onde NÓS abrimos e o cliente NUNCA respondeu,
-// após 24h sem atividade. Conversas com qualquer mensagem de entrada
-// (ultima_msg_entrada_em preenchida) NUNCA são tocadas.
+// após 3 dias sem atividade. Conversas com qualquer mensagem de entrada
+// (ultima_msg_entrada_em preenchida OU mensagem de entrada registrada em
+// meta_whatsapp_mensagens) NUNCA são tocadas.
 // Reaparecem automaticamente quando o cliente responde (webhook desarquiva).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 
