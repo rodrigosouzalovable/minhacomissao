@@ -1292,15 +1292,40 @@ export default function InboxMeta() {
     sairMultipla();
   };
   const excluirSelecionados = async () => {
-    if (selecionados.size === 0 || !confirm(`Excluir ${selecionados.size} conversa(s)?`)) return;
+    if (selecionados.size === 0) return;
     const ids = Array.from(selecionados);
     const cs = contatos.filter(c => ids.includes(c.id));
-    for (const c of cs) {
-      await supabase.from('meta_whatsapp_mensagens').delete().eq('instancia_id', c.instancia_id).eq('telefone', c.telefone);
+    const protegidas = cs.filter(c => !!c.ultima_msg_entrada_em);
+    const excluiveis = cs.filter(c => !c.ultima_msg_entrada_em);
+
+    if (!isAdmin) {
+      toast({
+        title: 'Sem permissão',
+        description: 'Apenas o admin pode excluir conversas. Use "Arquivar".',
+        variant: 'destructive',
+      });
+      return;
     }
-    await supabase.from('meta_whatsapp_contatos').delete().in('id', ids);
+    if (protegidas.length > 0) {
+      await supabase.from('meta_whatsapp_contatos')
+        .update({ arquivado: true }).in('id', protegidas.map(c => c.id));
+    }
+    if (excluiveis.length > 0) {
+      if (!confirm(`Excluir DEFINITIVAMENTE ${excluiveis.length} conversa(s) sem resposta do cliente?`)) { sairMultipla(); return; }
+      for (const c of excluiveis) {
+        await supabase.from('meta_whatsapp_mensagens').delete().eq('instancia_id', c.instancia_id).eq('telefone', c.telefone);
+      }
+      await supabase.from('meta_whatsapp_contatos').delete().in('id', excluiveis.map(c => c.id));
+    }
+    if (protegidas.length > 0) {
+      toast({
+        title: 'Conversas protegidas arquivadas',
+        description: `${protegidas.length} conversa(s) com resposta do cliente foram arquivadas em vez de excluídas.`,
+      });
+    }
     sairMultipla();
   };
+
 
   // ============== Render ==============
   return (
