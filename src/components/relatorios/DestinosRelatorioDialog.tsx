@@ -13,10 +13,11 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
-import { Users, RefreshCw, Send, Trash2, Search } from 'lucide-react';
+import { Users, RefreshCw, Send, Trash2, Search, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 
-type Instancia = { id: string; nome: string | null };
+type Instancia = { id: string; nome: string | null; server_url?: string | null; instance_token?: string | null };
 type Grupo = { jid: string; nome: string; participants_count?: number };
 type Destino = {
   id: string;
@@ -34,31 +35,60 @@ export function DestinosRelatorioDialog() {
   const [filtro, setFiltro] = useState('');
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [destinos, setDestinos] = useState<Destino[]>([]);
+  const [conexoes, setConexoes] = useState<Record<string, boolean>>({});
+  const [ultimoEnvio, setUltimoEnvio] = useState<Record<string, { instancia_id: string | null; em: string }>>({});
 
   const carregar = useCallback(async () => {
-    const [{ data: insts }, { data: dest }] = await Promise.all([
+    const [{ data: insts }, { data: dest }, { data: logs }] = await Promise.all([
       supabase
         .from('user_whatsapp_instances')
-        .select('id, nome')
+        .select('id, nome, server_url, instance_token')
         .eq('ativo', true)
         .order('nome'),
       supabase
         .from('relatorio_destinos' as any)
         .select('*')
         .order('criado_em', { ascending: true }),
+      supabase
+        .from('admin_notificacoes_log')
+        .select('mensagem, instancia_envio_id, enviado_em, status')
+        .like('tipo', 'relatorio_%')
+        .eq('status', 'enviado')
+        .order('enviado_em', { ascending: false })
+        .limit(200),
     ]);
     setInstancias((insts as Instancia[]) || []);
-    setDestinos(((dest as any[]) || []) as Destino[]);
-    if (!instanciaId) {
-      const memu = (insts as Instancia[] | null)?.find((i) =>
-        String(i.nome || '').toUpperCase().includes('MEMU 37'),
-      );
-      if (memu) setInstanciaId(memu.id);
+    const destList = ((dest as any[]) || []) as Destino[];
+    setDestinos(destList);
+
+    // Último envio bem-sucedido por grupo (o log guarda a mensagem prefixada com "[destino] ")
+    const mapa: Record<string, { instancia_id: string | null; em: string }> = {};
+    for (const l of (logs as any[]) || []) {
+      const m = String(l.mensagem || '');
+      const dest = m.startsWith('[') ? m.slice(1, m.indexOf(']')) : '';
+      if (dest && !mapa[dest]) mapa[dest] = { instancia_id: l.instancia_envio_id, em: l.enviado_em };
     }
+    setUltimoEnvio(mapa);
+
+    if (!instanciaId && (insts as Instancia[] | null)?.length) {
+      setInstanciaId((insts as Instancia[])[0].id);
+    }
+
+    // Status de conexão das instâncias ativas (cache de 5 min)
+    const lista = (insts as Instancia[]) || [];
+    const results = await Promise.all(
+      lista.map(async (i) => {
+        if (!i.server_url || !i.instance_token) return [i.id, false] as const;
+        const r = await checkUazapiConnection(i.id, i.server_url, i.instance_token);
+        return [i.id, isResultConnected(r)] as const;
+      }),
+    );
+    setConexoes(Object.fromEntries(results));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { if (open) carregar(); }, [open, carregar]);
+
 
   const buscarGrupos = async () => {
     if (!instanciaId) { toast.error('Selecione a instância que participa do grupo'); return; }
