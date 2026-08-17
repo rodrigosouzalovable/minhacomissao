@@ -220,6 +220,10 @@ export default function InboxMeta() {
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [padraoVerificado, setPadraoVerificado] = useState(false);
+  // Admin da própria caixa (pode gerenciar atendentes daquela caixa)
+  const [adminPadrao, setAdminPadrao] = useState(false);
+  const [adminCaixas, setAdminCaixas] = useState<Set<string>>(new Set());
+
   // Marca quando o usuário escolhe manualmente uma caixa (evita voltar para Padrão depois)
   const escolhaManualFolderRef = useRef(false);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
