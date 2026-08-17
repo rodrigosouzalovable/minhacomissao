@@ -1503,6 +1503,66 @@ serve(async (req) => {
       }
     }
 
+    // --- ESPELHO NO INBOX META OFICIAL (caixa AQUECIMENTO) + ATENDIMENTO DO IAGO ---
+    // Números conectados na aba Acionamento (UAZAPI) aparecem na caixa configurada
+    // do Inbox Meta e são atendidos pelo IAGO com as mesmas regras das instâncias oficiais.
+    let iagoAssumiu = false;
+    if (instanciaId && inboxTelefone && (inboxTexto || inboxMediaUrl)) {
+      try {
+        const { espelharMensagemInboxMeta, garantirEtiquetaIagoInbox } =
+          await import('../_shared/espelho-inbox-meta.ts');
+        const espelho = await espelharMensagemInboxMeta(supabase, instanciaId, {
+          telefone: inboxTelefone,
+          nome: inboxNomeContato || null,
+          conteudo: inboxConteudo,
+          tipoConteudo: inboxTipoConteudo,
+          mediaUrl: inboxPermanentMediaUrl || inboxMediaUrl || null,
+          waMessageId: (messageId && String(messageId).trim()) || null,
+          direcao: isFromMe ? 'saida' : 'entrada',
+        });
+
+        if (espelho.instancia && espelho.contatoId && !espelho.duplicada && !isFromMe) {
+          const contatoEspelhoId = espelho.contatoId;
+          const entradaId =
+            (messageId && String(messageId).trim()) || espelho.mensagemId || `${contatoEspelhoId}-${Date.now()}`;
+          const doIago = await garantirEtiquetaIagoInbox(
+            supabase,
+            contatoEspelhoId,
+            espelho.instancia.user_id,
+          );
+          iagoAssumiu = doIago;
+          if (doIago) {
+          const iagoTask = (async () => {
+            try {
+              const { data, error } = await supabase.functions.invoke('iago-atendimento', {
+                body: {
+                  contato_id: contatoEspelhoId,
+                  texto: inboxTexto || inboxConteudo,
+                  entrada_id: entradaId,
+                },
+              });
+              if (error) console.error('[ESPELHO-META] IAGO erro:', error.message);
+              else console.log('[ESPELHO-META] IAGO', JSON.stringify(data || {}));
+            } catch (e: any) {
+              console.error('[ESPELHO-META] IAGO exceção:', e?.message || e);
+            }
+          })();
+          try {
+            // @ts-ignore EdgeRuntime existe no runtime das edge functions
+            if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(iagoTask);
+            else await iagoTask;
+          } catch {
+            await iagoTask;
+          }
+          }
+        }
+      } catch (espErr: any) {
+        console.error('[ESPELHO-META] erro:', espErr?.message || espErr);
+      }
+    }
+
+
+
     // --- AQUECIMENTO: Detectar respostas de aquecimento ---
     if (!isFromMe && inboxTelefone) {
       try {
@@ -2254,6 +2314,14 @@ serve(async (req) => {
     const { data: chatbotConfig } = await supabase.from('chatbot_config').select('ativo').limit(1).single();
     if (!chatbotConfig?.ativo) {
       return new Response(JSON.stringify({ success: true, ignored: true, reason: 'disabled' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Se o IAGO assumiu a conversa (número espelhado no Inbox Meta), o chatbot
+    // legado não responde para evitar duas respostas no mesmo cliente.
+    if (iagoAssumiu) {
+      return new Response(JSON.stringify({ success: true, ignored: true, reason: 'iago_atendendo' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

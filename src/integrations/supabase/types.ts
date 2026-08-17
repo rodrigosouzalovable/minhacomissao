@@ -4612,7 +4612,7 @@ export type Database = {
       }
       meta_whatsapp_instances: {
         Row: {
-          access_token: string
+          access_token: string | null
           ativo: boolean
           atualizado_em: string
           business_id: string | null
@@ -4622,6 +4622,7 @@ export type Database = {
           enviados_hoje: number
           estado_pool: string | null
           fase_rampup: string | null
+          folder_padrao_id: string | null
           id: string
           messaging_limit_manual: string | null
           messaging_limit_source: string | null
@@ -4635,7 +4636,8 @@ export type Database = {
           nome: string
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
-          phone_number_id: string
+          phone_number_id: string | null
+          provider: string
           qualidade_liberada_em: string | null
           qualidade_liberada_manual: boolean
           rajada_taxa_atual: number
@@ -4653,9 +4655,10 @@ export type Database = {
           tenant_id: string
           throughput_level: string | null
           tier_diario: number
+          uazapi_instance_id: string | null
           ultimo_reset: string
           user_id: string
-          waba_id: string
+          waba_id: string | null
           webhook_callback_url: string | null
           webhook_perda_suspeita: Json | null
           webhook_saude_status: string | null
@@ -4664,7 +4667,7 @@ export type Database = {
           webhook_verify_token: string | null
         }
         Insert: {
-          access_token: string
+          access_token?: string | null
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null
@@ -4674,6 +4677,7 @@ export type Database = {
           enviados_hoje?: number
           estado_pool?: string | null
           fase_rampup?: string | null
+          folder_padrao_id?: string | null
           id?: string
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
@@ -4687,7 +4691,8 @@ export type Database = {
           nome: string
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
-          phone_number_id: string
+          phone_number_id?: string | null
+          provider?: string
           qualidade_liberada_em?: string | null
           qualidade_liberada_manual?: boolean
           rajada_taxa_atual?: number
@@ -4705,9 +4710,10 @@ export type Database = {
           tenant_id?: string
           throughput_level?: string | null
           tier_diario?: number
+          uazapi_instance_id?: string | null
           ultimo_reset?: string
           user_id: string
-          waba_id: string
+          waba_id?: string | null
           webhook_callback_url?: string | null
           webhook_perda_suspeita?: Json | null
           webhook_saude_status?: string | null
@@ -4716,7 +4722,7 @@ export type Database = {
           webhook_verify_token?: string | null
         }
         Update: {
-          access_token?: string
+          access_token?: string | null
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null
@@ -4726,6 +4732,7 @@ export type Database = {
           enviados_hoje?: number
           estado_pool?: string | null
           fase_rampup?: string | null
+          folder_padrao_id?: string | null
           id?: string
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
@@ -4739,7 +4746,8 @@ export type Database = {
           nome?: string
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
-          phone_number_id?: string
+          phone_number_id?: string | null
+          provider?: string
           qualidade_liberada_em?: string | null
           qualidade_liberada_manual?: boolean
           rajada_taxa_atual?: number
@@ -4757,9 +4765,10 @@ export type Database = {
           tenant_id?: string
           throughput_level?: string | null
           tier_diario?: number
+          uazapi_instance_id?: string | null
           ultimo_reset?: string
           user_id?: string
-          waba_id?: string
+          waba_id?: string | null
           webhook_callback_url?: string | null
           webhook_perda_suspeita?: Json | null
           webhook_saude_status?: string | null
@@ -4769,10 +4778,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "meta_whatsapp_instances_folder_padrao_id_fkey"
+            columns: ["folder_padrao_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_folders"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "meta_whatsapp_instances_meta_bm_id_fkey"
             columns: ["meta_bm_id"]
             isOneToOne: false
             referencedRelation: "meta_business_managers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_whatsapp_instances_uazapi_instance_id_fkey"
+            columns: ["uazapi_instance_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
             referencedColumns: ["id"]
           },
         ]
