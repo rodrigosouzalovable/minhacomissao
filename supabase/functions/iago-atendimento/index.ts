@@ -4,7 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
-  ehOptOut, ehNumeroErrado, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
+  ehOptOut, ehNumeroErrado, ehFalecido, MSG_FALECIDO, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
