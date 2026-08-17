@@ -1554,6 +1554,7 @@ serve(async (req) => {
           } catch {
             await iagoTask;
           }
+          }
         }
       } catch (espErr: any) {
         console.error('[ESPELHO-META] erro:', espErr?.message || espErr);
