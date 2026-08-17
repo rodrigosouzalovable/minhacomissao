@@ -13,10 +13,11 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
-import { Users, RefreshCw, Send, Trash2, Search } from 'lucide-react';
+import { Users, RefreshCw, Send, Trash2, Search, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 
-type Instancia = { id: string; nome: string | null };
+type Instancia = { id: string; nome: string | null; server_url?: string | null; instance_token?: string | null };
 type Grupo = { jid: string; nome: string; participants_count?: number };
 type Destino = {
   id: string;
@@ -34,31 +35,60 @@ export function DestinosRelatorioDialog() {
   const [filtro, setFiltro] = useState('');
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [destinos, setDestinos] = useState<Destino[]>([]);
+  const [conexoes, setConexoes] = useState<Record<string, boolean>>({});
+  const [ultimoEnvio, setUltimoEnvio] = useState<Record<string, { instancia_id: string | null; em: string }>>({});
 
   const carregar = useCallback(async () => {
-    const [{ data: insts }, { data: dest }] = await Promise.all([
+    const [{ data: insts }, { data: dest }, { data: logs }] = await Promise.all([
       supabase
         .from('user_whatsapp_instances')
-        .select('id, nome')
+        .select('id, nome, server_url, instance_token')
         .eq('ativo', true)
         .order('nome'),
       supabase
         .from('relatorio_destinos' as any)
         .select('*')
         .order('criado_em', { ascending: true }),
+      supabase
+        .from('admin_notificacoes_log')
+        .select('mensagem, instancia_envio_id, enviado_em, status')
+        .like('tipo', 'relatorio_%')
+        .eq('status', 'enviado')
+        .order('enviado_em', { ascending: false })
+        .limit(200),
     ]);
     setInstancias((insts as Instancia[]) || []);
-    setDestinos(((dest as any[]) || []) as Destino[]);
-    if (!instanciaId) {
-      const memu = (insts as Instancia[] | null)?.find((i) =>
-        String(i.nome || '').toUpperCase().includes('MEMU 37'),
-      );
-      if (memu) setInstanciaId(memu.id);
+    const destList = ((dest as any[]) || []) as Destino[];
+    setDestinos(destList);
+
+    // Último envio bem-sucedido por grupo (o log guarda a mensagem prefixada com "[destino] ")
+    const mapa: Record<string, { instancia_id: string | null; em: string }> = {};
+    for (const l of (logs as any[]) || []) {
+      const m = String(l.mensagem || '');
+      const dest = m.startsWith('[') ? m.slice(1, m.indexOf(']')) : '';
+      if (dest && !mapa[dest]) mapa[dest] = { instancia_id: l.instancia_envio_id, em: l.enviado_em };
     }
+    setUltimoEnvio(mapa);
+
+    if (!instanciaId && (insts as Instancia[] | null)?.length) {
+      setInstanciaId((insts as Instancia[])[0].id);
+    }
+
+    // Status de conexão das instâncias ativas (cache de 5 min)
+    const lista = (insts as Instancia[]) || [];
+    const results = await Promise.all(
+      lista.map(async (i) => {
+        if (!i.server_url || !i.instance_token) return [i.id, false] as const;
+        const r = await checkUazapiConnection(i.id, i.server_url, i.instance_token);
+        return [i.id, isResultConnected(r)] as const;
+      }),
+    );
+    setConexoes(Object.fromEntries(results));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { if (open) carregar(); }, [open, carregar]);
+
 
   const buscarGrupos = async () => {
     if (!instanciaId) { toast.error('Selecione a instância que participa do grupo'); return; }
@@ -135,12 +165,31 @@ export function DestinosRelatorioDialog() {
           <DialogTitle>Destinos do relatório</DialogTitle>
           <DialogDescription>
             Além dos números fixos, o resumo parcial e o consolidado podem ser enviados direto em grupos de
-            WhatsApp. O envio sai pela instância escolhida, que precisa participar do grupo.
+            WhatsApp. O sistema tenta a instância preferida e, se ela estiver desconectada ou fora do grupo,
+            usa automaticamente qualquer outra instância conectada.
           </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="flex-1 px-6 pb-2">
           <div className="space-y-6">
+            <div className="space-y-2">
+              <Label>Instâncias disponíveis para envio</Label>
+              <div className="flex flex-wrap gap-2">
+                {instancias.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
+                )}
+                {instancias.map((i) => {
+                  const on = conexoes[i.id];
+                  return (
+                    <Badge key={i.id} variant={on ? 'secondary' : 'outline'} className="gap-1">
+                      {on ? <Wifi className="h-3 w-3 text-green-600" /> : <WifiOff className="h-3 w-3 text-destructive" />}
+                      {i.nome || i.id.slice(0, 8)}
+                    </Badge>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Grupos que recebem o relatório</Label>
               {destinos.length === 0 ? (
@@ -149,25 +198,35 @@ export function DestinosRelatorioDialog() {
                 </p>
               ) : (
                 <div className="rounded-md border divide-y">
-                  {destinos.map((d) => (
-                    <div key={d.id} className="flex items-center gap-3 p-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm truncate">{d.nome || d.jid}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          envia por {nomeInstancia(d.instancia_id)}
-                        </p>
+                  {destinos.map((d) => {
+                    const ult = ultimoEnvio[d.jid];
+                    return (
+                      <div key={d.id} className="flex items-center gap-3 p-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm truncate">{d.nome || d.jid}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            preferida: {nomeInstancia(d.instancia_id)}
+                            {conexoes[d.instancia_id || ''] === false && ' (desconectada)'}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {ult
+                              ? `último envio: ${new Date(ult.em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} por ${nomeInstancia(ult.instancia_id)}`
+                              : 'sem envio registrado'}
+                          </p>
+                        </div>
+                        <Switch checked={d.ativo} onCheckedChange={(v) => toggleAtivo(d, v)} />
+                        <Button variant="outline" size="sm" onClick={() => testar(d)} disabled={loading}>
+                          <Send className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => remover(d)}>
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
                       </div>
-                      <Switch checked={d.ativo} onCheckedChange={(v) => toggleAtivo(d, v)} />
-                      <Button variant="outline" size="sm" onClick={() => testar(d)} disabled={loading}>
-                        <Send className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => remover(d)}>
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
+
             </div>
 
             <div className="space-y-2">

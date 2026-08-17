@@ -13,3 +13,4 @@
 - [Etiqueta só por envio manual](mem://features/whatsapp/etiqueta-atendente-envio-manual) — Campanhas/template HSM não vinculam atendente; conversa vai ao rodízio da caixa
 
 
+- [Relatório no grupo](mem://features/relatorios/envio-grupo-auto-cura) — Envio em grupo tenta todas as instâncias conectadas, grava a que funcionou e avisa falha total
