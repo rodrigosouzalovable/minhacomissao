@@ -45,11 +45,21 @@ const DICIONARIO: string[][] = [
 
 const PAGINA = 5000;
 
+type Cobertura = { fonte: string; total: number; atribuidos: number; sem_vinculo: number };
+
+const LABEL_FONTE: Record<string, string> = {
+  DISCADOR: 'Ligações (discador)',
+  WHATSAPP_ENVIOS: 'Envios WhatsApp',
+  WHATSAPP_RESPOSTAS: 'Respostas no Inbox',
+};
+
 export function ArquivoDiarioUmeCard() {
   const [data, setData] = useState<Date>(new Date());
   const [carregando, setCarregando] = useState(false);
   const [gerando, setGerando] = useState(false);
+  const [baixandoSemVinculo, setBaixandoSemVinculo] = useState(false);
   const [linhas, setLinhas] = useState<LinhaUme[] | null>(null);
+  const [cobertura, setCobertura] = useState<Cobertura[] | null>(null);
 
   const dataStr = useMemo(() => format(data, 'yyyy-MM-dd'), [data]);
 
@@ -67,11 +77,18 @@ export function ArquivoDiarioUmeCard() {
     return todas;
   }, [dataStr]);
 
+  const buscarCobertura = useCallback(async (): Promise<Cobertura[]> => {
+    const { data: res, error } = await (supabase as any).rpc('relatorio_ume_cobertura', { _data: dataStr });
+    if (error) throw error;
+    return (res ?? []) as Cobertura[];
+  }, [dataStr]);
+
   const conferir = async () => {
     setCarregando(true);
     try {
-      const res = await buscar();
+      const [res, cob] = await Promise.all([buscar(), buscarCobertura()]);
       setLinhas(res);
+      setCobertura(cob);
       toast.success(`${res.length.toLocaleString('pt-BR')} acionamentos encontrados`);
     } catch (e: any) {
       toast.error(e?.message ?? 'Não foi possível conferir o dia');
@@ -79,6 +96,34 @@ export function ArquivoDiarioUmeCard() {
       setCarregando(false);
     }
   };
+
+  const baixarSemVinculo = async () => {
+    setBaixandoSemVinculo(true);
+    try {
+      const { data: res, error } = await (supabase as any).rpc('relatorio_ume_sem_vinculo', { _data: dataStr });
+      if (error) throw error;
+      const lista = (res ?? []) as { fonte: string; telefone: string; quantidade: number }[];
+      if (lista.length === 0) {
+        toast.success('Nenhum telefone sem vínculo nesse dia');
+        return;
+      }
+      const XLSX = await import('xlsx');
+      const ws = XLSX.utils.aoa_to_sheet([
+        ['FONTE', 'TELEFONE', 'ACIONAMENTOS'],
+        ...lista.map((l) => [LABEL_FONTE[l.fonte] ?? l.fonte, l.telefone, l.quantidade]),
+      ]);
+      ws['!cols'] = [{ wch: 22 }, { wch: 18 }, { wch: 14 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sem vínculo');
+      XLSX.writeFile(wb, `SEM_VINCULO_CPF_${format(data, 'ddMMyyyy')}.xlsx`);
+      toast.success(`${lista.length.toLocaleString('pt-BR')} telefones exportados`);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Falha ao exportar telefones sem vínculo');
+    } finally {
+      setBaixandoSemVinculo(false);
+    }
+  };
+
 
   const baixar = async () => {
     setGerando(true);
