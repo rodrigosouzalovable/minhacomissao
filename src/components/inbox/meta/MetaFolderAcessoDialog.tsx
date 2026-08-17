@@ -181,9 +181,11 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
           ) : filtrados.length === 0 ? (
             <div className="text-xs text-muted-foreground text-center py-6">Nenhum usuário encontrado.</div>
           ) : filtrados.map((u) => (
-            <label key={u.user_id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-accent/40 rounded px-1.5 py-1">
-              <Checkbox checked={membros.has(u.user_id)} onCheckedChange={(v) => toggle(u.user_id, !!v)} />
-              <span className="flex-1 truncate">{u.nome}</span>
+            <div key={u.user_id} className="flex items-center gap-2 text-sm hover:bg-accent/40 rounded px-1.5 py-1">
+              <label className="flex flex-1 items-center gap-2 min-w-0 cursor-pointer">
+                <Checkbox checked={membros.has(u.user_id)} onCheckedChange={(v) => toggle(u.user_id, !!v)} />
+                <span className="flex-1 truncate">{u.nome}</span>
+              </label>
               {/^\s*iago\b/i.test(u.nome) && (
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/15 text-primary shrink-0">
                   IA
@@ -194,9 +196,17 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
                   fora da fila
                 </span>
               )}
-            </label>
+              <label
+                className="flex items-center gap-1 shrink-0 cursor-pointer text-[10px] text-muted-foreground"
+                title="Admin desta caixa: pode ativar/desativar outros atendentes"
+              >
+                <Checkbox checked={admins.has(u.user_id)} onCheckedChange={(v) => toggleAdmin(u.user_id, !!v)} />
+                Admin
+              </label>
+            </div>
 
           ))}
+
         </ScrollArea>
 
         <DialogFooter>
