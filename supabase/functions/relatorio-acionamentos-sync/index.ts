@@ -432,15 +432,29 @@ Deno.serve(async (req) => {
       // Destinos extras configurados (grupos de WhatsApp)
       const { data: destinos } = await supabase
         .from("relatorio_destinos")
-        .select("jid, instancia_id")
+        .select("id, jid, instancia_id")
         .eq("ativo", true);
       const grupos = (destinos || [])
         .map((d: any) => String(d.jid || "").trim())
         .filter((j: string) => j.length > 0);
+
+      // A instância "fixada" no destino é apenas preferência e só vale se ainda existir e estiver ativa.
+      const idsFixados = (destinos || [])
+        .map((d: any) => d.instancia_id)
+        .filter((v: any) => !!v);
+      let idsValidos = new Set<string>();
+      if (idsFixados.length) {
+        const { data: instAtivas } = await supabase
+          .from("user_whatsapp_instances")
+          .select("id")
+          .in("id", idsFixados)
+          .eq("ativo", true);
+        idsValidos = new Set((instAtivas || []).map((i: any) => i.id));
+      }
       const instanciaPorDestino: Record<string, string> = {};
       for (const d of (destinos || []) as any[]) {
         const j = String(d.jid || "").trim();
-        if (j && d.instancia_id) instanciaPorDestino[j] = d.instancia_id;
+        if (j && d.instancia_id && idsValidos.has(d.instancia_id)) instanciaPorDestino[j] = d.instancia_id;
       }
 
       enviado = await notificarNumeros(supabase, {
@@ -450,6 +464,30 @@ Deno.serve(async (req) => {
         instanciaPorDestino,
         chaveIdempotencia: chave,
       });
+
+      // Auto-cura: grava no destino a instância que realmente conseguiu enviar
+      const usadas = (enviado as any)?.instanciaUsadaPorDestino || {};
+      for (const d of (destinos || []) as any[]) {
+        const j = String(d.jid || "").trim();
+        const usada = usadas[j];
+        if (j && usada && usada !== d.instancia_id) {
+          await supabase.from("relatorio_destinos").update({ instancia_id: usada }).eq("id", d.id);
+        }
+      }
+
+      // Avisa quando o relatório não saiu para ninguém (falha silenciosa por dias)
+      if (!(enviado as any)?.skipped && ((enviado as any)?.enviados ?? 0) === 0) {
+        const motivo = ((enviado as any)?.erros || []).slice(0, 3).join(" | ").slice(0, 400) || "motivo desconhecido";
+        try {
+          await notificarNumeros(supabase, {
+            tipo: "relatorio_acionamentos_falha",
+            mensagem: `⚠️ *Relatório de acionamentos não foi enviado*\n${titulo}\n\nMotivo: ${motivo}\n\nVerifique as instâncias no painel (conexão/banimento).`,
+            destinatarios: DESTINATARIOS,
+            chaveIdempotencia: `${chave}:falha`,
+          });
+        } catch (_) { /* aviso é best-effort */ }
+      }
+
 
     }
 
