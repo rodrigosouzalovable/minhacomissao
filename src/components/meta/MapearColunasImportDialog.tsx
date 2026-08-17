@@ -389,7 +389,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
                       </Select>
                     )}
                     {firstIsHeader && (
-                      <div className="mt-1 text-[10px] text-muted-foreground truncate" title={String(firstRow[c] ?? "")}>
+                      <div className="mt-1 text-[10px] text-muted-foreground whitespace-pre-wrap break-words max-w-[360px]" title={String(firstRow[c] ?? "")}>
                         {String(firstRow[c] ?? "") || "—"}
                       </div>
                     )}
