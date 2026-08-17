@@ -48,7 +48,18 @@ export function ehOptOut(texto: string): boolean {
 export function ehNumeroErrado(texto: string): boolean {
   const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (!t.trim()) return false;
-  return /(nao\s*(sou|e)\s+(o|a|ele|ela|essa|esse|est[ae])\b|nao\s*sou\s*(eu|essa|esse)\b|nao\s*e\s*(o\s*)?meu\s*(nome|numero)|numero\s*errado|telefone\s*errado|pessoa\s*errada|nao\s*conhe(c|ss)o|errou\s*o\s*numero|(e|foi)\s*engano|numero\s*trocado|nao\s*e\s*comigo|nao\s*mora\s*(mais\s*)?aqui)/.test(t);
+  if (/(numero\s*errado|telefone\s*errado|pessoa\s*errada|nao\s*conhe(c|ss)o|errou\s*o\s*numero|(e|foi)\s*engano|numero\s*trocado|nao\s*e\s*comigo|nao\s*mora\s*(mais\s*)?aqui|aqui\s*nao\s*(e|mora)|quem\s*fala\s*nao\s*e|nao\s*e\s*(o\s*)?meu\s*(nome|numero))/.test(t)) return true;
+  // Pronomes/artigos clássicos: "nao sou o Sebastiao", "nao sou eu", "nao sou essa pessoa"
+  if (/\bnao\s*(sou|e|eh)\s+(o|a|ele|ela|essa|esse|est[ae]|eu|ninguem)\b/.test(t)) return true;
+  // "nao sou <nome>" — nome próprio direto, sem artigo
+  const m = t.match(/\bnao\s*(?:sou|eh)\s+([a-z]{3,})/);
+  if (m) {
+    const proibidas = new Set(['possivel', 'para', 'pra', 'isso', 'assim', 'bom', 'certo', 'ruim', 'necessario', 'obrigado', 'obrigada', 'nada', 'nao', 'muito', 'mais', 'agora', 'hoje', 'que', 'porque', 'verdade', 'justo', 'legal', 'caro', 'barato', 'valor', 'devedor', 'cliente', 'seu', 'sua', 'meu', 'minha', 'quem', 'contra', 'ela', 'ele']);
+    if (!proibidas.has(m[1])) return true;
+  }
+
+  return false;
+
 }
 
 /** Extrai CPF/CNPJ tolerando máscara e texto ao redor. */
