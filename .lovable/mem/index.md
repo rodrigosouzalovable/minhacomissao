@@ -14,3 +14,4 @@
 
 
 - [Relatório no grupo](mem://features/relatorios/envio-grupo-auto-cura) — Envio em grupo tenta todas as instâncias conectadas, grava a que funcionou e avisa falha total
+- [Arquivo UME vínculo CPF](mem://features/relatorios/ume-vinculo-telefone-cpf) — Arquivo diário UME só exporta acionamentos com CPF identificado via acionamento_telefone_cpf
