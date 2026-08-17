@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const corte = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const corte = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
 
     let arquivados = 0;
     let candidatosTotal = 0;
