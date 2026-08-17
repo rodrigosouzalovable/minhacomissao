@@ -1735,6 +1735,7 @@ export default function InboxMeta() {
                   etiquetasBloqueadas={etiquetasBloqueadas[c.id] ?? new Set()}
                   fixado={c.fixado}
                   arquivado={c.arquivado}
+                  podeExcluir={isAdmin && !c.ultima_msg_entrada_em}
                   onMarcarNaoLida={() => handleMarcarNaoLida(c.id)}
                   onExcluirConversa={handleExcluirConversa}
                   onEtiquetaToggle={handleEtiquetaToggle}
