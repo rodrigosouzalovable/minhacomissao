@@ -134,16 +134,19 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
                     <span className="text-xs text-muted-foreground flex-1">
                       {owned ? 'Sua caixa' : 'Compartilhada'}
                     </span>
-                    {owned && (
+                    {(owned || adminFolders.has(f.id)) && (
                       <>
                         <Button size="sm" variant="outline" onClick={() => setAcessoFolder(f)}>
                           <Users className="h-3.5 w-3.5 mr-1" /> Acesso ({members.size})
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => excluir(f.id)}>
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
+                        {owned && (
+                          <Button size="sm" variant="ghost" onClick={() => excluir(f.id)}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        )}
                       </>
                     )}
+
                   </div>
                 </div>
               );
