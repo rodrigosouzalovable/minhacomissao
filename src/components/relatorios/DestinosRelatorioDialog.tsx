@@ -165,12 +165,31 @@ export function DestinosRelatorioDialog() {
           <DialogTitle>Destinos do relatório</DialogTitle>
           <DialogDescription>
             Além dos números fixos, o resumo parcial e o consolidado podem ser enviados direto em grupos de
-            WhatsApp. O envio sai pela instância escolhida, que precisa participar do grupo.
+            WhatsApp. O sistema tenta a instância preferida e, se ela estiver desconectada ou fora do grupo,
+            usa automaticamente qualquer outra instância conectada.
           </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="flex-1 px-6 pb-2">
           <div className="space-y-6">
+            <div className="space-y-2">
+              <Label>Instâncias disponíveis para envio</Label>
+              <div className="flex flex-wrap gap-2">
+                {instancias.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhuma instância ativa cadastrada.</p>
+                )}
+                {instancias.map((i) => {
+                  const on = conexoes[i.id];
+                  return (
+                    <Badge key={i.id} variant={on ? 'secondary' : 'outline'} className="gap-1">
+                      {on ? <Wifi className="h-3 w-3 text-green-600" /> : <WifiOff className="h-3 w-3 text-destructive" />}
+                      {i.nome || i.id.slice(0, 8)}
+                    </Badge>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Grupos que recebem o relatório</Label>
               {destinos.length === 0 ? (
@@ -179,25 +198,35 @@ export function DestinosRelatorioDialog() {
                 </p>
               ) : (
                 <div className="rounded-md border divide-y">
-                  {destinos.map((d) => (
-                    <div key={d.id} className="flex items-center gap-3 p-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm truncate">{d.nome || d.jid}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          envia por {nomeInstancia(d.instancia_id)}
-                        </p>
+                  {destinos.map((d) => {
+                    const ult = ultimoEnvio[d.jid];
+                    return (
+                      <div key={d.id} className="flex items-center gap-3 p-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm truncate">{d.nome || d.jid}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            preferida: {nomeInstancia(d.instancia_id)}
+                            {conexoes[d.instancia_id || ''] === false && ' (desconectada)'}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {ult
+                              ? `último envio: ${new Date(ult.em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} por ${nomeInstancia(ult.instancia_id)}`
+                              : 'sem envio registrado'}
+                          </p>
+                        </div>
+                        <Switch checked={d.ativo} onCheckedChange={(v) => toggleAtivo(d, v)} />
+                        <Button variant="outline" size="sm" onClick={() => testar(d)} disabled={loading}>
+                          <Send className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => remover(d)}>
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
                       </div>
-                      <Switch checked={d.ativo} onCheckedChange={(v) => toggleAtivo(d, v)} />
-                      <Button variant="outline" size="sm" onClick={() => testar(d)} disabled={loading}>
-                        <Send className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => remover(d)}>
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
+
             </div>
 
             <div className="space-y-2">
