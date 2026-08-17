@@ -64,7 +64,9 @@ interface MetaInstance {
   saude_name_status?: string | null;
   saude_ban_info?: any;
   saude_checked_at?: string | null;
+  provider?: string | null;
 }
+
 interface MetaContato {
   id: string; instancia_id: string; telefone: string; nome: string | null; cpf?: string | null;
   ultima_mensagem: string | null; ultima_mensagem_em: string | null;
@@ -1077,6 +1079,13 @@ export default function InboxMeta() {
   }, [contatoAtivo, computeJanela]);
 
   const instAtiva = useMemo(() => instancias.find(i => i.id === contatoAtivo?.instancia_id), [instancias, contatoAtivo]);
+
+  // Nova Conversa usa template HSM oficial: espelhos UAZAPI (Acionamento) ficam fora
+  const instanciasOficiais = useMemo(
+    () => instancias.filter(i => (i.provider ?? 'meta') === 'meta'),
+    [instancias],
+  );
+
 
   // ============== Envio ==============
   const enviar = async (textoCustom?: string) => {
@@ -2275,7 +2284,7 @@ export default function InboxMeta() {
       <MetaNovaConversaDialog
         open={novaConversaOpen}
         onOpenChange={setNovaConversaOpen}
-        instancias={instancias}
+        instancias={instanciasOficiais}
         defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
         atendenteNome={atendenteNome}
         folderId={currentFolderId}

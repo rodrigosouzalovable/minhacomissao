@@ -7920,6 +7920,7 @@ export type Database = {
           display_phone: string
           id: string
           nome: string
+          provider: string
           saude_ban_info: Json
           saude_checked_at: string
           saude_name_status: string
@@ -8018,6 +8019,7 @@ export type Database = {
       is_admin_user: { Args: { uid: string }; Returns: boolean }
       is_consultoria_admin: { Args: { _uid: string }; Returns: boolean }
       is_consultoria_aluno: { Args: { _uid: string }; Returns: boolean }
+      is_instancia_parceiro: { Args: { _instancia: string }; Returns: boolean }
       is_parceiro_meta: { Args: { _uid: string }; Returns: boolean }
       limpar_pix_links_expirados: { Args: never; Returns: number }
       listar_credores_distintos: {

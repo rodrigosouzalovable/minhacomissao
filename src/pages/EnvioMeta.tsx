@@ -412,7 +412,7 @@ export default function EnvioMeta() {
 
   const carregar = async () => {
     setLoading(true);
-    const [i, t, u, bm] = await Promise.all([
+    const [i, t, u, bm, vp] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
       supabase.from("meta_whatsapp_templates")
         .select("*")
@@ -426,7 +426,9 @@ export default function EnvioMeta() {
       (supabase as any).from("meta_business_managers")
         .select("id, nome, business_id")
         .order("nome"),
+      (supabase as any).from("meta_instance_parceiros").select("instancia_id, user_id"),
     ]);
+
     if (bm?.data) {
       const map: Record<string, string> = {};
       for (const b of bm.data as any[]) map[b.id] = b.nome || b.business_id || "—";
@@ -445,12 +447,21 @@ export default function EnvioMeta() {
         if (t.includes("50")) return 50;
         return null;
       };
-      const mapped = (i.data as any[]).map((inst) => {
+      // Exclui espelhos UAZAPI e números vinculados a outros parceiros
+      const idsOutroParceiro = new Set(
+        (((vp as any)?.data as any[]) ?? [])
+          .filter((r) => r.user_id !== user?.id)
+          .map((r) => r.instancia_id as string),
+      );
+      const mapped = (i.data as any[])
+        .filter((inst) => (inst.provider ?? "meta") === "meta" && !idsOutroParceiro.has(inst.id))
+        .map((inst) => {
         const efetivo = tierParaNumero(inst.messaging_limit_manual) ?? tierParaNumero(inst.saude_tier);
         return { ...inst, tier_diario: efetivo ?? inst.tier_diario ?? 250 };
       });
       setInstancias(mapped as any);
     }
+
     if (t.data) setTemplates(t.data as any);
     if (u.data) setUazInstancias(u.data as any);
     setLoading(false);
