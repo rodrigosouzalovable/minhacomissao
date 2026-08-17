@@ -220,6 +220,10 @@ export default function InboxMeta() {
 
   const [podeVerPadrao, setPodeVerPadrao] = useState(true);
   const [padraoVerificado, setPadraoVerificado] = useState(false);
+  // Admin da própria caixa (pode gerenciar atendentes daquela caixa)
+  const [adminPadrao, setAdminPadrao] = useState(false);
+  const [adminCaixas, setAdminCaixas] = useState<Set<string>>(new Set());
+
   // Marca quando o usuário escolhe manualmente uma caixa (evita voltar para Padrão depois)
   const escolhaManualFolderRef = useRef(false);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
@@ -412,13 +416,22 @@ export default function InboxMeta() {
     } else {
       const { data: dm } = await (supabase as any)
         .from('meta_inbox_default_members')
-        .select('user_id')
+        .select('user_id, admin')
         .eq('user_id', user.id)
         .maybeSingle();
       setPodeVerPadrao(!!dm);
+      setAdminPadrao(!!(dm as any)?.admin);
       setPadraoVerificado(true);
     }
+    // Caixas onde o usuário é admin da própria caixa
+    const { data: adm } = await (supabase as any)
+      .from('meta_inbox_folder_members')
+      .select('folder_id')
+      .eq('user_id', user.id)
+      .eq('admin', true);
+    setAdminCaixas(new Set(((adm as any[]) ?? []).map((r) => r.folder_id as string)));
   }, [user, isAdmin]);
+
 
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
 
@@ -1614,20 +1627,23 @@ export default function InboxMeta() {
                       Padrão
                     </button>
                   </ContextMenuTrigger>
-                  {isAdmin && (
+                  {(isAdmin || adminPadrao) && (
                     <ContextMenuContent>
                       <ContextMenuItem onClick={() => setAcessoFolder({ id: null, nome: 'Padrão' })}>
                         <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
                       </ContextMenuItem>
-                      <ContextMenuItem onClick={() => setConfigFolder({ id: null, nome: 'Padrão' })}>
-                        <Settings2 className="h-4 w-4 mr-2" /> Configurar caixa
-                      </ContextMenuItem>
+                      {isAdmin && (
+                        <ContextMenuItem onClick={() => setConfigFolder({ id: null, nome: 'Padrão' })}>
+                          <Settings2 className="h-4 w-4 mr-2" /> Configurar caixa
+                        </ContextMenuItem>
+                      )}
                     </ContextMenuContent>
                   )}
                 </ContextMenu>
               )}
               {foldersVisiveis.map((f) => {
-                const podeGerenciar = isAdmin || f.owner_id === user?.id;
+                const podeGerenciar = isAdmin || f.owner_id === user?.id || adminCaixas.has(f.id);
+
                 return (
                   <ContextMenu key={f.id}>
                     <ContextMenuTrigger asChild>

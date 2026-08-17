@@ -9,4 +9,7 @@
 - [IAGO Silêncio Humano/Dúvida](mem://features/whatsapp/iago-silencio-humano-e-duvida) — Não responde quando não sabe (só escala) e fica calado 10 min após resposta humana, inclusive no plantão
 - [IAGO entende imagens](mem://features/whatsapp/iago-entende-imagens) — Leitura de imagem via meta-descrever-imagem; comprovante escala para humano, ilegível não é respondida
 - [Conversas nunca desaparecem](mem://constraints/whatsapp/inbox-meta-conversas-nunca-desaparecem) — Conversa com resposta do cliente não pode ser excluída/arquivada; exclusão admin-only; retenção 3 dias com dupla checagem
+- [Admin de caixa Inbox Meta](mem://features/whatsapp/inbox-meta-admin-de-caixa) — Coluna admin nos membros da caixa permite gerenciar atendentes só daquela caixa
+- [Etiqueta só por envio manual](mem://features/whatsapp/etiqueta-atendente-envio-manual) — Campanhas/template HSM não vinculam atendente; conversa vai ao rodízio da caixa
+
 

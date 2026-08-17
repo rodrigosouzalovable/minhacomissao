@@ -771,20 +771,24 @@ serve(async (req) => {
                   console.error('[MetaWebhook] erro no plantão do IAGO', e?.message || e);
                 }
 
-                // ---- Match por quem realmente iniciou/atendeu a conversa ----
+                // ---- Match por quem realmente atendeu a conversa (envio MANUAL) ----
                 // Prioriza o nome do atendente no texto ("*Atendente X:*"); fallback: user_id do remetente.
+                // Disparos em massa/campanha (template HSM) NÃO valem como atendimento —
+                // essas conversas caem no rodízio da caixa.
                 // Durante o plantão do IAGO esse fallback é ignorado — o IAGO assume.
                 if (!atendenteAcordoId && !etiquetaIagoId) {
                   try {
                     const { data: ultimaSaida } = await supabase
                       .from('meta_whatsapp_mensagens')
-                      .select('user_id, conteudo, criado_em')
+                      .select('user_id, conteudo, criado_em, template_nome')
                       .eq('instancia_id', inst.id)
                       .eq('telefone', outroLado || '')
                       .eq('direcao', 'saida')
+                      .is('template_nome', null)
                       .order('criado_em', { ascending: false })
                       .limit(1)
                       .maybeSingle();
+
 
                     // 1) Nome do atendente escrito no próprio texto da mensagem
                     let nomeRem = '';
@@ -817,7 +821,7 @@ serve(async (req) => {
                       }
                       if (jaExiste && etiquetaElegivel((jaExiste as any).nome)) {
                         atendenteAcordoId = (jaExiste as any).id;
-                        atendenteAcordoNome = `${(jaExiste as any).nome} (iniciou a conversa)`;
+                        atendenteAcordoNome = `${(jaExiste as any).nome} (atendeu manualmente)`;
                       } else {
                         console.log('[MetaWebhook] remetente não elegível/sem etiqueta:', nomeRem);
                       }

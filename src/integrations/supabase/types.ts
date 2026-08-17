@@ -3719,14 +3719,17 @@ export type Database = {
       }
       meta_inbox_default_members: {
         Row: {
+          admin: boolean
           criado_em: string
           user_id: string
         }
         Insert: {
+          admin?: boolean
           criado_em?: string
           user_id: string
         }
         Update: {
+          admin?: boolean
           criado_em?: string
           user_id?: string
         }
@@ -3791,18 +3794,21 @@ export type Database = {
       }
       meta_inbox_folder_members: {
         Row: {
+          admin: boolean
           created_at: string
           folder_id: string
           id: string
           user_id: string
         }
         Insert: {
+          admin?: boolean
           created_at?: string
           folder_id: string
           id?: string
           user_id: string
         }
         Update: {
+          admin?: boolean
           created_at?: string
           folder_id?: string
           id?: string
@@ -8019,6 +8025,10 @@ export type Database = {
       meta_envios_resumo: {
         Args: { _ate?: string; _uid?: string }
         Returns: Json
+      }
+      meta_inbox_default_can_manage: {
+        Args: { _uid: string }
+        Returns: boolean
       }
       meta_inbox_folder_can_manage: {
         Args: { _folder: string; _uid: string }

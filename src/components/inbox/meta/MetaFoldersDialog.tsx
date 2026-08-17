@@ -31,6 +31,8 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
   const { toast } = useToast();
   const [folders, setFolders] = useState<MetaInboxFolder[]>([]);
   const [membersByFolder, setMembersByFolder] = useState<Record<string, Set<string>>>({});
+  const [adminFolders, setAdminFolders] = useState<Set<string>>(new Set());
+
   const [novoNome, setNovoNome] = useState('');
   const [novaCor, setNovaCor] = useState(CORES[0]);
   const [busy, setBusy] = useState(false);
@@ -42,15 +44,19 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
       .select('id, nome, cor, owner_id')
       .order('nome');
     setFolders((fs as any) ?? []);
-    const { data: ms } = await supabase.from('meta_inbox_folder_members')
-      .select('folder_id, user_id');
+    const { data: ms } = await (supabase as any).from('meta_inbox_folder_members')
+      .select('folder_id, user_id, admin');
     const map: Record<string, Set<string>> = {};
+    const adm = new Set<string>();
     for (const r of (ms as any[]) ?? []) {
       if (!map[r.folder_id]) map[r.folder_id] = new Set();
       map[r.folder_id].add(r.user_id);
+      if (r.admin && r.user_id === currentUserId) adm.add(r.folder_id);
     }
     setMembersByFolder(map);
-  }, []);
+    setAdminFolders(adm);
+  }, [currentUserId]);
+
 
   useEffect(() => { if (open) load(); }, [open, load]);
 
@@ -128,16 +134,19 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
                     <span className="text-xs text-muted-foreground flex-1">
                       {owned ? 'Sua caixa' : 'Compartilhada'}
                     </span>
-                    {owned && (
+                    {(owned || adminFolders.has(f.id)) && (
                       <>
                         <Button size="sm" variant="outline" onClick={() => setAcessoFolder(f)}>
                           <Users className="h-3.5 w-3.5 mr-1" /> Acesso ({members.size})
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => excluir(f.id)}>
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
+                        {owned && (
+                          <Button size="sm" variant="ghost" onClick={() => excluir(f.id)}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        )}
                       </>
                     )}
+
                   </div>
                 </div>
               );
