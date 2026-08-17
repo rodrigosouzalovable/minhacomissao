@@ -1627,20 +1627,23 @@ export default function InboxMeta() {
                       Padrão
                     </button>
                   </ContextMenuTrigger>
-                  {isAdmin && (
+                  {(isAdmin || adminPadrao) && (
                     <ContextMenuContent>
                       <ContextMenuItem onClick={() => setAcessoFolder({ id: null, nome: 'Padrão' })}>
                         <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
                       </ContextMenuItem>
-                      <ContextMenuItem onClick={() => setConfigFolder({ id: null, nome: 'Padrão' })}>
-                        <Settings2 className="h-4 w-4 mr-2" /> Configurar caixa
-                      </ContextMenuItem>
+                      {isAdmin && (
+                        <ContextMenuItem onClick={() => setConfigFolder({ id: null, nome: 'Padrão' })}>
+                          <Settings2 className="h-4 w-4 mr-2" /> Configurar caixa
+                        </ContextMenuItem>
+                      )}
                     </ContextMenuContent>
                   )}
                 </ContextMenu>
               )}
               {foldersVisiveis.map((f) => {
-                const podeGerenciar = isAdmin || f.owner_id === user?.id;
+                const podeGerenciar = isAdmin || f.owner_id === user?.id || adminCaixas.has(f.id);
+
                 return (
                   <ContextMenu key={f.id}>
                     <ContextMenuTrigger asChild>
