@@ -1765,6 +1765,9 @@ export default function InboxMeta() {
                         {c.fixado && <Pin className="h-3 w-3 text-amber-500 shrink-0" />}
                         <span className="truncate">{c.nome || nomesCRM[suffix8(c.telefone)] || (c.telefone ? formatTelefone(c.telefone) : (c.whatsapp_username ? `@${c.whatsapp_username}` : 'Sem telefone'))}</span>
                         {!c.telefone && c.bsuid && <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">BSUID</Badge>}
+                        {c.arquivado && abaAtiva !== 'arquivados' && (
+                          <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">Arquivada</Badge>
+                        )}
                       </span>
                       <span className={cn(
                         'block text-xs truncate',
