@@ -1509,7 +1509,8 @@ serve(async (req) => {
     let iagoAssumiu = false;
     if (instanciaId && inboxTelefone && (inboxTexto || inboxMediaUrl)) {
       try {
-        const { espelharMensagemInboxMeta } = await import('../_shared/espelho-inbox-meta.ts');
+        const { espelharMensagemInboxMeta, garantirEtiquetaIagoInbox } =
+          await import('../_shared/espelho-inbox-meta.ts');
         const espelho = await espelharMensagemInboxMeta(supabase, instanciaId, {
           telefone: inboxTelefone,
           nome: inboxNomeContato || null,
@@ -1521,14 +1522,23 @@ serve(async (req) => {
         });
 
         if (espelho.instancia && espelho.contatoId && !espelho.duplicada && !isFromMe) {
-          iagoAssumiu = true;
+          const contatoEspelhoId = espelho.contatoId;
+          const entradaId =
+            (messageId && String(messageId).trim()) || espelho.mensagemId || `${contatoEspelhoId}-${Date.now()}`;
+          const doIago = await garantirEtiquetaIagoInbox(
+            supabase,
+            contatoEspelhoId,
+            espelho.instancia.user_id,
+          );
+          iagoAssumiu = doIago;
+          if (doIago) {
           const iagoTask = (async () => {
             try {
               const { data, error } = await supabase.functions.invoke('iago-atendimento', {
                 body: {
-                  contato_id: espelho.contatoId,
+                  contato_id: contatoEspelhoId,
                   texto: inboxTexto || inboxConteudo,
-                  entrada_id: (messageId && String(messageId).trim()) || null,
+                  entrada_id: entradaId,
                 },
               });
               if (error) console.error('[ESPELHO-META] IAGO erro:', error.message);
