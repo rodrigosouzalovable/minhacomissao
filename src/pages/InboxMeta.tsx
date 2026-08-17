@@ -1080,6 +1080,13 @@ export default function InboxMeta() {
 
   const instAtiva = useMemo(() => instancias.find(i => i.id === contatoAtivo?.instancia_id), [instancias, contatoAtivo]);
 
+  // Nova Conversa usa template HSM oficial: espelhos UAZAPI (Acionamento) ficam fora
+  const instanciasOficiais = useMemo(
+    () => instancias.filter(i => (i.provider ?? 'meta') === 'meta'),
+    [instancias],
+  );
+
+
   // ============== Envio ==============
   const enviar = async (textoCustom?: string) => {
     const raw = (textoCustom ?? '').trim();
