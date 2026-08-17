@@ -1253,15 +1253,33 @@ export default function InboxMeta() {
     });
   };
   const handleExcluirConversa = async (id: string) => {
-    if (!confirm('Excluir esta conversa e todas as mensagens?')) return;
     const c = contatos.find(x => x.id === id);
     if (!c) return;
+    // Conversa com resposta do cliente nunca é excluída — apenas arquivada.
+    if (c.ultima_msg_entrada_em) {
+      toast({
+        title: 'Conversa protegida',
+        description: 'Esta conversa tem resposta do cliente e não pode ser excluída. Ela foi arquivada.',
+      });
+      await handleArquivar(id, true);
+      return;
+    }
+    if (!isAdmin) {
+      toast({
+        title: 'Sem permissão',
+        description: 'Apenas o admin pode excluir conversas. Use "Arquivar".',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!confirm('Excluir DEFINITIVAMENTE esta conversa e todas as mensagens? Esta ação não pode ser desfeita.')) return;
     await supabase.from('meta_whatsapp_mensagens').delete()
       .eq('instancia_id', c.instancia_id).eq('telefone', c.telefone);
     await supabase.from('meta_whatsapp_contatos').delete().eq('id', id);
     if (contatoAtivo?.id === id) setContatoAtivo(null);
     toast({ title: 'Conversa excluída' });
   };
+
 
   // Multi-seleção
   const toggleSel = (id: string) => {
