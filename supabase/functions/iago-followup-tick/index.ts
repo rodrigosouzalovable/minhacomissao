@@ -11,7 +11,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, agoraSP, primeiroNome, carregarConfig, perfilIago, iagoAtendeCaixa,
-  etiquetasAtendente, enviarTexto, chamarIA, extrairJson, ehNumeroErrado, etiquetarAguardandoHumano,
+  etiquetasAtendente, enviarTexto, chamarIA, extrairJson, ehNumeroErrado, ehFalecido, etiquetarAguardandoHumano,
 } from '../_shared/iago.ts';
 
 const HORA = 60 * 60 * 1000;
@@ -247,6 +247,21 @@ Deno.serve(async (req) => {
         }).eq('id', est.id);
         try { await etiquetarAguardandoHumano(supabase, (contato as any).id); } catch (_) { /* noop */ }
         pulados.push('número errado');
+        continue;
+      }
+
+      // ===== Cliente informou falecimento do titular => nunca fazer follow-up =====
+      const informouFalecimento = historico.some((m) => m.direcao === 'entrada' && ehFalecido(String(m.conteudo || '')));
+      if (informouFalecimento) {
+        await supabase.from('iago_conversa_estado').update({
+          followup_feito: true,
+          followup_em: null,
+          followup_etapa: 3,
+          aguardando_humano: true,
+          etapa: 'falecido',
+        }).eq('id', est.id);
+        try { await etiquetarAguardandoHumano(supabase, (contato as any).id); } catch (_) { /* noop */ }
+        pulados.push('falecimento informado');
         continue;
       }
 

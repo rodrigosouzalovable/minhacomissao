@@ -62,6 +62,20 @@ export function ehNumeroErrado(texto: string): boolean {
 
 }
 
+/** Mensagem única de condolências/encerramento quando o cliente informa falecimento. */
+export const MSG_FALECIDO =
+  'Sinto muito pela perda. Agradeço a informação e peço desculpas pelo incômodo. Vamos registrar aqui e não incomodaremos mais. 🙏';
+
+/** Cliente/familiar avisou que o titular faleceu. */
+export function ehFalecido(texto: string): boolean {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!t.trim()) return false;
+  if (/\b(falec\w*|faleci\w*|obito|veio\s*a\s*obito|morreu|morre\w*u|ja\s*morreu|e\s*morto|esta\s*morto|morto|morta|sepultad\w*|enterrad\w*|de\s*cujus)\b/.test(t)) return true;
+  if (/(descansou\s*em\s*(paz|\d{4})|nao\s*esta\s*mais\s*(entre\s*nos|conosco|aqui\s*com\s*nos)|perdi\s*(meu|minha)\s*(pai|mae|irmao|irma|esposo|esposa|marido|filho|filha|avo|avoa|tio|tia))/.test(t)) return true;
+  return false;
+}
+
+
 /** Extrai CPF/CNPJ tolerando máscara e texto ao redor. */
 export function extrairDoc(texto: string): string {
   const t = String(texto || '');
