@@ -216,6 +216,7 @@ export async function notificarNumeros(
         }
         // Guarda o erro REAL da instância (sem mascarar com 405 de endpoints legados)
         ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.slice(0, 300);
+        errosTentativas.push(ultimoErro);
         if (isInstanceDeadError(respText, res.status)) {
           mortas.add(inst.id);
           console.warn(`[notificar-numeros] instância descartada (${inst.nome ?? inst.id}): ${ultimoErro}`);
@@ -227,17 +228,21 @@ export async function notificarNumeros(
       } catch (e) {
         if (timer) clearTimeout(timer);
         ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.slice(0, 300);
+        errosTentativas.push(ultimoErro);
       }
     }
 
     if (!sucesso) {
-      erros.push(`${numero}: ${ultimoErro}`);
+      // Mostra o que cada instância respondeu — facilita ver que o problema é o grupo, não a conexão
+      const detalhe = (errosTentativas.length > 1 ? errosTentativas.join(" || ") : ultimoErro).slice(0, 1000);
+      erros.push(`${numero}: ${detalhe}`);
       await supabase.from("admin_notificacoes_log").insert({
         tipo: params.tipo,
         chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numero}` : null,
         mensagem: `[${numero}] ${mensagemFinal}`.slice(0, 4000),
         status: "erro",
-        erro_detalhe: ultimoErro,
+        erro_detalhe: detalhe,
+
       });
     }
 
