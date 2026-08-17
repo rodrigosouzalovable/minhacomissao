@@ -234,8 +234,25 @@ Deno.serve(async (req) => {
         .order('criado_em', { ascending: false })
         .limit(14);
       const historico = ((msgs || []) as any[]).slice().reverse();
+
+      // ===== Cliente avisou que não é a pessoa procurada => nunca fazer follow-up =====
+      const negouIdentidade = historico.some((m) => m.direcao === 'entrada' && ehNumeroErrado(String(m.conteudo || '')));
+      if (negouIdentidade) {
+        await supabase.from('iago_conversa_estado').update({
+          followup_feito: true,
+          followup_em: null,
+          followup_etapa: 3,
+          aguardando_humano: true,
+          etapa: 'numero_errado',
+        }).eq('id', est.id);
+        try { await etiquetarAguardandoHumano(supabase, (contato as any).id); } catch (_) { /* noop */ }
+        pulados.push('número errado');
+        continue;
+      }
+
       const saidas = historico.filter((m) => m.direcao === 'saida');
       const saidasNorm = saidas.map((m) => normalizar(m.conteudo)).filter(Boolean);
+
 
       // Proposta só conta se valores realmente foram enviados ao cliente.
       const propostaEnviada = !!est.contexto?.proposta_enviada
