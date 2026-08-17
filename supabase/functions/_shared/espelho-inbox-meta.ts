@@ -140,7 +140,7 @@ export async function espelharMensagemInboxMeta(
       tipo_conteudo: msg.tipoConteudo || 'texto',
       media_url: msg.mediaUrl || null,
       timestamp_msg: agora,
-      status_envio: msg.direcao === 'saida' ? 'enviada' : 'recebida',
+      status_envio: msg.direcao === 'saida' ? 'enviada' : 'entregue',
       wa_message_id: msg.waMessageId || null,
     } as any)
     .select('id')
