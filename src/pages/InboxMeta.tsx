@@ -64,7 +64,9 @@ interface MetaInstance {
   saude_name_status?: string | null;
   saude_ban_info?: any;
   saude_checked_at?: string | null;
+  provider?: string | null;
 }
+
 interface MetaContato {
   id: string; instancia_id: string; telefone: string; nome: string | null; cpf?: string | null;
   ultima_mensagem: string | null; ultima_mensagem_em: string | null;
