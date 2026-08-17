@@ -628,12 +628,13 @@ export default function InboxMeta() {
         if (bDigits.length >= 8) orParts.push(`telefone.ilike.%${bDigits.slice(-8)}`);
       }
       if (orParts.length) {
+        // Busca também nas arquivadas: nenhuma conversa pode parecer perdida.
         let qs = supabase.from('meta_whatsapp_contatos')
           .select(selectCols)
-          .eq('arquivado', abaAtiva === 'arquivados')
           .or(orParts.join(','))
           .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
           .limit(200);
+
         if (filtroInstancia !== 'todas') qs = qs.eq('instancia_id', filtroInstancia);
         if (currentFolderId === null) qs = qs.is('folder_id', null);
         else qs = qs.eq('folder_id', currentFolderId);
@@ -1253,15 +1254,33 @@ export default function InboxMeta() {
     });
   };
   const handleExcluirConversa = async (id: string) => {
-    if (!confirm('Excluir esta conversa e todas as mensagens?')) return;
     const c = contatos.find(x => x.id === id);
     if (!c) return;
+    // Conversa com resposta do cliente nunca é excluída — apenas arquivada.
+    if (c.ultima_msg_entrada_em) {
+      toast({
+        title: 'Conversa protegida',
+        description: 'Esta conversa tem resposta do cliente e não pode ser excluída. Ela foi arquivada.',
+      });
+      await handleArquivar(id, true);
+      return;
+    }
+    if (!isAdmin) {
+      toast({
+        title: 'Sem permissão',
+        description: 'Apenas o admin pode excluir conversas. Use "Arquivar".',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!confirm('Excluir DEFINITIVAMENTE esta conversa e todas as mensagens? Esta ação não pode ser desfeita.')) return;
     await supabase.from('meta_whatsapp_mensagens').delete()
       .eq('instancia_id', c.instancia_id).eq('telefone', c.telefone);
     await supabase.from('meta_whatsapp_contatos').delete().eq('id', id);
     if (contatoAtivo?.id === id) setContatoAtivo(null);
     toast({ title: 'Conversa excluída' });
   };
+
 
   // Multi-seleção
   const toggleSel = (id: string) => {
@@ -1274,15 +1293,40 @@ export default function InboxMeta() {
     sairMultipla();
   };
   const excluirSelecionados = async () => {
-    if (selecionados.size === 0 || !confirm(`Excluir ${selecionados.size} conversa(s)?`)) return;
+    if (selecionados.size === 0) return;
     const ids = Array.from(selecionados);
     const cs = contatos.filter(c => ids.includes(c.id));
-    for (const c of cs) {
-      await supabase.from('meta_whatsapp_mensagens').delete().eq('instancia_id', c.instancia_id).eq('telefone', c.telefone);
+    const protegidas = cs.filter(c => !!c.ultima_msg_entrada_em);
+    const excluiveis = cs.filter(c => !c.ultima_msg_entrada_em);
+
+    if (!isAdmin) {
+      toast({
+        title: 'Sem permissão',
+        description: 'Apenas o admin pode excluir conversas. Use "Arquivar".',
+        variant: 'destructive',
+      });
+      return;
     }
-    await supabase.from('meta_whatsapp_contatos').delete().in('id', ids);
+    if (protegidas.length > 0) {
+      await supabase.from('meta_whatsapp_contatos')
+        .update({ arquivado: true }).in('id', protegidas.map(c => c.id));
+    }
+    if (excluiveis.length > 0) {
+      if (!confirm(`Excluir DEFINITIVAMENTE ${excluiveis.length} conversa(s) sem resposta do cliente?`)) { sairMultipla(); return; }
+      for (const c of excluiveis) {
+        await supabase.from('meta_whatsapp_mensagens').delete().eq('instancia_id', c.instancia_id).eq('telefone', c.telefone);
+      }
+      await supabase.from('meta_whatsapp_contatos').delete().in('id', excluiveis.map(c => c.id));
+    }
+    if (protegidas.length > 0) {
+      toast({
+        title: 'Conversas protegidas arquivadas',
+        description: `${protegidas.length} conversa(s) com resposta do cliente foram arquivadas em vez de excluídas.`,
+      });
+    }
     sairMultipla();
   };
+
 
   // ============== Render ==============
   return (
@@ -1691,6 +1735,7 @@ export default function InboxMeta() {
                   etiquetasBloqueadas={etiquetasBloqueadas[c.id] ?? new Set()}
                   fixado={c.fixado}
                   arquivado={c.arquivado}
+                  podeExcluir={isAdmin && !c.ultima_msg_entrada_em}
                   onMarcarNaoLida={() => handleMarcarNaoLida(c.id)}
                   onExcluirConversa={handleExcluirConversa}
                   onEtiquetaToggle={handleEtiquetaToggle}
@@ -1721,6 +1766,9 @@ export default function InboxMeta() {
                         {c.fixado && <Pin className="h-3 w-3 text-amber-500 shrink-0" />}
                         <span className="truncate">{c.nome || nomesCRM[suffix8(c.telefone)] || (c.telefone ? formatTelefone(c.telefone) : (c.whatsapp_username ? `@${c.whatsapp_username}` : 'Sem telefone'))}</span>
                         {!c.telefone && c.bsuid && <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">BSUID</Badge>}
+                        {c.arquivado && abaAtiva !== 'arquivados' && (
+                          <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">Arquivada</Badge>
+                        )}
                       </span>
                       <span className={cn(
                         'block text-xs truncate',

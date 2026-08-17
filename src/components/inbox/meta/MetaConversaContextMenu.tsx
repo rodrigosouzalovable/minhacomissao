@@ -19,6 +19,8 @@ interface Props {
   etiquetasBloqueadas?: Set<string>;
   fixado: boolean;
   arquivado: boolean;
+  /** Exclusão definitiva só é oferecida quando permitido (admin + sem resposta do cliente) */
+  podeExcluir?: boolean;
   onMarcarNaoLida: () => void;
   onExcluirConversa: (id: string) => void;
   onEtiquetaToggle: (cId: string, eId: string, ativo: boolean) => void;
@@ -29,7 +31,7 @@ interface Props {
 
 export function MetaConversaContextMenu({
   children, contatoId, etiquetas, etiquetasGerenciar, contatoEtiquetaIds, etiquetasBloqueadas,
-  fixado, arquivado,
+  fixado, arquivado, podeExcluir = false,
   onMarcarNaoLida, onExcluirConversa, onEtiquetaToggle, onEtiquetasChange, onFixarToggle, onArquivarToggle,
 }: Props) {
   const { toast } = useToast();
@@ -116,10 +118,14 @@ export function MetaConversaContextMenu({
             {arquivado ? <ArchiveRestore className="h-4 w-4 mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
             {arquivado ? 'Desarquivar' : 'Arquivar'}
           </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => onExcluirConversa(contatoId)} className="text-destructive focus:text-destructive">
-            <Trash2 className="h-4 w-4 mr-2" /> Excluir conversa
-          </ContextMenuItem>
+          {podeExcluir && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => onExcluirConversa(contatoId)} className="text-destructive focus:text-destructive">
+                <Trash2 className="h-4 w-4 mr-2" /> Excluir conversa
+              </ContextMenuItem>
+            </>
+          )}
           <ContextMenuSeparator />
           <ContextMenuSub>
             <ContextMenuSubTrigger><Tag className="h-4 w-4 mr-2" />Etiquetas</ContextMenuSubTrigger>
