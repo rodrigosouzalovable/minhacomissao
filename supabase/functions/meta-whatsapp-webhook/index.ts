@@ -821,7 +821,7 @@ serve(async (req) => {
                       }
                       if (jaExiste && etiquetaElegivel((jaExiste as any).nome)) {
                         atendenteAcordoId = (jaExiste as any).id;
-                        atendenteAcordoNome = `${(jaExiste as any).nome} (iniciou a conversa)`;
+                        atendenteAcordoNome = `${(jaExiste as any).nome} (atendeu manualmente)`;
                       } else {
                         console.log('[MetaWebhook] remetente não elegível/sem etiqueta:', nomeRem);
                       }
