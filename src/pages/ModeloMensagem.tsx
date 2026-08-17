@@ -1,13 +1,17 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
+import { LayoutPlanilhaTab } from '@/components/modelo-mensagem/LayoutPlanilhaTab';
 import { EditarTemplateMensagemDialog } from '@/components/EditarTemplateMensagemDialog';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings } from 'lucide-react';
 import { useState } from 'react';
+import { useUserRole } from '@/hooks/useUserRole';
 
 export default function ModeloMensagem() {
   const [editOpen, setEditOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const { isAdmin } = useUserRole();
 
   return (
     <AppLayout>
@@ -24,7 +28,22 @@ export default function ModeloMensagem() {
           </Button>
         </div>
 
-        <ColarImagemTab key={reloadKey} />
+        {isAdmin ? (
+          <Tabs defaultValue="imagem">
+            <TabsList>
+              <TabsTrigger value="imagem">Colar imagem</TabsTrigger>
+              <TabsTrigger value="planilha">Layout Planilha</TabsTrigger>
+            </TabsList>
+            <TabsContent value="imagem" className="mt-4">
+              <ColarImagemTab key={reloadKey} />
+            </TabsContent>
+            <TabsContent value="planilha" className="mt-4">
+              <LayoutPlanilhaTab />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <ColarImagemTab key={reloadKey} />
+        )}
       </div>
 
       <EditarTemplateMensagemDialog
