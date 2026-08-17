@@ -162,11 +162,14 @@ export async function notificarNumeros(
     const numero = normalizarNumero(rawDest);
     let sucesso = false;
     let ultimoErro = "sem_tentativas";
+    const errosTentativas: string[] = []; // erro de cada instância tentada (diagnóstico real)
 
     const vivas = candidatas.filter((i: any) => !mortas.has(i.id));
     if (!vivas.length) {
       ultimoErro = "nenhuma_instancia_disponivel";
     }
+
+
 
     // Ordem: instância preferida para este destino primeiro (se ainda estiver viva), depois round-robin
     const preferida = params.instanciaPorDestino?.[rawDest] || params.instanciaPorDestino?.[numero];
