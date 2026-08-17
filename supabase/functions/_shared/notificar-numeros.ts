@@ -7,26 +7,39 @@ export interface NotificarNumerosParams {
   mensagem: string;
   destinatarios: string[]; // números com ou sem DDI 55, ou JIDs de grupo (…@g.us)
   chaveIdempotencia?: string;
-  // Instância obrigatória/preferida por destino (ex.: grupo só recebe da instância que participa dele)
+  // Instância preferida por destino (ex.: grupo tende a receber da instância que participa dele).
+  // É apenas preferência: se a instância não existir mais ou estiver desconectada, o sistema
+  // percorre as demais instâncias ativas.
   instanciaPorDestino?: Record<string, string>;
 }
 
-
-const isRetryableInstanceError = (text: string, status: number) => {
+// Erros que indicam problema da INSTÂNCIA (sessão/token/queda) — descartamos a instância
+const isInstanceDeadError = (text: string, status: number) => {
   const n = text.toLowerCase();
   return (
-    status >= 500 ||
     n.includes("disconnected") || n.includes("not reconnectable") ||
     n.includes("not connected") || n.includes("session") ||
-    n.includes("offline") || n.includes("timeout") || n.includes("timed out") ||
-    n.includes("abort") || n.includes("unauthorized") ||
-    n.includes("invalid token") || n.includes("forbidden") || n.includes("connection")
+    n.includes("offline") || n.includes("logged out") || n.includes("logout") ||
+    n.includes("banned") || n.includes("unauthorized") ||
+    n.includes("invalid token") || n.includes("forbidden") ||
+    status === 401 || status === 403
+  );
+};
+
+// Erros que valem tentar em OUTRA instância (mas não condenam a instância atual)
+const isRetryableError = (text: string, status: number) => {
+  const n = text.toLowerCase();
+  return (
+    status >= 500 || status === 408 || status === 429 ||
+    n.includes("timeout") || n.includes("timed out") || n.includes("abort") ||
+    n.includes("connection") || n.includes("not in group") ||
+    n.includes("not a participant") || n.includes("not authorized to send")
   );
 };
 
 const hasProviderError = (text: string) => {
   const n = text.toLowerCase();
-  return n.includes('"error":true') || n.includes('"success":false') || n.includes("falha");
+  return n.includes('"error":true') || n.includes('"success":false') || n.includes('"error"') || n.includes("falha");
 };
 
 const uazUrl = (base: string, path: string, query?: Record<string, string>) => {
@@ -48,7 +61,7 @@ const parseConnected = (data: any) => {
   return flags.includes(true) || ["connected", "open", "online", "ready"].includes(raw);
 };
 
-const checkConnected = async (inst: any) => {
+const fetchStatusOnce = async (inst: any, timeoutMs: number) => {
   const base = String(inst.server_url || "").replace(/\/+$/, "");
   const token = String(inst.instance_token || "");
   if (!base || !token) return false;
@@ -60,16 +73,23 @@ const checkConnected = async (inst: any) => {
     let timer: any;
     try {
       const ctrl = new AbortController();
-      timer = setTimeout(() => ctrl.abort(), 2500);
+      timer = setTimeout(() => ctrl.abort(), timeoutMs);
       const res = await fetch(a.url, { headers: a.headers, signal: ctrl.signal });
       clearTimeout(timer);
       if (!res.ok) continue;
-      const text = await res.text();
-      const data = JSON.parse(text);
+      const data = JSON.parse(await res.text());
       if (parseConnected(data)) return true;
     } catch (_) { if (timer) clearTimeout(timer); }
   }
   return false;
+};
+
+// Timeout generoso + segunda tentativa: a UAZAPI às vezes demora a responder o status
+// e antes disso o sistema concluía erradamente que nenhuma instância estava conectada.
+const checkConnected = async (inst: any) => {
+  if (await fetchStatusOnce(inst, 8000)) return true;
+  await new Promise((r) => setTimeout(r, 500));
+  return await fetchStatusOnce(inst, 8000);
 };
 
 const normalizarNumero = (num: string) => {
@@ -84,8 +104,15 @@ const normalizarNumero = (num: string) => {
 export async function notificarNumeros(
   supabase: SupabaseClient,
   params: NotificarNumerosParams,
-): Promise<{ success: boolean; enviados: number; erros: string[]; skipped?: string }> {
+): Promise<{
+  success: boolean;
+  enviados: number;
+  erros: string[];
+  skipped?: string;
+  instanciaUsadaPorDestino?: Record<string, string>;
+}> {
   const erros: string[] = [];
+  const instanciaUsadaPorDestino: Record<string, string> = {};
 
   // Idempotência global (mesmo tipo+chave = pula tudo)
   if (params.chaveIdempotencia) {
@@ -111,79 +138,88 @@ export async function notificarNumeros(
   }
 
   const checks = await Promise.allSettled(insts.map(async (i: any) => ({ i, ok: await checkConnected(i) })));
-  const conectadas = checks
+  let candidatas = checks
     .filter((r: any) => r.status === "fulfilled" && r.value.ok)
     .map((r: any) => r.value.i);
 
-  if (!conectadas.length) {
-    await supabase.from("admin_notificacoes_log").insert({
-      tipo: params.tipo,
-      chave_idempotencia: params.chaveIdempotencia ?? null,
-      mensagem: params.mensagem,
-      status: "erro",
-      erro_detalhe: "nenhuma_instancia_conectada",
-    });
-    return { success: false, enviados: 0, erros: ["nenhuma_instancia_conectada"] };
+  // Fallback: se a checagem de status falhar para todas (API lenta/instável), tentamos
+  // enviar pelas ativas de qualquer forma. Só desistimos se o envio real também falhar.
+  if (!candidatas.length) {
+    console.warn("[notificar-numeros] nenhuma instância passou na checagem — tentando todas as ativas");
+    candidatas = insts as any[];
   }
 
   const mensagemFinal = params.mensagem;
   let enviados = 0;
   let cursor = 0;
+  const mortas = new Set<string>(); // instâncias descartadas nesta execução (banida/desconectada/token)
 
   for (const rawDest of params.destinatarios) {
     const numero = normalizarNumero(rawDest);
     let sucesso = false;
     let ultimoErro = "sem_tentativas";
 
-    // Ordem de tentativa: instância fixada para este destino primeiro, depois round-robin
-    const fixada = params.instanciaPorDestino?.[rawDest] || params.instanciaPorDestino?.[numero];
-    const ordem = fixada
+    const vivas = candidatas.filter((i: any) => !mortas.has(i.id));
+    if (!vivas.length) {
+      ultimoErro = "nenhuma_instancia_disponivel";
+    }
+
+    // Ordem: instância preferida para este destino primeiro (se ainda estiver viva), depois round-robin
+    const preferida = params.instanciaPorDestino?.[rawDest] || params.instanciaPorDestino?.[numero];
+    const temPreferida = preferida && vivas.some((i: any) => i.id === preferida);
+    const ordem = temPreferida
       ? [
-          ...conectadas.filter((i: any) => i.id === fixada),
-          ...conectadas.filter((i: any) => i.id !== fixada),
+          ...vivas.filter((i: any) => i.id === preferida),
+          ...vivas.filter((i: any) => i.id !== preferida),
         ]
-      : conectadas;
+      : vivas;
 
     for (let t = 0; t < ordem.length && !sucesso; t++) {
-      const inst = fixada ? ordem[t] : ordem[(cursor + t) % ordem.length];
+      const inst = temPreferida ? ordem[t] : ordem[(cursor + t) % ordem.length];
+      if (mortas.has(inst.id)) continue;
       const cleanUrl = String(inst.server_url).replace(/\/+$/, "");
-      const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
+      const endpoint = `${cleanUrl}/send/text`;
 
-
-      for (const endpoint of endpoints) {
-        let timer: any;
-        try {
-          const ctrl = new AbortController();
-          timer = setTimeout(() => ctrl.abort(), 7000);
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", token: inst.instance_token },
-            body: JSON.stringify({ number: numero, text: mensagemFinal }),
-            signal: ctrl.signal,
+      let timer: any;
+      try {
+        const ctrl = new AbortController();
+        timer = setTimeout(() => ctrl.abort(), 15000);
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", token: inst.instance_token },
+          body: JSON.stringify({ number: numero, text: mensagemFinal }),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        const respText = await res.text();
+        const provErr = hasProviderError(respText);
+        if (res.ok && !provErr) {
+          sucesso = true;
+          enviados++;
+          instanciaUsadaPorDestino[rawDest] = inst.id;
+          await supabase.from("admin_notificacoes_log").insert({
+            tipo: params.tipo,
+            chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numero}` : null,
+            mensagem: `[${numero}] ${mensagemFinal}`.slice(0, 4000),
+            instancia_envio_id: inst.id,
+            status: "enviado",
           });
-          clearTimeout(timer);
-          const respText = await res.text();
-          const provErr = hasProviderError(respText);
-          if (res.ok && !provErr) {
-            sucesso = true;
-            enviados++;
-            await supabase.from("admin_notificacoes_log").insert({
-              tipo: params.tipo,
-              chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numero}` : null,
-              mensagem: `[${numero}] ${mensagemFinal}`.slice(0, 4000),
-              instancia_envio_id: inst.id,
-              status: "enviado",
-            });
-            cursor = (cursor + t + 1) % conectadas.length;
-            break;
-          }
-          ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.slice(0, 200);
-          if (res.status === 405) continue;
-          if (!isRetryableInstanceError(respText, res.status)) break;
-        } catch (e) {
-          if (timer) clearTimeout(timer);
-          ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.slice(0, 200);
+          cursor = (cursor + t + 1) % Math.max(candidatas.length, 1);
+          break;
         }
+        // Guarda o erro REAL da instância (sem mascarar com 405 de endpoints legados)
+        ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.slice(0, 300);
+        if (isInstanceDeadError(respText, res.status)) {
+          mortas.add(inst.id);
+          console.warn(`[notificar-numeros] instância descartada (${inst.nome ?? inst.id}): ${ultimoErro}`);
+          continue;
+        }
+        if (isRetryableError(respText, res.status)) continue; // tenta outra instância
+        // Erro do destino (ex.: número não está no WhatsApp) — não adianta trocar instância
+        break;
+      } catch (e) {
+        if (timer) clearTimeout(timer);
+        ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.slice(0, 300);
       }
     }
 
@@ -202,5 +238,5 @@ export async function notificarNumeros(
     await new Promise((r) => setTimeout(r, 1500));
   }
 
-  return { success: enviados > 0, enviados, erros };
+  return { success: enviados > 0, enviados, erros, instanciaUsadaPorDestino };
 }
