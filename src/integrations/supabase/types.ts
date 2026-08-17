@@ -8149,6 +8149,14 @@ export type Database = {
           total: number
         }[]
       }
+      relatorio_ume_sem_vinculo: {
+        Args: { _data: string }
+        Returns: {
+          fonte: string
+          quantidade: number
+          telefone: string
+        }[]
+      }
       tresc_limpar_cache_antigo: { Args: never; Returns: number }
       user_can_access_tenant: {
         Args: { _tenant: string; _uid: string }
