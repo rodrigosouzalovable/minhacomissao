@@ -155,3 +155,52 @@ export async function espelharMensagemInboxMeta(
     instancia: inst,
   };
 }
+
+/**
+ * Garante que a conversa espelhada esteja atribuída ao IAGO.
+ * Só aplica se a conversa ainda não tiver etiqueta de atendente e se o IAGO
+ * for responsável pela caixa. Nunca cria etiquetas novas.
+ */
+export async function garantirEtiquetaIagoInbox(
+  supabase: any,
+  contatoId: string,
+  ownerUserId: string,
+): Promise<boolean> {
+  try {
+    const { data: jaTem } = await supabase
+      .from('meta_whatsapp_contato_etiquetas')
+      .select('etiqueta_id, meta_whatsapp_etiquetas!inner(nome)')
+      .eq('contato_id', contatoId);
+    const nomes = (jaTem ?? []).map((r: any) => String(r?.meta_whatsapp_etiquetas?.nome || ''));
+    if (nomes.some((n: string) => n.toLowerCase().startsWith('atendente:'))) {
+      return nomes.some((n: string) => /^atendente:\s*iago/i.test(n));
+    }
+
+    const { data: etiq } = await supabase
+      .from('meta_whatsapp_etiquetas')
+      .select('id')
+      .eq('user_id', ownerUserId)
+      .ilike('nome', 'Atendente: Iago%')
+      .limit(1)
+      .maybeSingle();
+    if (!(etiq as any)?.id) {
+      console.log('[espelho-inbox-meta] etiqueta do IAGO inexistente para', ownerUserId);
+      return false;
+    }
+
+    const { error } = await supabase
+      .from('meta_whatsapp_contato_etiquetas')
+      .insert({ contato_id: contatoId, etiqueta_id: (etiq as any).id, origem: 'auto_atendente' } as any);
+    if (error) {
+      const dup = String(error.message || '').toLowerCase().includes('duplicate') || (error as any).code === '23505';
+      if (!dup) {
+        console.error('[espelho-inbox-meta] falha ao etiquetar IAGO:', error.message);
+        return false;
+      }
+    }
+    return true;
+  } catch (e: any) {
+    console.error('[espelho-inbox-meta] erro etiqueta IAGO:', e?.message || e);
+    return false;
+  }
+}
