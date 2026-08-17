@@ -280,16 +280,27 @@ export default function ConfigurarMeta() {
 
   const carregar = async () => {
     setLoading(true);
-    const [i, t, b] = await Promise.all([
+    const [i, t, b, vp] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").order("criado_em", { ascending: false }),
       supabase.from("meta_whatsapp_templates").select("*").order("sincronizado_em", { ascending: false }),
       supabase.from("meta_business_managers").select("id,nome,business_id,ativo,padrao").eq("ativo", true).order("padrao", { ascending: false }).order("nome", { ascending: true }),
+      supabase.from("meta_instance_parceiros").select("instancia_id"),
     ]);
-    if (i.data) setInstancias(i.data as Instancia[]);
+    if (i.data) {
+      // Somente números oficiais (exclui espelhos UAZAPI da aba Acionamento)
+      let lista = (i.data as Instancia[]).filter((x) => ((x as any).provider ?? "meta") === "meta");
+      if (!parceiroMeta) {
+        // Números vinculados a parceiros não aparecem para admin/funcionários
+        const idsParceiro = new Set(((vp.data as any[]) ?? []).map((r) => r.instancia_id as string));
+        lista = lista.filter((x) => !idsParceiro.has(x.id));
+      }
+      setInstancias(lista);
+    }
     if (t.data) setTemplates(t.data as Template[]);
     if (b.data) setBms(b.data as BM[]);
     setLoading(false);
   };
+
 
   const carregarToken = async () => {
     if (parceiroMeta) {
