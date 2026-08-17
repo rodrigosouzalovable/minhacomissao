@@ -38,9 +38,11 @@ const isRetryableError = (text: string, status: number) => {
 };
 
 const hasProviderError = (text: string) => {
-  const n = text.toLowerCase();
-  return n.includes('"error":true') || n.includes('"success":false') || n.includes('"error"') || n.includes("falha");
+  const n = text.toLowerCase().replace(/\s+/g, "");
+  // "error":true  ou  "error":"alguma mensagem"  (ignora "error":false / "error":null / "error":"")
+  return n.includes('"error":true') || n.includes('"success":false') || /"error":"[^"]+"/.test(n);
 };
+
 
 const uazUrl = (base: string, path: string, query?: Record<string, string>) => {
   const url = new URL(`${base.replace(/\/+$/, "")}${path}`);
