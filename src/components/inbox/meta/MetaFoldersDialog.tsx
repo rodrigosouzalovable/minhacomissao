@@ -31,6 +31,8 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
   const { toast } = useToast();
   const [folders, setFolders] = useState<MetaInboxFolder[]>([]);
   const [membersByFolder, setMembersByFolder] = useState<Record<string, Set<string>>>({});
+  const [adminFolders, setAdminFolders] = useState<Set<string>>(new Set());
+
   const [novoNome, setNovoNome] = useState('');
   const [novaCor, setNovaCor] = useState(CORES[0]);
   const [busy, setBusy] = useState(false);
