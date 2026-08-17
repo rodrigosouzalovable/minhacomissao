@@ -176,7 +176,7 @@ export async function garantirEtiquetaIagoInbox(
       return nomes.some((n: string) => /^atendente:\s*iago/i.test(n));
     }
 
-    const { data: etiq } = await supabase
+    let { data: etiq } = await supabase
       .from('meta_whatsapp_etiquetas')
       .select('id')
       .eq('user_id', ownerUserId)
@@ -184,7 +184,17 @@ export async function garantirEtiquetaIagoInbox(
       .limit(1)
       .maybeSingle();
     if (!(etiq as any)?.id) {
-      console.log('[espelho-inbox-meta] etiqueta do IAGO inexistente para', ownerUserId);
+      // A etiqueta do IAGO pode pertencer a outro dono de instância — reaproveita a existente.
+      const { data: global } = await supabase
+        .from('meta_whatsapp_etiquetas')
+        .select('id')
+        .ilike('nome', 'Atendente: Iago%')
+        .limit(1)
+        .maybeSingle();
+      etiq = global;
+    }
+    if (!(etiq as any)?.id) {
+      console.log('[espelho-inbox-meta] etiqueta do IAGO inexistente');
       return false;
     }
 
