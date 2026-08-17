@@ -201,7 +201,7 @@ export function ArquivoDiarioUmeCard() {
               <Calendar
                 mode="single"
                 selected={data}
-                onSelect={(d) => { if (d) { setData(d); setLinhas(null); } }}
+                onSelect={(d) => { if (d) { setData(d); setLinhas(null); setCobertura(null); } }}
                 initialFocus
                 className={cn('p-3 pointer-events-auto')}
               />
@@ -217,6 +217,11 @@ export function ArquivoDiarioUmeCard() {
             {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
             Baixar Excel
           </Button>
+
+          <Button variant="ghost" size="sm" onClick={baixarSemVinculo} disabled={baixandoSemVinculo}>
+            {baixandoSemVinculo && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Telefones sem CPF vinculado
+          </Button>
         </div>
 
         {resumo && (
@@ -231,6 +236,24 @@ export function ArquivoDiarioUmeCard() {
             </div>
           </div>
         )}
+
+        {cobertura && cobertura.length > 0 && (
+          <div className="rounded-md border p-3 text-sm space-y-1">
+            <div className="font-medium">Cobertura do dia (acionamentos com CPF identificado)</div>
+            {cobertura.map((c) => (
+              <div key={c.fonte} className="text-muted-foreground">
+                {LABEL_FONTE[c.fonte] ?? c.fonte}: {Number(c.atribuidos).toLocaleString('pt-BR')} de{' '}
+                {Number(c.total).toLocaleString('pt-BR')} • sem vínculo:{' '}
+                {Number(c.sem_vinculo).toLocaleString('pt-BR')}
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground pt-1">
+              Só entram no arquivo do credor os acionamentos com CPF identificado. Os sem vínculo podem
+              ser conferidos no botão "Telefones sem CPF vinculado".
+            </p>
+          </div>
+        )}
+
       </CardContent>
     </Card>
   );
