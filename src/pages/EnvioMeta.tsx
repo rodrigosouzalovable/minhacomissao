@@ -412,7 +412,7 @@ export default function EnvioMeta() {
 
   const carregar = async () => {
     setLoading(true);
-    const [i, t, u, bm] = await Promise.all([
+    const [i, t, u, bm, vp] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
       supabase.from("meta_whatsapp_templates")
         .select("*")
@@ -426,7 +426,9 @@ export default function EnvioMeta() {
       (supabase as any).from("meta_business_managers")
         .select("id, nome, business_id")
         .order("nome"),
+      (supabase as any).from("meta_instance_parceiros").select("instancia_id, user_id"),
     ]);
+
     if (bm?.data) {
       const map: Record<string, string> = {};
       for (const b of bm.data as any[]) map[b.id] = b.nome || b.business_id || "—";
