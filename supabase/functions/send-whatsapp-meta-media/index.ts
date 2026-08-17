@@ -112,6 +112,95 @@ Deno.serve(async (req) => {
       if (canon?.telefone) to = canon.telefone;
     }
 
+    // ===== Instâncias NÃO OFICIAIS (espelho UAZAPI / aba Acionamento) =====
+    if ((inst as any).provider === 'uazapi') {
+      const { data: uz } = await supabase
+        .from('user_whatsapp_instances')
+        .select('id, server_url, instance_token')
+        .eq('id', (inst as any).uazapi_instance_id)
+        .maybeSingle();
+      if (!uz?.server_url || !uz?.instance_token) {
+        return new Response(JSON.stringify({ success: false, error: 'Instância UAZAPI sem credenciais' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const cleanUrl = String(uz.server_url).replace(/\/+$/, '');
+      const tipoUaz = type === 'audio' ? 'ptt' : type === 'image' ? 'image' : type === 'video' ? 'video' : 'document';
+      let waId: string | null = null;
+      let erroEnvio = '';
+      try {
+        const r = await fetch(`${cleanUrl}/send/media`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', token: uz.instance_token },
+          body: JSON.stringify({
+            number: to,
+            type: tipoUaz,
+            file: media_url,
+            text: caption || '',
+            docName: file_name || undefined,
+          }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) erroEnvio = j?.message || j?.error || `HTTP ${r.status}`;
+        else waId = String(j?.id || j?.messageid || j?.key?.id || '').split(':').pop() || null;
+      } catch (e) {
+        erroEnvio = e instanceof Error ? e.message : 'falha de rede UAZAPI';
+      }
+
+      if (erroEnvio) {
+        return new Response(JSON.stringify({ success: false, error: erroEnvio }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+      const tipoConteudo = type === 'audio' ? 'audio' : type === 'image' ? 'imagem' : type === 'video' ? 'video' : 'documento';
+
+      const { data: msgRow } = await supabase.from('meta_whatsapp_mensagens').insert({
+        user_id: uid,
+        instancia_id,
+        telefone: to,
+        direcao: 'saida',
+        conteudo: caption || `[${tipoConteudo}]`,
+        tipo_conteudo: tipoConteudo,
+        media_url,
+        timestamp_msg: nowIso,
+        status_envio: 'enviada',
+        wa_message_id: waId,
+      } as any).select('id').maybeSingle();
+
+      await supabase.from('whatsapp_mensagens').insert({
+        instancia_id: uz.id,
+        telefone_remoto: to,
+        conteudo: caption || `[${tipoConteudo}]`,
+        direcao: 'saida',
+        timestamp_msg: nowIso,
+        lida: true,
+        tipo_conteudo: tipoConteudo,
+        media_url,
+        whatsapp_msg_id: waId,
+      } as any);
+
+      const { data: ctUz } = await supabase
+        .from('meta_whatsapp_contatos')
+        .select('id')
+        .eq('instancia_id', instancia_id)
+        .eq('telefone', to)
+        .maybeSingle();
+      if ((ctUz as any)?.id) {
+        await supabase.from('meta_whatsapp_contatos')
+          .update({ ultima_mensagem: caption || `[${tipoConteudo}]`, ultima_mensagem_em: nowIso, atualizado_em: nowIso })
+          .eq('id', (ctUz as any).id);
+      }
+
+      return new Response(JSON.stringify({ success: true, waId, mensagem_id: (msgRow as any)?.id || null, provider: 'uazapi' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+
+
     // Verifica janela 24h — busca contato por telefone ou BSUID
     let contatoQuery = supabase
       .from('meta_whatsapp_contatos')
