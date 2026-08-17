@@ -68,6 +68,120 @@ Deno.serve(async (req) => {
       if (canon?.telefone) to = canon.telefone;
     }
 
+    // ===== Instâncias NÃO OFICIAIS (espelho UAZAPI / aba Acionamento) =====
+    // Não há janela de 24h nem template HSM: envia direto pela UAZAPI.
+    if ((inst as any).provider === 'uazapi') {
+      const { data: uz } = await supabase
+        .from('user_whatsapp_instances')
+        .select('id, server_url, instance_token')
+        .eq('id', (inst as any).uazapi_instance_id)
+        .maybeSingle();
+
+      if (!uz?.server_url || !uz?.instance_token) {
+        return new Response(JSON.stringify({ success: false, error: 'Instância UAZAPI sem credenciais' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const cleanUrl = String(uz.server_url).replace(/\/+$/, '');
+      let waId: string | null = null;
+      let erroEnvio = '';
+      try {
+        const r = await fetch(`${cleanUrl}/send/text`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', token: uz.instance_token },
+          body: JSON.stringify({ number: to, text: String(texto).slice(0, 4096) }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) erroEnvio = j?.message || j?.error || `HTTP ${r.status}`;
+        else waId = String(j?.id || j?.messageid || j?.key?.id || '').split(':').pop() || null;
+      } catch (e) {
+        erroEnvio = e instanceof Error ? e.message : 'falha de rede UAZAPI';
+      }
+
+      if (erroEnvio) {
+        return new Response(JSON.stringify({ success: false, error: erroEnvio }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+
+      const { data: msgRow } = await supabase.from('meta_whatsapp_mensagens').insert({
+        user_id: uid,
+        instancia_id,
+        telefone: to,
+        direcao: 'saida',
+        conteudo: texto,
+        tipo_conteudo: 'texto',
+        timestamp_msg: nowIso,
+        status_envio: 'enviada',
+        wa_message_id: waId,
+      } as any).select('id').maybeSingle();
+
+      // Mantém a aba Acionamento coerente com o histórico
+      await supabase.from('whatsapp_mensagens').insert({
+        instancia_id: uz.id,
+        telefone_remoto: to,
+        conteudo: texto,
+        direcao: 'saida',
+        timestamp_msg: nowIso,
+        lida: true,
+        tipo_conteudo: 'texto',
+        whatsapp_msg_id: waId,
+      } as any);
+
+      const { data: ctUz } = await supabase
+        .from('meta_whatsapp_contatos')
+        .select('id')
+        .eq('instancia_id', instancia_id)
+        .eq('telefone', to)
+        .maybeSingle();
+
+      if ((ctUz as any)?.id) {
+        await supabase.from('meta_whatsapp_contatos')
+          .update({ ultima_mensagem: texto, ultima_mensagem_em: nowIso, atualizado_em: nowIso })
+          .eq('id', (ctUz as any).id);
+
+        if (user_id && origem !== 'ia') {
+          await supabase.from('iago_conversa_estado')
+            .update({ aguardando_humano: true, followup_em: null })
+            .eq('contato_id', (ctUz as any).id);
+
+          const mAt = String(texto || '').match(/^\*Atendente\s+(.+?):\*/i);
+          let nomeAtendente = mAt?.[1]?.trim() || '';
+          if (!nomeAtendente) {
+            const { data: prof } = await supabase.from('profiles').select('nome').eq('id', user_id).maybeSingle();
+            nomeAtendente = String((prof as any)?.nome || '').trim();
+          }
+          if (nomeAtendente) {
+            await aplicarEtiquetaAtendente(supabase, {
+              contatoId: (ctUz as any).id,
+              atendenteNome: nomeAtendente,
+              ownerUserId: (inst as any).user_id,
+              somenteSeSemEtiqueta: true,
+              logPrefix: '[send-whatsapp-meta-text/uazapi]',
+            });
+          }
+        }
+      } else {
+        await supabase.from('meta_whatsapp_contatos').insert({
+          user_id: uid,
+          instancia_id,
+          folder_id: (inst as any).folder_padrao_id || null,
+          telefone: to,
+          telefone_visivel: true,
+          ultima_mensagem: texto,
+          ultima_mensagem_em: nowIso,
+        } as any);
+      }
+
+      return new Response(JSON.stringify({ success: true, waId, mensagem_id: (msgRow as any)?.id || null, provider: 'uazapi' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+
     // Bloqueia se janela 24h estiver expirada — checa por telefone OU bsuid
     let contatoQuery = supabase
       .from('meta_whatsapp_contatos')
