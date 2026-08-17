@@ -23,6 +23,7 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
   const { toast } = useToast();
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [membros, setMembros] = useState<Set<string>>(new Set());
+  const [admins, setAdmins] = useState<Set<string>>(new Set());
   const [naFila, setNaFila] = useState<Set<string>>(new Set());
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(false);
@@ -50,14 +51,16 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
       if (folderId === null) {
         const { data } = await (supabase as any)
           .from('meta_inbox_default_members')
-          .select('user_id');
+          .select('user_id, admin');
         setMembros(new Set(((data as any[]) ?? []).map((r) => r.user_id)));
+        setAdmins(new Set(((data as any[]) ?? []).filter((r) => r.admin).map((r) => r.user_id)));
       } else {
-        const { data } = await supabase
+        const { data } = await (supabase as any)
           .from('meta_inbox_folder_members')
-          .select('user_id')
+          .select('user_id, admin')
           .eq('folder_id', folderId);
         setMembros(new Set(((data as any[]) ?? []).map((r) => r.user_id)));
+        setAdmins(new Set(((data as any[]) ?? []).filter((r) => r.admin).map((r) => r.user_id)));
       }
       await loadFila();
     } finally {
@@ -68,23 +71,20 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
   useEffect(() => { if (open) { setBusca(''); load(); } }, [open, load]);
 
 
-  const toggle = async (userId: string, checked: boolean) => {
+  const toggle = async (userId: string, checked: boolean, comoAdmin = false) => {
     setSaving(true);
     try {
       let error: any = null;
-      if (folderId === null) {
-        if (checked) {
-          ({ error } = await (supabase as any).from('meta_inbox_default_members').insert({ user_id: userId }));
-        } else {
-          ({ error } = await (supabase as any).from('meta_inbox_default_members').delete().eq('user_id', userId));
-        }
+      const tabela = folderId === null ? 'meta_inbox_default_members' : 'meta_inbox_folder_members';
+      if (checked) {
+        const payload: any = folderId === null
+          ? { user_id: userId, admin: comoAdmin }
+          : { folder_id: folderId, user_id: userId, admin: comoAdmin };
+        ({ error } = await (supabase as any).from(tabela).insert(payload));
       } else {
-        if (checked) {
-          ({ error } = await supabase.from('meta_inbox_folder_members').insert({ folder_id: folderId, user_id: userId } as any));
-        } else {
-          ({ error } = await supabase.from('meta_inbox_folder_members').delete()
-            .eq('folder_id', folderId).eq('user_id', userId));
-        }
+        let q = (supabase as any).from(tabela).delete().eq('user_id', userId);
+        if (folderId !== null) q = q.eq('folder_id', folderId);
+        ({ error } = await q);
       }
       if (error) {
         toast({ title: 'Erro ao salvar acesso', description: error.message, variant: 'destructive' });
@@ -93,6 +93,11 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
       setMembros((prev) => {
         const n = new Set(prev);
         if (checked) n.add(userId); else n.delete(userId);
+        return n;
+      });
+      setAdmins((prev) => {
+        const n = new Set(prev);
+        if (checked && comoAdmin) n.add(userId); else n.delete(userId);
         return n;
       });
       if (checked) {
@@ -107,6 +112,33 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
     }
   };
 
+  const toggleAdmin = async (userId: string, checked: boolean) => {
+    // Marcar como admin garante que o usuário também seja atendente da caixa
+    if (checked && !membros.has(userId)) {
+      await toggle(userId, true, true);
+      return;
+    }
+    setSaving(true);
+    try {
+      const tabela = folderId === null ? 'meta_inbox_default_members' : 'meta_inbox_folder_members';
+      let q = (supabase as any).from(tabela).update({ admin: checked }).eq('user_id', userId);
+      if (folderId !== null) q = q.eq('folder_id', folderId);
+      const { error } = await q;
+      if (error) {
+        toast({ title: 'Erro ao definir admin da caixa', description: error.message, variant: 'destructive' });
+        return;
+      }
+      setAdmins((prev) => {
+        const n = new Set(prev);
+        if (checked) n.add(userId); else n.delete(userId);
+        return n;
+      });
+      onChanged?.();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const setTodos = async (checked: boolean) => {
     const alvo = funcionarios.filter((f) => membros.has(f.user_id) !== checked);
     for (const f of alvo) {
@@ -114,6 +146,7 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
       await toggle(f.user_id, checked);
     }
   };
+
 
   const filtrados = useMemo(() => {
     const t = busca.trim().toLowerCase();
