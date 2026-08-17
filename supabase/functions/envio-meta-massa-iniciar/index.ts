@@ -203,6 +203,21 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
+    // Grava o vínculo telefone -> CPF (só CPF real de 11 dígitos) para o relatório
+    // diário de acionamentos conseguir atribuir o disparo à carteira do credor.
+    try {
+      const pares = clientes
+        .map((c: any) => ({ telefone: c.telefone, cpf: String(c.cpf ?? '').replace(/\D/g, ''), origem: 'mailing' }))
+        .filter((p: any) => p.cpf.length === 11 && p.telefone);
+      for (let i = 0; i < pares.length; i += 1000) {
+        await supabase.rpc('acionamento_vincular_telefone_cpf', { _pares: pares.slice(i, i + 1000) });
+      }
+      console.log('[iniciar] vinculos telefone->cpf gravados:', pares.length);
+    } catch (e) {
+      console.error('[iniciar] falha ao gravar vinculos telefone->cpf', e);
+    }
+
+
     if (modoRajada) {
       // Dispara um worker paralelo POR INSTÂNCIA — cada worker envia em rajada.
       for (const instId of instanciaIdsFiltradas) {
