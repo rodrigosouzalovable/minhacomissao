@@ -2284,7 +2284,7 @@ export default function InboxMeta() {
       <MetaNovaConversaDialog
         open={novaConversaOpen}
         onOpenChange={setNovaConversaOpen}
-        instancias={instancias}
+        instancias={instanciasOficiais}
         defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
         atendenteNome={atendenteNome}
         folderId={currentFolderId}
