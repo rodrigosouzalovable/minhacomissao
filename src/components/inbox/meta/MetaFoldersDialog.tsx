@@ -42,15 +42,19 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
       .select('id, nome, cor, owner_id')
       .order('nome');
     setFolders((fs as any) ?? []);
-    const { data: ms } = await supabase.from('meta_inbox_folder_members')
-      .select('folder_id, user_id');
+    const { data: ms } = await (supabase as any).from('meta_inbox_folder_members')
+      .select('folder_id, user_id, admin');
     const map: Record<string, Set<string>> = {};
+    const adm = new Set<string>();
     for (const r of (ms as any[]) ?? []) {
       if (!map[r.folder_id]) map[r.folder_id] = new Set();
       map[r.folder_id].add(r.user_id);
+      if (r.admin && r.user_id === currentUserId) adm.add(r.folder_id);
     }
     setMembersByFolder(map);
-  }, []);
+    setAdminFolders(adm);
+  }, [currentUserId]);
+
 
   useEffect(() => { if (open) load(); }, [open, load]);
 
