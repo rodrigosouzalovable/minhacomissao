@@ -33,9 +33,11 @@ const isRetryableError = (text: string, status: number) => {
     status >= 500 || status === 408 || status === 429 ||
     n.includes("timeout") || n.includes("timed out") || n.includes("abort") ||
     n.includes("connection") || n.includes("not in group") ||
-    n.includes("not a participant") || n.includes("not authorized to send")
+    n.includes("not a participant") || n.includes("not participating") ||
+    n.includes("group members") || n.includes("not authorized to send")
   );
 };
+
 
 const hasProviderError = (text: string) => {
   const n = text.toLowerCase().replace(/\s+/g, "");
