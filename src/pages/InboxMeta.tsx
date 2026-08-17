@@ -628,12 +628,13 @@ export default function InboxMeta() {
         if (bDigits.length >= 8) orParts.push(`telefone.ilike.%${bDigits.slice(-8)}`);
       }
       if (orParts.length) {
+        // Busca também nas arquivadas: nenhuma conversa pode parecer perdida.
         let qs = supabase.from('meta_whatsapp_contatos')
           .select(selectCols)
-          .eq('arquivado', abaAtiva === 'arquivados')
           .or(orParts.join(','))
           .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
           .limit(200);
+
         if (filtroInstancia !== 'todas') qs = qs.eq('instancia_id', filtroInstancia);
         if (currentFolderId === null) qs = qs.is('folder_id', null);
         else qs = qs.eq('folder_id', currentFolderId);
