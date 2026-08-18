@@ -2668,6 +2668,18 @@ export default function Acionamento() {
                         />
                       </div>
                       <div className="space-y-2">
+                        <Label>Número do WhatsApp</Label>
+                        <Input
+                          placeholder="62 99999-9999"
+                          value={editingInstance.telefone || ''}
+                          onChange={(e) => setEditingInstance({ ...editingInstance, telefone: e.target.value })}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Usado na exportação da lista de números em Excel.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
                         <Label>Server URL</Label>
                         <Input
                           placeholder="https://certificadoracnpj.uazapi.com"
