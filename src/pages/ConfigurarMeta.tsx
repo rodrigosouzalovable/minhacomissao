@@ -264,6 +264,8 @@ export default function ConfigurarMeta() {
     access_token: "",
     tier_diario: "250",
   });
+  const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
+
 
   const templatesPorInstancia = useMemo(() => {
     const map: Record<string, { total: number; aprovados: number }> = {};
@@ -378,6 +380,35 @@ export default function ConfigurarMeta() {
     return t;
   };
 
+  const humanizarErroDuplicado = (msg: string): string => {
+    const m = (msg || "").toLowerCase();
+    if (m.includes("phone_number_id_key") || m.includes("duplicate key")) {
+      return "Este número (Phone Number ID) já está cadastrado em outra instância.";
+    }
+    return msg;
+  };
+
+  const atualizarDuplicado = async () => {
+    if (!duplicado) return;
+    const patch: any = {
+      nome: form.nome.trim(),
+      waba_id: form.waba_id.trim(),
+      business_id: form.business_id.trim() || null,
+      tier_diario: parseInt(form.tier_diario) || 250,
+    };
+    if (form.access_token.trim()) patch.access_token = form.access_token.trim();
+    const { error } = await supabase
+      .from("meta_whatsapp_instances")
+      .update(patch)
+      .eq("id", duplicado.id);
+    if (error) { toast.error("Erro: " + humanizarErroDuplicado(error.message)); return; }
+    toast.success("Instância existente atualizada");
+    setDuplicado(null);
+    setDialogOpen(false);
+    setForm({ nome: "", phone_number_id: "", waba_id: "", business_id: "", access_token: "", tier_diario: "250" });
+    carregar();
+  };
+
   const adicionar = async () => {
     if (!form.nome || !form.phone_number_id || !form.waba_id || !form.access_token) {
       toast.error("Preencha nome, Phone Number ID, WABA ID e Access Token");
@@ -385,6 +416,18 @@ export default function ConfigurarMeta() {
     }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // Já existe uma instância com esse Phone Number ID?
+    const { data: existente } = await supabase
+      .from("meta_whatsapp_instances")
+      .select("id, nome")
+      .eq("phone_number_id", form.phone_number_id.trim())
+      .maybeSingle();
+    if (existente) {
+      setDuplicado({ id: existente.id, nome: existente.nome || "sem nome" });
+      return;
+    }
+
 
     const { data: novaInst, error } = await supabase
       .from("meta_whatsapp_instances")
@@ -401,7 +444,7 @@ export default function ConfigurarMeta() {
       .select("id")
       .single();
     if (error) {
-      toast.error("Erro: " + error.message);
+      toast.error("Erro: " + humanizarErroDuplicado(error.message));
       return;
     }
     toast.success("Instância adicionada");
@@ -454,6 +497,17 @@ export default function ConfigurarMeta() {
       return;
     }
     setSalvandoEdit(true);
+    const { data: conflito } = await supabase
+      .from("meta_whatsapp_instances")
+      .select("id, nome")
+      .eq("phone_number_id", editForm.phone_number_id.trim())
+      .neq("id", editInst.id)
+      .maybeSingle();
+    if (conflito) {
+      setSalvandoEdit(false);
+      toast.error(`Este número (Phone Number ID) já está cadastrado na instância "${conflito.nome || "sem nome"}".`);
+      return;
+    }
     const patch: any = {
       nome: editForm.nome.trim(),
       phone_number_id: editForm.phone_number_id.trim(),
@@ -467,7 +521,8 @@ export default function ConfigurarMeta() {
       .update(patch)
       .eq("id", editInst.id);
     setSalvandoEdit(false);
-    if (error) { toast.error("Erro: " + error.message); return; }
+    if (error) { toast.error("Erro: " + humanizarErroDuplicado(error.message)); return; }
+
     toast.success("Instância atualizada");
     setEditInst(null);
     carregar();
@@ -1558,7 +1613,25 @@ export default function ConfigurarMeta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Número já cadastrado */}
+      <Dialog open={!!duplicado} onOpenChange={(o) => { if (!o) setDuplicado(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Número já cadastrado</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Este Phone Number ID já está cadastrado na instância <strong>"{duplicado?.nome}"</strong>.
+            Quer atualizar essa instância com os dados que você digitou (nome, WABA ID, Business Manager ID, token e tier)?
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicado(null)}>Cancelar</Button>
+            <Button onClick={atualizarDuplicado}>Atualizar instância existente</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
     </AppLayout>
 
   );
