@@ -2364,7 +2364,19 @@ export default function Acionamento() {
                                       </Badge>
                                     )}
                                   </div>
-                                  <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
+                                  <div className="flex items-center gap-2">
+                                    {inst.telefone ? (
+                                      <span className="text-[11px] font-medium text-foreground shrink-0">
+                                        {formatarTelefoneBR(inst.telefone)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] text-muted-foreground/70 italic shrink-0">
+                                        Número não cadastrado
+                                      </span>
+                                    )}
+                                    <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
+                                  </div>
+
                                 </div>
                               </div>
                               <div className="flex flex-col gap-1 shrink-0">
