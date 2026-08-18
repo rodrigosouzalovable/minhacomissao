@@ -632,6 +632,30 @@ export default function EnvioMeta() {
       toast.warning(`${badQuality.length} instância(s) RED/YELLOW removidas automaticamente: ${nomes}`);
     }
 
+    // Nome de exibição em análise/reprovado na Meta = entrega rejeitada (#131000).
+    // Essas instâncias são removidas do disparo automaticamente.
+    const nomeProblema = filteredInstanciaIds.filter((id) => {
+      const inst = instancias.find((x) => x.id === id) as any;
+      const st = String(inst?.meta_name_status || "").toUpperCase();
+      return st === "PENDING_REVIEW" || st === "REJECTED";
+    });
+    const idsOk = filteredInstanciaIds.filter((id) => !nomeProblema.includes(id));
+    if (idsOk.length === 0) {
+      return toast.error(
+        "Nenhuma instância recomendada. As selecionadas estão com o nome de exibição em análise/reprovado na Meta, o que faz a entrega falhar com \"Something went wrong (#131000)\". Aguarde a aprovação ou use outro número.",
+      );
+    }
+    if (nomeProblema.length > 0) {
+      const nomes = nomeProblema
+        .map((id) => instancias.find((x) => x.id === id)?.nome || id)
+        .slice(0, 5)
+        .join(", ");
+      toast.warning(
+        `${nomeProblema.length} instância(s) removidas: nome de exibição em análise/reprovado na Meta (causa o erro #131000) — ${nomes}`,
+      );
+    }
+
+
     // Cota por BM (janela de 24h): remove instâncias de BMs já esgotadas
     await recarregarCotas();
     const semCota = filteredInstanciaIds.filter((id) => {
