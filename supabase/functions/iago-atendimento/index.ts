@@ -384,7 +384,10 @@ Deno.serve(async (req) => {
           atendenteAcordo = String(at || '');
         } catch { /* opcional */ }
       } else {
-        proposta = await calcularProposta(supabase, cpf);
+        proposta = await calcularProposta(supabase, cpf, {
+          descAvista: (cfg as any).desconto_avista_pct,
+          descParcelado: (cfg as any).desconto_parcelado_pct,
+        });
       }
     }
 
