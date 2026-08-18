@@ -19,8 +19,12 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // Caixa AQUECIMENTO: nunca arquiva (números UAZAPI atendidos pelo IAGO)
+  const FOLDER_AQUECIMENTO = "4f7a52c0-9c86-4b80-8867-4ade7a6df441";
+
   try {
     const corte = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+
 
     let arquivados = 0;
     let candidatosTotal = 0;
