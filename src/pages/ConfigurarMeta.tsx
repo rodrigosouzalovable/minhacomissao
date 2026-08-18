@@ -497,6 +497,17 @@ export default function ConfigurarMeta() {
       return;
     }
     setSalvandoEdit(true);
+    const { data: conflito } = await supabase
+      .from("meta_whatsapp_instances")
+      .select("id, nome")
+      .eq("phone_number_id", editForm.phone_number_id.trim())
+      .neq("id", editInst.id)
+      .maybeSingle();
+    if (conflito) {
+      setSalvandoEdit(false);
+      toast.error(`Este número (Phone Number ID) já está cadastrado na instância "${conflito.nome || "sem nome"}".`);
+      return;
+    }
     const patch: any = {
       nome: editForm.nome.trim(),
       phone_number_id: editForm.phone_number_id.trim(),
@@ -510,7 +521,8 @@ export default function ConfigurarMeta() {
       .update(patch)
       .eq("id", editInst.id);
     setSalvandoEdit(false);
-    if (error) { toast.error("Erro: " + error.message); return; }
+    if (error) { toast.error("Erro: " + humanizarErroDuplicado(error.message)); return; }
+
     toast.success("Instância atualizada");
     setEditInst(null);
     carregar();
