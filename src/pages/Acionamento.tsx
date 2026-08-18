@@ -214,7 +214,7 @@ export default function Acionamento() {
   const [salvandoRelatorio, setSalvandoRelatorio] = useState(false);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string; proxy_enabled?: boolean; proxy_host?: string | null }>>([]);
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; telefone?: string | null; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string; proxy_enabled?: boolean; proxy_host?: string | null }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
@@ -357,7 +357,7 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
+        .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
         .eq('user_id', user.id)
         .order('ordem' as any, { ascending: true })
         .order('criado_em', { ascending: false });
@@ -1426,12 +1426,13 @@ export default function Acionamento() {
           .from('user_whatsapp_instances' as any)
           .update({
             nome: editingInstance.nome.trim() || null,
+            telefone: (editingInstance.telefone || '').replace(/\D/g, '') || null,
             server_url: editingInstance.server_url.trim(),
             instance_token: editingInstance.instance_token.trim(),
           } as any)
           .eq('id', editingInstance.id);
         if (error) throw error;
-        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, nome: editingInstance.nome.trim(), server_url: editingInstance.server_url.trim(), instance_token: editingInstance.instance_token.trim() } : i));
+        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, nome: editingInstance.nome.trim(), telefone: (editingInstance.telefone || '').replace(/\D/g, '') || null, server_url: editingInstance.server_url.trim(), instance_token: editingInstance.instance_token.trim() } : i));
         toast.success('Instância atualizada!');
       } else {
         // Insert
@@ -1440,6 +1441,7 @@ export default function Acionamento() {
           .insert({
             user_id: user.id,
             nome: editingInstance.nome.trim() || null,
+            telefone: (editingInstance.telefone || '').replace(/\D/g, '') || null,
             server_url: editingInstance.server_url.trim(),
             instance_token: editingInstance.instance_token.trim(),
           } as any)
@@ -2855,7 +2857,7 @@ export default function Acionamento() {
                                     className="h-7 w-7"
                                     onClick={() => {
                                       const cached = inst as any;
-                                      setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token, whatsapp_profile_name: cached.whatsapp_profile_name, whatsapp_profile_photo_url: cached.whatsapp_profile_photo_url, whatsapp_profile_description: cached.whatsapp_profile_description, whatsapp_profile_address: cached.whatsapp_profile_address, whatsapp_profile_email: cached.whatsapp_profile_email });
+                                      setEditingInstance({ id: inst.id, nome: inst.nome, telefone: (inst as any).telefone || '', server_url: inst.server_url, instance_token: inst.instance_token, whatsapp_profile_name: cached.whatsapp_profile_name, whatsapp_profile_photo_url: cached.whatsapp_profile_photo_url, whatsapp_profile_description: cached.whatsapp_profile_description, whatsapp_profile_address: cached.whatsapp_profile_address, whatsapp_profile_email: cached.whatsapp_profile_email });
                                       // Rehydrate profile fields from cache
                                       setProfileName(cached.whatsapp_profile_name || '');
                                       setCurrentProfilePhotoUrl(cached.whatsapp_profile_photo_url || '');
