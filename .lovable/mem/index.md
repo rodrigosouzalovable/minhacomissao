@@ -16,3 +16,4 @@
 - [Relatório no grupo](mem://features/relatorios/envio-grupo-auto-cura) — Envio em grupo tenta todas as instâncias conectadas, grava a que funcionou e avisa falha total
 - [Arquivo UME vínculo CPF](mem://features/relatorios/ume-vinculo-telefone-cpf) — Arquivo diário UME só exporta acionamentos com CPF identificado via acionamento_telefone_cpf
 - [IAGO Descontos e Espera 20s](mem://features/whatsapp/iago-descontos-e-espera-20s) — Descontos manuais em iago_config sobrepõem faixas do credor; espera extra de 20s com prioridade ao humano
+- [IAGO lê proposta anterior](mem://features/whatsapp/iago-le-proposta-anterior) — Proposta em mensagem nossa anterior é retomada; proibido pedir CPF de entrada; respostas automáticas ignoradas
