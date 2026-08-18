@@ -1567,14 +1567,23 @@ export default function Acionamento() {
           await supabase.functions.invoke('whatsapp-qr', {
             body: { action: 'setup-webhook', userId: user?.id, instanceId },
           });
+          // Grava automaticamente o número do WhatsApp conectado (se a UAZAPI retornou)
+          const phoneAuto = String(data?.phone || '').replace(/\D/g, '');
+          if (phoneAuto.length >= 10) {
+            await supabase
+              .from('user_whatsapp_instances' as any)
+              .update({ telefone: phoneAuto } as any)
+              .eq('id', instanceId);
+          }
           // Refresh instances list
           const { data: refreshed } = await supabase
             .from('user_whatsapp_instances' as any)
-            .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
+            .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
             .eq('user_id', user?.id)
             .order('ordem' as any, { ascending: true })
             .order('criado_em', { ascending: false });
           if (refreshed) setInstances(refreshed as any);
+
           setQrStep('idle');
           setQrImage(null);
           setPairingCode(null);
