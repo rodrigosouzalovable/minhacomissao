@@ -123,8 +123,16 @@ Deno.serve(async (req) => {
     const reprovadosGuardrail: any[] = [];
     for (const inst of insts) {
       const rotulo = inst.nome || inst.phone_number_id || inst.id;
+      if (excluidas.includes(inst.id)) { descartados.push(`${rotulo}: já falhou na entrega para este contato`); continue; }
+      // Nome de exibição reprovado/em análise costuma gerar falha de entrega (#131000)
+      const nameStatus = String(inst.meta_name_status || '').toUpperCase();
+      if (nameStatus === 'REJECTED' || nameStatus === 'PENDING_REVIEW') {
+        descartados.push(`${rotulo}: nome de exibição ${nameStatus} na Meta (entrega bloqueada)`);
+        continue;
+      }
       const motivoBm = motivoBloqueioBm(cotasBm, inst.meta_bm_id);
       if (motivoBm) { descartados.push(`${rotulo}: ${motivoBm}`); continue; }
+
       const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
       const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
       const pausaPorStatus = motivoPausaLower.startsWith('status=');
