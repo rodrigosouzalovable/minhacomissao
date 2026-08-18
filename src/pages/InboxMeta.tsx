@@ -1798,8 +1798,8 @@ export default function InboxMeta() {
                       sel && 'bg-primary/15',
                       c.nao_lido > 0 && !ativo && 'bg-emerald-500/5',
                       qualificacaoAtivaNaCaixa && !(qualifPorContato[c.id]?.length) && !!c.ultima_msg_entrada_em && !ativo && 'borda-nao-qualificada',
-                      !ativo && esp.nivel === 'alerta' && 'pisca-sla-amarelo',
-                      !ativo && esp.nivel === 'critico' && 'pisca-sla-vermelho',
+                      alertaEsperaAtivoNaCaixa && !ativo && esp.nivel === 'alerta' && 'pisca-sla-amarelo',
+                      alertaEsperaAtivoNaCaixa && !ativo && esp.nivel === 'critico' && 'pisca-sla-vermelho',
                     )}>
 
                     <div className="min-w-0 space-y-1">
