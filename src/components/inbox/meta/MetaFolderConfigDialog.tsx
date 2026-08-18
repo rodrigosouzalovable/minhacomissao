@@ -214,6 +214,22 @@ export function MetaFolderConfigDialog({
           <Switch checked={ativo} disabled={salvando} onCheckedChange={salvar} />
         </div>
 
+        <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+          <div className="space-y-0.5">
+            <Label className="text-sm">Alerta de cliente esperando resposta</Label>
+            <p className="text-xs text-muted-foreground">
+              Pisca o card em amarelo (15 a 30 min) e vermelho (mais de 30 min) enquanto ninguém responde.
+            </p>
+          </div>
+          <Switch
+            checked={alertaEspera}
+            disabled={salvando}
+            onCheckedChange={salvarAlertaEspera}
+            aria-label="Ativar alerta de cliente esperando resposta"
+          />
+        </div>
+
+
         <div className="space-y-3 rounded-md border p-3">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
