@@ -1,6 +1,7 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
 import { LayoutPlanilhaTab } from '@/components/modelo-mensagem/LayoutPlanilhaTab';
+import { LayoutUazapiTab } from '@/components/modelo-mensagem/LayoutUazapiTab';
 import { EditarTemplateMensagemDialog } from '@/components/EditarTemplateMensagemDialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -33,12 +34,16 @@ export default function ModeloMensagem() {
             <TabsList>
               <TabsTrigger value="imagem">Colar imagem</TabsTrigger>
               <TabsTrigger value="planilha">Layout Planilha</TabsTrigger>
+              <TabsTrigger value="uazapi">Layout Uazapi</TabsTrigger>
             </TabsList>
             <TabsContent value="imagem" className="mt-4">
               <ColarImagemTab key={reloadKey} />
             </TabsContent>
             <TabsContent value="planilha" className="mt-4">
               <LayoutPlanilhaTab />
+            </TabsContent>
+            <TabsContent value="uazapi" className="mt-4">
+              <LayoutUazapiTab />
             </TabsContent>
           </Tabs>
         ) : (
