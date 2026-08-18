@@ -1868,6 +1868,23 @@ export default function Acionamento() {
     }
   };
 
+  const handleExportarNumeros = async () => {
+    const numeros = instances
+      .map(i => (i.telefone || '').replace(/\D/g, ''))
+      .filter(Boolean);
+    if (numeros.length === 0) {
+      toast.error('Nenhum número cadastrado nas instâncias');
+      return;
+    }
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.aoa_to_sheet(numeros.map(n => [n]));
+    ws['!cols'] = [{ wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Numeros');
+    XLSX.writeFile(wb, 'numeros-uazapi.xlsx');
+    toast.success(`${numeros.length} número(s) exportado(s)`);
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
