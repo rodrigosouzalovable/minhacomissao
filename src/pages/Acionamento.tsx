@@ -166,6 +166,39 @@ interface InstanceFormData {
   whatsapp_profile_email?: string;
 }
 
+// Extrai o número do WhatsApp conectado a partir da resposta de status da UAZAPI
+function extrairTelefoneUazapi(payload: any): string | null {
+  if (!payload) return null;
+  const p = payload?.instance ?? payload;
+  const candidatos = [
+    payload?.phoneNumber, payload?.phone, payload?.wid, payload?.owner, payload?.jid,
+    p?.phoneNumber, p?.phone, p?.wid, p?.owner, p?.jid,
+    payload?.status?.phoneNumber, payload?.status?.phone,
+    payload?.result?.phone, payload?.data?.phone,
+  ];
+  for (const c of candidatos) {
+    if (typeof c === 'string') {
+      const d = c.replace(/\D/g, '');
+      if (d.length >= 10 && d.length <= 15) return d;
+    }
+  }
+  return null;
+}
+
+// Formata dígitos em (DD) 9NNNN-NNNN
+function formatarTelefoneBR(v?: string | null): string {
+  const d = String(v || '').replace(/\D/g, '');
+  if (d.length < 10) return d;
+  const semDdi = d.startsWith('55') && d.length > 11 ? d.slice(2) : d;
+  const ddd = semDdi.slice(0, 2);
+  const resto = semDdi.slice(2);
+  if (resto.length < 8) return d;
+  const meio = resto.length > 8 ? resto.slice(0, 5) : resto.slice(0, 4);
+  const fim = resto.length > 8 ? resto.slice(5) : resto.slice(4);
+  return `(${ddd}) ${meio}-${fim}`;
+}
+
+
 function SortableInstanceCard({ id, children }: { id: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
