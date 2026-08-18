@@ -1871,20 +1871,28 @@ export default function Acionamento() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Acionamento</h1>
-          {instances.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => checkInstanceConnections(instances)}
-              disabled={checkingConnections}
-              className="text-muted-foreground"
-            >
-              {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              <span className="ml-1 text-xs">Verificar conexões</span>
-            </Button>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-2xl font-bold">UAZAPI</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            {instances.some(i => i.telefone) && (
+              <Button variant="outline" size="sm" onClick={handleExportarNumeros} className="gap-1">
+                <Download className="h-4 w-4" />
+                <span className="text-xs">Exportar números (Excel)</span>
+              </Button>
+            )}
+            {instances.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => checkInstanceConnections(instances)}
+                disabled={checkingConnections}
+                className="text-muted-foreground"
+              >
+                {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                <span className="ml-1 text-xs">Verificar conexões</span>
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Alert banner for disconnected instances */}
