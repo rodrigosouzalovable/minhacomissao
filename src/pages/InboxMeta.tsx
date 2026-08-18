@@ -201,6 +201,7 @@ export default function InboxMeta() {
   const [qualificacoes, setQualificacoes] = useState<MetaQualificacao[]>([]);
   const [qualifPorContato, setQualifPorContato] = useState<Record<string, string[]>>({});
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
+  const [alertaEsperaCaixas, setAlertaEsperaCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
 
