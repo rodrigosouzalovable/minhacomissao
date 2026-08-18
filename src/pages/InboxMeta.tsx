@@ -909,12 +909,19 @@ export default function InboxMeta() {
 
   const [nowTick, setNowTick] = useState(Date.now());
 
+  const isCaixaAquecimento = useMemo(() => {
+    if (!currentFolderId) return false;
+    const f = folders.find(x => x.id === currentFolderId);
+    return !!f && /aquecimento/i.test(f.nome || '');
+  }, [folders, currentFolderId]);
+
   const contatosFiltrados = useMemo(() => {
     const bRaw = busca.trim();
     const b = norm(bRaw);
     const bDigits = bRaw.replace(/\D/g, '');
     const bTemDigito = /\d/.test(bRaw);
     const bSuffix = bDigits.slice(-8);
+    const ordenarPorAlerta = alertaEsperaAtivoNaCaixa && !isCaixaAquecimento;
     return contatos
       .filter(c => {
         if (b) {
@@ -951,30 +958,34 @@ export default function InboxMeta() {
         const rank = (c: MetaContato) => (c.fixado ? 0 : 1);
         const ra = rank(a), rb = rank(b);
         if (ra !== rb) return ra - rb;
-        // Alertas de espera sobem: vermelho (30min+) > amarelo (15-30min) > resto
-        const espera = (c: MetaContato) => {
-          if (!c.ultima_msg_entrada_em) return { rank: 2, t: 0 };
-          // Entrada nos últimos 10 min sempre sobe ao topo (mesmo já respondida)
-          const tRecente = new Date(c.ultima_msg_entrada_em).getTime();
-          if (nowTick - tRecente <= 10 * 60_000) return { rank: -1, t: -tRecente };
-          const tEntrada = new Date(c.ultima_msg_entrada_em).getTime();
-          const tUltima = c.ultima_mensagem_em ? new Date(c.ultima_mensagem_em).getTime() : 0;
-          if (tUltima > tEntrada) return { rank: 2, t: 0 };
-          const tDisp = c.sla_dispensado_em ? new Date(c.sla_dispensado_em).getTime() : 0;
-          if (tDisp >= tEntrada) return { rank: 2, t: 0 };
-          const min = Math.floor((nowTick - tEntrada) / 60_000);
-          if (min >= 30) return { rank: 0, t: tEntrada };
-          if (min >= 15) return { rank: 1, t: tEntrada };
-          return { rank: 2, t: 0 };
-        };
-        const ea = espera(a), eb = espera(b);
-        if (ea.rank !== eb.rank) return ea.rank - eb.rank;
-        if (ea.rank !== 2) return ea.t - eb.t; // espera mais antiga primeiro
+
+        if (ordenarPorAlerta) {
+          // Alertas de espera sobem: vermelho (30min+) > amarelo (15-30min) > resto
+          const espera = (c: MetaContato) => {
+            if (!c.ultima_msg_entrada_em) return { rank: 2, t: 0 };
+            // Entrada nos últimos 10 min sempre sobe ao topo (mesmo já respondida)
+            const tRecente = new Date(c.ultima_msg_entrada_em).getTime();
+            if (nowTick - tRecente <= 10 * 60_000) return { rank: -1, t: -tRecente };
+            const tEntrada = new Date(c.ultima_msg_entrada_em).getTime();
+            const tUltima = c.ultima_mensagem_em ? new Date(c.ultima_mensagem_em).getTime() : 0;
+            if (tUltima > tEntrada) return { rank: 2, t: 0 };
+            const tDisp = c.sla_dispensado_em ? new Date(c.sla_dispensado_em).getTime() : 0;
+            if (tDisp >= tEntrada) return { rank: 2, t: 0 };
+            const min = Math.floor((nowTick - tEntrada) / 60_000);
+            if (min >= 30) return { rank: 0, t: tEntrada };
+            if (min >= 15) return { rank: 1, t: tEntrada };
+            return { rank: 2, t: 0 };
+          };
+          const ea = espera(a), eb = espera(b);
+          if (ea.rank !== eb.rank) return ea.rank - eb.rank;
+          if (ea.rank !== 2) return ea.t - eb.t; // espera mais antiga primeiro
+        }
+
         const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato, nowTick, instancias]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento]);
 
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
