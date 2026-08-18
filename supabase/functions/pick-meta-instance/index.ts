@@ -52,8 +52,10 @@ function faseFromDias(d: number): string {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { instancia_ids, user_id, excluir_id, ignorar_pausa_qualidade } = await req.json();
+    const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = await req.json();
     const ignoraQualidadeGlobal = ignorar_pausa_qualidade === true;
+    const excluidas: string[] = Array.isArray(excluir_ids) ? excluir_ids : [];
+
     if (!Array.isArray(instancia_ids) || instancia_ids.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'instancia_ids obrigatório' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
