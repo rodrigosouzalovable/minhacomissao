@@ -232,6 +232,12 @@ Deno.serve(async (req) => {
       .map((m) => normalizarTexto(m.conteudo))
       .filter(Boolean);
 
+    // ===== Proposta já enviada por nós antes do IAGO (campanha/template/atendente) =====
+    const propostaPrevia = detectarPropostaPrevia(historico);
+    // Resposta automática do cliente (ausência/atendimento automático): não é resposta real.
+    const respostaAutomatica = ehRespostaAutomatica(textoAtual);
+
+
     // Se outra mensagem chegou enquanto esta execução aguardava a trava, processa a mais recente.
     if (ehOptOut(textoAtual)) {
       await supabase.from('iago_conversa_estado')
