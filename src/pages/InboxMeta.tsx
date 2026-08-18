@@ -2296,6 +2296,7 @@ export default function InboxMeta() {
         folderId={configFolder?.id ?? null}
         folderNome={configFolder?.nome ?? 'Padrão'}
         qualificacaoAtiva={qualifCaixas[configFolder?.id ?? CAIXA_PADRAO_ID] ?? true}
+        alertaEsperaAtivo={alertaEsperaCaixas[configFolder?.id ?? CAIXA_PADRAO_ID] ?? true}
         onChanged={fetchQualificacoes}
       />
       <MetaQualificacaoDialog
