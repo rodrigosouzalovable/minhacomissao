@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
         }
 
         const mensagem = `${emoji} Saúde do Webhook — ${inst.nome}\n\n${corpo}`;
-        const chave = `${inst.id}:${status}:${new Date().toISOString().slice(0, 13)}`;
+        const chave = `${inst.id}:${status}:${new Date().toISOString().slice(0, 10)}`;
         await notificarAdmin(supabase, {
           tipo: "meta_webhook_saude",
           mensagem,
