@@ -432,7 +432,11 @@ function descontoPadrao(dias: number, modalidade: 'avista' | 'parcelado'): numbe
  * dias de atraso da parcela mais antiga + faixas customizadas do credor
  * (credor_desconto_faixas) com fallback nas faixas padrão. Parcela mínima R$ 100.
  */
-export async function calcularProposta(supabase: any, cpf: string): Promise<PropostaCalculada | null> {
+export async function calcularProposta(
+  supabase: any,
+  cpf: string,
+  override?: { descAvista?: number | null; descParcelado?: number | null },
+): Promise<PropostaCalculada | null> {
   const { data: debitos } = await supabase.rpc('consultar_debitos_por_cpf', { p_cpf: cpf });
   const lista = (debitos || []) as any[];
   if (!lista.length) return null;
