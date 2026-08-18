@@ -547,6 +547,21 @@ export default function Acionamento() {
     [instances, connectionStatus]
   );
 
+  const instancesFiltradas = useMemo(() => {
+    const termo = filtroInstancia.trim();
+    if (!termo) return instances;
+    const digitos = termo.replace(/\D/g, '');
+    const texto = termo.toLowerCase();
+    return instances.filter(i => {
+      const tel = (i.telefone || '').replace(/\D/g, '');
+      const telSemDdi = tel.startsWith('55') ? tel.slice(2) : tel;
+      const casaTel = digitos.length >= 3 && (tel.includes(digitos) || telSemDdi.includes(digitos));
+      const casaNome = (i.nome || '').toLowerCase().includes(texto);
+      return casaTel || casaNome;
+    });
+  }, [instances, filtroInstancia]);
+
+
   const activeInstances = useMemo(() => 
     instances.filter(i => i.ativo && connectionStatus[i.id] === 'connected' && !i.apenas_lembretes && i.robo), 
     [instances, connectionStatus]
