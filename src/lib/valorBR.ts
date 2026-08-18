@@ -48,7 +48,7 @@ export function amostrasParecemValor(samples: unknown[]): boolean {
     const temDecimal = /[.,]\d+$/.test(s);
     // evita telefones/CPF/CNPJ (10-14 dígitos) quando não há centavos
     if (!temDecimal && digitos.length >= 10) return false;
-    if (digitos.length > 14) return false;
+    if (!temDecimal && digitos.length > 14) return false;
     // evita anos (1900-2100) inteiros de 4 dígitos
     if (!temDecimal && digitos.length === 4 && n >= 1900 && n <= 2100) return false;
     return true;
