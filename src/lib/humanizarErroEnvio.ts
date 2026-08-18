@@ -7,6 +7,24 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
 
   const s = raw.toLowerCase();
 
+  // #131000 — a Meta aceita a mensagem e rejeita na entrega. Na prática é problema da instância.
+  if (s.includes("#131000") || s.includes("something went wrong")) {
+    return "A Meta aceitou o envio mas rejeitou a entrega por essa instância (#131000). Quase sempre é problema do próprio número — nome de exibição em análise/reprovado, qualidade rebaixada ou pendência de pagamento no Business Manager — e não do contato. Envie esse contato por outra instância saudável.";
+  }
+  // Número sem WhatsApp / não entregável
+  if (s.includes("message undeliverable") || s.includes("#131026")) {
+    return "Não foi possível entregar: o número provavelmente não tem WhatsApp ativo, mudou de titular ou não aceita mensagens de empresas. Não é falha da instância.";
+  }
+  // Pendência de faturamento na conta Meta
+  if (s.includes("business eligibility payment issue") || s.includes("#131042")) {
+    return "A conta Meta dessa instância está com pendência de pagamento/faturamento. Regularize o método de pagamento no Business Manager — até lá os envios desse número continuarão falhando.";
+  }
+  // Nome de exibição em análise
+  if (s.includes("pending_review") || s.includes("display name")) {
+    return "O nome de exibição dessa instância está em análise ou foi reprovado pela Meta. Enquanto isso, a entrega pode ser bloqueada. Use outra instância até a aprovação.";
+  }
+
+
   // HTML retornado ao invés de JSON — instância caiu / Meta devolveu página de erro
   if (s.includes("unexpected token") && (s.includes("<") || s.includes("html"))) {
     return "A instância respondeu com uma página HTML em vez do formato esperado. Geralmente significa que ela ficou fora do ar por alguns segundos ou a Meta devolveu uma página de erro. Tente novamente mais tarde.";

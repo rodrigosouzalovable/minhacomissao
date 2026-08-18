@@ -632,9 +632,33 @@ export default function EnvioMeta() {
       toast.warning(`${badQuality.length} instância(s) RED/YELLOW removidas automaticamente: ${nomes}`);
     }
 
+    // Nome de exibição em análise/reprovado na Meta = entrega rejeitada (#131000).
+    // Essas instâncias são removidas do disparo automaticamente.
+    const nomeProblema = filteredInstanciaIds.filter((id) => {
+      const inst = instancias.find((x) => x.id === id) as any;
+      const st = String(inst?.meta_name_status || "").toUpperCase();
+      return st === "PENDING_REVIEW" || st === "REJECTED";
+    });
+    const idsOk = filteredInstanciaIds.filter((id) => !nomeProblema.includes(id));
+    if (idsOk.length === 0) {
+      return toast.error(
+        "Nenhuma instância recomendada. As selecionadas estão com o nome de exibição em análise/reprovado na Meta, o que faz a entrega falhar com \"Something went wrong (#131000)\". Aguarde a aprovação ou use outro número.",
+      );
+    }
+    if (nomeProblema.length > 0) {
+      const nomes = nomeProblema
+        .map((id) => instancias.find((x) => x.id === id)?.nome || id)
+        .slice(0, 5)
+        .join(", ");
+      toast.warning(
+        `${nomeProblema.length} instância(s) removidas: nome de exibição em análise/reprovado na Meta (causa o erro #131000) — ${nomes}`,
+      );
+    }
+
+
     // Cota por BM (janela de 24h): remove instâncias de BMs já esgotadas
     await recarregarCotas();
-    const semCota = filteredInstanciaIds.filter((id) => {
+    const semCota = idsOk.filter((id) => {
       const inst = instancias.find((x) => x.id === id) as any;
       return inst ? bmSemSaldo(inst.meta_bm_id) : false;
     });
@@ -645,7 +669,8 @@ export default function EnvioMeta() {
       }))).join(", ");
       toast.warning(`${semCota.length} instância(s) removidas: cota de 24h esgotada na(s) BM(s) ${nomesBm}.`);
     }
-    const instanciasComCota = filteredInstanciaIds.filter((id) => !semCota.includes(id));
+    const instanciasComCota = idsOk.filter((id) => !semCota.includes(id));
+
     if (instanciasComCota.length === 0) {
       return toast.error("Nenhuma instância disponível: a cota de 24h das BMs selecionadas está esgotada.");
     }
@@ -1303,11 +1328,17 @@ export default function EnvioMeta() {
                           <SaudeBadgeStatus status={i.saude_status} />
                           <SaudeBadgeQuality quality={i.saude_quality} />
                           {i.saude_tier && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{i.saude_tier}</Badge>}
+                          {["PENDING_REVIEW", "REJECTED"].includes(String(i.meta_name_status || "").toUpperCase()) && (
+                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" /> NÃO RECOMENDADA — nome {String(i.meta_name_status).toUpperCase()}
+                            </Badge>
+                          )}
                           {i.saude_ban_info && (
                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
                               <AlertTriangle className="h-3 w-3" /> BANIDO
                             </Badge>
                           )}
+
                           <button
                             type="button"
                             className="text-[10px] text-primary underline ml-1"

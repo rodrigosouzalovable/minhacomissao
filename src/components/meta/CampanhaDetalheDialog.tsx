@@ -604,7 +604,38 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   </Button>
                 </div>
               </summary>
+              {(() => {
+                const grupos = new Map<string, { inst: string; motivo: string; qtd: number }>();
+                for (const e of detalhes.erros) {
+                  const inst = e.instancia || "sem instância";
+                  const motivo = humanizarErroEnvio(e.erro);
+                  const k = `${inst}||${motivo}`;
+                  const g = grupos.get(k);
+                  if (g) g.qtd++;
+                  else grupos.set(k, { inst, motivo, qtd: 1 });
+                }
+                const lista = [...grupos.values()].sort((a, b) => b.qtd - a.qtd);
+                if (lista.length === 0) return null;
+                return (
+                  <div className="mx-3 mb-2 rounded-md border border-red-200 dark:border-red-900/50 bg-red-50/60 dark:bg-red-950/20 p-2 space-y-1.5">
+                    <div className="text-[11px] font-medium text-red-700 dark:text-red-400">
+                      Resumo das falhas por instância
+                    </div>
+                    {lista.slice(0, 6).map((g, i) => (
+                      <div key={i} className="text-[11px] leading-snug">
+                        <span className="font-medium">{g.inst}</span>
+                        <span className="text-muted-foreground"> — {g.qtd} falha(s)</span>
+                        <div className="text-muted-foreground">{g.motivo}</div>
+                      </div>
+                    ))}
+                    {lista.length > 6 && (
+                      <div className="text-[10px] text-muted-foreground">+{lista.length - 6} outro(s) motivo(s)</div>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono" style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}>
+
                 {detalhes.erros.map((e, i) => (
                   <div key={i} className="border-b border-border/40 py-1">
                     <div className="flex justify-between gap-2">

@@ -1310,12 +1310,12 @@ serve(async (req) => {
               }
             }
 
-            // === RETRY AUTOMÁTICO: reenfileira o item da campanha em outra instância ===
+            // === RETRY AUTOMÁTICO: reenfileira o item da campanha em OUTRA instância ===
             try {
               const MAX_TENTATIVAS_ITEM = 3;
               const { data: item } = await supabase
                 .from('envio_meta_job_item')
-                .select('id, job_id, tentativas, status')
+                .select('id, job_id, tentativas, status, instancia_id, vars')
                 .eq('wa_message_id', waId)
                 .maybeSingle();
 
@@ -1324,20 +1324,57 @@ serve(async (req) => {
                 if (tentativasAtual < MAX_TENTATIVAS_ITEM) {
                   const { data: job } = await supabase
                     .from('envio_meta_job')
-                    .select('id, status, instancia_ids, instancias_bloqueadas_run, enviados, erros')
+                    .select('id, status, instancia_ids, instancias_bloqueadas_run, falhas_por_instancia_run, enviados, erros')
                     .eq('id', item.job_id)
                     .maybeSingle();
 
                   if (job && ['rodando', 'pausado', 'concluido'].includes(job.status)) {
                     const bloqueadas: string[] = Array.isArray(job.instancias_bloqueadas_run)
-                      ? job.instancias_bloqueadas_run : [];
-                    if (isRestricted && !bloqueadas.includes(inst.id)) {
+                      ? [...job.instancias_bloqueadas_run] : [];
+
+                    // Conta falhas de ENTREGA por instância dentro deste job (chave dlv:)
+                    const falhasMap: Record<string, number> =
+                      (job.falhas_por_instancia_run && typeof job.falhas_por_instancia_run === 'object')
+                        ? { ...job.falhas_por_instancia_run } : {};
+                    const chaveDlv = `dlv:${inst.id}`;
+                    falhasMap[chaveDlv] = Number(falhasMap[chaveDlv] || 0) + 1;
+
+                    const MAX_FALHAS_ENTREGA = 3;
+                    const estourouEntrega = falhasMap[chaveDlv] >= MAX_FALHAS_ENTREGA;
+
+                    if ((isRestricted || estourouEntrega) && !bloqueadas.includes(inst.id)) {
                       bloqueadas.push(inst.id);
-                      await supabase.from('envio_meta_job')
-                        .update({ instancias_bloqueadas_run: bloqueadas })
-                        .eq('id', job.id);
+                      try {
+                        const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+                        await notificarAdmin(supabase, {
+                          tipo: 'meta_instancia_cortada_job',
+                          mensagem:
+                            `⚠️ Instância retirada da campanha por falhas de entrega\n\n` +
+                            `Instância: *${rotuloInstancia(inst)}*\n` +
+                            `Falhas de entrega neste envio: *${falhasMap[chaveDlv]}*\n` +
+                            `Último motivo: *${errTitle || 'failed'}*${errCode ? ` (#${errCode})` : ''}\n\n` +
+                            `A Meta aceitou as mensagens mas rejeitou a entrega. Os contatos continuam sendo enviados pelas outras instâncias.`,
+                          chaveIdempotencia: `job_corte_${job.id}_${inst.id}`,
+                          umaVezPorChave: true,
+                        });
+                      } catch (_) { /* aviso é best-effort */ }
                     }
-                    const restantes = (job.instancia_ids || []).filter((id: string) => !bloqueadas.includes(id));
+
+                    await supabase.from('envio_meta_job').update({
+                      instancias_bloqueadas_run: bloqueadas,
+                      falhas_por_instancia_run: falhasMap,
+                    }).eq('id', job.id);
+
+                    // Nunca repete o mesmo contato na instância que acabou de falhar
+                    const varsAtual = (item.vars && typeof item.vars === 'object') ? { ...(item.vars as any) } : {};
+                    const exclAtual: string[] = Array.isArray(varsAtual._inst_excluidas) ? varsAtual._inst_excluidas : [];
+                    const instFalhou = item.instancia_id || inst.id;
+                    const novasExcl = exclAtual.includes(instFalhou) ? exclAtual : [...exclAtual, instFalhou];
+                    varsAtual._inst_excluidas = novasExcl;
+
+                    const restantes = (job.instancia_ids || []).filter(
+                      (id: string) => !bloqueadas.includes(id) && !novasExcl.includes(id),
+                    );
 
                     if (restantes.length > 0) {
                       // Devolve item pra fila
@@ -1347,9 +1384,11 @@ serve(async (req) => {
                         instancia_nome: null,
                         wa_message_id: null,
                         processado_em: null,
+                        vars: varsAtual,
                         erro: `Falha na entrega (Meta): ${errTitle || 'failed'}${errCode ? ` (#${errCode})` : ''}`,
                         tentativas: tentativasAtual + 1,
                       }).eq('id', item.id);
+
 
                       // Ajusta contadores do job (o item tinha sido contado como enviado)
                       const novoEnviados = Math.max(0, Number(job.enviados || 0) - 1);
