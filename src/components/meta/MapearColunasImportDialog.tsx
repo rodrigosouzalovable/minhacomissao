@@ -373,7 +373,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
                         )}
                       </SelectContent>
                     </Select>
-                    {(colunasMonetarias.has(c) || fmtCol(c) !== "raw") && (
+                    {(
                       <Select
                         value={fmtCol(c)}
                         onValueChange={(v) => setFormatoPorColuna((p) => ({ ...p, [c]: v as FormatoValor }))}
