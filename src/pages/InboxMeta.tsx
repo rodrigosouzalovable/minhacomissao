@@ -1791,7 +1791,7 @@ export default function InboxMeta() {
                   <button
                     onClick={() => selMultipla ? toggleSel(c.id) : setContatoAtivo(c)}
                     onDoubleClick={() => { if (!selMultipla) { setSelMultipla(true); toggleSel(c.id); } }}
-                    title={esp.nivel !== 'ok' ? `Cliente aguardando resposta há ${esp.min}min` : undefined}
+                    title={alertaEsperaAtivoNaCaixa && esp.nivel !== 'ok' ? `Cliente aguardando resposta há ${esp.min}min` : undefined}
                     className={cn(
                       'relative block w-full max-w-full min-h-[76px] text-left px-3 py-3 pr-14 border-b hover:bg-accent/50 transition overflow-hidden',
                       ativo && 'bg-accent',
