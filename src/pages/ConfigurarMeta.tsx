@@ -444,7 +444,7 @@ export default function ConfigurarMeta() {
       .select("id")
       .single();
     if (error) {
-      toast.error("Erro: " + error.message);
+      toast.error("Erro: " + humanizarErroDuplicado(error.message));
       return;
     }
     toast.success("Instância adicionada");
