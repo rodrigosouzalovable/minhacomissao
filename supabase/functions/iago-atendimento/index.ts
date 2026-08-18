@@ -669,6 +669,8 @@ async function gerarResposta(args: {
   escolhaAnterior?: string;
   imagemCtx?: { descricao: string; classificacao: string } | null;
   qualificacoes?: QualificacaoIA[];
+  propostaPrevia?: { valor: string; texto: string } | null;
+  respostaAutomatica?: boolean;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
@@ -677,7 +679,7 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx, qualificacoes,
+    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica,
   } = args;
 
 
@@ -691,7 +693,10 @@ async function gerarResposta(args: {
 
   const semDebito = cpfIdentificado
     ? 'Já identifiquei o cliente pelo telefone, mas não há débitos em aberto para ele. NÃO peça o CPF: informe que não localizou débitos em aberto e escale para um humano conferir (escalar=true).'
-    : 'Ainda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.';
+    : propostaPrevia
+      ? `Ainda não tenho os débitos calculados no sistema, MAS nós já enviamos a este cliente uma proposta de pagamento à vista no valor de R$ ${propostaPrevia.valor}. NÃO peça o CPF agora: retome essa proposta.`
+      : 'Ainda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.';
+
 
   const opcoesTxt = (proposta?.opcoes || [])
     .map((o: any) => `   ${o.parcelas}x de R$ ${fmtBRL(o.valorParcela)}`)
