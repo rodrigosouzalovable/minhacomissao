@@ -45,7 +45,7 @@ export function amostrasParecemValor(samples: unknown[]): boolean {
     const n = parseNumeroBR(v);
     if (n == null) return false;
     const digitos = s.replace(/\D/g, "");
-    const temDecimal = /[.,]\d{1,2}$/.test(s);
+    const temDecimal = /[.,]\d+$/.test(s);
     // evita telefones/CPF/CNPJ (10-14 dígitos) quando não há centavos
     if (!temDecimal && digitos.length >= 10) return false;
     if (digitos.length > 14) return false;
