@@ -4120,16 +4120,19 @@ export type Database = {
       }
       meta_qualificacao_caixa: {
         Row: {
+          alerta_espera_ativo: boolean
           ativo: boolean
           folder_id: string
           updated_at: string
         }
         Insert: {
+          alerta_espera_ativo?: boolean
           ativo?: boolean
           folder_id: string
           updated_at?: string
         }
         Update: {
+          alerta_espera_ativo?: boolean
           ativo?: boolean
           folder_id?: string
           updated_at?: string
