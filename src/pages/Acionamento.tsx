@@ -464,6 +464,18 @@ export default function Acionamento() {
         const data = await checkUazapiConnection(inst.id, inst.server_url, inst.instance_token);
         const isConnected = isResultConnected(data);
         setConnectionStatus(prev => ({ ...prev, [inst.id]: isConnected ? 'connected' : 'disconnected' }));
+        // Preenche o telefone automaticamente quando a instância ainda não tem número salvo
+        const jaTem = (inst.telefone || '').replace(/\D/g, '').length >= 8;
+        if (!jaTem) {
+          const phone = extrairTelefoneUazapi(data?.data);
+          if (phone) {
+            await supabase
+              .from('user_whatsapp_instances' as any)
+              .update({ telefone: phone } as any)
+              .eq('id', inst.id);
+            setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, telefone: phone } : i));
+          }
+        }
         return { id: inst.id, connected: isConnected };
       } catch {
         setConnectionStatus(prev => ({ ...prev, [inst.id]: 'disconnected' }));
@@ -478,6 +490,7 @@ export default function Acionamento() {
     // é controlado **apenas manualmente** (toggle individual ou botão "Ativar todas").
     setCheckingConnections(false);
   }, []);
+
 
   // ECONOMIA: NÃO testar conexão de todas as instâncias automaticamente ao montar a página.
   // Cada chamada vira invocação da edge function `test-uazapi-connection`.
