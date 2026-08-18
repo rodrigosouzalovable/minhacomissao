@@ -89,7 +89,7 @@ export async function espelharMensagemInboxMeta(
     .order('atualizado_em', { ascending: false })
     .limit(1);
   const contato = Array.isArray(achados) && achados.length ? achados[0] : null;
-  const telefoneFinal = (contato as any)?.telefone || (digits.startsWith('55') ? digits : `55${digits}`);
+  const telefoneFinal = (contato as any)?.telefone || normalizarBr13(digits);
 
   let contatoId: string | null = (contato as any)?.id || null;
   const preview = String(msg.conteudo || '').slice(0, 200);
