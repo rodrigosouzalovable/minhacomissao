@@ -658,7 +658,7 @@ export default function EnvioMeta() {
 
     // Cota por BM (janela de 24h): remove instâncias de BMs já esgotadas
     await recarregarCotas();
-    const semCota = filteredInstanciaIds.filter((id) => {
+    const semCota = idsOk.filter((id) => {
       const inst = instancias.find((x) => x.id === id) as any;
       return inst ? bmSemSaldo(inst.meta_bm_id) : false;
     });
@@ -669,7 +669,8 @@ export default function EnvioMeta() {
       }))).join(", ");
       toast.warning(`${semCota.length} instância(s) removidas: cota de 24h esgotada na(s) BM(s) ${nomesBm}.`);
     }
-    const instanciasComCota = filteredInstanciaIds.filter((id) => !semCota.includes(id));
+    const instanciasComCota = idsOk.filter((id) => !semCota.includes(id));
+
     if (instanciasComCota.length === 0) {
       return toast.error("Nenhuma instância disponível: a cota de 24h das BMs selecionadas está esgotada.");
     }
