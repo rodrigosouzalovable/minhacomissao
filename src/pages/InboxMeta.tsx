@@ -1997,7 +1997,7 @@ export default function InboxMeta() {
                     <FileText className="h-3.5 w-3.5" /> Modelo
                   </Button>
 
-                  {(() => {
+                  {alertaEsperaAtivoNaCaixa && (() => {
                     const dispensado = !!contatoAtivo.sla_dispensado_em && !!contatoAtivo.ultima_msg_entrada_em
                       && new Date(contatoAtivo.sla_dispensado_em).getTime() >= new Date(contatoAtivo.ultima_msg_entrada_em).getTime();
                     return (
