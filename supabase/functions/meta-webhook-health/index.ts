@@ -153,8 +153,12 @@ Deno.serve(async (req) => {
         })
         .eq("id", inst.id);
 
-      // Notifica admin em problemas relevantes — texto humanizado.
-      if (status === "erro" || status === "perda_suspeita" || (forceNotify && status === "reinscrito")) {
+      // Notifica só UMA vez por mudança de estado (evita aviso de hora em hora).
+      const statusAnterior = (inst as any).webhook_saude_status ?? null;
+      const mudouEstado = statusAnterior !== status;
+      const problema = status === "erro" || status === "perda_suspeita";
+      if ((problema && (mudouEstado || forceNotify)) || (forceNotify && status === "reinscrito")) {
+
         const errLower = (erro || "").toLowerCase();
         const isTimeout =
           errLower.includes("timed out") ||
