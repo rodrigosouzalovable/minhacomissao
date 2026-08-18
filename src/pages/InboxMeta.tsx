@@ -473,6 +473,7 @@ export default function InboxMeta() {
   }, []);
 
   const qualificacaoAtivaNaCaixa = qualifCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
+  const alertaEsperaAtivoNaCaixa = alertaEsperaCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
 
   // Somente caixas permitidas (RLS já filtra a lista de folders)
   const foldersVisiveis = folders;
