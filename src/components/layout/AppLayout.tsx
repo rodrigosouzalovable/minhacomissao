@@ -88,7 +88,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/auditoria', label: 'Auditoria', icon: FileSpreadsheet, adminOnly: true },
   { href: '/admin/financeiro', label: 'Financeiro', icon: Wallet, adminOnly: true },
   { href: '/admin/importar-devedores', label: 'Importar Devedores', icon: FileSpreadsheet, adminOnly: true },
-  { href: '/admin/acionamento', label: 'Acionamento', icon: MessageSquare, adminOnly: true },
+  { href: '/admin/acionamento', label: 'UAZAPI', icon: MessageSquare, adminOnly: true },
   { href: '/admin/automacao-cobmais', label: 'Robô CobMais', icon: Bot, adminOnly: true },
   { href: '/campanhas-voz', label: 'Campanhas de Voz', icon: Volume2 },
   { href: '/inbox', label: 'WhatsApp Inbox', icon: MessageSquare, adminOnly: true },

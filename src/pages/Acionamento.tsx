@@ -156,6 +156,7 @@ const WhatsAppIcon = () => (
 interface InstanceFormData {
   id?: string;
   nome: string;
+  telefone?: string;
   server_url: string;
   instance_token: string;
   whatsapp_profile_name?: string;
@@ -213,7 +214,7 @@ export default function Acionamento() {
   const [salvandoRelatorio, setSalvandoRelatorio] = useState(false);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string; proxy_enabled?: boolean; proxy_host?: string | null }>>([]);
+  const [instances, setInstances] = useState<Array<{ id: string; nome: string; telefone?: string | null; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string; proxy_enabled?: boolean; proxy_host?: string | null }>>([]);
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
@@ -356,7 +357,7 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
+        .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
         .eq('user_id', user.id)
         .order('ordem' as any, { ascending: true })
         .order('criado_em', { ascending: false });
@@ -1425,12 +1426,13 @@ export default function Acionamento() {
           .from('user_whatsapp_instances' as any)
           .update({
             nome: editingInstance.nome.trim() || null,
+            telefone: (editingInstance.telefone || '').replace(/\D/g, '') || null,
             server_url: editingInstance.server_url.trim(),
             instance_token: editingInstance.instance_token.trim(),
           } as any)
           .eq('id', editingInstance.id);
         if (error) throw error;
-        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, nome: editingInstance.nome.trim(), server_url: editingInstance.server_url.trim(), instance_token: editingInstance.instance_token.trim() } : i));
+        setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, nome: editingInstance.nome.trim(), telefone: (editingInstance.telefone || '').replace(/\D/g, '') || null, server_url: editingInstance.server_url.trim(), instance_token: editingInstance.instance_token.trim() } : i));
         toast.success('Instância atualizada!');
       } else {
         // Insert
@@ -1439,6 +1441,7 @@ export default function Acionamento() {
           .insert({
             user_id: user.id,
             nome: editingInstance.nome.trim() || null,
+            telefone: (editingInstance.telefone || '').replace(/\D/g, '') || null,
             server_url: editingInstance.server_url.trim(),
             instance_token: editingInstance.instance_token.trim(),
           } as any)
@@ -1865,23 +1868,48 @@ export default function Acionamento() {
     }
   };
 
+  const handleExportarNumeros = async () => {
+    const numeros = instances
+      .map(i => (i.telefone || '').replace(/\D/g, ''))
+      .filter(Boolean);
+    if (numeros.length === 0) {
+      toast.error('Nenhum número cadastrado nas instâncias');
+      return;
+    }
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.aoa_to_sheet(numeros.map(n => [n]));
+    ws['!cols'] = [{ wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Numeros');
+    XLSX.writeFile(wb, 'numeros-uazapi.xlsx');
+    toast.success(`${numeros.length} número(s) exportado(s)`);
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Acionamento</h1>
-          {instances.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => checkInstanceConnections(instances)}
-              disabled={checkingConnections}
-              className="text-muted-foreground"
-            >
-              {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              <span className="ml-1 text-xs">Verificar conexões</span>
-            </Button>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-2xl font-bold">UAZAPI</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            {instances.some(i => i.telefone) && (
+              <Button variant="outline" size="sm" onClick={handleExportarNumeros} className="gap-1">
+                <Download className="h-4 w-4" />
+                <span className="text-xs">Exportar números (Excel)</span>
+              </Button>
+            )}
+            {instances.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => checkInstanceConnections(instances)}
+                disabled={checkingConnections}
+                className="text-muted-foreground"
+              >
+                {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                <span className="ml-1 text-xs">Verificar conexões</span>
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Alert banner for disconnected instances */}
@@ -1895,600 +1923,8 @@ export default function Acionamento() {
           </Alert>
         )}
 
-        {/* Upload + Histórico */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Importar Planilha</CardTitle>
-            <div className="flex items-center gap-2">
-              {!isAdmin && activeInstances.length > 0 && (
-                <Badge variant="secondary">
-                  {activeInstances.length} WhatsApp{activeInstances.length > 1 ? 's' : ''} ativo{activeInstances.length > 1 ? 's' : ''}
-                </Badge>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLembreteMensagensOpen(true)}
-                className="text-muted-foreground gap-1"
-              >
-                <MessageCircle className="h-4 w-4" />
-                <span className="text-xs">Mensagens de Lembrete</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setConfigDialogOpen(true)}
-                className="text-muted-foreground"
-              >
-                <Settings className="h-5 w-5" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="h-4 w-4 mr-2" /> Selecionar arquivo Excel
-              </Button>
-              {clientes.length > 0 && (
-                <Badge variant="secondary">
-                  {clientes.length} clientes importados
-                </Badge>
-              )}
-              {clientes.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleVerificarWhatsApp}
-                  disabled={verificandoWhatsApp}
-                  className="gap-1"
-                >
-                  {verificandoWhatsApp ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
-                  {verificandoWhatsApp ? 'Verificando...' : 'Verificar WhatsApp'}
-                </Button>
-              )}
-            </div>
-
-            {/* Resultado da verificação */}
-            {verificacaoConcluida && numerosInvalidos.length > 0 && (
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>{numerosInvalidos.length} número(s) sem WhatsApp removidos</AlertTitle>
-                <AlertDescription className="space-y-2">
-                  <p className="text-sm">Apenas {clientes.length} contatos válidos permanecem na lista.</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleDownloadComWhatsApp}
-                      className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                    >
-                      <Download className="h-4 w-4" />
-                      Baixar com WhatsApp ({clientes.length})
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleDownloadSemWhatsApp}
-                      className="gap-1 bg-amber-600 hover:bg-amber-700 text-white"
-                    >
-                      <Download className="h-4 w-4" />
-                      Baixar sem WhatsApp ({numerosInvalidos.length})
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setMostrarInvalidos(!mostrarInvalidos)}
-                      className="text-xs"
-                    >
-                      {mostrarInvalidos ? 'Ocultar removidos' : 'Ver números removidos'}
-                    </Button>
-                  </div>
-                  {mostrarInvalidos && (
-                    <div className="max-h-40 overflow-y-auto border rounded p-2 space-y-1">
-                      {numerosInvalidos.map((c, i) => (
-                        <p key={i} className="text-xs text-muted-foreground">
-                          {c.nome} — {c.telefone}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
-            {verificacaoConcluida && numerosInvalidos.length === 0 && numerosNaoVerificados.length === 0 && (
-              <Alert>
-                <Check className="h-4 w-4" />
-                <AlertTitle>Todos os números possuem WhatsApp ✓</AlertTitle>
-                <AlertDescription>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleDownloadComWhatsApp}
-                    className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white mt-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    Baixar planilha ({clientes.length})
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-            {numerosNaoVerificados.length > 0 && (
-              <Alert className="border-amber-400 bg-amber-50 dark:bg-amber-950/30">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                <AlertTitle className="text-amber-900 dark:text-amber-200">
-                  {numerosNaoVerificados.length} número(s) não puderam ser verificados
-                </AlertTitle>
-                <AlertDescription className="space-y-2">
-                  <p className="text-sm">
-                    A instância WhatsApp demorou demais para responder. Esses números continuam na lista mas o status com WhatsApp é desconhecido.
-                  </p>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleVerificarWhatsApp}
-                    disabled={verificandoWhatsApp}
-                    className="gap-1"
-                  >
-                    {verificandoWhatsApp ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Check className="h-4 w-4" />
-                    )}
-                    Tentar verificar novamente
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <p className="text-xs text-muted-foreground">
-              Formato esperado: <strong>Coluna A</strong> = CPF, <strong>Coluna B</strong> = Nome, <strong>Coluna C</strong> = Telefone, <strong>Coluna D</strong> = Atraso, <strong>Coluna E</strong> = Saldo
-            </p>
-
-            {historico.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">Histórico de importações</p>
-                <div className="space-y-1">
-                  {historico.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`flex items-center justify-between rounded-md border p-2 cursor-pointer hover:bg-accent/50 transition-colors ${activeHistoricoId === item.id ? 'border-primary bg-accent/30' : ''}`}
-                      onClick={() => handleLoadHistorico(item)}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileSpreadsheet className="h-4 w-4 shrink-0 text-green-600" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{item.nomeArquivo}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {item.qtdClientes} clientes · {formatDate(item.dataImportacao)}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 text-muted-foreground hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteHistorico(item.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Mensagem */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Mensagens</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              {variables.map((v) => (
-                <Button
-                  key={v.key}
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => insertVariable(v.key)}
-                >
-                  {v.key} <span className="ml-1 text-xs opacity-70">({v.label})</span>
-                </Button>
-              ))}
-            </div>
-            <Textarea
-              ref={textareaRef}
-              value={mensagem}
-              onChange={(e) => setMensagem(e.target.value)}
-              placeholder="Digite a mensagem usando as variáveis acima..."
-              rows={6}
-            />
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button onClick={handleSaveMessage}>
-                <Save className="h-4 w-4 mr-2" /> Salvar mensagem
-              </Button>
-              <div className="flex gap-2 items-center">
-                <Input
-                  placeholder="Número para teste (ex: 62999999999)"
-                  value={testPhone}
-                  onChange={(e) => setTestPhone(e.target.value)}
-                  className="w-64"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => handleTestSend()}
-                  disabled={sendingTest || !testPhone.trim() || !mensagem.trim()}
-                >
-                  {sendingTest ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                  Testar envio
-                </Button>
-              </div>
-            </div>
-
-            {mensagensSalvas.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">Mensagens salvas ({mensagensSalvas.length})</p>
-                <div className="space-y-1">
-                  {mensagensSalvas.map((msg, i) => (
-                    <div key={i} className="flex items-start justify-between gap-2 rounded-md border p-3">
-                      <p className="text-sm whitespace-pre-wrap break-words min-w-0 flex-1">{msg}</p>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDeleteMessage(i)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Lista de clientes com abas */}
-        {clientes.length > 0 && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={activeTab === 'pendentes' ? 'default' : 'outline'}
-                  onClick={() => setActiveTab('pendentes')}
-                >
-                  A ENVIAR ({pendentes.length})
-                </Button>
-                <Button
-                  variant={activeTab === 'enviados' ? 'default' : 'outline'}
-                  onClick={() => setActiveTab('enviados')}
-                >
-                  ENVIADOS ({enviadosHoje} hoje)
-                </Button>
-                {isAdmin && (
-                  <Button
-                    variant={activeTab === 'ia' ? 'default' : 'outline'}
-                    onClick={() => setActiveTab('ia')}
-                  >
-                    <Bot className="h-4 w-4 mr-1" />
-                    IA
-                  </Button>
-                )}
-                <Badge variant={activeInstances.length > 0 ? 'secondary' : 'destructive'} className="ml-auto flex items-center gap-1">
-                  <Smartphone className="h-3 w-3" />
-                  {activeInstances.length} robô{activeInstances.length !== 1 ? 's' : ''} ativo{activeInstances.length !== 1 ? 's' : ''}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {activeTab === 'pendentes' && (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
-                    <span className="text-sm font-medium">Envio automático:</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={autoMinSec}
-                      onChange={(e) => setAutoMinSec(Number(e.target.value))}
-                      className="w-20 h-9"
-                      disabled={autoSending}
-                    />
-                    <span className="text-sm">a</span>
-                    <Input
-                      type="number"
-                      min={2}
-                      value={autoMaxSec}
-                      onChange={(e) => setAutoMaxSec(Number(e.target.value))}
-                      className="w-20 h-9"
-                      disabled={autoSending}
-                    />
-                    <span className="text-sm">segundos</span>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleCalcInterval}
-                            disabled={autoSending || activeInstances.length === 0}
-                          >
-                            <Calculator className="h-4 w-4 mr-1" /> Calcular
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Calcula o intervalo ideal para ~30 msgs/número/dia (8h-18h)</p>
-                          <p className="text-xs text-muted-foreground">{activeInstances.length} número(s) robô ativo(s)</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    {!autoSending ? (
-                      <Button
-                        size="sm"
-                        onClick={handleAutoSend}
-                        disabled={mensagensSalvas.length === 0 || pendentes.length === 0}
-                        className="bg-green-600 hover:bg-green-700 text-primary-foreground"
-                      >
-                        <Play className="h-4 w-4 mr-1" /> Iniciar
-                      </Button>
-                    ) : (
-                      <>
-                        {autoProgress && (
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Enviando {autoProgress.current}/{autoProgress.total}...
-                          </span>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={handleStopAutoSend}
-                        >
-                          <Square className="h-4 w-4 mr-1" /> Parar
-                        </Button>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Agendamento de envio */}
-                  <div className="flex flex-wrap items-center gap-2 rounded-md border p-3 bg-muted/30">
-                    <CalendarClock className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">Agendar envio:</span>
-                    <Input
-                      type="date"
-                      value={agendamentoData}
-                      onChange={(e) => setAgendamentoData(e.target.value)}
-                      className="w-40 h-9"
-                      min={new Date().toISOString().split('T')[0]}
-                    />
-                    <Input
-                      type="time"
-                      value={agendamentoHora}
-                      onChange={(e) => setAgendamentoHora(e.target.value)}
-                      className="w-28 h-9"
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleAgendar}
-                      disabled={agendandoEnvio || !agendamentoData || mensagensSalvas.length === 0 || pendentes.length === 0}
-                    >
-                      {agendandoEnvio ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Clock className="h-4 w-4 mr-1" />}
-                      Agendar
-                    </Button>
-                    <span className="text-xs text-muted-foreground">
-                      Usa o intervalo min/max acima • {pendentes.length} pendentes
-                    </span>
-                  </div>
-
-                  {/* Agendamentos ativos */}
-                  {agendamentos.length > 0 && (
-                    <div className="space-y-1">
-                      {agendamentos.map(ag => (
-                        <div key={ag.id} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded bg-accent/50">
-                          <CalendarClock className="h-3.5 w-3.5" />
-                          <span>
-                            {new Date(ag.agendado_para).toLocaleDateString('pt-BR')} às{' '}
-                            {new Date(ag.agendado_para).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          <Badge variant={ag.status === 'executando' ? 'default' : 'secondary'}>
-                            {ag.status === 'executando' ? `Enviando (${ag.total_enviados})` : 'Pendente'}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {(ag.historico_data as any)?.clientes?.length || 0} clientes
-                          </span>
-                          {ag.status === 'pendente' && (
-                            <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => handleCancelAgendamento(ag.id)}>
-                              <X className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              {activeTab === 'pendentes' && (
-                <>
-                  {pendentes.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">Nenhum cliente pendente</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nome</TableHead>
-                          <TableHead>Telefone</TableHead>
-                          <TableHead>Saldo</TableHead>
-                          <TableHead>À Vista</TableHead>
-                          <TableHead>Parcelado</TableHead>
-                          <TableHead className="w-24 text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {pendentes.map((c) => (
-                          <TableRow key={c.originalIndex}>
-                            <TableCell className="font-medium">{c.nome}</TableCell>
-                            <TableCell>{c.telefone}</TableCell>
-                            <TableCell>{formatCurrency(c.saldo)}</TableCell>
-                            <TableCell className="text-green-600 font-medium">{calcAvista(c.saldo)}</TableCell>
-                            <TableCell className="text-xs max-w-[200px]">{calcParceladoDisplay(c.saldo)}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <Checkbox
-                                  checked={false}
-                                  onCheckedChange={(checked) => handleManualCheck(c.originalIndex, !!checked)}
-                                  disabled={autoSending}
-                                />
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  disabled={sendStatus[c.originalIndex] === 'sending' || autoSending}
-                                  onClick={() => handleSend(c.originalIndex)}
-                                  className={
-                                    sendStatus[c.originalIndex] === 'error'
-                                      ? 'text-destructive'
-                                      : 'text-green-600 hover:text-green-700'
-                                  }
-                                >
-                                  {sendStatus[c.originalIndex] === 'sending' ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                  ) : sendStatus[c.originalIndex] === 'error' ? (
-                                    <X className="h-5 w-5" />
-                                  ) : (
-                                    <WhatsAppIcon />
-                                  )}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </>
-              )}
-
-              {activeTab === 'enviados' && (
-                <>
-                  {enviados.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">Nenhuma mensagem enviada ainda</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nome</TableHead>
-                          <TableHead>Telefone</TableHead>
-                          <TableHead>Saldo</TableHead>
-                          <TableHead>À Vista</TableHead>
-                          <TableHead>Parcelado</TableHead>
-                          <TableHead>Enviado em</TableHead>
-                          <TableHead className="w-24 text-right">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {enviados.map((c) => {
-                          const wasSent = sendStatus[c.originalIndex] === 'success';
-                          const wasError = sendStatus[c.originalIndex] === 'error';
-                          const wasManual = manualChecked.has(c.originalIndex);
-                          const timestamp = sendTimestamps[c.originalIndex];
-                          const formattedTimestamp = timestamp
-                            ? new Date(timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                            : '—';
-                          const conversaStatus = getConversaStatus(c.telefone);
-                          return (
-                            <TableRow key={c.originalIndex}>
-                              <TableCell className="font-medium">{c.nome}</TableCell>
-                              <TableCell>{c.telefone}</TableCell>
-                              <TableCell>{formatCurrency(c.saldo)}</TableCell>
-                              <TableCell className="text-green-600 font-medium">{calcAvista(c.saldo)}</TableCell>
-                              <TableCell className="text-xs max-w-[200px]">{calcParceladoDisplay(c.saldo)}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground">{formattedTimestamp}</TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  {conversaStatus === 'negociando' && (
-                                    <Badge
-                                      variant="outline"
-                                      className="cursor-pointer bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30"
-                                      onClick={() => handleOpenChat(c)}
-                                    >
-                                      <MessageCircle className="h-3 w-3 mr-1" /> Em negociação
-                                    </Badge>
-                                  )}
-                                  {conversaStatus === 'aguardando' && (
-                                    <Badge
-                                      variant="outline"
-                                      className="cursor-pointer bg-yellow-500/20 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/30"
-                                      onClick={() => handleOpenChat(c)}
-                                    >
-                                      <MessageCircle className="h-3 w-3 mr-1" /> Aguardando
-                                    </Badge>
-                                  )}
-                                  {conversaStatus === 'acordo' && (
-                                    <Badge
-                                      variant="outline"
-                                      className="cursor-pointer bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30"
-                                      onClick={() => handleOpenChat(c)}
-                                    >
-                                      <Check className="h-3 w-3 mr-1" /> Acordo
-                                    </Badge>
-                                  )}
-                                  {!conversaStatus && wasSent && (
-                                    <Badge variant="default" className="bg-green-600 hover:bg-green-600">
-                                      <Check className="h-3 w-3 mr-1" /> Enviado
-                                    </Badge>
-                                  )}
-                                  {!conversaStatus && wasError && (
-                                    <Badge variant="destructive">
-                                      <X className="h-3 w-3 mr-1" /> Erro
-                                    </Badge>
-                                  )}
-                                  {!conversaStatus && wasManual && !wasSent && !wasError && (
-                                    <div className="flex items-center gap-2">
-                                      <Badge variant="secondary">Manual</Badge>
-                                      <Checkbox
-                                        checked={true}
-                                        onCheckedChange={(checked) => handleManualCheck(c.originalIndex, !!checked)}
-                                      />
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  )}
-                </>
-              )}
-
-              {activeTab === 'ia' && isAdmin && (
-                <ChatbotTemplatesTab />
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Config Dialog */}
-        <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
-          <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
-            <DialogHeader>
-              <DialogTitle>Configurações WhatsApp</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-6">
+        {/* Configuração das instâncias UAZAPI */}
+        <div className="space-y-6">
 
               <div className="space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -2668,6 +2104,18 @@ export default function Acionamento() {
                         />
                       </div>
                       <div className="space-y-2">
+                        <Label>Número do WhatsApp</Label>
+                        <Input
+                          placeholder="62 99999-9999"
+                          value={editingInstance.telefone || ''}
+                          onChange={(e) => setEditingInstance({ ...editingInstance, telefone: e.target.value })}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Usado na exportação da lista de números em Excel.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
                         <Label>Server URL</Label>
                         <Input
                           placeholder="https://certificadoracnpj.uazapi.com"
@@ -2736,337 +2184,6 @@ export default function Acionamento() {
                         </div>
                       )}
 
-                      {/* WhatsApp Profile Editing - only for existing connected instances */}
-                      {editingInstance.id && connectionStatus[editingInstance.id] === 'connected' && (
-                        <div className="space-y-3 rounded-md border p-3 bg-background">
-                          <div className="flex items-center justify-between">
-                            <h5 className="text-sm font-semibold flex items-center gap-1.5">
-                              <User className="h-4 w-4" />
-                              Perfil WhatsApp
-                            </h5>
-                            {loadingProfile && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-                          </div>
-
-                          {/* Profile Photo */}
-                          <div className="space-y-2">
-                            <Label className="text-xs flex items-center gap-1">
-                              <ImageIcon className="h-3 w-3" /> Foto do perfil
-                            </Label>
-                            <div className="flex items-center gap-4">
-                              {/* Current photo or preview */}
-                              <div className="h-16 w-16 rounded-full overflow-hidden bg-muted flex items-center justify-center shrink-0 border">
-                                {(profilePhotoPreview || currentProfilePhotoUrl) ? (
-                                  <img
-                                    src={profilePhotoPreview || currentProfilePhotoUrl}
-                                    alt="Foto do perfil"
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <User className="h-6 w-6 text-muted-foreground" />
-                                )}
-                              </div>
-                              <div className="flex flex-col gap-1.5">
-                                <input
-                                  ref={profilePhotoInputRef}
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={handleProfilePhotoSelect}
-                                />
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 text-xs"
-                                    onClick={() => profilePhotoInputRef.current?.click()}
-                                    disabled={savingProfilePhoto}
-                                  >
-                                    <Upload className="h-3 w-3 mr-1" /> Escolher imagem
-                                  </Button>
-                                  {profilePhotoPreview && (
-                                    <Button
-                                      size="sm"
-                                      className="h-8 text-xs"
-                                      onClick={() => handleSaveProfilePhoto(false)}
-                                      disabled={savingProfilePhoto}
-                                    >
-                                      {savingProfilePhoto ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 text-xs"
-                                    onClick={() => handleSaveProfilePhoto(true)}
-                                    disabled={savingProfilePhoto}
-                                  >
-                                    <Trash2 className="h-3 w-3 mr-1" /> Remover
-                                  </Button>
-                                </div>
-                                {profilePhotoFile && (
-                                  <span className="text-xs text-muted-foreground truncate max-w-[200px]">{profilePhotoFile.name}</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Profile Name */}
-                          <div className="space-y-1.5">
-                            <Label className="text-xs flex items-center gap-1">
-                              <User className="h-3 w-3" /> Nome do perfil
-                            </Label>
-                            <div className="flex gap-2">
-                              <Input
-                                placeholder="Nome exibido no WhatsApp"
-                                value={profileName}
-                                onChange={(e) => setProfileName(e.target.value)}
-                                className="text-xs h-8"
-                              />
-                              <Button
-                                size="sm"
-                                className="h-8 text-xs"
-                                onClick={handleSaveProfileName}
-                                disabled={savingProfileName || !profileName.trim()}
-                              >
-                                {savingProfileName ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Salvar'}
-                              </Button>
-                            </div>
-                          </div>
-
-                          <Separator />
-
-                          {/* Business Info */}
-                          <div className="space-y-2">
-                            <p className="text-xs font-medium flex items-center gap-1">
-                              <Building2 className="h-3 w-3" /> Dados Comerciais
-                            </p>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Descrição</Label>
-                              <Textarea
-                                placeholder="Descrição do negócio..."
-                                value={profileDescription}
-                                onChange={(e) => setProfileDescription(e.target.value)}
-                                className="text-xs min-h-[60px]"
-                                rows={2}
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs flex items-center gap-1">
-                                <MapPin className="h-3 w-3" /> Endereço
-                              </Label>
-                              <Input
-                                placeholder="Endereço comercial"
-                                value={profileAddress}
-                                onChange={(e) => setProfileAddress(e.target.value)}
-                                className="text-xs h-8"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs flex items-center gap-1">
-                                <Mail className="h-3 w-3" /> Email
-                              </Label>
-                              <Input
-                                placeholder="email@empresa.com"
-                                value={profileEmail}
-                                onChange={(e) => setProfileEmail(e.target.value)}
-                                className="text-xs h-8"
-                                type="email"
-                              />
-                            </div>
-                            <Button
-                              size="sm"
-                              className="h-8 text-xs w-full"
-                              onClick={handleSaveProfileBusiness}
-                              disabled={savingProfileBusiness}
-                            >
-                              {savingProfileBusiness ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
-                              Salvar dados comerciais
-                            </Button>
-                          </div>
-
-                          {/* Bulk update button */}
-                          <Separator />
-                          <div className="space-y-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-xs w-full"
-                              onClick={() => {
-                                // Pre-select all connected others
-                                const eligible = instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected');
-                                setBulkSelectedInstanceIds(new Set(eligible.map(i => i.id)));
-                                setBulkUpdateConfirmOpen(true);
-                              }}
-                              disabled={bulkUpdateRunning || (!profileName.trim() && !currentProfilePhotoUrl && !profileDescription.trim() && !profileAddress.trim() && !profileEmail.trim())}
-                            >
-                              <Copy className="h-3 w-3 mr-1" />
-                              Aplicar perfil em instâncias
-                            </Button>
-                            <p className="text-[10px] text-muted-foreground text-center">
-                              Atualiza foto, nome, descrição, endereço e e-mail gradativamente, uma instância por vez (10–30s entre cada)
-                            </p>
-                          </div>
-
-                          {/* Bulk update confirmation dialog */}
-                          <Dialog open={bulkUpdateConfirmOpen} onOpenChange={setBulkUpdateConfirmOpen}>
-                            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-                              <DialogHeader>
-                                <DialogTitle>Aplicar perfil em massa</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <p className="text-sm text-muted-foreground">
-                                  Selecione os campos e instâncias que receberão a atualização. O envio é gradual com intervalos aleatórios para segurança.
-                                </p>
-                                <div className="space-y-2">
-                                  <p className="text-xs font-semibold">Campos</p>
-                                  <div className="flex items-center gap-2">
-                                    <Checkbox id="bulk-name" checked={bulkUpdateApplyName} onCheckedChange={(c) => setBulkUpdateApplyName(!!c)} />
-                                    <Label htmlFor="bulk-name" className="text-sm">Nome: <strong>{profileName || '(vazio)'}</strong></Label>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Checkbox id="bulk-photo" checked={bulkUpdateApplyPhoto} onCheckedChange={(c) => setBulkUpdateApplyPhoto(!!c)} />
-                                    <Label htmlFor="bulk-photo" className="text-sm">Foto</Label>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Checkbox id="bulk-desc" checked={bulkUpdateApplyDescription} onCheckedChange={(c) => setBulkUpdateApplyDescription(!!c)} />
-                                    <Label htmlFor="bulk-desc" className="text-sm">Descrição: <strong>{profileDescription || '(vazio)'}</strong></Label>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Checkbox id="bulk-addr" checked={bulkUpdateApplyAddress} onCheckedChange={(c) => setBulkUpdateApplyAddress(!!c)} />
-                                    <Label htmlFor="bulk-addr" className="text-sm">Endereço: <strong>{profileAddress || '(vazio)'}</strong></Label>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Checkbox id="bulk-email" checked={bulkUpdateApplyEmail} onCheckedChange={(c) => setBulkUpdateApplyEmail(!!c)} />
-                                    <Label htmlFor="bulk-email" className="text-sm">E-mail: <strong>{profileEmail || '(vazio)'}</strong></Label>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <p className="text-xs font-semibold">Instâncias ({bulkSelectedInstanceIds.size} selecionada(s))</p>
-                                    <div className="flex gap-1">
-                                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => {
-                                        const eligible = instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected');
-                                        setBulkSelectedInstanceIds(new Set(eligible.map(i => i.id)));
-                                      }}>Todas</Button>
-                                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setBulkSelectedInstanceIds(new Set())}>Limpar</Button>
-                                    </div>
-                                  </div>
-                                  <div className="border rounded-md p-2 max-h-48 overflow-y-auto space-y-1">
-                                    {instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').map(i => (
-                                      <div key={i.id} className="flex items-center gap-2">
-                                        <Checkbox
-                                          id={`bulk-inst-${i.id}`}
-                                          checked={bulkSelectedInstanceIds.has(i.id)}
-                                          onCheckedChange={(c) => {
-                                            setBulkSelectedInstanceIds(prev => {
-                                              const next = new Set(prev);
-                                              if (c) next.add(i.id); else next.delete(i.id);
-                                              return next;
-                                            });
-                                          }}
-                                        />
-                                        <Label htmlFor={`bulk-inst-${i.id}`} className="text-xs cursor-pointer flex-1 truncate">{i.nome || 'Sem nome'}</Label>
-                                      </div>
-                                    ))}
-                                    {instances.filter(i => i.id !== editingInstance?.id && i.ativo && connectionStatus[i.id] === 'connected').length === 0 && (
-                                      <p className="text-[11px] text-muted-foreground text-center py-2">Nenhuma outra instância conectada</p>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {(() => {
-                                  const count = bulkSelectedInstanceIds.size;
-                                  const minMin = Math.max(1, Math.ceil(count * 0.5));
-                                  const maxMin = Math.max(1, Math.ceil(count * 1.5));
-                                  return (
-                                    <p className="text-xs text-muted-foreground">
-                                      ⏱ Tempo estimado: ~{minMin} a {maxMin} minuto(s)
-                                    </p>
-                                  );
-                                })()}
-                                <div className="flex gap-2 justify-end">
-                                  <Button variant="outline" size="sm" onClick={() => setBulkUpdateConfirmOpen(false)}>Cancelar</Button>
-                                  <Button
-                                    size="sm"
-                                    onClick={handleBulkProfileUpdate}
-                                    disabled={
-                                      bulkSelectedInstanceIds.size === 0 ||
-                                      (!bulkUpdateApplyName && !bulkUpdateApplyPhoto && !bulkUpdateApplyDescription && !bulkUpdateApplyAddress && !bulkUpdateApplyEmail)
-                                    }
-                                  >
-                                    <Play className="h-3 w-3 mr-1" /> Iniciar
-                                  </Button>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-
-                          {/* Bulk update progress */}
-                          {bulkUpdateRunning && (
-                            <div className="space-y-2 rounded-md border p-3 bg-accent/30">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold">Atualizando perfis... ({bulkUpdateProgress?.current}/{bulkUpdateProgress?.total})</p>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  className="h-6 text-[10px] px-2"
-                                  onClick={() => { bulkCancelRef.current = true; }}
-                                >
-                                  <Square className="h-3 w-3 mr-1" /> Cancelar
-                                </Button>
-                              </div>
-                              <div className="space-y-1 max-h-40 overflow-y-auto">
-                                {bulkUpdateLog.map(l => (
-                                  <div key={l.id} className="flex items-center gap-2 text-[11px]">
-                                    {l.status === 'pending' && <span className="text-muted-foreground">⏳</span>}
-                                    {l.status === 'running' && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
-                                    {l.status === 'success' && <span className="text-green-600">✓</span>}
-                                    {l.status === 'error' && <span className="text-destructive">✗</span>}
-                                    <span className={l.status === 'error' ? 'text-destructive' : ''}>{l.nome}</span>
-                                    {l.message && <span className="text-muted-foreground">— {l.message}</span>}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Bulk update results (after completion) */}
-                          {!bulkUpdateRunning && bulkUpdateLog.length > 0 && (
-                            <div className="space-y-2 rounded-md border p-3 bg-accent/20">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold">
-                                  Resultado: {bulkUpdateLog.filter(l => l.status === 'success').length} sucesso, {bulkUpdateLog.filter(l => l.status === 'error').length} erro(s)
-                                </p>
-                                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setBulkUpdateLog([])}>
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                              <div className="space-y-1 max-h-32 overflow-y-auto">
-                                {bulkUpdateLog.map(l => (
-                                  <div key={l.id} className="flex items-center gap-2 text-[11px]">
-                                    {l.status === 'success' && <span className="text-green-600">✓</span>}
-                                    {l.status === 'error' && <span className="text-destructive">✗</span>}
-                                    {l.status === 'pending' && <span className="text-muted-foreground">—</span>}
-                                    <span>{l.nome}</span>
-                                    {l.message && <span className="text-muted-foreground">— {l.message}</span>}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Proxy configuration */}
-                      {editingInstance.id && (
-                        <ProxyInstanceSection
-                          instanceId={editingInstance.id}
-                          onChanged={(patch) => {
-                            setInstances(prev => prev.map(i => i.id === editingInstance.id ? { ...i, proxy_enabled: patch.proxy_enabled, proxy_host: patch.proxy_host } : i));
-                          }}
-                        />
-                      )}
 
                       <div className="flex gap-2">
                         <Button onClick={handleSaveInstance} disabled={savingInstance} size="sm">
@@ -3173,7 +2290,7 @@ export default function Acionamento() {
                                     className="h-7 w-7"
                                     onClick={() => {
                                       const cached = inst as any;
-                                      setEditingInstance({ id: inst.id, nome: inst.nome, server_url: inst.server_url, instance_token: inst.instance_token, whatsapp_profile_name: cached.whatsapp_profile_name, whatsapp_profile_photo_url: cached.whatsapp_profile_photo_url, whatsapp_profile_description: cached.whatsapp_profile_description, whatsapp_profile_address: cached.whatsapp_profile_address, whatsapp_profile_email: cached.whatsapp_profile_email });
+                                      setEditingInstance({ id: inst.id, nome: inst.nome, telefone: (inst as any).telefone || '', server_url: inst.server_url, instance_token: inst.instance_token, whatsapp_profile_name: cached.whatsapp_profile_name, whatsapp_profile_photo_url: cached.whatsapp_profile_photo_url, whatsapp_profile_description: cached.whatsapp_profile_description, whatsapp_profile_address: cached.whatsapp_profile_address, whatsapp_profile_email: cached.whatsapp_profile_email });
                                       // Rehydrate profile fields from cache
                                       setProfileName(cached.whatsapp_profile_name || '');
                                       setCurrentProfilePhotoUrl(cached.whatsapp_profile_photo_url || '');
@@ -3367,9 +2484,7 @@ export default function Acionamento() {
                 </>
               )}
 
-            </div>
-          </DialogContent>
-        </Dialog>
+        </div>
 
         {/* Dialog Mensagens de Lembrete */}
         <LembreteMensagensDialog
