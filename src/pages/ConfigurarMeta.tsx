@@ -264,6 +264,8 @@ export default function ConfigurarMeta() {
     access_token: "",
     tier_diario: "250",
   });
+  const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
+
 
   const templatesPorInstancia = useMemo(() => {
     const map: Record<string, { total: number; aprovados: number }> = {};
