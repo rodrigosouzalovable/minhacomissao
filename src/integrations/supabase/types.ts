@@ -2406,6 +2406,8 @@ export type Database = {
           ativo: boolean
           created_at: string
           delay_digitacao_seg: number
+          desconto_avista_pct: number | null
+          desconto_parcelado_pct: number | null
           followup_ativo: boolean
           followup_hora_fim: number
           followup_hora_inicio: number
@@ -2429,6 +2431,8 @@ export type Database = {
           ativo?: boolean
           created_at?: string
           delay_digitacao_seg?: number
+          desconto_avista_pct?: number | null
+          desconto_parcelado_pct?: number | null
           followup_ativo?: boolean
           followup_hora_fim?: number
           followup_hora_inicio?: number
@@ -2452,6 +2456,8 @@ export type Database = {
           ativo?: boolean
           created_at?: string
           delay_digitacao_seg?: number
+          desconto_avista_pct?: number | null
+          desconto_parcelado_pct?: number | null
           followup_ativo?: boolean
           followup_hora_fim?: number
           followup_hora_inicio?: number
