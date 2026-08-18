@@ -6,6 +6,7 @@ import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
 interface UseMetaAudioRecorderProps {
   instanciaId: string;
   telefone: string;
+  bsuid?: string;
   userId?: string;
   replyToWaId?: string;
   conteudoCitado?: string;
@@ -107,6 +108,7 @@ async function ensureMetaAudio(
   // e também o WebM/OGG do navegador. Sempre re-codificamos para MP3, que é aceito.
   try {
     const mp3 = await withTimeout(encodeToMp3(blob), 60000, 'Conversão do áudio');
+    if (mp3.size < 128) throw new Error('Conversão gerou um áudio inválido');
     return { blob: mp3, ext: 'mp3', contentType: 'audio/mpeg' };
   } catch (mp3Err) {
     console.warn('[useMetaAudioRecorder] falha na conversão MP3, tentando ffmpeg', mp3Err, native.contentType);
@@ -138,14 +140,30 @@ async function ensureMetaAudio(
   ]), 45000, 'Conversão do áudio');
   const data = await withTimeout(ffmpeg.readFile(outName), 10000, 'Leitura do áudio convertido');
   const out = new Blob([data as unknown as BlobPart], { type: 'audio/ogg' });
+  if (out.size < 128) throw new Error('Conversão alternativa gerou um áudio inválido');
   try { await ffmpeg.deleteFile(inName); await ffmpeg.deleteFile(outName); } catch { /* noop */ }
   return { blob: out, ext: 'ogg', contentType: 'audio/ogg' };
 }
 
+async function invokeErrorMessage(error: unknown): Promise<string> {
+  const fallback = error instanceof Error ? error.message : 'Falha ao chamar o serviço de envio';
+  const context = (error as { context?: unknown } | null)?.context;
+  if (!(context instanceof Response)) return fallback;
+  try {
+    const payload = await context.clone().json() as { error?: string; message?: string };
+    return payload.error || payload.message || fallback;
+  } catch {
+    try {
+      return (await context.clone().text()) || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+}
 
 
 export function useMetaAudioRecorder({
-  instanciaId, telefone, userId, replyToWaId, conteudoCitado, onSent,
+  instanciaId, telefone, bsuid, userId, replyToWaId, conteudoCitado, onSent,
 }: UseMetaAudioRecorderProps) {
   const { toast } = useToast();
   const [gravando, setGravando] = useState(false);
@@ -157,6 +175,14 @@ export function useMetaAudioRecorder({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const iniciarGravacao = useCallback(async () => {
+    if (!instanciaId || (!telefone && !bsuid)) {
+      toast({
+        title: 'Conversa sem destinatário',
+        description: 'Não foi possível identificar o cliente desta conversa. Atualize o Inbox e tente novamente.',
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       // Gravamos em WebM/OPUS quando disponível (decodifica melhor no Web Audio)
@@ -198,7 +224,7 @@ export function useMetaAudioRecorder({
     } catch {
       toast({ title: 'Erro', description: 'Não foi possível acessar o microfone', variant: 'destructive' });
     }
-  }, [toast]);
+  }, [instanciaId, telefone, bsuid, toast]);
 
   const cancelarGravacao = useCallback(() => {
     const rec = mediaRecorderRef.current;
@@ -239,7 +265,8 @@ export function useMetaAudioRecorder({
             resolve();
             return;
           }
-          const path = `meta/${instanciaId}/${telefone}/${Date.now()}.${prepared.ext}`;
+          const destinatarioPath = (telefone || bsuid || 'destinatario').replace(/[^a-zA-Z0-9_-]/g, '_');
+          const path = `meta/${instanciaId}/${destinatarioPath}/${Date.now()}.${prepared.ext}`;
           let audioSignedUrl: string;
           try {
             audioSignedUrl = await uploadInboxMedia(path, prepared.blob, prepared.contentType);
@@ -250,7 +277,8 @@ export function useMetaAudioRecorder({
           const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-media', {
             body: {
               instancia_id: instanciaId,
-              telefone,
+              telefone: telefone || undefined,
+              bsuid: bsuid || undefined,
               media_url: audioSignedUrl,
               type: 'audio',
               user_id: userId,
@@ -258,7 +286,7 @@ export function useMetaAudioRecorder({
               conteudo_citado: conteudoCitado,
             },
           });
-          if (error) throw new Error(error.message);
+          if (error) throw new Error(await invokeErrorMessage(error));
           if (!data?.success) throw new Error(data?.error || 'Falha ao enviar áudio');
           onSent();
         } catch (err: any) {
@@ -271,7 +299,7 @@ export function useMetaAudioRecorder({
       };
       rec.stop();
     });
-  }, [instanciaId, telefone, userId, replyToWaId, conteudoCitado, onSent, toast]);
+  }, [instanciaId, telefone, bsuid, userId, replyToWaId, conteudoCitado, onSent, toast]);
 
   const transcreverGravacao = useCallback(async (): Promise<string | null> => {
     const rec = mediaRecorderRef.current;
