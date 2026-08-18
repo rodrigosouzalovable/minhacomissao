@@ -29,9 +29,17 @@ function guessAudioMime(url: string): string {
 
 // Sobe o binário para Meta /PHONE_ID/media e devolve o media id.
 async function uploadAudioToMeta(inst: any, mediaUrl: string): Promise<{ id?: string; error?: string; status?: number }> {
+  console.log('[send-whatsapp-meta-media] audio storage download started');
   const res = await fetch(mediaUrl);
-  if (!res.ok) return { error: `Falha ao baixar áudio do storage (HTTP ${res.status})` };
+  if (!res.ok) {
+    console.log('[send-whatsapp-meta-media] audio storage download failed', { status: res.status });
+    return { error: `Falha ao baixar o áudio armazenado (HTTP ${res.status})`, status: res.status };
+  }
   const buf = new Uint8Array(await res.arrayBuffer());
+  if (buf.byteLength < 128) {
+    console.log('[send-whatsapp-meta-media] invalid audio binary', { bytes: buf.byteLength });
+    return { error: 'O arquivo de áudio está vazio ou inválido. Grave novamente.' };
+  }
   const guessed = guessAudioMime(mediaUrl);
 
   // O frontend já re-encoda tudo para OGG/OPUS 16 kHz mono via ffmpeg.wasm.
@@ -75,6 +83,12 @@ Deno.serve(async (req) => {
     } = await req.json();
 
     if (!instancia_id || (!telefone && !bsuid) || !media_url || !type) {
+      console.log('[send-whatsapp-meta-media] invalid request', {
+        has_instancia: !!instancia_id,
+        has_destinatario: !!telefone || !!bsuid,
+        has_media_url: !!media_url,
+        type: type || null,
+      });
       return new Response(JSON.stringify({ success: false, error: 'instancia_id, (telefone ou bsuid), media_url, type obrigatórios' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -95,6 +109,11 @@ Deno.serve(async (req) => {
     const uid = user_id || inst.user_id;
     let to = telefone ? formatTel(telefone) : '';
     const useBsuid = !to && !!bsuid;
+    console.log('[send-whatsapp-meta-media] request accepted', {
+      type,
+      provider: (inst as any).provider || 'meta',
+      destination_type: useBsuid ? 'bsuid' : 'phone',
+    });
 
     // Canonicaliza telefone pelos últimos 8 dígitos para reaproveitar o formato
     // já cadastrado no contato (evita duplicar a conversa com/sem o "9").
@@ -239,6 +258,7 @@ Deno.serve(async (req) => {
     if (metaType === 'audio') {
       const up = await uploadAudioToMeta(inst, media_url);
       if (!up.id) {
+        console.log('[send-whatsapp-meta-media] audio upload aborted', { error: up.error, status: up.status });
         return new Response(JSON.stringify({ success: false, error: up.error || 'Falha ao subir áudio para a Meta' }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -277,6 +297,7 @@ Deno.serve(async (req) => {
     }
 
     const waId = data?.messages?.[0]?.id || null;
+    console.log('[send-whatsapp-meta-media] message sent', { metaType, has_message_id: !!waId });
     const nowIso = new Date().toISOString();
     const tipoConteudoLocal = metaType === 'image' ? 'imagem' : metaType === 'audio' ? 'audio' : metaType === 'video' ? 'video' : 'documento';
     const preview = metaType === 'image' ? '📷 Imagem' : metaType === 'audio' ? '🎵 Áudio' : metaType === 'video' ? '🎥 Vídeo' : `📄 ${file_name || 'Documento'}`;

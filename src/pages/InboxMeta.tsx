@@ -1186,6 +1186,7 @@ export default function InboxMeta() {
   const audioRec = useMetaAudioRecorder({
     instanciaId: contatoAtivo?.instancia_id || '',
     telefone: contatoAtivo?.telefone || '',
+    bsuid: contatoAtivo?.bsuid || undefined,
     userId: user?.id,
     replyToWaId: respondendo?.wa_message_id || undefined,
     conteudoCitado: respondendo?.conteudo || undefined,
