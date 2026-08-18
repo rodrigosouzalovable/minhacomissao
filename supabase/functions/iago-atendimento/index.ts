@@ -866,3 +866,45 @@ async function gerarResposta(args: {
     return { mensagens: [], escalar: true, motivo: `falha técnica da IA (${String(e?.message || e).slice(0, 60)})` };
   }
 }
+
+/**
+ * Procura, nas mensagens de saída (campanha/template/atendente/IAGO), uma proposta
+ * de pagamento já enviada ao cliente. Retorna o valor e o texto original.
+ */
+function detectarPropostaPrevia(historico: any[]): { valor: string; texto: string } | null {
+  const saidas = historico.filter((m) => m?.direcao === 'saida');
+  for (let i = saidas.length - 1; i >= 0; i--) {
+    const texto = String(saidas[i]?.conteudo || '').trim();
+    if (!texto) continue;
+    const semAcento = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const falaProposta = /(a\s*vista|avista|parcel|desconto|debito|divida|pagamento|proposta|autorizado)/.test(semAcento);
+    if (!falaProposta) continue;
+    const valores = texto.match(/r\$\s*[\d.]+,\d{2}/gi);
+    if (!valores?.length) continue;
+    const valor = valores[0].replace(/r\$\s*/i, '').trim();
+    return { valor, texto };
+  }
+  return null;
+}
+
+/** Mensagem automática de ausência do cliente (não é resposta real). */
+function ehRespostaAutomatica(texto: string): boolean {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!t.trim()) return false;
+  const padroes = [
+    'agradece seu contato',
+    'assim que possivel',
+    'aguarde um instante',
+    'ja te respondo',
+    'logo retornarei',
+    'em breve retornarei',
+    'mensagem automatica',
+    'estou ausente',
+    'no momento nao posso atender',
+    'enquanto aguarda',
+    'como posso ajudar voce',
+  ];
+  const acertos = padroes.filter((p) => t.includes(p)).length;
+  const temLink = /https?:\/\/|www\./.test(t);
+  return acertos >= 2 || (acertos >= 1 && (temLink || t.length > 120));
+}
