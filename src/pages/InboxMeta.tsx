@@ -12,7 +12,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot, Download, ChevronUp, ArrowLeft,
+  Bot, Download, ChevronUp, ArrowLeft, Smartphone,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -35,6 +35,7 @@ import { MetaFolderAcessoDialog } from '@/components/inbox/meta/MetaFolderAcesso
 import MetaIAConfigDialog from '@/components/inbox/meta/MetaIAConfigDialog';
 import { MetaQualificacaoDialog, type MetaQualificacao } from '@/components/inbox/meta/MetaQualificacaoDialog';
 import { MetaFolderConfigDialog, CAIXA_PADRAO_ID } from '@/components/inbox/meta/MetaFolderConfigDialog';
+import { MetaNumerosConectadosDialog } from '@/components/inbox/meta/MetaNumerosConectadosDialog';
 import { CopyButton } from '@/components/CopyButton';
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
 
@@ -195,6 +196,7 @@ export default function InboxMeta() {
   const [acessoFolder, setAcessoFolder] = useState<{ id: string | null; nome: string } | null>(null);
   const [iaConfigOpen, setIaConfigOpen] = useState(false);
   const [configFolder, setConfigFolder] = useState<{ id: string | null; nome: string } | null>(null);
+  const [numerosFolder, setNumerosFolder] = useState<{ id: string | null; nome: string } | null>(null);
   // Qualificação de conversas
   const [qualificacoes, setQualificacoes] = useState<MetaQualificacao[]>([]);
   const [qualifPorContato, setQualifPorContato] = useState<Record<string, string[]>>({});
@@ -1676,6 +1678,10 @@ export default function InboxMeta() {
                         <ContextMenuItem onClick={() => setConfigFolder({ id: f.id, nome: f.nome })}>
                           <Settings2 className="h-4 w-4 mr-2" /> Configurar caixa
                         </ContextMenuItem>
+                        <ContextMenuItem onClick={() => setNumerosFolder({ id: f.id, nome: f.nome })}>
+                          <Smartphone className="h-4 w-4 mr-2" /> Números conectados
+                        </ContextMenuItem>
+
                         {f.nome.trim().toUpperCase() === 'IA' && (
                           <ContextMenuItem onClick={() => setIaConfigOpen(true)}>
                             <Bot className="h-4 w-4 mr-2" /> Configurar IA
@@ -2256,6 +2262,12 @@ export default function InboxMeta() {
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
       <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} />
 
+      <MetaNumerosConectadosDialog
+        open={!!numerosFolder}
+        onOpenChange={(v) => { if (!v) setNumerosFolder(null); }}
+        folderId={numerosFolder?.id ?? null}
+        folderNome={numerosFolder?.nome ?? 'Padrão'}
+      />
       <MetaFolderConfigDialog
         open={!!configFolder}
         onOpenChange={(v) => { if (!v) setConfigFolder(null); }}
