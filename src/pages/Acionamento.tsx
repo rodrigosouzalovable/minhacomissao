@@ -156,6 +156,7 @@ const WhatsAppIcon = () => (
 interface InstanceFormData {
   id?: string;
   nome: string;
+  telefone?: string;
   server_url: string;
   instance_token: string;
   whatsapp_profile_name?: string;
