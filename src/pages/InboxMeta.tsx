@@ -201,6 +201,7 @@ export default function InboxMeta() {
   const [qualificacoes, setQualificacoes] = useState<MetaQualificacao[]>([]);
   const [qualifPorContato, setQualifPorContato] = useState<Record<string, string[]>>({});
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
+  const [alertaEsperaCaixas, setAlertaEsperaCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
 
@@ -444,10 +445,15 @@ export default function InboxMeta() {
       .select('id, nome, cor, ordem, ativo, parent_id').order('ordem');
     setQualificacoes(((data as any) ?? []) as MetaQualificacao[]);
     const { data: cx } = await (supabase as any).from('meta_qualificacao_caixa')
-      .select('folder_id, ativo');
+      .select('folder_id, ativo, alerta_espera_ativo');
     const map: Record<string, boolean> = {};
-    ((cx as any[]) ?? []).forEach(r => { map[r.folder_id] = !!r.ativo; });
+    const mapAlerta: Record<string, boolean> = {};
+    ((cx as any[]) ?? []).forEach(r => {
+      map[r.folder_id] = !!r.ativo;
+      mapAlerta[r.folder_id] = r.alerta_espera_ativo !== false;
+    });
     setQualifCaixas(map);
+    setAlertaEsperaCaixas(mapAlerta);
   }, []);
 
   useEffect(() => { fetchQualificacoes(); }, [fetchQualificacoes]);
@@ -467,6 +473,7 @@ export default function InboxMeta() {
   }, []);
 
   const qualificacaoAtivaNaCaixa = qualifCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
+  const alertaEsperaAtivoNaCaixa = alertaEsperaCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
 
   // Somente caixas permitidas (RLS já filtra a lista de folders)
   const foldersVisiveis = folders;
@@ -1784,15 +1791,15 @@ export default function InboxMeta() {
                   <button
                     onClick={() => selMultipla ? toggleSel(c.id) : setContatoAtivo(c)}
                     onDoubleClick={() => { if (!selMultipla) { setSelMultipla(true); toggleSel(c.id); } }}
-                    title={esp.nivel !== 'ok' ? `Cliente aguardando resposta há ${esp.min}min` : undefined}
+                    title={alertaEsperaAtivoNaCaixa && esp.nivel !== 'ok' ? `Cliente aguardando resposta há ${esp.min}min` : undefined}
                     className={cn(
                       'relative block w-full max-w-full min-h-[76px] text-left px-3 py-3 pr-14 border-b hover:bg-accent/50 transition overflow-hidden',
                       ativo && 'bg-accent',
                       sel && 'bg-primary/15',
                       c.nao_lido > 0 && !ativo && 'bg-emerald-500/5',
                       qualificacaoAtivaNaCaixa && !(qualifPorContato[c.id]?.length) && !!c.ultima_msg_entrada_em && !ativo && 'borda-nao-qualificada',
-                      !ativo && esp.nivel === 'alerta' && 'pisca-sla-amarelo',
-                      !ativo && esp.nivel === 'critico' && 'pisca-sla-vermelho',
+                      alertaEsperaAtivoNaCaixa && !ativo && esp.nivel === 'alerta' && 'pisca-sla-amarelo',
+                      alertaEsperaAtivoNaCaixa && !ativo && esp.nivel === 'critico' && 'pisca-sla-vermelho',
                     )}>
 
                     <div className="min-w-0 space-y-1">
@@ -1990,7 +1997,7 @@ export default function InboxMeta() {
                     <FileText className="h-3.5 w-3.5" /> Modelo
                   </Button>
 
-                  {(() => {
+                  {alertaEsperaAtivoNaCaixa && (() => {
                     const dispensado = !!contatoAtivo.sla_dispensado_em && !!contatoAtivo.ultima_msg_entrada_em
                       && new Date(contatoAtivo.sla_dispensado_em).getTime() >= new Date(contatoAtivo.ultima_msg_entrada_em).getTime();
                     return (
@@ -2289,6 +2296,7 @@ export default function InboxMeta() {
         folderId={configFolder?.id ?? null}
         folderNome={configFolder?.nome ?? 'Padrão'}
         qualificacaoAtiva={qualifCaixas[configFolder?.id ?? CAIXA_PADRAO_ID] ?? true}
+        alertaEsperaAtivo={alertaEsperaCaixas[configFolder?.id ?? CAIXA_PADRAO_ID] ?? true}
         onChanged={fetchQualificacoes}
       />
       <MetaQualificacaoDialog

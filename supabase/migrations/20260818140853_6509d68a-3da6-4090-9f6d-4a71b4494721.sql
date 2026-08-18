@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_qualificacao_caixa ADD COLUMN IF NOT EXISTS alerta_espera_ativo boolean NOT NULL DEFAULT true;

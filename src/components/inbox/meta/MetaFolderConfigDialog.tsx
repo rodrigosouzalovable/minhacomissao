@@ -23,14 +23,16 @@ interface Props {
   folderId: string | null;
   folderNome: string;
   qualificacaoAtiva: boolean;
+  alertaEsperaAtivo?: boolean;
   onChanged: () => void;
 }
 
 export function MetaFolderConfigDialog({
-  open, onOpenChange, folderId, folderNome, qualificacaoAtiva, onChanged,
+  open, onOpenChange, folderId, folderNome, qualificacaoAtiva, alertaEsperaAtivo = true, onChanged,
 }: Props) {
   const { toast } = useToast();
   const [ativo, setAtivo] = useState(qualificacaoAtiva);
+  const [alertaEspera, setAlertaEspera] = useState(alertaEsperaAtivo);
   const [salvando, setSalvando] = useState(false);
 
   const alvo = folderId ?? CAIXA_PADRAO_ID;
@@ -46,6 +48,7 @@ export function MetaFolderConfigDialog({
   const [plantaoBusy, setPlantaoBusy] = useState(false);
 
   useEffect(() => { if (open) setAtivo(qualificacaoAtiva); }, [open, qualificacaoAtiva]);
+  useEffect(() => { if (open) setAlertaEspera(alertaEsperaAtivo); }, [open, alertaEsperaAtivo]);
 
   const carregarCredores = useCallback(async () => {
     const { data, error } = await (supabase as any)
@@ -108,12 +111,28 @@ export function MetaFolderConfigDialog({
     setAtivo(valor);
     setSalvando(true);
     const { error } = await (supabase as any).from('meta_qualificacao_caixa').upsert(
-      { folder_id: alvo, ativo: valor, updated_at: new Date().toISOString() },
+      { folder_id: alvo, ativo: valor, alerta_espera_ativo: alertaEspera, updated_at: new Date().toISOString() },
       { onConflict: 'folder_id' },
     );
     setSalvando(false);
     if (error) {
       setAtivo(!valor);
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      return;
+    }
+    onChanged();
+  };
+
+  const salvarAlertaEspera = async (valor: boolean) => {
+    setAlertaEspera(valor);
+    setSalvando(true);
+    const { error } = await (supabase as any).from('meta_qualificacao_caixa').upsert(
+      { folder_id: alvo, ativo, alerta_espera_ativo: valor, updated_at: new Date().toISOString() },
+      { onConflict: 'folder_id' },
+    );
+    setSalvando(false);
+    if (error) {
+      setAlertaEspera(!valor);
       toast({ title: 'Erro', description: error.message, variant: 'destructive' });
       return;
     }
@@ -194,6 +213,22 @@ export function MetaFolderConfigDialog({
           </div>
           <Switch checked={ativo} disabled={salvando} onCheckedChange={salvar} />
         </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+          <div className="space-y-0.5">
+            <Label className="text-sm">Alerta de cliente esperando resposta</Label>
+            <p className="text-xs text-muted-foreground">
+              Pisca o card em amarelo (15 a 30 min) e vermelho (mais de 30 min) enquanto ninguém responde.
+            </p>
+          </div>
+          <Switch
+            checked={alertaEspera}
+            disabled={salvando}
+            onCheckedChange={salvarAlertaEspera}
+            aria-label="Ativar alerta de cliente esperando resposta"
+          />
+        </div>
+
 
         <div className="space-y-3 rounded-md border p-3">
           <div className="flex items-start justify-between gap-4">
