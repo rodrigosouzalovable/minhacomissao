@@ -456,23 +456,35 @@ export async function calcularProposta(
     dias = Math.max(0, Math.floor((hoje - Math.min(...ts)) / 86400000));
   }
 
-  // Faixas customizadas do credor
-  const { data: faixas } = await supabase
-    .from('credor_desconto_faixas')
-    .select('dias_de, dias_ate, desc_avista, desc_parcelado')
-    .eq('credor', normalizeCredor(credor))
-    .order('dias_de');
+  const clampPct = (v: unknown) =>
+    v == null || v === '' || Number.isNaN(Number(v)) ? null : Math.max(0, Math.min(100, Number(v)));
+  const ovAvista = clampPct(override?.descAvista);
+  const ovParc = clampPct(override?.descParcelado);
 
   let descAvista: number;
   let descParc: number;
-  const lst = (faixas || []) as any[];
-  if (lst.length) {
-    const hit = lst.find((f) => dias >= (Number(f.dias_de) || 0) && (f.dias_ate == null || dias <= Number(f.dias_ate)));
-    descAvista = hit ? Math.max(0, Math.min(100, Number(hit.desc_avista) || 0)) : 0;
-    descParc = hit ? Math.max(0, Math.min(100, Number(hit.desc_parcelado) || 0)) : 0;
+
+  if (ovAvista != null || ovParc != null) {
+    // Descontos definidos manualmente na configuração do IAGO têm prioridade.
+    descAvista = ovAvista ?? 0;
+    descParc = ovParc ?? 0;
   } else {
-    descAvista = descontoPadrao(dias, 'avista');
-    descParc = descontoPadrao(dias, 'parcelado');
+    // Faixas customizadas do credor
+    const { data: faixas } = await supabase
+      .from('credor_desconto_faixas')
+      .select('dias_de, dias_ate, desc_avista, desc_parcelado')
+      .eq('credor', normalizeCredor(credor))
+      .order('dias_de');
+
+    const lst = (faixas || []) as any[];
+    if (lst.length) {
+      const hit = lst.find((f) => dias >= (Number(f.dias_de) || 0) && (f.dias_ate == null || dias <= Number(f.dias_ate)));
+      descAvista = hit ? Math.max(0, Math.min(100, Number(hit.desc_avista) || 0)) : 0;
+      descParc = hit ? Math.max(0, Math.min(100, Number(hit.desc_parcelado) || 0)) : 0;
+    } else {
+      descAvista = descontoPadrao(dias, 'avista');
+      descParc = descontoPadrao(dias, 'parcelado');
+    }
   }
 
   const parcMin = 100;
