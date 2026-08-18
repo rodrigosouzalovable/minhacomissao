@@ -237,7 +237,31 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
                       onBlur={(e) => salvarCfg({ limite_msgs_dia: Number(e.target.value) })} />
                   </div>
                 </div>
+                <div className="border rounded-md p-3 space-y-2">
+                  <Label className="text-sm font-medium">Descontos da proposta</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">% à vista</Label>
+                      <Input type="number" min={0} max={100} placeholder="Automático"
+                        value={cfg.desconto_avista_pct ?? ''}
+                        onChange={(e) => setCfg({ ...cfg, desconto_avista_pct: e.target.value === '' ? null : Number(e.target.value) })}
+                        onBlur={(e) => salvarCfg({ desconto_avista_pct: e.target.value === '' ? null : Number(e.target.value) })} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">% parcelado</Label>
+                      <Input type="number" min={0} max={100} placeholder="Automático"
+                        value={cfg.desconto_parcelado_pct ?? ''}
+                        onChange={(e) => setCfg({ ...cfg, desconto_parcelado_pct: e.target.value === '' ? null : Number(e.target.value) })}
+                        onBlur={(e) => salvarCfg({ desconto_parcelado_pct: e.target.value === '' ? null : Number(e.target.value) })} />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    O IAGO usa esses percentuais nas propostas. Em branco, ele volta a usar as faixas por dias de atraso do credor.
+                    Parcela mínima de R$ 100 e grade 2x a 24x continuam valendo.
+                  </p>
+                </div>
               </TabsContent>
+
 
               <TabsContent value="ensinar" className="space-y-3 mt-0">
                 <p className="text-xs text-muted-foreground">
