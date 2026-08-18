@@ -444,10 +444,15 @@ export default function InboxMeta() {
       .select('id, nome, cor, ordem, ativo, parent_id').order('ordem');
     setQualificacoes(((data as any) ?? []) as MetaQualificacao[]);
     const { data: cx } = await (supabase as any).from('meta_qualificacao_caixa')
-      .select('folder_id, ativo');
+      .select('folder_id, ativo, alerta_espera_ativo');
     const map: Record<string, boolean> = {};
-    ((cx as any[]) ?? []).forEach(r => { map[r.folder_id] = !!r.ativo; });
+    const mapAlerta: Record<string, boolean> = {};
+    ((cx as any[]) ?? []).forEach(r => {
+      map[r.folder_id] = !!r.ativo;
+      mapAlerta[r.folder_id] = r.alerta_espera_ativo !== false;
+    });
     setQualifCaixas(map);
+    setAlertaEsperaCaixas(mapAlerta);
   }, []);
 
   useEffect(() => { fetchQualificacoes(); }, [fetchQualificacoes]);
