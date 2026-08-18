@@ -29,14 +29,19 @@ Deno.serve(async (req) => {
 
     const q = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, waba_id, phone_number_id, display_phone, access_token, ativo");
+      .select("id, nome, waba_id, phone_number_id, display_phone, access_token, ativo, provider, webhook_saude_status, webhook_ultimo_erro");
     const { data: instanciasRaw, error } = targetId
       ? await q.eq("id", targetId)
       : await q.eq("ativo", true);
     if (error) throw error;
 
     const permitidas = await idsInstanciasPermitidas(req, supabase);
-    const instancias = filtrarInstancias(instanciasRaw as any[], permitidas);
+    // Instâncias conectadas na UAZAPI (provider != 'meta') não possuem webhook Meta — não verificar.
+    const instancias = filtrarInstancias(
+      (instanciasRaw as any[] || []).filter((i) => (i.provider ?? "meta") === "meta" && !!i.waba_id),
+      permitidas,
+    );
+
 
     const inicioDia = new Date();
     inicioDia.setUTCHours(0, 0, 0, 0);
