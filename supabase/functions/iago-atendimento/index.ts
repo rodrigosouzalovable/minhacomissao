@@ -740,8 +740,25 @@ async function gerarResposta(args: {
     'Leia todo o HISTÓRICO RECENTE antes de responder. Nunca repita uma saudação, apresentação, pergunta ou proposta que já foi enviada.',
     cpfIdentificado
       ? 'IDENTIFICAÇÃO: o cliente JÁ está identificado no sistema. É PROIBIDO pedir CPF, documento ou dados de cadastro. Siga direto para a negociação com os dados de DADOS DO SISTEMA.'
-      : 'Se já pediu o CPF e o cliente ainda não o informou, não peça novamente; apenas aguarde. Se o CPF chegou, avance diretamente para a consulta/proposta.',
+      : propostaPrevia
+        ? 'IDENTIFICAÇÃO: ainda não tenho o cadastro, mas já existe proposta enviada nesta conversa. NÃO peça CPF nesta resposta.'
+        : 'Se já pediu o CPF e o cliente ainda não o informou, não peça novamente; apenas aguarde. Se o CPF chegou, avance diretamente para a consulta/proposta.',
     'PROIBIDO citar "a proposta que te mandei" (ou equivalente) se nenhum valor/proposta aparece no HISTÓRICO RECENTE. Só fale de proposta enviada se ela realmente foi enviada antes.',
+
+    propostaPrevia && !proposta
+      ? [
+        `PROPOSTA JÁ ENVIADA POR NÓS NESTA CONVERSA (valor à vista R$ ${propostaPrevia.valor}):`,
+        `"${propostaPrevia.texto.slice(0, 500)}"`,
+        'RETOMADA OBRIGATÓRIA: pergunte se o cliente conseguiu visualizar essa condição de pagamento à vista, cite o mesmo valor R$ ' + propostaPrevia.valor + ' (nunca outro valor, nunca arredonde) e pergunte o que ele achou, oferecendo verificar opções de parcelamento caso prefira.',
+        'É PROIBIDO pedir CPF, documento ou dados de cadastro nesta resposta. Só peça o CPF em uma etapa posterior, se o cliente demonstrar interesse em parcelamento e for necessário para calcular as parcelas — explicando que é para consultar o cadastro.',
+        'Não repita a mensagem da proposta inteira: apenas retome de forma curta e natural.',
+      ].join('\n')
+      : '',
+
+    respostaAutomatica
+      ? 'A ÚLTIMA MENSAGEM DO CLIENTE É UMA RESPOSTA AUTOMÁTICA (ausência/atendimento automático, muitas vezes com link). NÃO responda o conteúdo dela, não comente nem acesse o link, não agradeça o material divulgado. Apenas siga a conversa retomando o assunto da negociação.'
+      : '',
+
 
     cpfPorTelefone && nomeCliente
       ? `CONFIRMAÇÃO LEVE: na primeira mensagem confirme a identidade pelo nome, ex.: "Falo com ${primeiroNome(nomeCliente)}?" e já siga a conversa.`
