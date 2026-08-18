@@ -918,7 +918,11 @@ export default function InboxMeta() {
           const matchTexto = nomeContato.includes(b) || (nomeCRM && nomeCRM.includes(b));
           const matchTel = bTemDigito && bDigits.length > 0 &&
             (telDigits.includes(bDigits) || (bSuffix.length >= 4 && telSfx.includes(bSuffix)));
-          if (!matchTexto && !matchTel) return false;
+          const instC = instancias.find(i => i.id === c.instancia_id);
+          const instDigits = String((instC as any)?.display_phone || '').replace(/\D/g, '');
+          const matchInst = (!!instC && norm(instC.nome || '').includes(b)) ||
+            (bTemDigito && bDigits.length >= 4 && instDigits.includes(bDigits));
+          if (!matchTexto && !matchTel && !matchInst) return false;
         }
         if (filtroEtiqueta) {
           const ids = contatoEtiquetas[c.id] || [];
@@ -943,6 +947,9 @@ export default function InboxMeta() {
         // Alertas de espera sobem: vermelho (30min+) > amarelo (15-30min) > resto
         const espera = (c: MetaContato) => {
           if (!c.ultima_msg_entrada_em) return { rank: 2, t: 0 };
+          // Entrada nos últimos 10 min sempre sobe ao topo (mesmo já respondida)
+          const tRecente = new Date(c.ultima_msg_entrada_em).getTime();
+          if (nowTick - tRecente <= 10 * 60_000) return { rank: -1, t: -tRecente };
           const tEntrada = new Date(c.ultima_msg_entrada_em).getTime();
           const tUltima = c.ultima_mensagem_em ? new Date(c.ultima_mensagem_em).getTime() : 0;
           if (tUltima > tEntrada) return { rank: 2, t: 0 };
@@ -960,7 +967,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato, nowTick]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato, nowTick, instancias]);
 
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
@@ -1840,7 +1847,15 @@ export default function InboxMeta() {
                         ))}
                       </div>
                     )}
-                    <div className="text-[10px] text-emerald-500/80 truncate">{inst?.nome || inst?.display_phone || ''}</div>
+                    <div className="text-[10px] text-emerald-500/80 truncate flex items-center gap-1">
+                      <span className="truncate">
+                        {inst?.nome || ''}
+                        {inst?.display_phone ? ` · ${formatTelefone(inst.display_phone)}` : ''}
+                      </span>
+                      {(inst as any)?.provider === 'uazapi' && (
+                        <Badge variant="secondary" className="text-[8px] py-0 h-3.5 px-1 shrink-0">Não oficial</Badge>
+                      )}
+                    </div>
                   </button>
                 </MetaConversaContextMenu>
               );
