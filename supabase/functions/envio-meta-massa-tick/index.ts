@@ -174,8 +174,23 @@ async function processarItem(job: any): Promise<ItemResult> {
 
   // Remove instâncias auto-bloqueadas por falhas consecutivas neste job
   const bloqueadasRun: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
-  const instanciaIdsDisponiveis: string[] = (job.instancia_ids || []).filter((id: string) => !bloqueadasRun.includes(id));
+  // Instâncias que já falharam para ESTE contato (não repetir o mesmo número no mesmo chip)
+  const varsPend = ((pend as any).vars && typeof (pend as any).vars === 'object') ? (pend as any).vars : {};
+  const exclItem: string[] = Array.isArray(varsPend._inst_excluidas) ? varsPend._inst_excluidas : [];
+
+  const instanciaIdsDisponiveis: string[] = (job.instancia_ids || [])
+    .filter((id: string) => !bloqueadasRun.includes(id) && !exclItem.includes(id));
   if (instanciaIdsDisponiveis.length === 0) {
+    // Se sobrou instância no job mas nenhuma serve para este contato, marca só o item como erro
+    const restaNoJob = (job.instancia_ids || []).filter((id: string) => !bloqueadasRun.includes(id));
+    if (restaNoJob.length > 0) {
+      await supabase.from('envio_meta_job_item').update({
+        status: 'erro',
+        erro: 'Todas as instâncias disponíveis já falharam na entrega para este contato',
+        processado_em: new Date().toISOString(),
+      }).eq('id', pend.id);
+      return { advanced: true, waitMs: 1_000 };
+    }
     await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas foram ignoradas por falhas consecutivas');
     return { advanced: false, stop: true };
   }
@@ -190,8 +205,10 @@ async function processarItem(job: any): Promise<ItemResult> {
       instancia_ids: instanciaIdsDisponiveis,
       user_id: job.user_id,
       excluir_id: job.ultima_instancia_id || null,
+      excluir_ids: exclItem,
       ignorar_pausa_qualidade: job.modo_rajada === true,
     }),
+
 
   }).then((r) => r.json()).catch((e) => ({ success: false, error: String(e) }));
 
