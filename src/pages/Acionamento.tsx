@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 import { User, Building2, Mail, MapPin, ImageIcon } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { QrCode, Smartphone, GripVertical } from 'lucide-react';
+import { QrCode, Smartphone, GripVertical, Search } from 'lucide-react';
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -166,6 +166,39 @@ interface InstanceFormData {
   whatsapp_profile_email?: string;
 }
 
+// Extrai o número do WhatsApp conectado a partir da resposta de status da UAZAPI
+function extrairTelefoneUazapi(payload: any): string | null {
+  if (!payload) return null;
+  const p = payload?.instance ?? payload;
+  const candidatos = [
+    payload?.phoneNumber, payload?.phone, payload?.wid, payload?.owner, payload?.jid,
+    p?.phoneNumber, p?.phone, p?.wid, p?.owner, p?.jid,
+    payload?.status?.phoneNumber, payload?.status?.phone,
+    payload?.result?.phone, payload?.data?.phone,
+  ];
+  for (const c of candidatos) {
+    if (typeof c === 'string') {
+      const d = c.replace(/\D/g, '');
+      if (d.length >= 10 && d.length <= 15) return d;
+    }
+  }
+  return null;
+}
+
+// Formata dígitos em (DD) 9NNNN-NNNN
+function formatarTelefoneBR(v?: string | null): string {
+  const d = String(v || '').replace(/\D/g, '');
+  if (d.length < 10) return d;
+  const semDdi = d.startsWith('55') && d.length > 11 ? d.slice(2) : d;
+  const ddd = semDdi.slice(0, 2);
+  const resto = semDdi.slice(2);
+  if (resto.length < 8) return d;
+  const meio = resto.length > 8 ? resto.slice(0, 5) : resto.slice(0, 4);
+  const fim = resto.length > 8 ? resto.slice(5) : resto.slice(4);
+  return `(${ddd}) ${meio}-${fim}`;
+}
+
+
 function SortableInstanceCard({ id, children }: { id: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
@@ -215,7 +248,9 @@ export default function Acionamento() {
   
   // Multi-instance UAZAPI state
   const [instances, setInstances] = useState<Array<{ id: string; nome: string; telefone?: string | null; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string; proxy_enabled?: boolean; proxy_host?: string | null }>>([]);
+  const [filtroInstancia, setFiltroInstancia] = useState('');
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
+
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
@@ -464,6 +499,18 @@ export default function Acionamento() {
         const data = await checkUazapiConnection(inst.id, inst.server_url, inst.instance_token);
         const isConnected = isResultConnected(data);
         setConnectionStatus(prev => ({ ...prev, [inst.id]: isConnected ? 'connected' : 'disconnected' }));
+        // Preenche o telefone automaticamente quando a instância ainda não tem número salvo
+        const jaTem = (inst.telefone || '').replace(/\D/g, '').length >= 8;
+        if (!jaTem) {
+          const phone = extrairTelefoneUazapi(data?.data);
+          if (phone) {
+            await supabase
+              .from('user_whatsapp_instances' as any)
+              .update({ telefone: phone } as any)
+              .eq('id', inst.id);
+            setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, telefone: phone } : i));
+          }
+        }
         return { id: inst.id, connected: isConnected };
       } catch {
         setConnectionStatus(prev => ({ ...prev, [inst.id]: 'disconnected' }));
@@ -478,6 +525,7 @@ export default function Acionamento() {
     // é controlado **apenas manualmente** (toggle individual ou botão "Ativar todas").
     setCheckingConnections(false);
   }, []);
+
 
   // ECONOMIA: NÃO testar conexão de todas as instâncias automaticamente ao montar a página.
   // Cada chamada vira invocação da edge function `test-uazapi-connection`.
@@ -500,6 +548,21 @@ export default function Acionamento() {
     instances.filter(i => connectionStatus[i.id] === 'connected').length,
     [instances, connectionStatus]
   );
+
+  const instancesFiltradas = useMemo(() => {
+    const termo = filtroInstancia.trim();
+    if (!termo) return instances;
+    const digitos = termo.replace(/\D/g, '');
+    const texto = termo.toLowerCase();
+    return instances.filter(i => {
+      const tel = (i.telefone || '').replace(/\D/g, '');
+      const telSemDdi = tel.startsWith('55') ? tel.slice(2) : tel;
+      const casaTel = digitos.length >= 3 && (tel.includes(digitos) || telSemDdi.includes(digitos));
+      const casaNome = (i.nome || '').toLowerCase().includes(texto);
+      return casaTel || casaNome;
+    });
+  }, [instances, filtroInstancia]);
+
 
   const activeInstances = useMemo(() => 
     instances.filter(i => i.ativo && connectionStatus[i.id] === 'connected' && !i.apenas_lembretes && i.robo), 
@@ -1521,14 +1584,23 @@ export default function Acionamento() {
           await supabase.functions.invoke('whatsapp-qr', {
             body: { action: 'setup-webhook', userId: user?.id, instanceId },
           });
+          // Grava automaticamente o número do WhatsApp conectado (se a UAZAPI retornou)
+          const phoneAuto = String(data?.phone || '').replace(/\D/g, '');
+          if (phoneAuto.length >= 10) {
+            await supabase
+              .from('user_whatsapp_instances' as any)
+              .update({ telefone: phoneAuto } as any)
+              .eq('id', instanceId);
+          }
           // Refresh instances list
           const { data: refreshed } = await supabase
             .from('user_whatsapp_instances' as any)
-            .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
+            .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
             .eq('user_id', user?.id)
             .order('ordem' as any, { ascending: true })
             .order('criado_em', { ascending: false });
           if (refreshed) setInstances(refreshed as any);
+
           setQrStep('idle');
           setQrImage(null);
           setPairingCode(null);
@@ -1570,7 +1642,7 @@ export default function Acionamento() {
       if (qrData?.alreadyConnected) {
         const { data: refreshed } = await supabase
           .from('user_whatsapp_instances' as any)
-          .select('id, nome, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
+          .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
           .eq('user_id', user.id)
           .order('criado_em', { ascending: true });
         if (refreshed) setInstances(refreshed as any);
@@ -2197,13 +2269,42 @@ export default function Acionamento() {
                     </div>
                   )}
 
+                  {/* Busca de instância por número ou nome */}
+                  {instances.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          value={filtroInstancia}
+                          onChange={(e) => setFiltroInstancia(e.target.value)}
+                          placeholder="Pesquisar número ou nome"
+                          className="pl-8 h-9"
+                        />
+                      </div>
+                      {filtroInstancia.trim() && (
+                        <>
+                          <span className="text-xs text-muted-foreground">
+                            {instancesFiltradas.length} resultado{instancesFiltradas.length !== 1 ? 's' : ''}
+                          </span>
+                          <Button variant="ghost" size="sm" onClick={() => setFiltroInstancia('')} className="text-xs">
+                            Limpar
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   {/* Instances list */}
                   {instances.length === 0 && !editingInstance && (
                     <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância cadastrada</p>
                   )}
-                  <DndContext collisionDetection={closestCenter} onDragEnd={handleInstanceDragEnd}>
-                    <SortableContext items={instances.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                      {instances.map((inst) => {
+                  {instances.length > 0 && instancesFiltradas.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância encontrada para "{filtroInstancia}"</p>
+                  )}
+                  <DndContext collisionDetection={closestCenter} onDragEnd={filtroInstancia.trim() ? () => {} : handleInstanceDragEnd}>
+                    <SortableContext items={instancesFiltradas.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                      {instancesFiltradas.map((inst) => {
+
                         const status = connectionStatus[inst.id];
                         return (
                           <SortableInstanceCard key={inst.id} id={inst.id}>
@@ -2263,7 +2364,19 @@ export default function Acionamento() {
                                       </Badge>
                                     )}
                                   </div>
-                                  <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
+                                  <div className="flex items-center gap-2">
+                                    {inst.telefone ? (
+                                      <span className="text-[11px] font-medium text-foreground shrink-0">
+                                        {formatarTelefoneBR(inst.telefone)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] text-muted-foreground/70 italic shrink-0">
+                                        Número não cadastrado
+                                      </span>
+                                    )}
+                                    <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
+                                  </div>
+
                                 </div>
                               </div>
                               <div className="flex flex-col gap-1 shrink-0">
