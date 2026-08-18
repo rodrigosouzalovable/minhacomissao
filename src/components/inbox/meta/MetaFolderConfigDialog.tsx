@@ -48,6 +48,7 @@ export function MetaFolderConfigDialog({
   const [plantaoBusy, setPlantaoBusy] = useState(false);
 
   useEffect(() => { if (open) setAtivo(qualificacaoAtiva); }, [open, qualificacaoAtiva]);
+  useEffect(() => { if (open) setAlertaEspera(alertaEsperaAtivo); }, [open, alertaEsperaAtivo]);
 
   const carregarCredores = useCallback(async () => {
     const { data, error } = await (supabase as any)
