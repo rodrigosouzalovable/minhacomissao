@@ -111,12 +111,28 @@ export function MetaFolderConfigDialog({
     setAtivo(valor);
     setSalvando(true);
     const { error } = await (supabase as any).from('meta_qualificacao_caixa').upsert(
-      { folder_id: alvo, ativo: valor, updated_at: new Date().toISOString() },
+      { folder_id: alvo, ativo: valor, alerta_espera_ativo: alertaEspera, updated_at: new Date().toISOString() },
       { onConflict: 'folder_id' },
     );
     setSalvando(false);
     if (error) {
       setAtivo(!valor);
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      return;
+    }
+    onChanged();
+  };
+
+  const salvarAlertaEspera = async (valor: boolean) => {
+    setAlertaEspera(valor);
+    setSalvando(true);
+    const { error } = await (supabase as any).from('meta_qualificacao_caixa').upsert(
+      { folder_id: alvo, ativo, alerta_espera_ativo: valor, updated_at: new Date().toISOString() },
+      { onConflict: 'folder_id' },
+    );
+    setSalvando(false);
+    if (error) {
+      setAlertaEspera(!valor);
       toast({ title: 'Erro', description: error.message, variant: 'destructive' });
       return;
     }
