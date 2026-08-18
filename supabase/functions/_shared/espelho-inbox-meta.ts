@@ -5,6 +5,22 @@
 // Ao espelhar, os números conectados via UAZAPI passam a aparecer na caixa e o IAGO
 // atende essas conversas com exatamente as mesmas regras das instâncias oficiais.
 
+/**
+ * Padroniza o telefone no formato do lado oficial: 55 + DDD + 9 + 8 dígitos.
+ * A UAZAPI às vezes entrega o celular sem o "9" (12 dígitos).
+ */
+export function normalizarBr13(raw: string): string {
+  let d = String(raw || '').replace(/\D/g, '');
+  if (!d.startsWith('55')) d = `55${d}`;
+  if (d.length === 12) {
+    const ddd = d.slice(2, 4);
+    const resto = d.slice(4);
+    // Celular brasileiro tem 9 dígitos; fixo (8 dígitos começando com 2-5) fica como está
+    if (!/^[2-5]/.test(resto)) d = `55${ddd}9${resto}`;
+  }
+  return d;
+}
+
 export interface InstanciaEspelho {
   id: string;
   user_id: string;
