@@ -23,14 +23,16 @@ interface Props {
   folderId: string | null;
   folderNome: string;
   qualificacaoAtiva: boolean;
+  alertaEsperaAtivo?: boolean;
   onChanged: () => void;
 }
 
 export function MetaFolderConfigDialog({
-  open, onOpenChange, folderId, folderNome, qualificacaoAtiva, onChanged,
+  open, onOpenChange, folderId, folderNome, qualificacaoAtiva, alertaEsperaAtivo = true, onChanged,
 }: Props) {
   const { toast } = useToast();
   const [ativo, setAtivo] = useState(qualificacaoAtiva);
+  const [alertaEspera, setAlertaEspera] = useState(alertaEsperaAtivo);
   const [salvando, setSalvando] = useState(false);
 
   const alvo = folderId ?? CAIXA_PADRAO_ID;
