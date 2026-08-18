@@ -19,6 +19,8 @@ export interface MetaComposerHandle {
   focus: () => void;
 }
 
+const MAX_HEIGHT = 96; // ~4 linhas
+
 const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComposerImpl(
   { disabled, enviando, placeholder, onSend, onPaste, onEscape, initialText, onInitialTextConsumed },
   ref,
@@ -26,11 +28,25 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
   const [texto, setTexto] = useState('');
   const taRef = useRef<HTMLTextAreaElement>(null);
 
+  const ajustarAltura = useCallback(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const next = Math.min(ta.scrollHeight, MAX_HEIGHT);
+    ta.style.height = `${next}px`;
+    ta.style.overflowY = ta.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
+  }, []);
+
+  useEffect(() => {
+    ajustarAltura();
+  }, [texto, ajustarAltura]);
+
   const submit = useCallback(() => {
     const t = texto.trim();
     if (!t) return;
     setTexto('');
     onSend(t);
+    // Altura é resetada pelo useEffect ao limpar texto
   }, [texto, onSend]);
 
   const doAppend = useCallback((t: string) => {
@@ -67,7 +83,7 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
         onPaste={onPaste}
         placeholder={placeholder}
         disabled={disabled}
-        className="min-h-[44px] max-h-[120px] resize-none"
+        className="min-h-[40px] max-h-[96px] resize-none py-2 leading-5"
         rows={1}
       />
       <Button onClick={submit} disabled={disabled || !texto.trim()} size="icon" className="shrink-0">
@@ -78,3 +94,4 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
 });
 
 export const MetaComposer = memo(MetaComposerImpl);
+
