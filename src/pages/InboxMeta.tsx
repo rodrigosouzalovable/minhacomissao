@@ -955,6 +955,12 @@ export default function InboxMeta() {
         return true;
       })
       .sort((a, b) => {
+        if (isCaixaAquecimento) {
+          const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
+          const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
+          return tb - ta;
+        }
+
         const rank = (c: MetaContato) => (c.fixado ? 0 : 1);
         const ra = rank(a), rb = rank(b);
         if (ra !== rb) return ra - rb;
