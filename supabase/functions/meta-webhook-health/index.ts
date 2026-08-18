@@ -29,14 +29,19 @@ Deno.serve(async (req) => {
 
     const q = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, waba_id, phone_number_id, display_phone, access_token, ativo");
+      .select("id, nome, waba_id, phone_number_id, display_phone, access_token, ativo, provider, webhook_saude_status, webhook_ultimo_erro");
     const { data: instanciasRaw, error } = targetId
       ? await q.eq("id", targetId)
       : await q.eq("ativo", true);
     if (error) throw error;
 
     const permitidas = await idsInstanciasPermitidas(req, supabase);
-    const instancias = filtrarInstancias(instanciasRaw as any[], permitidas);
+    // Instâncias conectadas na UAZAPI (provider != 'meta') não possuem webhook Meta — não verificar.
+    const instancias = filtrarInstancias(
+      (instanciasRaw as any[] || []).filter((i) => (i.provider ?? "meta") === "meta" && !!i.waba_id),
+      permitidas,
+    );
+
 
     const inicioDia = new Date();
     inicioDia.setUTCHours(0, 0, 0, 0);
@@ -148,8 +153,12 @@ Deno.serve(async (req) => {
         })
         .eq("id", inst.id);
 
-      // Notifica admin em problemas relevantes — texto humanizado.
-      if (status === "erro" || status === "perda_suspeita" || (forceNotify && status === "reinscrito")) {
+      // Notifica só UMA vez por mudança de estado (evita aviso de hora em hora).
+      const statusAnterior = (inst as any).webhook_saude_status ?? null;
+      const mudouEstado = statusAnterior !== status;
+      const problema = status === "erro" || status === "perda_suspeita";
+      if ((problema && (mudouEstado || forceNotify)) || (forceNotify && status === "reinscrito")) {
+
         const errLower = (erro || "").toLowerCase();
         const isTimeout =
           errLower.includes("timed out") ||
@@ -212,7 +221,7 @@ Deno.serve(async (req) => {
         }
 
         const mensagem = `${emoji} Saúde do Webhook — ${inst.nome}\n\n${corpo}`;
-        const chave = `${inst.id}:${status}:${new Date().toISOString().slice(0, 13)}`;
+        const chave = `${inst.id}:${status}:${new Date().toISOString().slice(0, 10)}`;
         await notificarAdmin(supabase, {
           tipo: "meta_webhook_saude",
           mensagem,
