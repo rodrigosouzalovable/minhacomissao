@@ -575,8 +575,10 @@ Deno.serve(async (req) => {
     }
 
     const agoraIso = new Date().toISOString();
-    // Proposta considerada enviada apenas quando valores reais foram para o cliente.
+    // Proposta considerada enviada quando valores reais foram para o cliente —
+    // inclusive quando vieram de mensagem nossa anterior (campanha/template).
     const propostaEnviada = !!estado.contexto?.proposta_enviada
+      || !!propostaPrevia
       || (!!proposta && mensagens.some((m) => /r\$\s*\d/i.test(String(m))));
     // O cliente respondeu: a janela de 24h reabriu, então as etapas de follow-up recomeçam.
     const followupEm = !escalar && cfg.followup_ativo && mensagens.length
