@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Smartphone } from 'lucide-react';
+import { Loader2, RefreshCw, Smartphone } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -41,6 +43,24 @@ function fmtTelefone(v?: string | null) {
 export function MetaNumerosConectadosDialog({ open, onOpenChange, folderId, folderNome }: Props) {
   const [loading, setLoading] = useState(false);
   const [linhas, setLinhas] = useState<Linha[]>([]);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [recarregar, setRecarregar] = useState(0);
+
+  const sincronizar = async () => {
+    setSincronizando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('uazapi-sync-numeros', {
+        body: { folder_id: folderId },
+      });
+      if (error) throw error;
+      toast.success(`Números atualizados (${(data as any)?.atualizados ?? 0} de ${(data as any)?.total ?? 0})`);
+      setRecarregar((n) => n + 1);
+    } catch (e) {
+      toast.error('Não foi possível atualizar os números agora');
+    } finally {
+      setSincronizando(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -69,7 +89,7 @@ export function MetaNumerosConectadosDialog({ open, onOpenChange, folderId, fold
       setLoading(false);
     })();
     return () => { cancel = true; };
-  }, [open, folderId]);
+  }, [open, folderId, recarregar]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -80,6 +100,13 @@ export function MetaNumerosConectadosDialog({ open, onOpenChange, folderId, fold
             Números não oficiais (UAZAPI) vinculados a esta caixa de mensagens.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={sincronizar} disabled={sincronizando} className="gap-1.5">
+            <RefreshCw className={`h-3.5 w-3.5 ${sincronizando ? 'animate-spin' : ''}`} />
+            Atualizar números
+          </Button>
+        </div>
 
         {loading ? (
           <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
