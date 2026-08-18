@@ -2269,13 +2269,42 @@ export default function Acionamento() {
                     </div>
                   )}
 
+                  {/* Busca de instância por número ou nome */}
+                  {instances.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          value={filtroInstancia}
+                          onChange={(e) => setFiltroInstancia(e.target.value)}
+                          placeholder="Pesquisar número ou nome"
+                          className="pl-8 h-9"
+                        />
+                      </div>
+                      {filtroInstancia.trim() && (
+                        <>
+                          <span className="text-xs text-muted-foreground">
+                            {instancesFiltradas.length} resultado{instancesFiltradas.length !== 1 ? 's' : ''}
+                          </span>
+                          <Button variant="ghost" size="sm" onClick={() => setFiltroInstancia('')} className="text-xs">
+                            Limpar
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   {/* Instances list */}
                   {instances.length === 0 && !editingInstance && (
                     <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância cadastrada</p>
                   )}
-                  <DndContext collisionDetection={closestCenter} onDragEnd={handleInstanceDragEnd}>
-                    <SortableContext items={instances.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                      {instances.map((inst) => {
+                  {instances.length > 0 && instancesFiltradas.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">Nenhuma instância encontrada para "{filtroInstancia}"</p>
+                  )}
+                  <DndContext collisionDetection={closestCenter} onDragEnd={filtroInstancia.trim() ? () => {} : handleInstanceDragEnd}>
+                    <SortableContext items={instancesFiltradas.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                      {instancesFiltradas.map((inst) => {
+
                         const status = connectionStatus[inst.id];
                         return (
                           <SortableInstanceCard key={inst.id} id={inst.id}>
