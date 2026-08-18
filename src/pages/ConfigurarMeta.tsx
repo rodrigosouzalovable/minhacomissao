@@ -1613,7 +1613,25 @@ export default function ConfigurarMeta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Número já cadastrado */}
+      <Dialog open={!!duplicado} onOpenChange={(o) => { if (!o) setDuplicado(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Número já cadastrado</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Este Phone Number ID já está cadastrado na instância <strong>"{duplicado?.nome}"</strong>.
+            Quer atualizar essa instância com os dados que você digitou (nome, WABA ID, Business Manager ID, token e tier)?
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicado(null)}>Cancelar</Button>
+            <Button onClick={atualizarDuplicado}>Atualizar instância existente</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
     </AppLayout>
 
   );
