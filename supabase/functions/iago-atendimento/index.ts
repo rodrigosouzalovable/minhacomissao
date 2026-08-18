@@ -342,6 +342,32 @@ Deno.serve(async (req) => {
       console.log('[IAGO] humano inativo há mais de 10 min — IAGO retoma', { contato_id });
     }
 
+    // ===== Espera extra de 20s: prioridade para o atendente humano =====
+    // Dá 20 segundos a mais antes de responder. Se um humano responder nesse
+    // intervalo, o IAGO não envia nada.
+    await sleep(20000);
+    {
+      const corteEspera = String(estado.contexto?.ultimo_envio_ia || estado.created_at);
+      const { data: novasSaidas } = await supabase
+        .from('meta_whatsapp_mensagens')
+        .select('id, criado_em')
+        .eq('instancia_id', (contato as any).instancia_id)
+        .eq('telefone', (contato as any).telefone || '')
+        .eq('direcao', 'saida')
+        .gt('criado_em', corteEspera)
+        .order('criado_em', { ascending: false })
+        .limit(10);
+      const idsIAAtuais: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
+      const humanaNova = ((novasSaidas || []) as any[]).find((m) => !idsIAAtuais.includes(m.id));
+      if (humanaNova) {
+        await supabase.from('iago_conversa_estado')
+          .update({ followup_em: null }).eq('id', estado.id);
+        await finalizarEntrada();
+        console.log('[IAGO] humano respondeu durante a espera de 20s — IAGO calado', { contato_id });
+        return json({ success: true, skipped: 'humano respondeu na espera de 20s' });
+      }
+    }
+
 
     // ===== Contexto financeiro real =====
     let cpf = estado.cpf || '';
