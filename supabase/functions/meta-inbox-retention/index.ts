@@ -42,8 +42,10 @@ Deno.serve(async (req) => {
         .eq("fixado", false)
         .eq("nao_lido", 0)
         .lt("ultima_mensagem_em", corte)
+        .or(`folder_id.is.null,folder_id.neq.${FOLDER_AQUECIMENTO}`)
         .order("ultima_mensagem_em", { ascending: true })
         .limit(1000);
+
 
       if (error) throw error;
       if (!candidatos?.length) break;
