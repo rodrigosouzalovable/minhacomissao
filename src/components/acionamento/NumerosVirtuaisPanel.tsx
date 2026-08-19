@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet } from 'lucide-react';
+import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet, Webhook, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface Pedido {
   id: string;
@@ -17,26 +17,29 @@ interface Pedido {
   pais: string | null;
   numero: string | null;
   codigo: string | null;
+  texto_sms?: string | null;
   status: string;
   custo: number | null;
   expira_em: string | null;
   created_at: string;
 }
 
+// Códigos do protocolo da VirtualSMS (handler_api)
 const SERVICOS = [
-  { code: 'whatsapp', name: 'WhatsApp' },
-  { code: 'telegram', name: 'Telegram' },
-  { code: 'google', name: 'Google' },
-  { code: 'instagram', name: 'Instagram' },
-  { code: 'facebook', name: 'Facebook' },
+  { code: 'wa', name: 'WhatsApp' },
+  { code: 'tg', name: 'Telegram' },
+  { code: 'go', name: 'Google' },
+  { code: 'ig', name: 'Instagram' },
+  { code: 'fb', name: 'Facebook' },
 ];
 
-const PAISES = [
-  { code: 'brazil', name: 'Brasil' },
-  { code: 'usa', name: 'Estados Unidos' },
-  { code: 'portugal', name: 'Portugal' },
-  { code: 'mexico', name: 'México' },
-  { code: 'argentina', name: 'Argentina' },
+// IDs de país do protocolo (fallback; a lista real vem do provedor)
+const PAISES_FALLBACK = [
+  { id: '73', nome: 'Brasil' },
+  { id: '187', nome: 'Estados Unidos' },
+  { id: '117', nome: 'Portugal' },
+  { id: '54', nome: 'México' },
+  { id: '39', nome: 'Argentina' },
 ];
 
 const statusLabel: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -46,6 +49,7 @@ const statusLabel: Record<string, { label: string; variant: 'default' | 'seconda
   expirado: { label: 'Expirado', variant: 'destructive' },
   reembolsado: { label: 'Reembolsado', variant: 'secondary' },
 };
+
 
 const invoke = async (payload: Record<string, unknown>) => {
   const { data, error } = await supabase.functions.invoke('virtualsms', { body: payload });
