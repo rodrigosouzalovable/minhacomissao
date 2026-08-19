@@ -299,7 +299,17 @@ export default function Acionamento() {
     }
   }, [editingInstance?.id]);
 
+  // Painel de números virtuais: inicia minimizado (lembra preferência do usuário)
+  const [numerosVirtuaisOpen, setNumerosVirtuaisOpenState] = useState<boolean>(() => {
+    try { return localStorage.getItem('uazapi_numeros_virtuais_open') === '1'; } catch { return false; }
+  });
+  const setNumerosVirtuaisOpen = (open: boolean) => {
+    setNumerosVirtuaisOpenState(open);
+    try { localStorage.setItem('uazapi_numeros_virtuais_open', open ? '1' : '0'); } catch { /* ignore */ }
+  };
+
   // QR Code connection state
+
   const [qrLoading, setQrLoading] = useState(false);
   const [webhookAllLoading, setWebhookAllLoading] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
