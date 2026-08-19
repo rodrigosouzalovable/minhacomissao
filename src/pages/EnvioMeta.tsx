@@ -106,7 +106,7 @@ function normalizeDocument(value: string): string {
 }
 
 
-function parseRecipients(input: string): ClienteRow[] {
+function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
   const linhas = input.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows: ClienteRow[] = [];
   const seen = new Set<string>();
