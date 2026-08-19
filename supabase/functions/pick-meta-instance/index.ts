@@ -172,6 +172,15 @@ Deno.serve(async (req) => {
         if (pausaPorStatus) { descartados.push(`${rotulo}: pausada por ${inst.pausa_automatica_motivo}`); continue; }
       }
 
+      // Quarentena por queda de qualidade: fora do pool de campanha até a data.
+      if (inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date() && !ignoraQualidadeGlobal) {
+        descartados.push(
+          `${rotulo}: em quarentena até ${new Date(inst.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` +
+          `${inst.quarentena_motivo ? ` (${inst.quarentena_motivo})` : ''}`,
+        );
+        continue;
+      }
+
       // Reset diário (telemetria — não bloqueia envio)
       let uso = inst.enviados_hoje || 0;
       if (inst.ultimo_reset !== hoje) uso = 0;
@@ -180,6 +189,27 @@ Deno.serve(async (req) => {
         ? Math.floor((Date.now() - new Date(inst.data_ativacao_api).getTime()) / 86400000) + 1
         : 0;
       const fase = inst.data_ativacao_api ? faseFromDias(diasAtivo) : 'livre';
+
+      // ===== Teto diário efetivo + teto horário =====
+      if (freioAtivo) {
+        const freio = freioMap.get(inst.id);
+        const tetoDia = freio ? Number(freio.teto_efetivo) : tetoBase(inst, cfg, fase);
+        const enviadosDia = await enviadosHojeBrt(supabase, inst.id);
+        if (tetoDia <= 0) {
+          descartados.push(`${rotulo}: freio de qualidade — ${freio?.motivo_reducao || 'sem cota hoje'}`);
+          continue;
+        }
+        if (enviadosDia >= tetoDia) {
+          descartados.push(`${rotulo}: teto diário atingido (${enviadosDia}/${tetoDia})`);
+          continue;
+        }
+        const naHora = await enviadosUltimaHora(supabase, inst.id);
+        if (naHora >= cotaMaxHora) {
+          descartados.push(`${rotulo}: teto por hora atingido (${naHora}/${cotaMaxHora})`);
+          continue;
+        }
+      }
+
 
       // Guardrails baseados em métricas de ontem.
       // Só bloqueios REAIS de usuário (mo.bloqueadas) reprovam a instância —
