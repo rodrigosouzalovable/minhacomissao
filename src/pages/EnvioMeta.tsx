@@ -97,6 +97,13 @@ function normalizeTelKey(t: string): string {
   return d;
 }
 
+// Sufixo de 8 dígitos — padrão de comparação de telefone do projeto.
+function telSuffix8(t: string): string {
+  const d = String(t || "").replace(/\D+/g, "");
+  return d.length >= 8 ? d.slice(-8) : d;
+}
+
+
 function normalizeDocument(value: string): string {
   const d = String(value || "").replace(/\D/g, "");
   // Excel remove zeros à esquerda: recompõe CPF (11) / CNPJ (14).
