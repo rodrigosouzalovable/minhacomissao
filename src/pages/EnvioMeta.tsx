@@ -97,6 +97,13 @@ function normalizeTelKey(t: string): string {
   return d;
 }
 
+// Sufixo de 8 dígitos — padrão de comparação de telefone do projeto.
+function telSuffix8(t: string): string {
+  const d = String(t || "").replace(/\D+/g, "");
+  return d.length >= 8 ? d.slice(-8) : d;
+}
+
+
 function normalizeDocument(value: string): string {
   const d = String(value || "").replace(/\D/g, "");
   // Excel remove zeros à esquerda: recompõe CPF (11) / CNPJ (14).
@@ -120,7 +127,7 @@ function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
     const key = normalizeTelKey(telefone);
     if (!key) continue;
     // Números nossos (UAZAPI) são isentos de deduplicação: mantemos todas as repetições.
-    if (seen.has(key) && !isentos?.has(key)) continue;
+    if (seen.has(key) && !isentos?.has(telSuffix8(telefone))) continue;
     seen.add(key);
     rows.push({
       telefone,
@@ -148,7 +155,7 @@ function dedupRecipientsRaw(raw: string, isentos?: Set<string>): { texto: string
     const key = normalizeTelKey(tel);
     if (!key) { out.push(trimmed); continue; }
     if (seen.has(key)) {
-      if (!isentos?.has(key)) { dup++; continue; }
+      if (!isentos?.has(telSuffix8(tel))) { dup++; continue; }
       preservados++;
     }
     seen.add(key);
@@ -563,8 +570,8 @@ export default function EnvioMeta() {
   const isentosDedup = useMemo(() => {
     const s = new Set<string>();
     for (const u of uazInstancias as any[]) {
-      const key = normalizeTelKey(String(u?.telefone || ""));
-      if (key.length === 8) s.add(key);
+      const suf = telSuffix8(String(u?.telefone || ""));
+      if (suf.length === 8) s.add(suf);
     }
     return s;
   }, [uazInstancias]);
