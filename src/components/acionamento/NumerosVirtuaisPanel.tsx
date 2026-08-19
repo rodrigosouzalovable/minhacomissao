@@ -53,10 +53,20 @@ const statusLabel: Record<string, { label: string; variant: 'default' | 'seconda
 
 const invoke = async (payload: Record<string, unknown>) => {
   const { data, error } = await supabase.functions.invoke('virtualsms', { body: payload });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Erros de negócio vêm com status 4xx: extrai a mensagem real do corpo
+    let msg = error.message;
+    try {
+      const ctx = (error as any).context;
+      const body = ctx && typeof ctx.json === 'function' ? await ctx.json() : null;
+      if (body?.error) msg = body.error;
+    } catch { /* mantém mensagem original */ }
+    throw new Error(msg);
+  }
   if ((data as any)?.error) throw new Error((data as any).error);
   return data as any;
 };
+
 
 const usd = (v: number | null | undefined) => `US$ ${(Number(v) || 0).toFixed(2)}`;
 
