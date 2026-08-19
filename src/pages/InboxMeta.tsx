@@ -38,6 +38,7 @@ import { MetaFolderConfigDialog, CAIXA_PADRAO_ID } from '@/components/inbox/meta
 import { MetaNumerosConectadosDialog } from '@/components/inbox/meta/MetaNumerosConectadosDialog';
 import { CopyButton } from '@/components/CopyButton';
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
+import { AgendarRetornoDialog } from '@/components/inbox/meta/AgendarRetornoDialog';
 
 
 import { useUserRole } from '@/hooks/useUserRole';
