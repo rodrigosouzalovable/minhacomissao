@@ -143,13 +143,20 @@ serve(async (req) => {
 
     if (action === "webhook_info") {
       const conf = await cfg();
+      const seg = Deno.env.get("VIRTUALSMS_WEBHOOK_SECRET") ?? null;
+      const base = webhookUrl();
       return json({
         ok: true,
-        webhook_url: webhookUrl(),
-        secret: Deno.env.get("VIRTUALSMS_WEBHOOK_SECRET") ?? null,
+        webhook_url: base,
+        webhook_url_token: seg ? `${base}?token=${encodeURIComponent(seg)}` : base,
+        secret: seg,
         ultimo_evento_em: conf?.ultimo_evento_em ?? null,
+        ultima_rejeicao_em: (conf as any)?.ultima_rejeicao_em ?? null,
+        ultima_rejeicao_motivo: (conf as any)?.ultima_rejeicao_motivo ?? null,
+        ultima_rejeicao_debug: (conf as any)?.ultima_rejeicao_debug ?? null,
       });
     }
+
 
     if (action === "servicos") {
       const pais = body?.pais ? String(body.pais) : undefined;
