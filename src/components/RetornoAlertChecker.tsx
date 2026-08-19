@@ -4,13 +4,14 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Bell, User, Phone, FileText } from 'lucide-react';
+import { Bell, User, Phone, FileText, CalendarClock } from 'lucide-react';
 import successSound from '@/assets/success-sound.mp3';
 
 interface RetornoAlerta {
@@ -24,39 +25,35 @@ interface RetornoAlerta {
 
 export function RetornoAlertChecker() {
   const { user } = useAuth();
-  const [alertaRetorno, setAlertaRetorno] = useState<RetornoAlerta | null>(null);
+  const [fila, setFila] = useState<RetornoAlerta[]>([]);
   const notifiedIds = useRef<Set<string>>(new Set());
+
+  const alertaRetorno = fila[0] ?? null;
 
   const checkRetornos = useCallback(async () => {
     if (!user) return;
 
     const now = new Date();
-    // Build UTC-based window: compare against UTC times since DB stores as UTC
-    const past5Min = new Date(now.getTime() - 5 * 60 * 1000);
+    // data_retorno é gravado em UTC real — comparar direto, sem deslocar fuso.
+    const past60Min = new Date(now.getTime() - 60 * 60 * 1000);
     const in2Min = new Date(now.getTime() + 2 * 60 * 1000);
-
-    // We need to compare in "user local time" because the user entered local time 
-    // but it was stored as UTC. So we shift the window by the timezone offset.
-    const offsetMs = now.getTimezoneOffset() * 60 * 1000;
-    const past5MinUtc = new Date(past5Min.getTime() + offsetMs);
-    const in2MinUtc = new Date(in2Min.getTime() + offsetMs);
 
     const { data, error } = await supabase
       .from('retornos')
       .select('id, cliente_nome, cliente_cpf, cliente_telefone, observacao, data_retorno')
       .eq('user_id', user.id)
       .eq('status', 'pendente')
-      .lte('data_retorno', in2MinUtc.toISOString())
-      .gte('data_retorno', past5MinUtc.toISOString());
+      .lte('data_retorno', in2Min.toISOString())
+      .gte('data_retorno', past60Min.toISOString())
+      .order('data_retorno', { ascending: true });
 
     if (error || !data || data.length === 0) return;
 
-    // Find first non-notified retorno
-    const retorno = data.find(r => !notifiedIds.current.has(r.id));
-    if (!retorno) return;
+    const novos = data.filter((r) => !notifiedIds.current.has(r.id));
+    if (novos.length === 0) return;
 
-    notifiedIds.current.add(retorno.id);
-    setAlertaRetorno(retorno);
+    novos.forEach((r) => notifiedIds.current.add(r.id));
+    setFila((prev) => [...prev, ...novos]);
 
     // Play sound
     try {
@@ -91,8 +88,16 @@ export function RetornoAlertChecker() {
     };
   }, [user, checkRetornos]);
 
+  const fechar = () => setFila((prev) => prev.slice(1));
+
+  const concluir = async () => {
+    if (!alertaRetorno) return;
+    await supabase.from('retornos').update({ status: 'concluido' }).eq('id', alertaRetorno.id);
+    fechar();
+  };
+
   return (
-    <AlertDialog open={!!alertaRetorno} onOpenChange={(open) => { if (!open) setAlertaRetorno(null); }}>
+    <AlertDialog open={!!alertaRetorno} onOpenChange={(open) => { if (!open) fechar(); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
@@ -102,7 +107,7 @@ export function RetornoAlertChecker() {
           <AlertDialogDescription asChild>
             <div className="space-y-3 pt-2">
               <p className="text-base font-medium text-foreground">
-                Você tem um retorno agendado para agora:
+                Você precisa entrar em contato com este cliente agora:
               </p>
               <div className="space-y-2 rounded-lg bg-muted p-3">
                 <div className="flex items-center gap-2">
@@ -110,9 +115,22 @@ export function RetornoAlertChecker() {
                   <span className="font-semibold">{alertaRetorno?.cliente_nome}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <FileText className="h-3 w-3 text-muted-foreground" />
-                  <span>CPF: {alertaRetorno?.cliente_cpf}</span>
+                  <CalendarClock className="h-3 w-3 text-muted-foreground" />
+                  <span>
+                    {alertaRetorno
+                      ? new Date(alertaRetorno.data_retorno).toLocaleString('pt-BR', {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })
+                      : ''}
+                  </span>
                 </div>
+                {!!alertaRetorno?.cliente_cpf && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileText className="h-3 w-3 text-muted-foreground" />
+                    <span>CPF: {alertaRetorno.cliente_cpf}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-3 w-3 text-muted-foreground" />
                   <span>{alertaRetorno?.cliente_telefone}</span>
@@ -123,11 +141,17 @@ export function RetornoAlertChecker() {
                   </p>
                 )}
               </div>
+              {fila.length > 1 && (
+                <p className="text-xs text-muted-foreground">
+                  +{fila.length - 1} outro(s) retorno(s) aguardando.
+                </p>
+              )}
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogAction>Entendido</AlertDialogAction>
+          <AlertDialogCancel onClick={fechar}>Entendido</AlertDialogCancel>
+          <AlertDialogAction onClick={concluir}>Marcar como concluído</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
