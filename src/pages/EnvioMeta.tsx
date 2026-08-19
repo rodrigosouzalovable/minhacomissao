@@ -155,7 +155,7 @@ function dedupRecipientsRaw(raw: string, isentos?: Set<string>): { texto: string
     const key = normalizeTelKey(tel);
     if (!key) { out.push(trimmed); continue; }
     if (seen.has(key)) {
-      if (!isentos?.has(key)) { dup++; continue; }
+      if (!isentos?.has(telSuffix8(tel))) { dup++; continue; }
       preservados++;
     }
     seen.add(key);
