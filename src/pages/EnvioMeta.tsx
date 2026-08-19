@@ -266,7 +266,7 @@ export default function EnvioMeta() {
     if (!validador) return toast.error("Instância validadora inválida");
 
     // 1) Deduplica antes de tudo
-    const { texto, duplicados } = dedupRecipientsRaw(recipientsRaw);
+    const { texto, duplicados } = dedupRecipientsRaw(recipientsRaw, isentosDedup);
     if (duplicados > 0) {
       setRecipientsRaw(texto);
       toast.message(`${duplicados} duplicado(s) removido(s) antes da validação`);
