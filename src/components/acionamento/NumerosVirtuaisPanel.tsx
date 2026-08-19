@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet } from 'lucide-react';
+import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet, Webhook, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface Pedido {
   id: string;
@@ -17,26 +17,29 @@ interface Pedido {
   pais: string | null;
   numero: string | null;
   codigo: string | null;
+  texto_sms?: string | null;
   status: string;
   custo: number | null;
   expira_em: string | null;
   created_at: string;
 }
 
+// Códigos do protocolo da VirtualSMS (handler_api)
 const SERVICOS = [
-  { code: 'whatsapp', name: 'WhatsApp' },
-  { code: 'telegram', name: 'Telegram' },
-  { code: 'google', name: 'Google' },
-  { code: 'instagram', name: 'Instagram' },
-  { code: 'facebook', name: 'Facebook' },
+  { code: 'wa', name: 'WhatsApp' },
+  { code: 'tg', name: 'Telegram' },
+  { code: 'go', name: 'Google' },
+  { code: 'ig', name: 'Instagram' },
+  { code: 'fb', name: 'Facebook' },
 ];
 
-const PAISES = [
-  { code: 'brazil', name: 'Brasil' },
-  { code: 'usa', name: 'Estados Unidos' },
-  { code: 'portugal', name: 'Portugal' },
-  { code: 'mexico', name: 'México' },
-  { code: 'argentina', name: 'Argentina' },
+// IDs de país do protocolo (fallback; a lista real vem do provedor)
+const PAISES_FALLBACK = [
+  { id: '73', nome: 'Brasil' },
+  { id: '187', nome: 'Estados Unidos' },
+  { id: '117', nome: 'Portugal' },
+  { id: '54', nome: 'México' },
+  { id: '39', nome: 'Argentina' },
 ];
 
 const statusLabel: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -46,6 +49,7 @@ const statusLabel: Record<string, { label: string; variant: 'default' | 'seconda
   expirado: { label: 'Expirado', variant: 'destructive' },
   reembolsado: { label: 'Reembolsado', variant: 'secondary' },
 };
+
 
 const invoke = async (payload: Record<string, unknown>) => {
   const { data, error } = await supabase.functions.invoke('virtualsms', { body: payload });
@@ -62,10 +66,11 @@ interface Props {
 
 export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const qc = useQueryClient();
-  const [servico, setServico] = useState('whatsapp');
-  const [pais, setPais] = useState('brazil');
+  const [servico, setServico] = useState('wa');
+  const [pais, setPais] = useState('73');
   const [novoLimite, setNovoLimite] = useState('');
   const [abaAtiva, setAbaAtiva] = useState(true);
+  const [mostrarSecret, setMostrarSecret] = useState(false);
 
   // Visibility guard: sem aba em foco, nenhuma consulta ao provedor (economia de custo)
   useEffect(() => {
@@ -81,6 +86,25 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
     refetchOnWindowFocus: false,
     retry: false,
   });
+
+  const webhookQuery = useQuery({
+    queryKey: ['virtualsms-webhook'],
+    queryFn: () => invoke({ action: 'webhook_info' }),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const paisesQuery = useQuery({
+    queryKey: ['virtualsms-paises'],
+    queryFn: () => invoke({ action: 'paises' }),
+    staleTime: 24 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const paises: { id: string; nome: string }[] =
+    paisesQuery.data?.paises?.length ? paisesQuery.data.paises : PAISES_FALLBACK;
 
   const pedidosQuery = useQuery({
     queryKey: ['virtualsms-pedidos'],
@@ -108,8 +132,28 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   }, [pedidos]);
 
   const ultimoRecebido = pedidos.find((p) => p.status === 'recebido' && p.codigo);
+  const webhookAtivo = !!webhookQuery.data?.ultimo_evento_em;
 
-  // Polling só com pedido ativo + aba visível, a cada 5s
+  // Realtime: com o webhook configurado, o código chega por push (sem consultar o provedor)
+  useEffect(() => {
+    const canal = supabase
+      .channel('virtualsms-pedidos-rt')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'virtualsms_pedidos' },
+        (payload: any) => {
+          qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
+          if (payload?.new?.codigo && !payload?.old?.codigo) {
+            toast.success(`Código recebido: ${payload.new.codigo}`);
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(canal); };
+  }, [qc]);
+
+  // Rede de segurança: verificação a cada 20s, só com pedido ativo e aba visível.
+  // Desligada quando o webhook já recebeu eventos.
   useQuery({
     queryKey: ['virtualsms-status', pedidoAtivo?.order_id],
     queryFn: async () => {
@@ -118,11 +162,12 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
       if (res?.codigo) toast.success(`Código recebido: ${res.codigo}`);
       return res;
     },
-    enabled: !!pedidoAtivo && abaAtiva,
-    refetchInterval: 5000,
+    enabled: !!pedidoAtivo && abaAtiva && !webhookAtivo,
+    refetchInterval: 20000,
     refetchOnWindowFocus: false,
     retry: false,
   });
+
 
   const comprar = useMutation({
     mutationFn: () => invoke({ action: 'comprar', servico, pais }),
@@ -219,6 +264,82 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           <p className="text-xs text-destructive">{(saldoQuery.error as Error).message}</p>
         )}
 
+        {/* Webhook: SMS em tempo real */}
+        <div className="rounded-md border p-3 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Webhook className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Webhook (SMS em tempo real)</span>
+            {webhookAtivo ? (
+              <Badge variant="default" className="text-[10px] gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Ativo
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] gap-1">
+                <AlertCircle className="h-3 w-3" /> Nunca recebeu evento
+              </Badge>
+            )}
+            {webhookQuery.data?.ultimo_evento_em && (
+              <span className="text-xs text-muted-foreground">
+                Último evento: {new Date(webhookQuery.data.ultimo_evento_em).toLocaleString('pt-BR')}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              onClick={() => webhookQuery.refetch()}
+              disabled={webhookQuery.isFetching}
+            >
+              {webhookQuery.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Webhook URL</Label>
+            <div className="flex gap-2">
+              <Input readOnly value={webhookQuery.data?.webhook_url || ''} className="h-8 font-mono text-xs" />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => copiar(webhookQuery.data?.webhook_url || '')}
+                disabled={!webhookQuery.data?.webhook_url}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Secret Key</Label>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                type={mostrarSecret ? 'text' : 'password'}
+                value={webhookQuery.data?.secret || ''}
+                className="h-8 font-mono text-xs"
+              />
+              <Button size="sm" variant="outline" onClick={() => setMostrarSecret((v) => !v)}>
+                {mostrarSecret ? 'Ocultar' : 'Mostrar'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => copiar(webhookQuery.data?.secret || '')}
+                disabled={!webhookQuery.data?.secret}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Em virtualsms.de → Dashboard → Webhook Configuration: cole a URL e a Secret Key acima, marque
+            <strong> SMS Received</strong> e <strong>Status Changed</strong> e salve. Com isso o código chega na hora,
+            mesmo com esta aba fechada.
+          </p>
+        </div>
+
+
         {/* Compra */}
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
@@ -235,14 +356,15 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           <div className="space-y-1">
             <Label className="text-xs">País</Label>
             <Select value={pais} onValueChange={setPais}>
-              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PAISES.map((p) => (
-                  <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
+              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                {paises.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
           <Button
             size="sm"
             onClick={() => comprar.mutate()}

@@ -6271,16 +6271,19 @@ export type Database = {
         Row: {
           id: string
           limite_mensal_usd: number
+          ultimo_evento_em: string | null
           updated_at: string
         }
         Insert: {
           id?: string
           limite_mensal_usd?: number
+          ultimo_evento_em?: string | null
           updated_at?: string
         }
         Update: {
           id?: string
           limite_mensal_usd?: number
+          ultimo_evento_em?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -6296,8 +6299,10 @@ export type Database = {
           numero: string | null
           order_id: string
           pais: string | null
+          recebido_em: string | null
           servico: string
           status: string
+          texto_sms: string | null
           updated_at: string
         }
         Insert: {
@@ -6310,8 +6315,10 @@ export type Database = {
           numero?: string | null
           order_id: string
           pais?: string | null
+          recebido_em?: string | null
           servico: string
           status?: string
+          texto_sms?: string | null
           updated_at?: string
         }
         Update: {
@@ -6324,8 +6331,10 @@ export type Database = {
           numero?: string | null
           order_id?: string
           pais?: string | null
+          recebido_em?: string | null
           servico?: string
           status?: string
+          texto_sms?: string | null
           updated_at?: string
         }
         Relationships: []
