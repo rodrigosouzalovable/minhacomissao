@@ -144,6 +144,18 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const ultimoRecebido = pedidos.find((p) => p.status === 'recebido' && p.codigo);
   const webhookAtivo = !!webhookQuery.data?.ultimo_evento_em;
 
+  // Relógio para liberar o cancelamento (provedor só aceita após 5 min da compra)
+  const [agora, setAgora] = useState(Date.now());
+  useEffect(() => {
+    if (!pedidoAtivo) return;
+    const t = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [pedidoAtivo]);
+  const segParaCancelar = pedidoAtivo
+    ? Math.max(0, Math.ceil((new Date(pedidoAtivo.created_at).getTime() + 5 * 60 * 1000 - agora) / 1000))
+    : 0;
+
+
   // Realtime: com o webhook configurado, o código chega por push (sem consultar o provedor)
   useEffect(() => {
     const canal = supabase
