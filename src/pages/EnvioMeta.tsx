@@ -2000,7 +2000,8 @@ export default function EnvioMeta() {
           toast.success(
             `${stats.total} contato(s) importado(s)` +
             (stats.ignorados ? ` • ${stats.ignorados} ignorado(s)` : "") +
-            (stats.duplicados ? ` • ${stats.duplicados} duplicado(s) removido(s)` : "") +
+            (stats.duplicados ? ` • 🔁 ${stats.duplicados} duplicado(s) removido(s)` : "") +
+            (stats.preservados ? ` • 🟦 ${stats.preservados} linha(s) de números UAZAPI mantidas` : "") +
             (varsCount ? ` • variáveis do template preenchidas em ${varsCount} linha(s)` : "")
           );
         }}
