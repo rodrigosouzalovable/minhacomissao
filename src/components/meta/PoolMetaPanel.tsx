@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { CheckCircle2, PauseCircle, PlayCircle, RefreshCw, ShieldCheck, Loader2, Clock } from "lucide-react";
+import { CheckCircle2, PauseCircle, PlayCircle, RefreshCw, ShieldCheck, Loader2, Clock, Settings2 } from "lucide-react";
+
 
 type MetaInst = {
   id: string;
@@ -26,6 +29,9 @@ type MetaInst = {
   messaging_limit_manual: string | null;
   messaging_limit_source: string | null;
   messaging_limit_synced_at: string | null;
+  teto_escada: number | null;
+  quarentena_ate: string | null;
+  quarentena_motivo: string | null;
 };
 
 type PoolConfig = {
@@ -74,6 +80,9 @@ export function PoolMetaPanel() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [checando, setChecando] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editData, setEditData] = useState("");
+  const [editTeto, setEditTeto] = useState("");
 
   const carregar = async () => {
     setLoading(true);
@@ -132,6 +141,51 @@ export function PoolMetaPanel() {
     setSavingId(null);
     if (error) { toast.error(error.message); return; }
     toast.success(`${inst.nome} retomado`);
+    await carregar();
+  };
+
+  const abrirEdicao = (inst: MetaInst) => {
+    setEditandoId(inst.id);
+    setEditData(inst.data_ativacao_api ? String(inst.data_ativacao_api).slice(0, 10) : "");
+    setEditTeto(inst.teto_escada != null ? String(inst.teto_escada) : "");
+  };
+
+  const salvarRampa = async (inst: MetaInst) => {
+    setSavingId(inst.id);
+    const dias = editData
+      ? Math.floor((Date.now() - new Date(editData + "T00:00:00").getTime()) / 86400000) + 1
+      : null;
+    const fase = dias == null
+      ? inst.fase_rampup
+      : dias <= 3 ? "fase1" : dias <= 7 ? "fase2" : dias <= 14 ? "fase3" : dias <= 21 ? "fase4" : "livre";
+    const tetoNum = editTeto.trim() === "" ? null : Math.max(1, Number(editTeto));
+    if (tetoNum != null && !Number.isFinite(tetoNum)) {
+      setSavingId(null);
+      toast.error("Teto inválido");
+      return;
+    }
+    const { error } = await (supabase as any).from("meta_whatsapp_instances")
+      .update({
+        data_ativacao_api: editData || null,
+        fase_rampup: fase,
+        teto_escada: tetoNum,
+      })
+      .eq("id", inst.id);
+    setSavingId(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Rampa de ${inst.nome} atualizada`);
+    setEditandoId(null);
+    await carregar();
+  };
+
+  const sairQuarentena = async (inst: MetaInst) => {
+    setSavingId(inst.id);
+    const { error } = await (supabase as any).from("meta_whatsapp_instances")
+      .update({ quarentena_ate: null, quarentena_motivo: null })
+      .eq("id", inst.id);
+    setSavingId(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${inst.nome} liberado da quarentena`);
     await carregar();
   };
 
@@ -236,7 +290,56 @@ export function PoolMetaPanel() {
                     </Badge>
                     <Badge variant="outline">{FASE_LABEL[inst.fase_rampup || "aguardando"]}</Badge>
                     {inst.data_ativacao_api && <Badge variant="outline">{dias}d na API</Badge>}
+                    {inst.teto_escada != null && <Badge variant="outline">Teto manual: {inst.teto_escada}/dia</Badge>}
                   </div>
+
+                  {inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date() && (
+                    <div className="text-xs bg-amber-500/10 border border-amber-500/30 rounded p-2 text-amber-700 dark:text-amber-400 flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium">Em quarentena ({inst.quarentena_motivo || "qualidade"})</p>
+                        <p>Fora das campanhas até {new Date(inst.quarentena_ate).toLocaleDateString("pt-BR")} — segue atendendo conversas recebidas.</p>
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => sairQuarentena(inst)} disabled={savingId === inst.id}>
+                        Liberar
+                      </Button>
+                    </div>
+                  )}
+
+                  {editandoId === inst.id ? (
+                    <div className="rounded border p-2 space-y-2 bg-muted/40">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[11px]">Na API oficial desde</Label>
+                          <Input type="date" value={editData} onChange={(e) => setEditData(e.target.value)} className="h-8 text-xs" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[11px]">Teto diário manual</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder="automático"
+                            value={editTeto}
+                            onChange={(e) => setEditTeto(e.target.value)}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        A data define a fase da rampa (1–3d: {cfg?.cota_fase1 ?? 15}/dia · 4–7d: {cfg?.cota_fase2 ?? 40} · 8–14d: {cfg?.cota_fase3 ?? 80} · 15–21d: {cfg?.cota_fase4 ?? 200} · +21d: livre).
+                        Deixe o teto vazio para usar a fase automaticamente.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => salvarRampa(inst)} disabled={savingId === inst.id} className="flex-1">
+                          {savingId === inst.id ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null} Salvar
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditandoId(null)}>Cancelar</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => abrirEdicao(inst)}>
+                      <Settings2 className="h-3.5 w-3.5 mr-1" /> Editar rampa / teto
+                    </Button>
+                  )}
 
                   {inst.estado_pool === "ativo" && (
                     <div>
