@@ -66,10 +66,11 @@ interface Props {
 
 export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const qc = useQueryClient();
-  const [servico, setServico] = useState('whatsapp');
-  const [pais, setPais] = useState('brazil');
+  const [servico, setServico] = useState('wa');
+  const [pais, setPais] = useState('73');
   const [novoLimite, setNovoLimite] = useState('');
   const [abaAtiva, setAbaAtiva] = useState(true);
+  const [mostrarSecret, setMostrarSecret] = useState(false);
 
   // Visibility guard: sem aba em foco, nenhuma consulta ao provedor (economia de custo)
   useEffect(() => {
@@ -85,6 +86,25 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
     refetchOnWindowFocus: false,
     retry: false,
   });
+
+  const webhookQuery = useQuery({
+    queryKey: ['virtualsms-webhook'],
+    queryFn: () => invoke({ action: 'webhook_info' }),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const paisesQuery = useQuery({
+    queryKey: ['virtualsms-paises'],
+    queryFn: () => invoke({ action: 'paises' }),
+    staleTime: 24 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const paises: { id: string; nome: string }[] =
+    paisesQuery.data?.paises?.length ? paisesQuery.data.paises : PAISES_FALLBACK;
 
   const pedidosQuery = useQuery({
     queryKey: ['virtualsms-pedidos'],
@@ -112,8 +132,28 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   }, [pedidos]);
 
   const ultimoRecebido = pedidos.find((p) => p.status === 'recebido' && p.codigo);
+  const webhookAtivo = !!webhookQuery.data?.ultimo_evento_em;
 
-  // Polling só com pedido ativo + aba visível, a cada 5s
+  // Realtime: com o webhook configurado, o código chega por push (sem consultar o provedor)
+  useEffect(() => {
+    const canal = supabase
+      .channel('virtualsms-pedidos-rt')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'virtualsms_pedidos' },
+        (payload: any) => {
+          qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
+          if (payload?.new?.codigo && !payload?.old?.codigo) {
+            toast.success(`Código recebido: ${payload.new.codigo}`);
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(canal); };
+  }, [qc]);
+
+  // Rede de segurança: verificação a cada 20s, só com pedido ativo e aba visível.
+  // Desligada quando o webhook já recebeu eventos.
   useQuery({
     queryKey: ['virtualsms-status', pedidoAtivo?.order_id],
     queryFn: async () => {
@@ -122,11 +162,12 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
       if (res?.codigo) toast.success(`Código recebido: ${res.codigo}`);
       return res;
     },
-    enabled: !!pedidoAtivo && abaAtiva,
-    refetchInterval: 5000,
+    enabled: !!pedidoAtivo && abaAtiva && !webhookAtivo,
+    refetchInterval: 20000,
     refetchOnWindowFocus: false,
     retry: false,
   });
+
 
   const comprar = useMutation({
     mutationFn: () => invoke({ action: 'comprar', servico, pais }),
