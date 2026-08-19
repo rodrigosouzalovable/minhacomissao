@@ -144,6 +144,18 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const ultimoRecebido = pedidos.find((p) => p.status === 'recebido' && p.codigo);
   const webhookAtivo = !!webhookQuery.data?.ultimo_evento_em;
 
+  // Relógio para liberar o cancelamento (provedor só aceita após 5 min da compra)
+  const [agora, setAgora] = useState(Date.now());
+  useEffect(() => {
+    if (!pedidoAtivo) return;
+    const t = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [pedidoAtivo]);
+  const segParaCancelar = pedidoAtivo
+    ? Math.max(0, Math.ceil((new Date(pedidoAtivo.created_at).getTime() + 5 * 60 * 1000 - agora) / 1000))
+    : 0;
+
+
   // Realtime: com o webhook configurado, o código chega por push (sem consultar o provedor)
   useEffect(() => {
     const canal = supabase
@@ -455,11 +467,16 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
                     size="sm"
                     variant="ghost"
                     onClick={() => cancelar.mutate(p.order_id)}
-                    disabled={cancelar.isPending}
+                    disabled={cancelar.isPending || (p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0)}
+                    title={segParaCancelar > 0 ? 'O provedor só permite cancelar 5 minutos após a compra' : undefined}
                   >
-                    <X className="h-3.5 w-3.5 mr-1" /> Cancelar pedido
+                    <X className="h-3.5 w-3.5 mr-1" />
+                    {p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0
+                      ? `Cancelar em ${Math.floor(segParaCancelar / 60)}:${String(segParaCancelar % 60).padStart(2, '0')}`
+                      : 'Cancelar pedido'}
                   </Button>
                 )}
+
               </div>
             </div>
           );
