@@ -2008,11 +2008,22 @@ export default function InboxMeta() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 gap-1.5 text-xs"
+                    className="h-7 w-7 p-0"
                     onClick={() => setModeloMsgOpen(true)}
                     title="Gerar mensagem de negociação (Modelo Mensagem)"
+                    aria-label="Modelo de mensagem"
                   >
-                    <FileText className="h-3.5 w-3.5" /> Modelo
+                    <FileText className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setAgendarRetornoOpen(true)}
+                    title="Agendar retorno para este cliente"
+                    aria-label="Agendar retorno"
+                  >
+                    <Clock className="h-3.5 w-3.5" />
                   </Button>
 
                   {alertaEsperaAtivoNaCaixa && (() => {
