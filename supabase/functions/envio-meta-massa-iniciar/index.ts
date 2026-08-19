@@ -102,6 +102,59 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Remove instâncias em quarentena por queda de qualidade (exceto modo rajada).
+    if (modoRajada !== true) {
+      const { data: quarentena } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, nome, quarentena_ate')
+        .in('id', instanciaIdsFiltradas)
+        .not('quarentena_ate', 'is', null)
+        .gt('quarentena_ate', new Date().toISOString());
+      const emQuarentena = new Set((quarentena || []).map((r: any) => r.id));
+      if (emQuarentena.size > 0) {
+        instanciaIdsFiltradas = instanciaIdsFiltradas.filter((id) => !emQuarentena.has(id));
+        if (instanciaIdsFiltradas.length === 0) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'Todas as instâncias selecionadas estão em quarentena por queda de qualidade. Selecione outras instâncias ou aguarde o fim da quarentena.',
+          }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      }
+    }
+
+    // ===== Higiene de base: remove destinatários suprimidos =====
+    // (números que já falharam entrega repetidas vezes ou nunca respondem)
+    let clientesEnvio = clientes;
+    let suprimidos = 0;
+    const { data: cfgPool } = await supabase
+      .from('meta_envio_pool_config').select('supressao_ativa').eq('id', 1).maybeSingle();
+    if (cfgPool?.supressao_ativa !== false) {
+      const sufixo = (t: string) => {
+        const d = String(t || '').replace(/\D+/g, '');
+        return d.length >= 8 ? d.slice(-8) : d;
+      };
+      const sufixos = Array.from(new Set(clientes.map((c) => sufixo(c.telefone)).filter(Boolean)));
+      const bloqueados = new Set<string>();
+      for (let i = 0; i < sufixos.length; i += 500) {
+        const { data } = await supabase
+          .from('meta_destinatario_supressao')
+          .select('telefone_sufixo')
+          .in('telefone_sufixo', sufixos.slice(i, i + 500));
+        (data || []).forEach((r: any) => bloqueados.add(r.telefone_sufixo));
+      }
+      if (bloqueados.size > 0) {
+        clientesEnvio = clientes.filter((c) => !bloqueados.has(sufixo(c.telefone)));
+        suprimidos = clientes.length - clientesEnvio.length;
+      }
+      if (clientesEnvio.length === 0) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Todos os ${clientes.length} destinatários estão na lista de supressão (falhas de entrega ou sem resposta). Nada foi enviado.`,
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      console.log('[iniciar] suprimidos por higiene de base:', suprimidos);
+    }
+
 
     // Trava anti-gasto: bloqueia envio em massa de templates MARKETING (custo ~7x utility).
     // Verifica todos os template_ids (por instância + o principal).
