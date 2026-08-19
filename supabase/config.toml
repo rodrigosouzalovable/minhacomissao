@@ -133,3 +133,7 @@ verify_jwt = false
 [functions.meta-descrever-imagem]
 verify_jwt = false
 
+[functions.virtualsms-webhook]
+verify_jwt = false
+
+
