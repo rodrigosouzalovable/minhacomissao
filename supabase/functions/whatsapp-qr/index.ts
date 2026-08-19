@@ -166,28 +166,50 @@ async function createInstance(userId: string) {
   return json({ ok: true, instanceId: inserted.id, instanceUrl, instanceToken: token });
 }
 
-// Poll /instance/status até o QR/paircode ficar disponível (UAZAPI gera de forma assíncrona)
-async function pollForQr(base: string, token: string, isPairing: boolean) {
-  const tries = isPairing ? 8 : 6;
+// Poll até o QR/paircode ficar disponível.
+// A UAZAPI responde 200 com qrcode vazio enquanto ainda cria a sessão; quem realmente
+// dispara a geração é o POST /instance/connect, então alternamos connect + status.
+function pickQr(data: any) {
+  const raw = data?.qrcode || data?.qr || data?.base64 || data?.qrCode ||
+              data?.instance?.qrcode || data?.instance?.qrcode_base64 || null;
+  const pair = data?.pairingCode || data?.pairing_code || data?.paircode ||
+               data?.instance?.paircode || data?.instance?.pairingCode || null;
+  const qr = typeof raw === "string" && raw.trim() ? raw : null;
+  const pairingCode = typeof pair === "string" && pair.trim() ? pair : null;
+  return { qr, pairingCode };
+}
+
+async function pollForQr(base: string, token: string, isPairing: boolean, phone?: string) {
+  const tries = isPairing ? 12 : 10;
+  let lastStatus = "?";
   for (let i = 0; i < tries; i++) {
-    await new Promise((r) => setTimeout(r, 2500));
+    const wait = i < 4 ? 1500 : i < 8 ? 2500 : 4000;
+    await new Promise((r) => setTimeout(r, wait));
     try {
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 10000);
-      const res = await fetch(uazUrl(base, "/instance/status", { token }), {
-        headers: { token },
-        signal: ctrl.signal,
-      }).finally(() => clearTimeout(timer));
+      const timer = setTimeout(() => ctrl.abort(), 12000);
+
+      // Ciclos pares: reemite o connect (gera o QR). Ímpares: consulta o status.
+      const useConnect = i % 2 === 0;
+      const res = useConnect
+        ? await fetch(`${base}/instance/connect`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token },
+            body: phone ? JSON.stringify({ phone }) : "{}",
+            signal: ctrl.signal,
+          }).finally(() => clearTimeout(timer))
+        : await fetch(uazUrl(base, "/instance/status", { token }), {
+            headers: { token },
+            signal: ctrl.signal,
+          }).finally(() => clearTimeout(timer));
+
       if (!res.ok) continue;
       const text = await res.text();
       let data: any = null;
       try { data = JSON.parse(text); } catch (_) { continue; }
       if (!data) continue;
 
-      const qr = data.qrcode || data.qr || data.base64 || data.qrCode ||
-                 data.instance?.qrcode || data.instance?.qrcode_base64 || null;
-      const pairingCode = data.pairingCode || data.pairing_code || data.paircode ||
-                          data.instance?.paircode || data.instance?.pairingCode || null;
+      const { qr, pairingCode } = pickQr(data);
 
       if (isPairing && pairingCode) return { ok: true, qr: null, pairingCode };
       if (qr) return { ok: true, qr, pairingCode: pairingCode || null };
@@ -197,13 +219,15 @@ async function pollForQr(base: string, token: string, isPairing: boolean) {
       if (parsed?.connected) {
         return { ok: true, alreadyConnected: true, connected: true, phone: parsed.phone };
       }
-      console.log(`[QR] poll ${i + 1}/${tries} sem QR (status=${data?.instance?.status || data?.status || "?"})`);
+      lastStatus = data?.instance?.status || data?.status || "?";
+      console.log(`[QR] poll ${i + 1}/${tries} (${useConnect ? "connect" : "status"}) sem QR (status=${lastStatus})`);
     } catch (e) {
       console.log(`[QR] poll error: ${(e as Error).message}`);
     }
   }
-  return null;
+  return { ok: false as const, lastStatus };
 }
+
 
 // ── FETCH QR ──
 
