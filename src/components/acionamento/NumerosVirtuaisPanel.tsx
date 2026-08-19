@@ -13,24 +13,45 @@ import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet, Webhook,
 interface Pedido {
   id: string;
   order_id: string;
+  provider?: string | null;
   servico: string;
   pais: string | null;
+  ddd?: string | null;
   numero: string | null;
   codigo: string | null;
   texto_sms?: string | null;
   status: string;
   custo: number | null;
+  banido_em?: string | null;
   expira_em: string | null;
   created_at: string;
 }
 
-// Códigos do protocolo da VirtualSMS (handler_api)
+// Códigos do protocolo handler_api (VirtualSMS e SMS24H)
 const SERVICOS = [
   { code: 'wa', name: 'WhatsApp' },
   { code: 'tg', name: 'Telegram' },
   { code: 'go', name: 'Google' },
   { code: 'ig', name: 'Instagram' },
   { code: 'fb', name: 'Facebook' },
+];
+
+const PROVEDORES = [
+  { id: 'virtualsms', label: 'VirtualSMS (US$, preço variável)', moeda: 'US$', ddd: false },
+  { id: 'sms24h', label: 'SMS24H (R$, escolhe DDD)', moeda: 'R$', ddd: true },
+];
+
+// DDDs brasileiros válidos
+const DDDS = [
+  '11', '12', '13', '14', '15', '16', '17', '18', '19',
+  '21', '22', '24', '27', '28',
+  '31', '32', '33', '34', '35', '37', '38',
+  '41', '42', '43', '44', '45', '46', '47', '48', '49',
+  '51', '53', '54', '55',
+  '61', '62', '63', '64', '65', '66', '67', '68', '69',
+  '71', '73', '74', '75', '77', '79',
+  '81', '82', '83', '84', '85', '86', '87', '88', '89',
+  '91', '92', '93', '94', '95', '96', '97', '98', '99',
 ];
 
 // IDs de país do protocolo (fallback; a lista real vem do provedor)
@@ -49,6 +70,7 @@ const statusLabel: Record<string, { label: string; variant: 'default' | 'seconda
   expirado: { label: 'Expirado', variant: 'destructive' },
   reembolsado: { label: 'Reembolsado', variant: 'secondary' },
 };
+
 
 
 const invoke = async (payload: Record<string, unknown>) => {
