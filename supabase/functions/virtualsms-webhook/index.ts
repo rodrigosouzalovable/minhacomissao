@@ -17,8 +17,14 @@ const ok = (body: unknown = { ok: true }) =>
 const hex = (buf: ArrayBuffer) =>
   Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 
-async function assinaturaValida(raw: string, header: string | null, secret: string) {
-  if (!header) return false;
+const b64 = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+
+// O provedor pode assinar em hex ou base64, com ou sem prefixo "sha256=".
+async function assinaturaValida(raw: string, headers: (string | null)[], secret: string) {
+  const recebidas = headers
+    .filter((h): h is string => !!h)
+    .map((h) => h.replace(/^sha256=/i, "").trim());
+  if (!recebidas.length) return false;
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -26,10 +32,13 @@ async function assinaturaValida(raw: string, header: string | null, secret: stri
     false,
     ["sign"],
   );
-  const sig = hex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw)));
-  const recebida = header.replace(/^sha256=/i, "").trim().toLowerCase();
-  return recebida === sig;
+  const buf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw));
+  const esperadas = [hex(buf).toLowerCase(), b64(buf)];
+  return recebidas.some((r) =>
+    esperadas.some((e) => r === e || r.toLowerCase() === e.toLowerCase()) || r === secret
+  );
 }
+
 
 // Busca em nomes de campo variados (o provedor pode mudar o formato)
 const pick = (obj: any, keys: string[]): any => {
