@@ -2,6 +2,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
 import { LayoutPlanilhaTab } from '@/components/modelo-mensagem/LayoutPlanilhaTab';
 import { LayoutUazapiTab } from '@/components/modelo-mensagem/LayoutUazapiTab';
+import { LayoutVistaParcelamentoTab } from '@/components/modelo-mensagem/LayoutVistaParcelamentoTab';
 import { EditarTemplateMensagemDialog } from '@/components/EditarTemplateMensagemDialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
