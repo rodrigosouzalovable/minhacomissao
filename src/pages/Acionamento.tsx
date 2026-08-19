@@ -1696,10 +1696,8 @@ export default function Acionamento() {
     setQrLoading(true);
     try {
       const usePhone = connectMethod === 'code' ? normalizePairingPhone(pairingPhone) : '';
-      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId: createdInstanceId, phone: usePhone || undefined },
-      });
-      if (error) throw error;
+      const data = await invokeQrWithRetry({ action: 'qr', userId: user.id, instanceId: createdInstanceId, phone: usePhone || undefined });
+
       if (data?.ok && (data.qr || data.pairingCode)) {
         if (data.qr) {
           const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
