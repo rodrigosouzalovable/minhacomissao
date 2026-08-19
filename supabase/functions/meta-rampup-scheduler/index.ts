@@ -33,9 +33,44 @@ Deno.serve(async (req) => {
         updates.push({ id: inst.id, dias, fase });
       }
     }
-    return new Response(JSON.stringify({ success: true, atualizadas: updates.length, updates }), {
+
+    // ===== Escada de retorno pós-quarentena =====
+    // Números que saíram da quarentena sobem de degrau quando estão GREEN;
+    // quem não está GREEN volta ao primeiro degrau.
+    const { data: cfg } = await supabase
+      .from('meta_envio_pool_config').select('escada_retorno').eq('id', 1).maybeSingle();
+    const escada: number[] = Array.isArray(cfg?.escada_retorno) ? cfg!.escada_retorno : [20, 40, 80];
+
+    const { data: comEscada } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id, nome, saude_quality, teto_escada, quarentena_ate')
+      .not('teto_escada', 'is', null);
+
+    const escadaUpdates: any[] = [];
+    for (const inst of (comEscada || []) as any[]) {
+      const emQuarentena = inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date();
+      if (emQuarentena) continue;
+      const qual = String(inst.saude_quality || '').toUpperCase();
+      const atual = Number(inst.teto_escada);
+      let novo: number | null = atual;
+      if (qual === 'GREEN') {
+        const idx = escada.findIndex((v) => Number(v) >= atual);
+        const proximo = idx >= 0 && idx + 1 < escada.length ? Number(escada[idx + 1]) : null;
+        // Último degrau concluído com GREEN → libera o teto normal da fase.
+        novo = proximo ?? null;
+      } else {
+        novo = Number(escada[0] ?? 20);
+      }
+      if (novo !== atual) {
+        await supabase.from('meta_whatsapp_instances').update({ teto_escada: novo }).eq('id', inst.id);
+        escadaUpdates.push({ id: inst.id, nome: inst.nome, de: atual, para: novo });
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, atualizadas: updates.length, updates, escada: escadaUpdates }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
   } catch (e) {
     return new Response(JSON.stringify({ success: false, error: e instanceof Error ? e.message : 'erro' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
