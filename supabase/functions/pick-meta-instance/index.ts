@@ -115,9 +115,23 @@ Deno.serve(async (req) => {
     const blockMaxPct = Number(cfg?.guardrail_block_rate_max_pct ?? 2);
     const volumeMinGuardrail = Number(cfg?.guardrail_volume_minimo ?? 50);
 
+    // Freio de qualidade do dia (teto efetivo por instância)
+    const freioAtivo = cfg?.freio_ativo !== false;
+    const hojeBrt = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }),
+    ).toISOString().slice(0, 10);
+    const { data: freioRows } = await supabase
+      .from('meta_instance_freio_diario')
+      .select('instancia_id, teto_efetivo, motivo_reducao')
+      .in('instancia_id', instancia_ids)
+      .eq('dia', hojeBrt);
+    const freioMap = new Map<string, any>();
+    (freioRows || []).forEach((f: any) => freioMap.set(f.instancia_id, f));
+    const cotaMaxHora = Math.max(1, Number(cfg?.cota_max_hora ?? 12));
 
     // Cotas por BM (janela móvel de 24h)
     const cotasBm = await carregarCotasBm(supabase);
+
 
     // Contagem hoje (fallback: enviados_hoje da própria row)
     const candidates: any[] = [];
