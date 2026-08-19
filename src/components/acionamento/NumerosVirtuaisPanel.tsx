@@ -280,14 +280,15 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           <div className="space-y-1">
             <Label className="text-xs">País</Label>
             <Select value={pais} onValueChange={setPais}>
-              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PAISES.map((p) => (
-                  <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
+              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                {paises.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
           <Button
             size="sm"
             onClick={() => comprar.mutate()}
