@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { CheckCircle2, PauseCircle, PlayCircle, RefreshCw, ShieldCheck, Loader2, Clock, Settings2 } from "lucide-react";
+import { CheckCircle2, PauseCircle, PlayCircle, RefreshCw, ShieldCheck, Loader2, Clock, Settings2, Zap } from "lucide-react";
+
 
 
 type MetaInst = {
@@ -38,7 +40,10 @@ type PoolConfig = {
   cota_fase1: number; cota_fase2: number; cota_fase3: number; cota_fase4: number;
   bloquear_domingo: boolean;
   horario_inicio: string; horario_fim: string;
+  freio_ativo: boolean | null;
+  cota_max_hora: number | null;
 };
+
 
 const FASE_LABEL: Record<string, string> = {
   aguardando: "Aguardando templates",
@@ -83,6 +88,20 @@ export function PoolMetaPanel() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editData, setEditData] = useState("");
   const [editTeto, setEditTeto] = useState("");
+  const [savingTurbo, setSavingTurbo] = useState(false);
+  const [horaInput, setHoraInput] = useState("");
+
+  const salvarTurbo = async (turbo: boolean, cotaHora?: number) => {
+    setSavingTurbo(true);
+    const patch: any = { freio_ativo: !turbo, atualizado_em: new Date().toISOString() };
+    if (typeof cotaHora === "number" && cotaHora > 0) patch.cota_max_hora = cotaHora;
+    const { error } = await (supabase as any).from("meta_envio_pool_config").update(patch).eq("id", 1);
+    setSavingTurbo(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(turbo ? "Modo Turbo ligado — sem teto de rampa" : "Freio de rampa reativado");
+    await carregar();
+  };
+
 
   const carregar = async () => {
     setLoading(true);
@@ -234,7 +253,57 @@ export function PoolMetaPanel() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Modo Turbo */}
+        <div className={`rounded-md border p-3 space-y-2 ${cfg?.freio_ativo === false ? "border-amber-500/60 bg-amber-500/10" : ""}`}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Zap className={`h-4 w-4 ${cfg?.freio_ativo === false ? "text-amber-600" : "text-muted-foreground"}`} />
+              <div>
+                <p className="text-sm font-semibold">Modo Turbo (sem freio de rampa)</p>
+                <p className="text-xs text-muted-foreground">
+                  Ignora teto por hora, teto diário de fase e corte por engajamento. Os envios respeitam apenas o delay configurado na campanha.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={cfg?.freio_ativo === false}
+              disabled={savingTurbo}
+              onCheckedChange={(v) => salvarTurbo(v)}
+            />
+          </div>
+          {cfg?.freio_ativo === false ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              ⚠️ Risco assumido: sem freio, a qualidade dos números pode cair (YELLOW/RED) ou o número pode ser banido pela Meta. Desligue quando terminar a campanha.
+            </p>
+          ) : (
+            <div className="flex items-end gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Teto por hora / número</Label>
+                <Input
+                  className="h-8 w-28"
+                  type="number"
+                  value={horaInput}
+                  placeholder={String(cfg?.cota_max_hora ?? 12)}
+                  onChange={(e) => setHoraInput(e.target.value)}
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={savingTurbo || !horaInput}
+                onClick={() => salvarTurbo(false, Number(horaInput))}
+              >
+                Salvar teto
+              </Button>
+              <span className="text-xs text-muted-foreground pb-1.5">
+                Atual: {cfg?.cota_max_hora ?? 12}/h — com delay de 5–10s são necessários ~500/h por número.
+              </span>
+            </div>
+          )}
+        </div>
+
         {/* Resumo */}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-md border p-3">
             <p className="text-xs text-muted-foreground">Ativos no pool</p>

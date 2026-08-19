@@ -468,7 +468,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                     )}
                     <div className="text-amber-600/80 dark:text-amber-400/80">
                       Para liberar mais volume: <b>Monitor de Envios → Pool Meta → Editar rampa / teto</b> do número e depois use <b>Reativar</b> aqui.
+                      Para remover todos os limites de uma vez (teto por hora, teto de fase e corte por engajamento), ligue o <b>Modo Turbo</b> no Pool Meta — nesse modo a campanha só respeita o delay configurado, assumindo o risco de queda de qualidade/ban.
                     </div>
+
                   </div>
                 );
               }
