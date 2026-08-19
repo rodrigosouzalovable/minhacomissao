@@ -127,7 +127,7 @@ function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
     const key = normalizeTelKey(telefone);
     if (!key) continue;
     // Números nossos (UAZAPI) são isentos de deduplicação: mantemos todas as repetições.
-    if (seen.has(key) && !isentos?.has(key)) continue;
+    if (seen.has(key) && !isentos?.has(telSuffix8(telefone))) continue;
     seen.add(key);
     rows.push({
       telefone,
