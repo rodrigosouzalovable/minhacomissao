@@ -232,10 +232,11 @@ Deno.serve(async (req) => {
         const ratio = mo.inbound / Math.max(1, mo.enviadas) * 100;
         if (ratio < ratioMinPct) tetoQualidade = 0.3; // sem inbound = teto 30% da cota
       }
-      const q = pesoQualidade(inst.saude_quality, ignoraQualidade);
+      const q = pesoQualidade(inst.saude_quality, ignoraQualidadeGate);
       if (q === 0) { descartados.push(`${rotulo}: qualidade ${String(inst.saude_quality || 'desconhecida').toUpperCase()}`); continue; }
       if (String(inst.saude_quality || '').toUpperCase() === 'YELLOW') tetoQualidade = Math.min(tetoQualidade, 0.3);
-      if (String(inst.saude_quality || '').toUpperCase() === 'RED' && ignoraQualidade) tetoQualidade = Math.min(tetoQualidade, 0.3);
+      if (String(inst.saude_quality || '').toUpperCase() === 'RED' && ignoraQualidadeGate) tetoQualidade = Math.min(tetoQualidade, 0.3);
+
       const tierEfetivo = inst.messaging_limit_manual || inst.saude_tier;
       // Score prioriza chips com menos uso hoje para distribuição no round-robin.
       const score = q * pesoTier(tierEfetivo) * fatorIdade(diasAtivo) * tetoQualidade * (1 / (1 + uso));
