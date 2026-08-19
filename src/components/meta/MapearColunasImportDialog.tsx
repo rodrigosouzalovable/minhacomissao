@@ -302,7 +302,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       out.push(cols.map((c) => c.get(arr)).join(", "));
     }
     if (out.length === 0) { toast.error("Nenhum telefone válido encontrado após mapeamento"); return; }
-    onConfirm(out, { total: out.length, ignorados, duplicados }, varsByTel, headers);
+    onConfirm(out, { total: out.length, ignorados, duplicados, preservados }, varsByTel, headers);
     onOpenChange(false);
   };
 
