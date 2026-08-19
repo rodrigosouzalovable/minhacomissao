@@ -570,8 +570,8 @@ export default function EnvioMeta() {
   const isentosDedup = useMemo(() => {
     const s = new Set<string>();
     for (const u of uazInstancias as any[]) {
-      const key = normalizeTelKey(String(u?.telefone || ""));
-      if (key.length === 8) s.add(key);
+      const suf = telSuffix8(String(u?.telefone || ""));
+      if (suf.length === 8) s.add(suf);
     }
     return s;
   }, [uazInstancias]);
