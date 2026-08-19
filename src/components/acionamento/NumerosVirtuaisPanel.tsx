@@ -604,6 +604,15 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
                 </p>
               )}
 
+              {p.banido_em && p.status === 'aguardando' && !p.codigo && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <Ban className="h-3 w-3" />
+                  {p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0
+                    ? `Banido — cancelamento automático quando liberar (em ${Math.floor(segParaCancelar / 60)}:${String(segParaCancelar % 60).padStart(2, '0')})`
+                    : 'Banido — cancelando automaticamente...'}
+                </p>
+              )}
+
               <div className="flex gap-2">
                 {p.numero && onConectar && (
                   <Button size="sm" variant="secondary" onClick={() => onConectar(p.numero!)}>
