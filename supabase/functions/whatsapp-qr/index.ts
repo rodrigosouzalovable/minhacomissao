@@ -322,10 +322,12 @@ async function fetchQr(instanceId: string, phone?: string) {
     }
 
     // UAZAPI responde 200 com qrcode vazio enquanto ainda está gerando a sessão.
-    // Fazemos poll no /instance/status até o QR aparecer antes de desistir.
-    const pollResult = await pollForQr(base, token, isPairing);
-    if (pollResult) return json(pollResult);
-    debugLogs.push(`poll ${attempt} sem QR`);
+    // Fazemos poll alternando connect/status até o QR aparecer antes de desistir.
+    const pollResult = await pollForQr(base, token, isPairing, cleanPhone || undefined);
+    if (pollResult.ok) return json(pollResult);
+    lastPollStatus = pollResult.lastStatus || lastPollStatus;
+    debugLogs.push(`poll ${attempt} sem QR (status=${lastPollStatus})`);
+
 
     if (attempt < maxAttempts) {
       await new Promise((r) => setTimeout(r, 2000));
