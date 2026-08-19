@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet, Webhook, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet, Webhook, CheckCircle2, AlertCircle, Ban } from 'lucide-react';
 
 interface Pedido {
   id: string;
