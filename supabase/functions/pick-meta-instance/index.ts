@@ -3,6 +3,8 @@
 // Fórmula: quality × tier × idade × (1 - uso_hoje/cota_efetiva)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
+import { enviadosHojeBrt, enviadosUltimaHora, tetoBase } from '../_shared/meta-freio.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
