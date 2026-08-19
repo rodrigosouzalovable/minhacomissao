@@ -6271,18 +6271,27 @@ export type Database = {
         Row: {
           id: string
           limite_mensal_usd: number
+          ultima_rejeicao_debug: string | null
+          ultima_rejeicao_em: string | null
+          ultima_rejeicao_motivo: string | null
           ultimo_evento_em: string | null
           updated_at: string
         }
         Insert: {
           id?: string
           limite_mensal_usd?: number
+          ultima_rejeicao_debug?: string | null
+          ultima_rejeicao_em?: string | null
+          ultima_rejeicao_motivo?: string | null
           ultimo_evento_em?: string | null
           updated_at?: string
         }
         Update: {
           id?: string
           limite_mensal_usd?: number
+          ultima_rejeicao_debug?: string | null
+          ultima_rejeicao_em?: string | null
+          ultima_rejeicao_motivo?: string | null
           ultimo_evento_em?: string | null
           updated_at?: string
         }

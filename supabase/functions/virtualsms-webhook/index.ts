@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-signature",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-signature, x-signature, x-hub-signature-256, x-webhook-secret, x-api-key",
 };
 
 const ok = (body: unknown = { ok: true }) =>
@@ -17,8 +17,14 @@ const ok = (body: unknown = { ok: true }) =>
 const hex = (buf: ArrayBuffer) =>
   Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 
-async function assinaturaValida(raw: string, header: string | null, secret: string) {
-  if (!header) return false;
+const b64 = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+
+// O provedor pode assinar em hex ou base64, com ou sem prefixo "sha256=".
+async function assinaturaValida(raw: string, headers: (string | null)[], secret: string) {
+  const recebidas = headers
+    .filter((h): h is string => !!h)
+    .map((h) => h.replace(/^sha256=/i, "").trim());
+  if (!recebidas.length) return false;
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -26,10 +32,13 @@ async function assinaturaValida(raw: string, header: string | null, secret: stri
     false,
     ["sign"],
   );
-  const sig = hex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw)));
-  const recebida = header.replace(/^sha256=/i, "").trim().toLowerCase();
-  return recebida === sig;
+  const buf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw));
+  const esperadas = [hex(buf).toLowerCase(), b64(buf)];
+  return recebidas.some((r) =>
+    esperadas.some((e) => r === e || r.toLowerCase() === e.toLowerCase()) || r === secret
+  );
 }
+
 
 // Busca em nomes de campo variados (o provedor pode mudar o formato)
 const pick = (obj: any, keys: string[]): any => {
@@ -61,13 +70,19 @@ serve(async (req) => {
   const raw = await req.text();
 
   try {
-    // --- Autenticação do evento: assinatura HMAC ou token na URL ---
+    // --- Autenticação do evento: assinatura HMAC, token na URL ou segredo em cabeçalho ---
     const url = new URL(req.url);
-    const tokenUrl = url.searchParams.get("token");
-    const assinatura = req.headers.get("x-webhook-signature") || req.headers.get("X-Webhook-Signature");
+    const tokenUrl = url.searchParams.get("token") || url.searchParams.get("secret");
+    const authHeader = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    const secretHeader = req.headers.get("x-webhook-secret") || req.headers.get("x-api-key") || "";
+    const assinaturas = [
+      req.headers.get("x-webhook-signature"),
+      req.headers.get("x-signature"),
+      req.headers.get("x-hub-signature-256"),
+    ];
 
-    const porToken = !!secret && !!tokenUrl && tokenUrl === secret;
-    const porAssinatura = !!secret && await assinaturaValida(raw, assinatura, secret);
+    const porToken = !!secret && (tokenUrl === secret || authHeader === secret || secretHeader === secret);
+    const porAssinatura = !!secret && await assinaturaValida(raw, assinaturas, secret);
 
     if (!secret) {
       console.error("[virtualsms-webhook] VIRTUALSMS_WEBHOOK_SECRET ausente");
@@ -77,12 +92,30 @@ serve(async (req) => {
       });
     }
     if (!porToken && !porAssinatura) {
-      console.warn("[virtualsms-webhook] assinatura inválida");
+      // Registra a tentativa recusada (sem expor o segredo) para identificar o formato do provedor
+      const cabecalhos = [...req.headers.entries()]
+        .filter(([k]) => !/cookie|apikey|^authorization$/i.test(k))
+        .map(([k, v]) => `${k}: ${k.toLowerCase().includes("signat") ? v.slice(0, 24) + "…" : v.slice(0, 60)}`)
+        .join(" | ");
+      const debug = `headers[${cabecalhos}] body[${raw.slice(0, 300)}]`;
+      console.warn("[virtualsms-webhook] recusado —", debug);
+      const { data: c } = await admin.from("virtualsms_config").select("id").limit(1).maybeSingle();
+      const patchRej = {
+        ultima_rejeicao_em: new Date().toISOString(),
+        ultima_rejeicao_motivo: assinaturas.some(Boolean)
+          ? "Assinatura não corresponde ao segredo configurado"
+          : "Requisição sem assinatura e sem token na URL",
+        ultima_rejeicao_debug: debug.slice(0, 1000),
+      };
+      if (c?.id) await admin.from("virtualsms_config").update(patchRej).eq("id", c.id);
+      else await admin.from("virtualsms_config").insert(patchRej);
+
       return new Response(JSON.stringify({ error: "Assinatura inválida" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     let payload: any = {};
     try {
@@ -93,13 +126,20 @@ serve(async (req) => {
     console.log("[virtualsms-webhook] evento:", raw.slice(0, 800));
 
     const agora = new Date().toISOString();
-    // Marca que o webhook está recebendo eventos (indicador na tela)
+    // Marca que o webhook está recebendo eventos (indicador na tela) e limpa a última rejeição
+    const okPatch = {
+      ultimo_evento_em: agora,
+      ultima_rejeicao_em: null,
+      ultima_rejeicao_motivo: null,
+      ultima_rejeicao_debug: null,
+    };
     const { data: conf } = await admin.from("virtualsms_config").select("id").limit(1).maybeSingle();
     if (conf?.id) {
-      await admin.from("virtualsms_config").update({ ultimo_evento_em: agora }).eq("id", conf.id);
+      await admin.from("virtualsms_config").update(okPatch).eq("id", conf.id);
     } else {
-      await admin.from("virtualsms_config").insert({ ultimo_evento_em: agora });
+      await admin.from("virtualsms_config").insert(okPatch);
     }
+
 
     const orderId = pick(payload, [
       "activationId", "activation_id", "id", "orderId", "order_id",
