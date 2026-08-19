@@ -272,7 +272,7 @@ export default function EnvioMeta() {
       toast.message(`${duplicados} duplicado(s) removido(s) antes da validação`);
     }
 
-    const numeros = parseRecipients(texto).map((r) => r.telefone);
+    const numeros = parseRecipients(texto, isentosDedup).map((r) => r.telefone);
     if (numeros.length === 0) return toast.error("Adicione destinatários primeiro");
     setValidando(true);
     try {
