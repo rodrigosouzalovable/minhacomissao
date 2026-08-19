@@ -220,7 +220,11 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   useQuery({
     queryKey: ['virtualsms-status', pedidoAtivo?.order_id],
     queryFn: async () => {
-      const res = await invoke({ action: 'status', order_id: pedidoAtivo!.order_id });
+      const res = await invoke({
+        action: 'status',
+        provider: pedidoAtivo!.provider || 'virtualsms',
+        order_id: pedidoAtivo!.order_id,
+      });
       qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
       if (res?.codigo) toast.success(`Código recebido: ${res.codigo}`);
       return res;
@@ -233,7 +237,15 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
 
   const comprar = useMutation({
-    mutationFn: () => invoke({ action: 'comprar', servico, pais }),
+    mutationFn: () =>
+      invoke({
+        action: 'comprar',
+        provider,
+        servico,
+        pais,
+        ddd: suportaDdd ? ddd : undefined,
+        max_preco: novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : undefined,
+      }),
     onSuccess: (res) => {
       toast.success(res?.pedido?.numero ? `Número comprado: ${res.pedido.numero}` : 'Número comprado');
       qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
@@ -243,11 +255,22 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   });
 
   const cancelar = useMutation({
-    mutationFn: (orderId: string) => invoke({ action: 'cancelar', order_id: orderId }),
+    mutationFn: (p: Pedido) =>
+      invoke({ action: 'cancelar', provider: p.provider || 'virtualsms', order_id: p.order_id }),
     onSuccess: () => {
       toast.success('Pedido cancelado — o provedor devolve o valor.');
       qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
       qc.invalidateQueries({ queryKey: ['virtualsms-saldo'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const marcarBanido = useMutation({
+    mutationFn: (p: Pedido) =>
+      invoke({ action: 'marcar_banido', order_id: p.order_id, banido: !p.banido_em }),
+    onSuccess: (_r, p) => {
+      toast.success(p.banido_em ? 'Marcação de banido removida' : 'Número marcado como banido');
+      qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -262,10 +285,22 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const salvarTeto = useMutation({
+    mutationFn: () => invoke({ action: 'salvar_limite', preco_max_usd: Number(novoTeto.replace(',', '.')) }),
+    onSuccess: () => {
+      toast.success('Preço máximo por número atualizado');
+      qc.invalidateQueries({ queryKey: ['virtualsms-saldo'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const saldo = saldoQuery.data;
   const gasto = Number(saldo?.gasto_mes || 0);
   const limite = Number(saldo?.limite_mensal_usd || 0);
+  const tetoAtual = Number(saldo?.preco_max_usd ?? 0.9);
   const bloqueado = limite > 0 && gasto >= limite;
+  const menorPreco = precoQuery.data?.menor_preco as number | null | undefined;
+
 
   const copiar = (txt: string) => {
     navigator.clipboard.writeText(txt);
