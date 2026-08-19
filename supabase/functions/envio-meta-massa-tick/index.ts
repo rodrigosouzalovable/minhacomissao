@@ -397,7 +397,32 @@ async function processarItem(job: any): Promise<ItemResult> {
       tentativas: proximasTentativas,
       wa_message_id: ok ? waIdOk : (pend as any).wa_message_id ?? null,
     }).eq('id', pend.id);
+
+    // Higiene de base: número inválido/inexistente vai para supressão
+    // (não faz sentido queimar qualidade tentando de novo).
+    const erroLower = String(erroMsg || '').toLowerCase();
+    const numeroInvalido = !ok && (
+      erroLower.includes('não existe') ||
+      erroLower.includes('nao existe') ||
+      erroLower.includes('não possui whatsapp') ||
+      erroLower.includes('invalid') ||
+      erroLower.includes('131026') ||
+      erroLower.includes('131051')
+    );
+    if (numeroInvalido) {
+      const dig = String((pend as any).telefone || '').replace(/\D+/g, '');
+      const sufixo = dig.length >= 8 ? dig.slice(-8) : dig;
+      if (sufixo) {
+        await supabase.from('meta_destinatario_supressao').upsert({
+          telefone_sufixo: sufixo,
+          telefone: dig,
+          motivo: `entrega impossível: ${String(erroMsg || '').slice(0, 160)}`,
+          criado_em: new Date().toISOString(),
+        }, { onConflict: 'telefone_sufixo' });
+      }
+    }
   }
+
 
   const lo = Math.max(1, job.min_seg || 30);
   const hi = Math.max(lo, job.max_seg || 90);
