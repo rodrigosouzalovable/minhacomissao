@@ -559,7 +559,17 @@ export default function EnvioMeta() {
     );
   }, [templateGroup, instanciaIds, instancias]);
 
-  const recipients = useMemo(() => parseRecipients(recipientsRaw), [recipientsRaw]);
+  // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
+  const isentosDedup = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of uazInstancias as any[]) {
+      const key = normalizeTelKey(String(u?.telefone || ""));
+      if (key.length === 8) s.add(key);
+    }
+    return s;
+  }, [uazInstancias]);
+
+  const recipients = useMemo(() => parseRecipients(recipientsRaw, isentosDedup), [recipientsRaw, isentosDedup]);
 
   const templateIdByInstance = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
