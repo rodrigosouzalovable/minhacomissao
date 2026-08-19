@@ -1744,10 +1744,8 @@ export default function Acionamento() {
     setPairingCode(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId },
-      });
-      if (error) throw error;
+      const data = await invokeQrWithRetry({ action: 'qr', userId: user.id, instanceId });
+
 
       if (data?.alreadyConnected) {
         setReconnectingInstanceId(null);
