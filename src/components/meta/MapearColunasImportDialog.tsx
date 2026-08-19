@@ -275,13 +275,18 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     const varsByTel: Record<string, Record<string, string>> = {};
     let ignorados = 0;
     let duplicados = 0;
+    let preservados = 0;
     for (const r of dataRows) {
       const arr = r || [];
       const telRaw = String(arr[idxTel] ?? "").trim();
       const digitos = telRaw.replace(/\D/g, "");
       if (!digitos) { if (arr.some((x) => String(x ?? "").trim())) ignorados++; continue; }
       const key = normalizeTelKey(digitos);
-      if (seen.has(key)) { duplicados++; continue; }
+      const isento = !!isentosDedup?.has(key);
+      if (seen.has(key)) {
+        if (!isento) { duplicados++; continue; }
+        preservados++;
+      }
       seen.add(key);
 
       // varsByTel: só o que veio das colunas tplvar mapeadas
