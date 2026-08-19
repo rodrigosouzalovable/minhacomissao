@@ -1965,44 +1965,28 @@ export default function InboxMeta() {
                   {qualificacaoAtivaNaCaixa && (
                     <Button
                       variant="outline"
-                      size="sm"
-                      className="h-7 text-[11px] gap-1"
+                      size="icon"
+                      className="h-7 w-7 p-0"
                       onClick={() => setQualifDialogOpen(true)}
                       title="Qualificar esta conversa"
+                      aria-label="Qualificar esta conversa"
                     >
                       {(() => {
                         const sel = (qualifPorContato[contatoAtivo.id] ?? [])
                           .map(id => qualificacoes.find(x => x.id === id))
                           .filter(Boolean) as MetaQualificacao[];
                         const qs = sel.filter(q => !q.parent_id);
-                        const rotulo = (p: MetaQualificacao) => {
-                          const mots = sel.filter(m => m.parent_id === p.id).map(m => m.nome);
-                          return mots.length ? `${p.nome} (${mots.join(', ')})` : p.nome;
-                        };
+                        const primeiraCor = qs.length > 0 ? qs[0].cor : undefined;
                         return (
-                          <>
-                            {qs.length > 0 ? (
-                              <span className="flex items-center -space-x-1">
-                                {qs.map(q => (
-                                  <span
-                                    key={q.id}
-                                    className="h-2.5 w-2.5 rounded-full ring-1 ring-background"
-                                    style={{ backgroundColor: q.cor }}
-                                  />
-                                ))}
-                              </span>
-                            ) : (
-                              <span
-                                className="h-2.5 w-2.5 rounded-full"
-                                style={{ backgroundColor: 'hsl(var(--muted-foreground))' }}
-                              />
+                          <span className="relative inline-flex items-center justify-center">
+                            <Tag
+                              className="h-3.5 w-3.5"
+                              color={primeiraCor ?? 'hsl(var(--muted-foreground))'}
+                            />
+                            {qs.length > 1 && (
+                              <span className="absolute -top-0.5 -right-0.5 flex h-1.5 w-1.5 rounded-full bg-primary" />
                             )}
-                            {qs.length === 0
-                              ? 'Qualificação'
-                              : qs.length === 1
-                                ? rotulo(qs[0])
-                                : `${rotulo(qs[0])} +${qs.length - 1}`}
-                          </>
+                          </span>
                         );
                       })()}
                     </Button>
