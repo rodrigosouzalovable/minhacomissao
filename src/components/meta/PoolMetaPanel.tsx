@@ -38,7 +38,10 @@ type PoolConfig = {
   cota_fase1: number; cota_fase2: number; cota_fase3: number; cota_fase4: number;
   bloquear_domingo: boolean;
   horario_inicio: string; horario_fim: string;
+  freio_ativo: boolean | null;
+  cota_max_hora: number | null;
 };
+
 
 const FASE_LABEL: Record<string, string> = {
   aguardando: "Aguardando templates",
