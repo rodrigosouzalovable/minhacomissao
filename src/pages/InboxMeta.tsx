@@ -204,6 +204,7 @@ export default function InboxMeta() {
   const [alertaEsperaCaixas, setAlertaEsperaCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
+  const [agendarRetornoOpen, setAgendarRetornoOpen] = useState(false);
 
   // Meus Clientes (conversas com a etiqueta do próprio usuário)
   const [modoMeusClientes, setModoMeusClientes] = useState(false);
