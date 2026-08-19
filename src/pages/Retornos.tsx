@@ -388,9 +388,9 @@ export default function Retornos() {
         dataPrimeiroPagamento: form.dataPrimeiroPagamento || null,
       });
 
-      // Concatenar data + hora para salvar como timestamptz
-      const dataRetornoFinal = form.horaRetorno 
-        ? `${validated.dataRetorno}T${form.horaRetorno}:00` 
+      // Concatenar data + hora (hora local do usuário) e converter para UTC real
+      const dataRetornoFinal = form.horaRetorno
+        ? new Date(`${validated.dataRetorno}T${form.horaRetorno}:00`).toISOString()
         : validated.dataRetorno;
 
       const { error } = await supabase.from('retornos').insert({
