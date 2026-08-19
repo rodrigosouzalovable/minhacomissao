@@ -393,7 +393,13 @@ async function fetchQr(instanceId: string, phone?: string) {
     }
   }
 
-  return json({ ok: false, error: "Não foi possível obter o QR Code.", debug: debugLogs }, 400);
+  return json({
+    ok: false,
+    error: `A UAZAPI não gerou o QR Code (status: ${lastPollStatus}). Aguarde alguns segundos e tente novamente.`,
+    retryable: true,
+    debug: debugLogs,
+  }, 400);
+
 }
 
 // ── CHECK STATUS ──
