@@ -1762,7 +1762,7 @@ export default function EnvioMeta() {
                   variant="outline"
                   onClick={async () => {
                     const validSet = new Set(validacaoPreview.valid.map((t) => normalizeTelKey(t)));
-                    const dedup = dedupRecipientsRaw(recipientsRaw);
+                    const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
                     const linhas = dedup.texto.split(/\r?\n/).filter(Boolean);
                     const usarHeaders = recipientsHeaders.length > 0;
                     const colHeaders = usarHeaders ? recipientsHeaders : ["Telefone", "Nome", "CPF/CNPJ", "Atraso", "Saldo"];
