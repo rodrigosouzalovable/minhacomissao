@@ -86,6 +86,20 @@ export function PoolMetaPanel() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editData, setEditData] = useState("");
   const [editTeto, setEditTeto] = useState("");
+  const [savingTurbo, setSavingTurbo] = useState(false);
+  const [horaInput, setHoraInput] = useState("");
+
+  const salvarTurbo = async (turbo: boolean, cotaHora?: number) => {
+    setSavingTurbo(true);
+    const patch: any = { freio_ativo: !turbo, atualizado_em: new Date().toISOString() };
+    if (typeof cotaHora === "number" && cotaHora > 0) patch.cota_max_hora = cotaHora;
+    const { error } = await (supabase as any).from("meta_envio_pool_config").update(patch).eq("id", 1);
+    setSavingTurbo(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(turbo ? "Modo Turbo ligado — sem teto de rampa" : "Freio de rampa reativado");
+    await carregar();
+  };
+
 
   const carregar = async () => {
     setLoading(true);
