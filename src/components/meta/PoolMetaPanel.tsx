@@ -251,7 +251,57 @@ export function PoolMetaPanel() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Modo Turbo */}
+        <div className={`rounded-md border p-3 space-y-2 ${cfg?.freio_ativo === false ? "border-amber-500/60 bg-amber-500/10" : ""}`}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Zap className={`h-4 w-4 ${cfg?.freio_ativo === false ? "text-amber-600" : "text-muted-foreground"}`} />
+              <div>
+                <p className="text-sm font-semibold">Modo Turbo (sem freio de rampa)</p>
+                <p className="text-xs text-muted-foreground">
+                  Ignora teto por hora, teto diário de fase e corte por engajamento. Os envios respeitam apenas o delay configurado na campanha.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={cfg?.freio_ativo === false}
+              disabled={savingTurbo}
+              onCheckedChange={(v) => salvarTurbo(v)}
+            />
+          </div>
+          {cfg?.freio_ativo === false ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              ⚠️ Risco assumido: sem freio, a qualidade dos números pode cair (YELLOW/RED) ou o número pode ser banido pela Meta. Desligue quando terminar a campanha.
+            </p>
+          ) : (
+            <div className="flex items-end gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Teto por hora / número</Label>
+                <Input
+                  className="h-8 w-28"
+                  type="number"
+                  value={horaInput}
+                  placeholder={String(cfg?.cota_max_hora ?? 12)}
+                  onChange={(e) => setHoraInput(e.target.value)}
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={savingTurbo || !horaInput}
+                onClick={() => salvarTurbo(false, Number(horaInput))}
+              >
+                Salvar teto
+              </Button>
+              <span className="text-xs text-muted-foreground pb-1.5">
+                Atual: {cfg?.cota_max_hora ?? 12}/h — com delay de 5–10s são necessários ~500/h por número.
+              </span>
+            </div>
+          )}
+        </div>
+
         {/* Resumo */}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-md border p-3">
             <p className="text-xs text-muted-foreground">Ativos no pool</p>
