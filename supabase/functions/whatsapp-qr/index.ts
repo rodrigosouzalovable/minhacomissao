@@ -184,7 +184,7 @@ async function fetchQr(instanceId: string, phone?: string) {
   // Primary approach: POST /instance/connect with token header
   // Pairing-code flow is slower (UAZAPI opens session + generates code) → longer timeout + more retries
   const isPairing = !!cleanPhone;
-  const maxAttempts = isPairing ? 5 : 3;
+  const maxAttempts = isPairing ? 5 : 4;
   const perAttemptTimeoutMs = isPairing ? 45000 : 25000;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
