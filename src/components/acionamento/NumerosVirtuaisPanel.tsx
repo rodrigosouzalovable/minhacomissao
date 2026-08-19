@@ -275,6 +275,21 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Cancelamento automático: pedido ativo marcado como banido é cancelado assim que o provedor libera (5 min)
+  const autoCanceladoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pedidoAtivo) return;
+    if (!pedidoAtivo.banido_em) return;
+    if (pedidoAtivo.codigo) return;
+    if (pedidoAtivo.status !== 'aguardando') return;
+    if (segParaCancelar > 0) return;
+    if (autoCanceladoRef.current === pedidoAtivo.order_id) return;
+    autoCanceladoRef.current = pedidoAtivo.order_id;
+    toast.info('Número banido — solicitando o cancelamento automático...');
+    cancelar.mutate(pedidoAtivo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoAtivo, segParaCancelar]);
+
   const salvarLimite = useMutation({
     mutationFn: () => invoke({ action: 'salvar_limite', limite_mensal_usd: Number(novoLimite.replace(',', '.')) }),
     onSuccess: () => {
