@@ -134,22 +134,27 @@ function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
 }
 
 // Reescreve o textarea sem duplicados, retornando quantos foram removidos.
-function dedupRecipientsRaw(raw: string): { texto: string; duplicados: number } {
+// Telefones em `isentos` (números nossos da UAZAPI) nunca são removidos.
+function dedupRecipientsRaw(raw: string, isentos?: Set<string>): { texto: string; duplicados: number; preservados: number } {
   const linhas = raw.split(/\r?\n/);
   const seen = new Set<string>();
   const out: string[] = [];
   let dup = 0;
+  let preservados = 0;
   for (const l of linhas) {
     const trimmed = l.trim();
     if (!trimmed) continue;
     const tel = splitLinhaEnvio(trimmed)[0] || "";
     const key = normalizeTelKey(tel);
     if (!key) { out.push(trimmed); continue; }
-    if (seen.has(key)) { dup++; continue; }
+    if (seen.has(key)) {
+      if (!isentos?.has(key)) { dup++; continue; }
+      preservados++;
+    }
     seen.add(key);
     out.push(trimmed);
   }
-  return { texto: out.join("\n"), duplicados: dup };
+  return { texto: out.join("\n"), duplicados: dup, preservados };
 }
 
 export default function EnvioMeta() {
