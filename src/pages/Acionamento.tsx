@@ -2285,21 +2285,35 @@ export default function Acionamento() {
                     </div>
                   )}
 
-                  {/* Números virtuais (VirtualSMS) — só admin */}
+                  {/* Números virtuais (VirtualSMS) — só admin, recolhível (inicia minimizado) */}
                   {isAdmin && (
-                    <NumerosVirtuaisPanel
-                      onConectar={(numero) => {
-                        const limpo = String(numero).replace(/\D/g, '');
-                        setEditingInstance({ nome: '', telefone: limpo, server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' });
-                        setConnectMethod('code');
-                        setPairingPhone(limpo);
-                        setQrStep('idle');
-                        setQrImage(null);
-                        setPairingCode(null);
-                        toast.info('Preencha o nome da instância, salve e gere o código de pareamento.');
-                      }}
-                    />
+                    <Collapsible open={numerosVirtuaisOpen} onOpenChange={setNumerosVirtuaisOpen}>
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
+                        >
+                          <span>Números virtuais (SMS)</span>
+                          <ChevronDown className={`h-4 w-4 transition-transform ${numerosVirtuaisOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="pt-3">
+                        <NumerosVirtuaisPanel
+                          onConectar={(numero) => {
+                            const limpo = String(numero).replace(/\D/g, '');
+                            setEditingInstance({ nome: '', telefone: limpo, server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' });
+                            setConnectMethod('code');
+                            setPairingPhone(limpo);
+                            setQrStep('idle');
+                            setQrImage(null);
+                            setPairingCode(null);
+                            toast.info('Preencha o nome da instância, salve e gere o código de pareamento.');
+                          }}
+                        />
+                      </CollapsibleContent>
+                    </Collapsible>
                   )}
+
 
 
                   {instances.length > 0 && (
