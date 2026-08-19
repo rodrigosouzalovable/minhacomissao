@@ -144,6 +144,51 @@ export function PoolMetaPanel() {
     await carregar();
   };
 
+  const abrirEdicao = (inst: MetaInst) => {
+    setEditandoId(inst.id);
+    setEditData(inst.data_ativacao_api ? String(inst.data_ativacao_api).slice(0, 10) : "");
+    setEditTeto(inst.teto_escada != null ? String(inst.teto_escada) : "");
+  };
+
+  const salvarRampa = async (inst: MetaInst) => {
+    setSavingId(inst.id);
+    const dias = editData
+      ? Math.floor((Date.now() - new Date(editData + "T00:00:00").getTime()) / 86400000) + 1
+      : null;
+    const fase = dias == null
+      ? inst.fase_rampup
+      : dias <= 3 ? "fase1" : dias <= 7 ? "fase2" : dias <= 14 ? "fase3" : dias <= 21 ? "fase4" : "livre";
+    const tetoNum = editTeto.trim() === "" ? null : Math.max(1, Number(editTeto));
+    if (tetoNum != null && !Number.isFinite(tetoNum)) {
+      setSavingId(null);
+      toast.error("Teto inválido");
+      return;
+    }
+    const { error } = await (supabase as any).from("meta_whatsapp_instances")
+      .update({
+        data_ativacao_api: editData || null,
+        fase_rampup: fase,
+        teto_escada: tetoNum,
+      })
+      .eq("id", inst.id);
+    setSavingId(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Rampa de ${inst.nome} atualizada`);
+    setEditandoId(null);
+    await carregar();
+  };
+
+  const sairQuarentena = async (inst: MetaInst) => {
+    setSavingId(inst.id);
+    const { error } = await (supabase as any).from("meta_whatsapp_instances")
+      .update({ quarentena_ate: null, quarentena_motivo: null })
+      .eq("id", inst.id);
+    setSavingId(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${inst.nome} liberado da quarentena`);
+    await carregar();
+  };
+
   const checarSaude = async () => {
     setChecando(true);
     try {
