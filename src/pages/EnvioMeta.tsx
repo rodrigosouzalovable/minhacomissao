@@ -106,7 +106,7 @@ function normalizeDocument(value: string): string {
 }
 
 
-function parseRecipients(input: string): ClienteRow[] {
+function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
   const linhas = input.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows: ClienteRow[] = [];
   const seen = new Set<string>();
@@ -119,7 +119,8 @@ function parseRecipients(input: string): ClienteRow[] {
     const nome = !parts[2] && secondAsDoc ? "" : (parts[1] || "");
     const key = normalizeTelKey(telefone);
     if (!key) continue;
-    if (seen.has(key)) continue;
+    // Números nossos (UAZAPI) são isentos de deduplicação: mantemos todas as repetições.
+    if (seen.has(key) && !isentos?.has(key)) continue;
     seen.add(key);
     rows.push({
       telefone,
@@ -133,22 +134,27 @@ function parseRecipients(input: string): ClienteRow[] {
 }
 
 // Reescreve o textarea sem duplicados, retornando quantos foram removidos.
-function dedupRecipientsRaw(raw: string): { texto: string; duplicados: number } {
+// Telefones em `isentos` (números nossos da UAZAPI) nunca são removidos.
+function dedupRecipientsRaw(raw: string, isentos?: Set<string>): { texto: string; duplicados: number; preservados: number } {
   const linhas = raw.split(/\r?\n/);
   const seen = new Set<string>();
   const out: string[] = [];
   let dup = 0;
+  let preservados = 0;
   for (const l of linhas) {
     const trimmed = l.trim();
     if (!trimmed) continue;
     const tel = splitLinhaEnvio(trimmed)[0] || "";
     const key = normalizeTelKey(tel);
     if (!key) { out.push(trimmed); continue; }
-    if (seen.has(key)) { dup++; continue; }
+    if (seen.has(key)) {
+      if (!isentos?.has(key)) { dup++; continue; }
+      preservados++;
+    }
     seen.add(key);
     out.push(trimmed);
   }
-  return { texto: out.join("\n"), duplicados: dup };
+  return { texto: out.join("\n"), duplicados: dup, preservados };
 }
 
 export default function EnvioMeta() {
@@ -260,13 +266,13 @@ export default function EnvioMeta() {
     if (!validador) return toast.error("Instância validadora inválida");
 
     // 1) Deduplica antes de tudo
-    const { texto, duplicados } = dedupRecipientsRaw(recipientsRaw);
+    const { texto, duplicados } = dedupRecipientsRaw(recipientsRaw, isentosDedup);
     if (duplicados > 0) {
       setRecipientsRaw(texto);
       toast.message(`${duplicados} duplicado(s) removido(s) antes da validação`);
     }
 
-    const numeros = parseRecipients(texto).map((r) => r.telefone);
+    const numeros = parseRecipients(texto, isentosDedup).map((r) => r.telefone);
     if (numeros.length === 0) return toast.error("Adicione destinatários primeiro");
     setValidando(true);
     try {
@@ -553,7 +559,17 @@ export default function EnvioMeta() {
     );
   }, [templateGroup, instanciaIds, instancias]);
 
-  const recipients = useMemo(() => parseRecipients(recipientsRaw), [recipientsRaw]);
+  // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
+  const isentosDedup = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of uazInstancias as any[]) {
+      const key = normalizeTelKey(String(u?.telefone || ""));
+      if (key.length === 8) s.add(key);
+    }
+    return s;
+  }, [uazInstancias]);
+
+  const recipients = useMemo(() => parseRecipients(recipientsRaw, isentosDedup), [recipientsRaw, isentosDedup]);
 
   const templateIdByInstance = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -702,12 +718,15 @@ export default function EnvioMeta() {
     }
 
     // Deduplica destinatários antes de qualquer coisa
-    const dedup = dedupRecipientsRaw(recipientsRaw);
+    const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
     if (dedup.duplicados > 0) {
       setRecipientsRaw(dedup.texto);
-      toast.message(`${dedup.duplicados} duplicado(s) removido(s)`);
+      toast.message(
+        `${dedup.duplicados} duplicado(s) removido(s)` +
+        (dedup.preservados ? ` • 🟦 ${dedup.preservados} linha(s) de números UAZAPI mantidas` : "")
+      );
     }
-    const recipientsDedup = parseRecipients(dedup.texto);
+    const recipientsDedup = parseRecipients(dedup.texto, isentosDedup);
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
 
     // Fallback: se todas as instâncias marcadas estão fora do pool e há 1 destinatário só,
@@ -869,8 +888,8 @@ export default function EnvioMeta() {
   const enviarTeste = async () => {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Marque ao menos uma instância no card 2");
-    const dedup = dedupRecipientsRaw(recipientsRaw);
-    const rows = parseRecipients(dedup.texto);
+    const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
+    const rows = parseRecipients(dedup.texto, isentosDedup);
     if (rows.length === 0) return toast.error("Cole ao menos um destinatário");
 
     // usa 1ª instância marcada + 1º destinatário
@@ -1743,7 +1762,7 @@ export default function EnvioMeta() {
                   variant="outline"
                   onClick={async () => {
                     const validSet = new Set(validacaoPreview.valid.map((t) => normalizeTelKey(t)));
-                    const dedup = dedupRecipientsRaw(recipientsRaw);
+                    const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
                     const linhas = dedup.texto.split(/\r?\n/).filter(Boolean);
                     const usarHeaders = recipientsHeaders.length > 0;
                     const colHeaders = usarHeaders ? recipientsHeaders : ["Telefone", "Nome", "CPF/CNPJ", "Atraso", "Saldo"];
@@ -1965,6 +1984,7 @@ export default function EnvioMeta() {
         open={mapDlg.open}
         onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
         rows={mapDlg.rows}
+        isentosDedup={isentosDedup}
         template={template ? {
           nome_template: template.nome_template,
           body_text: (template as any).body_text || "",
@@ -1980,7 +2000,8 @@ export default function EnvioMeta() {
           toast.success(
             `${stats.total} contato(s) importado(s)` +
             (stats.ignorados ? ` • ${stats.ignorados} ignorado(s)` : "") +
-            (stats.duplicados ? ` • ${stats.duplicados} duplicado(s) removido(s)` : "") +
+            (stats.duplicados ? ` • 🔁 ${stats.duplicados} duplicado(s) removido(s)` : "") +
+            (stats.preservados ? ` • 🟦 ${stats.preservados} linha(s) de números UAZAPI mantidas` : "") +
             (varsCount ? ` • variáveis do template preenchidas em ${varsCount} linha(s)` : "")
           );
         }}

@@ -77,9 +77,11 @@ type Props = {
   onOpenChange: (v: boolean) => void;
   rows: any[][];
   template?: TemplateInfo;
+  /** Sufixos (8 dígitos) de números nossos da UAZAPI — isentos de deduplicação. */
+  isentosDedup?: Set<string>;
   onConfirm: (
     csvLines: string[],
-    stats: { total: number; ignorados: number; duplicados: number },
+    stats: { total: number; ignorados: number; duplicados: number; preservados?: number },
     varsByTel: Record<string, Record<string, string>>,
     headers: string[],
   ) => void;
@@ -103,7 +105,7 @@ function placeholderContext(bodyText: string, key: string): string {
   return around;
 }
 
-export default function MapearColunasImportDialog({ open, onOpenChange, rows, template, onConfirm }: Props) {
+export default function MapearColunasImportDialog({ open, onOpenChange, rows, template, isentosDedup, onConfirm }: Props) {
   const nCols = useMemo(() => rows.reduce((m, r) => Math.max(m, (r || []).length), 0), [rows]);
 
   const firstRow = rows[0] || [];
@@ -273,13 +275,18 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     const varsByTel: Record<string, Record<string, string>> = {};
     let ignorados = 0;
     let duplicados = 0;
+    let preservados = 0;
     for (const r of dataRows) {
       const arr = r || [];
       const telRaw = String(arr[idxTel] ?? "").trim();
       const digitos = telRaw.replace(/\D/g, "");
       if (!digitos) { if (arr.some((x) => String(x ?? "").trim())) ignorados++; continue; }
       const key = normalizeTelKey(digitos);
-      if (seen.has(key)) { duplicados++; continue; }
+      const isento = !!isentosDedup?.has(key);
+      if (seen.has(key)) {
+        if (!isento) { duplicados++; continue; }
+        preservados++;
+      }
       seen.add(key);
 
       // varsByTel: só o que veio das colunas tplvar mapeadas
@@ -295,7 +302,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       out.push(cols.map((c) => c.get(arr)).join(", "));
     }
     if (out.length === 0) { toast.error("Nenhum telefone válido encontrado após mapeamento"); return; }
-    onConfirm(out, { total: out.length, ignorados, duplicados }, varsByTel, headers);
+    onConfirm(out, { total: out.length, ignorados, duplicados, preservados }, varsByTel, headers);
     onOpenChange(false);
   };
 
