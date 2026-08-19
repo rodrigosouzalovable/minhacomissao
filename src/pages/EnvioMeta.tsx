@@ -119,7 +119,8 @@ function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
     const nome = !parts[2] && secondAsDoc ? "" : (parts[1] || "");
     const key = normalizeTelKey(telefone);
     if (!key) continue;
-    if (seen.has(key)) continue;
+    // Números nossos (UAZAPI) são isentos de deduplicação: mantemos todas as repetições.
+    if (seen.has(key) && !isentos?.has(key)) continue;
     seen.add(key);
     rows.push({
       telefone,
