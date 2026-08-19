@@ -80,6 +80,9 @@ export function PoolMetaPanel() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [checando, setChecando] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editData, setEditData] = useState("");
+  const [editTeto, setEditTeto] = useState("");
 
   const carregar = async () => {
     setLoading(true);
