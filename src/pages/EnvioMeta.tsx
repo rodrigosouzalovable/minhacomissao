@@ -888,8 +888,8 @@ export default function EnvioMeta() {
   const enviarTeste = async () => {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Marque ao menos uma instância no card 2");
-    const dedup = dedupRecipientsRaw(recipientsRaw);
-    const rows = parseRecipients(dedup.texto);
+    const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
+    const rows = parseRecipients(dedup.texto, isentosDedup);
     if (rows.length === 0) return toast.error("Cole ao menos um destinatário");
 
     // usa 1ª instância marcada + 1º destinatário
