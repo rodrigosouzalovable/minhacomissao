@@ -448,6 +448,30 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   </div>
                 );
               }
+              if (/teto diário atingido|quarentena|teto por hora/i.test(motivo)) {
+                const linhas = motivo
+                  .replace(/^Nenhuma instância disponível\s*[—-]\s*/i, '')
+                  .split('|')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                return (
+                  <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/40 rounded px-3 py-2 space-y-1">
+                    <div className="font-semibold">⏸️ Parada pelo limite diário de rampa (proteção de qualidade)</div>
+                    <div>
+                      Nenhum número está liberado agora: todos bateram o teto de envios do dia (ou estão em quarentena).
+                      Não é bloqueio da Meta nem erro de template — os pendentes continuam salvos.
+                    </div>
+                    {linhas.length > 0 && (
+                      <ul className="list-disc pl-4 space-y-0.5 text-amber-600/90 dark:text-amber-400/90">
+                        {linhas.map((l, i) => <li key={i}>{l}</li>)}
+                      </ul>
+                    )}
+                    <div className="text-amber-600/80 dark:text-amber-400/80">
+                      Para liberar mais volume: <b>Monitor de Envios → Pool Meta → Editar rampa / teto</b> do número e depois use <b>Reativar</b> aqui.
+                    </div>
+                  </div>
+                );
+              }
               return null;
             })()}
             {resultado?.statusMotivo && resultado.enviados === 0 && !/business account|#131031|locked/i.test(String((job as any).status_motivo || resultado?.statusMotivo || '')) && (
