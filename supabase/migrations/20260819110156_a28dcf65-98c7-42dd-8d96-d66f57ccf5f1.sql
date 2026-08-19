@@ -1,0 +1,7 @@
+ALTER TABLE public.virtualsms_pedidos
+  ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'virtualsms',
+  ADD COLUMN IF NOT EXISTS ddd TEXT,
+  ADD COLUMN IF NOT EXISTS banido_em TIMESTAMPTZ;
+
+ALTER TABLE public.virtualsms_config
+  ADD COLUMN IF NOT EXISTS preco_max_usd NUMERIC NOT NULL DEFAULT 0.90;

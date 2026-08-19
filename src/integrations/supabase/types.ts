@@ -6271,6 +6271,7 @@ export type Database = {
         Row: {
           id: string
           limite_mensal_usd: number
+          preco_max_usd: number
           ultima_rejeicao_debug: string | null
           ultima_rejeicao_em: string | null
           ultima_rejeicao_motivo: string | null
@@ -6280,6 +6281,7 @@ export type Database = {
         Insert: {
           id?: string
           limite_mensal_usd?: number
+          preco_max_usd?: number
           ultima_rejeicao_debug?: string | null
           ultima_rejeicao_em?: string | null
           ultima_rejeicao_motivo?: string | null
@@ -6289,6 +6291,7 @@ export type Database = {
         Update: {
           id?: string
           limite_mensal_usd?: number
+          preco_max_usd?: number
           ultima_rejeicao_debug?: string | null
           ultima_rejeicao_em?: string | null
           ultima_rejeicao_motivo?: string | null
@@ -6299,15 +6302,18 @@ export type Database = {
       }
       virtualsms_pedidos: {
         Row: {
+          banido_em: string | null
           codigo: string | null
           created_at: string
           criado_por: string | null
           custo: number | null
+          ddd: string | null
           expira_em: string | null
           id: string
           numero: string | null
           order_id: string
           pais: string | null
+          provider: string
           recebido_em: string | null
           servico: string
           status: string
@@ -6315,15 +6321,18 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          banido_em?: string | null
           codigo?: string | null
           created_at?: string
           criado_por?: string | null
           custo?: number | null
+          ddd?: string | null
           expira_em?: string | null
           id?: string
           numero?: string | null
           order_id: string
           pais?: string | null
+          provider?: string
           recebido_em?: string | null
           servico: string
           status?: string
@@ -6331,15 +6340,18 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          banido_em?: string | null
           codigo?: string | null
           created_at?: string
           criado_por?: string | null
           custo?: number | null
+          ddd?: string | null
           expira_em?: string | null
           id?: string
           numero?: string | null
           order_id?: string
           pais?: string | null
+          provider?: string
           recebido_em?: string | null
           servico?: string
           status?: string
