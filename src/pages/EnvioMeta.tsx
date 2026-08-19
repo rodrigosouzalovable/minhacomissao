@@ -718,12 +718,15 @@ export default function EnvioMeta() {
     }
 
     // Deduplica destinatários antes de qualquer coisa
-    const dedup = dedupRecipientsRaw(recipientsRaw);
+    const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
     if (dedup.duplicados > 0) {
       setRecipientsRaw(dedup.texto);
-      toast.message(`${dedup.duplicados} duplicado(s) removido(s)`);
+      toast.message(
+        `${dedup.duplicados} duplicado(s) removido(s)` +
+        (dedup.preservados ? ` • 🟦 ${dedup.preservados} linha(s) de números UAZAPI mantidas` : "")
+      );
     }
-    const recipientsDedup = parseRecipients(dedup.texto);
+    const recipientsDedup = parseRecipients(dedup.texto, isentosDedup);
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
 
     // Fallback: se todas as instâncias marcadas estão fora do pool e há 1 destinatário só,
