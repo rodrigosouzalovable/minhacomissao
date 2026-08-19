@@ -1984,6 +1984,7 @@ export default function EnvioMeta() {
         open={mapDlg.open}
         onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
         rows={mapDlg.rows}
+        isentosDedup={isentosDedup}
         template={template ? {
           nome_template: template.nome_template,
           body_text: (template as any).body_text || "",
