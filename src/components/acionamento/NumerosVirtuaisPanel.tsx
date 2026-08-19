@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -274,6 +274,21 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  // Cancelamento automático: pedido ativo marcado como banido é cancelado assim que o provedor libera (5 min)
+  const autoCanceladoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pedidoAtivo) return;
+    if (!pedidoAtivo.banido_em) return;
+    if (pedidoAtivo.codigo) return;
+    if (pedidoAtivo.status !== 'aguardando') return;
+    if (segParaCancelar > 0) return;
+    if (autoCanceladoRef.current === pedidoAtivo.order_id) return;
+    autoCanceladoRef.current = pedidoAtivo.order_id;
+    toast.info('Número banido — solicitando o cancelamento automático...');
+    cancelar.mutate(pedidoAtivo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoAtivo, segParaCancelar]);
 
   const salvarLimite = useMutation({
     mutationFn: () => invoke({ action: 'salvar_limite', limite_mensal_usd: Number(novoLimite.replace(',', '.')) }),
@@ -586,6 +601,15 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   Aguardando o SMS {abaAtiva ? '(verificando a cada 5s)' : '(pausado — volte para esta aba)'}
+                </p>
+              )}
+
+              {p.banido_em && p.status === 'aguardando' && !p.codigo && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <Ban className="h-3 w-3" />
+                  {p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0
+                    ? `Banido — cancelamento automático quando liberar (em ${Math.floor(segParaCancelar / 60)}:${String(segParaCancelar % 60).padStart(2, '0')})`
+                    : 'Banido — cancelando automaticamente...'}
                 </p>
               )}
 
