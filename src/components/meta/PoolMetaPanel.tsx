@@ -29,6 +29,9 @@ type MetaInst = {
   messaging_limit_manual: string | null;
   messaging_limit_source: string | null;
   messaging_limit_synced_at: string | null;
+  teto_escada: number | null;
+  quarentena_ate: string | null;
+  quarentena_motivo: string | null;
 };
 
 type PoolConfig = {
