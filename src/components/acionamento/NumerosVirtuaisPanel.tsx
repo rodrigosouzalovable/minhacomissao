@@ -98,11 +98,18 @@ interface Props {
 
 export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const qc = useQueryClient();
+  const [provider, setProvider] = useState('virtualsms');
   const [servico, setServico] = useState('wa');
   const [pais, setPais] = useState('73');
+  const [ddd, setDdd] = useState('62');
   const [novoLimite, setNovoLimite] = useState('');
+  const [novoTeto, setNovoTeto] = useState('');
   const [abaAtiva, setAbaAtiva] = useState(true);
   const [mostrarSecret, setMostrarSecret] = useState(false);
+
+  const provInfo = PROVEDORES.find((p) => p.id === provider) || PROVEDORES[0];
+  const moeda = (v: number | null | undefined) => `${provInfo.moeda} ${(Number(v) || 0).toFixed(2)}`;
+  const suportaDdd = provInfo.ddd && pais === '73';
 
   // Visibility guard: sem aba em foco, nenhuma consulta ao provedor (economia de custo)
   useEffect(() => {
@@ -112,8 +119,9 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   }, []);
 
   const saldoQuery = useQuery({
-    queryKey: ['virtualsms-saldo'],
-    queryFn: () => invoke({ action: 'saldo' }),
+    queryKey: ['virtualsms-saldo', provider],
+    queryFn: () => invoke({ action: 'saldo', provider }),
+
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     retry: false,
