@@ -166,7 +166,47 @@ async function createInstance(userId: string) {
   return json({ ok: true, instanceId: inserted.id, instanceUrl, instanceToken: token });
 }
 
+// Poll /instance/status até o QR/paircode ficar disponível (UAZAPI gera de forma assíncrona)
+async function pollForQr(base: string, token: string, isPairing: boolean) {
+  const tries = isPairing ? 8 : 6;
+  for (let i = 0; i < tries; i++) {
+    await new Promise((r) => setTimeout(r, 2500));
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      const res = await fetch(uazUrl(base, "/instance/status", { token }), {
+        headers: { token },
+        signal: ctrl.signal,
+      }).finally(() => clearTimeout(timer));
+      if (!res.ok) continue;
+      const text = await res.text();
+      let data: any = null;
+      try { data = JSON.parse(text); } catch (_) { continue; }
+      if (!data) continue;
+
+      const qr = data.qrcode || data.qr || data.base64 || data.qrCode ||
+                 data.instance?.qrcode || data.instance?.qrcode_base64 || null;
+      const pairingCode = data.pairingCode || data.pairing_code || data.paircode ||
+                          data.instance?.paircode || data.instance?.pairingCode || null;
+
+      if (isPairing && pairingCode) return { ok: true, qr: null, pairingCode };
+      if (qr) return { ok: true, qr, pairingCode: pairingCode || null };
+      if (pairingCode) return { ok: true, qr: null, pairingCode };
+
+      const parsed = parseConnectionState(data);
+      if (parsed?.connected) {
+        return { ok: true, alreadyConnected: true, connected: true, phone: parsed.phone };
+      }
+      console.log(`[QR] poll ${i + 1}/${tries} sem QR (status=${data?.instance?.status || data?.status || "?"})`);
+    } catch (e) {
+      console.log(`[QR] poll error: ${(e as Error).message}`);
+    }
+  }
+  return null;
+}
+
 // ── FETCH QR ──
+
 async function fetchQr(instanceId: string, phone?: string) {
   const instance = await getInstanceById(instanceId);
   if (!instance) {
