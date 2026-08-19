@@ -264,6 +264,82 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           <p className="text-xs text-destructive">{(saldoQuery.error as Error).message}</p>
         )}
 
+        {/* Webhook: SMS em tempo real */}
+        <div className="rounded-md border p-3 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Webhook className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Webhook (SMS em tempo real)</span>
+            {webhookAtivo ? (
+              <Badge variant="default" className="text-[10px] gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Ativo
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] gap-1">
+                <AlertCircle className="h-3 w-3" /> Nunca recebeu evento
+              </Badge>
+            )}
+            {webhookQuery.data?.ultimo_evento_em && (
+              <span className="text-xs text-muted-foreground">
+                Último evento: {new Date(webhookQuery.data.ultimo_evento_em).toLocaleString('pt-BR')}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              onClick={() => webhookQuery.refetch()}
+              disabled={webhookQuery.isFetching}
+            >
+              {webhookQuery.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Webhook URL</Label>
+            <div className="flex gap-2">
+              <Input readOnly value={webhookQuery.data?.webhook_url || ''} className="h-8 font-mono text-xs" />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => copiar(webhookQuery.data?.webhook_url || '')}
+                disabled={!webhookQuery.data?.webhook_url}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Secret Key</Label>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                type={mostrarSecret ? 'text' : 'password'}
+                value={webhookQuery.data?.secret || ''}
+                className="h-8 font-mono text-xs"
+              />
+              <Button size="sm" variant="outline" onClick={() => setMostrarSecret((v) => !v)}>
+                {mostrarSecret ? 'Ocultar' : 'Mostrar'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => copiar(webhookQuery.data?.secret || '')}
+                disabled={!webhookQuery.data?.secret}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Em virtualsms.de → Dashboard → Webhook Configuration: cole a URL e a Secret Key acima, marque
+            <strong> SMS Received</strong> e <strong>Status Changed</strong> e salve. Com isso o código chega na hora,
+            mesmo com esta aba fechada.
+          </p>
+        </div>
+
+
         {/* Compra */}
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
