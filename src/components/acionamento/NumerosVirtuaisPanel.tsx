@@ -554,7 +554,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
             : ' A VirtualSMS não permite escolher o DDD — use o SMS24H para isso.'}
         </p>
 
-        </div>
+
 
         {/* Pedido ativo / último código */}
         {(pedidoAtivo || ultimoRecebido) && (() => {
