@@ -126,13 +126,20 @@ serve(async (req) => {
     console.log("[virtualsms-webhook] evento:", raw.slice(0, 800));
 
     const agora = new Date().toISOString();
-    // Marca que o webhook está recebendo eventos (indicador na tela)
+    // Marca que o webhook está recebendo eventos (indicador na tela) e limpa a última rejeição
+    const okPatch = {
+      ultimo_evento_em: agora,
+      ultima_rejeicao_em: null,
+      ultima_rejeicao_motivo: null,
+      ultima_rejeicao_debug: null,
+    };
     const { data: conf } = await admin.from("virtualsms_config").select("id").limit(1).maybeSingle();
     if (conf?.id) {
-      await admin.from("virtualsms_config").update({ ultimo_evento_em: agora }).eq("id", conf.id);
+      await admin.from("virtualsms_config").update(okPatch).eq("id", conf.id);
     } else {
-      await admin.from("virtualsms_config").insert({ ultimo_evento_em: agora });
+      await admin.from("virtualsms_config").insert(okPatch);
     }
+
 
     const orderId = pick(payload, [
       "activationId", "activation_id", "id", "orderId", "order_id",
