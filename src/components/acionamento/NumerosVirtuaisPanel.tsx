@@ -136,8 +136,8 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   });
 
   const paisesQuery = useQuery({
-    queryKey: ['virtualsms-paises'],
-    queryFn: () => invoke({ action: 'paises' }),
+    queryKey: ['virtualsms-paises', provider],
+    queryFn: () => invoke({ action: 'paises', provider }),
     staleTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -145,6 +145,17 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
   const paises: { id: string; nome: string }[] =
     paisesQuery.data?.paises?.length ? paisesQuery.data.paises : PAISES_FALLBACK;
+
+  // Preço mínimo disponível — mostra a variação antes de comprar
+  const precoQuery = useQuery({
+    queryKey: ['virtualsms-preco', provider, servico, pais],
+    queryFn: () => invoke({ action: 'precos', provider, servico, pais }),
+    enabled: abaAtiva && !!servico,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
 
   const pedidosQuery = useQuery({
     queryKey: ['virtualsms-pedidos'],
