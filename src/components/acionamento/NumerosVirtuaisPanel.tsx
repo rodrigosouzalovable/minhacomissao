@@ -8,29 +8,50 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet, Webhook, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet, Webhook, CheckCircle2, AlertCircle, Ban } from 'lucide-react';
 
 interface Pedido {
   id: string;
   order_id: string;
+  provider?: string | null;
   servico: string;
   pais: string | null;
+  ddd?: string | null;
   numero: string | null;
   codigo: string | null;
   texto_sms?: string | null;
   status: string;
   custo: number | null;
+  banido_em?: string | null;
   expira_em: string | null;
   created_at: string;
 }
 
-// Códigos do protocolo da VirtualSMS (handler_api)
+// Códigos do protocolo handler_api (VirtualSMS e SMS24H)
 const SERVICOS = [
   { code: 'wa', name: 'WhatsApp' },
   { code: 'tg', name: 'Telegram' },
   { code: 'go', name: 'Google' },
   { code: 'ig', name: 'Instagram' },
   { code: 'fb', name: 'Facebook' },
+];
+
+const PROVEDORES = [
+  { id: 'virtualsms', label: 'VirtualSMS (US$, preço variável)', moeda: 'US$', ddd: false },
+  { id: 'sms24h', label: 'SMS24H (R$, escolhe DDD)', moeda: 'R$', ddd: true },
+];
+
+// DDDs brasileiros válidos
+const DDDS = [
+  '11', '12', '13', '14', '15', '16', '17', '18', '19',
+  '21', '22', '24', '27', '28',
+  '31', '32', '33', '34', '35', '37', '38',
+  '41', '42', '43', '44', '45', '46', '47', '48', '49',
+  '51', '53', '54', '55',
+  '61', '62', '63', '64', '65', '66', '67', '68', '69',
+  '71', '73', '74', '75', '77', '79',
+  '81', '82', '83', '84', '85', '86', '87', '88', '89',
+  '91', '92', '93', '94', '95', '96', '97', '98', '99',
 ];
 
 // IDs de país do protocolo (fallback; a lista real vem do provedor)
@@ -49,6 +70,7 @@ const statusLabel: Record<string, { label: string; variant: 'default' | 'seconda
   expirado: { label: 'Expirado', variant: 'destructive' },
   reembolsado: { label: 'Reembolsado', variant: 'secondary' },
 };
+
 
 
 const invoke = async (payload: Record<string, unknown>) => {
@@ -76,11 +98,18 @@ interface Props {
 
 export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const qc = useQueryClient();
+  const [provider, setProvider] = useState('virtualsms');
   const [servico, setServico] = useState('wa');
   const [pais, setPais] = useState('73');
+  const [ddd, setDdd] = useState('62');
   const [novoLimite, setNovoLimite] = useState('');
+  const [novoTeto, setNovoTeto] = useState('');
   const [abaAtiva, setAbaAtiva] = useState(true);
   const [mostrarSecret, setMostrarSecret] = useState(false);
+
+  const provInfo = PROVEDORES.find((p) => p.id === provider) || PROVEDORES[0];
+  const moeda = (v: number | null | undefined) => `${provInfo.moeda} ${(Number(v) || 0).toFixed(2)}`;
+  const suportaDdd = provInfo.ddd && pais === '73';
 
   // Visibility guard: sem aba em foco, nenhuma consulta ao provedor (economia de custo)
   useEffect(() => {
@@ -90,8 +119,9 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   }, []);
 
   const saldoQuery = useQuery({
-    queryKey: ['virtualsms-saldo'],
-    queryFn: () => invoke({ action: 'saldo' }),
+    queryKey: ['virtualsms-saldo', provider],
+    queryFn: () => invoke({ action: 'saldo', provider }),
+
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -106,8 +136,8 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   });
 
   const paisesQuery = useQuery({
-    queryKey: ['virtualsms-paises'],
-    queryFn: () => invoke({ action: 'paises' }),
+    queryKey: ['virtualsms-paises', provider],
+    queryFn: () => invoke({ action: 'paises', provider }),
     staleTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -115,6 +145,17 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
   const paises: { id: string; nome: string }[] =
     paisesQuery.data?.paises?.length ? paisesQuery.data.paises : PAISES_FALLBACK;
+
+  // Preço mínimo disponível — mostra a variação antes de comprar
+  const precoQuery = useQuery({
+    queryKey: ['virtualsms-preco', provider, servico, pais],
+    queryFn: () => invoke({ action: 'precos', provider, servico, pais }),
+    enabled: abaAtiva && !!servico,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
 
   const pedidosQuery = useQuery({
     queryKey: ['virtualsms-pedidos'],
@@ -179,7 +220,11 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   useQuery({
     queryKey: ['virtualsms-status', pedidoAtivo?.order_id],
     queryFn: async () => {
-      const res = await invoke({ action: 'status', order_id: pedidoAtivo!.order_id });
+      const res = await invoke({
+        action: 'status',
+        provider: pedidoAtivo!.provider || 'virtualsms',
+        order_id: pedidoAtivo!.order_id,
+      });
       qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
       if (res?.codigo) toast.success(`Código recebido: ${res.codigo}`);
       return res;
@@ -192,7 +237,15 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
 
   const comprar = useMutation({
-    mutationFn: () => invoke({ action: 'comprar', servico, pais }),
+    mutationFn: () =>
+      invoke({
+        action: 'comprar',
+        provider,
+        servico,
+        pais,
+        ddd: suportaDdd ? ddd : undefined,
+        max_preco: novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : undefined,
+      }),
     onSuccess: (res) => {
       toast.success(res?.pedido?.numero ? `Número comprado: ${res.pedido.numero}` : 'Número comprado');
       qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
@@ -202,11 +255,22 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   });
 
   const cancelar = useMutation({
-    mutationFn: (orderId: string) => invoke({ action: 'cancelar', order_id: orderId }),
+    mutationFn: (p: Pedido) =>
+      invoke({ action: 'cancelar', provider: p.provider || 'virtualsms', order_id: p.order_id }),
     onSuccess: () => {
       toast.success('Pedido cancelado — o provedor devolve o valor.');
       qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
       qc.invalidateQueries({ queryKey: ['virtualsms-saldo'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const marcarBanido = useMutation({
+    mutationFn: (p: Pedido) =>
+      invoke({ action: 'marcar_banido', order_id: p.order_id, banido: !p.banido_em }),
+    onSuccess: (_r, p) => {
+      toast.success(p.banido_em ? 'Marcação de banido removida' : 'Número marcado como banido');
+      qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -221,10 +285,22 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const salvarTeto = useMutation({
+    mutationFn: () => invoke({ action: 'salvar_limite', preco_max_usd: Number(novoTeto.replace(',', '.')) }),
+    onSuccess: () => {
+      toast.success('Preço máximo por número atualizado');
+      qc.invalidateQueries({ queryKey: ['virtualsms-saldo'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const saldo = saldoQuery.data;
   const gasto = Number(saldo?.gasto_mes || 0);
   const limite = Number(saldo?.limite_mensal_usd || 0);
+  const tetoAtual = Number(saldo?.preco_max_usd ?? 0.9);
   const bloqueado = limite > 0 && gasto >= limite;
+  const menorPreco = precoQuery.data?.menor_preco as number | null | undefined;
+
 
   const copiar = (txt: string) => {
     navigator.clipboard.writeText(txt);
@@ -236,7 +312,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Smartphone className="h-4 w-4" />
-          Números Virtuais (VirtualSMS)
+          Números Virtuais (VirtualSMS / SMS24H)
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -387,6 +463,17 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
         {/* Compra */}
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
+            <Label className="text-xs">Provedor</Label>
+            <Select value={provider} onValueChange={setProvider}>
+              <SelectTrigger className="h-9 w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PROVEDORES.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
             <Label className="text-xs">Serviço</Label>
             <Select value={servico} onValueChange={setServico}>
               <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
@@ -408,6 +495,40 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
               </SelectContent>
             </Select>
           </div>
+          {suportaDdd && (
+            <div className="space-y-1">
+              <Label className="text-xs">DDD</Label>
+              <Select value={ddd} onValueChange={setDdd}>
+                <SelectTrigger className="h-9 w-24"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {DDDS.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label className="text-xs">Preço máx. por número</Label>
+            <div className="flex gap-1">
+              <Input
+                value={novoTeto}
+                onChange={(e) => setNovoTeto(e.target.value)}
+                placeholder={tetoAtual.toFixed(2)}
+                className="h-9 w-24"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9"
+                onClick={() => salvarTeto.mutate()}
+                disabled={!novoTeto.trim() || salvarTeto.isPending}
+                title="Salva este teto como padrão para as próximas compras"
+              >
+                Salvar
+              </Button>
+            </div>
+          </div>
 
           <Button
             size="sm"
@@ -422,6 +543,18 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
             <span className="text-xs text-destructive">Limite mensal atingido — aumente o limite para comprar.</span>
           )}
         </div>
+
+        <p className="text-[11px] text-muted-foreground">
+          {menorPreco != null
+            ? <>Menor preço disponível agora: <strong>{moeda(menorPreco)}</strong>. </>
+            : ''}
+          O preço do provedor é dinâmico — a compra é bloqueada acima do teto de <strong>{provInfo.moeda} {(novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : tetoAtual).toFixed(2)}</strong>.
+          {provInfo.ddd
+            ? ' O SMS24H permite escolher o DDD do número.'
+            : ' A VirtualSMS não permite escolher o DDD — use o SMS24H para isso.'}
+        </p>
+
+
 
         {/* Pedido ativo / último código */}
         {(pedidoAtivo || ultimoRecebido) && (() => {
@@ -466,7 +599,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => cancelar.mutate(p.order_id)}
+                    onClick={() => cancelar.mutate(p)}
                     disabled={cancelar.isPending || (p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0)}
                     title={segParaCancelar > 0 ? 'O provedor só permite cancelar 5 minutos após a compra' : undefined}
                   >
@@ -489,19 +622,40 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
             <div className="rounded-md border divide-y">
               {pedidos.map((p) => {
                 const st = statusLabel[p.status] || { label: p.status, variant: 'outline' as const };
+                const prov = PROVEDORES.find((x) => x.id === (p.provider || 'virtualsms'));
                 return (
                   <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
                     <span className="font-mono">{p.numero || '—'}</span>
+                    {p.ddd && <span className="text-muted-foreground">DDD {p.ddd}</span>}
                     <span className="text-muted-foreground">{p.servico}</span>
+                    <span className="text-muted-foreground">{p.provider === 'sms24h' ? 'SMS24H' : 'VirtualSMS'}</span>
                     {p.codigo && <code className="font-mono font-semibold">{p.codigo}</code>}
                     <Badge variant={st.variant} className="text-[10px] px-1.5 py-0">{st.label}</Badge>
-                    <span className="ml-auto text-muted-foreground">{usd(p.custo)}</span>
+                    {p.banido_em && (
+                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-1">
+                        <Ban className="h-2.5 w-2.5" /> Banido
+                      </Badge>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => marcarBanido.mutate(p)}
+                      disabled={marcarBanido.isPending}
+                      title="Registra que este número já veio banido no WhatsApp"
+                    >
+                      {p.banido_em ? 'Desmarcar' : 'Marcar banido'}
+                    </Button>
+                    <span className="ml-auto text-muted-foreground">
+                      {`${prov?.moeda || 'US$'} ${(Number(p.custo) || 0).toFixed(2)}`}
+                    </span>
                     <span className="text-muted-foreground">
                       {new Date(p.created_at).toLocaleDateString('pt-BR')}
                     </span>
                   </div>
                 );
               })}
+
             </div>
           </div>
         )}
