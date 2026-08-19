@@ -463,6 +463,17 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
         {/* Compra */}
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
+            <Label className="text-xs">Provedor</Label>
+            <Select value={provider} onValueChange={setProvider}>
+              <SelectTrigger className="h-9 w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PROVEDORES.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
             <Label className="text-xs">Serviço</Label>
             <Select value={servico} onValueChange={setServico}>
               <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
@@ -484,6 +495,40 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
               </SelectContent>
             </Select>
           </div>
+          {suportaDdd && (
+            <div className="space-y-1">
+              <Label className="text-xs">DDD</Label>
+              <Select value={ddd} onValueChange={setDdd}>
+                <SelectTrigger className="h-9 w-24"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {DDDS.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label className="text-xs">Preço máx. por número</Label>
+            <div className="flex gap-1">
+              <Input
+                value={novoTeto}
+                onChange={(e) => setNovoTeto(e.target.value)}
+                placeholder={tetoAtual.toFixed(2)}
+                className="h-9 w-24"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9"
+                onClick={() => salvarTeto.mutate()}
+                disabled={!novoTeto.trim() || salvarTeto.isPending}
+                title="Salva este teto como padrão para as próximas compras"
+              >
+                Salvar
+              </Button>
+            </div>
+          </div>
 
           <Button
             size="sm"
@@ -497,6 +542,18 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           {bloqueado && (
             <span className="text-xs text-destructive">Limite mensal atingido — aumente o limite para comprar.</span>
           )}
+        </div>
+
+        <p className="text-[11px] text-muted-foreground">
+          {menorPreco != null
+            ? <>Menor preço disponível agora: <strong>{moeda(menorPreco)}</strong>. </>
+            : ''}
+          O preço do provedor é dinâmico — a compra é bloqueada acima do teto de <strong>{provInfo.moeda} {(novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : tetoAtual).toFixed(2)}</strong>.
+          {provInfo.ddd
+            ? ' O SMS24H permite escolher o DDD do número.'
+            : ' A VirtualSMS não permite escolher o DDD — use o SMS24H para isso.'}
+        </p>
+
         </div>
 
         {/* Pedido ativo / último código */}
