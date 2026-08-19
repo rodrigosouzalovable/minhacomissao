@@ -256,7 +256,19 @@ async function fetchQr(instanceId: string, phone?: string) {
         debugLogs.push(`200 no QR: ${JSON.stringify(data).substring(0, 150)}`);
       }
     }
+
+    // UAZAPI responde 200 com qrcode vazio enquanto ainda está gerando a sessão.
+    // Fazemos poll no /instance/status até o QR aparecer antes de desistir.
+    const pollResult = await pollForQr(base, token, isPairing);
+    if (pollResult) return json(pollResult);
+    debugLogs.push(`poll ${attempt} sem QR`);
+
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, 2000));
+      continue;
+    }
     break;
+
     } catch (e) {
       console.log(`[QR] Error attempt ${attempt}: ${(e as Error).message}`);
       const isTimeout = (e as Error).name === "AbortError" || (e as Error).message?.includes("timeout");
