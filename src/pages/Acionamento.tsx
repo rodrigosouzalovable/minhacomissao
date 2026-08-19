@@ -2,7 +2,9 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 import { User, Building2, Mail, MapPin, ImageIcon } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { QrCode, Smartphone, GripVertical, Search } from 'lucide-react';
+import { QrCode, Smartphone, GripVertical, Search, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -297,7 +299,17 @@ export default function Acionamento() {
     }
   }, [editingInstance?.id]);
 
+  // Painel de números virtuais: inicia minimizado (lembra preferência do usuário)
+  const [numerosVirtuaisOpen, setNumerosVirtuaisOpenState] = useState<boolean>(() => {
+    try { return localStorage.getItem('uazapi_numeros_virtuais_open') === '1'; } catch { return false; }
+  });
+  const setNumerosVirtuaisOpen = (open: boolean) => {
+    setNumerosVirtuaisOpenState(open);
+    try { localStorage.setItem('uazapi_numeros_virtuais_open', open ? '1' : '0'); } catch { /* ignore */ }
+  };
+
   // QR Code connection state
+
   const [qrLoading, setQrLoading] = useState(false);
   const [webhookAllLoading, setWebhookAllLoading] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
@@ -1614,6 +1626,30 @@ export default function Acionamento() {
     }, 3000);
   }, [user?.id, stopQrPolling, checkInstanceConnections]);
 
+  // Pede o QR à edge function; se a UAZAPI ainda não gerou (retryable), tenta 1x automaticamente.
+  const invokeQrWithRetry = useCallback(async (body: Record<string, any>) => {
+    const call = async () => {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', { body });
+      if (error && !data) throw error;
+      return data as any;
+    };
+    let data: any;
+    try {
+      data = await call();
+    } catch (e) {
+      // 400 com corpo (retryable) também cai aqui em alguns casos → tenta de novo
+      await new Promise(r => setTimeout(r, 3000));
+      data = await call();
+      return data;
+    }
+    if (!data?.ok && !data?.alreadyConnected) {
+      await new Promise(r => setTimeout(r, 3000));
+      try { data = await call(); } catch (_) { /* mantém resultado anterior */ }
+    }
+    return data;
+  }, []);
+
+
   const handleConnectQr = async () => {
     if (!user) return;
     setQrLoading(true);
@@ -1634,11 +1670,8 @@ export default function Acionamento() {
 
       // Step 2: Fetch QR code or pairing code
       const usePhone = connectMethod === 'code' ? normalizePairingPhone(pairingPhone) : '';
-      const { data: qrData, error: qrError } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId, phone: usePhone || undefined },
-      });
+      const qrData = await invokeQrWithRetry({ action: 'qr', userId: user.id, instanceId, phone: usePhone || undefined });
 
-      if (qrError) throw qrError;
 
       if (qrData?.alreadyConnected) {
         const { data: refreshed } = await supabase
@@ -1675,10 +1708,8 @@ export default function Acionamento() {
     setQrLoading(true);
     try {
       const usePhone = connectMethod === 'code' ? normalizePairingPhone(pairingPhone) : '';
-      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId: createdInstanceId, phone: usePhone || undefined },
-      });
-      if (error) throw error;
+      const data = await invokeQrWithRetry({ action: 'qr', userId: user.id, instanceId: createdInstanceId, phone: usePhone || undefined });
+
       if (data?.ok && (data.qr || data.pairingCode)) {
         if (data.qr) {
           const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
@@ -1725,10 +1756,8 @@ export default function Acionamento() {
     setPairingCode(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId },
-      });
-      if (error) throw error;
+      const data = await invokeQrWithRetry({ action: 'qr', userId: user.id, instanceId });
+
 
       if (data?.alreadyConnected) {
         setReconnectingInstanceId(null);
@@ -1756,10 +1785,8 @@ export default function Acionamento() {
     stopQrPolling();
     setQrLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId: reconnectingInstanceId },
-      });
-      if (error) throw error;
+      const data = await invokeQrWithRetry({ action: 'qr', userId: user.id, instanceId: reconnectingInstanceId });
+
       if (data?.ok && data.qr) {
         const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
         setQrImage(qr);
@@ -2270,21 +2297,35 @@ export default function Acionamento() {
                     </div>
                   )}
 
-                  {/* Números virtuais (VirtualSMS) — só admin */}
+                  {/* Números virtuais (VirtualSMS) — só admin, recolhível (inicia minimizado) */}
                   {isAdmin && (
-                    <NumerosVirtuaisPanel
-                      onConectar={(numero) => {
-                        const limpo = String(numero).replace(/\D/g, '');
-                        setEditingInstance({ nome: '', telefone: limpo, server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' });
-                        setConnectMethod('code');
-                        setPairingPhone(limpo);
-                        setQrStep('idle');
-                        setQrImage(null);
-                        setPairingCode(null);
-                        toast.info('Preencha o nome da instância, salve e gere o código de pareamento.');
-                      }}
-                    />
+                    <Collapsible open={numerosVirtuaisOpen} onOpenChange={setNumerosVirtuaisOpen}>
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
+                        >
+                          <span>Números virtuais (SMS)</span>
+                          <ChevronDown className={`h-4 w-4 transition-transform ${numerosVirtuaisOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="pt-3">
+                        <NumerosVirtuaisPanel
+                          onConectar={(numero) => {
+                            const limpo = String(numero).replace(/\D/g, '');
+                            setEditingInstance({ nome: '', telefone: limpo, server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' });
+                            setConnectMethod('code');
+                            setPairingPhone(limpo);
+                            setQrStep('idle');
+                            setQrImage(null);
+                            setPairingCode(null);
+                            toast.info('Preencha o nome da instância, salve e gere o código de pareamento.');
+                          }}
+                        />
+                      </CollapsibleContent>
+                    </Collapsible>
                   )}
+
 
 
                   {instances.length > 0 && (
