@@ -1773,10 +1773,8 @@ export default function Acionamento() {
     stopQrPolling();
     setQrLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId: reconnectingInstanceId },
-      });
-      if (error) throw error;
+      const data = await invokeQrWithRetry({ action: 'qr', userId: user.id, instanceId: reconnectingInstanceId });
+
       if (data?.ok && data.qr) {
         const qr = data.qr.startsWith('data:') ? data.qr : `data:image/png;base64,${data.qr}`;
         setQrImage(qr);
