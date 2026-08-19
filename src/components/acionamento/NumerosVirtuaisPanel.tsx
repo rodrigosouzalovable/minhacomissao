@@ -467,11 +467,16 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
                     size="sm"
                     variant="ghost"
                     onClick={() => cancelar.mutate(p.order_id)}
-                    disabled={cancelar.isPending}
+                    disabled={cancelar.isPending || (p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0)}
+                    title={segParaCancelar > 0 ? 'O provedor só permite cancelar 5 minutos após a compra' : undefined}
                   >
-                    <X className="h-3.5 w-3.5 mr-1" /> Cancelar pedido
+                    <X className="h-3.5 w-3.5 mr-1" />
+                    {p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0
+                      ? `Cancelar em ${Math.floor(segParaCancelar / 60)}:${String(segParaCancelar % 60).padStart(2, '0')}`
+                      : 'Cancelar pedido'}
                   </Button>
                 )}
+
               </div>
             </div>
           );
