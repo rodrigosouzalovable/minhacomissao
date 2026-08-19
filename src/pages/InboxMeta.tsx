@@ -2017,14 +2017,14 @@ export default function InboxMeta() {
                       && new Date(contatoAtivo.sla_dispensado_em).getTime() >= new Date(contatoAtivo.ultima_msg_entrada_em).getTime();
                     return (
                       <Button
-                        size="sm"
+                        size="icon"
                         variant={dispensado ? 'secondary' : 'outline'}
-                        className="h-7 gap-1.5 text-xs"
+                        className="h-7 w-7 p-0"
                         onClick={() => handleDispensarResposta(contatoAtivo.id, !dispensado)}
-                        title="Marcar que este cliente não precisa de resposta (remove o alerta de tempo)"
+                        title={dispensado ? 'Remover dispensa de resposta' : 'Não precisa de resposta (remove o alerta de tempo)'}
+                        aria-label={dispensado ? 'Remover dispensa de resposta' : 'Não precisa de resposta'}
                       >
                         {dispensado ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
-                        Não precisa resposta
                       </Button>
                     );
                   })()}
