@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
         instancia_ids: instanciaIdsFiltradas,
         min_seg: minSec,
         max_seg: maxSec,
-        total: clientes.length,
+        total: clientesEnvio.length,
         proximo_em: new Date().toISOString(),
         nome_campanha: nomeCampanha,
         modo_rajada: modoRajada,
@@ -227,13 +227,13 @@ Deno.serve(async (req) => {
       .select('id')
       .single();
     if (jobErr) { console.error('[iniciar] insert job falhou', jobErr); throw jobErr; }
-    console.log('[iniciar] job criado', job.id, 'clientes:', clientes.length, 'instancias:', instanciaIdsFiltradas.length, 'folder:', folderId);
+    console.log('[iniciar] job criado', job.id, 'clientes:', clientesEnvio.length, 'instancias:', instanciaIdsFiltradas.length, 'folder:', folderId);
 
     // Insere itens em lotes de 500 para não estourar payload.
     // Em modo rajada: pré-atribui instância em round-robin para permitir workers paralelos.
     const CHUNK = 500;
-    for (let i = 0; i < clientes.length; i += CHUNK) {
-      const slice = clientes.slice(i, i + CHUNK).map((c, idx) => {
+    for (let i = 0; i < clientesEnvio.length; i += CHUNK) {
+      const slice = clientesEnvio.slice(i, i + CHUNK).map((c, idx) => {
         const globalIdx = i + idx;
         const instId = modoRajada
           ? instanciaIdsFiltradas[globalIdx % instanciaIdsFiltradas.length]
@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
     // Grava o vínculo telefone -> CPF (só CPF real de 11 dígitos) para o relatório
     // diário de acionamentos conseguir atribuir o disparo à carteira do credor.
     try {
-      const pares = clientes
+      const pares = clientesEnvio
         .map((c: any) => ({ telefone: c.telefone, cpf: String(c.cpf ?? '').replace(/\D/g, ''), origem: 'mailing' }))
         .filter((p: any) => p.cpf.length === 11 && p.telefone);
       for (let i = 0; i < pares.length; i += 1000) {
