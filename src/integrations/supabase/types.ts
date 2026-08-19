@@ -3398,6 +3398,36 @@ export type Database = {
           },
         ]
       }
+      meta_destinatario_supressao: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          falhas: number
+          motivo: string
+          telefone: string
+          telefone_sufixo: string
+          tenant_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          falhas?: number
+          motivo: string
+          telefone: string
+          telefone_sufixo: string
+          tenant_id?: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          falhas?: number
+          motivo?: string
+          telefone?: string
+          telefone_sufixo?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       meta_envio_pool_config: {
         Row: {
           aquecimento_ativo: boolean
@@ -3411,17 +3441,25 @@ export type Database = {
           cota_fase2: number
           cota_fase3: number
           cota_fase4: number
+          cota_max_hora: number
           delay_max_entre_numeros_seg: number
           delay_max_mesmo_numero_seg: number
           delay_min_entre_numeros_seg: number
           delay_min_mesmo_numero_seg: number
           duracao_pausa_yellow_horas: number
+          escada_retorno: Json
+          freio_ativo: boolean
           guardrail_block_rate_max_pct: number
           guardrail_ratio_inbound: boolean
           guardrail_ratio_min_pct: number
           horario_fim: string
           horario_inicio: string
           id: number
+          nao_lidas_max_pct: number
+          pct_max_cota_meta: number
+          quarentena_dias: number
+          resposta_min_pct: number
+          supressao_ativa: boolean
           tenant_id: string
         }
         Insert: {
@@ -3436,17 +3474,25 @@ export type Database = {
           cota_fase2?: number
           cota_fase3?: number
           cota_fase4?: number
+          cota_max_hora?: number
           delay_max_entre_numeros_seg?: number
           delay_max_mesmo_numero_seg?: number
           delay_min_entre_numeros_seg?: number
           delay_min_mesmo_numero_seg?: number
           duracao_pausa_yellow_horas?: number
+          escada_retorno?: Json
+          freio_ativo?: boolean
           guardrail_block_rate_max_pct?: number
           guardrail_ratio_inbound?: boolean
           guardrail_ratio_min_pct?: number
           horario_fim?: string
           horario_inicio?: string
           id?: number
+          nao_lidas_max_pct?: number
+          pct_max_cota_meta?: number
+          quarentena_dias?: number
+          resposta_min_pct?: number
+          supressao_ativa?: boolean
           tenant_id?: string
         }
         Update: {
@@ -3461,17 +3507,25 @@ export type Database = {
           cota_fase2?: number
           cota_fase3?: number
           cota_fase4?: number
+          cota_max_hora?: number
           delay_max_entre_numeros_seg?: number
           delay_max_mesmo_numero_seg?: number
           delay_min_entre_numeros_seg?: number
           delay_min_mesmo_numero_seg?: number
           duracao_pausa_yellow_horas?: number
+          escada_retorno?: Json
+          freio_ativo?: boolean
           guardrail_block_rate_max_pct?: number
           guardrail_ratio_inbound?: boolean
           guardrail_ratio_min_pct?: number
           horario_fim?: string
           horario_inicio?: string
           id?: number
+          nao_lidas_max_pct?: number
+          pct_max_cota_meta?: number
+          quarentena_dias?: number
+          resposta_min_pct?: number
+          supressao_ativa?: boolean
           tenant_id?: string
         }
         Relationships: []
@@ -3924,6 +3978,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "meta_instance_daily_metrics_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_instance_freio_diario: {
+        Row: {
+          atualizado_em: string
+          dia: string
+          enviados: number
+          instancia_id: string
+          motivo_reducao: string | null
+          nao_lidas_pct: number | null
+          resposta_pct: number | null
+          tenant_id: string
+          teto_efetivo: number
+        }
+        Insert: {
+          atualizado_em?: string
+          dia?: string
+          enviados?: number
+          instancia_id: string
+          motivo_reducao?: string | null
+          nao_lidas_pct?: number | null
+          resposta_pct?: number | null
+          tenant_id?: string
+          teto_efetivo?: number
+        }
+        Update: {
+          atualizado_em?: string
+          dia?: string
+          enviados?: number
+          instancia_id?: string
+          motivo_reducao?: string | null
+          nao_lidas_pct?: number | null
+          resposta_pct?: number | null
+          tenant_id?: string
+          teto_efetivo?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_instance_freio_diario_instancia_id_fkey"
             columns: ["instancia_id"]
             isOneToOne: false
             referencedRelation: "meta_whatsapp_instances"
@@ -4649,6 +4747,8 @@ export type Database = {
           provider: string
           qualidade_liberada_em: string | null
           qualidade_liberada_manual: boolean
+          quarentena_ate: string | null
+          quarentena_motivo: string | null
           rajada_taxa_atual: number
           rajada_ultimo_ajuste_em: string | null
           rate_limit_ate: string | null
@@ -4662,6 +4762,7 @@ export type Database = {
           saude_tier: string | null
           score_saude_cache: number | null
           tenant_id: string
+          teto_escada: number | null
           throughput_level: string | null
           tier_diario: number
           uazapi_instance_id: string | null
@@ -4704,6 +4805,8 @@ export type Database = {
           provider?: string
           qualidade_liberada_em?: string | null
           qualidade_liberada_manual?: boolean
+          quarentena_ate?: string | null
+          quarentena_motivo?: string | null
           rajada_taxa_atual?: number
           rajada_ultimo_ajuste_em?: string | null
           rate_limit_ate?: string | null
@@ -4717,6 +4820,7 @@ export type Database = {
           saude_tier?: string | null
           score_saude_cache?: number | null
           tenant_id?: string
+          teto_escada?: number | null
           throughput_level?: string | null
           tier_diario?: number
           uazapi_instance_id?: string | null
@@ -4759,6 +4863,8 @@ export type Database = {
           provider?: string
           qualidade_liberada_em?: string | null
           qualidade_liberada_manual?: boolean
+          quarentena_ate?: string | null
+          quarentena_motivo?: string | null
           rajada_taxa_atual?: number
           rajada_ultimo_ajuste_em?: string | null
           rate_limit_ate?: string | null
@@ -4772,6 +4878,7 @@ export type Database = {
           saude_tier?: string | null
           score_saude_cache?: number | null
           tenant_id?: string
+          teto_escada?: number | null
           throughput_level?: string | null
           tier_diario?: number
           uazapi_instance_id?: string | null
