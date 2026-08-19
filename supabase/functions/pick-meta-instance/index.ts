@@ -154,10 +154,13 @@ Deno.serve(async (req) => {
       const pausaPorStatus = motivoPausaLower.startsWith('status=');
       const pausaAtiva = !!inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date();
       const estadoBloqueado = inst.estado_pool === 'restrita' || inst.estado_pool === 'pausado';
-      // Liberação: botão "Retomar" OU instância sem pausa/restrição ativa
-      // (nesses casos a qualidade YELLOW/RED é apenas informativa).
+      // Liberação de PAUSA: botão "Retomar" OU instância sem pausa/restrição ativa.
       const ignoraQualidade =
         ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true || (!pausaAtiva && !estadoBloqueado);
+      // Gate de QUALIDADE (mais estrito): YELLOW/RED só passam em rajada ou com
+      // liberação manual explícita — proteger o número vem antes do volume.
+      const ignoraQualidadeGate = ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true;
+
 
 
       if (inst.estado_pool && inst.estado_pool !== 'ativo') {
