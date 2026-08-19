@@ -77,9 +77,11 @@ type Props = {
   onOpenChange: (v: boolean) => void;
   rows: any[][];
   template?: TemplateInfo;
+  /** Sufixos (8 dígitos) de números nossos da UAZAPI — isentos de deduplicação. */
+  isentosDedup?: Set<string>;
   onConfirm: (
     csvLines: string[],
-    stats: { total: number; ignorados: number; duplicados: number },
+    stats: { total: number; ignorados: number; duplicados: number; preservados?: number },
     varsByTel: Record<string, Record<string, string>>,
     headers: string[],
   ) => void;
