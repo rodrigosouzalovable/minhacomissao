@@ -565,19 +565,40 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
             <div className="rounded-md border divide-y">
               {pedidos.map((p) => {
                 const st = statusLabel[p.status] || { label: p.status, variant: 'outline' as const };
+                const prov = PROVEDORES.find((x) => x.id === (p.provider || 'virtualsms'));
                 return (
                   <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
                     <span className="font-mono">{p.numero || '—'}</span>
+                    {p.ddd && <span className="text-muted-foreground">DDD {p.ddd}</span>}
                     <span className="text-muted-foreground">{p.servico}</span>
+                    <span className="text-muted-foreground">{p.provider === 'sms24h' ? 'SMS24H' : 'VirtualSMS'}</span>
                     {p.codigo && <code className="font-mono font-semibold">{p.codigo}</code>}
                     <Badge variant={st.variant} className="text-[10px] px-1.5 py-0">{st.label}</Badge>
-                    <span className="ml-auto text-muted-foreground">{usd(p.custo)}</span>
+                    {p.banido_em && (
+                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-1">
+                        <Ban className="h-2.5 w-2.5" /> Banido
+                      </Badge>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => marcarBanido.mutate(p)}
+                      disabled={marcarBanido.isPending}
+                      title="Registra que este número já veio banido no WhatsApp"
+                    >
+                      {p.banido_em ? 'Desmarcar' : 'Marcar banido'}
+                    </Button>
+                    <span className="ml-auto text-muted-foreground">
+                      {`${prov?.moeda || 'US$'} ${(Number(p.custo) || 0).toFixed(2)}`}
+                    </span>
                     <span className="text-muted-foreground">
                       {new Date(p.created_at).toLocaleDateString('pt-BR')}
                     </span>
                   </div>
                 );
               })}
+
             </div>
           </div>
         )}
