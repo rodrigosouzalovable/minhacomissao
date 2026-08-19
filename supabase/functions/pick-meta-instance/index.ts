@@ -3,6 +3,8 @@
 // Fórmula: quality × tier × idade × (1 - uso_hoje/cota_efetiva)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
+import { enviadosHojeBrt, enviadosUltimaHora, tetoBase } from '../_shared/meta-freio.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -113,9 +115,23 @@ Deno.serve(async (req) => {
     const blockMaxPct = Number(cfg?.guardrail_block_rate_max_pct ?? 2);
     const volumeMinGuardrail = Number(cfg?.guardrail_volume_minimo ?? 50);
 
+    // Freio de qualidade do dia (teto efetivo por instância)
+    const freioAtivo = cfg?.freio_ativo !== false;
+    const hojeBrt = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }),
+    ).toISOString().slice(0, 10);
+    const { data: freioRows } = await supabase
+      .from('meta_instance_freio_diario')
+      .select('instancia_id, teto_efetivo, motivo_reducao')
+      .in('instancia_id', instancia_ids)
+      .eq('dia', hojeBrt);
+    const freioMap = new Map<string, any>();
+    (freioRows || []).forEach((f: any) => freioMap.set(f.instancia_id, f));
+    const cotaMaxHora = Math.max(1, Number(cfg?.cota_max_hora ?? 12));
 
     // Cotas por BM (janela móvel de 24h)
     const cotasBm = await carregarCotasBm(supabase);
+
 
     // Contagem hoje (fallback: enviados_hoje da própria row)
     const candidates: any[] = [];
@@ -138,10 +154,13 @@ Deno.serve(async (req) => {
       const pausaPorStatus = motivoPausaLower.startsWith('status=');
       const pausaAtiva = !!inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date();
       const estadoBloqueado = inst.estado_pool === 'restrita' || inst.estado_pool === 'pausado';
-      // Liberação: botão "Retomar" OU instância sem pausa/restrição ativa
-      // (nesses casos a qualidade YELLOW/RED é apenas informativa).
+      // Liberação de PAUSA: botão "Retomar" OU instância sem pausa/restrição ativa.
       const ignoraQualidade =
         ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true || (!pausaAtiva && !estadoBloqueado);
+      // Gate de QUALIDADE (mais estrito): YELLOW/RED só passam em rajada ou com
+      // liberação manual explícita — proteger o número vem antes do volume.
+      const ignoraQualidadeGate = ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true;
+
 
 
       if (inst.estado_pool && inst.estado_pool !== 'ativo') {
@@ -156,6 +175,15 @@ Deno.serve(async (req) => {
         if (pausaPorStatus) { descartados.push(`${rotulo}: pausada por ${inst.pausa_automatica_motivo}`); continue; }
       }
 
+      // Quarentena por queda de qualidade: fora do pool de campanha até a data.
+      if (inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date() && !ignoraQualidadeGlobal) {
+        descartados.push(
+          `${rotulo}: em quarentena até ${new Date(inst.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` +
+          `${inst.quarentena_motivo ? ` (${inst.quarentena_motivo})` : ''}`,
+        );
+        continue;
+      }
+
       // Reset diário (telemetria — não bloqueia envio)
       let uso = inst.enviados_hoje || 0;
       if (inst.ultimo_reset !== hoje) uso = 0;
@@ -164,6 +192,27 @@ Deno.serve(async (req) => {
         ? Math.floor((Date.now() - new Date(inst.data_ativacao_api).getTime()) / 86400000) + 1
         : 0;
       const fase = inst.data_ativacao_api ? faseFromDias(diasAtivo) : 'livre';
+
+      // ===== Teto diário efetivo + teto horário =====
+      if (freioAtivo) {
+        const freio = freioMap.get(inst.id);
+        const tetoDia = freio ? Number(freio.teto_efetivo) : tetoBase(inst, cfg, fase);
+        const enviadosDia = await enviadosHojeBrt(supabase, inst.id);
+        if (tetoDia <= 0) {
+          descartados.push(`${rotulo}: freio de qualidade — ${freio?.motivo_reducao || 'sem cota hoje'}`);
+          continue;
+        }
+        if (enviadosDia >= tetoDia) {
+          descartados.push(`${rotulo}: teto diário atingido (${enviadosDia}/${tetoDia})`);
+          continue;
+        }
+        const naHora = await enviadosUltimaHora(supabase, inst.id);
+        if (naHora >= cotaMaxHora) {
+          descartados.push(`${rotulo}: teto por hora atingido (${naHora}/${cotaMaxHora})`);
+          continue;
+        }
+      }
+
 
       // Guardrails baseados em métricas de ontem.
       // Só bloqueios REAIS de usuário (mo.bloqueadas) reprovam a instância —
@@ -183,10 +232,11 @@ Deno.serve(async (req) => {
         const ratio = mo.inbound / Math.max(1, mo.enviadas) * 100;
         if (ratio < ratioMinPct) tetoQualidade = 0.3; // sem inbound = teto 30% da cota
       }
-      const q = pesoQualidade(inst.saude_quality, ignoraQualidade);
+      const q = pesoQualidade(inst.saude_quality, ignoraQualidadeGate);
       if (q === 0) { descartados.push(`${rotulo}: qualidade ${String(inst.saude_quality || 'desconhecida').toUpperCase()}`); continue; }
       if (String(inst.saude_quality || '').toUpperCase() === 'YELLOW') tetoQualidade = Math.min(tetoQualidade, 0.3);
-      if (String(inst.saude_quality || '').toUpperCase() === 'RED' && ignoraQualidade) tetoQualidade = Math.min(tetoQualidade, 0.3);
+      if (String(inst.saude_quality || '').toUpperCase() === 'RED' && ignoraQualidadeGate) tetoQualidade = Math.min(tetoQualidade, 0.3);
+
       const tierEfetivo = inst.messaging_limit_manual || inst.saude_tier;
       // Score prioriza chips com menos uso hoje para distribuição no round-robin.
       const score = q * pesoTier(tierEfetivo) * fatorIdade(diasAtivo) * tetoQualidade * (1 / (1 + uso));

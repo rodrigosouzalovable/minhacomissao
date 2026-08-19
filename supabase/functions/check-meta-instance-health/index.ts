@@ -141,7 +141,59 @@ Deno.serve(async (req) => {
           notificarPausa = { motivo: `Status Meta = ${st} — pausa preventiva`, alcance: 'numero' };
         }
 
+        // ===== Quarentena por queda de qualidade =====
+        // Número que cai para YELLOW/RED sai do pool de campanha por N dias e
+        // volta com teto baixo (primeiro degrau da escada de retorno).
+        const qualAnterior = String(inst.saude_quality || '').toUpperCase();
+        const caiu = (qual === 'YELLOW' || qual === 'RED') && qualAnterior !== qual;
+        const escada: number[] = Array.isArray(cfg?.escada_retorno) ? cfg.escada_retorno : [20, 40, 80];
+        if (caiu && !liberadaManual) {
+          const dias = Math.max(1, Number(cfg?.quarentena_dias ?? 7));
+          const quarentenaAtual = inst.quarentena_ate ? new Date(inst.quarentena_ate).getTime() : 0;
+          const novaQuarentena = Date.now() + dias * 86400000;
+          if (novaQuarentena > quarentenaAtual) {
+            updatePayload.quarentena_ate = new Date(novaQuarentena).toISOString();
+            updatePayload.quarentena_motivo = `qualidade ${qual}`;
+          }
+          updatePayload.teto_escada = Number(escada[0] ?? 20);
+        }
+        // Alerta imediato de degradação (1 aviso por número por dia)
+        let alertaQueda: string | null = null;
+        if (caiu) {
+          alertaQueda =
+            `⚠️ *Qualidade caiu para ${qual}*\n\n` +
+            `Número: *${inst.nome || inst.display_phone}*\n` +
+            `Antes: ${qualAnterior || 'desconhecida'} → Agora: ${qual}\n` +
+            (updatePayload.quarentena_ate
+              ? `Quarentena até ${new Date(updatePayload.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (fora das campanhas; segue atendendo conversas recebidas).\n`
+              : '') +
+            `Volta com teto de ${escada[0] ?? 20}/dia e sobe em escada se ficar GREEN.`;
+        }
+
         await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
+
+        if (alertaQueda) {
+          try {
+            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            const { data: envio24h } = await supabase
+              .from('meta_whatsapp_mensagens')
+              .select('direcao')
+              .eq('instancia_id', inst.id)
+              .gte('criado_em', new Date(Date.now() - 86400000).toISOString())
+              .limit(20000);
+            const saidas = (envio24h || []).filter((m: any) => m.direcao === 'saida').length;
+            const entradas = (envio24h || []).filter((m: any) => m.direcao === 'entrada').length;
+            await notificarAdmin(supabase, {
+              tipo: 'meta_queda_qualidade',
+              mensagem: `${alertaQueda}\n\n📊 Últimas 24h: ${saidas} enviadas / ${entradas} recebidas`,
+              chaveIdempotencia: `meta_queda_${inst.id}_${qual}_${new Date().toISOString().slice(0, 10)}`,
+              umaVezPorChave: true,
+            });
+          } catch (e) {
+            console.log('[health] alerta de queda falhou:', String(e).slice(0, 200));
+          }
+        }
+
 
         if (notificarPausa) {
           try {

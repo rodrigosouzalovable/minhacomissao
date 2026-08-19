@@ -102,6 +102,59 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Remove instâncias em quarentena por queda de qualidade (exceto modo rajada).
+    if (modoRajada !== true) {
+      const { data: quarentena } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, nome, quarentena_ate')
+        .in('id', instanciaIdsFiltradas)
+        .not('quarentena_ate', 'is', null)
+        .gt('quarentena_ate', new Date().toISOString());
+      const emQuarentena = new Set((quarentena || []).map((r: any) => r.id));
+      if (emQuarentena.size > 0) {
+        instanciaIdsFiltradas = instanciaIdsFiltradas.filter((id) => !emQuarentena.has(id));
+        if (instanciaIdsFiltradas.length === 0) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'Todas as instâncias selecionadas estão em quarentena por queda de qualidade. Selecione outras instâncias ou aguarde o fim da quarentena.',
+          }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      }
+    }
+
+    // ===== Higiene de base: remove destinatários suprimidos =====
+    // (números que já falharam entrega repetidas vezes ou nunca respondem)
+    let clientesEnvio = clientes;
+    let suprimidos = 0;
+    const { data: cfgPool } = await supabase
+      .from('meta_envio_pool_config').select('supressao_ativa').eq('id', 1).maybeSingle();
+    if (cfgPool?.supressao_ativa !== false) {
+      const sufixo = (t: string) => {
+        const d = String(t || '').replace(/\D+/g, '');
+        return d.length >= 8 ? d.slice(-8) : d;
+      };
+      const sufixos = Array.from(new Set(clientes.map((c) => sufixo(c.telefone)).filter(Boolean)));
+      const bloqueados = new Set<string>();
+      for (let i = 0; i < sufixos.length; i += 500) {
+        const { data } = await supabase
+          .from('meta_destinatario_supressao')
+          .select('telefone_sufixo')
+          .in('telefone_sufixo', sufixos.slice(i, i + 500));
+        (data || []).forEach((r: any) => bloqueados.add(r.telefone_sufixo));
+      }
+      if (bloqueados.size > 0) {
+        clientesEnvio = clientes.filter((c) => !bloqueados.has(sufixo(c.telefone)));
+        suprimidos = clientes.length - clientesEnvio.length;
+      }
+      if (clientesEnvio.length === 0) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Todos os ${clientes.length} destinatários estão na lista de supressão (falhas de entrega ou sem resposta). Nada foi enviado.`,
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      console.log('[iniciar] suprimidos por higiene de base:', suprimidos);
+    }
+
 
     // Trava anti-gasto: bloqueia envio em massa de templates MARKETING (custo ~7x utility).
     // Verifica todos os template_ids (por instância + o principal).
@@ -164,7 +217,7 @@ Deno.serve(async (req) => {
         instancia_ids: instanciaIdsFiltradas,
         min_seg: minSec,
         max_seg: maxSec,
-        total: clientes.length,
+        total: clientesEnvio.length,
         proximo_em: new Date().toISOString(),
         nome_campanha: nomeCampanha,
         modo_rajada: modoRajada,
@@ -174,13 +227,13 @@ Deno.serve(async (req) => {
       .select('id')
       .single();
     if (jobErr) { console.error('[iniciar] insert job falhou', jobErr); throw jobErr; }
-    console.log('[iniciar] job criado', job.id, 'clientes:', clientes.length, 'instancias:', instanciaIdsFiltradas.length, 'folder:', folderId);
+    console.log('[iniciar] job criado', job.id, 'clientes:', clientesEnvio.length, 'instancias:', instanciaIdsFiltradas.length, 'folder:', folderId);
 
     // Insere itens em lotes de 500 para não estourar payload.
     // Em modo rajada: pré-atribui instância em round-robin para permitir workers paralelos.
     const CHUNK = 500;
-    for (let i = 0; i < clientes.length; i += CHUNK) {
-      const slice = clientes.slice(i, i + CHUNK).map((c, idx) => {
+    for (let i = 0; i < clientesEnvio.length; i += CHUNK) {
+      const slice = clientesEnvio.slice(i, i + CHUNK).map((c, idx) => {
         const globalIdx = i + idx;
         const instId = modoRajada
           ? instanciaIdsFiltradas[globalIdx % instanciaIdsFiltradas.length]
@@ -206,7 +259,7 @@ Deno.serve(async (req) => {
     // Grava o vínculo telefone -> CPF (só CPF real de 11 dígitos) para o relatório
     // diário de acionamentos conseguir atribuir o disparo à carteira do credor.
     try {
-      const pares = clientes
+      const pares = clientesEnvio
         .map((c: any) => ({ telefone: c.telefone, cpf: String(c.cpf ?? '').replace(/\D/g, ''), origem: 'mailing' }))
         .filter((p: any) => p.cpf.length === 11 && p.telefone);
       for (let i = 0; i < pares.length; i += 1000) {
