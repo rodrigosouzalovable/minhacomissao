@@ -6,7 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const BASE = "https://virtualsms.io/api/v1";
+// Protocolo padrão de ativação SMS (compatível SMS-Activate) usado pela VirtualSMS
+const BASE = "https://api.virtualsms.de/stubs/handler_api";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -14,47 +15,58 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-// Traduz erros do provedor para português claro
-function humanizarErro(status: number, texto: string): string {
-  const t = (texto || "").toLowerCase();
-  if (status === 401 || status === 403 || t.includes("unauthorized") || t.includes("invalid api key")) {
-    return "Chave da VirtualSMS inválida ou sem permissão. Verifique a API Key cadastrada.";
-  }
-  if (t.includes("insufficient") || t.includes("balance")) {
-    return "Saldo insuficiente na VirtualSMS. Faça um depósito na conta do provedor.";
-  }
-  if (t.includes("no numbers") || t.includes("out of stock") || t.includes("not available") || status === 404) {
-    return "Nenhum número disponível para esse serviço/país neste momento. Tente outro país ou aguarde alguns minutos.";
-  }
-  if (status === 429) return "Muitas requisições ao provedor. Aguarde alguns segundos e tente de novo.";
-  if (status >= 500) return "A VirtualSMS está instável no momento. Tente novamente em instantes.";
-  return texto ? `VirtualSMS: ${texto}`.slice(0, 300) : `VirtualSMS retornou HTTP ${status}`;
+// Traduz códigos de erro do provedor para português claro
+function humanizarErro(texto: string): string {
+  const t = (texto || "").trim().toUpperCase();
+  const mapa: Record<string, string> = {
+    BAD_KEY: "Chave da VirtualSMS inválida. Confira a API Key em virtualsms.de (Settings → API Key).",
+    BAD_ACTION: "Ação não suportada pelo provedor.",
+    BANNED: "Conta bloqueada na VirtualSMS.",
+    NO_BALANCE: "Saldo insuficiente na VirtualSMS. Adicione fundos (Add Funds).",
+    NO_NUMBERS: "Nenhum número disponível para esse serviço/país agora. Tente outro país ou aguarde.",
+    WRONG_SERVICE: "Serviço inválido. Escolha outro serviço da lista.",
+    WRONG_COUNTRY: "País inválido.",
+    NO_ACTIVATION: "Ativação não encontrada no provedor.",
+    BAD_STATUS: "Status inválido para essa ativação.",
+    EARLY_CANCEL_DENIED: "Só é possível cancelar após 5 minutos da compra (regra do provedor).",
+    ERROR_SQL: "A VirtualSMS está instável no momento. Tente novamente em instantes.",
+    NO_METRICS: "Sem dados suficientes no provedor.",
+  };
+  if (mapa[t]) return mapa[t];
+  return texto ? `VirtualSMS: ${texto}`.slice(0, 300) : "Resposta vazia da VirtualSMS";
 }
 
-async function vsms(path: string, init?: RequestInit) {
+const CODIGOS_ERRO = new Set([
+  "BAD_KEY", "BAD_ACTION", "BANNED", "NO_BALANCE", "NO_NUMBERS", "WRONG_SERVICE",
+  "WRONG_COUNTRY", "NO_ACTIVATION", "BAD_STATUS", "EARLY_CANCEL_DENIED", "ERROR_SQL",
+  "NO_METRICS", "WRONG_ACTIVATION_ID", "RENEW_ACTIVATION_NOT_AVAILABLE", "WRONG_MAX_PRICE",
+]);
+
+// Chama o handler_api. Retorna { texto, dados } — dados só quando a resposta é JSON.
+async function vsms(action: string, params: Record<string, string | number | undefined> = {}) {
   const apiKey = Deno.env.get("VIRTUALSMS_API_KEY");
   if (!apiKey) throw new Error("VIRTUALSMS_API_KEY não configurada no backend.");
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(init?.headers || {}),
-    },
-  });
-  const raw = await res.text();
-  let data: any = null;
+
+  const url = new URL(BASE);
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("action", action);
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && String(v) !== "") url.searchParams.set(k, String(v));
+  }
+
+  const res = await fetch(url.toString(), { headers: { Accept: "application/json, text/plain" } });
+  const texto = (await res.text()).trim();
+
+  let dados: any = null;
   try {
-    data = raw ? JSON.parse(raw) : null;
-  } catch {
-    data = { raw };
-  }
-  if (!res.ok) {
-    const msg = data?.message || data?.error || data?.detail || raw;
-    throw new Error(humanizarErro(res.status, typeof msg === "string" ? msg : JSON.stringify(msg)));
-  }
-  return data;
+    dados = texto.startsWith("{") || texto.startsWith("[") ? JSON.parse(texto) : null;
+  } catch { /* resposta em texto puro */ }
+
+  const primeiro = texto.split(":")[0].toUpperCase();
+  if (!res.ok && !dados) throw new Error(humanizarErro(texto || `HTTP ${res.status}`));
+  if (CODIGOS_ERRO.has(primeiro)) throw new Error(humanizarErro(texto));
+
+  return { texto, dados };
 }
 
 const num = (v: unknown): number | null => {
@@ -62,21 +74,18 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-// Extrai campos com nomes variados que o provedor pode usar
-const pick = (obj: any, keys: string[]) => {
-  for (const k of keys) {
-    const v = k.split(".").reduce<any>((acc, part) => (acc == null ? acc : acc[part]), obj);
-    if (v !== undefined && v !== null && v !== "") return v;
-  }
-  return null;
+const webhookUrl = () => {
+  const ref = Deno.env.get("SUPABASE_URL")?.replace(/\/+$/, "") || "";
+  return `${ref}/functions/v1/virtualsms-webhook`;
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const admin = createClient(supabaseUrl, serviceKey);
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
 
   try {
     // --- Autenticação + checagem de admin ---
@@ -107,65 +116,100 @@ serve(async (req) => {
         .neq("status", "reembolsado");
       return (data || []).reduce((s: number, r: any) => s + (Number(r.custo) || 0), 0);
     };
-    const limite = async () => {
-      const { data } = await admin.from("virtualsms_config").select("limite_mensal_usd").limit(1).maybeSingle();
-      return Number(data?.limite_mensal_usd ?? 20);
+    const cfg = async () => {
+      const { data } = await admin
+        .from("virtualsms_config")
+        .select("id, limite_mensal_usd, ultimo_evento_em")
+        .limit(1)
+        .maybeSingle();
+      return data;
     };
 
     if (action === "saldo") {
-      const data = await vsms("/balance");
-      const saldo = num(pick(data, ["balance", "data.balance", "amount", "data.amount"]));
+      const conf = await cfg();
+      // Resposta: ACCESS_BALANCE:10.50
+      const { texto } = await vsms("getBalance");
+      const saldo = num(texto.split(":")[1]);
       return json({
         ok: true,
         saldo,
-        moeda: pick(data, ["currency", "data.currency"]) || "USD",
+        moeda: "USD",
         gasto_mes: await gastoMes(),
-        limite_mensal_usd: await limite(),
+        limite_mensal_usd: Number(conf?.limite_mensal_usd ?? 20),
+        webhook_url: webhookUrl(),
+        webhook_ultimo_evento_em: conf?.ultimo_evento_em ?? null,
+      });
+    }
+
+    if (action === "webhook_info") {
+      const conf = await cfg();
+      return json({
+        ok: true,
+        webhook_url: webhookUrl(),
+        secret: Deno.env.get("VIRTUALSMS_WEBHOOK_SECRET") ?? null,
+        ultimo_evento_em: conf?.ultimo_evento_em ?? null,
       });
     }
 
     if (action === "servicos") {
-      try {
-        const data = await vsms("/services");
-        const lista = Array.isArray(data) ? data : (data?.data ?? data?.services ?? []);
-        if (Array.isArray(lista) && lista.length) return json({ ok: true, servicos: lista });
-      } catch (_) {
-        // provedor pode não expor esse endpoint — usamos a lista padrão abaixo
-      }
+      const pais = body?.pais ? String(body.pais) : undefined;
+      const { dados } = await vsms("getServicesList", { country: pais });
+      const lista = Array.isArray(dados?.services) ? dados.services : [];
+      if (lista.length) return json({ ok: true, servicos: lista });
       return json({
         ok: true,
         servicos: [
-          { code: "whatsapp", name: "WhatsApp" },
-          { code: "telegram", name: "Telegram" },
-          { code: "google", name: "Google" },
-          { code: "instagram", name: "Instagram" },
-          { code: "facebook", name: "Facebook" },
+          { code: "wa", name: "WhatsApp" },
+          { code: "tg", name: "Telegram" },
+          { code: "go", name: "Google" },
+          { code: "ig", name: "Instagram" },
+          { code: "fb", name: "Facebook" },
         ],
       });
     }
 
+    if (action === "paises") {
+      const { dados } = await vsms("getCountries");
+      const lista = dados && typeof dados === "object"
+        ? Object.values(dados).map((c: any) => ({ id: String(c?.id ?? ""), nome: c?.eng ?? c?.rus ?? "" }))
+          .filter((c) => c.id)
+        : [];
+      return json({ ok: true, paises: lista });
+    }
+
+    if (action === "precos") {
+      const servico = String(body?.servico || "").trim();
+      const pais = body?.pais ? String(body.pais) : undefined;
+      if (!servico) return json({ error: "Informe o serviço." }, 400);
+      const { dados } = await vsms("getPrices", { service: servico, country: pais });
+      return json({ ok: true, precos: dados ?? {} });
+    }
+
     if (action === "comprar") {
       const servico = String(body?.servico || "").trim();
-      const pais = body?.pais ? String(body.pais).trim() : null;
-      if (!servico) return json({ error: "Informe o serviço (ex.: whatsapp)." }, 400);
+      const pais = body?.pais !== undefined && body?.pais !== null && String(body.pais) !== ""
+        ? String(body.pais)
+        : "73"; // Brasil por padrão
+      if (!servico) return json({ error: "Informe o serviço (ex.: wa)." }, 400);
 
       const gasto = await gastoMes();
-      const lim = await limite();
+      const conf = await cfg();
+      const lim = Number(conf?.limite_mensal_usd ?? 20);
       if (lim > 0 && gasto >= lim) {
         return json({ error: `Limite mensal de US$ ${lim.toFixed(2)} atingido (gasto: US$ ${gasto.toFixed(2)}). Aumente o limite para continuar.` }, 400);
       }
 
-      const data = await vsms("/orders", {
-        method: "POST",
-        body: JSON.stringify({ service: servico, ...(pais ? { country: pais } : {}) }),
+      const { dados } = await vsms("getNumberV2", {
+        service: servico,
+        country: pais,
+        maxPrice: body?.max_preco ? String(body.max_preco) : undefined,
+        operator: body?.operadora ? String(body.operadora) : undefined,
       });
 
-      const orderId = String(pick(data, ["id", "order_id", "data.id", "data.order_id"]) ?? "");
-      const numero = pick(data, ["phone", "number", "phone_number", "data.phone", "data.number", "data.phone_number"]);
-      const custo = num(pick(data, ["price", "cost", "data.price", "data.cost"]));
-      const expira = pick(data, ["expires_at", "expire_at", "data.expires_at", "data.expire_at"]);
-
-      if (!orderId) return json({ error: "O provedor não retornou o identificador do pedido." }, 502);
+      const orderId = String(dados?.activationId ?? "");
+      const numero = dados?.phoneNumber ? String(dados.phoneNumber) : null;
+      const custo = num(dados?.activationCost);
+      if (!orderId) return json({ error: "O provedor não retornou o identificador da ativação." }, 502);
 
       const { data: pedido, error: insErr } = await admin
         .from("virtualsms_pedidos")
@@ -173,15 +217,15 @@ serve(async (req) => {
           order_id: orderId,
           servico,
           pais,
-          numero: numero ? String(numero) : null,
+          numero,
           custo,
           status: "aguardando",
-          expira_em: expira ? new Date(expira).toISOString() : new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+          expira_em: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
           criado_por: user.id,
         })
         .select()
         .single();
-      if (insErr) return json({ error: `Pedido criado no provedor, mas falhou ao gravar: ${insErr.message}`, order_id: orderId }, 500);
+      if (insErr) return json({ error: `Número comprado, mas falhou ao gravar: ${insErr.message}`, order_id: orderId }, 500);
 
       return json({ ok: true, pedido });
     }
@@ -190,39 +234,32 @@ serve(async (req) => {
       const orderId = String(body?.order_id || "").trim();
       if (!orderId) return json({ error: "order_id obrigatório" }, 400);
 
-      const data = await vsms(`/orders/${encodeURIComponent(orderId)}/sms`);
-      const lista = Array.isArray(data) ? data : (data?.data ?? data?.sms ?? data?.messages ?? []);
-      const primeiro = Array.isArray(lista) ? lista[0] : lista;
-      const codigo = pick(primeiro ?? {}, ["code", "sms_code", "otp"]) ||
-        pick(data, ["code", "data.code", "sms_code"]);
-      const texto = pick(primeiro ?? {}, ["text", "message", "content"]);
-      const statusProv = String(pick(data, ["status", "data.status"]) || "").toLowerCase();
+      const { dados, texto } = await vsms("getStatusV2", { id: orderId });
+      const statusProv = String(dados?.status ?? texto.split(":")[0] ?? "").toUpperCase();
+      const codigo = dados?.code ?? (texto.startsWith("STATUS_OK") ? texto.split(":")[1] : null);
 
       let novoStatus = "aguardando";
       if (codigo) novoStatus = "recebido";
-      else if (statusProv.includes("cancel")) novoStatus = "cancelado";
-      else if (statusProv.includes("refund")) novoStatus = "reembolsado";
-      else if (statusProv.includes("expir") || statusProv.includes("timeout")) novoStatus = "expirado";
+      else if (statusProv.includes("CANCEL")) novoStatus = "cancelado";
 
       const patch: Record<string, unknown> = { status: novoStatus, updated_at: new Date().toISOString() };
-      if (codigo) patch.codigo = String(codigo);
-      if (novoStatus === "reembolsado" || novoStatus === "expirado") patch.custo = 0;
+      if (codigo) {
+        patch.codigo = String(codigo);
+        patch.recebido_em = new Date().toISOString();
+      }
+      if (novoStatus === "cancelado") patch.custo = 0;
       await admin.from("virtualsms_pedidos").update(patch).eq("order_id", orderId);
 
-      return json({ ok: true, status: novoStatus, codigo: codigo ? String(codigo) : null, texto: texto ? String(texto) : null });
+      // Finaliza a ativação no provedor quando o código chegou (libera o número)
+      if (codigo) await vsms("setStatus", { id: orderId, status: 6 }).catch(() => {});
+
+      return json({ ok: true, status: novoStatus, codigo: codigo ? String(codigo) : null });
     }
 
     if (action === "cancelar") {
       const orderId = String(body?.order_id || "").trim();
       if (!orderId) return json({ error: "order_id obrigatório" }, 400);
-      try {
-        await vsms(`/orders/${encodeURIComponent(orderId)}/cancel`, { method: "POST" });
-      } catch (e) {
-        // Alguns provedores usam DELETE
-        await vsms(`/orders/${encodeURIComponent(orderId)}`, { method: "DELETE" }).catch(() => {
-          throw e;
-        });
-      }
+      await vsms("setStatus", { id: orderId, status: 8 });
       await admin
         .from("virtualsms_pedidos")
         .update({ status: "cancelado", custo: 0, updated_at: new Date().toISOString() })
@@ -233,12 +270,12 @@ serve(async (req) => {
     if (action === "salvar_limite") {
       const valor = Number(body?.limite_mensal_usd);
       if (!Number.isFinite(valor) || valor < 0) return json({ error: "Limite inválido" }, 400);
-      const { data: cfg } = await admin.from("virtualsms_config").select("id").limit(1).maybeSingle();
-      if (cfg?.id) {
+      const conf = await cfg();
+      if (conf?.id) {
         await admin
           .from("virtualsms_config")
           .update({ limite_mensal_usd: valor, updated_at: new Date().toISOString() })
-          .eq("id", cfg.id);
+          .eq("id", conf.id);
       } else {
         await admin.from("virtualsms_config").insert({ limite_mensal_usd: valor });
       }
