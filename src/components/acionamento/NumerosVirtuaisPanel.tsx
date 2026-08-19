@@ -542,7 +542,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => cancelar.mutate(p.order_id)}
+                    onClick={() => cancelar.mutate(p)}
                     disabled={cancelar.isPending || (p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0)}
                     title={segParaCancelar > 0 ? 'O provedor só permite cancelar 5 minutos após a compra' : undefined}
                   >
