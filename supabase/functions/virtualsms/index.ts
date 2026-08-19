@@ -119,7 +119,7 @@ serve(async (req) => {
     const cfg = async () => {
       const { data } = await admin
         .from("virtualsms_config")
-        .select("id, limite_mensal_usd, ultimo_evento_em")
+        .select("id, limite_mensal_usd, ultimo_evento_em, ultima_rejeicao_em, ultima_rejeicao_motivo, ultima_rejeicao_debug")
         .limit(1)
         .maybeSingle();
       return data;
