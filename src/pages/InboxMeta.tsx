@@ -2313,6 +2313,15 @@ export default function InboxMeta() {
       />
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
       <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} />
+      {contatoAtivo && (
+        <AgendarRetornoDialog
+          open={agendarRetornoOpen}
+          onOpenChange={setAgendarRetornoOpen}
+          clienteNome={contatoAtivo.nome || (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : 'Contato')}
+          clienteTelefone={contatoAtivo.telefone || ''}
+          clienteCpf={cpfDoContato}
+        />
+      )}
 
       <MetaNumerosConectadosDialog
         open={!!numerosFolder}
