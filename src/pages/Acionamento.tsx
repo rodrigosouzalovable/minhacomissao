@@ -1614,6 +1614,30 @@ export default function Acionamento() {
     }, 3000);
   }, [user?.id, stopQrPolling, checkInstanceConnections]);
 
+  // Pede o QR à edge function; se a UAZAPI ainda não gerou (retryable), tenta 1x automaticamente.
+  const invokeQrWithRetry = useCallback(async (body: Record<string, any>) => {
+    const call = async () => {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', { body });
+      if (error && !data) throw error;
+      return data as any;
+    };
+    let data: any;
+    try {
+      data = await call();
+    } catch (e) {
+      // 400 com corpo (retryable) também cai aqui em alguns casos → tenta de novo
+      await new Promise(r => setTimeout(r, 3000));
+      data = await call();
+      return data;
+    }
+    if (!data?.ok && !data?.alreadyConnected) {
+      await new Promise(r => setTimeout(r, 3000));
+      try { data = await call(); } catch (_) { /* mantém resultado anterior */ }
+    }
+    return data;
+  }, []);
+
+
   const handleConnectQr = async () => {
     if (!user) return;
     setQrLoading(true);
