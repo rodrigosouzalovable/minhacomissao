@@ -240,6 +240,8 @@ async function fetchQr(instanceId: string, phone?: string) {
   const token = instance.instance_token;
 
   const debugLogs: string[] = [];
+  let lastPollStatus = "?";
+
 
   // Normalize phone (digits only). If provided, request pairing code instead of QR.
   const cleanPhone = phone ? phone.replace(/\D/g, "") : "";
