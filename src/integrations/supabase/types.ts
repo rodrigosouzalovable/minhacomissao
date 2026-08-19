@@ -6267,6 +6267,69 @@ export type Database = {
         }
         Relationships: []
       }
+      virtualsms_config: {
+        Row: {
+          id: string
+          limite_mensal_usd: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          limite_mensal_usd?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          limite_mensal_usd?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      virtualsms_pedidos: {
+        Row: {
+          codigo: string | null
+          created_at: string
+          criado_por: string | null
+          custo: number | null
+          expira_em: string | null
+          id: string
+          numero: string | null
+          order_id: string
+          pais: string | null
+          servico: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          codigo?: string | null
+          created_at?: string
+          criado_por?: string | null
+          custo?: number | null
+          expira_em?: string | null
+          id?: string
+          numero?: string | null
+          order_id: string
+          pais?: string | null
+          servico: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          codigo?: string | null
+          created_at?: string
+          criado_por?: string | null
+          custo?: number | null
+          expira_em?: string | null
+          id?: string
+          numero?: string | null
+          order_id?: string
+          pais?: string | null
+          servico?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       voice_campaign_audios: {
         Row: {
           audio_url: string

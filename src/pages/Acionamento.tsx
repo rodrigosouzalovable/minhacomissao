@@ -33,6 +33,7 @@ import ChatbotTemplatesTab from '@/components/ChatbotTemplatesTab';
 import ChatHistoryDialog from '@/components/ChatHistoryDialog';
 import LembreteMensagensDialog from '@/components/LembreteMensagensDialog';
 import { ProxyInstanceSection } from '@/components/acionamento/ProxyInstanceSection';
+import { NumerosVirtuaisPanel } from '@/components/acionamento/NumerosVirtuaisPanel';
 import * as XLSX from 'xlsx';
 
 interface ClienteData {
@@ -2269,7 +2270,23 @@ export default function Acionamento() {
                     </div>
                   )}
 
-                  {/* Busca de instância por número ou nome */}
+                  {/* Números virtuais (VirtualSMS) — só admin */}
+                  {isAdmin && (
+                    <NumerosVirtuaisPanel
+                      onConectar={(numero) => {
+                        const limpo = String(numero).replace(/\D/g, '');
+                        setEditingInstance({ nome: '', telefone: limpo, server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' });
+                        setConnectMethod('code');
+                        setPairingPhone(limpo);
+                        setQrStep('idle');
+                        setQrImage(null);
+                        setPairingCode(null);
+                        toast.info('Preencha o nome da instância, salve e gere o código de pareamento.');
+                      }}
+                    />
+                  )}
+
+
                   {instances.length > 0 && (
                     <div className="flex items-center gap-2">
                       <div className="relative flex-1 max-w-sm">
