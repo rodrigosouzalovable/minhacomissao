@@ -1658,11 +1658,8 @@ export default function Acionamento() {
 
       // Step 2: Fetch QR code or pairing code
       const usePhone = connectMethod === 'code' ? normalizePairingPhone(pairingPhone) : '';
-      const { data: qrData, error: qrError } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', userId: user.id, instanceId, phone: usePhone || undefined },
-      });
+      const qrData = await invokeQrWithRetry({ action: 'qr', userId: user.id, instanceId, phone: usePhone || undefined });
 
-      if (qrError) throw qrError;
 
       if (qrData?.alreadyConnected) {
         const { data: refreshed } = await supabase
