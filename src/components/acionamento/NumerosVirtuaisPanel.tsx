@@ -295,18 +295,25 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Webhook URL</Label>
+            <Label className="text-xs text-muted-foreground">Webhook URL (recomendada — já com token)</Label>
             <div className="flex gap-2">
-              <Input readOnly value={webhookQuery.data?.webhook_url || ''} className="h-8 font-mono text-xs" />
+              <Input
+                readOnly
+                value={webhookQuery.data?.webhook_url_token || webhookQuery.data?.webhook_url || ''}
+                className="h-8 font-mono text-xs"
+              />
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => copiar(webhookQuery.data?.webhook_url || '')}
+                onClick={() => copiar(webhookQuery.data?.webhook_url_token || webhookQuery.data?.webhook_url || '')}
                 disabled={!webhookQuery.data?.webhook_url}
               >
                 <Copy className="h-3.5 w-3.5" />
               </Button>
             </div>
+            <p className="text-[11px] text-muted-foreground">
+              Use esta URL no site: o token já autentica o evento, independente do formato de assinatura do provedor.
+            </p>
           </div>
 
           <div className="space-y-1">
@@ -332,11 +339,26 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
             </div>
           </div>
 
+          {webhookQuery.data?.ultima_rejeicao_em && !webhookAtivo && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 space-y-1">
+              <p className="text-xs font-medium text-destructive">
+                Última tentativa recusada em {new Date(webhookQuery.data.ultima_rejeicao_em).toLocaleString('pt-BR')}
+              </p>
+              <p className="text-[11px] text-muted-foreground">{webhookQuery.data.ultima_rejeicao_motivo}</p>
+              {webhookQuery.data.ultima_rejeicao_debug && (
+                <p className="text-[10px] font-mono break-all text-muted-foreground/80">
+                  {webhookQuery.data.ultima_rejeicao_debug}
+                </p>
+              )}
+            </div>
+          )}
+
           <p className="text-xs text-muted-foreground">
-            Em virtualsms.de → Dashboard → Webhook Configuration: cole a URL e a Secret Key acima, marque
-            <strong> SMS Received</strong> e <strong>Status Changed</strong> e salve. Com isso o código chega na hora,
-            mesmo com esta aba fechada.
+            Em virtualsms.de → Dashboard → Webhook Configuration: cole a <strong>URL com token</strong> acima, cole a
+            Secret Key no campo Secret Key, marque <strong>SMS Received</strong> e <strong>Status Changed</strong> e
+            salve. Com isso o código chega na hora, mesmo com esta aba fechada.
           </p>
+
         </div>
 
 
