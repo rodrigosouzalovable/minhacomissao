@@ -155,8 +155,39 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => resolve(pc.localDescription?.sdp ?? ''), 3000);
   });
 
+  // ---------- tradução de erros da função de chamadas ----------
+  const erroLegivel = async (error: any, data: any): Promise<string> => {
+    if (data?.error) return String(data.details ? `${data.error} — ${data.details}` : data.error);
+    const bruto = String(error?.message ?? '');
+    // erro de rede/deploy: o navegador não conseguiu falar com o backend
+    if (/Failed to send a request|Failed to fetch|NetworkError|FunctionsFetchError/i.test(bruto)) {
+      return 'O recurso de chamadas não respondeu no servidor. Tente novamente em alguns segundos; se continuar, o serviço de chamadas está indisponível.';
+    }
+    // resposta HTTP de erro: tenta ler o corpo para mostrar o motivo real
+    try {
+      const ctx = error?.context;
+      if (ctx && typeof ctx.text === 'function') {
+        const txt = await ctx.text();
+        try {
+          const j = JSON.parse(txt);
+          if (j?.error) return String(j.details ? `${j.error} — ${j.details}` : j.error);
+        } catch { /* corpo não-JSON */ }
+        if (txt) return txt.slice(0, 300);
+      }
+    } catch { /* ignora */ }
+    return bruto || 'Erro desconhecido';
+  };
+
   // ---------- pedido de permissão ----------
   const pedirPermissao = useCallback(async (a: Alvo) => {
+    if (!comChamada.has(a.instancia_id)) {
+      toast({
+        title: 'Chamadas de voz desligadas neste número',
+        description: 'Ative em API Oficial Meta → card da instância → botão "Chamadas". O número também precisa ter Chamadas (Calling) habilitado no painel da Meta.',
+        variant: 'destructive',
+      });
+      return false;
+    }
     const { data, error } = await supabase.functions.invoke('meta-call-permission-request', {
       body: {
         instancia_id: a.instancia_id, telefone: dig(a.telefone),
@@ -166,7 +197,7 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     if (error || !data?.ok) {
       toast({
         title: 'Não foi possível pedir a permissão',
-        description: data?.error || error?.message || 'Erro desconhecido',
+        description: await erroLegivel(error, data),
         variant: 'destructive',
       });
       return false;
@@ -177,7 +208,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     });
     await recarregarPermissoes();
     return true;
-  }, [toast, recarregarPermissoes]);
+  }, [toast, recarregarPermissoes, comChamada]);
+
 
   // ---------- chamada de saída ----------
   const ligar = useCallback(async (a: Alvo) => {
