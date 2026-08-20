@@ -8,6 +8,7 @@ import {
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
+  nomePerfilConfiavel, extrairNomeInformado,
 
 } from '../_shared/iago.ts';
 
@@ -423,7 +424,33 @@ Deno.serve(async (req) => {
       }
     }
 
-    const nomeCliente = proposta?.nomeCliente || nomePorTelefone || (contato as any).nome || '';
+    // ===== Nome do cliente: cadastro > informado por ele > perfil do WhatsApp (só se confiável) =====
+    const ctxNome = (estado.contexto || {}) as any;
+    let nomeInformado = String(ctxNome.nome_informado || '').trim();
+    let nomePedido = !!ctxNome.nome_pedido;
+    const nomePerfil = String((contato as any).nome || '').trim();
+    const perfilOk = nomePerfilConfiavel(nomePerfil);
+
+    if (!nomeInformado && !proposta?.nomeCliente && !nomePorTelefone) {
+      const detectado = extrairNomeInformado(textoAtual);
+      if (detectado && (nomePedido || !perfilOk)) {
+        nomeInformado = detectado;
+        await supabase.from('iago_conversa_estado')
+          .update({ contexto: { ...ctxNome, nome_informado: detectado, nome_pedido: true } })
+          .eq('id', estado.id);
+        estado.contexto = { ...ctxNome, nome_informado: detectado, nome_pedido: true };
+        nomePedido = true;
+        // Corrige o nome do contato quando o que está salvo é só o perfil do WhatsApp
+        if (!perfilOk) {
+          await supabase.from('meta_whatsapp_contatos')
+            .update({ nome: detectado }).eq('id', contato_id);
+        }
+        console.log('[IAGO] nome do cliente gravado', { contato_id, nome: detectado });
+      }
+    }
+
+    const nomeCliente = proposta?.nomeCliente || nomePorTelefone || nomeInformado || (perfilOk ? nomePerfil : '');
+    const precisaPerguntarNome = !nomeCliente && !nomePedido;
 
 
     // ===== Cliente já tem acordo => humano assume =====
@@ -454,7 +481,7 @@ Deno.serve(async (req) => {
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
       qualificacoes: await quals(),
-      propostaPrevia, respostaAutomatica,
+      propostaPrevia, respostaAutomatica, precisaPerguntarNome,
     });
 
 
@@ -607,6 +634,8 @@ Deno.serve(async (req) => {
         opcao_escolhida: escolha || null,
         data_pagamento: dataAcordada,
         reperguntou_data: reperguntouData,
+        nome_informado: nomeInformado || (estado.contexto || {}).nome_informado || null,
+        nome_pedido: nomePedido || precisaPerguntarNome,
       },
 
     }).eq('id', estado.id);
@@ -671,6 +700,7 @@ async function gerarResposta(args: {
   qualificacoes?: QualificacaoIA[];
   propostaPrevia?: { valor: string; texto: string } | null;
   respostaAutomatica?: boolean;
+  precisaPerguntarNome?: boolean;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
@@ -679,7 +709,7 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica,
+    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome,
   } = args;
 
 
@@ -762,6 +792,13 @@ async function gerarResposta(args: {
 
     cpfPorTelefone && nomeCliente
       ? `CONFIRMAÇÃO LEVE: na primeira mensagem confirme a identidade pelo nome, ex.: "Falo com ${primeiroNome(nomeCliente)}?" e já siga a conversa.`
+      : '',
+    'NOME DO CLIENTE: é PROIBIDO deduzir o nome da pessoa a partir do nome/descrição do perfil do WhatsApp (coisas como "Deus é Fiel", nome de loja, apelido). Use nome APENAS quando ele estiver informado abaixo.',
+    nomeCliente
+      ? `Use o primeiro nome do cliente com naturalidade (sem repetir em toda mensagem): ${primeiroNome(nomeCliente)}.`
+      : '',
+    precisaPerguntarNome
+      ? 'AINDA NÃO SEI O NOME DESTE CLIENTE: responda normalmente o que ele pediu e, na mesma leva de mensagens, pergunte o nome de forma natural (ex.: "Antes de continuar, como você se chama?"). Nunca chame o cliente por nenhum nome nesta resposta. Se ele não quiser informar, siga o atendimento sem insistir.'
       : '',
     'IDENTIDADE NEGADA: se o cliente disser que não é a pessoa procurada, que é número errado/engano ou que não conhece essa pessoa, responda APENAS uma mensagem curta agradecendo e encerrando o contato (ex.: "Entendi, obrigado pela atenção e desculpe o incômodo!"). Nesse caso é PROIBIDO pedir CPF, citar o credor/empresa, valores ou proposta. Use escalar=false.',
     cpfPorTelefone && multiplosCandidatos

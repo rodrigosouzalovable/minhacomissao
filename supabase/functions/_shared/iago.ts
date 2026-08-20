@@ -21,6 +21,101 @@ export const primeiroNome = (nome?: string | null) => {
   return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : '';
 };
 
+const semAcento = (v: unknown) =>
+  String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/** Palavras que denunciam nome de perfil do WhatsApp que NÃO é nome de pessoa. */
+const PALAVRAS_NAO_PESSOA = new Set([
+  'deus', 'jesus', 'cristo', 'fiel', 'fe', 'senhor', 'gloria', 'amem', 'aleluia', 'abencoado',
+  'abencoada', 'deusefiel', 'oficial', 'loja', 'lojas', 'empresa', 'contato', 'atendimento',
+  'vendas', 'comercial', 'suporte', 'servicos', 'servico', 'delivery', 'transportes', 'transporte',
+  'me', 'mei', 'ltda', 'eireli', 'imoveis', 'auto', 'pecas', 'moveis', 'variedades', 'distribuidora',
+  'mercado', 'mercadinho', 'barbearia', 'salao', 'studio', 'estudio', 'clinica', 'construcao',
+  'materiais', 'financeira', 'credito', 'consultoria', 'representante', 'trabalho', 'casa',
+  'familia', 'amor', 'vida', 'sonho', 'sonhos', 'guerreiro', 'guerreira', 'top', 'zap', 'whats',
+  'whatsapp', 'novo', 'nova', 'numero', 'tel', 'telefone', 'cliente', 'admin', 'grupo',
+]);
+
+/**
+ * Diz se o nome vindo do perfil do WhatsApp (pushName) pode ser tratado como nome real da pessoa.
+ * Rejeita frases religiosas, razões sociais, apelidos com símbolos/números e nomes longos.
+ */
+export function nomePerfilConfiavel(nome?: string | null): boolean {
+  const bruto = String(nome || '').trim();
+  if (bruto.length < 3 || bruto.length > 40) return false;
+  // símbolos, emojis, números ou pontuação => não é nome de pessoa
+  if (/[^\p{L}\s.'-]/u.test(bruto)) return false;
+  const partes = semAcento(bruto).split(/\s+/).filter(Boolean);
+  if (!partes.length || partes.length > 3) return false;
+  if (partes.some((p) => PALAVRAS_NAO_PESSOA.has(p))) return false;
+  // primeiro nome muito curto (iniciais/abreviações)
+  if (partes[0].length < 3) return false;
+  return true;
+}
+
+const PALAVRAS_NAO_NOME = new Set([
+  'sim', 'nao', 'ok', 'okay', 'obrigado', 'obrigada', 'bom', 'boa', 'dia', 'tarde', 'noite',
+  'oi', 'ola', 'blz', 'beleza', 'certo', 'entendi', 'quem', 'aqui', 'nada', 'agora', 'depois',
+  'boleto', 'pix', 'divida', 'acordo', 'valor', 'parcela', 'cpf', 'pode', 'quero', 'preciso',
+  'desempregado', 'ainda', 'talvez', 'moco', 'senhor', 'senhora', 'amigo', 'amiga', 'irmao',
+]);
+
+/**
+ * Extrai o nome que o cliente informou na mensagem ("meu nome é X", "sou o X", "aqui é X"
+ * ou o nome isolado logo depois de perguntarmos). Retorna '' quando não há nome claro.
+ */
+export function extrairNomeInformado(texto?: string | null): string {
+  const bruto = String(texto || '').trim();
+  if (!bruto) return '';
+  if (/\d/.test(bruto.replace(/\s/g, '')) && soDigitos(bruto).length >= 6) return '';
+
+  const limpar = (v: string) =>
+    v.replace(/[^\p{L}\s'-]/gu, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(' ')
+      .trim();
+
+  const validar = (cand: string): string => {
+    const nome = limpar(cand);
+    if (!nome) return '';
+    const partes = semAcento(nome).split(/\s+/);
+    if (partes[0].length < 3) return '';
+    if (partes.some((p) => PALAVRAS_NAO_NOME.has(p) || PALAVRAS_NAO_PESSOA.has(p))) return '';
+    if (nome.length > 40) return '';
+    return nome
+      .split(/\s+/)
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  const t = semAcento(bruto);
+  const padroes = [
+    /(?:meu\s+nome\s+(?:e|eh|é)|me\s+chamo|pode\s+me\s+chamar\s+de|aqui\s+(?:e|eh|é)|(?:e|eh|é)\s+(?:o|a)\s+)([a-z\s']{3,40})/,
+    /\bsou\s+(?:o|a)\s+([a-z\s']{3,40})/,
+    /\bsou\s+([a-z\s']{3,40})/,
+  ];
+  for (const re of padroes) {
+    const m = t.match(re);
+    if (m) {
+      // reconstrói o trecho original (com acentos) pela posição
+      const inicio = t.indexOf(m[1]);
+      const original = inicio >= 0 ? bruto.slice(inicio, inicio + m[1].length) : m[1];
+      const nome = validar(original);
+      if (nome) return nome;
+    }
+  }
+
+  // Mensagem curta contendo apenas o nome (resposta direta à pergunta)
+  const palavras = bruto.split(/\s+/).filter(Boolean);
+  if (palavras.length <= 3 && !/[?!]/.test(bruto)) {
+    const nome = validar(bruto);
+    if (nome) return nome;
+  }
+  return '';
+}
+
 export const cpfFormatado = (cpf: string) => {
   const d = soDigitos(cpf);
   if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
