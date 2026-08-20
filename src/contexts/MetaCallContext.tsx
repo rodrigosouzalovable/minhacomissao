@@ -291,7 +291,9 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     }
     setAlvo(a);
     setEstado('preparando');
+    direcaoRef.current = 'saida';
     try {
+
       const pc = await criarPc();
       const offer = await pc.createOffer({ offerToReceiveAudio: true });
       await pc.setLocalDescription(offer);
