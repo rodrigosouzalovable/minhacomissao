@@ -110,6 +110,18 @@ Deno.serve(async (req) => {
     }
     const inst = await carregarInstancia(supabase, instanciaId);
 
+    // Diagnóstico: mostra platform_type / status do número (útil quando a Meta recusa com #141000).
+    if (body?.diag === true) {
+      const r = await fetch(
+        `${GRAPH}/${inst.phone_number_id}?fields=display_phone_number,verified_name,platform_type,code_verification_status,quality_rating,status,throughput,is_official_business_account`,
+        { headers: { Authorization: `Bearer ${inst.access_token}` } },
+      );
+      const info = await r.json().catch(() => ({}));
+      const st = await lerStatus(inst);
+      return json({ ok: true, numero: info, calling: st.calling, status: st.status });
+    }
+
+
     if (typeof ativar === 'boolean') {
       const r = await ligarDesligar(inst, ativar);
       if (!r.ok) {
