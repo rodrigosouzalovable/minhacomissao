@@ -1,8 +1,10 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { ChamadaFlutuante } from '@/components/inbox/meta/ChamadaFlutuante';
 import { ChamadaEntrandoDialog } from '@/components/inbox/meta/ChamadaEntrandoDialog';
 
@@ -21,6 +23,7 @@ export type ChamadaRow = {
   erro: string | null;
   sdp_offer: string | null;
   sdp_answer: string | null;
+  funcionario_id?: string | null;
 };
 
 export type EstadoChamada = 'idle' | 'preparando' | 'chamando' | 'em_andamento' | 'encerrando';
