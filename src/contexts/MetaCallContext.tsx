@@ -448,20 +448,41 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   // permissões em tempo real (o cliente aceitou o pedido)
   useEffect(() => {
     const ch = supabase.channel('meta-call-perms')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_call_permissions' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_call_permissions' }, async (payload) => {
         const row = payload.new as any;
         if (!row?.instancia_id) return;
         setPermissoes(prev => ({
           ...prev,
           [`${row.instancia_id}:${dig(row.telefone)}`]: { status: row.status, expira_em: row.expira_em },
         }));
-        if (row.status === 'accepted') {
-          toast({ title: 'Cliente autorizou a chamada', description: 'Você já pode ligar para esse número.' });
-        }
+        if (row.status !== 'accepted') return;
+
+        const tel = dig(row.telefone);
+        const { data: ct } = await supabase.from('meta_whatsapp_contatos')
+          .select('id, nome, telefone')
+          .eq('instancia_id', row.instancia_id)
+          .like('telefone', `%${tel.slice(-8)}`)
+          .limit(1)
+          .maybeSingle();
+        const quem = [ct?.nome, ct?.telefone || tel].filter(Boolean).join(' — ');
+        toast({
+          title: 'Cliente autorizou a chamada',
+          description: `${quem}. Abra a conversa para ligar.`,
+          action: (
+            <ToastAction
+              altText="Abrir conversa"
+              onClick={() => navigate(
+                `/admin/inbox-meta?contato=${ct?.id ?? ''}&telefone=${tel}&instancia=${row.instancia_id}`,
+              )}
+            >
+              Abrir conversa
+            </ToastAction>
+          ),
+        });
       })
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
-  }, [toast]);
+  }, [toast, navigate]);
 
   const value = useMemo<Ctx>(() => ({
     estado, alvo, segundos, mudo, ligar, pedirPermissao, ligarOuPedirPermissao, encerrar, alternarMudo, permissaoDe,
