@@ -862,10 +862,14 @@ export default function EnvioMeta() {
         ? `MODO RAJADA CONTROLADA — envio paralelo por instância, com limite seguro de mensagens por segundo.\n\n`
         : "");
       const delayLinha = modoRajada ? `${Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1))} msg/s por instância` : `delay ${lo}-${hi}s`;
+      const tplLinha = variantesGroups.length > 1
+        ? `${variantesGroups.length} templates alternados (${variantesGroups.map((g) => g.nome).join(", ")})`
+        : `template "${template.nome_template}"`;
       if (!confirm(
-        `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
+        `${bloco}Disparar ${tplLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
+
     
     }
 
