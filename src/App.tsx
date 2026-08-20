@@ -12,6 +12,8 @@ import { AutoSendProvider } from "@/hooks/useAutoSend";
 import { WhatsAppSendingProvider } from "@/contexts/WhatsAppSendingContext";
 import { VoiceCampaignSendingProvider } from "@/contexts/VoiceCampaignSendingContext";
 import { EnvioMetaSendingProvider } from "@/contexts/EnvioMetaSendingContext";
+import { MetaCallProvider } from "@/contexts/MetaCallContext";
+
 import CampanhasFlutuante from "@/components/meta/CampanhasFlutuante";
 
 // Code-split: each route becomes its own chunk to reduce initial bundle.
