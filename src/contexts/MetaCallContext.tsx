@@ -217,6 +217,14 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       toast({ title: 'Já existe uma chamada em andamento', variant: 'destructive' });
       return;
     }
+    if (!comChamada.has(a.instancia_id)) {
+      toast({
+        title: 'Chamadas de voz desligadas neste número',
+        description: 'Ative em API Oficial Meta → card da instância → botão "Chamadas". O número também precisa ter Chamadas (Calling) habilitado no painel da Meta.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setAlvo(a);
     setEstado('preparando');
     try {
@@ -228,14 +236,14 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.functions.invoke('meta-call-start', {
         body: { instancia_id: a.instancia_id, telefone: dig(a.telefone), contato_id: a.contato_id ?? null, sdp },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await erroLegivel(error, data));
       if (!data?.ok) {
         if (data?.precisa_permissao) {
           limpar();
           await pedirPermissao(a);
           return;
         }
-        throw new Error(data?.error || 'Falha ao iniciar a chamada');
+        throw new Error(await erroLegivel(null, data));
       }
       callIdRef.current = data.call_id;
       chamadaIdRef.current = data.chamada_id ?? null;
@@ -245,7 +253,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       limpar();
       toast({ title: 'Chamada não iniciada', description: msg, variant: 'destructive' });
     }
-  }, [estado, criarPc, toast, limpar, pedirPermissao]);
+  }, [estado, criarPc, toast, limpar, pedirPermissao, comChamada]);
+
 
   const encerrar = useCallback(async () => {
     const callId = callIdRef.current;
