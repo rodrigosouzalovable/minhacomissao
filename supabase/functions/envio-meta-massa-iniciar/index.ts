@@ -166,7 +166,12 @@ Deno.serve(async (req) => {
     const allTemplateIds = Array.from(new Set([
       template.id,
       ...Object.values(templateIdByInstance || {}).filter(Boolean) as string[],
+      ...templateVariantes.flatMap((v) => [
+        v?.template_id,
+        ...Object.values(v?.template_id_by_instance || {}),
+      ]).filter(Boolean) as string[],
     ]));
+
     const { data: tplCats } = await supabase
       .from('meta_whatsapp_templates')
       .select('id, nome_template, categoria')
