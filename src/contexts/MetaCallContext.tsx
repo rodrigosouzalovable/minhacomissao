@@ -428,10 +428,11 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   }, [toast]);
 
   const value = useMemo<Ctx>(() => ({
-    estado, alvo, segundos, mudo, ligar, pedirPermissao, encerrar, alternarMudo, permissaoDe, recarregarPermissoes,
-    chamadasHabilitadas, recarregarInstanciasComChamada,
-  }), [estado, alvo, segundos, mudo, ligar, pedirPermissao, encerrar, alternarMudo, permissaoDe, recarregarPermissoes,
-    chamadasHabilitadas, recarregarInstanciasComChamada]);
+    estado, alvo, segundos, mudo, ligar, pedirPermissao, ligarOuPedirPermissao, encerrar, alternarMudo, permissaoDe,
+    recarregarPermissoes, revalidarPermissao, chamadasHabilitadas, recarregarInstanciasComChamada,
+  }), [estado, alvo, segundos, mudo, ligar, pedirPermissao, ligarOuPedirPermissao, encerrar, alternarMudo, permissaoDe,
+    recarregarPermissoes, revalidarPermissao, chamadasHabilitadas, recarregarInstanciasComChamada]);
+
 
 
   return (
