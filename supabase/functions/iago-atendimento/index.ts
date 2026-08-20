@@ -792,6 +792,13 @@ async function gerarResposta(args: {
     cpfPorTelefone && nomeCliente
       ? `CONFIRMAÇÃO LEVE: na primeira mensagem confirme a identidade pelo nome, ex.: "Falo com ${primeiroNome(nomeCliente)}?" e já siga a conversa.`
       : '',
+    'NOME DO CLIENTE: é PROIBIDO deduzir o nome da pessoa a partir do nome/descrição do perfil do WhatsApp (coisas como "Deus é Fiel", nome de loja, apelido). Use nome APENAS quando ele estiver informado abaixo.',
+    nomeCliente
+      ? `Use o primeiro nome do cliente com naturalidade (sem repetir em toda mensagem): ${primeiroNome(nomeCliente)}.`
+      : '',
+    precisaPerguntarNome
+      ? 'AINDA NÃO SEI O NOME DESTE CLIENTE: responda normalmente o que ele pediu e, na mesma leva de mensagens, pergunte o nome de forma natural (ex.: "Antes de continuar, como você se chama?"). Nunca chame o cliente por nenhum nome nesta resposta. Se ele não quiser informar, siga o atendimento sem insistir.'
+      : '',
     'IDENTIDADE NEGADA: se o cliente disser que não é a pessoa procurada, que é número errado/engano ou que não conhece essa pessoa, responda APENAS uma mensagem curta agradecendo e encerrando o contato (ex.: "Entendi, obrigado pela atenção e desculpe o incômodo!"). Nesse caso é PROIBIDO pedir CPF, citar o credor/empresa, valores ou proposta. Use escalar=false.',
     cpfPorTelefone && multiplosCandidatos
       ? 'ATENÇÃO: este telefone está vinculado a mais de um cadastro. Confirme o nome do cliente ANTES de apresentar qualquer valor ou proposta.'
