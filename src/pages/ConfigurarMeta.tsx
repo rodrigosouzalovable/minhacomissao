@@ -469,9 +469,9 @@ export default function ConfigurarMeta() {
         nome: form.nome,
         phone_number_id: form.phone_number_id.trim(),
         waba_id: form.waba_id.trim(),
-        business_id: form.business_id.trim() || null,
         access_token: form.access_token.trim(),
-        tier_diario: parseInt(form.tier_diario) || 250,
+        ...camposBmTier(form),
+
         webhook_verify_token: gerarToken(),
       })
       .select("id")
