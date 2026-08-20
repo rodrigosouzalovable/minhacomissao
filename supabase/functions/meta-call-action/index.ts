@@ -64,7 +64,9 @@ Deno.serve(async (req) => {
       if (acao === 'accept') {
         patch.status = 'em_andamento';
         if (!chamada.funcionario_id && userId) patch.funcionario_id = userId;
-        if (sdp) patch.sdp_answer = sdp;
+        // não gravamos o SDP local em sdp_answer: esse campo é reservado à
+        // resposta do cliente em chamadas de saída
+
       } else if (acao === 'reject') {
         patch.status = 'rejeitada';
         patch.data_fim = new Date().toISOString();

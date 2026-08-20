@@ -80,6 +80,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   const callIdRef = useRef<string | null>(null);
   const chamadaIdRef = useRef<string | null>(null);
   const answerAplicadaRef = useRef(false);
+  const direcaoRef = useRef<'saida' | 'entrada' | null>(null);
+
 
   // ---------- permissões ----------
   const recarregarPermissoes = useCallback(async () => {
@@ -129,6 +131,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     callIdRef.current = null;
     chamadaIdRef.current = null;
     answerAplicadaRef.current = false;
+    direcaoRef.current = null;
+
     setSegundos(0);
     setMudo(false);
     setEstado('idle');
@@ -287,7 +291,9 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     }
     setAlvo(a);
     setEstado('preparando');
+    direcaoRef.current = 'saida';
     try {
+
       const pc = await criarPc();
       const offer = await pc.createOffer({ offerToReceiveAudio: true });
       await pc.setLocalDescription(offer);
@@ -352,7 +358,9 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setEstado('preparando');
+    direcaoRef.current = 'entrada';
     try {
+
       // o microfone é pedido antes de fechar o pop-up: se o navegador bloquear,
       // a chamada continua tocando e o atendente pode tentar de novo
       const pc = await criarPc();
@@ -420,17 +428,25 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
         if (!callIdRef.current || row.call_id !== callIdRef.current) return;
 
 
-        // resposta SDP do cliente (chamada de saída aceita)
-        if (row.sdp_answer && !answerAplicadaRef.current && pcRef.current) {
+        // resposta SDP do cliente — só vale para chamadas de saída aguardando resposta
+        const pc = pcRef.current;
+        if (
+          row.sdp_answer && !answerAplicadaRef.current && pc &&
+          direcaoRef.current === 'saida' && pc.signalingState === 'have-local-offer'
+        ) {
           answerAplicadaRef.current = true;
           try {
-            await pcRef.current.setRemoteDescription({ type: 'answer', sdp: row.sdp_answer });
+            await pc.setRemoteDescription({ type: 'answer', sdp: row.sdp_answer });
             setSegundos(0);
             setEstado('em_andamento');
-          } catch {
-            toast({ title: 'Falha no áudio da chamada', variant: 'destructive' });
+          } catch (e) {
+            console.error('[chamada] falha ao aplicar resposta de áudio', e);
+            if (estado !== 'em_andamento') {
+              toast({ title: 'Falha no áudio da chamada', variant: 'destructive' });
+            }
           }
         }
+
 
         if (['concluida', 'perdida', 'rejeitada', 'erro'].includes(row.status)) {
           const rotulos: Record<string, string> = {
