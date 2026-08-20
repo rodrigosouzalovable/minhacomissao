@@ -721,6 +721,35 @@ export default function ConfigurarMeta() {
     carregar();
   };
 
+  const toggleChamadas = async (inst: Instancia) => {
+    const ativar = !(inst as any).chamadas_habilitadas;
+    setChamadasBusy(inst.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-call-settings", {
+        body: { instancia_id: inst.id, ativar },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.ok) throw new Error(data?.error || "Falha ao alterar as chamadas de voz");
+      toast({
+        title: ativar ? "Chamadas de voz ativadas" : "Chamadas de voz desativadas",
+        description: ativar
+          ? "Este número já pode receber e fazer ligações pelo WhatsApp."
+          : "Este número não fará mais ligações pelo WhatsApp.",
+      });
+      carregar();
+    } catch (e) {
+      toast({
+        title: "Não foi possível alterar as chamadas",
+        description: e instanceof Error ? e.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setChamadasBusy(null);
+    }
+  };
+
+
+
   const excluir = async (inst: Instancia) => {
     if (!confirm(`Excluir instância "${inst.nome}"?`)) return;
     await supabase.from("meta_whatsapp_instances").delete().eq("id", inst.id);
