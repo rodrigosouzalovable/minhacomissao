@@ -14,8 +14,12 @@ export function ehNumeroInacessivel(erro: unknown, code?: unknown): boolean {
   const semObjeto = s.includes("does not exist") ||
     s.includes("cannot be loaded due to missing permissions") ||
     s.includes("unsupported post request");
-  return isCode100 && semObjeto;
+  // A Meta às vezes devolve só a frase, sem o "#100" no texto.
+  const fraseTipica = s.includes("unsupported post request") ||
+    (s.includes("object with id") && s.includes("does not exist"));
+  return (isCode100 && semObjeto) || fraseTipica;
 }
+
 
 /** Restringe a instância no pool e avisa o admin (idempotente por dia). */
 export async function tratarNumeroInacessivel(
