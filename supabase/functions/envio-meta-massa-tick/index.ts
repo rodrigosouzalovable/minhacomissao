@@ -319,7 +319,7 @@ async function processarItem(job: any): Promise<ItemResult> {
       await supabase.from('envio_meta_job_item')
         .update({ status: 'pendente', instancia_id: null, instancia_nome: null })
         .eq('id', pend.id);
-      const waitMs = 10 * 60_000;
+      const waitMs = await esperaAteJanela(supabase);
       await supabase.from('envio_meta_job').update({
         proximo_em: new Date(Date.now() + waitMs).toISOString(),
         status_motivo: sendResp.error,
