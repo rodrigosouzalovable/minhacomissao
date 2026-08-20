@@ -449,7 +449,7 @@ Deno.serve(async (req) => {
 
       const { data: pendentes } = await supabase
         .from('envio_meta_job_item')
-        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, instancia_nome, tentativas')
+        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, instancia_nome, tentativas, variante_idx')
         .eq('job_id', jobId)
         .eq('instancia_id', instanciaId)
         .eq('status', 'pendente')
