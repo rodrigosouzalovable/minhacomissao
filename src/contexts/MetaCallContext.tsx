@@ -181,7 +181,7 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
         const txt = await ctx.text();
         try {
           const j = JSON.parse(txt);
-          if (j?.error) return String(j.details ? `${j.error} — ${j.details}` : j.error);
+          if (j?.error) return String(detalheTexto(j.details) ? `${j.error} — ${detalheTexto(j.details)}` : j.error);
         } catch { /* corpo não-JSON */ }
         if (txt) return txt.slice(0, 300);
       }
