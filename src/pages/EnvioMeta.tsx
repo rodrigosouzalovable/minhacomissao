@@ -80,6 +80,20 @@ type Template = {
   categoria: string | null;
 };
 
+// Conta variáveis numéricas ({{1}}, {{2}}...) do cabeçalho TEXT + corpo do template.
+function contarVariaveis(t: { body_text?: string | null; variaveis?: any } | null | undefined): number {
+  if (!t) return 0;
+  const comps: any[] = Array.isArray(t?.variaveis?._components) ? t.variaveis._components : [];
+  const header = comps.find((c: any) => c?.type === "HEADER");
+  const headerText = header?.format === "TEXT" ? String(header?.text || "") : "";
+  const texto = `${headerText}\n${t.body_text || ""}`;
+  const set = new Set<string>();
+  const re = /\{\{\s*(\d+)\s*\}\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(texto)) !== null) set.add(m[1]);
+  return set.size;
+}
+
 type ClienteRow = {
   telefone: string;
   nome?: string;
