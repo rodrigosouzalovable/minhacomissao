@@ -178,6 +178,8 @@ export function AgendarCampanhaBox({
           template_nome: template.nome_template,
           instancia_ids: instanciaIds,
           template_id_by_instance: templateIdByInstance,
+          template_variantes: (templateVariantes && templateVariantes.length > 1) ? templateVariantes : null,
+
           min_seg: minSec,
           max_seg: maxSec,
           folga_cota: folga,
