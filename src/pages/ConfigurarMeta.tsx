@@ -517,9 +517,10 @@ export default function ConfigurarMeta() {
       nome: inst.nome || "",
       phone_number_id: inst.phone_number_id || "",
       waba_id: inst.waba_id || "",
-      business_id: inst.business_id || "",
+      meta_bm_id: inst.meta_bm_id || "__none__",
       access_token: "",
-      tier_diario: String(inst.tier_diario || 250),
+      messaging_limit_manual: inst.messaging_limit_manual || "__auto__",
+
     });
   };
 
