@@ -121,6 +121,30 @@ Deno.serve(async (req) => {
       return json({ ok: true, numero: info, calling: st.calling, status: st.status });
     }
 
+    // Diagnóstico de escrita: testa variantes do POST /settings para descobrir o formato aceito.
+    if (body?.diag_post === true) {
+      const variantes: Array<[string, string, Record<string, unknown>]> = [
+        ['v23 calling', 'v23.0', { calling: { status: 'ENABLED' } }],
+        ['v23 calling+mp', 'v23.0', { messaging_product: 'whatsapp', calling: { status: 'ENABLED' } }],
+        ['v24 calling', 'v24.0', { calling: { status: 'ENABLED' } }],
+        ['v26 calling', 'v26.0', { calling: { status: 'ENABLED' } }],
+      ];
+      const out: any[] = [];
+      for (const [nome, ver, corpo] of variantes) {
+        const r = await fetch(`https://graph.facebook.com/${ver}/${inst.phone_number_id}/settings`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(corpo),
+        });
+        const d = await r.json().catch(() => ({}));
+        out.push({ variante: nome, status: r.status, resposta: d });
+        await sleep(200);
+      }
+      return json({ ok: true, testes: out });
+    }
+
+
+
 
     if (typeof ativar === 'boolean') {
       const r = await ligarDesligar(inst, ativar);
