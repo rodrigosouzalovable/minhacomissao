@@ -2012,13 +2012,14 @@ export default function InboxMeta() {
                     const perm = instId ? permissaoDe(instId, contatoAtivo.telefone) : 'none';
                     const autorizado = perm === 'accepted';
                     const ocupado = estadoChamada !== 'idle';
+                    const vozOn = instId ? chamadasHabilitadas(instId) : false;
                     return (
                       <>
                         <Button
                           size="sm"
                           variant={autorizado ? 'default' : 'outline'}
                           className="h-7 w-7 p-0"
-                          disabled={!instId || ocupado}
+                          disabled={!instId || ocupado || !vozOn}
                           onClick={() => {
                             const alvo = {
                               contato_id: contatoAtivo.id,
@@ -2030,18 +2031,21 @@ export default function InboxMeta() {
                             else void pedirPermissao(alvo);
                           }}
                           title={
-                            ocupado
-                              ? 'Já existe uma chamada em andamento'
-                              : autorizado
-                                ? 'Ligar para o cliente pelo WhatsApp'
-                                : perm === 'pending'
-                                  ? 'Pedido de permissão enviado — reenviar'
-                                  : 'Pedir permissão do cliente para ligar'
+                            !vozOn
+                              ? 'Chamadas de voz desligadas neste número — ative em API Oficial Meta → card da instância → "Chamadas"'
+                              : ocupado
+                                ? 'Já existe uma chamada em andamento'
+                                : autorizado
+                                  ? 'Ligar para o cliente pelo WhatsApp'
+                                  : perm === 'pending'
+                                    ? 'Pedido de permissão enviado — reenviar'
+                                    : 'Pedir permissão do cliente para ligar'
                           }
                           aria-label="Ligar para o cliente"
                         >
                           <Phone className="h-3.5 w-3.5" />
                         </Button>
+
                         <Button
                           size="sm"
                           variant="outline"
