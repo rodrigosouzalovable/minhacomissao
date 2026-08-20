@@ -599,6 +599,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     if (!j) return null;
     if (j.status !== "rodando" && j.status !== "pausado") return null;
     const proximoMs = j.proximo_em ? new Date(j.proximo_em).getTime() - Date.now() : 0;
+    const motivo = j.status_motivo || "";
+    const aguardandoJanela = /fora do hor|abertura da janela|domingo/i.test(motivo);
     return {
       enviados: j.enviados,
       erros: j.erros,
@@ -606,7 +608,10 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       atualTelefone: j.atual_telefone || "",
       atualInstancia: j.atual_instancia || "",
       proximoEmSeg: Math.max(0, Math.ceil(proximoMs / 1000)),
+      aguardandoJanela,
+      janelaMotivo: aguardandoJanela ? motivo : undefined,
     };
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, tick]);
 
