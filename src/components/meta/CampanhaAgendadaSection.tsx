@@ -108,6 +108,9 @@ type Props = {
   instancias: InstanciaLite[];
   template: { id: string; nome_template: string } | null;
   templateIdByInstance: Record<string, string>;
+  /** Variação de templates (round-robin). Cada item traz o mapa de ids por instância. */
+  templateVariantes?: Array<{ template_id: string; nome_template: string; template_id_by_instance: Record<string, string> }>;
+
   minSec: number;
   maxSec: number;
   disabled?: boolean;
