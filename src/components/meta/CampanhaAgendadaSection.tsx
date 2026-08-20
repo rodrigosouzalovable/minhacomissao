@@ -123,6 +123,8 @@ export function AgendarCampanhaBox({
   instancias,
   template,
   templateIdByInstance,
+  templateVariantes,
+
   minSec,
   maxSec,
   disabled,
