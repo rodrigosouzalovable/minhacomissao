@@ -422,11 +422,16 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
         const row = payload.new as ChamadaRow | undefined;
         if (!row) return;
 
-        // chamada de entrada tocando — só toca para o atendente vinculado à conversa
+        // chamada de entrada tocando — toca para o atendente vinculado à conversa.
+        // Sem atendente identificado, cai para os administradores (rede de segurança).
         if (row.tipo_chamada === 'entrada' && row.status === 'ringing' && row.sdp_offer && estado === 'idle') {
-          if (row.funcionario_id && row.funcionario_id === meuIdRef.current) setEntrando(row);
+          const paraMim = row.funcionario_id
+            ? row.funcionario_id === meuIdRef.current
+            : souAdminRef.current;
+          if (paraMim) setEntrando(row);
           return;
         }
+
 
         // a chamada exibida no pop-up deixou de tocar -> fecha e para o toque
         if (row.status !== 'ringing') {
