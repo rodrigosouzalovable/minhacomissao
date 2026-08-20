@@ -380,7 +380,15 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => undefined);
   }, []);
 
+  // rede de segurança: nenhuma chamada da Meta fica tocando mais de ~45s
+  useEffect(() => {
+    if (!entrando) return;
+    const t = setTimeout(() => setEntrando(null), 45_000);
+    return () => clearTimeout(t);
+  }, [entrando?.id]);
+
   // ---------- realtime: respostas SDP, encerramentos e chamadas de entrada ----------
+
   useEffect(() => {
     const ch = supabase.channel('meta-chamadas-global')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_chamadas' }, async (payload) => {
