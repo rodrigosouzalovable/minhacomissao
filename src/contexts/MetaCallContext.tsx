@@ -131,6 +131,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     callIdRef.current = null;
     chamadaIdRef.current = null;
     answerAplicadaRef.current = false;
+    direcaoRef.current = null;
+
     setSegundos(0);
     setMudo(false);
     setEstado('idle');
