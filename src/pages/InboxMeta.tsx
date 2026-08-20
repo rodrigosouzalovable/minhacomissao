@@ -58,6 +58,7 @@ import {
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
+import { humanizarErroEnvio } from '@/lib/humanizarErroEnvio';
 import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 
@@ -1180,7 +1181,7 @@ export default function InboxMeta() {
           setMensagens(prev => prev.filter(m => m.id !== tempId));
         } catch (e: any) {
           setMensagens(prev => prev.map(m => m.id === tempId ? { ...m, status_envio: 'erro' } : m));
-          toast({ title: 'Erro ao enviar', description: e.message, variant: 'destructive' });
+          toast({ title: 'Erro ao enviar', description: humanizarErroEnvio(e.message), variant: 'destructive', duration: 12000 });
           break;
         }
       }
@@ -1260,7 +1261,7 @@ export default function InboxMeta() {
       setRespondendo(null);
       setArquivoParaConfirmar(null);
     } catch (e: any) {
-      toast({ title: 'Erro ao enviar mídia', description: e.message, variant: 'destructive' });
+      toast({ title: 'Erro ao enviar mídia', description: humanizarErroEnvio(e.message), variant: 'destructive', duration: 12000 });
     } finally {
       setEnviandoArquivo(false);
     }

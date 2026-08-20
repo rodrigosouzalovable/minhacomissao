@@ -80,6 +80,8 @@ export function ReabrirComTemplateDialog({
           instancia_id,
           cliente: { telefone: telefone.replace(/\D/g, ''), nome: nomeVar.trim() || contato_nome || undefined },
           atendente_nome: atendente_nome?.trim() || undefined,
+          // Resposta manual a um cliente: qualidade YELLOW/RED não bloqueia.
+          ignorar_pausa_qualidade: true,
         },
       });
       if (error) throw new Error(error.message);
