@@ -253,19 +253,20 @@ export default function ConfigurarMeta() {
     nome: "",
     phone_number_id: "",
     waba_id: "",
-    business_id: "",
+    meta_bm_id: "__none__",
     access_token: "",
-    tier_diario: "250",
+    messaging_limit_manual: "__auto__",
   });
   const [salvandoEdit, setSalvandoEdit] = useState(false);
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
     waba_id: "",
-    business_id: "",
+    meta_bm_id: "__none__",
     access_token: "",
-    tier_diario: "250",
+    messaging_limit_manual: "__auto__",
   });
+
   const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
 
 
@@ -390,13 +391,42 @@ export default function ConfigurarMeta() {
     return msg;
   };
 
+  const TIER_VALORES: Record<string, number> = {
+    TIER_250: 250,
+    TIER_1K: 1000,
+    TIER_2K: 2000,
+    TIER_10K: 10000,
+    TIER_100K: 100000,
+    TIER_UNLIMITED: 1000000,
+  };
+
+  const camposBmTier = (f: { meta_bm_id: string; messaging_limit_manual: string }) => {
+    const bm = f.meta_bm_id !== "__none__" ? bms.find((b) => b.id === f.meta_bm_id) : null;
+    const manual = f.messaging_limit_manual !== "__auto__" ? f.messaging_limit_manual : null;
+    return {
+      meta_bm_id: bm ? bm.id : null,
+      business_id: (bm as any)?.business_id || null,
+      messaging_limit_manual: manual,
+      messaging_limit_source: manual ? "manual" : "padrao",
+      tier_diario: manual ? TIER_VALORES[manual] || 250 : 1000,
+    };
+  };
+
+  const FORM_VAZIO = {
+    nome: "",
+    phone_number_id: "",
+    waba_id: "",
+    meta_bm_id: "__none__",
+    access_token: "",
+    messaging_limit_manual: "__auto__",
+  };
+
   const atualizarDuplicado = async () => {
     if (!duplicado) return;
     const patch: any = {
       nome: form.nome.trim(),
       waba_id: form.waba_id.trim(),
-      business_id: form.business_id.trim() || null,
-      tier_diario: parseInt(form.tier_diario) || 250,
+      ...camposBmTier(form),
     };
     if (form.access_token.trim()) patch.access_token = form.access_token.trim();
     const { error } = await supabase
@@ -407,9 +437,10 @@ export default function ConfigurarMeta() {
     toast.success("Instância existente atualizada");
     setDuplicado(null);
     setDialogOpen(false);
-    setForm({ nome: "", phone_number_id: "", waba_id: "", business_id: "", access_token: "", tier_diario: "250" });
+    setForm(FORM_VAZIO);
     carregar();
   };
+
 
   const adicionar = async () => {
     if (!form.nome || !form.phone_number_id || !form.waba_id || !form.access_token) {
@@ -438,9 +469,9 @@ export default function ConfigurarMeta() {
         nome: form.nome,
         phone_number_id: form.phone_number_id.trim(),
         waba_id: form.waba_id.trim(),
-        business_id: form.business_id.trim() || null,
         access_token: form.access_token.trim(),
-        tier_diario: parseInt(form.tier_diario) || 250,
+        ...camposBmTier(form),
+
         webhook_verify_token: gerarToken(),
       })
       .select("id")
@@ -451,7 +482,7 @@ export default function ConfigurarMeta() {
     }
     toast.success("Instância adicionada");
     setDialogOpen(false);
-    setForm({ nome: "", phone_number_id: "", waba_id: "", business_id: "", access_token: "", tier_diario: "250" });
+    setForm(FORM_VAZIO);
     carregar();
 
     // Auto-inscrever webhook para começar a receber mensagens
@@ -486,9 +517,10 @@ export default function ConfigurarMeta() {
       nome: inst.nome || "",
       phone_number_id: inst.phone_number_id || "",
       waba_id: inst.waba_id || "",
-      business_id: inst.business_id || "",
+      meta_bm_id: inst.meta_bm_id || "__none__",
       access_token: "",
-      tier_diario: String(inst.tier_diario || 250),
+      messaging_limit_manual: inst.messaging_limit_manual || "__auto__",
+
     });
   };
 
@@ -514,8 +546,8 @@ export default function ConfigurarMeta() {
       nome: editForm.nome.trim(),
       phone_number_id: editForm.phone_number_id.trim(),
       waba_id: editForm.waba_id.trim(),
-      business_id: editForm.business_id.trim() || null,
-      tier_diario: parseInt(editForm.tier_diario) || 250,
+      ...camposBmTier(editForm),
+
     };
     if (editForm.access_token.trim()) patch.access_token = editForm.access_token.trim();
     const { error } = await supabase
@@ -1539,18 +1571,45 @@ export default function ConfigurarMeta() {
               <Input value={form.waba_id} onChange={(e) => setForm({ ...form, waba_id: e.target.value })} placeholder="Ex: 987654321098765" />
             </div>
             <div>
-              <Label>Business Manager ID (opcional)</Label>
-              <Input value={form.business_id} onChange={(e) => setForm({ ...form, business_id: e.target.value })} />
+              <Label>Business Manager</Label>
+              <Select value={form.meta_bm_id} onValueChange={(v) => setForm({ ...form, meta_bm_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecionar BM" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Não vinculada —</SelectItem>
+                  {bms.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {bms.length === 0
+                  ? 'Cadastre BMs em "Business Managers" para vincular'
+                  : "O limite diário de disparos é definido na BM e compartilhado por todos os WhatsApps vinculados a ela."}
+              </p>
             </div>
             <div>
               <Label>Access Token (permanente) *</Label>
               <Input type="password" value={form.access_token} onChange={(e) => setForm({ ...form, access_token: e.target.value })} placeholder="EAAxxxxx..." />
             </div>
             <div>
-              <Label>Tier diário inicial</Label>
-              <Input type="number" value={form.tier_diario} onChange={(e) => setForm({ ...form, tier_diario: e.target.value })} />
+              <Label>Limite de mensagens</Label>
+              <Select value={form.messaging_limit_manual} onValueChange={(v) => setForm({ ...form, messaging_limit_manual: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__auto__">🔄 Automático (padrão TIER_1K)</SelectItem>
+                  <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
+                  <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
+                  <SelectItem value="TIER_2K">✋ TIER_2K (2.000/dia)</SelectItem>
+                  <SelectItem value="TIER_10K">✋ TIER_10K (10.000/dia)</SelectItem>
+                  <SelectItem value="TIER_100K">✋ TIER_100K (100.000/dia)</SelectItem>
+                  <SelectItem value="TIER_UNLIMITED">✋ Ilimitado</SelectItem>
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground mt-1">Meta começa em 250 e escala para 1k → 10k → 100k</p>
             </div>
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
@@ -1577,8 +1636,23 @@ export default function ConfigurarMeta() {
               <Input value={editForm.waba_id} onChange={(e) => setEditForm({ ...editForm, waba_id: e.target.value })} />
             </div>
             <div>
-              <Label>Business Manager ID (opcional)</Label>
-              <Input value={editForm.business_id} onChange={(e) => setEditForm({ ...editForm, business_id: e.target.value })} />
+              <Label>Business Manager</Label>
+              <Select value={editForm.meta_bm_id} onValueChange={(v) => setEditForm({ ...editForm, meta_bm_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecionar BM" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Não vinculada —</SelectItem>
+                  {bms.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {bms.length === 0
+                  ? 'Cadastre BMs em "Business Managers" para vincular'
+                  : "O limite diário de disparos é definido na BM e compartilhado por todos os WhatsApps vinculados a ela."}
+              </p>
             </div>
             <div>
               <Label>Access Token (deixe em branco para manter o atual)</Label>
@@ -1586,9 +1660,21 @@ export default function ConfigurarMeta() {
               <p className="text-xs text-muted-foreground mt-1">Só preencha se quiser substituir o token permanente.</p>
             </div>
             <div>
-              <Label>Tier diário</Label>
-              <Input type="number" value={editForm.tier_diario} onChange={(e) => setEditForm({ ...editForm, tier_diario: e.target.value })} />
+              <Label>Limite de mensagens</Label>
+              <Select value={editForm.messaging_limit_manual} onValueChange={(v) => setEditForm({ ...editForm, messaging_limit_manual: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__auto__">🔄 Automático (padrão TIER_1K)</SelectItem>
+                  <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
+                  <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
+                  <SelectItem value="TIER_2K">✋ TIER_2K (2.000/dia)</SelectItem>
+                  <SelectItem value="TIER_10K">✋ TIER_10K (10.000/dia)</SelectItem>
+                  <SelectItem value="TIER_100K">✋ TIER_100K (100.000/dia)</SelectItem>
+                  <SelectItem value="TIER_UNLIMITED">✋ Ilimitado</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditInst(null)} disabled={salvandoEdit}>Cancelar</Button>
