@@ -391,13 +391,42 @@ export default function ConfigurarMeta() {
     return msg;
   };
 
+  const TIER_VALORES: Record<string, number> = {
+    TIER_250: 250,
+    TIER_1K: 1000,
+    TIER_2K: 2000,
+    TIER_10K: 10000,
+    TIER_100K: 100000,
+    TIER_UNLIMITED: 1000000,
+  };
+
+  const camposBmTier = (f: { meta_bm_id: string; messaging_limit_manual: string }) => {
+    const bm = f.meta_bm_id !== "__none__" ? bms.find((b) => b.id === f.meta_bm_id) : null;
+    const manual = f.messaging_limit_manual !== "__auto__" ? f.messaging_limit_manual : null;
+    return {
+      meta_bm_id: bm ? bm.id : null,
+      business_id: (bm as any)?.business_id || null,
+      messaging_limit_manual: manual,
+      messaging_limit_source: manual ? "manual" : "padrao",
+      tier_diario: manual ? TIER_VALORES[manual] || 250 : 1000,
+    };
+  };
+
+  const FORM_VAZIO = {
+    nome: "",
+    phone_number_id: "",
+    waba_id: "",
+    meta_bm_id: "__none__",
+    access_token: "",
+    messaging_limit_manual: "__auto__",
+  };
+
   const atualizarDuplicado = async () => {
     if (!duplicado) return;
     const patch: any = {
       nome: form.nome.trim(),
       waba_id: form.waba_id.trim(),
-      business_id: form.business_id.trim() || null,
-      tier_diario: parseInt(form.tier_diario) || 250,
+      ...camposBmTier(form),
     };
     if (form.access_token.trim()) patch.access_token = form.access_token.trim();
     const { error } = await supabase
@@ -408,9 +437,10 @@ export default function ConfigurarMeta() {
     toast.success("Instância existente atualizada");
     setDuplicado(null);
     setDialogOpen(false);
-    setForm({ nome: "", phone_number_id: "", waba_id: "", business_id: "", access_token: "", tier_diario: "250" });
+    setForm(FORM_VAZIO);
     carregar();
   };
+
 
   const adicionar = async () => {
     if (!form.nome || !form.phone_number_id || !form.waba_id || !form.access_token) {
