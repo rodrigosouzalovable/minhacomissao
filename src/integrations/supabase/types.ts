@@ -3246,6 +3246,54 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_call_permissions: {
+        Row: {
+          atualizado_em: string
+          contato_id: string | null
+          expira_em: string | null
+          id: string
+          instancia_id: string | null
+          solicitado_em: string | null
+          status: string
+          telefone: string
+        }
+        Insert: {
+          atualizado_em?: string
+          contato_id?: string | null
+          expira_em?: string | null
+          id?: string
+          instancia_id?: string | null
+          solicitado_em?: string | null
+          status?: string
+          telefone: string
+        }
+        Update: {
+          atualizado_em?: string
+          contato_id?: string | null
+          expira_em?: string | null
+          id?: string
+          instancia_id?: string | null
+          solicitado_em?: string | null
+          status?: string
+          telefone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_call_permissions_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_call_permissions_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_campanha_agendada: {
         Row: {
           created_at: string
@@ -4723,6 +4771,7 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           business_id: string | null
+          chamadas_habilitadas: boolean
           criado_em: string
           data_ativacao_api: string | null
           display_phone: string | null
@@ -4781,6 +4830,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null
+          chamadas_habilitadas?: boolean
           criado_em?: string
           data_ativacao_api?: string | null
           display_phone?: string | null
@@ -4839,6 +4889,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null
+          chamadas_habilitadas?: boolean
           criado_em?: string
           data_ativacao_api?: string | null
           display_phone?: string | null
@@ -7335,6 +7386,81 @@ export type Database = {
           texto?: string
         }
         Relationships: []
+      }
+      whatsapp_chamadas: {
+        Row: {
+          call_id: string | null
+          contato_id: string | null
+          created_at: string
+          custo_estimado: number | null
+          data_fim: string | null
+          data_inicio: string
+          duracao_segundos: number
+          erro: string | null
+          funcionario_id: string | null
+          id: string
+          instancia_id: string | null
+          observacao: string | null
+          phone_number_id: string | null
+          status: string
+          telefone: string
+          tipo_chamada: string
+          waba_id: string | null
+        }
+        Insert: {
+          call_id?: string | null
+          contato_id?: string | null
+          created_at?: string
+          custo_estimado?: number | null
+          data_fim?: string | null
+          data_inicio?: string
+          duracao_segundos?: number
+          erro?: string | null
+          funcionario_id?: string | null
+          id?: string
+          instancia_id?: string | null
+          observacao?: string | null
+          phone_number_id?: string | null
+          status?: string
+          telefone: string
+          tipo_chamada?: string
+          waba_id?: string | null
+        }
+        Update: {
+          call_id?: string | null
+          contato_id?: string | null
+          created_at?: string
+          custo_estimado?: number | null
+          data_fim?: string | null
+          data_inicio?: string
+          duracao_segundos?: number
+          erro?: string | null
+          funcionario_id?: string | null
+          id?: string
+          instancia_id?: string | null
+          observacao?: string | null
+          phone_number_id?: string | null
+          status?: string
+          telefone?: string
+          tipo_chamada?: string
+          waba_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_chamadas_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_chamadas_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_chip_eventos: {
         Row: {
