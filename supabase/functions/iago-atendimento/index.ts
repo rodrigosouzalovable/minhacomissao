@@ -8,7 +8,7 @@ import {
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
-  nomePerfilConfiavel, extrairNomeInformado,
+  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade,
 
 } from '../_shared/iago.ts';
 
