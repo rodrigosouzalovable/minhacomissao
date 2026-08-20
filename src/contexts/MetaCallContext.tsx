@@ -38,7 +38,11 @@ type Ctx = {
   alternarMudo: () => void;
   permissaoDe: (instanciaId: string, telefone: string) => 'accepted' | 'pending' | 'rejected' | 'none';
   recarregarPermissoes: () => Promise<void>;
+  /** true quando o número oficial já tem chamadas de voz ligadas. */
+  chamadasHabilitadas: (instanciaId: string) => boolean;
+  recarregarInstanciasComChamada: () => Promise<void>;
 };
+
 
 const MetaCallContext = createContext<Ctx | null>(null);
 
@@ -53,6 +57,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   const [mudo, setMudo] = useState(false);
   const [entrando, setEntrando] = useState<ChamadaRow | null>(null);
   const [permissoes, setPermissoes] = useState<Record<string, { status: string; expira_em: string | null }>>({});
+  const [comChamada, setComChamada] = useState<Set<string>>(new Set());
+
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -71,6 +77,19 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => { void recarregarPermissoes(); }, [recarregarPermissoes]);
+
+  // ---------- quais números têm chamadas de voz ligadas ----------
+  const recarregarInstanciasComChamada = useCallback(async () => {
+    const { data } = await supabase.from('meta_whatsapp_instances')
+      .select('id').eq('chamadas_habilitadas', true);
+    setComChamada(new Set((data ?? []).map((r: any) => r.id)));
+  }, []);
+
+  useEffect(() => { void recarregarInstanciasComChamada(); }, [recarregarInstanciasComChamada]);
+
+  const chamadasHabilitadas = useCallback((instanciaId: string) => comChamada.has(instanciaId), [comChamada]);
+
+
 
   const permissaoDe = useCallback((instanciaId: string, telefone: string) => {
     const p = permissoes[`${instanciaId}:${dig(telefone)}`];
@@ -136,8 +155,39 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     setTimeout(() => resolve(pc.localDescription?.sdp ?? ''), 3000);
   });
 
+  // ---------- tradução de erros da função de chamadas ----------
+  const erroLegivel = async (error: any, data: any): Promise<string> => {
+    if (data?.error) return String(data.details ? `${data.error} — ${data.details}` : data.error);
+    const bruto = String(error?.message ?? '');
+    // erro de rede/deploy: o navegador não conseguiu falar com o backend
+    if (/Failed to send a request|Failed to fetch|NetworkError|FunctionsFetchError/i.test(bruto)) {
+      return 'O recurso de chamadas não respondeu no servidor. Tente novamente em alguns segundos; se continuar, o serviço de chamadas está indisponível.';
+    }
+    // resposta HTTP de erro: tenta ler o corpo para mostrar o motivo real
+    try {
+      const ctx = error?.context;
+      if (ctx && typeof ctx.text === 'function') {
+        const txt = await ctx.text();
+        try {
+          const j = JSON.parse(txt);
+          if (j?.error) return String(j.details ? `${j.error} — ${j.details}` : j.error);
+        } catch { /* corpo não-JSON */ }
+        if (txt) return txt.slice(0, 300);
+      }
+    } catch { /* ignora */ }
+    return bruto || 'Erro desconhecido';
+  };
+
   // ---------- pedido de permissão ----------
   const pedirPermissao = useCallback(async (a: Alvo) => {
+    if (!comChamada.has(a.instancia_id)) {
+      toast({
+        title: 'Chamadas de voz desligadas neste número',
+        description: 'Ative em API Oficial Meta → card da instância → botão "Chamadas". O número também precisa ter Chamadas (Calling) habilitado no painel da Meta.',
+        variant: 'destructive',
+      });
+      return false;
+    }
     const { data, error } = await supabase.functions.invoke('meta-call-permission-request', {
       body: {
         instancia_id: a.instancia_id, telefone: dig(a.telefone),
@@ -147,7 +197,7 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     if (error || !data?.ok) {
       toast({
         title: 'Não foi possível pedir a permissão',
-        description: data?.error || error?.message || 'Erro desconhecido',
+        description: await erroLegivel(error, data),
         variant: 'destructive',
       });
       return false;
@@ -158,12 +208,21 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     });
     await recarregarPermissoes();
     return true;
-  }, [toast, recarregarPermissoes]);
+  }, [toast, recarregarPermissoes, comChamada]);
+
 
   // ---------- chamada de saída ----------
   const ligar = useCallback(async (a: Alvo) => {
     if (estado !== 'idle') {
       toast({ title: 'Já existe uma chamada em andamento', variant: 'destructive' });
+      return;
+    }
+    if (!comChamada.has(a.instancia_id)) {
+      toast({
+        title: 'Chamadas de voz desligadas neste número',
+        description: 'Ative em API Oficial Meta → card da instância → botão "Chamadas". O número também precisa ter Chamadas (Calling) habilitado no painel da Meta.',
+        variant: 'destructive',
+      });
       return;
     }
     setAlvo(a);
@@ -177,14 +236,14 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.functions.invoke('meta-call-start', {
         body: { instancia_id: a.instancia_id, telefone: dig(a.telefone), contato_id: a.contato_id ?? null, sdp },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await erroLegivel(error, data));
       if (!data?.ok) {
         if (data?.precisa_permissao) {
           limpar();
           await pedirPermissao(a);
           return;
         }
-        throw new Error(data?.error || 'Falha ao iniciar a chamada');
+        throw new Error(await erroLegivel(null, data));
       }
       callIdRef.current = data.call_id;
       chamadaIdRef.current = data.chamada_id ?? null;
@@ -194,7 +253,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       limpar();
       toast({ title: 'Chamada não iniciada', description: msg, variant: 'destructive' });
     }
-  }, [estado, criarPc, toast, limpar, pedirPermissao]);
+  }, [estado, criarPc, toast, limpar, pedirPermissao, comChamada]);
+
 
   const encerrar = useCallback(async () => {
     const callId = callIdRef.current;
@@ -313,7 +373,10 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     estado, alvo, segundos, mudo, ligar, pedirPermissao, encerrar, alternarMudo, permissaoDe, recarregarPermissoes,
-  }), [estado, alvo, segundos, mudo, ligar, pedirPermissao, encerrar, alternarMudo, permissaoDe, recarregarPermissoes]);
+    chamadasHabilitadas, recarregarInstanciasComChamada,
+  }), [estado, alvo, segundos, mudo, ligar, pedirPermissao, encerrar, alternarMudo, permissaoDe, recarregarPermissoes,
+    chamadasHabilitadas, recarregarInstanciasComChamada]);
+
 
   return (
     <MetaCallContext.Provider value={value}>
