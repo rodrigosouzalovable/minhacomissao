@@ -94,6 +94,14 @@ export function humanizarErroChamada(data: any): string {
   const code = Number(err.code ?? 0);
   const sub = Number(err.error_subcode ?? 0);
   const msg = String(err.message || err.error_user_msg || 'Falha ao processar a chamada');
+  const detalhe = typeof err?.error_data?.details === 'string' ? err.error_data.details : '';
+
+  if (code === 131009) {
+    if (/call_permission/i.test(detalhe)) {
+      return 'A Meta recusou o pedido de permissão de chamada neste número (o botão de autorização não está liberado). Envie o pedido por template de permissão aprovado ou confirme com o suporte da Meta a liberação do recurso "Call Permissions" para este WABA.';
+    }
+    return `A Meta recusou um parâmetro do pedido: ${detalhe || msg}`;
+  }
 
   if (code === 141000) {
     return 'Este número está em um aplicativo Meta que ainda não tem o produto "Chamadas" (Calling) liberado. Adicione/ative Chamadas no app da Meta que controla este número — os números do app onde você já ativou "calls" funcionam.';
@@ -101,6 +109,7 @@ export function humanizarErroChamada(data: any): string {
   if (code === 138018) {
     return 'A Meta exige o webhook de chamadas assinado neste WABA. Tentei reinscrever automaticamente; se persistir, ative o campo "calls" no webhook do app da Meta e tente novamente.';
   }
+
   if (code === 100 && /calling/i.test(msg)) {
     return 'A Calling API não está habilitada neste número. Ative "Chamadas" no app da Meta e nas configurações do número.';
   }
