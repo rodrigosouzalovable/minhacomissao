@@ -646,7 +646,7 @@ export default function EnvioMeta() {
       const first = g.rows.find((r) => r.status === "approved");
       return {
         template_id: first?.id || "",
-        nome_template: g.nome_template,
+        nome_template: g.nome,
         template_id_by_instance: byInst,
       };
     });
