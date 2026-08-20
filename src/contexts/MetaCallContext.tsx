@@ -383,6 +383,7 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
 
 
   const rejeitar = useCallback(async (row: ChamadaRow) => {
+    // fecha o pop-up (e o bip) antes de falar com a Meta
     setEntrando(null);
     if (!row.call_id) return;
     await supabase.functions.invoke('meta-call-action', {
