@@ -206,6 +206,9 @@ export default function InboxMeta() {
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
   const [agendarRetornoOpen, setAgendarRetornoOpen] = useState(false);
+  const [histChamadasOpen, setHistChamadasOpen] = useState(false);
+  const { ligar, pedirPermissao, permissaoDe, estado: estadoChamada } = useMetaCall();
+
 
   // Meus Clientes (conversas com a etiqueta do próprio usuário)
   const [modoMeusClientes, setModoMeusClientes] = useState(false);
