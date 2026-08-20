@@ -1,6 +1,8 @@
 // Cria um job de envio em massa Meta persistente.
 // O envio propriamente dito é feito pelo cron `envio-meta-massa-tick`.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { calcularJanelaEnvio } from '../_shared/metaJanelaEnvio.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -216,6 +218,13 @@ Deno.serve(async (req) => {
         .in('id', instanciaIdsFiltradas);
     } catch (_) { /* não bloqueia início */ }
 
+    // Janela de envio: dentro do horário o job já arranca no primeiro tick; fora dele
+    // agenda exatamente para a abertura da janela (sem backoff fixo de 10 min).
+    const janela = await calcularJanelaEnvio(supabase);
+    const proximoEmInicial = janela.aberta
+      ? new Date().toISOString()
+      : new Date(Date.now() + janela.esperaMs).toISOString();
+
     const { data: job, error: jobErr } = await supabase
       .from('envio_meta_job')
       .insert({
@@ -230,12 +239,14 @@ Deno.serve(async (req) => {
         min_seg: minSec,
         max_seg: maxSec,
         total: clientesEnvio.length,
-        proximo_em: new Date().toISOString(),
+        proximo_em: proximoEmInicial,
+        status_motivo: janela.aberta ? null : `Aguardando abertura da janela de envio (${janela.aberturaBrtLabel} BRT)`,
         nome_campanha: nomeCampanha,
         modo_rajada: modoRajada,
         msgs_por_segundo: msgsPorSegundo,
         folder_id: folderId,
       })
+
       .select('id')
       .single();
     if (jobErr) { console.error('[iniciar] insert job falhou', jobErr); throw jobErr; }

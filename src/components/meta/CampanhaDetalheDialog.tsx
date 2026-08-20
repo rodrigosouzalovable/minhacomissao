@@ -393,10 +393,13 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
               ) : null}
             </div>
             <div className="text-xs text-muted-foreground h-4 overflow-hidden whitespace-nowrap truncate">
-              {progresso && progresso.proximoEmSeg > 0 && !pausado
-                ? `Próximo envio em ${progresso.proximoEmSeg}s`
-                : null}
+              {progresso && progresso.aguardandoJanela && !pausado
+                ? `${progresso.janelaMotivo || "Aguardando abertura da janela de envio"}${progresso.proximoEmSeg > 0 ? ` — inicia em ${Math.ceil(progresso.proximoEmSeg / 60)} min` : ""}`
+                : progresso && progresso.proximoEmSeg > 0 && !pausado
+                  ? `Próximo envio em ${progresso.proximoEmSeg}s`
+                  : null}
             </div>
+
             {eta && (
               <div className="text-xs rounded border bg-muted/40 px-2 py-1.5 space-y-0.5">
                 {eta.tipo === "final" ? (

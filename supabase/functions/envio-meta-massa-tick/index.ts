@@ -2,6 +2,8 @@
 // campanha elegível e encerra; o pg_cron agenda o próximo tick sem manter uma
 // função ociosa durante o delay configurado pelo usuário.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { esperaAteJanela } from '../_shared/metaJanelaEnvio.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -232,7 +234,8 @@ async function processarItem(job: any): Promise<ItemResult> {
   if (!pickResp?.success) {
     const blocked = pickResp?.blocked;
     if (blocked === 'domingo' || blocked === 'horario') {
-      const waitMs = 10 * 60_000;
+      const waitMs = await esperaAteJanela(supabase);
+
       await supabase.from('envio_meta_job').update({
         proximo_em: new Date(Date.now() + waitMs).toISOString(),
         status_motivo: pickResp?.error || blocked,
@@ -318,7 +321,7 @@ async function processarItem(job: any): Promise<ItemResult> {
       await supabase.from('envio_meta_job_item')
         .update({ status: 'pendente', instancia_id: null, instancia_nome: null })
         .eq('id', pend.id);
-      const waitMs = 10 * 60_000;
+      const waitMs = await esperaAteJanela(supabase);
       await supabase.from('envio_meta_job').update({
         proximo_em: new Date(Date.now() + waitMs).toISOString(),
         status_motivo: sendResp.error,
