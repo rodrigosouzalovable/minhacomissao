@@ -57,6 +57,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   const [mudo, setMudo] = useState(false);
   const [entrando, setEntrando] = useState<ChamadaRow | null>(null);
   const [permissoes, setPermissoes] = useState<Record<string, { status: string; expira_em: string | null }>>({});
+  const [comChamada, setComChamada] = useState<Set<string>>(new Set());
+
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
