@@ -636,6 +636,23 @@ export default function EnvioMeta() {
     return map;
   }, [templateGroup, instanciaIds]);
 
+  // Variantes prontas para agendamento (mesma estrutura usada no disparo imediato)
+  const templateVariantesAgendamento = useMemo(() => {
+    return variantesGroups.map((g) => {
+      const byInst: Record<string, string> = {};
+      for (const r of g.rows) {
+        if (r.status === "approved" && instanciaIds.includes(r.instancia_id)) byInst[r.instancia_id] = r.id;
+      }
+      const first = g.rows.find((r) => r.status === "approved");
+      return {
+        template_id: first?.id || "",
+        nome_template: g.nome_template,
+        template_id_by_instance: byInst,
+      };
+    });
+  }, [variantesGroups, instanciaIds]);
+
+
   const SEM_BM = "__sem_bm__";
   const { cotaDaBm, semSaldo: bmSemSaldo, recarregar: recarregarCotas } = useBmCotas();
   const bmsDisponiveis = useMemo(() => {
