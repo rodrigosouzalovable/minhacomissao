@@ -78,6 +78,19 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { void recarregarPermissoes(); }, [recarregarPermissoes]);
 
+  // ---------- quais números têm chamadas de voz ligadas ----------
+  const recarregarInstanciasComChamada = useCallback(async () => {
+    const { data } = await supabase.from('meta_whatsapp_instances')
+      .select('id').eq('chamadas_habilitadas', true);
+    setComChamada(new Set((data ?? []).map((r: any) => r.id)));
+  }, []);
+
+  useEffect(() => { void recarregarInstanciasComChamada(); }, [recarregarInstanciasComChamada]);
+
+  const chamadasHabilitadas = useCallback((instanciaId: string) => comChamada.has(instanciaId), [comChamada]);
+
+
+
   const permissaoDe = useCallback((instanciaId: string, telefone: string) => {
     const p = permissoes[`${instanciaId}:${dig(telefone)}`];
     if (!p) return 'none' as const;
