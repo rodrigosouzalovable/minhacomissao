@@ -142,8 +142,13 @@ Deno.serve(async (req) => {
       );
       const info = await r.json().catch(() => ({}));
       const st = await lerStatus(inst);
-      return json({ ok: true, numero: info, calling: st.calling, status: st.status });
+      const sub = await fetch(`${GRAPH}/${inst.waba_id}/subscribed_apps`, {
+        headers: { Authorization: `Bearer ${inst.access_token}` },
+      });
+      const apps = await sub.json().catch(() => ({}));
+      return json({ ok: true, numero: info, calling: st.calling, status: st.status, subscribed_apps: apps });
     }
+
 
     // Diagnóstico de escrita: testa variantes do POST /settings para descobrir o formato aceito.
     if (body?.diag_post === true) {
