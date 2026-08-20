@@ -217,7 +217,9 @@ const App = () => (
           <WhatsAppSendingProvider>
           <VoiceCampaignSendingProvider>
           <EnvioMetaSendingProvider>
+          <MetaCallProvider>
           <Suspense fallback={<PageFallback />}>
+
           <Routes>
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/ir/boleto" element={<RedirectBoleto />} />
