@@ -116,6 +116,49 @@ export function extrairNomeInformado(texto?: string | null): string {
   return '';
 }
 
+/**
+ * Nome do cliente que NÓS já usamos na saudação das mensagens enviadas
+ * ("Olá Mayara Janaina Vieira Tavares, ...", "Bom dia, Mayara,").
+ * Serve para o IAGO não perguntar um nome que ele mesmo já enviou.
+ */
+export function nomeDeSaudacaoEnviada(
+  historico?: Array<{ direcao?: string | null; conteudo?: string | null }> | null,
+): string {
+  const saidas = (historico || []).filter((m) => m?.direcao === 'saida');
+  const padroes = [
+    /^\s*(?:ol[aá]|oi|prezad[oa]|sr\.?|sra\.?)[,\s]+([\p{L}][\p{L}\s'.-]{2,60}?)\s*[,!.?:\n]/iu,
+    /^\s*(?:bom\s+dia|boa\s+tarde|boa\s+noite)[,\s]+([\p{L}][\p{L}\s'.-]{2,60}?)\s*[,!.?:\n]/iu,
+  ];
+  for (const m of saidas) {
+    const texto = String(m?.conteudo || '').trim();
+    if (!texto) continue;
+    for (const re of padroes) {
+      const match = texto.match(re);
+      if (!match) continue;
+      const partes = String(match[1] || '')
+        .replace(/[^\p{L}\s'-]/gu, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+      if (!partes.length || partes.length > 5) continue;
+      const semAc = partes.map((p) => semAcento(p));
+      if (semAc[0].length < 3) continue;
+      if (semAc.some((p) => PALAVRAS_NAO_NOME.has(p) || PALAVRAS_NAO_PESSOA.has(p))) continue;
+      return partes
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+        .join(' ');
+    }
+  }
+  return '';
+}
+
+/** Cliente confirmou que é a pessoa procurada ("sim", "sou eu", "isso mesmo"). */
+export function ehConfirmacaoIdentidade(texto?: string | null): boolean {
+  const t = semAcento(String(texto || '').trim().toLowerCase()).replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t || t.split(' ').length > 6) return false;
+  return /(^|\b)(sim|isso|isso mesmo|exato|exatamente|correto|positivo|confirmo|sou eu|sou ela|sou ele|e comigo|sou eu mesma|sou eu mesmo|sou a titular|sou o titular|pode falar|pode seguir)(\b|$)/.test(t);
+}
+
+
 export const cpfFormatado = (cpf: string) => {
   const d = soDigitos(cpf);
   if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
