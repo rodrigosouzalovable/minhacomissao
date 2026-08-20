@@ -1,6 +1,8 @@
 // Cria um job de envio em massa Meta persistente.
 // O envio propriamente dito é feito pelo cron `envio-meta-massa-tick`.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { calcularJanelaEnvio } from '../_shared/metaJanelaEnvio.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
