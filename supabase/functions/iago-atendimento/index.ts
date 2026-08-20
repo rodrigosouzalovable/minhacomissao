@@ -87,6 +87,16 @@ Deno.serve(async (req) => {
       return json({ success: false, skipped: tags.length ? 'conversa de outro atendente' : 'conversa sem atendente' });
     }
 
+    // ===== Atendente humano já vinculado a este telefone (qualquer caixa) => IAGO calado =====
+    const humanoVinculado = await temAtendenteHumanoNoTelefone(supabase, contato_id, iago.nome || '');
+    if (humanoVinculado) {
+      await supabase.from('iago_conversa_estado')
+        .update({ followup_em: null, followup_feito: true })
+        .eq('contato_id', contato_id);
+      console.log('[IAGO] atendente humano vinculado — IAGO não responde', { contato_id, atendente: humanoVinculado });
+      return json({ success: true, skipped: `atendente humano vinculado (${humanoVinculado})` });
+    }
+
     // ===== Estado =====
     let { data: estado } = await supabase
       .from('iago_conversa_estado').select('*').eq('contato_id', contato_id).maybeSingle();
