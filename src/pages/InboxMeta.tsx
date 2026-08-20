@@ -574,6 +574,34 @@ export default function InboxMeta() {
   // Troca de caixa/instância/aba/busca volta ao primeiro lote
   useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim]);
 
+  // Link direto (aviso "Cliente autorizou a chamada"): abre a conversa do cliente
+  const linkDiretoRef = useRef(false);
+  useEffect(() => {
+    if (!user || linkDiretoRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const contatoId = params.get('contato');
+    const telefone = (params.get('telefone') || '').replace(/\D/g, '');
+    if (!contatoId && !telefone) return;
+    linkDiretoRef.current = true;
+    void (async () => {
+      const cols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id';
+      let q = supabase.from('meta_whatsapp_contatos').select(cols).limit(1);
+      q = contatoId ? q.eq('id', contatoId) : q.like('telefone', `%${telefone.slice(-8)}`);
+      const { data } = await q.maybeSingle();
+      if (data) {
+        setCurrentFolderId((data as any).folder_id ?? null);
+        setAbaAtiva((data as any).arquivado ? 'arquivados' : 'conversas');
+        setContatoAtivo(data as any);
+      } else {
+        toast({ title: 'Conversa não encontrada', description: 'O contato pode estar em outra caixa de mensagens.' });
+      }
+      const url = new URL(window.location.href);
+      ['contato', 'telefone', 'instancia'].forEach(k => url.searchParams.delete(k));
+      window.history.replaceState({}, '', url.pathname + url.search);
+    })();
+  }, [user, toast]);
+
+
   const fetchContatos = useCallback(async () => {
     if (!user) return;
     const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id';
