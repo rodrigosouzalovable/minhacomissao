@@ -39,6 +39,9 @@ import { MetaNumerosConectadosDialog } from '@/components/inbox/meta/MetaNumeros
 import { CopyButton } from '@/components/CopyButton';
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
 import { AgendarRetornoDialog } from '@/components/inbox/meta/AgendarRetornoDialog';
+import { HistoricoChamadasDialog } from '@/components/inbox/meta/HistoricoChamadasDialog';
+import { useMetaCall } from '@/contexts/MetaCallContext';
+
 
 
 import { useUserRole } from '@/hooks/useUserRole';
