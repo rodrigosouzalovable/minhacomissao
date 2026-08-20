@@ -1809,6 +1809,7 @@ export type Database = {
           template_id: string | null
           template_id_by_instance: Json
           template_nome: string | null
+          template_variantes: Json
           tenant_id: string
           total: number
           ultima_instancia_id: string | null
@@ -1842,6 +1843,7 @@ export type Database = {
           template_id?: string | null
           template_id_by_instance?: Json
           template_nome?: string | null
+          template_variantes?: Json
           tenant_id?: string
           total?: number
           ultima_instancia_id?: string | null
@@ -1875,6 +1877,7 @@ export type Database = {
           template_id?: string | null
           template_id_by_instance?: Json
           template_nome?: string | null
+          template_variantes?: Json
           tenant_id?: string
           total?: number
           ultima_instancia_id?: string | null
@@ -1912,6 +1915,7 @@ export type Database = {
           tenant_id: string
           tentativas: number
           updated_at: string
+          variante_idx: number
           vars: Json
           wa_message_id: string | null
         }
@@ -1933,6 +1937,7 @@ export type Database = {
           tenant_id?: string
           tentativas?: number
           updated_at?: string
+          variante_idx?: number
           vars?: Json
           wa_message_id?: string | null
         }
@@ -1954,6 +1959,7 @@ export type Database = {
           tenant_id?: string
           tentativas?: number
           updated_at?: string
+          variante_idx?: number
           vars?: Json
           wa_message_id?: string | null
         }
@@ -3311,6 +3317,7 @@ export type Database = {
           template_id: string
           template_id_by_instance: Json
           template_nome: string
+          template_variantes: Json
           tenant_id: string
           total_itens: number
           updated_at: string
@@ -3332,6 +3339,7 @@ export type Database = {
           template_id: string
           template_id_by_instance?: Json
           template_nome: string
+          template_variantes?: Json
           tenant_id?: string
           total_itens?: number
           updated_at?: string
@@ -3353,6 +3361,7 @@ export type Database = {
           template_id?: string
           template_id_by_instance?: Json
           template_nome?: string
+          template_variantes?: Json
           tenant_id?: string
           total_itens?: number
           updated_at?: string
