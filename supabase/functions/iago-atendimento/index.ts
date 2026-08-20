@@ -4,7 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
-  ehOptOut, ehNumeroErrado, ehFalecido, MSG_FALECIDO, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente,
+  ehOptOut, ehNumeroErrado, ehFalecido, MSG_FALECIDO, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente, temAtendenteHumanoNoTelefone,
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
@@ -85,6 +85,16 @@ Deno.serve(async (req) => {
     const ehDoIago = tags.some((t) => t.replace(/^atendente:\s*/i, '').trim().toLowerCase() === nomeIago);
     if (!ehDoIago) {
       return json({ success: false, skipped: tags.length ? 'conversa de outro atendente' : 'conversa sem atendente' });
+    }
+
+    // ===== Atendente humano já vinculado a este telefone (qualquer caixa) => IAGO calado =====
+    const humanoVinculado = await temAtendenteHumanoNoTelefone(supabase, contato_id, iago.nome || '');
+    if (humanoVinculado) {
+      await supabase.from('iago_conversa_estado')
+        .update({ followup_em: null, followup_feito: true })
+        .eq('contato_id', contato_id);
+      console.log('[IAGO] atendente humano vinculado — IAGO não responde', { contato_id, atendente: humanoVinculado });
+      return json({ success: true, skipped: `atendente humano vinculado (${humanoVinculado})` });
     }
 
     // ===== Estado =====

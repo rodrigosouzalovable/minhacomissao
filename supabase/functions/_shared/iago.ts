@@ -236,6 +236,54 @@ export async function etiquetasAtendente(supabase: any, contatoId: string): Prom
     .filter((n: string) => /^atendente:/i.test(n));
 }
 
+/**
+ * Existe atendente HUMANO vinculado ao mesmo telefone (qualquer caixa/instância)?
+ * Compara pelos últimos 8 dígitos, padrão do sistema.
+ */
+export async function temAtendenteHumanoNoTelefone(
+  supabase: any,
+  contatoId: string,
+  nomeIago: string,
+): Promise<string | null> {
+  try {
+    const { data: c } = await supabase
+      .from('meta_whatsapp_contatos')
+      .select('telefone')
+      .eq('id', contatoId)
+      .maybeSingle();
+    const tel = String((c as any)?.telefone || '').replace(/\D/g, '');
+    if (!tel) return null;
+    const sufixo = tel.slice(-8);
+    if (sufixo.length < 8) return null;
+
+    const { data: contatos } = await supabase
+      .from('meta_whatsapp_contatos')
+      .select('id, telefone')
+      .ilike('telefone', `%${sufixo}`);
+    const ids = ((contatos || []) as any[])
+      .filter((r) => String(r.telefone || '').replace(/\D/g, '').endsWith(sufixo))
+      .map((r) => r.id);
+    if (!ids.length) return null;
+
+    const { data: links } = await supabase
+      .from('meta_whatsapp_contato_etiquetas')
+      .select('meta_whatsapp_etiquetas(nome)')
+      .in('contato_id', ids);
+
+    const iago = String(nomeIago || '').trim().toLowerCase();
+    for (const r of (links || []) as any[]) {
+      const nome = String(r?.meta_whatsapp_etiquetas?.nome || '');
+      if (!/^atendente:/i.test(nome)) continue;
+      const atendente = nome.replace(/^atendente:\s*/i, '').trim();
+      if (atendente.toLowerCase() !== iago) return atendente;
+    }
+    return null;
+  } catch (e: any) {
+    console.error('[IAGO] falha ao checar atendente humano do telefone', e?.message || e);
+    return null;
+  }
+}
+
 export async function etiquetarAguardandoHumano(supabase: any, contatoId: string) {
   try {
     let { data: et } = await supabase

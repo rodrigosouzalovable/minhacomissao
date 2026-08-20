@@ -11,7 +11,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, agoraSP, primeiroNome, carregarConfig, perfilIago, iagoAtendeCaixa,
-  etiquetasAtendente, enviarTexto, chamarIA, extrairJson, ehNumeroErrado, ehFalecido, etiquetarAguardandoHumano,
+  etiquetasAtendente, temAtendenteHumanoNoTelefone, enviarTexto, chamarIA, extrairJson, ehNumeroErrado, ehFalecido, etiquetarAguardandoHumano,
   nomePerfilConfiavel,
 } from '../_shared/iago.ts';
 
@@ -219,10 +219,11 @@ Deno.serve(async (req) => {
       const tags = await etiquetasAtendente(supabase, (contato as any).id);
       const nomeIago = String(iago.nome || '').trim().toLowerCase();
       const ehDoIago = tags.some((t) => t.replace(/^atendente:\s*/i, '').trim().toLowerCase() === nomeIago);
-      if (!atende || !ehDoIago) {
+      const humanoVinculado = await temAtendenteHumanoNoTelefone(supabase, (contato as any).id, iago.nome || '');
+      if (!atende || !ehDoIago || humanoVinculado) {
         await supabase.from('iago_conversa_estado')
           .update({ followup_feito: true, followup_em: null, followup_etapa: 3 }).eq('id', est.id);
-        pulados.push('conversa não é do IAGO');
+        pulados.push(humanoVinculado ? `atendente humano vinculado (${humanoVinculado})` : 'conversa não é do IAGO');
         continue;
       }
 
