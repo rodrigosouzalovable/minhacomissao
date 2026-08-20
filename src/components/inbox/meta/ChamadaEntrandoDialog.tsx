@@ -82,7 +82,11 @@ export function ChamadaEntrandoDialog({ chamada, onAtender, onRejeitar, onFechar
           <Button className="flex-1" onClick={() => chamada && void onAtender(chamada)}>
             <Phone className="h-4 w-4 mr-1" /> Atender
           </Button>
-          <Button variant="destructive" className="flex-1" onClick={() => chamada && void onRejeitar(chamada)}>
+          <Button
+            variant="destructive"
+            className="flex-1"
+            onClick={() => { setSilenciado(true); if (chamada) void onRejeitar(chamada); }}
+          >
             <PhoneOff className="h-4 w-4 mr-1" /> Rejeitar
           </Button>
         </div>
