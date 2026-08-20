@@ -885,6 +885,21 @@ export default function EnvioMeta() {
       }
     }
 
+    // Variação de templates: cada variante leva seu próprio mapa instância -> template_id
+    const templateVariantes = variantesGroups.map((g) => {
+      const byInst: Record<string, string> = {};
+      for (const r of g.rows) {
+        if (r.status === "approved" && instanciasComCota.includes(r.instancia_id)) {
+          byInst[r.instancia_id] = r.id;
+        }
+      }
+      return {
+        template_id: g.sample.id,
+        nome_template: g.nome,
+        template_id_by_instance: byInst,
+      };
+    });
+
     // ✅ Confirmação de custo — mostra R$ estimado e exige digitação do valor
     const okCusto = await pedirConfirmacaoCusto(
       clientesFinal.map((c) => c.telefone),
@@ -915,6 +930,8 @@ export default function EnvioMeta() {
       semWhatsapp: semWa,
       erroValidacao: erroVal,
       templateIdByInstance,
+      templateVariantes: templateVariantes.length > 1 ? templateVariantes : undefined,
+
       nomeCampanha: nomeCampanha.trim() || undefined,
       folderId: folderId === "__default__" ? null : folderId,
       modoRajada,
