@@ -80,6 +80,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   const callIdRef = useRef<string | null>(null);
   const chamadaIdRef = useRef<string | null>(null);
   const answerAplicadaRef = useRef(false);
+  const direcaoRef = useRef<'saida' | 'entrada' | null>(null);
+
 
   // ---------- permissões ----------
   const recarregarPermissoes = useCallback(async () => {
