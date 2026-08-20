@@ -274,7 +274,10 @@ Deno.serve(async (req) => {
       const propostaEnviada = !!est.contexto?.proposta_enviada
         || saidas.some((m) => /r\$\s*\d/i.test(String(m.conteudo || '')));
 
-      const nome = primeiroNome((contato as any).nome);
+      // Nome informado pelo cliente tem prioridade; nome de perfil do WhatsApp só se for confiável.
+      const nomeCtx = String((est.contexto || {}).nome_informado || '').trim();
+      const nomePerfilFup = String((contato as any).nome || '').trim();
+      const nome = primeiroNome(nomeCtx || (nomePerfilConfiavel(nomePerfilFup) ? nomePerfilFup : ''));
 
       // Credor configurado na caixa de mensagens (se houver)
       let credor = '';
