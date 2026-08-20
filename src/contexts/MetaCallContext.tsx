@@ -358,7 +358,9 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setEstado('preparando');
+    direcaoRef.current = 'entrada';
     try {
+
       // o microfone é pedido antes de fechar o pop-up: se o navegador bloquear,
       // a chamada continua tocando e o atendente pode tentar de novo
       const pc = await criarPc();
