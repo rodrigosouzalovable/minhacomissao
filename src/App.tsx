@@ -284,7 +284,9 @@ const App = () => (
           </Routes>
           </Suspense>
           <CampanhasFlutuante />
+          </MetaCallProvider>
           </EnvioMetaSendingProvider>
+
           </VoiceCampaignSendingProvider>
           </WhatsAppSendingProvider>
           </AutoSendProvider>
