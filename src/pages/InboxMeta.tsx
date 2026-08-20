@@ -2015,7 +2015,7 @@ export default function InboxMeta() {
                       <>
                         <Button
                           size="sm"
-                          variant={autorizado ? 'default' : 'outline'}
+                          variant="outline"
                           className="h-7 w-7 p-0"
                           disabled={!instId || ocupado || !vozOn}
                           onClick={() => {
@@ -2042,17 +2042,6 @@ export default function InboxMeta() {
                           aria-label="Ligar para o cliente"
                         >
                           <Phone className="h-3.5 w-3.5" />
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setHistChamadasOpen(true)}
-                          title="Histórico de chamadas deste cliente"
-                          aria-label="Histórico de chamadas"
-                        >
-                          <PhoneIncoming className="h-3.5 w-3.5" />
                         </Button>
                       </>
                     );
@@ -2406,15 +2395,6 @@ export default function InboxMeta() {
         folderId={currentFolderId}
         onSent={() => { fetchContatos(); }}
       />
-      {contatoAtivo?.telefone && (
-        <HistoricoChamadasDialog
-          open={histChamadasOpen}
-          onOpenChange={setHistChamadasOpen}
-          telefone={contatoAtivo.telefone}
-          nome={contatoAtivo.nome}
-        />
-      )}
-
       {contatoAtivo && (
         <ReabrirComTemplateDialog
           open={reabrirTemplateOpen}
