@@ -382,8 +382,9 @@ serve(async (req) => {
               const sdpTipo = String(c?.session?.sdp_type || '').toLowerCase();
 
               const { data: existente } = await supabase.from('whatsapp_chamadas')
-                .select('id, status, data_inicio, tipo_chamada')
+                .select('id, status, data_inicio, tipo_chamada, funcionario_id, contato_id')
                 .eq('call_id', callId).maybeSingle();
+
 
               const agora = new Date().toISOString();
               const patch: any = { atualizado_em: agora };
