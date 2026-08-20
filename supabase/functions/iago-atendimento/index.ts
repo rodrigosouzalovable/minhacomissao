@@ -261,29 +261,45 @@ Deno.serve(async (req) => {
       return json({ success: true, etapa: 'optout' });
     }
 
-    // ===== "não sou essa pessoa / número errado" => agradece e encerra =====
-    if (ehNumeroErrado(textoAtual)) {
-      try {
-        await enviarTexto(supabase, contato, MSG_NUMERO_ERRADO);
-      } catch (e: any) {
-        console.error('[IAGO] falha ao enviar encerramento de número errado', e?.message || e);
+    // ===== "não sou essa pessoa / número errado" => agradece, encerra e nunca mais contata =====
+    const encerrarNumeroErrado = async (origem: string) => {
+      const jaEncerrou = historico.some(
+        (m: any) => m.direcao === 'saida' && /desculpe o inc[oô]modo/i.test(String(m.conteudo || '')),
+      );
+      if (!jaEncerrou) {
+        try {
+          await enviarTexto(supabase, contato, MSG_NUMERO_ERRADO);
+        } catch (e: any) {
+          console.error('[IAGO] falha ao enviar encerramento de número errado', e?.message || e);
+        }
       }
       await supabase.from('iago_conversa_estado').update({
         etapa: 'numero_errado',
         aguardando_humano: true,
         followup_em: null,
         followup_feito: true,
+        followup_etapa: 3,
         ultima_msg_em: new Date().toISOString(),
         ultima_msg_cliente_em: new Date().toISOString(),
         contexto: { ...(estado.contexto || {}), ultimo_motivo: 'cliente informou que não é a pessoa procurada' },
       }).eq('id', estado.id);
       await etiquetarAguardandoHumano(supabase, contato_id);
       await qualificar('Não é o Cliente');
+      await suprimirDestinatario(
+        supabase,
+        (contato as any).telefone || (contato as any).bsuid,
+        'pessoa_errada: cliente informou que não é a pessoa procurada',
+      );
       await finalizarEntrada();
 
-      console.log('[IAGO] número errado — conversa encerrada', { contato_id });
-      return json({ success: true, etapa: 'numero_errado' });
+      console.log('[IAGO] número errado — conversa encerrada', { contato_id, origem });
+      return json({ success: true, etapa: 'numero_errado', origem });
+    };
+
+    if (ehNumeroErrado(textoAtual)) {
+      return await encerrarNumeroErrado('texto');
     }
+
 
     // ===== Cliente/familiar informou falecimento => condolências e encerra (sem follow-up) =====
     if (ehFalecido(textoAtual)) {
