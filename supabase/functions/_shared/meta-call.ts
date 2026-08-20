@@ -96,11 +96,15 @@ export function humanizarErroChamada(data: any): string {
   const msg = String(err.message || err.error_user_msg || 'Falha ao processar a chamada');
 
   if (code === 141000) {
-    return 'A Meta ainda não liberou Chamadas (Calling API) para este número. É preciso habilitar o recurso "Chamadas" no WhatsApp Manager, no próprio número, antes de usar aqui.';
+    return 'Este número está em um aplicativo Meta que ainda não tem o produto "Chamadas" (Calling) liberado. Adicione/ative Chamadas no app da Meta que controla este número — os números do app onde você já ativou "calls" funcionam.';
+  }
+  if (code === 138018) {
+    return 'A Meta exige o webhook de chamadas assinado neste WABA. Tentei reinscrever automaticamente; se persistir, ative o campo "calls" no webhook do app da Meta e tente novamente.';
   }
   if (code === 100 && /calling/i.test(msg)) {
     return 'A Calling API não está habilitada neste número. Ative "Chamadas" no app da Meta e nas configurações do número.';
   }
+
 
   if (code === 138006 || /permission/i.test(msg)) {
     return 'O cliente ainda não autorizou chamadas. Envie o pedido de permissão e aguarde o "Aceitar chamada".';
