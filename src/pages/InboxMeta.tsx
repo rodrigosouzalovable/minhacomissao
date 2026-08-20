@@ -2404,6 +2404,15 @@ export default function InboxMeta() {
         folderId={currentFolderId}
         onSent={() => { fetchContatos(); }}
       />
+      {contatoAtivo?.telefone && (
+        <HistoricoChamadasDialog
+          open={histChamadasOpen}
+          onOpenChange={setHistChamadasOpen}
+          telefone={contatoAtivo.telefone}
+          nome={contatoAtivo.nome}
+        />
+      )}
+
       {contatoAtivo && (
         <ReabrirComTemplateDialog
           open={reabrirTemplateOpen}
