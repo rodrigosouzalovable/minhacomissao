@@ -8,7 +8,7 @@ import {
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
-  nomePerfilConfiavel, extrairNomeInformado,
+  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade,
 
 } from '../_shared/iago.ts';
 
@@ -434,33 +434,41 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ===== Nome do cliente: cadastro > informado por ele > perfil do WhatsApp (só se confiável) =====
+    // ===== Nome do cliente: cadastro > informado/confirmado > enviado por nós > perfil do WhatsApp =====
     const ctxNome = (estado.contexto || {}) as any;
     let nomeInformado = String(ctxNome.nome_informado || '').trim();
     let nomePedido = !!ctxNome.nome_pedido;
     const nomePerfil = String((contato as any).nome || '').trim();
     const perfilOk = nomePerfilConfiavel(nomePerfil);
+    // Nome que já usamos na saudação das nossas mensagens (campanha/template)
+    const nomeEnviadoPorNos = nomeDeSaudacaoEnviada(historico);
+
+    const gravarNome = async (nome: string) => {
+      nomeInformado = nome;
+      const novo = { ...ctxNome, nome_informado: nome, nome_pedido: true };
+      await supabase.from('iago_conversa_estado').update({ contexto: novo }).eq('id', estado.id);
+      estado.contexto = novo;
+      nomePedido = true;
+      if (!perfilOk) {
+        await supabase.from('meta_whatsapp_contatos').update({ nome }).eq('id', contato_id);
+      }
+      console.log('[IAGO] nome do cliente gravado', { contato_id, nome });
+    };
 
     if (!nomeInformado && !proposta?.nomeCliente && !nomePorTelefone) {
       const detectado = extrairNomeInformado(textoAtual);
       if (detectado && (nomePedido || !perfilOk)) {
-        nomeInformado = detectado;
-        await supabase.from('iago_conversa_estado')
-          .update({ contexto: { ...ctxNome, nome_informado: detectado, nome_pedido: true } })
-          .eq('id', estado.id);
-        estado.contexto = { ...ctxNome, nome_informado: detectado, nome_pedido: true };
-        nomePedido = true;
-        // Corrige o nome do contato quando o que está salvo é só o perfil do WhatsApp
-        if (!perfilOk) {
-          await supabase.from('meta_whatsapp_contatos')
-            .update({ nome: detectado }).eq('id', contato_id);
-        }
-        console.log('[IAGO] nome do cliente gravado', { contato_id, nome: detectado });
+        await gravarNome(detectado);
+      } else if (nomeEnviadoPorNos && ehConfirmacaoIdentidade(textoAtual)) {
+        // Cliente confirmou que é a pessoa que nomeamos na abertura => nome resolvido
+        await gravarNome(nomeEnviadoPorNos);
       }
     }
 
-    const nomeCliente = proposta?.nomeCliente || nomePorTelefone || nomeInformado || (perfilOk ? nomePerfil : '');
+    const nomeCliente = proposta?.nomeCliente || nomePorTelefone || nomeInformado
+      || nomeEnviadoPorNos || (perfilOk ? nomePerfil : '');
     const precisaPerguntarNome = !nomeCliente && !nomePedido;
+
 
 
     // ===== Cliente já tem acordo => humano assume =====

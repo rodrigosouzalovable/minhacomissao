@@ -12,7 +12,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, agoraSP, primeiroNome, carregarConfig, perfilIago, iagoAtendeCaixa,
   etiquetasAtendente, temAtendenteHumanoNoTelefone, enviarTexto, chamarIA, extrairJson, ehNumeroErrado, ehFalecido, etiquetarAguardandoHumano,
-  nomePerfilConfiavel,
+  nomePerfilConfiavel, nomeDeSaudacaoEnviada,
 } from '../_shared/iago.ts';
 
 const HORA = 60 * 60 * 1000;
@@ -275,10 +275,14 @@ Deno.serve(async (req) => {
       const propostaEnviada = !!est.contexto?.proposta_enviada
         || saidas.some((m) => /r\$\s*\d/i.test(String(m.conteudo || '')));
 
-      // Nome informado pelo cliente tem prioridade; nome de perfil do WhatsApp só se for confiável.
+      // Nome informado pelo cliente tem prioridade; depois o nome que nós usamos na saudação;
+      // nome de perfil do WhatsApp só se for confiável.
       const nomeCtx = String((est.contexto || {}).nome_informado || '').trim();
       const nomePerfilFup = String((contato as any).nome || '').trim();
-      const nome = primeiroNome(nomeCtx || (nomePerfilConfiavel(nomePerfilFup) ? nomePerfilFup : ''));
+      const nome = primeiroNome(
+        nomeCtx || nomeDeSaudacaoEnviada(historico) || (nomePerfilConfiavel(nomePerfilFup) ? nomePerfilFup : ''),
+      );
+
 
       // Credor configurado na caixa de mensagens (se houver)
       let credor = '';
