@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Phone, PhoneOff, BellOff } from 'lucide-react';
+import { Phone, PhoneOff, BellOff, MessageSquare } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import type { ChamadaRow } from '@/contexts/MetaCallContext';
 
 interface Props {
@@ -10,6 +12,7 @@ interface Props {
   onRejeitar: (c: ChamadaRow) => void | Promise<void>;
   onFechar: () => void;
 }
+
 
 /** Toque simples gerado no próprio navegador (sem arquivo de áudio). */
 function useToque(ativo: boolean) {
