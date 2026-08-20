@@ -58,6 +58,7 @@ const dig = (v?: string | null) => String(v ?? '').replace(/\D/g, '');
 
 export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [estado, setEstado] = useState<EstadoChamada>('idle');
   const [alvo, setAlvo] = useState<Alvo | null>(null);
   const [segundos, setSegundos] = useState(0);
@@ -65,6 +66,12 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   const [entrando, setEntrando] = useState<ChamadaRow | null>(null);
   const [permissoes, setPermissoes] = useState<Record<string, { status: string; expira_em: string | null }>>({});
   const [comChamada, setComChamada] = useState<Set<string>>(new Set());
+  const meuIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => { meuIdRef.current = data?.user?.id ?? null; });
+  }, []);
+
 
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
