@@ -189,6 +189,9 @@ export default function EnvioMeta() {
   const [loading, setLoading] = useState(true);
 
   const [templateId, setTemplateId] = useState<string>("");
+  // Variação de templates: chaves adicionais (além do principal) que entram no round-robin
+  const [variantesExtraKeys, setVariantesExtraKeys] = useState<string[]>([]);
+
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [recipientsHeaders, setRecipientsHeaders] = useState<string[]>([]);
