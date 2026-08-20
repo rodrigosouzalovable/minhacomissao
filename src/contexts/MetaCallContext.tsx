@@ -336,34 +336,41 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
 
   // ---------- atender chamada de entrada ----------
   const atender = useCallback(async (row: ChamadaRow) => {
-    setEntrando(null);
     if (!row.call_id || !row.sdp_offer) {
+      setEntrando(null);
       toast({ title: 'Chamada indisponível', description: 'A oferta de áudio não chegou.', variant: 'destructive' });
       return;
     }
-    setAlvo({ contato_id: row.contato_id, instancia_id: row.instancia_id!, telefone: row.telefone });
     setEstado('preparando');
     try {
+      // o microfone é pedido antes de fechar o pop-up: se o navegador bloquear,
+      // a chamada continua tocando e o atendente pode tentar de novo
       const pc = await criarPc();
+      setEntrando(null);
       await pc.setRemoteDescription({ type: 'offer', sdp: row.sdp_offer });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       const sdp = await sdpCompleto(pc);
+      setAlvo({ contato_id: row.contato_id, instancia_id: row.instancia_id!, telefone: row.telefone });
       const { data, error } = await supabase.functions.invoke('meta-call-action', {
         body: { acao: 'accept', call_id: row.call_id, instancia_id: row.instancia_id, sdp },
       });
-      if (error) throw new Error(error.message);
-      if (!data?.ok) throw new Error(data?.error || 'Falha ao atender');
+      if (error || !data?.ok) throw new Error(await erroLegivel(error, data));
       callIdRef.current = row.call_id;
       chamadaIdRef.current = row.id;
       setSegundos(0);
       setEstado('em_andamento');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao atender';
+      const bruto = e instanceof Error ? e.message : 'Erro ao atender';
+      const nome = (e as any)?.name ?? '';
+      const msg = /NotAllowedError|Permission denied|NotFoundError|microphone/i.test(`${nome} ${bruto}`)
+        ? 'Permita o acesso ao microfone no navegador para atender a chamada.'
+        : bruto;
       limpar();
       toast({ title: 'Não foi possível atender', description: msg, variant: 'destructive' });
     }
   }, [criarPc, limpar, toast]);
+
 
   const rejeitar = useCallback(async (row: ChamadaRow) => {
     setEntrando(null);
