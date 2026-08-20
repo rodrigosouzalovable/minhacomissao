@@ -34,10 +34,14 @@ type Ctx = {
   mudo: boolean;
   ligar: (alvo: Alvo) => Promise<void>;
   pedirPermissao: (alvo: Alvo) => Promise<boolean>;
+  /** Revalida no banco e liga se já autorizado; caso contrário pede a permissão. */
+  ligarOuPedirPermissao: (alvo: Alvo) => Promise<void>;
   encerrar: () => Promise<void>;
   alternarMudo: () => void;
   permissaoDe: (instanciaId: string, telefone: string) => 'accepted' | 'pending' | 'rejected' | 'none';
   recarregarPermissoes: () => Promise<void>;
+  revalidarPermissao: (instanciaId: string, telefone: string) => Promise<'accepted' | 'pending' | 'rejected' | 'none'>;
+
   /** true quando o número oficial já tem chamadas de voz ligadas. */
   chamadasHabilitadas: (instanciaId: string) => boolean;
   recarregarInstanciasComChamada: () => Promise<void>;
