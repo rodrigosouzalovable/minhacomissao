@@ -4,6 +4,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
+import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -791,7 +793,17 @@ Deno.serve(async (req) => {
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
+      // Número removido/sem permissão no Business Manager (#100)
+      if (ehNumeroInacessivel(msg)) {
+        await tratarNumeroInacessivel(supabase, inst, msg);
+        return new Response(JSON.stringify({
+          success: false, instance_restricted: true, instance_disable: true, numero_inacessivel: true,
+          error: MSG_NUMERO_INACESSIVEL, detalhe: msg, instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       // Detecta bloqueio/restrição/banimento síncrono da Meta
+
       const restrictedCodes = [
         131031, 131049, 368, 130429,
         131042, 131050,

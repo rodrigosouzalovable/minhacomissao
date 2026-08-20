@@ -4,6 +4,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
+import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -250,10 +252,18 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       const erro = data?.error?.message || `HTTP ${res.status}`;
+      if (ehNumeroInacessivel(erro, data?.error?.code)) {
+        await tratarNumeroInacessivel(supabase, inst, erro);
+        return new Response(JSON.stringify({
+          success: false, instance_restricted: true, numero_inacessivel: true,
+          error: MSG_NUMERO_INACESSIVEL, detalhe: erro, instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       return new Response(JSON.stringify({ success: false, error: erro }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     const waId: string | null = data?.messages?.[0]?.id || null;
     const nowIso = new Date().toISOString();

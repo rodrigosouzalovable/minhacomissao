@@ -2,6 +2,8 @@
 // Áudio é enviado via Meta Media API (upload multipart) para evitar rejeição de container webm.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
+import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -291,10 +293,19 @@ Deno.serve(async (req) => {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       console.log('[send-whatsapp-meta-media] Meta send error', { metaType, err: data });
-      return new Response(JSON.stringify({ success: false, error: data?.error?.message || `HTTP ${res.status}`, raw: data }), {
+      const erroMsg = data?.error?.message || `HTTP ${res.status}`;
+      if (ehNumeroInacessivel(erroMsg, data?.error?.code)) {
+        await tratarNumeroInacessivel(supabase, inst, erroMsg);
+        return new Response(JSON.stringify({
+          success: false, instance_restricted: true, numero_inacessivel: true,
+          error: MSG_NUMERO_INACESSIVEL, detalhe: erroMsg, instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ success: false, error: erroMsg, raw: data }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     const waId = data?.messages?.[0]?.id || null;
     console.log('[send-whatsapp-meta-media] message sent', { metaType, has_message_id: !!waId });

@@ -7,10 +7,21 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
 
   const s = raw.toLowerCase();
 
+  // #100 — número/objeto inacessível pelo token atual (removido do WABA, migrou de BM
+  // ou o app perdeu permissão). Precisa reconectar a instância na Meta.
+  if (
+    s.includes("unsupported post request") ||
+    (s.includes("object with id") && s.includes("does not exist")) ||
+    (s.includes("#100") && s.includes("missing permissions"))
+  ) {
+    return "Esse número não está mais acessível pela API da Meta (#100). Normalmente significa que ele foi removido/desabilitado do WhatsApp Business Account, migrou de Business Manager, ou o token do app perdeu permissão sobre ele. Reconecte a instância (token e Phone Number ID) no Business Manager ou envie por outra instância. O número foi retirado do pool de envios automaticamente.";
+  }
+
   // #131000 — a Meta aceita a mensagem e rejeita na entrega. Na prática é problema da instância.
   if (s.includes("#131000") || s.includes("something went wrong")) {
     return "A Meta aceitou o envio mas rejeitou a entrega por essa instância (#131000). Quase sempre é problema do próprio número — nome de exibição em análise/reprovado, qualidade rebaixada ou pendência de pagamento no Business Manager — e não do contato. Envie esse contato por outra instância saudável.";
   }
+
   // Número sem WhatsApp / não entregável
   if (s.includes("message undeliverable") || s.includes("#131026")) {
     return "Não foi possível entregar: o número provavelmente não tem WhatsApp ativo, mudou de titular ou não aceita mensagens de empresas. Não é falha da instância.";
