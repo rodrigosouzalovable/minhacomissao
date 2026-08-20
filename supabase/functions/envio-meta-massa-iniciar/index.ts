@@ -54,6 +54,11 @@ Deno.serve(async (req) => {
       ? Math.max(1, Math.min(60, Number(body?.msgsPorSegundo ?? 30)))
       : 10;
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
+    // Variação de templates: round-robin entre variantes (mesma qtd de variáveis)
+    const templateVariantes = (Array.isArray(body?.templateVariantes) ? body.templateVariantes : []) as Array<{
+      template_id: string; nome_template?: string; template_id_by_instance?: Record<string, string>;
+    }>;
+
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
     const folderId: string | null = typeof body?.folderId === 'string' && body.folderId ? body.folderId : null;
 
