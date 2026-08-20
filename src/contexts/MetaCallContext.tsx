@@ -38,7 +38,11 @@ type Ctx = {
   alternarMudo: () => void;
   permissaoDe: (instanciaId: string, telefone: string) => 'accepted' | 'pending' | 'rejected' | 'none';
   recarregarPermissoes: () => Promise<void>;
+  /** true quando o número oficial já tem chamadas de voz ligadas. */
+  chamadasHabilitadas: (instanciaId: string) => boolean;
+  recarregarInstanciasComChamada: () => Promise<void>;
 };
+
 
 const MetaCallContext = createContext<Ctx | null>(null);
 
