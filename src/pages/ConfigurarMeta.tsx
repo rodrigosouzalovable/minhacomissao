@@ -1571,18 +1571,45 @@ export default function ConfigurarMeta() {
               <Input value={form.waba_id} onChange={(e) => setForm({ ...form, waba_id: e.target.value })} placeholder="Ex: 987654321098765" />
             </div>
             <div>
-              <Label>Business Manager ID (opcional)</Label>
-              <Input value={form.business_id} onChange={(e) => setForm({ ...form, business_id: e.target.value })} />
+              <Label>Business Manager</Label>
+              <Select value={form.meta_bm_id} onValueChange={(v) => setForm({ ...form, meta_bm_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecionar BM" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Não vinculada —</SelectItem>
+                  {bms.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {bms.length === 0
+                  ? 'Cadastre BMs em "Business Managers" para vincular'
+                  : "O limite diário de disparos é definido na BM e compartilhado por todos os WhatsApps vinculados a ela."}
+              </p>
             </div>
             <div>
               <Label>Access Token (permanente) *</Label>
               <Input type="password" value={form.access_token} onChange={(e) => setForm({ ...form, access_token: e.target.value })} placeholder="EAAxxxxx..." />
             </div>
             <div>
-              <Label>Tier diário inicial</Label>
-              <Input type="number" value={form.tier_diario} onChange={(e) => setForm({ ...form, tier_diario: e.target.value })} />
+              <Label>Limite de mensagens</Label>
+              <Select value={form.messaging_limit_manual} onValueChange={(v) => setForm({ ...form, messaging_limit_manual: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__auto__">🔄 Automático (padrão TIER_1K)</SelectItem>
+                  <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
+                  <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
+                  <SelectItem value="TIER_2K">✋ TIER_2K (2.000/dia)</SelectItem>
+                  <SelectItem value="TIER_10K">✋ TIER_10K (10.000/dia)</SelectItem>
+                  <SelectItem value="TIER_100K">✋ TIER_100K (100.000/dia)</SelectItem>
+                  <SelectItem value="TIER_UNLIMITED">✋ Ilimitado</SelectItem>
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground mt-1">Meta começa em 250 e escala para 1k → 10k → 100k</p>
             </div>
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
