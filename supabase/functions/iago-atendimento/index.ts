@@ -480,7 +480,7 @@ Deno.serve(async (req) => {
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
       qualificacoes: await quals(),
-      propostaPrevia, respostaAutomatica,
+      propostaPrevia, respostaAutomatica, precisaPerguntarNome,
     });
 
 
