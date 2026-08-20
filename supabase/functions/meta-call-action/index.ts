@@ -36,17 +36,28 @@ Deno.serve(async (req) => {
 
     const inst = await carregarInstancia(supabase, instanciaId);
 
+    // Chamadas de entrada: a Meta recomenda pre_accept (negocia o áudio) e depois accept.
+    if (acao === 'accept' && sdp) {
+      const pre = await chamarGraph(inst, {
+        call_id: callId, action: 'pre_accept', session: { sdp_type: 'answer', sdp },
+      });
+      console.log('[meta-call-action:pre_accept]', pre.status, JSON.stringify(pre.data));
+      // pre_accept é best-effort: se a Meta recusar, seguimos direto para o accept
+    }
+
     const payload: Record<string, unknown> = { call_id: callId, action: acao };
     if ((acao === 'accept' || acao === 'pre_accept') && sdp) {
       payload.session = { sdp_type: 'answer', sdp };
     }
 
     const resp = await chamarGraph(inst, payload);
+    console.log(`[meta-call-action:${acao}]`, resp.status, JSON.stringify(resp.data));
     if (!resp.ok) {
       const erro = humanizarErroChamada(resp.data);
       console.error(`[meta-call-action:${acao}] falha`, resp.status, JSON.stringify(resp.data));
       return json({ ok: false, error: erro, status: resp.status, details: resp.data }, 200);
     }
+
 
     if (chamada?.id) {
       const patch: Record<string, unknown> = { atualizado_em: new Date().toISOString() };

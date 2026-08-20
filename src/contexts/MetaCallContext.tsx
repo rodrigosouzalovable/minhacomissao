@@ -336,34 +336,41 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
 
   // ---------- atender chamada de entrada ----------
   const atender = useCallback(async (row: ChamadaRow) => {
-    setEntrando(null);
     if (!row.call_id || !row.sdp_offer) {
+      setEntrando(null);
       toast({ title: 'Chamada indisponível', description: 'A oferta de áudio não chegou.', variant: 'destructive' });
       return;
     }
-    setAlvo({ contato_id: row.contato_id, instancia_id: row.instancia_id!, telefone: row.telefone });
     setEstado('preparando');
     try {
+      // o microfone é pedido antes de fechar o pop-up: se o navegador bloquear,
+      // a chamada continua tocando e o atendente pode tentar de novo
       const pc = await criarPc();
+      setEntrando(null);
       await pc.setRemoteDescription({ type: 'offer', sdp: row.sdp_offer });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       const sdp = await sdpCompleto(pc);
+      setAlvo({ contato_id: row.contato_id, instancia_id: row.instancia_id!, telefone: row.telefone });
       const { data, error } = await supabase.functions.invoke('meta-call-action', {
         body: { acao: 'accept', call_id: row.call_id, instancia_id: row.instancia_id, sdp },
       });
-      if (error) throw new Error(error.message);
-      if (!data?.ok) throw new Error(data?.error || 'Falha ao atender');
+      if (error || !data?.ok) throw new Error(await erroLegivel(error, data));
       callIdRef.current = row.call_id;
       chamadaIdRef.current = row.id;
       setSegundos(0);
       setEstado('em_andamento');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Erro ao atender';
+      const bruto = e instanceof Error ? e.message : 'Erro ao atender';
+      const nome = (e as any)?.name ?? '';
+      const msg = /NotAllowedError|Permission denied|NotFoundError|microphone/i.test(`${nome} ${bruto}`)
+        ? 'Permita o acesso ao microfone no navegador para atender a chamada.'
+        : bruto;
       limpar();
       toast({ title: 'Não foi possível atender', description: msg, variant: 'destructive' });
     }
   }, [criarPc, limpar, toast]);
+
 
   const rejeitar = useCallback(async (row: ChamadaRow) => {
     setEntrando(null);
@@ -373,7 +380,15 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => undefined);
   }, []);
 
+  // rede de segurança: nenhuma chamada da Meta fica tocando mais de ~45s
+  useEffect(() => {
+    if (!entrando) return;
+    const t = setTimeout(() => setEntrando(null), 45_000);
+    return () => clearTimeout(t);
+  }, [entrando?.id]);
+
   // ---------- realtime: respostas SDP, encerramentos e chamadas de entrada ----------
+
   useEffect(() => {
     const ch = supabase.channel('meta-chamadas-global')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_chamadas' }, async (payload) => {
@@ -386,7 +401,13 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        // a chamada exibida no pop-up deixou de tocar -> fecha e para o toque
+        if (row.status !== 'ringing') {
+          setEntrando(prev => (prev && (prev.id === row.id || prev.call_id === row.call_id) ? null : prev));
+        }
+
         if (!callIdRef.current || row.call_id !== callIdRef.current) return;
+
 
         // resposta SDP do cliente (chamada de saída aceita)
         if (row.sdp_answer && !answerAplicadaRef.current && pcRef.current) {

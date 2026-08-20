@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Phone, PhoneOff } from 'lucide-react';
+import { Phone, PhoneOff, BellOff } from 'lucide-react';
 import type { ChamadaRow } from '@/contexts/MetaCallContext';
 
 interface Props {
@@ -14,8 +14,18 @@ interface Props {
 /** Toque simples gerado no próprio navegador (sem arquivo de áudio). */
 function useToque(ativo: boolean) {
   const ctxRef = useRef<AudioContext | null>(null);
+  const oscsRef = useRef<OscillatorNode[]>([]);
+
+  const pararTudo = useCallback(() => {
+    for (const o of oscsRef.current) {
+      try { o.stop(); } catch { /* já parado */ }
+      try { o.disconnect(); } catch { /* noop */ }
+    }
+    oscsRef.current = [];
+  }, []);
+
   useEffect(() => {
-    if (!ativo) return;
+    if (!ativo) { pararTudo(); return; }
     let cancelado = false;
     const beep = () => {
       if (cancelado) return;
@@ -28,19 +38,30 @@ function useToque(ativo: boolean) {
         osc.frequency.value = 620;
         gain.gain.value = 0.08;
         osc.connect(gain).connect(ctx.destination);
+        osc.onended = () => { oscsRef.current = oscsRef.current.filter(o => o !== osc); };
         osc.start();
         osc.stop(ctx.currentTime + 0.35);
+        oscsRef.current.push(osc);
       } catch { /* navegador bloqueou áudio */ }
     };
     beep();
     const t = setInterval(beep, 1600);
-    return () => { cancelado = true; clearInterval(t); };
-  }, [ativo]);
-  useEffect(() => () => { void ctxRef.current?.close().catch(() => undefined); }, []);
+    return () => { cancelado = true; clearInterval(t); pararTudo(); };
+  }, [ativo, pararTudo]);
+
+  useEffect(() => () => {
+    pararTudo();
+    void ctxRef.current?.close().catch(() => undefined);
+    ctxRef.current = null;
+  }, [pararTudo]);
 }
 
 export function ChamadaEntrandoDialog({ chamada, onAtender, onRejeitar, onFechar }: Props) {
-  useToque(!!chamada);
+  const [silenciado, setSilenciado] = useState(false);
+  useToque(!!chamada && !silenciado);
+
+  // cada nova chamada volta a tocar
+  useEffect(() => { if (chamada) setSilenciado(false); }, [chamada?.id]);
 
   return (
     <Dialog open={!!chamada} onOpenChange={(o) => { if (!o) onFechar(); }}>
@@ -65,6 +86,16 @@ export function ChamadaEntrandoDialog({ chamada, onAtender, onRejeitar, onFechar
             <PhoneOff className="h-4 w-4 mr-1" /> Rejeitar
           </Button>
         </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full text-muted-foreground"
+          onClick={() => setSilenciado(true)}
+          disabled={silenciado}
+        >
+          <BellOff className="h-4 w-4 mr-1" /> {silenciado ? 'Toque silenciado' : 'Silenciar toque'}
+        </Button>
       </DialogContent>
     </Dialog>
   );
