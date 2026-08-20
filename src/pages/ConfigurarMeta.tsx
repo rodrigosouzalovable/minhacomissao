@@ -730,19 +730,15 @@ export default function ConfigurarMeta() {
       });
       if (error) throw new Error(error.message);
       if (!data?.ok) throw new Error(data?.error || "Falha ao alterar as chamadas de voz");
-      toast({
-        title: ativar ? "Chamadas de voz ativadas" : "Chamadas de voz desativadas",
-        description: ativar
-          ? "Este número já pode receber e fazer ligações pelo WhatsApp."
-          : "Este número não fará mais ligações pelo WhatsApp.",
-      });
+      toast.success(
+        ativar
+          ? "Chamadas de voz ativadas — este número já pode receber e fazer ligações pelo WhatsApp."
+          : "Chamadas de voz desativadas neste número.",
+      );
       carregar();
     } catch (e) {
-      toast({
-        title: "Não foi possível alterar as chamadas",
-        description: e instanceof Error ? e.message : "Erro desconhecido",
-        variant: "destructive",
-      });
+      toast.error(e instanceof Error ? e.message : "Não foi possível alterar as chamadas");
+
     } finally {
       setChamadasBusy(null);
     }
