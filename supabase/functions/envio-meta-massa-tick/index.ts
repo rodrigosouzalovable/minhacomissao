@@ -232,7 +232,8 @@ async function processarItem(job: any): Promise<ItemResult> {
   if (!pickResp?.success) {
     const blocked = pickResp?.blocked;
     if (blocked === 'domingo' || blocked === 'horario') {
-      const waitMs = 10 * 60_000;
+      const waitMs = await esperaAteJanela(supabase);
+
       await supabase.from('envio_meta_job').update({
         proximo_em: new Date(Date.now() + waitMs).toISOString(),
         status_motivo: pickResp?.error || blocked,
