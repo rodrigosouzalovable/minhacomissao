@@ -1722,6 +1722,8 @@ export default function EnvioMeta() {
         instancias={instancias.map((i) => ({ id: i.id, nome: i.nome }))}
         template={template ? { id: template.id, nome_template: template.nome_template } : null}
         templateIdByInstance={templateIdByInstance}
+        templateVariantes={templateVariantesAgendamento}
+
         minSec={Math.max(1, Number(minSec) || 1)}
         maxSec={Math.max(Math.max(1, Number(minSec) || 1), Number(maxSec) || 1)}
         disabled={enviando || validando || instanciasIncompatíveis.length > 0}
