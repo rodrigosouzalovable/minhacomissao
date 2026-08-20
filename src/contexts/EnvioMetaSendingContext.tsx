@@ -678,6 +678,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           minSec: p.minSec,
           maxSec: p.maxSec,
           templateIdByInstance: p.templateIdByInstance ?? {},
+          templateVariantes: p.templateVariantes ?? [],
+
           nomeCampanha: p.nomeCampanha ?? null,
           modoRajada: p.modoRajada === true,
           msgsPorSegundo: p.msgsPorSegundo,
