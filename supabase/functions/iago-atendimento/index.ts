@@ -633,6 +633,8 @@ Deno.serve(async (req) => {
         opcao_escolhida: escolha || null,
         data_pagamento: dataAcordada,
         reperguntou_data: reperguntouData,
+        nome_informado: nomeInformado || (estado.contexto || {}).nome_informado || null,
+        nome_pedido: nomePedido || precisaPerguntarNome,
       },
 
     }).eq('id', estado.id);
