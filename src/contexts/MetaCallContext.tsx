@@ -67,10 +67,18 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   const [permissoes, setPermissoes] = useState<Record<string, { status: string; expira_em: string | null }>>({});
   const [comChamada, setComChamada] = useState<Set<string>>(new Set());
   const meuIdRef = useRef<string | null>(null);
+  const souAdminRef = useRef(false);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => { meuIdRef.current = data?.user?.id ?? null; });
+    void supabase.auth.getUser().then(async ({ data }) => {
+      const uid = data?.user?.id ?? null;
+      meuIdRef.current = uid;
+      if (!uid) return;
+      const { data: adm } = await supabase.rpc('has_role', { _user_id: uid, _role: 'admin' });
+      souAdminRef.current = adm === true;
+    });
   }, []);
+
 
 
 
