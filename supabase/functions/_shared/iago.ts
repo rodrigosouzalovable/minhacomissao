@@ -186,7 +186,13 @@ export function ehOptOut(texto: string): boolean {
 export function ehNumeroErrado(texto: string): boolean {
   const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (!t.trim()) return false;
+  // Tolerante a erros de digitação: "pessoo errada", "pesoa erada", "num errado", "numro errado"
+  if (/(pes+o+a?s?\s*e?r+a?r?ad[ao]|(num|nmr|numr|numer|numero|nunero|telefon?e?|tel|fone|whats\w*|contato)\s*(esta\s*)?e?r+a?r+ad[ao])/.test(t)) return true;
   if (/(numero\s*errado|telefone\s*errado|pessoa\s*errada|nao\s*conhe(c|ss)o|errou\s*o\s*numero|(e|foi)\s*engano|numero\s*trocado|nao\s*e\s*comigo|nao\s*mora\s*(mais\s*)?aqui|aqui\s*nao\s*(e|mora)|quem\s*fala\s*nao\s*e|nao\s*e\s*(o\s*)?meu\s*(nome|numero))/.test(t)) return true;
+  // "nao é essa/esta pessoa", "nao é ela/ele", "nao conheco essa pessoa"
+  if (/\bnao\s*(e|eh|é)?\s*(essa|esta|ess[ae]|est[ae])?\s*pessoa\b/.test(t)) return true;
+  if (/\bnao\s*conhe\w*\s*(essa|esse|est[ae])?\s*pessoa\b/.test(t)) return true;
+
   // Pronomes/artigos clássicos: "nao sou o Sebastiao", "nao sou eu", "nao sou essa pessoa"
   if (/\bnao\s*(sou|e|eh)\s+(o|a|ele|ela|essa|esse|est[ae]|eu|ninguem)\b/.test(t)) return true;
   // "nao sou <nome>" — nome próprio direto, sem artigo
