@@ -7,7 +7,18 @@ import {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function ligarDesligar(inst: Instancia, ativar: boolean) {
+/** Reinscreve o app no WABA (necessário depois de adicionar o campo de webhook "calls"). */
+async function reinscreverWaba(inst: Instancia) {
+  if (!inst.waba_id) return { ok: false, data: { error: { message: 'Instância sem waba_id' } } };
+  const res = await fetch(`${GRAPH}/${inst.waba_id}/subscribed_apps`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${inst.access_token}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok && !data?.error, status: res.status, data };
+}
+
+async function postCalling(inst: Instancia, ativar: boolean) {
   const res = await fetch(`${GRAPH}/${inst.phone_number_id}/settings`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
@@ -22,6 +33,19 @@ async function ligarDesligar(inst: Instancia, ativar: boolean) {
   const data = await res.json().catch(() => ({}));
   return { ok: res.ok && !data?.error, status: res.status, data };
 }
+
+async function ligarDesligar(inst: Instancia, ativar: boolean) {
+  let r = await postCalling(inst, ativar);
+  // 138018/2593151 = pré-requisitos (webhook "calls" não assinado no WABA). Reinscreve e tenta de novo.
+  const code = Number(r.data?.error?.code ?? 0);
+  if (!r.ok && code === 138018) {
+    await reinscreverWaba(inst);
+    await sleep(800);
+    r = await postCalling(inst, ativar);
+  }
+  return r;
+}
+
 
 async function lerStatus(inst: Instancia) {
   const get = await fetch(`${GRAPH}/${inst.phone_number_id}/settings?include=calling`, {
