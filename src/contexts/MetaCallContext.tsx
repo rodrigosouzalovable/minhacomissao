@@ -156,8 +156,19 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   });
 
   // ---------- tradução de erros da função de chamadas ----------
+  const detalheTexto = (d: any) => {
+    if (!d) return '';
+    if (typeof d === 'string') return d;
+    const alvo = d?.error?.error_data?.details ?? d?.error?.message;
+    if (typeof alvo === 'string') return alvo;
+    try { return JSON.stringify(d).slice(0, 300); } catch { return ''; }
+  };
   const erroLegivel = async (error: any, data: any): Promise<string> => {
-    if (data?.error) return String(data.details ? `${data.error} — ${data.details}` : data.error);
+    if (data?.error) {
+      const det = detalheTexto(data.details);
+      return String(det ? `${data.error} — ${det}` : data.error);
+    }
+
     const bruto = String(error?.message ?? '');
     // erro de rede/deploy: o navegador não conseguiu falar com o backend
     if (/Failed to send a request|Failed to fetch|NetworkError|FunctionsFetchError/i.test(bruto)) {
@@ -170,7 +181,7 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
         const txt = await ctx.text();
         try {
           const j = JSON.parse(txt);
-          if (j?.error) return String(j.details ? `${j.error} — ${j.details}` : j.error);
+          if (j?.error) return String(detalheTexto(j.details) ? `${j.error} — ${detalheTexto(j.details)}` : j.error);
         } catch { /* corpo não-JSON */ }
         if (txt) return txt.slice(0, 300);
       }
