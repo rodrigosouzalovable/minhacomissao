@@ -302,6 +302,15 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     }
   }, [estado, criarPc, toast, limpar, pedirPermissao, comChamada]);
 
+  /** Botão de telefone: revalida a permissão e decide entre ligar ou pedir autorização. */
+  const ligarOuPedirPermissao = useCallback(async (a: Alvo) => {
+    const st = await revalidarPermissao(a.instancia_id, a.telefone);
+    if (st === 'accepted') { await ligar(a); return; }
+    await pedirPermissao(a);
+  }, [revalidarPermissao, ligar, pedirPermissao]);
+
+
+
 
   const encerrar = useCallback(async () => {
     const callId = callIdRef.current;
