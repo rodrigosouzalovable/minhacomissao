@@ -2027,8 +2027,8 @@ export default function InboxMeta() {
                               telefone: contatoAtivo.telefone!,
                               nome: contatoAtivo.nome,
                             };
-                            if (autorizado) void ligar(alvo);
-                            else void pedirPermissao(alvo);
+                            void ligarOuPedirPermissao(alvo);
+
                           }}
                           title={
                             !vozOn
