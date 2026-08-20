@@ -140,7 +140,7 @@ Deno.serve(async (req) => {
         const finalItem = { ...item, instancia_id: chosenInstId };
 
         try {
-          const data = await invokeSend(supabase, finalItem, campanha);
+          const data = await invokeSend(supabase, finalItem, campanha, i);
           if (data?.blocked === 'domingo' || data?.blocked === 'horario') break;
           if (data?.tier_full || data?.pool_blocked || data?.pool_paused) {
             // Não decrementa; deixa pendente para replanejamento
