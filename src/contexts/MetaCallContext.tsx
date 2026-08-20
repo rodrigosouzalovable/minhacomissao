@@ -470,9 +470,54 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
           limpar();
         }
       })
-      .subscribe();
-    return () => { void supabase.removeChannel(ch); };
+      .subscribe((st) => {
+        if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') {
+          setTimeout(() => { try { void ch.subscribe(); } catch { /* canal já removido */ } }, 3000);
+        }
+      });
+
+    // se a aba ficou em segundo plano ou a internet caiu, garante a reconexão
+    const revisar = () => {
+      if (document.visibilityState !== 'visible') return;
+      const st = (ch as any).state;
+      if (st !== 'joined' && st !== 'joining') {
+        try { void ch.subscribe(); } catch { /* canal já removido */ }
+      }
+    };
+    document.addEventListener('visibilitychange', revisar);
+    window.addEventListener('online', revisar);
+
+    return () => {
+      document.removeEventListener('visibilitychange', revisar);
+      window.removeEventListener('online', revisar);
+      void supabase.removeChannel(ch);
+    };
   }, [estado, limpar, toast]);
+
+  // pega uma chamada que já estava tocando (ex.: página recarregada durante o toque)
+  useEffect(() => {
+    const buscarTocando = async () => {
+      if (document.visibilityState !== 'visible' || estado !== 'idle' || entrando) return;
+      const desde = new Date(Date.now() - 45_000).toISOString();
+      const { data } = await supabase.from('whatsapp_chamadas')
+        .select('*')
+        .eq('tipo_chamada', 'entrada')
+        .eq('status', 'ringing')
+        .gte('atualizado_em', desde)
+        .order('atualizado_em', { ascending: false })
+        .limit(5);
+      const row = (data ?? []).find((r: any) => r.sdp_offer && (
+        r.funcionario_id ? r.funcionario_id === meuIdRef.current : souAdminRef.current
+      ));
+      if (row) setEntrando(row as ChamadaRow);
+    };
+    void buscarTocando();
+    const onVis = () => { void buscarTocando(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado]);
+
 
   // permissões em tempo real (o cliente aceitou o pedido)
   useEffect(() => {
