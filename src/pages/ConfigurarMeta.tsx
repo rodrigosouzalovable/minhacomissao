@@ -1054,6 +1054,19 @@ export default function ConfigurarMeta() {
             <div className="flex gap-2">
               <Button
                 variant="outline"
+                onClick={ativarChamadasTodas}
+                disabled={chamadasBusy !== null}
+                title="Liga a Calling API (chamadas de voz) em todos os números ativos da API oficial Meta"
+              >
+                {chamadasBusy === "__all__" ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Phone className="h-4 w-4 mr-2" />
+                )}
+                Ativar chamadas em todos
+              </Button>
+              <Button
+                variant="outline"
                 onClick={verificarSaudeWebhooks}
                 disabled={verificandoWebhooks}
                 title="Verifica todos os webhooks na Meta, reinscreve os que estiverem incorretos e detecta possíveis mensagens perdidas"
