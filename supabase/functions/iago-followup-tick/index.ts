@@ -11,7 +11,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, agoraSP, primeiroNome, carregarConfig, perfilIago, iagoAtendeCaixa,
-  etiquetasAtendente, temAtendenteHumanoNoTelefone, enviarTexto, chamarIA, extrairJson, ehNumeroErrado, ehFalecido, etiquetarAguardandoHumano,
+  etiquetasAtendente, temAtendenteHumanoNoTelefone, enviarTexto, chamarIA, extrairJson, ehNumeroErrado, ehFalecido, etiquetarAguardandoHumano, suprimirDestinatario,
   nomePerfilConfiavel, nomeDeSaudacaoEnviada,
 } from '../_shared/iago.ts';
 
@@ -180,7 +180,17 @@ Deno.serve(async (req) => {
       if (etapa) candidatos.set(est.id, { est, etapa });
     }
 
+    const ETAPAS_ENCERRADAS = new Set(['numero_errado', 'falecido', 'optout']);
+
     for (const { est, etapa } of candidatos.values()) {
+      // Conversa já encerrada (pessoa errada / falecimento / opt-out): nunca retomar.
+      if (ETAPAS_ENCERRADAS.has(String(est.etapa || '')) || est.optout === true) {
+        await supabase.from('iago_conversa_estado')
+          .update({ followup_feito: true, followup_em: null, followup_etapa: 3 }).eq('id', est.id);
+        pulados.push(`conversa encerrada (${est.etapa || 'optout'})`);
+        continue;
+      }
+
       const { data: contato } = await supabase
         .from('meta_whatsapp_contatos')
         .select('id, instancia_id, telefone, bsuid, nome, folder_id, ultima_msg_entrada_em')
@@ -238,7 +248,8 @@ Deno.serve(async (req) => {
       const historico = ((msgs || []) as any[]).slice().reverse();
 
       // ===== Cliente avisou que não é a pessoa procurada => nunca fazer follow-up =====
-      const negouIdentidade = historico.some((m) => m.direcao === 'entrada' && ehNumeroErrado(String(m.conteudo || '')));
+      const negouIdentidade = historico.some((m) => m.direcao === 'entrada' && ehNumeroErrado(String(m.conteudo || '')))
+        || historico.some((m) => m.direcao === 'saida' && /desculpe o inc[oô]modo/i.test(String(m.conteudo || '')));
       if (negouIdentidade) {
         await supabase.from('iago_conversa_estado').update({
           followup_feito: true,
@@ -248,6 +259,11 @@ Deno.serve(async (req) => {
           etapa: 'numero_errado',
         }).eq('id', est.id);
         try { await etiquetarAguardandoHumano(supabase, (contato as any).id); } catch (_) { /* noop */ }
+        await suprimirDestinatario(
+          supabase,
+          (contato as any).telefone || (contato as any).bsuid,
+          'pessoa_errada: cliente informou que não é a pessoa procurada',
+        );
         pulados.push('número errado');
         continue;
       }
