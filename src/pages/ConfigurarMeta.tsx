@@ -546,8 +546,8 @@ export default function ConfigurarMeta() {
       nome: editForm.nome.trim(),
       phone_number_id: editForm.phone_number_id.trim(),
       waba_id: editForm.waba_id.trim(),
-      business_id: editForm.business_id.trim() || null,
-      tier_diario: parseInt(editForm.tier_diario) || 250,
+      ...camposBmTier(editForm),
+
     };
     if (editForm.access_token.trim()) patch.access_token = editForm.access_token.trim();
     const { error } = await supabase
