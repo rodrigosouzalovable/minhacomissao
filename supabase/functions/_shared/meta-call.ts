@@ -3,7 +3,9 @@
 // a Graph API só troca a sinalização (SDP).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-export const GRAPH = 'https://graph.facebook.com/v21.0';
+// Calling API existe a partir da v23.0 da Graph API.
+export const GRAPH = 'https://graph.facebook.com/v23.0';
+
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
