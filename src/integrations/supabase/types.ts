@@ -8420,6 +8420,13 @@ export type Database = {
         Args: { _ate?: string; _uid?: string }
         Returns: Json
       }
+      meta_fila_status_caixa: {
+        Args: { _folder?: string }
+        Returns: {
+          na_fila: boolean
+          user_id: string
+        }[]
+      }
       meta_inbox_default_can_manage: {
         Args: { _uid: string }
         Returns: boolean
