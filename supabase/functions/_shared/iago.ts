@@ -206,6 +206,32 @@ export function ehNumeroErrado(texto: string): boolean {
 
 }
 
+/**
+ * Nunca mais falar com esse telefone em campanhas/lembretes.
+ * Usado quando o cliente informa que não é a pessoa procurada (ou falecimento).
+ */
+export async function suprimirDestinatario(
+  supabase: any,
+  telefone: unknown,
+  motivo: string,
+): Promise<void> {
+  try {
+    const dig = soDigitos(telefone);
+    const sufixo = dig.length >= 8 ? dig.slice(-8) : dig;
+    if (!sufixo) return;
+    await supabase.from('meta_destinatario_supressao').upsert({
+      telefone_sufixo: sufixo,
+      telefone: dig,
+      motivo: String(motivo || '').slice(0, 160),
+      criado_em: new Date().toISOString(),
+    }, { onConflict: 'telefone_sufixo' });
+  } catch (e) {
+    console.log('[IAGO] falha ao suprimir destinatário:', String(e).slice(0, 160));
+  }
+}
+
+
+
 /** Mensagem única de condolências/encerramento quando o cliente informa falecimento. */
 export const MSG_FALECIDO =
   'Sinto muito pela perda. Agradeço a informação e peço desculpas pelo incômodo. Vamos registrar aqui e não incomodaremos mais. 🙏';
