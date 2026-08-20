@@ -39,27 +39,43 @@ Deno.serve(async (req) => {
           components: [{ type: 'body', parameters: [{ type: 'text', text: nomeCliente }] }],
         },
       }
-      : {
-        messaging_product: 'whatsapp', recipient_type: 'individual', to: telefone, type: 'interactive',
-        interactive: {
-          type: 'call_permission_request',
-          body: { text: texto },
-          action: { name: 'review_call_permission', parameters: {} },
-        },
-      };
+      : null;
 
-    const res = await fetch(`${GRAPH}/${inst.phone_number_id}/messages`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const payloadInterativo = (nomeCta: string) => ({
+      messaging_product: 'whatsapp', recipient_type: 'individual', to: telefone, type: 'interactive',
+      interactive: {
+        type: 'call_permission_request',
+        body: { text: texto },
+        action: { name: nomeCta },
+      },
     });
-    const data = await res.json().catch(() => ({}));
 
-    if (!res.ok || data?.error) {
-      const erro = humanizarErroChamada(data);
-      console.error('[meta-call-permission-request] falha', res.status, JSON.stringify(data));
-      return json({ ok: false, error: erro, status: res.status, details: data }, 200);
+    const enviar = async (corpo: unknown) => {
+      const res = await fetch(`${GRAPH}/${inst.phone_number_id}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpo),
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok && !data?.error, status: res.status, data };
+    };
+
+    let r = await enviar(payload ?? payloadInterativo('call_permission_request'));
+
+    // 131009 no CTA: tenta o nome antigo antes de desistir.
+    if (!payload && !r.ok && Number(r.data?.error?.code ?? 0) === 131009) {
+      console.error('[meta-call-permission-request] CTA recusado', JSON.stringify(r.data));
+      r = await enviar(payloadInterativo('review_call_permission'));
     }
+
+    const data = r.data;
+
+    if (!r.ok) {
+      const erro = humanizarErroChamada(data);
+      console.error('[meta-call-permission-request] falha', r.status, JSON.stringify(data));
+      return json({ ok: false, error: erro, status: r.status, details: data }, 200);
+    }
+
 
     await supabase.from('meta_call_permissions').upsert({
       contato_id: contatoId, instancia_id: inst.id, telefone,
