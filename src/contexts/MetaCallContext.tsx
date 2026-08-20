@@ -405,9 +405,9 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
         const row = payload.new as ChamadaRow | undefined;
         if (!row) return;
 
-        // chamada de entrada tocando
+        // chamada de entrada tocando — só toca para o atendente vinculado à conversa
         if (row.tipo_chamada === 'entrada' && row.status === 'ringing' && row.sdp_offer && estado === 'idle') {
-          setEntrando(row);
+          if (row.funcionario_id && row.funcionario_id === meuIdRef.current) setEntrando(row);
           return;
         }
 
