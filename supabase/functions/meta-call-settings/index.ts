@@ -119,9 +119,10 @@ Deno.serve(async (req) => {
               .update({ chamadas_habilitadas: st.status === 'ENABLED' }).eq('id', inst.id);
           }
           resultados.push({
-            instancia_id: id, nome: inst.nome, ok: true,
+            instancia_id: id, nome: inst.nome, ok: true, app: appMeta,
             status: st.status, habilitado: st.status === 'ENABLED',
           });
+
         } catch (e) {
           resultados.push({
             instancia_id: id, ok: false,
