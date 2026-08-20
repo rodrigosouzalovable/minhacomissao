@@ -54,6 +54,11 @@ Deno.serve(async (req) => {
       ? Math.max(1, Math.min(60, Number(body?.msgsPorSegundo ?? 30)))
       : 10;
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
+    // Variação de templates: round-robin entre variantes (mesma qtd de variáveis)
+    const templateVariantes = (Array.isArray(body?.templateVariantes) ? body.templateVariantes : []) as Array<{
+      template_id: string; nome_template?: string; template_id_by_instance?: Record<string, string>;
+    }>;
+
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
     const folderId: string | null = typeof body?.folderId === 'string' && body.folderId ? body.folderId : null;
 
@@ -161,7 +166,12 @@ Deno.serve(async (req) => {
     const allTemplateIds = Array.from(new Set([
       template.id,
       ...Object.values(templateIdByInstance || {}).filter(Boolean) as string[],
+      ...templateVariantes.flatMap((v) => [
+        v?.template_id,
+        ...Object.values(v?.template_id_by_instance || {}),
+      ]).filter(Boolean) as string[],
     ]));
+
     const { data: tplCats } = await supabase
       .from('meta_whatsapp_templates')
       .select('id, nome_template, categoria')
@@ -214,6 +224,8 @@ Deno.serve(async (req) => {
         template_id: template.id,
         template_nome: template.nome_template,
         template_id_by_instance: templateIdByInstance,
+        template_variantes: templateVariantes,
+
         instancia_ids: instanciaIdsFiltradas,
         min_seg: minSec,
         max_seg: maxSec,
@@ -250,8 +262,10 @@ Deno.serve(async (req) => {
           status: 'pendente',
           instancia_id: instId,
           instancia_nome: instId ? (nomeById.get(instId) ?? null) : null,
+          variante_idx: templateVariantes.length > 1 ? globalIdx % templateVariantes.length : 0,
         };
       });
+
       const { error } = await supabase.from('envio_meta_job_item').insert(slice);
       if (error) throw error;
     }

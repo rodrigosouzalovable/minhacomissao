@@ -80,6 +80,20 @@ type Template = {
   categoria: string | null;
 };
 
+// Conta variáveis numéricas ({{1}}, {{2}}...) do cabeçalho TEXT + corpo do template.
+function contarVariaveis(t: { body_text?: string | null; variaveis?: any } | null | undefined): number {
+  if (!t) return 0;
+  const comps: any[] = Array.isArray(t?.variaveis?._components) ? t.variaveis._components : [];
+  const header = comps.find((c: any) => c?.type === "HEADER");
+  const headerText = header?.format === "TEXT" ? String(header?.text || "") : "";
+  const texto = `${headerText}\n${t.body_text || ""}`;
+  const set = new Set<string>();
+  const re = /\{\{\s*(\d+)\s*\}\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(texto)) !== null) set.add(m[1]);
+  return set.size;
+}
+
 type ClienteRow = {
   telefone: string;
   nome?: string;
@@ -189,6 +203,9 @@ export default function EnvioMeta() {
   const [loading, setLoading] = useState(true);
 
   const [templateId, setTemplateId] = useState<string>("");
+  // Variação de templates: chaves adicionais (além do principal) que entram no round-robin
+  const [variantesExtraKeys, setVariantesExtraKeys] = useState<string[]>([]);
+
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [recipientsHeaders, setRecipientsHeaders] = useState<string[]>([]);
@@ -513,6 +530,7 @@ export default function EnvioMeta() {
     sample: Template;
     rows: Template[];
     instanciasAprovadasIds: Set<string>;
+    varsCount: number;
   };
   const templateGroups = useMemo<TemplateGroup[]>(() => {
     const map = new Map<string, TemplateGroup>();
@@ -537,6 +555,7 @@ export default function EnvioMeta() {
           sample: t,
           rows: [t],
           instanciasAprovadasIds: new Set(t.status === "approved" ? [t.instancia_id] : []),
+          varsCount: contarVariaveis(t),
         });
       }
     }
@@ -558,13 +577,41 @@ export default function EnvioMeta() {
   // Usa o primeiro registro do grupo como "template" para preview/variáveis.
   const template = templateGroup?.sample ?? null;
 
-  // Instâncias selecionadas que NÃO têm este template aprovado
+  // Templates compatíveis para variação: mesma quantidade de variáveis do principal
+  const variantesCompativeis = useMemo(() => {
+    if (!templateGroup) return [] as TemplateGroup[];
+    return templateGroups.filter((g) => g.key !== templateGroup.key && g.varsCount === templateGroup.varsCount);
+  }, [templateGroups, templateGroup]);
+
+  // Limpa variantes que deixaram de ser compatíveis/disponíveis
+  useEffect(() => {
+    setVariantesExtraKeys((prev) => {
+      const validas = prev.filter((k) => variantesCompativeis.some((g) => g.key === k));
+      return validas.length === prev.length ? prev : validas;
+    });
+  }, [variantesCompativeis]);
+
+  // Grupos que entram no round-robin de templates (principal + extras)
+  const variantesGroups = useMemo<TemplateGroup[]>(() => {
+    if (!templateGroup) return [];
+    const extras = variantesExtraKeys
+      .map((k) => templateGroups.find((g) => g.key === k))
+      .filter(Boolean) as TemplateGroup[];
+    return [templateGroup, ...extras];
+  }, [templateGroup, variantesExtraKeys, templateGroups]);
+
+  const toggleVariante = (key: string) => {
+    setVariantesExtraKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  };
+
+  // Instâncias selecionadas que NÃO têm TODOS os templates selecionados aprovados
   const instanciasIncompatíveis = useMemo(() => {
-    if (!templateGroup) return [] as Instancia[];
+    if (variantesGroups.length === 0) return [] as Instancia[];
     return instancias.filter(
-      (i) => instanciaIds.includes(i.id) && !templateGroup.instanciasAprovadasIds.has(i.id),
+      (i) => instanciaIds.includes(i.id) && !variantesGroups.every((g) => g.instanciasAprovadasIds.has(i.id)),
     );
-  }, [templateGroup, instanciaIds, instancias]);
+  }, [variantesGroups, instanciaIds, instancias]);
+
 
   // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
   const isentosDedup = useMemo(() => {
@@ -588,6 +635,23 @@ export default function EnvioMeta() {
     }
     return map;
   }, [templateGroup, instanciaIds]);
+
+  // Variantes prontas para agendamento (mesma estrutura usada no disparo imediato)
+  const templateVariantesAgendamento = useMemo(() => {
+    return variantesGroups.map((g) => {
+      const byInst: Record<string, string> = {};
+      for (const r of g.rows) {
+        if (r.status === "approved" && instanciaIds.includes(r.instancia_id)) byInst[r.instancia_id] = r.id;
+      }
+      const first = g.rows.find((r) => r.status === "approved");
+      return {
+        template_id: first?.id || "",
+        nome_template: g.nome,
+        template_id_by_instance: byInst,
+      };
+    });
+  }, [variantesGroups, instanciaIds]);
+
 
   const SEM_BM = "__sem_bm__";
   const { cotaDaBm, semSaldo: bmSemSaldo, recarregar: recarregarCotas } = useBmCotas();
@@ -815,10 +879,14 @@ export default function EnvioMeta() {
         ? `MODO RAJADA CONTROLADA — envio paralelo por instância, com limite seguro de mensagens por segundo.\n\n`
         : "");
       const delayLinha = modoRajada ? `${Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1))} msg/s por instância` : `delay ${lo}-${hi}s`;
+      const tplLinha = variantesGroups.length > 1
+        ? `${variantesGroups.length} templates alternados (${variantesGroups.map((g) => g.nome).join(", ")})`
+        : `template "${template.nome_template}"`;
       if (!confirm(
-        `${bloco}Disparar template "${template.nome_template}" para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
+        `${bloco}Disparar ${tplLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
+
     
     }
 
@@ -837,6 +905,21 @@ export default function EnvioMeta() {
         templateIdByInstance[r.instancia_id] = r.id;
       }
     }
+
+    // Variação de templates: cada variante leva seu próprio mapa instância -> template_id
+    const templateVariantes = variantesGroups.map((g) => {
+      const byInst: Record<string, string> = {};
+      for (const r of g.rows) {
+        if (r.status === "approved" && instanciasComCota.includes(r.instancia_id)) {
+          byInst[r.instancia_id] = r.id;
+        }
+      }
+      return {
+        template_id: g.sample.id,
+        nome_template: g.nome,
+        template_id_by_instance: byInst,
+      };
+    });
 
     // ✅ Confirmação de custo — mostra R$ estimado e exige digitação do valor
     const okCusto = await pedirConfirmacaoCusto(
@@ -868,6 +951,8 @@ export default function EnvioMeta() {
       semWhatsapp: semWa,
       erroValidacao: erroVal,
       templateIdByInstance,
+      templateVariantes: templateVariantes.length > 1 ? templateVariantes : undefined,
+
       nomeCampanha: nomeCampanha.trim() || undefined,
       folderId: folderId === "__default__" ? null : folderId,
       modoRajada,
@@ -1044,6 +1129,52 @@ export default function EnvioMeta() {
                   })}
                 </SelectContent>
               </Select>
+            )}
+
+            {/* Variação de templates — só templates com a MESMA quantidade de variáveis */}
+            {templateGroup && (
+              <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-sm font-medium">Variação de templates (opcional)</p>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    {templateGroup.varsCount} variável{templateGroup.varsCount === 1 ? "" : "is"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Marque outros templates para alternar a cada disparo. Só aparecem templates com a mesma
+                  quantidade de variáveis do principal.
+                </p>
+                {variantesCompativeis.length === 0 ? (
+                  <p className="text-xs italic text-muted-foreground">
+                    Nenhum outro template com {templateGroup.varsCount} variável{templateGroup.varsCount === 1 ? "" : "is"} nas instâncias selecionadas.
+                  </p>
+                ) : (
+                  <div className="space-y-1 max-h-44 overflow-y-auto">
+                    {variantesCompativeis.map((g) => {
+                      const marcado = variantesExtraKeys.includes(g.key);
+                      const ok = g.instanciasAprovadasIds.size;
+                      return (
+                        <label
+                          key={g.key}
+                          className="flex items-center gap-2 text-sm cursor-pointer rounded px-1.5 py-1 hover:bg-muted"
+                        >
+                          <Checkbox checked={marcado} onCheckedChange={() => toggleVariante(g.key)} />
+                          <span className="truncate flex-1">{g.nome}</span>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                            {ok}/{instanciaIds.length} inst.
+                          </Badge>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {variantesGroups.length > 1 && (
+                  <p className="text-xs text-primary">
+                    {variantesGroups.length} templates selecionados · {templateGroup.varsCount} variável
+                    {templateGroup.varsCount === 1 ? "" : "is"} · alternando a cada envio
+                  </p>
+                )}
+              </div>
             )}
 
 
@@ -1591,6 +1722,8 @@ export default function EnvioMeta() {
         instancias={instancias.map((i) => ({ id: i.id, nome: i.nome }))}
         template={template ? { id: template.id, nome_template: template.nome_template } : null}
         templateIdByInstance={templateIdByInstance}
+        templateVariantes={templateVariantesAgendamento}
+
         minSec={Math.max(1, Number(minSec) || 1)}
         maxSec={Math.max(Math.max(1, Number(minSec) || 1), Number(maxSec) || 1)}
         disabled={enviando || validando || instanciasIncompatíveis.length > 0}

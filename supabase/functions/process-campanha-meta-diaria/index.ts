@@ -28,9 +28,24 @@ async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
-async function invokeSend(supabase: any, item: any, campanha: any) {
-  const templateIdByInst = (campanha.template_id_by_instance || {}) as Record<string, string>;
-  const templateId = templateIdByInst[item.instancia_id] || campanha.template_id;
+// Variação de templates: rotaciona entre as variantes escolhidas, sempre usando
+// o template aprovado na instância que fará o envio.
+function resolverTemplateId(campanha: any, instId: string, varianteIdx: number): string {
+  const variantes = Array.isArray(campanha?.template_variantes) ? campanha.template_variantes : [];
+  const n = variantes.length;
+  if (n > 0) {
+    const start = (((Number(varianteIdx) || 0) % n) + n) % n;
+    for (let i = 0; i < n; i++) {
+      const byInst = variantes[(start + i) % n]?.template_id_by_instance || {};
+      if (byInst[instId]) return byInst[instId];
+    }
+  }
+  return (campanha?.template_id_by_instance || {})[instId] || campanha?.template_id;
+}
+
+async function invokeSend(supabase: any, item: any, campanha: any, varianteIdx = 0) {
+  const templateId = resolverTemplateId(campanha, item.instancia_id, varianteIdx);
+
   const { data, error } = await supabase.functions.invoke('send-whatsapp-meta', {
     body: {
       template_id: templateId,
@@ -125,7 +140,7 @@ Deno.serve(async (req) => {
         const finalItem = { ...item, instancia_id: chosenInstId };
 
         try {
-          const data = await invokeSend(supabase, finalItem, campanha);
+          const data = await invokeSend(supabase, finalItem, campanha, i);
           if (data?.blocked === 'domingo' || data?.blocked === 'horario') break;
           if (data?.tier_full || data?.pool_blocked || data?.pool_paused) {
             // Não decrementa; deixa pendente para replanejamento

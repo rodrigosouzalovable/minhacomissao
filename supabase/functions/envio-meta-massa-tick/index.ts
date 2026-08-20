@@ -37,6 +37,23 @@ const ORCAMENTO_MS = 120_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Variação de templates: resolve o template_id da variante atribuída ao item,
+// já aprovado na instância escolhida. Se a variante não existe nessa instância,
+// cai para a próxima variante e, por fim, para o template principal do job.
+function resolverTemplateId(job: any, instId: string, varianteIdx: number): string {
+  const variantes = Array.isArray(job?.template_variantes) ? job.template_variantes : [];
+  const n = variantes.length;
+  if (n > 0) {
+    const start = (((Number(varianteIdx) || 0) % n) + n) % n;
+    for (let i = 0; i < n; i++) {
+      const byInst = variantes[(start + i) % n]?.template_id_by_instance || {};
+      if (byInst[instId]) return byInst[instId];
+    }
+  }
+  return (job?.template_id_by_instance || {})[instId] || job?.template_id;
+}
+
+
 async function encerrarJobSemDisponibilidade(job: any, motivo: string) {
   const { data: transitioned } = await supabase.from('envio_meta_job').update({
     status: 'erro',
@@ -148,7 +165,7 @@ async function processarItem(job: any): Promise<ItemResult> {
 
   const { data: pend, error: pendErr } = await supabase
     .from('envio_meta_job_item')
-    .select('id, ordem, telefone, nome, cpf, atraso, saldo, vars, tentativas')
+    .select('id, ordem, telefone, nome, cpf, atraso, saldo, vars, tentativas, variante_idx')
     .eq('job_id', job.id)
     .eq('status', 'pendente')
     .order('ordem', { ascending: true })
@@ -260,7 +277,7 @@ async function processarItem(job: any): Promise<ItemResult> {
     atual_instancia: instNome,
   }).eq('id', job.id);
 
-  const tplId = (job.template_id_by_instance || {})[instId] || job.template_id;
+  const tplId = resolverTemplateId(job, instId, Number((pend as any).variante_idx || 0));
   const cliente = {
     telefone: pend.telefone,
     nome: pend.nome,

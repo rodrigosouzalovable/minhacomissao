@@ -108,6 +108,9 @@ type Props = {
   instancias: InstanciaLite[];
   template: { id: string; nome_template: string } | null;
   templateIdByInstance: Record<string, string>;
+  /** Variação de templates (round-robin). Cada item traz o mapa de ids por instância. */
+  templateVariantes?: Array<{ template_id: string; nome_template: string; template_id_by_instance: Record<string, string> }>;
+
   minSec: number;
   maxSec: number;
   disabled?: boolean;
@@ -120,6 +123,8 @@ export function AgendarCampanhaBox({
   instancias,
   template,
   templateIdByInstance,
+  templateVariantes,
+
   minSec,
   maxSec,
   disabled,
@@ -173,6 +178,8 @@ export function AgendarCampanhaBox({
           template_nome: template.nome_template,
           instancia_ids: instanciaIds,
           template_id_by_instance: templateIdByInstance,
+          template_variantes: (templateVariantes && templateVariantes.length > 1) ? templateVariantes : null,
+
           min_seg: minSec,
           max_seg: maxSec,
           folga_cota: folga,

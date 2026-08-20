@@ -55,6 +55,9 @@ export type IniciarParams = {
   semWhatsapp?: string[];
   erroValidacao?: string[];
   templateIdByInstance?: Record<string, string>;
+  /** Variação de templates: round-robin entre variantes (mesma qtd de variáveis) */
+  templateVariantes?: Array<{ template_id: string; nome_template: string; template_id_by_instance: Record<string, string> }>;
+
   nomeCampanha?: string;
   modoRajada?: boolean;
   msgsPorSegundo?: number;
@@ -675,6 +678,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           minSec: p.minSec,
           maxSec: p.maxSec,
           templateIdByInstance: p.templateIdByInstance ?? {},
+          templateVariantes: p.templateVariantes ?? [],
+
           nomeCampanha: p.nomeCampanha ?? null,
           modoRajada: p.modoRajada === true,
           msgsPorSegundo: p.msgsPorSegundo,
