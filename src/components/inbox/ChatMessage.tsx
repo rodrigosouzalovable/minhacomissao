@@ -223,9 +223,10 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       return <p className="text-xs italic text-muted-foreground">{msg.conteudo}</p>;
     }
 
-    if (tipo !== 'texto' && !mediaUrl) {
+    if (tipo !== 'texto' && tipo !== 'contato' && !mediaUrl) {
       return <p className="text-xs italic text-muted-foreground">Mídia indisponível</p>;
     }
+
 
     if (tipo === 'audio' && mediaUrl) {
       const src = audioBlobUrl || mediaUrl;
