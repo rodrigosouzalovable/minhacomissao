@@ -12,6 +12,8 @@ import { AutoSendProvider } from "@/hooks/useAutoSend";
 import { WhatsAppSendingProvider } from "@/contexts/WhatsAppSendingContext";
 import { VoiceCampaignSendingProvider } from "@/contexts/VoiceCampaignSendingContext";
 import { EnvioMetaSendingProvider } from "@/contexts/EnvioMetaSendingContext";
+import { MetaCallProvider } from "@/contexts/MetaCallContext";
+
 import CampanhasFlutuante from "@/components/meta/CampanhasFlutuante";
 
 // Code-split: each route becomes its own chunk to reduce initial bundle.
@@ -217,7 +219,9 @@ const App = () => (
           <WhatsAppSendingProvider>
           <VoiceCampaignSendingProvider>
           <EnvioMetaSendingProvider>
+          <MetaCallProvider>
           <Suspense fallback={<PageFallback />}>
+
           <Routes>
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/ir/boleto" element={<RedirectBoleto />} />
@@ -282,7 +286,9 @@ const App = () => (
           </Routes>
           </Suspense>
           <CampanhasFlutuante />
+          </MetaCallProvider>
           </EnvioMetaSendingProvider>
+
           </VoiceCampaignSendingProvider>
           </WhatsAppSendingProvider>
           </AutoSendProvider>

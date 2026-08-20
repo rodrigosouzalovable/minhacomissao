@@ -335,6 +335,110 @@ serve(async (req) => {
         const fieldName = String(change.field || '').toLowerCase();
         const isEchoField = fieldName === 'message_echoes' || fieldName === 'smb_message_echoes';
 
+        // ===== Permissão de chamada de voz (resposta do cliente) =====
+        try {
+          const respostasPerm: any[] = [];
+          for (const m of (value.messages || [])) {
+            const r = m?.interactive?.call_permission_reply || m?.call_permission_reply;
+            if (r) respostasPerm.push({ from: m.from, ...r });
+          }
+          for (const u of (value.call_permission_updates || [])) {
+            respostasPerm.push({ from: u?.user_wa_id || u?.from, ...(u?.call_permission_response || u) });
+          }
+          for (const r of respostasPerm) {
+            const tel = normalizePhone(r.from);
+            if (!tel) continue;
+            const aceitou = String(r.response || r.status || '').toLowerCase().includes('accept');
+            const expSec = Number(r.expiration_timestamp || r.expires_at || 0);
+            const { data: ct } = await supabase.from('meta_whatsapp_contatos')
+              .select('id').eq('instancia_id', inst.id).eq('telefone', tel).maybeSingle();
+            await supabase.from('meta_call_permissions').upsert({
+              contato_id: ct?.id ?? null,
+              instancia_id: inst.id,
+              telefone: tel,
+              status: aceitou ? 'accepted' : 'rejected',
+              expira_em: aceitou
+                ? new Date(expSec > 0 ? expSec * 1000 : Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+                : null,
+              atualizado_em: new Date().toISOString(),
+            }, { onConflict: 'instancia_id,telefone' });
+            console.log('[MetaWebhook] permissão de chamada', tel, aceitou ? 'aceita' : 'recusada');
+          }
+        } catch (e) {
+          console.error('[MetaWebhook] erro processando permissão de chamada', e);
+        }
+
+        // ===== Eventos de chamada de voz (Calling API) =====
+        if (fieldName === 'calls' || Array.isArray(value.calls)) {
+          try {
+            for (const c of (value.calls || [])) {
+              const callId = c?.id ? String(c.id) : null;
+              if (!callId) continue;
+              const evento = String(c.event || c.status || '').toLowerCase();
+              const entrada = String(c.direction || '').toUpperCase().includes('USER');
+              const tel = normalizePhone(entrada ? (c.from || c.wa_id) : (c.to || c.from));
+              const sdp = c?.session?.sdp || null;
+              const sdpTipo = String(c?.session?.sdp_type || '').toLowerCase();
+
+              const { data: existente } = await supabase.from('whatsapp_chamadas')
+                .select('id, status, data_inicio, tipo_chamada')
+                .eq('call_id', callId).maybeSingle();
+
+              const agora = new Date().toISOString();
+              const patch: any = { atualizado_em: agora };
+              if (sdp && sdpTipo === 'answer') patch.sdp_answer = sdp;
+              if (sdp && sdpTipo === 'offer') patch.sdp_offer = sdp;
+
+              if (evento === 'connect') {
+                patch.status = entrada && !existente ? 'ringing' : 'em_andamento';
+              } else if (evento === 'ringing') {
+                patch.status = 'ringing';
+              } else if (evento === 'accept' || evento === 'accepted') {
+                patch.status = 'em_andamento';
+              } else if (evento === 'reject' || evento === 'rejected') {
+                patch.status = 'rejeitada';
+                patch.data_fim = agora;
+              } else if (evento === 'terminate' || evento === 'terminated') {
+                const inicioMs = existente?.data_inicio ? new Date(existente.data_inicio).getTime() : Date.now();
+                const dur = Number(c.duration ?? 0) > 0
+                  ? Number(c.duration)
+                  : (existente?.status === 'em_andamento' ? Math.max(0, Math.round((Date.now() - inicioMs) / 1000)) : 0);
+                const atendida = existente?.status === 'em_andamento' || dur > 0;
+                patch.status = atendida ? 'concluida' : (existente?.status === 'rejeitada' ? 'rejeitada' : 'perdida');
+                patch.duracao_segundos = dur;
+                patch.data_fim = agora;
+                const tipo = existente?.tipo_chamada || (entrada ? 'entrada' : 'saida');
+                patch.custo_estimado = tipo === 'saida' ? Number((Math.ceil(dur / 60) * 0.017).toFixed(4)) : 0;
+                if (c?.status_reason || c?.error) patch.erro = String(c.status_reason || c?.error?.message || '');
+              }
+
+              if (existente?.id) {
+                await supabase.from('whatsapp_chamadas').update(patch).eq('id', existente.id);
+              } else {
+                const { data: ct } = await supabase.from('meta_whatsapp_contatos')
+                  .select('id').eq('instancia_id', inst.id).eq('telefone', tel).maybeSingle();
+                await supabase.from('whatsapp_chamadas').insert({
+                  call_id: callId,
+                  contato_id: ct?.id ?? null,
+                  instancia_id: inst.id,
+                  waba_id: wabaIdEntry,
+                  phone_number_id: inst.phone_number_id,
+                  telefone: tel || '',
+                  tipo_chamada: entrada ? 'entrada' : 'saida',
+                  ...patch,
+                  status: patch.status || 'ringing',
+                });
+              }
+              console.log('[MetaWebhook] evento de chamada', callId, evento, patch.status);
+            }
+          } catch (e) {
+            console.error('[MetaWebhook] erro processando evento de chamada', e);
+          }
+          if (fieldName === 'calls') continue;
+        }
+
+
+
         // ===== Mensagens recebidas =====
         const messages = isEchoField ? (value.message_echoes || value.messages || []) : (value.messages || []);
         const contacts = value.contacts || [];

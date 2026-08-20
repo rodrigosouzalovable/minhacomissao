@@ -18,7 +18,7 @@ import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
-import { DollarSign, FileText, CreditCard, Upload } from "lucide-react";
+import { DollarSign, FileText, CreditCard, Upload, Phone } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -96,6 +96,8 @@ export default function ConfigurarMeta() {
   const [testando, setTestando] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState<string | null>(null);
   const [sincPerfil, setSincPerfil] = useState<string | null>(null);
+  const [chamadasBusy, setChamadasBusy] = useState<string | null>(null);
+
   const [savingToken, setSavingToken] = useState(false);
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
@@ -721,6 +723,31 @@ export default function ConfigurarMeta() {
     carregar();
   };
 
+  const toggleChamadas = async (inst: Instancia) => {
+    const ativar = !(inst as any).chamadas_habilitadas;
+    setChamadasBusy(inst.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-call-settings", {
+        body: { instancia_id: inst.id, ativar },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.ok) throw new Error(data?.error || "Falha ao alterar as chamadas de voz");
+      toast.success(
+        ativar
+          ? "Chamadas de voz ativadas — este número já pode receber e fazer ligações pelo WhatsApp."
+          : "Chamadas de voz desativadas neste número.",
+      );
+      carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível alterar as chamadas");
+
+    } finally {
+      setChamadasBusy(null);
+    }
+  };
+
+
+
   const excluir = async (inst: Instancia) => {
     if (!confirm(`Excluir instância "${inst.nome}"?`)) return;
     await supabase.from("meta_whatsapp_instances").delete().eq("id", inst.id);
@@ -1194,6 +1221,20 @@ export default function ConfigurarMeta() {
                             title="Atualizar nome oficial, foto de perfil e 'sobre' desta instância na Meta"
                           >
                             {sincPerfil === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Sincronizar perfil</>}
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant={(inst as any).chamadas_habilitadas ? 'default' : 'outline'}
+                            onClick={() => toggleChamadas(inst)}
+                            disabled={chamadasBusy === inst.id}
+                            title={(inst as any).chamadas_habilitadas
+                              ? 'Chamadas de voz ativadas neste número — clique para desativar'
+                              : 'Ativar chamadas de voz (WhatsApp Calling) neste número'}
+                          >
+                            {chamadasBusy === inst.id
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <><Phone className="h-3 w-3 mr-1" />{(inst as any).chamadas_habilitadas ? 'Chamadas ON' : 'Chamadas OFF'}</>}
                           </Button>
 
                           <Button size="sm" variant="ghost" onClick={() => abrirEdicao(inst)} title="Editar informações da instância">
