@@ -393,7 +393,13 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        // a chamada exibida no pop-up deixou de tocar -> fecha e para o toque
+        if (row.status !== 'ringing') {
+          setEntrando(prev => (prev && (prev.id === row.id || prev.call_id === row.call_id) ? null : prev));
+        }
+
         if (!callIdRef.current || row.call_id !== callIdRef.current) return;
+
 
         // resposta SDP do cliente (chamada de saída aceita)
         if (row.sdp_answer && !answerAplicadaRef.current && pcRef.current) {
