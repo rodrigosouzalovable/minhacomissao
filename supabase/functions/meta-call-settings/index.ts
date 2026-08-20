@@ -89,15 +89,30 @@ Deno.serve(async (req) => {
             continue;
           }
           const inst = await carregarInstancia(supabase, id);
+          // App da Meta que está inscrito neste WABA (ajuda a saber onde ativar "calls").
+          let appMeta: any = null;
+          try {
+            const sub = await fetch(`${GRAPH}/${inst.waba_id}/subscribed_apps`, {
+              headers: { Authorization: `Bearer ${inst.access_token}` },
+            });
+            const j = await sub.json().catch(() => ({}));
+            const d = j?.data?.[0]?.whatsapp_business_api_data;
+            appMeta = d ? { id: d.id, nome: d.name } : null;
+          } catch { /* ignora */ }
+
           if (typeof ativar === 'boolean') {
             const r = await ligarDesligar(inst, ativar);
             if (!r.ok) {
               const erro = humanizarErroChamada(r.data);
-              resultados.push({ instancia_id: id, nome: inst.nome, ok: false, error: erro });
+              resultados.push({
+                instancia_id: id, nome: inst.nome, ok: false, error: erro,
+                codigo: r.data?.error?.code ?? null, app: appMeta,
+              });
               await sleep(300);
               continue;
             }
           }
+
           const st = await lerStatus(inst);
           if (st.status === 'ENABLED' || st.status === 'DISABLED') {
             await supabase.from('meta_whatsapp_instances')
