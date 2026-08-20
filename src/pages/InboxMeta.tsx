@@ -12,7 +12,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, PhoneIncoming,
+  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -39,7 +39,6 @@ import { MetaNumerosConectadosDialog } from '@/components/inbox/meta/MetaNumeros
 import { CopyButton } from '@/components/CopyButton';
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
 import { AgendarRetornoDialog } from '@/components/inbox/meta/AgendarRetornoDialog';
-import { HistoricoChamadasDialog } from '@/components/inbox/meta/HistoricoChamadasDialog';
 import { useMetaCall } from '@/contexts/MetaCallContext';
 
 
@@ -209,7 +208,6 @@ export default function InboxMeta() {
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
   const [agendarRetornoOpen, setAgendarRetornoOpen] = useState(false);
-  const [histChamadasOpen, setHistChamadasOpen] = useState(false);
   const { ligarOuPedirPermissao, permissaoDe, estado: estadoChamada, chamadasHabilitadas } = useMetaCall();
 
 
@@ -2017,7 +2015,7 @@ export default function InboxMeta() {
                       <>
                         <Button
                           size="sm"
-                          variant={autorizado ? 'default' : 'outline'}
+                          variant="outline"
                           className="h-7 w-7 p-0"
                           disabled={!instId || ocupado || !vozOn}
                           onClick={() => {
@@ -2044,17 +2042,6 @@ export default function InboxMeta() {
                           aria-label="Ligar para o cliente"
                         >
                           <Phone className="h-3.5 w-3.5" />
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setHistChamadasOpen(true)}
-                          title="Histórico de chamadas deste cliente"
-                          aria-label="Histórico de chamadas"
-                        >
-                          <PhoneIncoming className="h-3.5 w-3.5" />
                         </Button>
                       </>
                     );
@@ -2408,15 +2395,6 @@ export default function InboxMeta() {
         folderId={currentFolderId}
         onSent={() => { fetchContatos(); }}
       />
-      {contatoAtivo?.telefone && (
-        <HistoricoChamadasDialog
-          open={histChamadasOpen}
-          onOpenChange={setHistChamadasOpen}
-          telefone={contatoAtivo.telefone}
-          nome={contatoAtivo.nome}
-        />
-      )}
-
       {contatoAtivo && (
         <ReabrirComTemplateDialog
           open={reabrirTemplateOpen}
