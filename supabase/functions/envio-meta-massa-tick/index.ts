@@ -260,7 +260,7 @@ async function processarItem(job: any): Promise<ItemResult> {
     atual_instancia: instNome,
   }).eq('id', job.id);
 
-  const tplId = (job.template_id_by_instance || {})[instId] || job.template_id;
+  const tplId = resolverTemplateId(job, instId, Number((pend as any).variante_idx || 0));
   const cliente = {
     telefone: pend.telefone,
     nome: pend.nome,
