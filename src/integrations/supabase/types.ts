@@ -7389,6 +7389,7 @@ export type Database = {
       }
       whatsapp_chamadas: {
         Row: {
+          atualizado_em: string
           call_id: string | null
           contato_id: string | null
           created_at: string
@@ -7402,12 +7403,15 @@ export type Database = {
           instancia_id: string | null
           observacao: string | null
           phone_number_id: string | null
+          sdp_answer: string | null
+          sdp_offer: string | null
           status: string
           telefone: string
           tipo_chamada: string
           waba_id: string | null
         }
         Insert: {
+          atualizado_em?: string
           call_id?: string | null
           contato_id?: string | null
           created_at?: string
@@ -7421,12 +7425,15 @@ export type Database = {
           instancia_id?: string | null
           observacao?: string | null
           phone_number_id?: string | null
+          sdp_answer?: string | null
+          sdp_offer?: string | null
           status?: string
           telefone: string
           tipo_chamada?: string
           waba_id?: string | null
         }
         Update: {
+          atualizado_em?: string
           call_id?: string | null
           contato_id?: string | null
           created_at?: string
@@ -7440,6 +7447,8 @@ export type Database = {
           instancia_id?: string | null
           observacao?: string | null
           phone_number_id?: string | null
+          sdp_answer?: string | null
+          sdp_offer?: string | null
           status?: string
           telefone?: string
           tipo_chamada?: string
