@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Phone, PhoneOff, BellOff } from 'lucide-react';
+import { Phone, PhoneOff, BellOff, MessageSquare } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import type { ChamadaRow } from '@/contexts/MetaCallContext';
 
 interface Props {
@@ -10,6 +12,7 @@ interface Props {
   onRejeitar: (c: ChamadaRow) => void | Promise<void>;
   onFechar: () => void;
 }
+
 
 /** Toque simples gerado no próprio navegador (sem arquivo de áudio). */
 function useToque(ativo: boolean) {
@@ -58,14 +61,41 @@ function useToque(ativo: boolean) {
 
 export function ChamadaEntrandoDialog({ chamada, onAtender, onRejeitar, onFechar }: Props) {
   const [silenciado, setSilenciado] = useState(false);
+  const [nome, setNome] = useState<string | null>(null);
+  const navigate = useNavigate();
   useToque(!!chamada && !silenciado);
 
   // cada nova chamada volta a tocar
   useEffect(() => { if (chamada) setSilenciado(false); }, [chamada?.id]);
 
+  // busca o nome do cliente para o atendente saber quem está ligando
+  useEffect(() => {
+    setNome(null);
+    if (!chamada) return;
+    let vivo = true;
+    void (async () => {
+      const tel = String(chamada.telefone || '').replace(/\D/g, '');
+      let q = supabase.from('meta_whatsapp_contatos').select('nome').limit(1);
+      q = chamada.contato_id
+        ? q.eq('id', chamada.contato_id)
+        : q.eq('instancia_id', chamada.instancia_id).like('telefone', `%${tel.slice(-8)}`);
+      const { data } = await q.maybeSingle();
+      if (vivo && data?.nome) setNome(data.nome);
+    })();
+    return () => { vivo = false; };
+  }, [chamada?.id]);
+
+  const abrirConversa = () => {
+    if (!chamada) return;
+    const tel = String(chamada.telefone || '').replace(/\D/g, '');
+    navigate(
+      `/admin/inbox-meta?contato=${chamada.contato_id ?? ''}&telefone=${tel}&instancia=${chamada.instancia_id}`,
+    );
+  };
+
   return (
     <Dialog open={!!chamada} onOpenChange={(o) => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-xs">
+      <DialogContent className="max-w-xs z-[200]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500 animate-pulse">
@@ -74,7 +104,9 @@ export function ChamadaEntrandoDialog({ chamada, onAtender, onRejeitar, onFechar
             Chamada recebida
           </DialogTitle>
           <DialogDescription>
-            {chamada?.telefone ? `Cliente ${chamada.telefone} está ligando pelo WhatsApp.` : 'Chamada de voz pelo WhatsApp.'}
+            {chamada?.telefone
+              ? `${nome ? `${nome} — ` : ''}${chamada.telefone} está ligando pelo WhatsApp.`
+              : 'Chamada de voz pelo WhatsApp.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -91,6 +123,10 @@ export function ChamadaEntrandoDialog({ chamada, onAtender, onRejeitar, onFechar
           </Button>
         </div>
 
+        <Button variant="outline" size="sm" className="w-full" onClick={abrirConversa}>
+          <MessageSquare className="h-4 w-4 mr-1" /> Abrir conversa
+        </Button>
+
         <Button
           variant="ghost"
           size="sm"
@@ -100,6 +136,7 @@ export function ChamadaEntrandoDialog({ chamada, onAtender, onRejeitar, onFechar
         >
           <BellOff className="h-4 w-4 mr-1" /> {silenciado ? 'Toque silenciado' : 'Silenciar toque'}
         </Button>
+
       </DialogContent>
     </Dialog>
   );

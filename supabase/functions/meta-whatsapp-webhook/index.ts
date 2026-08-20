@@ -382,8 +382,9 @@ serve(async (req) => {
               const sdpTipo = String(c?.session?.sdp_type || '').toLowerCase();
 
               const { data: existente } = await supabase.from('whatsapp_chamadas')
-                .select('id, status, data_inicio, tipo_chamada')
+                .select('id, status, data_inicio, tipo_chamada, funcionario_id, contato_id')
                 .eq('call_id', callId).maybeSingle();
+
 
               const agora = new Date().toISOString();
               const patch: any = { atualizado_em: agora };
@@ -413,19 +414,34 @@ serve(async (req) => {
                 if (c?.status_reason || c?.error) patch.erro = String(c.status_reason || c?.error?.message || '');
               }
 
+              const sufixo = String(tel || '').replace(/\D/g, '').slice(-8);
+              const buscarContato = async () => {
+                if (!sufixo) return null;
+                const { data } = await supabase.from('meta_whatsapp_contatos')
+                  .select('id').eq('instancia_id', inst.id).like('telefone', `%${sufixo}`).limit(1).maybeSingle();
+                return data?.id ?? null;
+              };
+
               if (existente?.id) {
+                // a chamada pode ter sido criada no evento "connect" sem atendente:
+                // ao tocar, garante que a etiqueta do atendente seja resolvida
+                if (entrada && patch.status === 'ringing' && !existente.funcionario_id) {
+                  const contatoId = existente.contato_id ?? await buscarContato();
+                  if (contatoId && !existente.contato_id) patch.contato_id = contatoId;
+                  patch.funcionario_id = await resolverAtendenteChamada(supabase, contatoId);
+                }
                 await supabase.from('whatsapp_chamadas').update(patch).eq('id', existente.id);
               } else {
-                const { data: ct } = await supabase.from('meta_whatsapp_contatos')
-                  .select('id').eq('instancia_id', inst.id).eq('telefone', tel).maybeSingle();
+                const contatoId = await buscarContato();
                 // A chamada de entrada só toca para o atendente vinculado à conversa.
                 // Se estiver com o IAGO, a etiqueta é transferida para o próximo do rodízio.
+                // Sem atendente identificado, o front-end faz a ligação tocar para os admins.
                 const funcionarioId = entrada
-                  ? await resolverAtendenteChamada(supabase, ct?.id ?? null)
+                  ? await resolverAtendenteChamada(supabase, contatoId)
                   : null;
                 await supabase.from('whatsapp_chamadas').insert({
                   call_id: callId,
-                  contato_id: ct?.id ?? null,
+                  contato_id: contatoId,
                   instancia_id: inst.id,
                   waba_id: wabaIdEntry,
                   phone_number_id: inst.phone_number_id,
@@ -436,6 +452,7 @@ serve(async (req) => {
                   status: patch.status || 'ringing',
                 });
               }
+
               console.log('[MetaWebhook] evento de chamada', callId, evento, patch.status);
             }
           } catch (e) {

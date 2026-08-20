@@ -67,10 +67,18 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   const [permissoes, setPermissoes] = useState<Record<string, { status: string; expira_em: string | null }>>({});
   const [comChamada, setComChamada] = useState<Set<string>>(new Set());
   const meuIdRef = useRef<string | null>(null);
+  const souAdminRef = useRef(false);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => { meuIdRef.current = data?.user?.id ?? null; });
+    void supabase.auth.getUser().then(async ({ data }) => {
+      const uid = data?.user?.id ?? null;
+      meuIdRef.current = uid;
+      if (!uid) return;
+      const { data: adm } = await supabase.rpc('has_role', { _user_id: uid, _role: 'admin' });
+      souAdminRef.current = adm === true;
+    });
   }, []);
+
 
 
 
@@ -414,11 +422,16 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
         const row = payload.new as ChamadaRow | undefined;
         if (!row) return;
 
-        // chamada de entrada tocando — só toca para o atendente vinculado à conversa
+        // chamada de entrada tocando — toca para o atendente vinculado à conversa.
+        // Sem atendente identificado, cai para os administradores (rede de segurança).
         if (row.tipo_chamada === 'entrada' && row.status === 'ringing' && row.sdp_offer && estado === 'idle') {
-          if (row.funcionario_id && row.funcionario_id === meuIdRef.current) setEntrando(row);
+          const paraMim = row.funcionario_id
+            ? row.funcionario_id === meuIdRef.current
+            : souAdminRef.current;
+          if (paraMim) setEntrando(row);
           return;
         }
+
 
         // a chamada exibida no pop-up deixou de tocar -> fecha e para o toque
         if (row.status !== 'ringing') {
@@ -457,9 +470,54 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
           limpar();
         }
       })
-      .subscribe();
-    return () => { void supabase.removeChannel(ch); };
+      .subscribe((st) => {
+        if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') {
+          setTimeout(() => { try { void ch.subscribe(); } catch { /* canal já removido */ } }, 3000);
+        }
+      });
+
+    // se a aba ficou em segundo plano ou a internet caiu, garante a reconexão
+    const revisar = () => {
+      if (document.visibilityState !== 'visible') return;
+      const st = (ch as any).state;
+      if (st !== 'joined' && st !== 'joining') {
+        try { void ch.subscribe(); } catch { /* canal já removido */ }
+      }
+    };
+    document.addEventListener('visibilitychange', revisar);
+    window.addEventListener('online', revisar);
+
+    return () => {
+      document.removeEventListener('visibilitychange', revisar);
+      window.removeEventListener('online', revisar);
+      void supabase.removeChannel(ch);
+    };
   }, [estado, limpar, toast]);
+
+  // pega uma chamada que já estava tocando (ex.: página recarregada durante o toque)
+  useEffect(() => {
+    const buscarTocando = async () => {
+      if (document.visibilityState !== 'visible' || estado !== 'idle' || entrando) return;
+      const desde = new Date(Date.now() - 45_000).toISOString();
+      const { data } = await supabase.from('whatsapp_chamadas')
+        .select('*')
+        .eq('tipo_chamada', 'entrada')
+        .eq('status', 'ringing')
+        .gte('atualizado_em', desde)
+        .order('atualizado_em', { ascending: false })
+        .limit(5);
+      const row = (data ?? []).find((r: any) => r.sdp_offer && (
+        r.funcionario_id ? r.funcionario_id === meuIdRef.current : souAdminRef.current
+      ));
+      if (row) setEntrando(row as ChamadaRow);
+    };
+    void buscarTocando();
+    const onVis = () => { void buscarTocando(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado]);
+
 
   // permissões em tempo real (o cliente aceitou o pedido)
   useEffect(() => {
