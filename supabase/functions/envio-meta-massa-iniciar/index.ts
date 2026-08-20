@@ -262,8 +262,10 @@ Deno.serve(async (req) => {
           status: 'pendente',
           instancia_id: instId,
           instancia_nome: instId ? (nomeById.get(instId) ?? null) : null,
+          variante_idx: templateVariantes.length > 1 ? globalIdx % templateVariantes.length : 0,
         };
       });
+
       const { error } = await supabase.from('envio_meta_job_item').insert(slice);
       if (error) throw error;
     }
