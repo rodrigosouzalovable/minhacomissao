@@ -1114,6 +1114,52 @@ export default function EnvioMeta() {
               </Select>
             )}
 
+            {/* Variação de templates — só templates com a MESMA quantidade de variáveis */}
+            {templateGroup && (
+              <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-sm font-medium">Variação de templates (opcional)</p>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    {templateGroup.varsCount} variável{templateGroup.varsCount === 1 ? "" : "is"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Marque outros templates para alternar a cada disparo. Só aparecem templates com a mesma
+                  quantidade de variáveis do principal.
+                </p>
+                {variantesCompativeis.length === 0 ? (
+                  <p className="text-xs italic text-muted-foreground">
+                    Nenhum outro template com {templateGroup.varsCount} variável{templateGroup.varsCount === 1 ? "" : "is"} nas instâncias selecionadas.
+                  </p>
+                ) : (
+                  <div className="space-y-1 max-h-44 overflow-y-auto">
+                    {variantesCompativeis.map((g) => {
+                      const marcado = variantesExtraKeys.includes(g.key);
+                      const ok = g.instanciasAprovadasIds.size;
+                      return (
+                        <label
+                          key={g.key}
+                          className="flex items-center gap-2 text-sm cursor-pointer rounded px-1.5 py-1 hover:bg-muted"
+                        >
+                          <Checkbox checked={marcado} onCheckedChange={() => toggleVariante(g.key)} />
+                          <span className="truncate flex-1">{g.nome}</span>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                            {ok}/{instanciaIds.length} inst.
+                          </Badge>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {variantesGroups.length > 1 && (
+                  <p className="text-xs text-primary">
+                    {variantesGroups.length} templates selecionados · {templateGroup.varsCount} variável
+                    {templateGroup.varsCount === 1 ? "" : "is"} · alternando a cada envio
+                  </p>
+                )}
+              </div>
+            )}
+
 
             {templateGroup && String(templateGroup.categoria || '').toUpperCase() === 'MARKETING' && (
               <div className="rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm">
