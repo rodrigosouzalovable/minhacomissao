@@ -298,6 +298,7 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       const msg = e instanceof Error ? e.message : 'Erro ao ligar';
       limpar();
       toast({ title: 'Chamada não iniciada', description: msg, variant: 'destructive' });
+
     }
   }, [estado, criarPc, toast, limpar, pedirPermissao, comChamada]);
 
