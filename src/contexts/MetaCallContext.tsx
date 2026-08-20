@@ -34,10 +34,14 @@ type Ctx = {
   mudo: boolean;
   ligar: (alvo: Alvo) => Promise<void>;
   pedirPermissao: (alvo: Alvo) => Promise<boolean>;
+  /** Revalida no banco e liga se já autorizado; caso contrário pede a permissão. */
+  ligarOuPedirPermissao: (alvo: Alvo) => Promise<void>;
   encerrar: () => Promise<void>;
   alternarMudo: () => void;
   permissaoDe: (instanciaId: string, telefone: string) => 'accepted' | 'pending' | 'rejected' | 'none';
   recarregarPermissoes: () => Promise<void>;
+  revalidarPermissao: (instanciaId: string, telefone: string) => Promise<'accepted' | 'pending' | 'rejected' | 'none'>;
+
   /** true quando o número oficial já tem chamadas de voz ligadas. */
   chamadasHabilitadas: (instanciaId: string) => boolean;
   recarregarInstanciasComChamada: () => Promise<void>;
@@ -189,6 +193,25 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     return bruto || 'Erro desconhecido';
   };
 
+  /** Reconsulta no banco a permissão daquele par (instância + telefone) e atualiza o mapa local. */
+  const revalidarPermissao = useCallback(async (instanciaId: string, telefone: string) => {
+    const tel = dig(telefone);
+    const suf = tel.slice(-8);
+    const { data } = await supabase.from('meta_call_permissions')
+      .select('telefone, status, expira_em')
+      .eq('instancia_id', instanciaId)
+      .like('telefone', `%${suf}`);
+    const row = (data ?? [])[0];
+    if (!row) return 'none' as const;
+    setPermissoes(prev => ({
+      ...prev,
+      [`${instanciaId}:${tel}`]: { status: row.status, expira_em: row.expira_em },
+      [`${instanciaId}:${dig(row.telefone)}`]: { status: row.status, expira_em: row.expira_em },
+    }));
+    if (row.status === 'accepted' && row.expira_em && new Date(row.expira_em).getTime() < Date.now()) return 'none' as const;
+    return (row.status as 'accepted' | 'pending' | 'rejected') ?? 'none';
+  }, []);
+
   // ---------- pedido de permissão ----------
   const pedirPermissao = useCallback(async (a: Alvo) => {
     if (!comChamada.has(a.instancia_id)) {
@@ -199,6 +222,13 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       });
       return false;
     }
+
+    // o cliente pode já ter aceitado (webhook) — evita reenviar convite e estourar o limite da Meta
+    if (await revalidarPermissao(a.instancia_id, a.telefone) === 'accepted') {
+      toast({ title: 'Cliente já autorizou as chamadas', description: 'Clique novamente no telefone para ligar.' });
+      return true;
+    }
+
     const { data, error } = await supabase.functions.invoke('meta-call-permission-request', {
       body: {
         instancia_id: a.instancia_id, telefone: dig(a.telefone),
@@ -206,11 +236,19 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       },
     });
     if (error || !data?.ok) {
-      toast({
-        title: 'Não foi possível pedir a permissão',
-        description: await erroLegivel(error, data),
-        variant: 'destructive',
-      });
+      const msg = await erroLegivel(error, data);
+      // Meta recusa novo convite quando já existe um ativo/aceito
+      if (/limit .*call permission|call permission requests has exceeded|138010/i.test(msg)) {
+        const st = await revalidarPermissao(a.instancia_id, a.telefone);
+        toast({
+          title: st === 'accepted' ? 'Cliente já autorizou as chamadas' : 'Convite de chamada já enviado',
+          description: st === 'accepted'
+            ? 'Clique novamente no telefone para ligar.'
+            : 'A Meta não permite reenviar o pedido agora. Aguarde o cliente tocar em "Permitir" no WhatsApp.',
+        });
+        return st === 'accepted';
+      }
+      toast({ title: 'Não foi possível pedir a permissão', description: msg, variant: 'destructive' });
       return false;
     }
     toast({
@@ -219,7 +257,8 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
     });
     await recarregarPermissoes();
     return true;
-  }, [toast, recarregarPermissoes, comChamada]);
+  }, [toast, recarregarPermissoes, comChamada, revalidarPermissao]);
+
 
 
   // ---------- chamada de saída ----------
@@ -263,8 +302,18 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
       const msg = e instanceof Error ? e.message : 'Erro ao ligar';
       limpar();
       toast({ title: 'Chamada não iniciada', description: msg, variant: 'destructive' });
+
     }
   }, [estado, criarPc, toast, limpar, pedirPermissao, comChamada]);
+
+  /** Botão de telefone: revalida a permissão e decide entre ligar ou pedir autorização. */
+  const ligarOuPedirPermissao = useCallback(async (a: Alvo) => {
+    const st = await revalidarPermissao(a.instancia_id, a.telefone);
+    if (st === 'accepted') { await ligar(a); return; }
+    await pedirPermissao(a);
+  }, [revalidarPermissao, ligar, pedirPermissao]);
+
+
 
 
   const encerrar = useCallback(async () => {
@@ -383,10 +432,11 @@ export function MetaCallProvider({ children }: { children: React.ReactNode }) {
   }, [toast]);
 
   const value = useMemo<Ctx>(() => ({
-    estado, alvo, segundos, mudo, ligar, pedirPermissao, encerrar, alternarMudo, permissaoDe, recarregarPermissoes,
-    chamadasHabilitadas, recarregarInstanciasComChamada,
-  }), [estado, alvo, segundos, mudo, ligar, pedirPermissao, encerrar, alternarMudo, permissaoDe, recarregarPermissoes,
-    chamadasHabilitadas, recarregarInstanciasComChamada]);
+    estado, alvo, segundos, mudo, ligar, pedirPermissao, ligarOuPedirPermissao, encerrar, alternarMudo, permissaoDe,
+    recarregarPermissoes, revalidarPermissao, chamadasHabilitadas, recarregarInstanciasComChamada,
+  }), [estado, alvo, segundos, mudo, ligar, pedirPermissao, ligarOuPedirPermissao, encerrar, alternarMudo, permissaoDe,
+    recarregarPermissoes, revalidarPermissao, chamadasHabilitadas, recarregarInstanciasComChamada]);
+
 
 
   return (

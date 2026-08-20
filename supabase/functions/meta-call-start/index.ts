@@ -28,9 +28,12 @@ Deno.serve(async (req) => {
     const inst = await carregarInstancia(supabase, instanciaId);
 
     // Permissão de chamada precisa estar aceita e válida.
-    const { data: perm } = await supabase.from('meta_call_permissions')
-      .select('status, expira_em')
-      .eq('instancia_id', instanciaId).eq('telefone', telefone).maybeSingle();
+    // busca por telefone exato e, como fallback, pelo sufixo de 8 dígitos (padrão do projeto)
+    const { data: perms } = await supabase.from('meta_call_permissions')
+      .select('telefone, status, expira_em')
+      .eq('instancia_id', instanciaId)
+      .like('telefone', `%${telefone.slice(-8)}`);
+    const perm = (perms ?? []).find((p: any) => digitos(p.telefone) === telefone) ?? (perms ?? [])[0];
     const permOk = perm?.status === 'accepted'
       && (!perm.expira_em || new Date(perm.expira_em).getTime() > Date.now());
     if (!permOk) {
