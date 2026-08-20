@@ -417,6 +417,11 @@ serve(async (req) => {
               } else {
                 const { data: ct } = await supabase.from('meta_whatsapp_contatos')
                   .select('id').eq('instancia_id', inst.id).eq('telefone', tel).maybeSingle();
+                // A chamada de entrada só toca para o atendente vinculado à conversa.
+                // Se estiver com o IAGO, a etiqueta é transferida para o próximo do rodízio.
+                const funcionarioId = entrada
+                  ? await resolverAtendenteChamada(supabase, ct?.id ?? null)
+                  : null;
                 await supabase.from('whatsapp_chamadas').insert({
                   call_id: callId,
                   contato_id: ct?.id ?? null,
@@ -425,6 +430,7 @@ serve(async (req) => {
                   phone_number_id: inst.phone_number_id,
                   telefone: tel || '',
                   tipo_chamada: entrada ? 'entrada' : 'saida',
+                  funcionario_id: funcionarioId,
                   ...patch,
                   status: patch.status || 'ringing',
                 });
