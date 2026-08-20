@@ -699,6 +699,7 @@ async function gerarResposta(args: {
   qualificacoes?: QualificacaoIA[];
   propostaPrevia?: { valor: string; texto: string } | null;
   respostaAutomatica?: boolean;
+  precisaPerguntarNome?: boolean;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
@@ -707,7 +708,7 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica,
+    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome,
   } = args;
 
 
