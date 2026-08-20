@@ -30,6 +30,10 @@ export type EnvioProgresso = {
   atualTelefone: string;
   atualInstancia: string;
   proximoEmSeg: number;
+  /** true quando o job está apenas esperando a janela de envio (horário/domingo) */
+  aguardandoJanela?: boolean;
+  janelaMotivo?: string;
+
 };
 
 export type EnvioResultado = { enviados: number; erros: number; total: number; statusMotivo?: string } | null;
