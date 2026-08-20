@@ -4,7 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
-  ehOptOut, ehNumeroErrado, ehFalecido, MSG_FALECIDO, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente, temAtendenteHumanoNoTelefone,
+  ehOptOut, ehNumeroErrado, ehFalecido, MSG_FALECIDO, suprimirDestinatario, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente, temAtendenteHumanoNoTelefone,
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
@@ -261,29 +261,45 @@ Deno.serve(async (req) => {
       return json({ success: true, etapa: 'optout' });
     }
 
-    // ===== "não sou essa pessoa / número errado" => agradece e encerra =====
-    if (ehNumeroErrado(textoAtual)) {
-      try {
-        await enviarTexto(supabase, contato, MSG_NUMERO_ERRADO);
-      } catch (e: any) {
-        console.error('[IAGO] falha ao enviar encerramento de número errado', e?.message || e);
+    // ===== "não sou essa pessoa / número errado" => agradece, encerra e nunca mais contata =====
+    const encerrarNumeroErrado = async (origem: string) => {
+      const jaEncerrou = historico.some(
+        (m: any) => m.direcao === 'saida' && /desculpe o inc[oô]modo/i.test(String(m.conteudo || '')),
+      );
+      if (!jaEncerrou) {
+        try {
+          await enviarTexto(supabase, contato, MSG_NUMERO_ERRADO);
+        } catch (e: any) {
+          console.error('[IAGO] falha ao enviar encerramento de número errado', e?.message || e);
+        }
       }
       await supabase.from('iago_conversa_estado').update({
         etapa: 'numero_errado',
         aguardando_humano: true,
         followup_em: null,
         followup_feito: true,
+        followup_etapa: 3,
         ultima_msg_em: new Date().toISOString(),
         ultima_msg_cliente_em: new Date().toISOString(),
         contexto: { ...(estado.contexto || {}), ultimo_motivo: 'cliente informou que não é a pessoa procurada' },
       }).eq('id', estado.id);
       await etiquetarAguardandoHumano(supabase, contato_id);
       await qualificar('Não é o Cliente');
+      await suprimirDestinatario(
+        supabase,
+        (contato as any).telefone || (contato as any).bsuid,
+        'pessoa_errada: cliente informou que não é a pessoa procurada',
+      );
       await finalizarEntrada();
 
-      console.log('[IAGO] número errado — conversa encerrada', { contato_id });
-      return json({ success: true, etapa: 'numero_errado' });
+      console.log('[IAGO] número errado — conversa encerrada', { contato_id, origem });
+      return json({ success: true, etapa: 'numero_errado', origem });
+    };
+
+    if (ehNumeroErrado(textoAtual)) {
+      return await encerrarNumeroErrado('texto');
     }
+
 
     // ===== Cliente/familiar informou falecimento => condolências e encerra (sem follow-up) =====
     if (ehFalecido(textoAtual)) {
@@ -501,6 +517,11 @@ Deno.serve(async (req) => {
       qualificacoes: await quals(),
       propostaPrevia, respostaAutomatica, precisaPerguntarNome,
     });
+
+    // ===== A IA entendeu que não é o titular (mesmo com erro de escrita) => encerra =====
+    if (resultado?.nao_e_titular === true || String(resultado?.nao_e_titular || '').toLowerCase() === 'sim') {
+      return await encerrarNumeroErrado('ia');
+    }
 
 
 
@@ -875,7 +896,8 @@ async function gerarResposta(args: {
       : ''),
     '',
     'Responda SOMENTE com JSON válido no formato:',
-    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":"","qualificacao":"","qualificacao_motivo":""}',
+    '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":"","qualificacao":"","qualificacao_motivo":"","nao_e_titular":false}',
+    'nao_e_titular = true SOMENTE quando o cliente disser que não é a pessoa procurada, que é número/pessoa errada, engano, que não conhece o titular ou que ele não mora mais ali — inclusive com erro de digitação (ex.: "pessoo errada", "num erado"). Nesses casos deixe "mensagens" vazio: o sistema envia o encerramento padrão e não fala mais com esse número.',
     'escolha = forma de pagamento escolhida pelo cliente ("à vista" ou "12x"), vazio se ele ainda não escolheu.',
     'pagamento_hoje = "sim", "nao" ou "" conforme a resposta dele sobre pagar hoje.',
     'data_pagamento = a data que o cliente informou, JÁ RESOLVIDA no formato YYYY-MM-DD usando a lista de datas acima (ex.: "segunda" ou "segunda que vem" => a data da próxima segunda-feira). Use "mes_que_vem" quando ele falar de outro mês sem dia, e vazio se não informou nada.',

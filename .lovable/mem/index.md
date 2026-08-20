@@ -1,5 +1,6 @@
 - [Etiqueta no Envio](mem://features/whatsapp/etiqueta-atendente-no-envio) — Conversa recebe etiqueta do atendente nomeado já no envio, sem esperar resposta
 - [IAGO Atendente IA](mem://features/whatsapp/iago-atendente-ia) — Atendente de IA na fila do Inbox Meta: caixas por membership, follow-up único 2h (08-19h), opt-out, escalada Aguardando Humano
+- [IAGO Pessoa Errada](mem://features/whatsapp/iago-pessoa-errada-encerra-definitivo) — Nega ser titular: encerra, sem follow-up, telefone em supressão de disparos
 - [IAGO nome do cliente](mem://features/whatsapp/iago-nome-do-cliente) — Nunca usa pushName tipo "Deus é Fiel"; pergunta o nome uma vez e grava em contexto.nome_informado
 - [Rodízio circular Inbox Meta](mem://features/whatsapp/inbox-meta-rodizio-circular) — Fila sequencial por caixa, sem compensação de carga; IAGO recebe somente a própria vez
 - [Storage Mídia Privado](mem://technical/whatsapp/storage-public-access) — Bucket inbox-media é PRIVADO; usar URLs assinadas (1 ano) para exibir e para Meta/UAZAPI baixarem
