@@ -253,19 +253,20 @@ export default function ConfigurarMeta() {
     nome: "",
     phone_number_id: "",
     waba_id: "",
-    business_id: "",
+    meta_bm_id: "__none__",
     access_token: "",
-    tier_diario: "250",
+    messaging_limit_manual: "__auto__",
   });
   const [salvandoEdit, setSalvandoEdit] = useState(false);
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
     waba_id: "",
-    business_id: "",
+    meta_bm_id: "__none__",
     access_token: "",
-    tier_diario: "250",
+    messaging_limit_manual: "__auto__",
   });
+
   const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
 
 
