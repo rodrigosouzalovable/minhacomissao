@@ -2,6 +2,8 @@
 // campanha elegível e encerra; o pg_cron agenda o próximo tick sem manter uma
 // função ociosa durante o delay configurado pelo usuário.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { esperaAteJanela } from '../_shared/metaJanelaEnvio.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
