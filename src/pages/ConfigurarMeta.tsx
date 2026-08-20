@@ -482,7 +482,7 @@ export default function ConfigurarMeta() {
     }
     toast.success("Instância adicionada");
     setDialogOpen(false);
-    setForm({ nome: "", phone_number_id: "", waba_id: "", business_id: "", access_token: "", tier_diario: "250" });
+    setForm(FORM_VAZIO);
     carregar();
 
     // Auto-inscrever webhook para começar a receber mensagens
