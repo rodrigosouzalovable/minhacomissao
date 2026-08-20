@@ -4,6 +4,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
+import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
