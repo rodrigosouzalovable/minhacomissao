@@ -423,7 +423,33 @@ Deno.serve(async (req) => {
       }
     }
 
-    const nomeCliente = proposta?.nomeCliente || nomePorTelefone || (contato as any).nome || '';
+    // ===== Nome do cliente: cadastro > informado por ele > perfil do WhatsApp (só se confiável) =====
+    const ctxNome = (estado.contexto || {}) as any;
+    let nomeInformado = String(ctxNome.nome_informado || '').trim();
+    let nomePedido = !!ctxNome.nome_pedido;
+    const nomePerfil = String((contato as any).nome || '').trim();
+    const perfilOk = nomePerfilConfiavel(nomePerfil);
+
+    if (!nomeInformado && !proposta?.nomeCliente && !nomePorTelefone) {
+      const detectado = extrairNomeInformado(textoAtual);
+      if (detectado && (nomePedido || !perfilOk)) {
+        nomeInformado = detectado;
+        await supabase.from('iago_conversa_estado')
+          .update({ contexto: { ...ctxNome, nome_informado: detectado, nome_pedido: true } })
+          .eq('id', estado.id);
+        estado.contexto = { ...ctxNome, nome_informado: detectado, nome_pedido: true };
+        nomePedido = true;
+        // Corrige o nome do contato quando o que está salvo é só o perfil do WhatsApp
+        if (!perfilOk) {
+          await supabase.from('meta_whatsapp_contatos')
+            .update({ nome: detectado }).eq('id', contato_id);
+        }
+        console.log('[IAGO] nome do cliente gravado', { contato_id, nome: detectado });
+      }
+    }
+
+    const nomeCliente = proposta?.nomeCliente || nomePorTelefone || nomeInformado || (perfilOk ? nomePerfil : '');
+    const precisaPerguntarNome = !nomeCliente && !nomePedido;
 
 
     // ===== Cliente já tem acordo => humano assume =====
