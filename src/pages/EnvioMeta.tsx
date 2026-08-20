@@ -530,6 +530,7 @@ export default function EnvioMeta() {
     sample: Template;
     rows: Template[];
     instanciasAprovadasIds: Set<string>;
+    varsCount: number;
   };
   const templateGroups = useMemo<TemplateGroup[]>(() => {
     const map = new Map<string, TemplateGroup>();
@@ -554,6 +555,7 @@ export default function EnvioMeta() {
           sample: t,
           rows: [t],
           instanciasAprovadasIds: new Set(t.status === "approved" ? [t.instancia_id] : []),
+          varsCount: contarVariaveis(t),
         });
       }
     }
@@ -575,13 +577,41 @@ export default function EnvioMeta() {
   // Usa o primeiro registro do grupo como "template" para preview/variáveis.
   const template = templateGroup?.sample ?? null;
 
-  // Instâncias selecionadas que NÃO têm este template aprovado
+  // Templates compatíveis para variação: mesma quantidade de variáveis do principal
+  const variantesCompativeis = useMemo(() => {
+    if (!templateGroup) return [] as TemplateGroup[];
+    return templateGroups.filter((g) => g.key !== templateGroup.key && g.varsCount === templateGroup.varsCount);
+  }, [templateGroups, templateGroup]);
+
+  // Limpa variantes que deixaram de ser compatíveis/disponíveis
+  useEffect(() => {
+    setVariantesExtraKeys((prev) => {
+      const validas = prev.filter((k) => variantesCompativeis.some((g) => g.key === k));
+      return validas.length === prev.length ? prev : validas;
+    });
+  }, [variantesCompativeis]);
+
+  // Grupos que entram no round-robin de templates (principal + extras)
+  const variantesGroups = useMemo<TemplateGroup[]>(() => {
+    if (!templateGroup) return [];
+    const extras = variantesExtraKeys
+      .map((k) => templateGroups.find((g) => g.key === k))
+      .filter(Boolean) as TemplateGroup[];
+    return [templateGroup, ...extras];
+  }, [templateGroup, variantesExtraKeys, templateGroups]);
+
+  const toggleVariante = (key: string) => {
+    setVariantesExtraKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  };
+
+  // Instâncias selecionadas que NÃO têm TODOS os templates selecionados aprovados
   const instanciasIncompatíveis = useMemo(() => {
-    if (!templateGroup) return [] as Instancia[];
+    if (variantesGroups.length === 0) return [] as Instancia[];
     return instancias.filter(
-      (i) => instanciaIds.includes(i.id) && !templateGroup.instanciasAprovadasIds.has(i.id),
+      (i) => instanciaIds.includes(i.id) && !variantesGroups.every((g) => g.instanciasAprovadasIds.has(i.id)),
     );
-  }, [templateGroup, instanciaIds, instancias]);
+  }, [variantesGroups, instanciaIds, instancias]);
+
 
   // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
   const isentosDedup = useMemo(() => {
