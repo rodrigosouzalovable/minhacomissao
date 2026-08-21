@@ -989,6 +989,10 @@ export default function InboxMeta() {
           const qids = qualifPorContato[c.id] ?? [];
           if (!qids.some(id => mcMarcadores.has(id))) return false;
         }
+        if (filtroQualifs.size > 0) {
+          const qids = qualifPorContato[c.id] ?? [];
+          if (!qids.some(id => filtroQualifs.has(id))) return false;
+        }
         return true;
       })
       .sort((a, b) => {
