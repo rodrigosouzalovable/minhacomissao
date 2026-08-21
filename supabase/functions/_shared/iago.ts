@@ -182,6 +182,19 @@ export function ehOptOut(texto: string): boolean {
   return /(bloquear\s*contato|bloquear|me\s*bloqueia|nao\s*quero\s*mais\s*receber|nao\s*quero\s*receber|sair\s*da\s*lista|descadastr|para\s*de\s*me\s*mandar|pare\s*de\s*me\s*enviar|remover\s*meu\s*numero)/.test(t);
 }
 
+/**
+ * Cliente clicou/respondeu "Bloquear contato" (botão do template) ou pediu bloqueio
+ * explícito => entra na BLACKLIST e nunca mais recebe campanha/lembrete.
+ */
+export function ehPedidoBloqueioContato(texto: string): boolean {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  if (!t) return false;
+  if (/^bloquear\s*(o\s*)?contato\b/.test(t)) return true;
+  if (/\bbloquear\s*(o\s*)?contato\b/.test(t)) return true;
+  if (/(me\s*bloqueia|bloqueia\s*me|quero\s*ser\s*bloqueado|nao\s*quero\s*mais\s*receber|sair\s*da\s*lista|descadastr\w*|remover?\s*meu\s*numero|pare?\s*de\s*me\s*(mandar|enviar))/.test(t)) return true;
+  return false;
+}
+
 /** Cliente avisou que não é a pessoa procurada / número errado. */
 export function ehNumeroErrado(texto: string): boolean {
   const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
