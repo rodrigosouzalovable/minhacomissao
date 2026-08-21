@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
-import { etiquetarAguardandoHumano } from '../_shared/iago.ts';
+import { etiquetarAguardandoHumano, ehPedidoBloqueioContato, suprimirDestinatario } from '../_shared/iago.ts';
 import { resolverAtendenteChamada } from '../_shared/meta-call-atendente.ts';
 
 const corsHeaders = {
@@ -1299,10 +1299,10 @@ serve(async (req) => {
               if ((cfgBl as any)?.blacklist_ativa !== false) {
                 await suprimirDestinatario(
                   supabase,
-                  telefoneCliente,
+                  outroLado,
                   'blacklist: cliente pediu bloqueio de contato',
                 );
-                console.log('[MetaWebhook] contato adicionado à blacklist', { telefone: telefoneCliente });
+                console.log('[MetaWebhook] contato adicionado à blacklist', { telefone: outroLado });
               }
             } catch (e: any) {
               console.error('[MetaWebhook] falha ao gravar blacklist', e?.message || e);
