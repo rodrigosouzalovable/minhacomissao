@@ -498,9 +498,9 @@ export default function Acionamento() {
   const handleDownloadComWhatsApp = () => exportClientes(clientes, 'contatos-com-whatsapp');
   const handleDownloadSemWhatsApp = () => exportClientes(numerosInvalidos, 'contatos-sem-whatsapp');
 
-  const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances) => {
+  const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances): Promise<Array<{ id: string; connected: boolean }>> => {
     const activeOnes = instancesToCheck.filter(i => i.ativo);
-    if (activeOnes.length === 0) return;
+    if (activeOnes.length === 0) return [];
 
     setCheckingConnections(true);
     const initialStatus: Record<string, 'connected' | 'disconnected' | 'checking'> = {};
