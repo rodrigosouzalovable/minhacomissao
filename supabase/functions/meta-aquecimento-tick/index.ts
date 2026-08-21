@@ -33,11 +33,16 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (hora < 9 || hora >= 19) {
+    const hIniCfg = Number(String(cfg.horario_inicio || '08:00').split(':')[0]);
+    const hFimCfg = Number(String(cfg.horario_fim || '19:00').split(':')[0]);
+    const hIni = Number.isFinite(hIniCfg) ? hIniCfg : 8;
+    const hFim = Number.isFinite(hFimCfg) ? hFimCfg : 19;
+    if (hora < hIni || hora >= hFim) {
       return new Response(JSON.stringify({ skipped: 'fora_janela' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     const template = cfg.aquecimento_template_utility;
     if (!template) {
