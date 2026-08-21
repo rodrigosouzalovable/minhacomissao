@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
-import { etiquetarAguardandoHumano } from '../_shared/iago.ts';
+import { etiquetarAguardandoHumano, ehPedidoBloqueioContato, suprimirDestinatario } from '../_shared/iago.ts';
 import { resolverAtendenteChamada } from '../_shared/meta-call-atendente.ts';
 
 const corsHeaders = {
@@ -1288,8 +1288,33 @@ serve(async (req) => {
             }
           }
 
+          // ===== Blacklist: cliente clicou/respondeu "Bloquear contato" =====
+          // Entra na lista de bloqueio e nunca mais recebe campanha/lembrete.
+          let pediuBloqueio = false;
+          if (!isEcho && !msgError && ehPedidoBloqueioContato(texto)) {
+            pediuBloqueio = true;
+            try {
+              const { data: cfgBl } = await supabase
+                .from('meta_envio_pool_config').select('blacklist_ativa').eq('id', 1).maybeSingle();
+              if ((cfgBl as any)?.blacklist_ativa !== false) {
+                await suprimirDestinatario(
+                  supabase,
+                  outroLado,
+                  'blacklist: cliente pediu bloqueio de contato',
+                );
+                console.log('[MetaWebhook] contato adicionado à blacklist', { telefone: outroLado });
+              }
+            } catch (e: any) {
+              console.error('[MetaWebhook] falha ao gravar blacklist', e?.message || e);
+            }
+            if (contatoIdFinal) {
+              try { await etiquetarAguardandoHumano(supabase, contatoIdFinal); } catch (_) { /* ignore */ }
+            }
+          }
+
           // ===== Atendimento automático com IA (caixa "IA" + atendente IAGO) =====
-          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao && !imagemSemLeitura) {
+          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao && !imagemSemLeitura && !pediuBloqueio) {
+
 
             const iaTask = (async () => {
               try {

@@ -8,8 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2 } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -217,6 +218,26 @@ export default function EnvioMeta() {
   const [minSec, setMinSec] = useState<string>("30");
   const [maxSec, setMaxSec] = useState<string>("90");
   const [modoRajada, setModoRajada] = useState<boolean>(false);
+  const [blacklistAtiva, setBlacklistAtiva] = useState<boolean>(true);
+  const [salvandoBlacklist, setSalvandoBlacklist] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("meta_envio_pool_config").select("blacklist_ativa").eq("id", 1).maybeSingle();
+      if (data) setBlacklistAtiva((data as any).blacklist_ativa !== false);
+    })();
+  }, []);
+
+  const salvarBlacklistAtiva = async (v: boolean) => {
+    setSalvandoBlacklist(true);
+    const { error } = await supabase
+      .from("meta_envio_pool_config").update({ blacklist_ativa: v } as any).eq("id", 1);
+    setSalvandoBlacklist(false);
+    if (error) { toast.error("Não foi possível salvar: " + error.message); return; }
+    setBlacklistAtiva(v);
+    toast.success(v ? "Blacklist ativada — contatos bloqueados não recebem envio." : "Blacklist desativada.");
+  };
   const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("1");
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [validadorId, setValidadorId] = useState<string>("");
@@ -1755,6 +1776,25 @@ export default function EnvioMeta() {
               </div>
             </label>
           </div>
+
+          <div className="rounded-md border p-3 flex items-start justify-between gap-3">
+            <div className="text-sm">
+              <div className="font-semibold flex items-center gap-2">
+                <Ban className="h-4 w-4 text-destructive" /> Bloquear Blacklist
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Não dispara para contatos que pediram bloqueio (clicaram em "Bloquear contato" no template).
+                Recomendado manter ativado.
+              </div>
+            </div>
+            <Switch
+              checked={blacklistAtiva}
+              disabled={salvandoBlacklist}
+              onCheckedChange={(v) => salvarBlacklistAtiva(v)}
+            />
+          </div>
+
+
 
 
 

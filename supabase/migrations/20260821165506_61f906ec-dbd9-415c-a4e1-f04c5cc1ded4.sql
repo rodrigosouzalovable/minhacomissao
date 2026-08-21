@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_envio_pool_config ADD COLUMN IF NOT EXISTS blacklist_ativa boolean NOT NULL DEFAULT true;
