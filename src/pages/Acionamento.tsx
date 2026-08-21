@@ -537,6 +537,7 @@ export default function Acionamento() {
     // memória, via connectionStatus) já reflete o status real; o flag `ativo` agora
     // é controlado **apenas manualmente** (toggle individual ou botão "Ativar todas").
     setCheckingConnections(false);
+    return results;
   }, []);
 
 
