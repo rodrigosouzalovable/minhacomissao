@@ -129,38 +129,55 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ===== Higiene de base: remove destinatários suprimidos =====
-    // (números que já falharam entrega repetidas vezes ou nunca respondem)
+    // ===== Higiene de base: remove destinatários suprimidos e blacklist =====
+    // supressao_ativa -> números com falhas de entrega / sem resposta
+    // blacklist_ativa -> números que pediram bloqueio pelo botão "Bloquear contato"
     let clientesEnvio = clientes;
     let suprimidos = 0;
+    let bloqueadosBlacklist = 0;
     const { data: cfgPool } = await supabase
-      .from('meta_envio_pool_config').select('supressao_ativa').eq('id', 1).maybeSingle();
-    if (cfgPool?.supressao_ativa !== false) {
+      .from('meta_envio_pool_config').select('supressao_ativa, blacklist_ativa').eq('id', 1).maybeSingle();
+    const supressaoAtiva = cfgPool?.supressao_ativa !== false;
+    const blacklistAtiva = cfgPool?.blacklist_ativa !== false;
+    if (supressaoAtiva || blacklistAtiva) {
       const sufixo = (t: string) => {
         const d = String(t || '').replace(/\D+/g, '');
         return d.length >= 8 ? d.slice(-8) : d;
       };
       const sufixos = Array.from(new Set(clientes.map((c) => sufixo(c.telefone)).filter(Boolean)));
       const bloqueados = new Set<string>();
+      const blacklist = new Set<string>();
       for (let i = 0; i < sufixos.length; i += 500) {
         const { data } = await supabase
           .from('meta_destinatario_supressao')
-          .select('telefone_sufixo')
+          .select('telefone_sufixo, motivo')
           .in('telefone_sufixo', sufixos.slice(i, i + 500));
-        (data || []).forEach((r: any) => bloqueados.add(r.telefone_sufixo));
+        (data || []).forEach((r: any) => {
+          const ehBlacklist = String(r.motivo || '').startsWith('blacklist');
+          if (ehBlacklist) {
+            if (blacklistAtiva) blacklist.add(r.telefone_sufixo);
+          } else if (supressaoAtiva) {
+            bloqueados.add(r.telefone_sufixo);
+          }
+        });
       }
-      if (bloqueados.size > 0) {
-        clientesEnvio = clientes.filter((c) => !bloqueados.has(sufixo(c.telefone)));
-        suprimidos = clientes.length - clientesEnvio.length;
+      if (bloqueados.size > 0 || blacklist.size > 0) {
+        clientesEnvio = clientes.filter((c) => {
+          const s = sufixo(c.telefone);
+          if (blacklist.has(s)) { bloqueadosBlacklist++; return false; }
+          if (bloqueados.has(s)) { suprimidos++; return false; }
+          return true;
+        });
       }
       if (clientesEnvio.length === 0) {
         return new Response(JSON.stringify({
           success: false,
-          error: `Todos os ${clientes.length} destinatários estão na lista de supressão (falhas de entrega ou sem resposta). Nada foi enviado.`,
+          error: `Todos os ${clientes.length} destinatários estão bloqueados (${bloqueadosBlacklist} na blacklist, ${suprimidos} na supressão). Nada foi enviado.`,
         }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      console.log('[iniciar] suprimidos por higiene de base:', suprimidos);
+      console.log('[iniciar] higiene de base — suprimidos:', suprimidos, 'blacklist:', bloqueadosBlacklist);
     }
+
 
 
     // Trava anti-gasto: bloqueia envio em massa de templates MARKETING (custo ~7x utility).
