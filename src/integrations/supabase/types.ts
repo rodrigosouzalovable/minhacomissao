@@ -3493,6 +3493,7 @@ export type Database = {
           atualizado_em: string
           auto_pausa_red_waba: boolean
           auto_pausa_yellow: boolean
+          blacklist_ativa: boolean
           bloquear_domingo: boolean
           cota_fase1: number
           cota_fase2: number
@@ -3526,6 +3527,7 @@ export type Database = {
           atualizado_em?: string
           auto_pausa_red_waba?: boolean
           auto_pausa_yellow?: boolean
+          blacklist_ativa?: boolean
           bloquear_domingo?: boolean
           cota_fase1?: number
           cota_fase2?: number
@@ -3559,6 +3561,7 @@ export type Database = {
           atualizado_em?: string
           auto_pausa_red_waba?: boolean
           auto_pausa_yellow?: boolean
+          blacklist_ativa?: boolean
           bloquear_domingo?: boolean
           cota_fase1?: number
           cota_fase2?: number
