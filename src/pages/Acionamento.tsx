@@ -1970,11 +1970,28 @@ export default function Acionamento() {
   };
 
   const handleExportarNumeros = async () => {
-    const numeros = instances
-      .map(i => (i.telefone || '').replace(/\D/g, ''))
-      .filter(Boolean);
+    let statusMap: Record<string, boolean> = {};
+    const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
+    if (!jaTemAlgumStatus) {
+      toast.info('Verificando conexões antes de exportar...');
+      const results = await checkInstanceConnections(instances);
+      results.forEach(r => { statusMap[r.id] = r.connected; });
+    } else {
+      instances.forEach(i => { statusMap[i.id] = connectionStatus[i.id] === 'connected'; });
+    }
+
+    const numeros = Array.from(new Set(
+      instances
+        .filter(i => statusMap[i.id])
+        .map(i => {
+          const d = (i.telefone || '').replace(/\D/g, '');
+          return d.startsWith('55') && d.length >= 12 ? d.slice(2) : d;
+        })
+        .filter(n => n.length >= 10)
+    ));
+
     if (numeros.length === 0) {
-      toast.error('Nenhum número cadastrado nas instâncias');
+      toast.error('Nenhum número conectado com telefone cadastrado para exportar');
       return;
     }
     const XLSX = await import('xlsx');
@@ -1983,8 +2000,9 @@ export default function Acionamento() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Numeros');
     XLSX.writeFile(wb, 'numeros-uazapi.xlsx');
-    toast.success(`${numeros.length} número(s) exportado(s)`);
+    toast.success(`${numeros.length} número(s) conectado(s) exportado(s)`);
   };
+
 
   return (
     <AppLayout>
