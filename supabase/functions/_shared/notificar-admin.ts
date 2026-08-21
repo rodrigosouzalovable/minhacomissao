@@ -221,6 +221,7 @@ export async function notificarAdmin(
       if (ja?.length) return { success: false, skipped: "ja_enviado" };
     }
 
+
     // Round-robin: pega próxima instância ativa após a última usada
     const { data: insts } = await supabase
       .from("user_whatsapp_instances")
