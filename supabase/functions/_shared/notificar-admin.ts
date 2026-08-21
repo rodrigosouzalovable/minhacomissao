@@ -221,6 +221,7 @@ export async function notificarAdmin(
       if (ja?.length) return { success: false, skipped: "ja_enviado" };
     }
 
+
     // Round-robin: pega próxima instância ativa após a última usada
     const { data: insts } = await supabase
       .from("user_whatsapp_instances")
@@ -272,7 +273,43 @@ export async function notificarAdmin(
 
     const mensagemFinal = `🤖 *Aviso Sistema*\n\n${params.mensagem}`;
 
-    const enviarPara = async (numeroFinal: string): Promise<{ ok: boolean; erro?: string }> => {
+    const enviarPara = async (numeroFinal: string): Promise<{ ok: boolean; erro?: string; skipped?: string }> => {
+      const chaveDest = params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numeroFinal}` : null;
+
+      // === TRAVA ATÔMICA ===
+      // Reserva a chave ANTES de enviar. Se outra execução simultânea já
+      // reservou (índice único em tipo + chave_idempotencia), aborta sem enviar.
+      let reservaId: string | null = null;
+      if (chaveDest) {
+        const { data: reserva, error: erroReserva } = await supabase
+          .from("admin_notificacoes_log")
+          .insert({
+            tipo: params.tipo,
+            chave_idempotencia: chaveDest,
+            mensagem: `[${numeroFinal}] ${params.mensagem}`,
+            status: "reservado",
+          })
+          .select("id")
+          .maybeSingle();
+        if (erroReserva || !reserva?.id) {
+          return { ok: false, skipped: "ja_enviado", erro: "ja_reservado" };
+        }
+        reservaId = (reserva as any).id;
+      }
+
+      const registrar = async (campos: Record<string, unknown>) => {
+        if (reservaId) {
+          await supabase.from("admin_notificacoes_log").update(campos).eq("id", reservaId);
+          return;
+        }
+        await supabase.from("admin_notificacoes_log").insert({
+          tipo: params.tipo,
+          chave_idempotencia: chaveDest,
+          mensagem: `[${numeroFinal}] ${params.mensagem}`,
+          ...campos,
+        });
+      };
+
       let ultimoErro = "sem_tentativas";
       const errosTentativas: string[] = [];
       const connectedStartIdx = cfg.ultima_instancia_id
@@ -298,13 +335,7 @@ export async function notificarAdmin(
             const providerError = hasProviderError(respText);
             if (res.ok && !providerError) {
               if (timer) clearTimeout(timer);
-              await supabase.from("admin_notificacoes_log").insert({
-                tipo: params.tipo,
-                chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numeroFinal}` : null,
-                mensagem: `[${numeroFinal}] ${params.mensagem}`,
-                instancia_envio_id: inst.id,
-                status: "enviado",
-              });
+              await registrar({ instancia_envio_id: inst.id, status: "enviado", enviado_em: new Date().toISOString() });
               await supabase
                 .from("admin_notificacoes_config")
                 .update({ ultima_instancia_id: inst.id, updated_at: new Date().toISOString() })
@@ -328,11 +359,9 @@ export async function notificarAdmin(
       // Último recurso: tenta pela API Oficial da Meta (só entrega se houver janela de 24h aberta)
       const viaMeta = await tentarViaMetaOficial(supabase, numeroFinal, mensagemFinal);
       if (viaMeta.ok) {
-        await supabase.from("admin_notificacoes_log").insert({
-          tipo: params.tipo,
-          chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numeroFinal}` : null,
-          mensagem: `[${numeroFinal}] ${params.mensagem}`,
+        await registrar({
           status: "enviado",
+          enviado_em: new Date().toISOString(),
           erro_detalhe: `fallback_meta_oficial; uazapi: ${errosTentativas.slice(-3).join(" | ")}`.slice(0, 4000),
         });
         return { ok: true };
@@ -340,15 +369,18 @@ export async function notificarAdmin(
       if (viaMeta.erro) errosTentativas.push(`meta_oficial: ${viaMeta.erro}`);
 
       const erroFinal = errosTentativas.slice(-10).join(" | ") || ultimoErro;
-      await supabase.from("admin_notificacoes_log").insert({
-        tipo: params.tipo,
-        chave_idempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numeroFinal}` : null,
-        mensagem: `[${numeroFinal}] ${params.mensagem}`,
-        status: "erro",
-        erro_detalhe: erroFinal,
-      });
+      if (reservaId && !params.umaVezPorChave) {
+        // Falhou a entrega: libera a chave para que uma tentativa futura possa
+        // reenviar, mas mantém o registro de erro (sem chave) para auditoria.
+        await supabase.from("admin_notificacoes_log")
+          .update({ chave_idempotencia: null, status: "erro", erro_detalhe: erroFinal })
+          .eq("id", reservaId);
+      } else {
+        await registrar({ status: "erro", erro_detalhe: erroFinal });
+      }
       return { ok: false, erro: erroFinal };
     };
+
 
     const resultados: { ok: boolean; erro?: string }[] = [];
     for (const dest of destinos) {
