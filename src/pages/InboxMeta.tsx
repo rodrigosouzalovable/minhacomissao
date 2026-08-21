@@ -207,6 +207,8 @@ export default function InboxMeta() {
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
   const [alertaEsperaCaixas, setAlertaEsperaCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
+  const [filtroQualifs, setFiltroQualifs] = useState<Set<string>>(new Set());
+  const [filtroQualifOpen, setFiltroQualifOpen] = useState(false);
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
   const [agendarRetornoOpen, setAgendarRetornoOpen] = useState(false);
   const { ligarOuPedirPermissao, permissaoDe, estado: estadoChamada, chamadasHabilitadas } = useMetaCall();
