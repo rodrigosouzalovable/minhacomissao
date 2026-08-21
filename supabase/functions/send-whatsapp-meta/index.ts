@@ -823,25 +823,40 @@ Deno.serve(async (req) => {
 
       if (isRestricted) {
         const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+        // Só avisa na TRANSIÇÃO normal -> restrita (evita repetir o aviso).
+        const { data: estadoAntes } = await supabase
+          .from('meta_whatsapp_instances')
+          .select('estado_pool, pausa_automatica_ate')
+          .eq('id', inst.id)
+          .maybeSingle();
+        const jaRestrita = (estadoAntes as any)?.estado_pool === 'restrita' ||
+          (!!(estadoAntes as any)?.pausa_automatica_ate &&
+            new Date((estadoAntes as any).pausa_automatica_ate).getTime() > Date.now());
+
         await supabase.from('meta_whatsapp_instances').update({
           estado_pool: 'restrita',
           pausa_automatica_ate: ate,
           pausa_automatica_motivo: msg.slice(0, 200),
         }).eq('id', inst.id);
 
-        try {
-          const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
-          const chave = `meta_instancia_restrita_${inst.id}_${new Date().toISOString().slice(0, 10)}`;
-          await notificarAdmin(supabase, {
-            tipo: 'meta_instancia_restrita',
-            mensagem:
-              `🚫 Instância Meta restringida/bloqueada\n\n` +
-              `Instância: *${rotuloInstancia(inst)}*\n` +
-              `Motivo: *${msg}*\n\n` +
-              `Pausa automática por 24h. Verifique o Business Manager da Meta.`,
-            chaveIdempotencia: chave,
-          });
-        } catch (_) { /* ignore */ }
+        if (!jaRestrita) {
+          try {
+            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            const chave = `meta_instancia_restrita_${inst.id}_${new Date().toISOString().slice(0, 10)}`;
+            await notificarAdmin(supabase, {
+              tipo: 'meta_instancia_restrita',
+              mensagem:
+                `🚫 Instância Meta restringida/bloqueada\n\n` +
+                `Instância: *${rotuloInstancia(inst)}*\n` +
+                `Motivo: *${msg}*\n\n` +
+                `Pausa automática por 24h. Verifique o Business Manager da Meta.`,
+              chaveIdempotencia: chave,
+              umaVezPorChave: true,
+            });
+          } catch (_) { /* ignore */ }
+        }
+
 
         return new Response(JSON.stringify({
           success: false,
