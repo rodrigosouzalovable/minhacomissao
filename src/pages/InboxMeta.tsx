@@ -12,7 +12,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone,
+  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, Bookmark,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -207,6 +207,8 @@ export default function InboxMeta() {
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
   const [alertaEsperaCaixas, setAlertaEsperaCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
+  const [filtroQualifs, setFiltroQualifs] = useState<Set<string>>(new Set());
+  const [filtroQualifOpen, setFiltroQualifOpen] = useState(false);
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
   const [agendarRetornoOpen, setAgendarRetornoOpen] = useState(false);
   const { ligarOuPedirPermissao, permissaoDe, estado: estadoChamada, chamadasHabilitadas } = useMetaCall();
@@ -987,6 +989,10 @@ export default function InboxMeta() {
           const qids = qualifPorContato[c.id] ?? [];
           if (!qids.some(id => mcMarcadores.has(id))) return false;
         }
+        if (filtroQualifs.size > 0) {
+          const qids = qualifPorContato[c.id] ?? [];
+          if (!qids.some(id => filtroQualifs.has(id))) return false;
+        }
         return true;
       })
       .sort((a, b) => {
@@ -1026,7 +1032,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento]);
+  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, filtroQualifs, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento]);
 
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
@@ -1548,6 +1554,57 @@ export default function InboxMeta() {
                   </button>
                 </PopoverContent>
 
+              </Popover>
+              <Popover open={filtroQualifOpen} onOpenChange={setFiltroQualifOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={filtroQualifs.size > 0 ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-8 px-2 gap-1"
+                    title="Filtrar por qualificações"
+                    aria-label="Filtrar por qualificações"
+                  >
+                    <Bookmark className="h-3.5 w-3.5" />
+                    {filtroQualifs.size > 0 && <span className="text-[10px] leading-none">{filtroQualifs.size}</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-60 p-2" align="end">
+                  <div className="space-y-1 max-h-72 overflow-y-auto overscroll-contain">
+                    {qualificacoes.filter(q => q.ativo && !q.parent_id).length === 0 && (
+                      <p className="text-[11px] text-muted-foreground">Nenhuma qualificação ativa.</p>
+                    )}
+                    {qualificacoes.filter(q => q.ativo && !q.parent_id).flatMap(p => [
+                      p,
+                      ...qualificacoes.filter(m => m.ativo && m.parent_id === p.id),
+                    ]).map(q => {
+                      const on = filtroQualifs.has(q.id);
+                      return (
+                        <button
+                          key={q.id}
+                          onClick={() => setFiltroQualifs(prev => {
+                            const n = new Set(prev);
+                            if (n.has(q.id)) n.delete(q.id); else n.add(q.id);
+                            return n;
+                          })}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent',
+                            on && 'bg-primary/10',
+                            q.parent_id && 'pl-5',
+                          )}
+                        >
+                          {on ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" /> : <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: q.cor }} />
+                          <span className="truncate">{q.nome}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {filtroQualifs.size > 0 && (
+                    <Button variant="ghost" size="sm" className="w-full h-7 text-[11px] mt-1" onClick={() => setFiltroQualifs(new Set())}>
+                      Limpar qualificações
+                    </Button>
+                  )}
+                </PopoverContent>
               </Popover>
               <Button
                 variant={filtroJanela24h ? 'default' : 'outline'}
