@@ -1756,6 +1756,25 @@ export default function EnvioMeta() {
             </label>
           </div>
 
+          <div className="rounded-md border p-3 flex items-start justify-between gap-3">
+            <div className="text-sm">
+              <div className="font-semibold flex items-center gap-2">
+                <Ban className="h-4 w-4 text-destructive" /> Bloquear Blacklist
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Não dispara para contatos que pediram bloqueio (clicaram em "Bloquear contato" no template).
+                Recomendado manter ativado.
+              </div>
+            </div>
+            <Switch
+              checked={blacklistAtiva}
+              disabled={salvandoBlacklist}
+              onCheckedChange={(v) => salvarBlacklistAtiva(v)}
+            />
+          </div>
+
+
+
 
 
           {modoRajada && instanciaIds.length === 1 && (recipients.length > 0 || (validacaoPreview?.valid.length ?? 0) > 0) && (() => {
