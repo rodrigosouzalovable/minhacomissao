@@ -1423,6 +1423,23 @@ export default function ConfigurarMeta() {
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => sincronizarSaude(inst)}>
                           <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar agora
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs"
+                          disabled={revalidando === inst.id}
+                          onClick={() => revalidarBloqueio(inst)}
+                          title="Consultar a Meta agora e liberar o número no pool se o bloqueio (conta bloqueada / número inacessível) já não existir"
+                        >
+                          {revalidando === inst.id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <><ShieldCheck className="h-3 w-3 mr-1" /> Revalidar na Meta</>}
+                        </Button>
+                        {(inst as any).pausa_automatica_motivo && (
+                          <Badge variant="destructive" className="text-[10px]">
+                            fora do pool: {(inst as any).pausa_automatica_motivo}
+                          </Badge>
+                        )}
                       </div>
 
                     </div>
