@@ -302,6 +302,13 @@ Deno.serve(async (req) => {
           error: MSG_NUMERO_INACESSIVEL, detalhe: erroMsg, instancia_id,
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
+      if (ehContaBloqueada(erroMsg, data?.error?.code)) {
+        await tratarContaBloqueada(supabase, inst, erroMsg);
+        return new Response(JSON.stringify({
+          success: false, instance_restricted: true, conta_bloqueada: true,
+          error: MSG_CONTA_BLOQUEADA, detalhe: erroMsg, instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       return new Response(JSON.stringify({ success: false, error: erroMsg, raw: data }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
