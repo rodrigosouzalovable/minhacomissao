@@ -846,6 +846,37 @@ export default function ConfigurarMeta() {
 
   };
 
+  // Consulta a Meta agora e, se o bloqueio real (conta bloqueada #131031 /
+  // número inacessível #100) já não existir, devolve o número ao pool.
+  const revalidarBloqueio = async (inst: Instancia) => {
+    setRevalidando(inst.id);
+    const toastId = toast.loading(`Revalidando ${inst.nome} na Meta...`);
+    try {
+      const { data, error } = await supabase.functions.invoke("check-meta-instance-health", {
+        body: { instancia_id: inst.id },
+      });
+      if (error) throw error;
+      const res = (data?.resultados || data?.results || [])[0] || {};
+      if (res?.liberada) {
+        toast.success("Bloqueio liberado — número voltou para o pool de envios", { id: toastId, duration: 10000 });
+      } else if (res?.error) {
+        toast.error(`A Meta ainda recusa este número: ${res.error}`, { id: toastId, duration: 15000 });
+      } else {
+        const st = res?.status || "?";
+        const q = res?.quality_rating || "?";
+        toast.message(`Status na Meta: ${st} · Qualidade: ${q}`, {
+          id: toastId,
+          description: "Se o número segue fora do pool, o bloqueio ainda está ativo no Business Manager.",
+          duration: 12000,
+        });
+      }
+      carregar();
+    } catch (e: any) {
+      toast.error("Falhou: " + (e?.message || e), { id: toastId });
+    }
+    setRevalidando(null);
+  };
+
   const sincronizarSaude = async (inst: Instancia) => {
     const toastId = toast.loading(`Sincronizando ${inst.nome}...`);
     try {
