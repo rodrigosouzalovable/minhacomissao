@@ -21,4 +21,5 @@
 - [IAGO Descontos e Espera 20s](mem://features/whatsapp/iago-descontos-e-espera-20s) — Descontos manuais em iago_config sobrepõem faixas do credor; espera extra de 20s com prioridade ao humano
 - [IAGO lê proposta anterior](mem://features/whatsapp/iago-le-proposta-anterior) — Proposta em mensagem nossa anterior é retomada; proibido pedir CPF de entrada; respostas automáticas ignoradas
 - [Meta Erro #100](mem://features/whatsapp/meta-numero-inacessivel-100) — Erro #100 da Graph restringe a instância, avisa admin 1x/dia e explica em PT; resposta no Inbox nunca bloqueada por qualidade
+- [Meta Conta Bloqueada #131031](mem://features/whatsapp/meta-conta-bloqueada-131031) — Business Account locked restringe a instância, avisa 1x/dia, auto-libera na revalidação; banner prioriza bloqueio real sobre qualidade
 - [Blacklist Bloquear Contato](mem://features/whatsapp/blacklist-bloquear-contato) — Botão "Bloquear contato" adiciona à blacklist; toggle "Bloquear Blacklist" no Envio Meta
