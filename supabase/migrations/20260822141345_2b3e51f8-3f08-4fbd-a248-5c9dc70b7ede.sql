@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.get_meta_whatsapp_active_instances_for_sending() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_meta_whatsapp_active_instances_for_sending() TO authenticated, service_role;

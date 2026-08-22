@@ -3,6 +3,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
+import { ehContaBloqueada, MSG_CONTA_BLOQUEADA, tratarContaBloqueada } from '../_shared/meta-conta-bloqueada.ts';
 
 
 const corsHeaders = {
@@ -299,6 +300,13 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({
           success: false, instance_restricted: true, numero_inacessivel: true,
           error: MSG_NUMERO_INACESSIVEL, detalhe: erroMsg, instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (ehContaBloqueada(erroMsg, data?.error?.code)) {
+        await tratarContaBloqueada(supabase, inst, erroMsg);
+        return new Response(JSON.stringify({
+          success: false, instance_restricted: true, conta_bloqueada: true,
+          error: MSG_CONTA_BLOQUEADA, detalhe: erroMsg, instancia_id,
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ success: false, error: erroMsg, raw: data }), {

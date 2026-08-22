@@ -18,7 +18,7 @@ import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
-import { DollarSign, FileText, CreditCard, Upload, Phone } from "lucide-react";
+import { DollarSign, FileText, CreditCard, Upload, Phone, ShieldCheck } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -95,6 +95,7 @@ export default function ConfigurarMeta() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [testando, setTestando] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState<string | null>(null);
+  const [revalidando, setRevalidando] = useState<string | null>(null);
   const [sincPerfil, setSincPerfil] = useState<string | null>(null);
   const [chamadasBusy, setChamadasBusy] = useState<string | null>(null);
 
@@ -846,6 +847,37 @@ export default function ConfigurarMeta() {
 
   };
 
+  // Consulta a Meta agora e, se o bloqueio real (conta bloqueada #131031 /
+  // número inacessível #100) já não existir, devolve o número ao pool.
+  const revalidarBloqueio = async (inst: Instancia) => {
+    setRevalidando(inst.id);
+    const toastId = toast.loading(`Revalidando ${inst.nome} na Meta...`);
+    try {
+      const { data, error } = await supabase.functions.invoke("check-meta-instance-health", {
+        body: { instancia_id: inst.id },
+      });
+      if (error) throw error;
+      const res = (data?.resultados || data?.results || [])[0] || {};
+      if (res?.liberada) {
+        toast.success("Bloqueio liberado — número voltou para o pool de envios", { id: toastId, duration: 10000 });
+      } else if (res?.error) {
+        toast.error(`A Meta ainda recusa este número: ${res.error}`, { id: toastId, duration: 15000 });
+      } else {
+        const st = res?.status || "?";
+        const q = res?.quality_rating || "?";
+        toast.message(`Status na Meta: ${st} · Qualidade: ${q}`, {
+          id: toastId,
+          description: "Se o número segue fora do pool, o bloqueio ainda está ativo no Business Manager.",
+          duration: 12000,
+        });
+      }
+      carregar();
+    } catch (e: any) {
+      toast.error("Falhou: " + (e?.message || e), { id: toastId });
+    }
+    setRevalidando(null);
+  };
+
   const sincronizarSaude = async (inst: Instancia) => {
     const toastId = toast.loading(`Sincronizando ${inst.nome}...`);
     try {
@@ -1423,6 +1455,23 @@ export default function ConfigurarMeta() {
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => sincronizarSaude(inst)}>
                           <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar agora
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs"
+                          disabled={revalidando === inst.id}
+                          onClick={() => revalidarBloqueio(inst)}
+                          title="Consultar a Meta agora e liberar o número no pool se o bloqueio (conta bloqueada / número inacessível) já não existir"
+                        >
+                          {revalidando === inst.id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <><ShieldCheck className="h-3 w-3 mr-1" /> Revalidar na Meta</>}
+                        </Button>
+                        {(inst as any).pausa_automatica_motivo && (
+                          <Badge variant="destructive" className="text-[10px]">
+                            fora do pool: {(inst as any).pausa_automatica_motivo}
+                          </Badge>
+                        )}
                       </div>
 
                     </div>

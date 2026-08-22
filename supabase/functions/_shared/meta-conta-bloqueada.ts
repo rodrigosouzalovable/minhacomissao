@@ -1,0 +1,83 @@
+// Detecta o erro #131031 da Graph API ("Business Account locked") — a conta do
+// Business Manager está bloqueada/em revisão pela Meta e TODOS os envios daquele
+// número são recusados, mesmo respondendo cliente dentro da janela de 24h.
+// Nesse caso a instância é restringida no pool e o admin é avisado 1x/dia.
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { rotuloInstancia } from "./rotulo-instancia.ts";
+
+export const MOTIVO_CONTA_BLOQUEADA = "Business Account locked";
+
+export const MSG_CONTA_BLOQUEADA =
+  "A conta do Business Manager desta instância está bloqueada pela Meta (#131031). Enquanto o bloqueio existir, a Meta recusa todos os envios deste número — inclusive respostas dentro da janela de 24h. Resolva a restrição no Business Manager (Central de Contas/Qualidade, apelação e método de pagamento) ou responda por outra instância. Não é problema de qualidade nem do contato.";
+
+export function ehContaBloqueada(erro: unknown, code?: unknown): boolean {
+  const s = String(erro || "").toLowerCase();
+  if (String(code || "") === "131031") return true;
+  if (s.includes("#131031")) return true;
+  return s.includes("business account") && s.includes("locked");
+}
+
+/** Texto amigável de um motivo de pausa gravado na instância, se for bloqueio real da Meta. */
+export function ehMotivoBloqueioMeta(motivo?: string | null): boolean {
+  const s = String(motivo || "").toLowerCase();
+  if (!s) return false;
+  return (
+    s.includes("locked") ||
+    s.includes("business account") ||
+    s.includes("numero_inacessivel") ||
+    s.includes("status=banned") ||
+    s.includes("status=restricted") ||
+    s.includes("status=flagged") ||
+    s.includes("payment") ||
+    s.includes("billing") ||
+    s.includes("eligibility")
+  );
+}
+
+/** Restringe a instância no pool e avisa o admin (idempotente por dia). */
+export async function tratarContaBloqueada(
+  supabase: SupabaseClient,
+  inst: any,
+  msgOriginal: string,
+): Promise<void> {
+  let jaRestrita = false;
+  try {
+    const { data: antes } = await supabase
+      .from("meta_whatsapp_instances")
+      .select("estado_pool, pausa_automatica_ate")
+      .eq("id", inst.id)
+      .maybeSingle();
+    jaRestrita = (antes as any)?.estado_pool === "restrita" ||
+      (!!(antes as any)?.pausa_automatica_ate &&
+        new Date((antes as any).pausa_automatica_ate).getTime() > Date.now());
+
+    const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from("meta_whatsapp_instances").update({
+      estado_pool: "restrita",
+      pausa_automatica_ate: ate,
+      pausa_automatica_motivo: MOTIVO_CONTA_BLOQUEADA,
+    }).eq("id", inst.id);
+  } catch (e) {
+    console.log("[conta-bloqueada] update falhou:", String(e).slice(0, 200));
+  }
+
+  if (jaRestrita) return;
+
+  try {
+    const { notificarAdmin } = await import("./notificar-admin.ts");
+    const hoje = new Date().toISOString().slice(0, 10);
+    await notificarAdmin(supabase, {
+      tipo: "meta_conta_bloqueada",
+      mensagem:
+        `⛔ *Business Account bloqueada pela Meta (#131031)*\n\n` +
+        `Instância: *${rotuloInstancia(inst)}*\n\n` +
+        `A Meta está recusando todos os envios desse número — inclusive respostas na janela de 24h. Não é qualidade nem contato.\n\n` +
+        `Resolva no Business Manager (restrição da conta / apelação / método de pagamento). O número saiu do pool automaticamente e volta sozinho quando a Meta liberar.\n\n` +
+        `Detalhe técnico: ${String(msgOriginal).slice(0, 180)}`,
+      chaveIdempotencia: `meta_conta_bloqueada_${inst.id}_${hoje}`,
+      umaVezPorChave: true,
+    });
+  } catch (e) {
+    console.log("[conta-bloqueada] notificarAdmin falhou:", String(e).slice(0, 200));
+  }
+}

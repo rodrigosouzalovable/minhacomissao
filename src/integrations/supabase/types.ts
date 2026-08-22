@@ -8274,8 +8274,11 @@ export type Database = {
         Returns: {
           ativo: boolean
           display_phone: string
+          estado_pool: string
           id: string
           nome: string
+          pausa_automatica_ate: string
+          pausa_automatica_motivo: string
           provider: string
           saude_ban_info: Json
           saude_checked_at: string
