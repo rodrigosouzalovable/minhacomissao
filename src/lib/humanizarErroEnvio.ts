@@ -17,6 +17,12 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
     return "Esse número não está mais acessível pela API da Meta (#100). Normalmente significa que ele foi removido/desabilitado do WhatsApp Business Account, migrou de Business Manager, ou o token do app perdeu permissão sobre ele. Reconecte a instância (token e Phone Number ID) no Business Manager ou envie por outra instância. O número foi retirado do pool de envios automaticamente.";
   }
 
+  // #131031 — Business Account bloqueada/em revisão pela Meta. Nada passa por esse
+  // número enquanto o bloqueio existir (nem resposta na janela de 24h).
+  if (s.includes("#131031") || (s.includes("business account") && s.includes("locked"))) {
+    return "A conta do Business Manager desta instância está bloqueada pela Meta (#131031). Enquanto o bloqueio existir, a Meta recusa todos os envios desse número — inclusive respostas dentro da janela de 24h. Não é problema de qualidade nem do contato: resolva a restrição no Business Manager (Central de Contas/Qualidade, apelação e método de pagamento) ou responda por outra instância. O número saiu do pool automaticamente e volta sozinho quando a Meta liberar.";
+  }
+
   // #131000 — a Meta aceita a mensagem e rejeita na entrega. Na prática é problema da instância.
   if (s.includes("#131000") || s.includes("something went wrong")) {
     return "A Meta aceitou o envio mas rejeitou a entrega por essa instância (#131000). Quase sempre é problema do próprio número — nome de exibição em análise/reprovado, qualidade rebaixada ou pendência de pagamento no Business Manager — e não do contato. Envie esse contato por outra instância saudável.";
