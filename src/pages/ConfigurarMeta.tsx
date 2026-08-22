@@ -18,7 +18,7 @@ import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
-import { DollarSign, FileText, CreditCard, Upload, Phone } from "lucide-react";
+import { DollarSign, FileText, CreditCard, Upload, Phone, ShieldCheck } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
