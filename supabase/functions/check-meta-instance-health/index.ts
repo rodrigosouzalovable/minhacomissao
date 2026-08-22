@@ -170,7 +170,43 @@ Deno.serve(async (req) => {
             `Volta com teto de ${escada[0] ?? 20}/dia e sobe em escada se ficar GREEN.`;
         }
 
+        // ===== Auto-liberação de bloqueio real da Meta =====
+        // Se a instância foi restringida por bloqueio da Meta (#131031 Business
+        // Account locked / número inacessível #100) e agora a Graph API responde
+        // normalmente (número CONNECTED, sem ban_info), devolvemos o número ao pool.
+        const motivoAtual = String(inst.pausa_automatica_motivo || '').toLowerCase();
+        const eraBloqueioMeta = motivoAtual.includes('locked') ||
+          motivoAtual.includes('business account') ||
+          motivoAtual.includes('numero_inacessivel');
+        const semBanAgora = !r.ban_info ||
+          (typeof r.ban_info === 'object' && Object.keys(r.ban_info).length === 0);
+        const graphOk = !r.error && st === 'CONNECTED' && semBanAgora;
+        if (eraBloqueioMeta && graphOk && !notificarPausa) {
+          updatePayload.estado_pool = 'ativo';
+          updatePayload.pausa_automatica_ate = null;
+          updatePayload.pausa_automatica_motivo = null;
+          r.liberada = true;
+        }
+
         await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
+
+        if (r.liberada) {
+          try {
+            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            const hojeBrt = new Date().toISOString().slice(0, 10);
+            await notificarAdmin(supabase, {
+              tipo: 'meta_bloqueio_liberado',
+              mensagem:
+                `✅ *Bloqueio da Meta liberado*\n\n` +
+                `Número: *${inst.nome || inst.display_phone}*\n` +
+                `A Meta voltou a responder normalmente (CONNECTED, sem restrição). O número voltou para o pool de envios.`,
+              chaveIdempotencia: `meta_bloqueio_liberado_${inst.id}_${hojeBrt}`,
+              umaVezPorChave: true,
+            });
+          } catch (e) {
+            console.log('[health] aviso de liberação falhou:', String(e).slice(0, 200));
+          }
+        }
 
         if (alertaQueda) {
           try {
