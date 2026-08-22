@@ -7,6 +7,28 @@ export interface MetaInstanceHealth {
   saude_name_status?: string | null;
   saude_ban_info?: any;
   saude_checked_at?: string | null;
+  estado_pool?: string | null;
+  pausa_automatica_ate?: string | null;
+  pausa_automatica_motivo?: string | null;
+}
+
+/** Motivo de pausa que representa bloqueio real da Meta (não é qualidade). */
+function bloqueioReal(motivo?: string | null): string | null {
+  const s = String(motivo || '').toLowerCase();
+  if (!s) return null;
+  if (s.includes('131031') || (s.includes('business account') && s.includes('locked'))) {
+    return 'Business Manager bloqueado pela Meta (#131031) — a Meta está recusando todos os envios deste número, inclusive respostas na janela de 24h. Resolva a restrição no Business Manager.';
+  }
+  if (s.includes('numero_inacessivel')) {
+    return 'Este número não está mais acessível pela API da Meta (#100). Reconecte token/Phone Number ID no Business Manager.';
+  }
+  if (s.includes('payment') || s.includes('billing') || s.includes('eligibility') || s.includes('131042')) {
+    return 'Pendência de pagamento/faturamento na conta Meta. Regularize no Business Manager — até lá os envios falham.';
+  }
+  if (s.includes('status=banned')) return 'Número banido pela Meta. Envios recusados.';
+  if (s.includes('status=restricted') || s.includes('restrict')) return 'Número restringido pela Meta. Envios recusados até a revisão.';
+  if (s.includes('status=flagged') || s.includes('flagged')) return 'Número sinalizado (FLAGGED) pela Meta. Envios podem ser recusados.';
+  return null;
 }
 
 interface Props {
