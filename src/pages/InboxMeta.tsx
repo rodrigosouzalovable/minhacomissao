@@ -851,7 +851,7 @@ export default function InboxMeta() {
       try {
         await supabase.functions.invoke('check-meta-instance-health', { body: { instancia_id: inst.id } });
         const { data } = await supabase.from('meta_whatsapp_instances')
-          .select('id, nome, display_phone, ativo, saude_status, saude_quality, saude_name_status, saude_ban_info, saude_checked_at')
+          .select('id, nome, display_phone, ativo, saude_status, saude_quality, saude_name_status, saude_ban_info, saude_checked_at, estado_pool, pausa_automatica_ate, pausa_automatica_motivo')
           .eq('id', inst.id).maybeSingle();
         if (data) {
           setInstancias(prev => prev.map(p => p.id === inst.id ? { ...p, ...(data as MetaInstance) } : p));
