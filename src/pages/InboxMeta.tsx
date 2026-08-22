@@ -70,6 +70,9 @@ interface MetaInstance {
   saude_ban_info?: any;
   saude_checked_at?: string | null;
   provider?: string | null;
+  estado_pool?: string | null;
+  pausa_automatica_ate?: string | null;
+  pausa_automatica_motivo?: string | null;
 }
 
 interface MetaContato {
