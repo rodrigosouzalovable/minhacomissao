@@ -22,4 +22,6 @@
 - [IAGO lê proposta anterior](mem://features/whatsapp/iago-le-proposta-anterior) — Proposta em mensagem nossa anterior é retomada; proibido pedir CPF de entrada; respostas automáticas ignoradas
 - [Meta Erro #100](mem://features/whatsapp/meta-numero-inacessivel-100) — Erro #100 da Graph restringe a instância, avisa admin 1x/dia e explica em PT; resposta no Inbox nunca bloqueada por qualidade
 - [Meta Conta Bloqueada #131031](mem://features/whatsapp/meta-conta-bloqueada-131031) — Business Account locked restringe a instância, avisa 1x/dia, auto-libera na revalidação; banner prioriza bloqueio real sobre qualidade
+- [Meta Pendência Pagamento #131042](mem://features/whatsapp/meta-pendencia-pagamento-131042) — Pendência de cartão/fatura da BM restringe números; auto-libera na revalidação e botão de revalidar em lote na BM
+
 - [Blacklist Bloquear Contato](mem://features/whatsapp/blacklist-bloquear-contato) — Botão "Bloquear contato" adiciona à blacklist; toggle "Bloquear Blacklist" no Envio Meta
