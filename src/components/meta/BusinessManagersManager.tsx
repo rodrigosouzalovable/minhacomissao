@@ -40,6 +40,52 @@ export default function BusinessManagersManager() {
   const [tierEditId, setTierEditId] = useState<string | null>(null);
   const [tierValor, setTierValor] = useState("");
   const [tierIlimitado, setTierIlimitado] = useState(false);
+  const [revalidandoBm, setRevalidandoBm] = useState<string | null>(null);
+
+  // Depois de regularizar o pagamento na Meta, revalida todos os números da BM:
+  // quem voltar CONNECTED e sem restrição retorna sozinho para o pool de envios.
+  async function revalidarNumerosDaBm(bm: BM) {
+    setRevalidandoBm(bm.id);
+    const toastId = toast.loading(`Revalidando números de ${bm.nome} na Meta...`);
+    try {
+      let q = (supabase as any)
+        .from("meta_whatsapp_instances")
+        .select("id, nome")
+        .eq("ativo", true);
+      q = bm.business_id
+        ? q.or(`meta_bm_id.eq.${bm.id},business_id.eq.${bm.business_id}`)
+        : q.eq("meta_bm_id", bm.id);
+      const { data: insts, error } = await q;
+      if (error) throw error;
+      const lista = (insts || []) as { id: string; nome: string }[];
+      if (!lista.length) {
+        toast.message("Nenhum WhatsApp ativo vinculado a esta BM", { id: toastId });
+        setRevalidandoBm(null);
+        return;
+      }
+      let liberados = 0;
+      for (const inst of lista) {
+        try {
+          const { data } = await supabase.functions.invoke("check-meta-instance-health", {
+            body: { instancia_id: inst.id },
+          });
+          const res = ((data as any)?.resultados || (data as any)?.results || [])[0] || {};
+          if (res?.liberada) liberados++;
+        } catch (_) { /* segue para o próximo número */ }
+      }
+      toast.success(
+        liberados > 0
+          ? `${liberados} de ${lista.length} número(s) voltaram para o pool de envios`
+          : `Nenhum número liberado ainda — a Meta segue recusando os ${lista.length} número(s) desta BM`,
+        { id: toastId, duration: 12000 },
+      );
+      recarregarCotas();
+    } catch (e: any) {
+      toast.error("Falhou: " + (e?.message || e), { id: toastId });
+    }
+    setRevalidandoBm(null);
+  }
+
 
   const [nome, setNome] = useState("");
   const [appId, setAppId] = useState("");
