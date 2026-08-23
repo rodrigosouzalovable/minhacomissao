@@ -1468,10 +1468,23 @@ export default function ConfigurarMeta() {
                             : <><ShieldCheck className="h-3 w-3 mr-1" /> Revalidar na Meta</>}
                         </Button>
                         {(inst as any).pausa_automatica_motivo && (
-                          <Badge variant="destructive" className="text-[10px]">
-                            fora do pool: {(inst as any).pausa_automatica_motivo}
-                          </Badge>
+                          (() => {
+                            const motivo = String((inst as any).pausa_automatica_motivo);
+                            const pagamento = /#131042|payment|billing|eligibility|pagamento/i.test(motivo);
+                            return (
+                              <Badge
+                                variant="destructive"
+                                className="text-[10px] max-w-[420px] whitespace-normal text-left leading-snug"
+                                title={motivo}
+                              >
+                                {pagamento
+                                  ? "fora do pool: pendência de pagamento da Business Manager (#131042) — troque/regularize o cartão e as faturas na BM. Volta ao pool automaticamente após a revalidação."
+                                  : `fora do pool: ${motivo}`}
+                              </Badge>
+                            );
+                          })()
                         )}
+
                       </div>
 
                     </div>
