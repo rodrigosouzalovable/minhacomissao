@@ -33,9 +33,10 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
     return "Não foi possível entregar: o número provavelmente não tem WhatsApp ativo, mudou de titular ou não aceita mensagens de empresas. Não é falha da instância.";
   }
   // Pendência de faturamento na conta Meta
-  if (s.includes("business eligibility payment issue") || s.includes("#131042")) {
-    return "A conta Meta dessa instância está com pendência de pagamento/faturamento. Regularize o método de pagamento no Business Manager — até lá os envios desse número continuarão falhando.";
+  if (s.includes("business eligibility payment issue") || s.includes("#131042") || s.includes("eligibility")) {
+    return "A Business Manager desta instância está com pendência de pagamento/elegibilidade na Meta (#131042). Não é qualidade do número nem problema do contato: a Meta recusa os envios até o faturamento ficar em ordem. No Business Manager, vá em Configurações de pagamento e (1) troque/adicione um cartão de crédito válido com compras internacionais liberadas, (2) pague as faturas em aberto, (3) defina esse cartão como principal, e confirme que a verificação de negócio da BM está concluída. Como a pendência é da BM, resolver isso libera todos os números vinculados a ela. Depois de regularizar, use \"Revalidar na Meta\" no card (ou aguarde a checagem automática): o número volta sozinho para o pool.";
   }
+
   // Nome de exibição em análise
   if (s.includes("pending_review") || s.includes("display name")) {
     return "O nome de exibição dessa instância está em análise ou foi reprovado pela Meta. Enquanto isso, a entrega pode ser bloqueada. Use outra instância até a aprovação.";
