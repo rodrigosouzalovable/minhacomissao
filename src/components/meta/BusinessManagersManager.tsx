@@ -438,6 +438,17 @@ export default function BusinessManagersManager() {
                     </div>
                     <Button
                       variant="outline" size="sm"
+                      disabled={revalidandoBm === bm.id}
+                      onClick={() => revalidarNumerosDaBm(bm)}
+                      title="Revalidar todos os números desta BM na Meta (use depois de regularizar cartão/faturas)"
+                    >
+                      {revalidandoBm === bm.id
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <ShieldCheck className="w-4 h-4" />}
+                    </Button>
+
+                    <Button
+                      variant="outline" size="sm"
                       onClick={() => iniciarEdicao(bm)}
                       title="Editar nome"
                     >
