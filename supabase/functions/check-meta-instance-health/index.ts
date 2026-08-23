@@ -172,12 +172,13 @@ Deno.serve(async (req) => {
 
         // ===== Auto-liberação de bloqueio real da Meta =====
         // Se a instância foi restringida por bloqueio da Meta (#131031 Business
-        // Account locked / número inacessível #100) e agora a Graph API responde
-        // normalmente (número CONNECTED, sem ban_info), devolvemos o número ao pool.
-        const motivoAtual = String(inst.pausa_automatica_motivo || '').toLowerCase();
-        const eraBloqueioMeta = motivoAtual.includes('locked') ||
-          motivoAtual.includes('business account') ||
-          motivoAtual.includes('numero_inacessivel');
+        // Account locked, número inacessível #100 ou pendência de pagamento
+        // #131042) e agora a Graph API responde normalmente (número CONNECTED,
+        // sem ban_info), devolvemos o número ao pool.
+        const { ehMotivoBloqueioMeta, ehMotivoPagamento } = await import('../_shared/meta-conta-bloqueada.ts');
+        const motivoAtual = String(inst.pausa_automatica_motivo || '');
+        const eraBloqueioMeta = ehMotivoBloqueioMeta(motivoAtual);
+        const eraPagamento = ehMotivoPagamento(motivoAtual);
         const semBanAgora = !r.ban_info ||
           (typeof r.ban_info === 'object' && Object.keys(r.ban_info).length === 0);
         const graphOk = !r.error && st === 'CONNECTED' && semBanAgora;
@@ -186,7 +187,9 @@ Deno.serve(async (req) => {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
           r.liberada = true;
+          r.liberada_pagamento = eraPagamento;
         }
+
 
         await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
 
