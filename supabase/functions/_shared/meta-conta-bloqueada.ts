@@ -17,6 +17,19 @@ export function ehContaBloqueada(erro: unknown, code?: unknown): boolean {
   return s.includes("business account") && s.includes("locked");
 }
 
+/** Motivo de pausa ligado a pendência de pagamento/elegibilidade da BM (#131042). */
+export function ehMotivoPagamento(motivo?: string | null): boolean {
+  const s = String(motivo || "").toLowerCase();
+  if (!s) return false;
+  return (
+    s.includes("#131042") ||
+    s.includes("payment") ||
+    s.includes("billing") ||
+    s.includes("eligibility") ||
+    s.includes("pagamento")
+  );
+}
+
 /** Texto amigável de um motivo de pausa gravado na instância, se for bloqueio real da Meta. */
 export function ehMotivoBloqueioMeta(motivo?: string | null): boolean {
   const s = String(motivo || "").toLowerCase();
@@ -28,11 +41,10 @@ export function ehMotivoBloqueioMeta(motivo?: string | null): boolean {
     s.includes("status=banned") ||
     s.includes("status=restricted") ||
     s.includes("status=flagged") ||
-    s.includes("payment") ||
-    s.includes("billing") ||
-    s.includes("eligibility")
+    ehMotivoPagamento(s)
   );
 }
+
 
 /** Restringe a instância no pool e avisa o admin (idempotente por dia). */
 export async function tratarContaBloqueada(
