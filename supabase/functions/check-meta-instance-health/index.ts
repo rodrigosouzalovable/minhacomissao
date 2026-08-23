@@ -202,7 +202,11 @@ Deno.serve(async (req) => {
               mensagem:
                 `✅ *Bloqueio da Meta liberado*\n\n` +
                 `Número: *${inst.nome || inst.display_phone}*\n` +
-                `A Meta voltou a responder normalmente (CONNECTED, sem restrição). O número voltou para o pool de envios.`,
+                (r.liberada_pagamento
+                  ? `A pendência de pagamento/elegibilidade da Business Manager foi regularizada — a Meta voltou a aceitar envios.`
+                  : `A Meta voltou a responder normalmente (CONNECTED, sem restrição).`) +
+                ` O número voltou para o pool de envios.`,
+
               chaveIdempotencia: `meta_bloqueio_liberado_${inst.id}_${hojeBrt}`,
               umaVezPorChave: true,
             });
