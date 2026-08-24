@@ -697,6 +697,13 @@ export default function EnvioMeta() {
   const enviar = async () => {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
+    if (recipients.length === 0) return toast.error("Importe a planilha com os destinatários");
+    if (instanciasIncompatíveis.length > 0) {
+      return toast.error(
+        `${instanciasIncompatíveis.length} instância(s) selecionada(s) não têm este template aprovado — remova-as ou troque o template.`,
+      );
+    }
+
     if (agendamento.ativo) {
       if (!agendarParaISO) return toast.error("Informe a data e a hora de início do agendamento");
       if (new Date(agendarParaISO).getTime() <= Date.now()) {
