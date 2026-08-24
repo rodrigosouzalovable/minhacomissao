@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
-import { Lightbulb, Loader2, RefreshCw, Copy, CornerDownLeft, X } from 'lucide-react';
+import { Lightbulb, Loader2, RefreshCw, Copy, CornerDownLeft, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const OBJECAO_LABEL: Record<string, string> = {
