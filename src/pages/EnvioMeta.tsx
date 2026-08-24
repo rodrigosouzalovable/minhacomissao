@@ -897,8 +897,11 @@ export default function EnvioMeta() {
       const tplLinha = variantesGroups.length > 1
         ? `${variantesGroups.length} templates alternados (${variantesGroups.map((g) => g.nome).join(", ")})`
         : `template "${template.nome_template}"`;
+      const acaoLinha = agendarParaISO
+        ? `Agendar ${tplLinha} para iniciar em ${new Date(agendarParaISO).toLocaleString("pt-BR")}`
+        : `Disparar ${tplLinha}`;
       if (!confirm(
-        `${bloco}Disparar ${tplLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
+        `${bloco}${acaoLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
 
