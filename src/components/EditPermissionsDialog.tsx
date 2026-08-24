@@ -201,6 +201,8 @@ export function EditPermissionsDialog({
             atende_inbox_meta: atendeInboxMeta,
             parceiro_meta: parceiroMeta,
             ve_campanhas: veCampanhas,
+            bate_ponto: batePonto,
+
 
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
