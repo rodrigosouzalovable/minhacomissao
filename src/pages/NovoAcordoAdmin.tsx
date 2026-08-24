@@ -251,23 +251,12 @@ export default function NovoAcordoAdmin() {
   // Gerar preview das parcelas para visualização
   const parcelasPreview = useMemo(() => {
     if (!calculo || !form.dataPrimeiroPagamento) return [];
-    
+
     const dataPrimeiro = new Date(form.dataPrimeiroPagamento + 'T00:00:00');
     const numParcelas = parseInt(form.parcelas) || 1;
-    
-    if (empresa === 'mundo_da_moda') {
-      // UME | APORTE: comissão em todas as parcelas
-      return gerarParcelasMundoDaModa(
-        dataPrimeiro,
-        numParcelas,
-        calculo.valorDemaisParcelas,
-        calculo.comissaoDemaisParcelas,
-        calculo.valorPrimeiraParcela,
-        calculo.comissaoPrimeiraParcela
-      );
-    }
-    
-    return gerarParcelas(
+
+    // Comissão em todas as parcelas (NOVO MUNDO e UME)
+    return gerarParcelasMundoDaModa(
       dataPrimeiro,
       numParcelas,
       calculo.valorDemaisParcelas,
