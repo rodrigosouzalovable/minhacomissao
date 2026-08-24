@@ -48,6 +48,7 @@ export function SugestoesObjecaoPanel({
   const [objecao, setObjecao] = useState<string>(objecaoLocal || 'outro');
   const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
   const [logId, setLogId] = useState<string | null>(null);
+  const [minimizado, setMinimizado] = useState(false);
   const buscadoRef = useRef<string>('');
 
   const buscar = useCallback(async (forcar = false) => {
