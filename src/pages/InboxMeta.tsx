@@ -2072,8 +2072,8 @@ export default function InboxMeta() {
                             if (!marca) return <span className="text-muted-foreground">Credor: definir</span>;
                             return (
                               <>
-                                <img src={marca.logo} alt="" className="h-3.5 w-3.5 rounded object-contain" />
-                                <span className="font-medium text-foreground/80">{marca.nome}</span>
+                                <img src={marca.logo} alt="" className="h-7 w-7 rounded object-contain" />
+                                <span className="text-sm font-semibold text-foreground/90">{marca.nome}</span>
                               </>
                             );
                           })()}
@@ -2088,7 +2088,7 @@ export default function InboxMeta() {
                             className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
                             onClick={() => definirCredorContato(contatoAtivo.id, m.slug)}
                           >
-                            <img src={m.logo} alt="" className="h-4 w-4 rounded object-contain" />
+                            <img src={m.logo} alt="" className="h-5 w-5 rounded object-contain" />
                             {m.nome}
                           </button>
                         ))}

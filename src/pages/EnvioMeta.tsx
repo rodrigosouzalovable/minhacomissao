@@ -2077,10 +2077,7 @@ export default function EnvioMeta() {
                 <SelectItem value="__none__">Não informar</SelectItem>
                 {CREDOR_MARCAS_LISTA.map((m) => (
                   <SelectItem key={m.slug} value={m.slug}>
-                    <span className="inline-flex items-center gap-2">
-                      <img src={m.logo} alt="" className="h-4 w-4 rounded object-contain" />
-                      {m.nome}
-                    </span>
+                    {m.nome}
                   </SelectItem>
                 ))}
               </SelectContent>
