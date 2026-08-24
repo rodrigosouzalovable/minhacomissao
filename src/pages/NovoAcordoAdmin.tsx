@@ -103,7 +103,7 @@ export default function NovoAcordoAdmin() {
     setForm({ ...form, clienteNome: filteredValue });
   };
   
-  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda' | null>(null);
   const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
   const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null }>>([]);
   useEffect(() => {
@@ -191,79 +191,43 @@ export default function NovoAcordoAdmin() {
     const valorPrimeiraParcela = parseCurrency(form.valorPrimeiraParcela);
     const valorDemaisParcelas = parseCurrency(form.valorDemaisParcelas);
 
-    if (parcelas <= 0 || diasAtraso < 0 || valorTotal <= 0) return null;
+    if (parcelas <= 0 || diasAtraso < 0 || valorTotal <= 0 || !empresa) return null;
 
     const usarValoresEspecificos = valorPrimeiraParcela > 0 && valorDemaisParcelas > 0;
 
-    // Lógica diferente para cada empresa
-    if (empresa === 'mundo_da_moda') {
-      // UME | APORTE: comissão (Honorário) em TODAS as parcelas, % por faixa de atraso
-      const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
-      
-      if (usarValoresEspecificos) {
-        const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
-        const comissaoDemais = valorDemaisParcelas * (percentual / 100);
-        const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
-        return {
-          percentual,
-          valorTotal,
-          valorPrimeiraParcela,
-          valorDemaisParcelas,
-          comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
-          comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
-          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: true as const,
-        };
-      } else {
-        const valorParcela = valorTotal / parcelas;
-        const comissaoPorParcela = valorParcela * (percentual / 100);
-        const comissaoTotal = comissaoPorParcela * parcelas;
-        return {
-          percentual,
-          valorTotal,
-          valorPrimeiraParcela: valorParcela,
-          valorDemaisParcelas: valorParcela,
-          comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
-          comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
-          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: false as const,
-        };
-      }
-    } else {
-      const { percentual } = calcularComissao(valorTotal, parcelas, diasAtraso);
+    // NOVO MUNDO e UME: mesma tabela de comissão por faixa de atraso,
+    // aplicada em TODAS as parcelas.
+    const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
 
-      if (usarValoresEspecificos) {
-        const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
-        const comissaoDemais = valorDemaisParcelas * (percentual / 100);
-        const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
-
-        return {
-          percentual,
-          valorTotal,
-          valorPrimeiraParcela,
-          valorDemaisParcelas,
-          comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
-          comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
-          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: true as const,
-        };
-      } else {
-        const valorParcela = valorTotal / parcelas;
-        const comissaoPorParcela = valorParcela * (percentual / 100);
-        const comissaoTotal = comissaoPorParcela * parcelas;
-
-        return {
-          percentual,
-          valorTotal,
-          valorPrimeiraParcela: valorParcela,
-          valorDemaisParcelas: valorParcela,
-          comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
-          comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
-          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: false as const,
-        };
-      }
+    if (usarValoresEspecificos) {
+      const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
+      const comissaoDemais = valorDemaisParcelas * (percentual / 100);
+      const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
+      return {
+        percentual,
+        valorTotal,
+        valorPrimeiraParcela,
+        valorDemaisParcelas,
+        comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
+        comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
+        comissaoTotal: Math.round(comissaoTotal * 100) / 100,
+        usarValoresEspecificos: true as const,
+      };
     }
+
+    const valorParcela = valorTotal / parcelas;
+    const comissaoPorParcela = valorParcela * (percentual / 100);
+    const comissaoTotal = comissaoPorParcela * parcelas;
+    return {
+      percentual,
+      valorTotal,
+      valorPrimeiraParcela: valorParcela,
+      valorDemaisParcelas: valorParcela,
+      comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
+      comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
+      comissaoTotal: Math.round(comissaoTotal * 100) / 100,
+      usarValoresEspecificos: false as const,
+    };
   }, [form.valorTotal, form.parcelas, form.diasAtraso, form.valorPrimeiraParcela, form.valorDemaisParcelas, empresa]);
 
   const validacaoSomaParcelas = useMemo(() => {
@@ -287,23 +251,12 @@ export default function NovoAcordoAdmin() {
   // Gerar preview das parcelas para visualização
   const parcelasPreview = useMemo(() => {
     if (!calculo || !form.dataPrimeiroPagamento) return [];
-    
+
     const dataPrimeiro = new Date(form.dataPrimeiroPagamento + 'T00:00:00');
     const numParcelas = parseInt(form.parcelas) || 1;
-    
-    if (empresa === 'mundo_da_moda') {
-      // UME | APORTE: comissão em todas as parcelas
-      return gerarParcelasMundoDaModa(
-        dataPrimeiro,
-        numParcelas,
-        calculo.valorDemaisParcelas,
-        calculo.comissaoDemaisParcelas,
-        calculo.valorPrimeiraParcela,
-        calculo.comissaoPrimeiraParcela
-      );
-    }
-    
-    return gerarParcelas(
+
+    // Comissão em todas as parcelas (NOVO MUNDO e UME)
+    return gerarParcelasMundoDaModa(
       dataPrimeiro,
       numParcelas,
       calculo.valorDemaisParcelas,
@@ -337,7 +290,16 @@ export default function NovoAcordoAdmin() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId || !calculo) return;
+    if (!userId) return;
+    if (!empresa) {
+      toast({
+        variant: 'destructive',
+        title: 'Empresa não selecionada',
+        description: 'Selecione a empresa/credor do contrato (NOVO MUNDO ou UME).',
+      });
+      return;
+    }
+    if (!calculo) return;
     
     setIsLoading(true);
 
@@ -395,35 +357,15 @@ export default function NovoAcordoAdmin() {
 
       if (acordoError) throw acordoError;
 
-      // Gerar parcelas - lógica diferente para cada empresa
-      let parcelas;
-      if (empresa === 'mundo_da_moda') {
-        // UME | APORTE: comissão em todas as parcelas
-        parcelas = gerarParcelasMundoDaModa(
-          new Date(validated.dataPrimeiroPagamento),
-          validated.parcelas,
-          calculo.valorDemaisParcelas,
-          calculo.comissaoDemaisParcelas,
-          calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined,
-          calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined
-        );
-      } else {
-        parcelas = calculo.usarValoresEspecificos
-          ? gerarParcelas(
-              new Date(validated.dataPrimeiroPagamento),
-              validated.parcelas,
-              calculo.valorDemaisParcelas,
-              calculo.comissaoDemaisParcelas,
-              calculo.valorPrimeiraParcela,
-              calculo.comissaoPrimeiraParcela
-            )
-          : gerarParcelas(
-              new Date(validated.dataPrimeiroPagamento),
-              validated.parcelas,
-              calculo.valorDemaisParcelas,
-              calculo.comissaoDemaisParcelas
-            );
-      }
+      // Gerar parcelas: comissão em todas as parcelas (NOVO MUNDO e UME)
+      const parcelas = gerarParcelasMundoDaModa(
+        new Date(validated.dataPrimeiroPagamento),
+        validated.parcelas,
+        calculo.valorDemaisParcelas,
+        calculo.comissaoDemaisParcelas,
+        calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined,
+        calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined
+      );
 
       // Inserir os pagamentos com status baseado nas parcelas marcadas como pagas
       const pagamentosData = parcelas.map(p => {
@@ -571,7 +513,7 @@ export default function NovoAcordoAdmin() {
                     className="flex-1"
                     onClick={() => setEmpresa('ume_novo_mundo')}
                   >
-                    UME | INADIMPLENTES
+                    NOVO MUNDO
                   </Button>
                   <Button
                     type="button"
@@ -579,12 +521,12 @@ export default function NovoAcordoAdmin() {
                     className="flex-1"
                     onClick={() => setEmpresa('mundo_da_moda')}
                   >
-                    UME | APORTE
+                    UME
                   </Button>
                 </div>
-                {empresa === 'mundo_da_moda' && (
+                {!empresa && (
                   <p className="text-sm text-muted-foreground">
-                    Comissão por faixa de atraso (Honorário) aplicada em todas as parcelas.
+                    Selecione a empresa/credor do contrato para calcular a comissão.
                   </p>
                 )}
               </div>
