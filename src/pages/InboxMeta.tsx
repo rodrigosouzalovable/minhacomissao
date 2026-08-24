@@ -2513,7 +2513,7 @@ export default function InboxMeta() {
         onChanged={fetchFolders}
       />
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
-      <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} />
+      <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} credor={contatoAtivo?.credor ?? null} />
       {contatoAtivo && (
         <AgendarRetornoDialog
           open={agendarRetornoOpen}
