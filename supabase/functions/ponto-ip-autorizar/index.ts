@@ -52,8 +52,13 @@ Deno.serve(async (req) => {
     if (!isAdmin) return json({ error: "Apenas administradores" }, 403);
 
     if (acao === "autorizar_atual" || acao === "adicionar") {
-      const cidr = acao === "adicionar" ? String(body?.cidr ?? "").trim() : ip;
+      const ipCliente = String(body?.ip ?? "").trim();
+      const valido = /^[0-9a-fA-F.:]+(\/\d{1,3})?$/.test(ipCliente) && ipCliente.length <= 45;
+      const cidr = acao === "adicionar"
+        ? String(body?.cidr ?? "").trim()
+        : (ip || (valido ? ipCliente : ""));
       if (!cidr) return json({ error: "IP não identificado" }, 400);
+
       const { data, error } = await admin
         .from("ponto_ips_autorizados")
         .insert({
