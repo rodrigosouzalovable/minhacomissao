@@ -633,6 +633,22 @@ export default function EnvioMeta() {
     );
   }, [variantesGroups, instanciaIds, instancias]);
 
+  // Motivos que impedem disparar/agendar — exibidos na tela para não travar o botão sem explicação.
+  const motivosBloqueio = useMemo(() => {
+    const m: string[] = [];
+    if (!templateGroup) m.push("Selecione um template aprovado.");
+    if (instanciaIds.length === 0) m.push("Selecione ao menos uma instância.");
+    if (recipientsRaw.trim().length === 0) m.push("Importe a planilha com os destinatários.");
+    if (instanciasIncompatíveis.length > 0) {
+      m.push(
+        `${instanciasIncompatíveis.length} instância(s) selecionada(s) não têm este template aprovado — remova-as ou troque o template.`,
+      );
+    }
+    return m;
+  }, [templateGroup, instanciaIds, recipientsRaw, instanciasIncompatíveis]);
+
+
+
 
   // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
   const isentosDedup = useMemo(() => {
