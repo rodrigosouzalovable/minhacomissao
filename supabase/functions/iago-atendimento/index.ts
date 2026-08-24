@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     // ===== Contato / caixa =====
     const { data: contato } = await supabase
       .from('meta_whatsapp_contatos')
-      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id')
+      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id, credor')
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
@@ -67,18 +67,15 @@ Deno.serve(async (req) => {
     const atende = await iagoAtendeCaixa(supabase, iago.id, (contato as any).folder_id ?? null);
     if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
 
-    // ===== Credor definido na caixa (sobrepõe o credor vindo dos débitos) =====
-    const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
-    let credorCaixa = '';
-    {
-      const { data: cr } = await supabase
-        .from('meta_inbox_folder_credores')
-        .select('nome')
-        .eq('folder_id', (contato as any).folder_id ?? CAIXA_PADRAO_ID)
-        .eq('ativo', true)
-        .maybeSingle();
-      credorCaixa = String((cr as any)?.nome || '').trim();
-    }
+    // ===== Credor da conversa: cabeçalho da conversa > credor único ativo da caixa =====
+    const credorResolvido = await resolverCredorConversa(
+      supabase,
+      (contato as any).folder_id ?? null,
+      (contato as any).credor ?? null,
+    );
+    const credorCaixa = credorResolvido.nome;
+    const credorAmbiguo = credorResolvido.ambiguo;
+
 
     // ===== A conversa é do IAGO? (etiqueta de atendente) =====
     const tags = await etiquetasAtendente(supabase, contato_id);
