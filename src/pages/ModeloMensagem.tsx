@@ -1,6 +1,8 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
 import { LayoutPlanilhaTab } from '@/components/modelo-mensagem/LayoutPlanilhaTab';
+import { LayoutUmeTab } from '@/components/modelo-mensagem/LayoutUmeTab';
+
 import { LayoutUazapiTab } from '@/components/modelo-mensagem/LayoutUazapiTab';
 import { LayoutVistaParcelamentoTab } from '@/components/modelo-mensagem/LayoutVistaParcelamentoTab';
 import { ModeloUmeTab } from '@/components/modelo-mensagem/ModeloUmeTab';
@@ -34,7 +36,8 @@ export default function ModeloMensagem() {
         {isAdmin ? (
           <Tabs defaultValue="imagem">
             <TabsList>
-              <TabsTrigger value="imagem">Colar imagem</TabsTrigger>
+              <TabsTrigger value="imagem">Layout Novo Mundo</TabsTrigger>
+              <TabsTrigger value="layout-ume">Layout UME</TabsTrigger>
               <TabsTrigger value="planilha">Layout Parcelamento</TabsTrigger>
               <TabsTrigger value="vista-parcelamento">Layout à vista + parcelamento</TabsTrigger>
               <TabsTrigger value="uazapi">Layout Uazapi</TabsTrigger>
@@ -42,6 +45,9 @@ export default function ModeloMensagem() {
             </TabsList>
             <TabsContent value="imagem" className="mt-4">
               <ColarImagemTab key={reloadKey} />
+            </TabsContent>
+            <TabsContent value="layout-ume" className="mt-4">
+              <LayoutUmeTab />
             </TabsContent>
             <TabsContent value="planilha" className="mt-4">
               <LayoutPlanilhaTab />
@@ -57,9 +63,20 @@ export default function ModeloMensagem() {
             </TabsContent>
           </Tabs>
         ) : (
-
-          <ColarImagemTab key={reloadKey} />
+          <Tabs defaultValue="imagem">
+            <TabsList>
+              <TabsTrigger value="imagem">Layout Novo Mundo</TabsTrigger>
+              <TabsTrigger value="layout-ume">Layout UME</TabsTrigger>
+            </TabsList>
+            <TabsContent value="imagem" className="mt-4">
+              <ColarImagemTab key={reloadKey} />
+            </TabsContent>
+            <TabsContent value="layout-ume" className="mt-4">
+              <LayoutUmeTab />
+            </TabsContent>
+          </Tabs>
         )}
+
       </div>
 
       <EditarTemplateMensagemDialog

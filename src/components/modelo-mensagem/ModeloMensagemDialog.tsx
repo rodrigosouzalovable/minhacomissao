@@ -1,5 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
+import { LayoutUmeTab } from '@/components/modelo-mensagem/LayoutUmeTab';
 
 interface Props {
   open: boolean;
@@ -13,10 +15,23 @@ export function ModeloMensagemDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Modelo Mensagem</DialogTitle>
           <DialogDescription>
-            Cole o print do Cob+, confira os dados e copie a mensagem de negociação.
+            Cole o print, confira os dados e copie a mensagem de negociação.
           </DialogDescription>
         </DialogHeader>
-        {open && <ColarImagemTab />}
+        {open && (
+          <Tabs defaultValue="imagem">
+            <TabsList>
+              <TabsTrigger value="imagem">Layout Novo Mundo</TabsTrigger>
+              <TabsTrigger value="layout-ume">Layout UME</TabsTrigger>
+            </TabsList>
+            <TabsContent value="imagem" className="mt-4">
+              <ColarImagemTab />
+            </TabsContent>
+            <TabsContent value="layout-ume" className="mt-4">
+              <LayoutUmeTab />
+            </TabsContent>
+          </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   );
