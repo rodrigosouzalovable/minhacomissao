@@ -2072,8 +2072,8 @@ export default function InboxMeta() {
                             if (!marca) return <span className="text-muted-foreground">Credor: definir</span>;
                             return (
                               <>
-                                <img src={marca.logo} alt="" className="h-3.5 w-3.5 rounded object-contain" />
-                                <span className="font-medium text-foreground/80">{marca.nome}</span>
+                                <img src={marca.logo} alt="" className="h-7 w-7 rounded object-contain" />
+                                <span className="text-sm font-semibold text-foreground/90">{marca.nome}</span>
                               </>
                             );
                           })()}
