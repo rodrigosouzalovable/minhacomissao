@@ -266,6 +266,7 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
         cliente,
         user_id: job.user_id,
         folder_id: job.folder_id ?? null,
+        credor: item.credor ?? job.credor ?? null,
         ignorar_pausa_qualidade: true,
       }),
     }).then((r) => r.json());
@@ -466,7 +467,7 @@ Deno.serve(async (req) => {
 
       const { data: pendentes } = await supabase
         .from('envio_meta_job_item')
-        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, instancia_nome, tentativas, variante_idx')
+        .select('id, telefone, nome, cpf, atraso, saldo, vars, instancia_id, instancia_nome, tentativas, variante_idx, credor')
         .eq('job_id', jobId)
         .eq('instancia_id', instanciaId)
         .eq('status', 'pendente')

@@ -26,6 +26,7 @@ import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
+import { CREDOR_MARCAS_LISTA, type CredorSlug } from "@/lib/credorMarcas";
 import { splitLinhaEnvio, parseNumeroBR } from "@/lib/valorBR";
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
@@ -102,6 +103,7 @@ type ClienteRow = {
   atraso?: string;
   saldo?: number;
   vars?: Record<string, string>;
+  credor?: string | null;
 };
 
 function normalizeTelKey(t: string): string {
@@ -289,6 +291,8 @@ export default function EnvioMeta() {
 
   const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][] }>({ open: false, rows: [] });
   const [varsByTel, setVarsByTel] = useState<Record<string, Record<string, string>>>({});
+  const [credor, setCredor] = useState<string>("__none__");
+  const [credorByTel, setCredorByTel] = useState<Record<string, CredorSlug>>({});
   const [editVarsOpen, setEditVarsOpen] = useState(false);
 
   const importarExcel = async (file: File) => {
@@ -975,12 +979,16 @@ export default function EnvioMeta() {
       const d = String(tel || "").replace(/\D/g, "");
       return d.length >= 8 ? d.slice(-8) : d;
     };
-    const clientesComVars: ClienteRow[] = hasVars
-      ? clientesFinal.map((c) => {
-          const v = varsByTel[varKey(c.telefone)];
-          return v ? { ...c, vars: v } : c;
-        })
-      : clientesFinal;
+    const credorPadrao = credor === "__none__" ? null : credor;
+    const clientesComVars: ClienteRow[] = clientesFinal.map((c) => {
+      const k = varKey(c.telefone);
+      const v = hasVars ? varsByTel[k] : undefined;
+      const credLinha = credorByTel[k] ?? credorPadrao ?? null;
+      const out: ClienteRow = { ...c };
+      if (v) out.vars = v;
+      if (credLinha) out.credor = credLinha;
+      return out;
+    });
 
     const jobIdCriado = await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
@@ -999,6 +1007,7 @@ export default function EnvioMeta() {
       modoRajada,
       msgsPorSegundo: modoRajada ? Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1)) : undefined,
       agendarPara: agendarParaISO,
+      credor: credorPadrao,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
@@ -1012,6 +1021,7 @@ export default function EnvioMeta() {
     setRecipientsRaw("");
     setRecipientsHeaders([]);
     setVarsByTel({});
+    setCredorByTel({});
     setValidacaoPreview(null);
     setNomeCampanha("");
     setTimeout(() => { refreshStatus(); }, 1500);
@@ -2057,6 +2067,33 @@ export default function EnvioMeta() {
             </p>
           </div>
 
+          <div className="max-w-md space-y-1.5">
+            <Label>Credor desta campanha</Label>
+            <Select value={credor} onValueChange={setCredor}>
+              <SelectTrigger>
+                <SelectValue placeholder="Não informar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Não informar</SelectItem>
+                {CREDOR_MARCAS_LISTA.map((m) => (
+                  <SelectItem key={m.slug} value={m.slug}>
+                    <span className="inline-flex items-center gap-2">
+                      <img src={m.logo} alt="" className="h-4 w-4 rounded object-contain" />
+                      {m.nome}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              O credor aparece no cabeçalho de cada conversa no Inbox Meta Oficial. Se a planilha tiver uma coluna
+              mapeada como <strong>Credor</strong>, o valor da linha tem prioridade sobre esta seleção.
+              {Object.keys(credorByTel).length > 0 && (
+                <> {" "}• {Object.keys(credorByTel).length} linha(s) com credor vindo da planilha.</>
+              )}
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={enviar} disabled={validando || enviandoTeste} size="lg">
               {validando
@@ -2201,12 +2238,13 @@ export default function EnvioMeta() {
           body_text: (template as any).body_text || "",
           variaveis: template.variaveis || null,
         } : null}
-        onConfirm={(linhas, stats, novosVars, headers) => {
+        onConfirm={(linhas, stats, novosVars, headers, credByTel) => {
           setRecipientsRaw(linhas.join("\n"));
           setRecipientsHeaders(headers || []);
           setEditAsText(false);
           setValidacaoPreview(null);
           setVarsByTel(novosVars || {});
+          setCredorByTel(credByTel || {});
           const varsCount = Object.keys(novosVars || {}).length;
           toast.success(
             `${stats.total} contato(s) importado(s)` +

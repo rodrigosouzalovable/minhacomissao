@@ -1789,6 +1789,7 @@ export type Database = {
           atual_telefone: string | null
           concluido_em: string | null
           created_at: string
+          credor: string | null
           enviados: number
           erros: number
           falhas_por_instancia_run: Json
@@ -1823,6 +1824,7 @@ export type Database = {
           atual_telefone?: string | null
           concluido_em?: string | null
           created_at?: string
+          credor?: string | null
           enviados?: number
           erros?: number
           falhas_por_instancia_run?: Json
@@ -1857,6 +1859,7 @@ export type Database = {
           atual_telefone?: string | null
           concluido_em?: string | null
           created_at?: string
+          credor?: string | null
           enviados?: number
           erros?: number
           falhas_por_instancia_run?: Json
@@ -1901,6 +1904,7 @@ export type Database = {
           atraso: string | null
           cpf: string | null
           created_at: string
+          credor: string | null
           erro: string | null
           id: string
           instancia_id: string | null
@@ -1923,6 +1927,7 @@ export type Database = {
           atraso?: string | null
           cpf?: string | null
           created_at?: string
+          credor?: string | null
           erro?: string | null
           id?: string
           instancia_id?: string | null
@@ -1945,6 +1950,7 @@ export type Database = {
           atraso?: string | null
           cpf?: string | null
           created_at?: string
+          credor?: string | null
           erro?: string | null
           id?: string
           instancia_id?: string | null
@@ -4601,6 +4607,7 @@ export type Database = {
           atualizado_em: string
           bsuid: string | null
           cpf: string | null
+          credor: string | null
           criado_em: string
           fixado: boolean
           folder_id: string | null
@@ -4625,6 +4632,7 @@ export type Database = {
           atualizado_em?: string
           bsuid?: string | null
           cpf?: string | null
+          credor?: string | null
           criado_em?: string
           fixado?: boolean
           folder_id?: string | null
@@ -4649,6 +4657,7 @@ export type Database = {
           atualizado_em?: string
           bsuid?: string | null
           cpf?: string | null
+          credor?: string | null
           criado_em?: string
           fixado?: boolean
           folder_id?: string | null

@@ -37,6 +37,7 @@ import { MetaQualificacaoDialog, type MetaQualificacao } from '@/components/inbo
 import { MetaFolderConfigDialog, CAIXA_PADRAO_ID } from '@/components/inbox/meta/MetaFolderConfigDialog';
 import { MetaNumerosConectadosDialog } from '@/components/inbox/meta/MetaNumerosConectadosDialog';
 import { CopyButton } from '@/components/CopyButton';
+import { CREDOR_MARCAS_LISTA, getCredorMarca } from "@/lib/credorMarcas";
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
 import { AgendarRetornoDialog } from '@/components/inbox/meta/AgendarRetornoDialog';
 import { useMetaCall } from '@/contexts/MetaCallContext';
@@ -86,6 +87,7 @@ interface MetaContato {
   whatsapp_username?: string | null;
   telefone_visivel?: boolean | null;
   folder_id?: string | null;
+  credor?: string | null;
 }
 interface MetaMensagem {
   id: string; instancia_id: string; telefone: string; conteudo: string;
@@ -589,7 +591,7 @@ export default function InboxMeta() {
     if (!contatoId && !telefone) return;
     linkDiretoRef.current = true;
     void (async () => {
-      const cols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id';
+      const cols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
       let q = supabase.from('meta_whatsapp_contatos').select(cols).limit(1);
       q = contatoId ? q.eq('id', contatoId) : q.like('telefone', `%${telefone.slice(-8)}`);
       const { data } = await q.maybeSingle();
@@ -609,7 +611,7 @@ export default function InboxMeta() {
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
-    const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id';
+    const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
 
     // ===== Modo "Meus Clientes": todo o histórico com a etiqueta do usuário =====
     if (modoMeusClientes) {
@@ -1382,6 +1384,13 @@ export default function InboxMeta() {
   };
 
 
+  const definirCredorContato = async (id: string, slug: string | null) => {
+    const { error } = await supabase.from('meta_whatsapp_contatos').update({ credor: slug }).eq('id', id);
+    if (error) { toast({ title: 'Falha ao salvar credor', description: error.message, variant: 'destructive' }); return; }
+    setContatos(prev => prev.map(c => (c.id === id ? { ...c, credor: slug } : c)));
+    setContatoAtivo(prev => (prev && prev.id === id ? { ...prev, credor: slug } : prev));
+  };
+
   // Multi-seleção
   const toggleSel = (id: string) => {
     setSelecionados(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -2050,6 +2059,48 @@ export default function InboxMeta() {
                       </>
                     )}
                     <span>· via {instAtiva?.nome || instAtiva?.display_phone || 'Meta'}</span>
+                    <span>·</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 hover:bg-accent"
+                          title="Credor desta conversa (clique para alterar)"
+                        >
+                          {(() => {
+                            const marca = getCredorMarca(contatoAtivo.credor);
+                            if (!marca) return <span className="text-muted-foreground">Credor: definir</span>;
+                            return (
+                              <>
+                                <img src={marca.logo} alt="" className="h-3.5 w-3.5 rounded object-contain" />
+                                <span className="font-medium text-foreground/80">{marca.nome}</span>
+                              </>
+                            );
+                          })()}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-52 p-1" align="start">
+                        <div className="px-2 py-1 text-[11px] uppercase text-muted-foreground">Credor</div>
+                        {CREDOR_MARCAS_LISTA.map((m) => (
+                          <button
+                            key={m.slug}
+                            type="button"
+                            className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
+                            onClick={() => definirCredorContato(contatoAtivo.id, m.slug)}
+                          >
+                            <img src={m.logo} alt="" className="h-4 w-4 rounded object-contain" />
+                            {m.nome}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="w-full text-left rounded px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent"
+                          onClick={() => definirCredorContato(contatoAtivo.id, null)}
+                        >
+                          Não informar
+                        </button>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   </div>
                 </div>
