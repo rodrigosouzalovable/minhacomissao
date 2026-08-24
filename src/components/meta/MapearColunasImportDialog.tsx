@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectGroup, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { amostrasParecemValor, formatarValorBR, type FormatoValor } from "@/lib/valorBR";
+import { normalizarCredor, type CredorSlug } from "@/lib/credorMarcas";
 
 const VALOR_HEADER_RX = /(saldo|valor|d[ií]vida|debito|débito|montante|total|parcela|entrada)/i;
 
@@ -17,6 +18,7 @@ const FIXED_LABELS: Record<string, string> = {
   cpf: "CPF / CNPJ",
   atraso: "Atraso (dias)",
   saldo: "Saldo (R$)",
+  credor: "Credor",
 };
 
 const HEADER_HINTS: Array<{ role: string; rx: RegExp }> = [
@@ -24,6 +26,7 @@ const HEADER_HINTS: Array<{ role: string; rx: RegExp }> = [
   { role: "cpf", rx: /(cpf|cnpj|documento|doc)/i },
   { role: "nome", rx: /(nome|cliente|razao|razão|contato)/i },
   { role: "atraso", rx: /(atraso|dias|days)/i },
+  { role: "credor", rx: /(credor|carteira)/i },
   { role: "saldo", rx: /(saldo|valor|d[ií]vida|debito|débito|montante|total)/i },
 ];
 
@@ -84,6 +87,7 @@ type Props = {
     stats: { total: number; ignorados: number; duplicados: number; preservados?: number },
     varsByTel: Record<string, Record<string, string>>,
     headers: string[],
+    credorByTel?: Record<string, CredorSlug>,
   ) => void;
 };
 
@@ -233,6 +237,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     const idxCpf = mapping.findIndex((r) => r === "cpf");
     const idxAtraso = mapping.findIndex((r) => r === "atraso");
     const idxSaldo = mapping.findIndex((r) => r === "saldo");
+    const idxCredor = mapping.findIndex((r) => r === "credor");
 
     if (idxCpf < 0 && idxNome >= 0 && columnLooksLikeDocument(rows, idxNome, firstIsHeader)) {
       toast.error(`A coluna ${colLetter(idxNome)} parece ser CPF/CNPJ. Marque como "CPF / CNPJ" para preencher a variável {cpf}.`);
@@ -273,6 +278,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     const seen = new Set<string>();
     const out: string[] = [];
     const varsByTel: Record<string, Record<string, string>> = {};
+    const credorByTel: Record<string, CredorSlug> = {};
     let ignorados = 0;
     let duplicados = 0;
     let preservados = 0;
@@ -299,10 +305,15 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       }
       if (Object.keys(rowVars).length > 0) varsByTel[key] = rowVars;
 
+      if (idxCredor >= 0) {
+        const cred = normalizarCredor(String(arr[idxCredor] ?? ""));
+        if (cred) credorByTel[key] = cred;
+      }
+
       out.push(cols.map((c) => c.get(arr)).join(", "));
     }
     if (out.length === 0) { toast.error("Nenhum telefone válido encontrado após mapeamento"); return; }
-    onConfirm(out, { total: out.length, ignorados, duplicados, preservados }, varsByTel, headers);
+    onConfirm(out, { total: out.length, ignorados, duplicados, preservados }, varsByTel, headers, credorByTel);
     onOpenChange(false);
   };
 
