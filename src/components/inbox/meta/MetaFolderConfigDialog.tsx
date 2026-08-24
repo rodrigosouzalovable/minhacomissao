@@ -157,20 +157,6 @@ export function MetaFolderConfigDialog({
 
   const alternarCredor = async (credor: Credor, valor: boolean) => {
     setBusy(true);
-    if (valor) {
-      const outros = credores.filter(c => c.id !== credor.id && c.ativo).map(c => c.id);
-      if (outros.length) {
-        const { error: errOff } = await (supabase as any)
-          .from('meta_inbox_folder_credores')
-          .update({ ativo: false })
-          .in('id', outros);
-        if (errOff) {
-          setBusy(false);
-          toast({ title: 'Erro', description: errOff.message, variant: 'destructive' });
-          return;
-        }
-      }
-    }
     const { error } = await (supabase as any)
       .from('meta_inbox_folder_credores')
       .update({ ativo: valor })
@@ -182,6 +168,7 @@ export function MetaFolderConfigDialog({
     }
     carregarCredores();
   };
+
 
   const excluirCredor = async (credor: Credor) => {
     setBusy(true);
