@@ -290,7 +290,16 @@ export default function NovoAcordoAdmin() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId || !calculo) return;
+    if (!userId) return;
+    if (!empresa) {
+      toast({
+        variant: 'destructive',
+        title: 'Empresa não selecionada',
+        description: 'Selecione a empresa/credor do contrato (NOVO MUNDO ou UME).',
+      });
+      return;
+    }
+    if (!calculo) return;
     
     setIsLoading(true);
 
