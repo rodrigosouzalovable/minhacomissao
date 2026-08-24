@@ -66,6 +66,8 @@ export type IniciarParams = {
   modoRajada?: boolean;
   msgsPorSegundo?: number;
   folderId?: string | null;
+  /** ISO UTC: quando preenchido, a campanha fica registrada e só começa nesse momento. */
+  agendarPara?: string | null;
   onAfterEnvio?: () => void;
 };
 
