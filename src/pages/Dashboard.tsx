@@ -34,6 +34,8 @@ import { useUserPermissions } from '@/hooks/useUserPermissions';
 export default function Dashboard() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { batePonto } = useUserPermissions();
+
   const [definirMetasOpen, setDefinirMetasOpen] = useState(false);
   const [configMotivOpen, setConfigMotivOpen] = useState(false);
   const metaMes = useMetaMes();
