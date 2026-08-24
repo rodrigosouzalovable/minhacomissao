@@ -25,3 +25,5 @@
 - [Meta Pendência Pagamento #131042](mem://features/whatsapp/meta-pendencia-pagamento-131042) — Pendência de cartão/fatura da BM restringe números; auto-libera na revalidação e botão de revalidar em lote na BM
 
 - [Blacklist Bloquear Contato](mem://features/whatsapp/blacklist-bloquear-contato) — Botão "Bloquear contato" adiciona à blacklist; toggle "Bloquear Blacklist" no Envio Meta
+
+- [Controle de Ponto e Atividade](mem://features/ponto-e-atividade) — Ponto 4x/dia por IP do escritório, bloqueio total até bater entrada, cronômetro de inatividade 10min, relatório admin-only
