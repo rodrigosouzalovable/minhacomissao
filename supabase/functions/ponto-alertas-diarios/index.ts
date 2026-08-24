@@ -50,7 +50,10 @@ Deno.serve(async (req) => {
       porUser.set(r.user_id, lista);
     }
 
-    const ativos = (perfis ?? []).filter((p: any) => p.ativo !== false && obrigatorio.get(p.id) !== false);
+    const ativos = (perfis ?? []).filter(
+      (p: any) => p.ativo !== false && obrigadosPermissao.has(p.id) && obrigatorio.get(p.id) !== false,
+    );
+
 
     let linhas: string[] = [];
     let titulo = "";
