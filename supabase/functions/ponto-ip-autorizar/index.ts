@@ -46,8 +46,9 @@ Deno.serve(async (req) => {
 
     if (acao === "consultar") {
       const { data: regras } = await admin.from("ponto_ips_autorizados").select("cidr, ativo");
-      return json({ ip, autorizado: ipAutorizado(ip, regras ?? []) });
+      return json({ ip, origem: ip ? "servidor" : "", autorizado: ip ? ipAutorizado(ip, regras ?? []) : false });
     }
+
 
     if (!isAdmin) return json({ error: "Apenas administradores" }, 403);
 
