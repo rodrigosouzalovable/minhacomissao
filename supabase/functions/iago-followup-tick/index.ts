@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
 
       const { data: contato } = await supabase
         .from('meta_whatsapp_contatos')
-        .select('id, instancia_id, telefone, bsuid, nome, folder_id, ultima_msg_entrada_em')
+        .select('id, instancia_id, telefone, bsuid, nome, folder_id, credor, ultima_msg_entrada_em')
         .eq('id', est.contato_id)
         .maybeSingle();
       if (!contato) { pulados.push('contato inexistente'); continue; }
