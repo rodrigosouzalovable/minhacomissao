@@ -59,6 +59,8 @@ export function EditPermissionsDialog({
   const [atendeInboxMeta, setAtendeInboxMeta] = useState(true);
   const [parceiroMeta, setParceiroMeta] = useState(false);
   const [veCampanhas, setVeCampanhas] = useState(false);
+  const [batePonto, setBatePonto] = useState(false);
+
   const [instanciasParceiro, setInstanciasParceiro] = useState<string[]>([]);
   const [buscaInstancia, setBuscaInstancia] = useState('');
   const [selectedTenants, setSelectedTenants] = useState<string[]>([]);
@@ -156,6 +158,8 @@ export function EditPermissionsDialog({
       setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? true);
       setParceiroMeta((permissions as any).parceiro_meta ?? false);
       setVeCampanhas((permissions as any).ve_campanhas ?? false);
+      setBatePonto((permissions as any).bate_ponto ?? false);
+
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
@@ -169,6 +173,8 @@ export function EditPermissionsDialog({
       setAtendeInboxMeta(true);
       setParceiroMeta(false);
       setVeCampanhas(false);
+      setBatePonto(false);
+
 
     }
   }, [permissions, open]);
@@ -195,6 +201,8 @@ export function EditPermissionsDialog({
             atende_inbox_meta: atendeInboxMeta,
             parceiro_meta: parceiroMeta,
             ve_campanhas: veCampanhas,
+            bate_ponto: batePonto,
+
 
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
           };
@@ -365,6 +373,17 @@ export function EditPermissionsDialog({
               </div>
               <Switch checked={veCampanhas} onCheckedChange={setVeCampanhas} />
             </div>
+
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label className="text-sm font-medium">Precisa bater ponto</Label>
+                <p className="text-xs text-muted-foreground">
+                  O sistema fica bloqueado para este usuário até ele registrar a entrada do dia, na rede do escritório.
+                </p>
+              </div>
+              <Switch checked={batePonto} onCheckedChange={setBatePonto} />
+            </div>
+
 
             <div className="space-y-3 rounded-md border p-3">
               <div className="flex items-center justify-between">

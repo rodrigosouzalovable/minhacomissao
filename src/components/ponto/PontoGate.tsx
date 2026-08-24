@@ -1,6 +1,8 @@
 import { ReactNode } from 'react';
 import { useUserRole } from '@/hooks/useUserRole';
 import { usePonto } from '@/hooks/usePonto';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
+
 import { PontoCard } from './PontoCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,14 +16,17 @@ import { LogOut, ShieldAlert } from 'lucide-react';
  */
 export function PontoGate({ children }: { children: ReactNode }) {
   const { isAdmin, isGestor, loading: roleLoading } = useUserRole();
+  const { batePonto, isLoading: permLoading } = useUserPermissions();
   const { entradaOk, emAlmoco, isLoading } = usePonto();
   const { signOut } = useAuth();
 
-  if (roleLoading || isLoading) return <>{children}</>;
+  if (roleLoading || permLoading || isLoading) return <>{children}</>;
   if (isAdmin || isGestor) return <>{children}</>;
+  if (!batePonto) return <>{children}</>;
 
   const bloqueado = !entradaOk || emAlmoco;
   if (!bloqueado) return <>{children}</>;
+
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 py-6">

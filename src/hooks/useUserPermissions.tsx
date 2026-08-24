@@ -32,6 +32,8 @@ export function useUserPermissions() {
     atendeInboxMeta: (permissions as any)?.atende_inbox_meta ?? true,
     parceiroMeta: (permissions as any)?.parceiro_meta ?? false,
     veCampanhas: (permissions as any)?.ve_campanhas ?? false,
+    batePonto: (permissions as any)?.bate_ponto ?? false,
+
 
     isLoading,
   };

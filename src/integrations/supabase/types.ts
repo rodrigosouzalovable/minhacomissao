@@ -6455,6 +6455,7 @@ export type Database = {
           acordos_compartilhados: boolean
           atende_inbox_meta: boolean
           atualizado_em: string
+          bate_ponto: boolean
           concedido_por: string | null
           credores: string[]
           criado_em: string
@@ -6474,6 +6475,7 @@ export type Database = {
           acordos_compartilhados?: boolean
           atende_inbox_meta?: boolean
           atualizado_em?: string
+          bate_ponto?: boolean
           concedido_por?: string | null
           credores?: string[]
           criado_em?: string
@@ -6493,6 +6495,7 @@ export type Database = {
           acordos_compartilhados?: boolean
           atende_inbox_meta?: boolean
           atualizado_em?: string
+          bate_ponto?: boolean
           concedido_por?: string | null
           credores?: string[]
           criado_em?: string

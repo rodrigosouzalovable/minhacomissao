@@ -26,12 +26,16 @@ import { RecordePessoalCard } from '@/components/RecordePessoalCard';
 import { ConfigMotivacaoDialog } from '@/components/ConfigMotivacaoDialog';
 import { HistoricoMesesCard } from '@/components/HistoricoMesesCard';
 import { PontoCard } from '@/components/ponto/PontoCard';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
+
 
 
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { batePonto } = useUserPermissions();
+
   const [definirMetasOpen, setDefinirMetasOpen] = useState(false);
   const [configMotivOpen, setConfigMotivOpen] = useState(false);
   const metaMes = useMetaMes();
@@ -170,7 +174,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {!isAdmin && <PontoCard />}
+        {!isAdmin && batePonto && <PontoCard />}
 
         <HistoricoMesesCard />
 

@@ -30,15 +30,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    const [{ data: perfis }, { data: registros }, { data: jornadas }] = await Promise.all([
+    const [{ data: perfis }, { data: registros }, { data: jornadas }, { data: perms }] = await Promise.all([
       admin.from("profiles").select("id, nome, ativo"),
       admin.from("ponto_registros").select("user_id, tipo, registrado_em").eq("data", data),
       admin.from("ponto_jornada_config").select("user_id, ponto_obrigatorio"),
+      admin.from("user_permissions").select("user_id").eq("bate_ponto", true),
     ]);
+
+    const obrigadosPermissao = new Set<string>((perms ?? []).map((p: any) => p.user_id));
 
     const obrigatorio = new Map<string, boolean>(
       (jornadas ?? []).map((j: any) => [j.user_id, j.ponto_obrigatorio !== false]),
     );
+
     const porUser = new Map<string, string[]>();
     for (const r of registros ?? []) {
       const lista = porUser.get(r.user_id) ?? [];
@@ -46,7 +50,10 @@ Deno.serve(async (req) => {
       porUser.set(r.user_id, lista);
     }
 
-    const ativos = (perfis ?? []).filter((p: any) => p.ativo !== false && obrigatorio.get(p.id) !== false);
+    const ativos = (perfis ?? []).filter(
+      (p: any) => p.ativo !== false && obrigadosPermissao.has(p.id) && obrigatorio.get(p.id) !== false,
+    );
+
 
     let linhas: string[] = [];
     let titulo = "";
