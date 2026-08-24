@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -21,7 +21,7 @@ import { calcularCustoEstimado } from "@/hooks/useCustoEstimadoEnvio";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useMetaEnviosTotais } from "@/hooks/useMetaEnviosTotais";
 import { useAuth } from "@/hooks/useAuth";
-import { AgendarCampanhaBox, CampanhasAgendadasList } from "@/components/meta/CampanhaAgendadaSection";
+import { AgendarCampanhaBox, agendamentoParaISO, type AgendamentoState } from "@/components/meta/CampanhaAgendadaSection";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -657,21 +657,9 @@ export default function EnvioMeta() {
     return map;
   }, [templateGroup, instanciaIds]);
 
-  // Variantes prontas para agendamento (mesma estrutura usada no disparo imediato)
-  const templateVariantesAgendamento = useMemo(() => {
-    return variantesGroups.map((g) => {
-      const byInst: Record<string, string> = {};
-      for (const r of g.rows) {
-        if (r.status === "approved" && instanciaIds.includes(r.instancia_id)) byInst[r.instancia_id] = r.id;
-      }
-      const first = g.rows.find((r) => r.status === "approved");
-      return {
-        template_id: first?.id || "",
-        nome_template: g.nome,
-        template_id_by_instance: byInst,
-      };
-    });
-  }, [variantesGroups, instanciaIds]);
+  // Agendamento por data e hora (quando ativo, o botão "Disparar" passa a "Agendar")
+  const [agendamento, setAgendamento] = useState<AgendamentoState>({ ativo: false, data: "", hora: "" });
+  const agendarParaISO = agendamentoParaISO(agendamento);
 
 
   const SEM_BM = "__sem_bm__";
@@ -709,6 +697,12 @@ export default function EnvioMeta() {
   const enviar = async () => {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
+    if (agendamento.ativo) {
+      if (!agendarParaISO) return toast.error("Informe a data e a hora de início do agendamento");
+      if (new Date(agendarParaISO).getTime() <= Date.now()) {
+        return toast.error("A data e hora do agendamento precisam estar no futuro");
+      }
+    }
     if (String(templateGroup.categoria || '').toUpperCase() === 'MARKETING') {
       return toast.error(
         `Envio bloqueado: template "${templateGroup.nome}" é categoria MARKETING. Só templates UTILITY são permitidos. Peça ao admin liberar em Configurar Meta → Segurança de Custos.`,
@@ -903,8 +897,11 @@ export default function EnvioMeta() {
       const tplLinha = variantesGroups.length > 1
         ? `${variantesGroups.length} templates alternados (${variantesGroups.map((g) => g.nome).join(", ")})`
         : `template "${template.nome_template}"`;
+      const acaoLinha = agendarParaISO
+        ? `Agendar ${tplLinha} para iniciar em ${new Date(agendarParaISO).toLocaleString("pt-BR")}`
+        : `Disparar ${tplLinha}`;
       if (!confirm(
-        `${bloco}Disparar ${tplLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
+        `${bloco}${acaoLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
 
@@ -978,6 +975,7 @@ export default function EnvioMeta() {
       folderId: folderId === "__default__" ? null : folderId,
       modoRajada,
       msgsPorSegundo: modoRajada ? Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1)) : undefined,
+      agendarPara: agendarParaISO,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
@@ -995,7 +993,12 @@ export default function EnvioMeta() {
     setNomeCampanha("");
     setTimeout(() => { refreshStatus(); }, 1500);
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-    toast.success("Campanha iniciada. Acompanhe no botão Campanhas.");
+    if (agendarParaISO) {
+      toast.success(`Campanha agendada para ${new Date(agendarParaISO).toLocaleString("pt-BR")}. Acompanhe no botão Campanhas.`);
+      setAgendamento({ ativo: false, data: "", hora: "" });
+    } else {
+      toast.success("Campanha iniciada. Acompanhe no botão Campanhas.");
+    }
   };
 
   const enviarTeste = async () => {
@@ -1736,21 +1739,12 @@ export default function EnvioMeta() {
 
 
 
-      {/* Agendamento multi-dia */}
+      {/* Agendamento por data e hora */}
       <AgendarCampanhaBox
-        clientes={recipients}
-        instanciaIds={instanciaIds}
-        instancias={instancias.map((i) => ({ id: i.id, nome: i.nome }))}
-        template={template ? { id: template.id, nome_template: template.nome_template } : null}
-        templateIdByInstance={templateIdByInstance}
-        templateVariantes={templateVariantesAgendamento}
-
-        minSec={Math.max(1, Number(minSec) || 1)}
-        maxSec={Math.max(Math.max(1, Number(minSec) || 1), Number(maxSec) || 1)}
+        value={agendamento}
+        onChange={setAgendamento}
         disabled={enviando || validando || instanciasIncompatíveis.length > 0}
       />
-
-      <CampanhasAgendadasList />
 
       {/* Envio */}
       <Card>
@@ -2042,8 +2036,14 @@ export default function EnvioMeta() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={enviar} disabled={validando || enviandoTeste || instanciasIncompatíveis.length > 0} size="lg">
-              {validando ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-              {validando ? "Validando WhatsApp..." : `Disparar ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
+              {validando
+                ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                : agendamento.ativo
+                  ? <CalendarClock className="h-4 w-4 mr-2" />
+                  : <Send className="h-4 w-4 mr-2" />}
+              {validando
+                ? "Validando WhatsApp..."
+                : `${agendamento.ativo ? "Agendar" : "Disparar"} ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
             </Button>
           </div>
 

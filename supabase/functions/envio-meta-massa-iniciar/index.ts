@@ -63,6 +63,12 @@ Deno.serve(async (req) => {
 
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
     const folderId: string | null = typeof body?.folderId === 'string' && body.folderId ? body.folderId : null;
+    // Agendamento: ISO UTC no futuro. Job criado como 'rodando', mas só começa em proximo_em.
+    let agendarParaMs: number | null = null;
+    if (typeof body?.agendarPara === 'string' && body.agendarPara) {
+      const t = Date.parse(body.agendarPara);
+      if (!Number.isNaN(t) && t > Date.now() + 30_000) agendarParaMs = t;
+    }
 
     if (!template?.id) {
       console.error('[iniciar] recusado 400: template obrigatório');
@@ -238,9 +244,18 @@ Deno.serve(async (req) => {
     // Janela de envio: dentro do horário o job já arranca no primeiro tick; fora dele
     // agenda exatamente para a abertura da janela (sem backoff fixo de 10 min).
     const janela = await calcularJanelaEnvio(supabase);
-    const proximoEmInicial = janela.aberta
+    let proximoEmInicial = janela.aberta
       ? new Date().toISOString()
       : new Date(Date.now() + janela.esperaMs).toISOString();
+    let statusMotivoInicial: string | null = janela.aberta
+      ? null
+      : `Aguardando abertura da janela de envio (${janela.aberturaBrtLabel} BRT)`;
+    if (agendarParaMs) {
+      // Agendado: nunca antes da data escolhida. Se cair fora da janela, o tick
+      // reagenda para a próxima abertura quando o horário chegar.
+      proximoEmInicial = new Date(agendarParaMs).toISOString();
+      statusMotivoInicial = `Campanha agendada para ${new Date(agendarParaMs).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT)`;
+    }
 
     const { data: job, error: jobErr } = await supabase
       .from('envio_meta_job')
@@ -257,7 +272,7 @@ Deno.serve(async (req) => {
         max_seg: maxSec,
         total: clientesEnvio.length,
         proximo_em: proximoEmInicial,
-        status_motivo: janela.aberta ? null : `Aguardando abertura da janela de envio (${janela.aberturaBrtLabel} BRT)`,
+        status_motivo: statusMotivoInicial,
         nome_campanha: nomeCampanha,
         modo_rajada: modoRajada,
         msgs_por_segundo: msgsPorSegundo,
@@ -312,6 +327,13 @@ Deno.serve(async (req) => {
       console.error('[iniciar] falha ao gravar vinculos telefone->cpf', e);
     }
 
+    // Agendada: nada é disparado agora. O tick agendado assume quando proximo_em vencer.
+    if (agendarParaMs) {
+      console.log('[iniciar] job agendado', job.id, 'para', new Date(agendarParaMs).toISOString());
+      return new Response(JSON.stringify({ success: true, job_id: job.id, agendado_para: new Date(agendarParaMs).toISOString() }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     if (modoRajada) {
       // Dispara um worker paralelo POR INSTÂNCIA — cada worker envia em rajada.

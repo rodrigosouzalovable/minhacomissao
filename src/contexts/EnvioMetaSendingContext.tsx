@@ -66,6 +66,8 @@ export type IniciarParams = {
   modoRajada?: boolean;
   msgsPorSegundo?: number;
   folderId?: string | null;
+  /** ISO UTC: quando preenchido, a campanha fica registrada e só começa nesse momento. */
+  agendarPara?: string | null;
   onAfterEnvio?: () => void;
 };
 
@@ -693,6 +695,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           modoRajada: p.modoRajada === true,
           msgsPorSegundo: p.msgsPorSegundo,
           folderId: p.folderId ?? null,
+          agendarPara: p.agendarPara ?? null,
         },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
