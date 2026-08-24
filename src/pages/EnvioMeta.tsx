@@ -1743,8 +1743,8 @@ export default function EnvioMeta() {
       <AgendarCampanhaBox
         value={agendamento}
         onChange={setAgendamento}
-        disabled={enviando || validando || instanciasIncompatíveis.length > 0}
       />
+
 
       {/* Envio */}
       <Card>
