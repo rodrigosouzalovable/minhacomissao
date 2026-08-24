@@ -306,18 +306,13 @@ Deno.serve(async (req) => {
       );
 
 
-      // Credor configurado na caixa de mensagens (se houver)
-      let credor = '';
-      if ((contato as any).folder_id) {
-        const { data: cr } = await supabase
-          .from('meta_inbox_folder_credores')
-          .select('nome')
-          .eq('folder_id', (contato as any).folder_id)
-          .eq('ativo', true)
-          .limit(1)
-          .maybeSingle();
-        credor = String((cr as any)?.nome || '');
-      }
+      // Credor da conversa: cabeçalho da conversa > credor único ativo da caixa
+      const credor = (await resolverCredorConversa(
+        supabase,
+        (contato as any).folder_id ?? null,
+        (contato as any).credor ?? null,
+      )).nome;
+
 
       let texto = '';
       if (etapa === 1 && propostaEnviada) {
