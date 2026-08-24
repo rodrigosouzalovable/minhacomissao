@@ -335,6 +335,12 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
                 <ListaItens lista={porTipo.aprendizado} mostrarGatilho />
               </TabsContent>
 
+              <TabsContent value="objecoes" className="space-y-3 mt-0">
+                <ObjecoesCatalogoTab />
+              </TabsContent>
+
+
+
               <TabsContent value="followup" className="space-y-4 mt-0">
                 <div className="flex items-center justify-between border rounded-md p-3">
                   <div>
