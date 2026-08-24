@@ -106,13 +106,17 @@ export function SugestoesObjecaoPanel({
             disabled={carregando} onClick={() => void buscar(true)}>
             <RefreshCw className={cn('h-3.5 w-3.5', carregando && 'animate-spin')} />
           </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" title={minimizado ? 'Maximizar' : 'Minimizar'}
+            onClick={() => setMinimizado(v => !v)}>
+            {minimizado ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </Button>
           <Button variant="ghost" size="icon" className="h-6 w-6" title="Fechar" onClick={onFechar}>
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
-      <div className="p-2 space-y-2 max-h-[45vh] overflow-y-auto">
+      {!minimizado && <div className="p-2 space-y-2 max-h-[45vh] overflow-y-auto">
         {carregando && !sugestoes.length && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground px-1 py-3">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando a conversa...
