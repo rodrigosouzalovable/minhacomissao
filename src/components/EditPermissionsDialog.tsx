@@ -173,6 +173,8 @@ export function EditPermissionsDialog({
       setAtendeInboxMeta(true);
       setParceiroMeta(false);
       setVeCampanhas(false);
+      setBatePonto(false);
+
 
     }
   }, [permissions, open]);
