@@ -244,9 +244,18 @@ Deno.serve(async (req) => {
     // Janela de envio: dentro do horário o job já arranca no primeiro tick; fora dele
     // agenda exatamente para a abertura da janela (sem backoff fixo de 10 min).
     const janela = await calcularJanelaEnvio(supabase);
-    const proximoEmInicial = janela.aberta
+    let proximoEmInicial = janela.aberta
       ? new Date().toISOString()
       : new Date(Date.now() + janela.esperaMs).toISOString();
+    let statusMotivoInicial: string | null = janela.aberta
+      ? null
+      : `Aguardando abertura da janela de envio (${janela.aberturaBrtLabel} BRT)`;
+    if (agendarParaMs) {
+      // Agendado: nunca antes da data escolhida. Se cair fora da janela, o tick
+      // reagenda para a próxima abertura quando o horário chegar.
+      proximoEmInicial = new Date(agendarParaMs).toISOString();
+      statusMotivoInicial = `Campanha agendada para ${new Date(agendarParaMs).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT)`;
+    }
 
     const { data: job, error: jobErr } = await supabase
       .from('envio_meta_job')
