@@ -5,6 +5,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -2215,19 +2217,47 @@ export default function InboxMeta() {
                     );
                   })()}
 
-                  {janelaInfo.status === 'aberta' ? (
-                    <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 gap-1">
-                      <Clock className="h-3 w-3" /> Aberta · fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
-                    </Badge>
-                  ) : janelaInfo.status === 'alerta' ? (
-                    <Badge variant="outline" className="border-amber-500/60 bg-amber-500/10 text-amber-600 dark:text-amber-400 gap-1 animate-pulse">
-                      <AlertCircle className="h-3 w-3" /> Janela fecha em {formatDistanceToNowStrict(new Date(janelaInfo.expiraEm!), { locale: ptBR })}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400 gap-1">
-                      <AlertCircle className="h-3 w-3" /> Fechada · envio bloqueado
-                    </Badge>
-                  )}
+                  {(() => {
+                    const restante = janelaInfo.expiraEm
+                      ? formatDistanceToNowStrict(new Date(janelaInfo.expiraEm), { locale: ptBR })
+                      : null;
+                    const cfg = janelaInfo.status === 'aberta'
+                      ? {
+                          cls: 'border-emerald-500/40 text-emerald-500',
+                          icon: <Clock className="h-3.5 w-3.5" />,
+                          label: `Janela 24h aberta${restante ? ` · fecha em ${restante}` : ''}`,
+                        }
+                      : janelaInfo.status === 'alerta'
+                        ? {
+                            cls: 'border-amber-500/60 bg-amber-500/10 text-amber-600 dark:text-amber-400 animate-pulse',
+                            icon: <AlertCircle className="h-3.5 w-3.5" />,
+                            label: `Janela fecha em ${restante ?? 'menos de 1h'}`,
+                          }
+                        : {
+                            cls: 'border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400',
+                            icon: <AlertCircle className="h-3.5 w-3.5" />,
+                            label: 'Janela fechada · envio livre bloqueado',
+                          };
+                    return (
+                      <TooltipProvider delayDuration={150}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              className={cn(
+                                'inline-flex h-7 w-7 items-center justify-center rounded-md border cursor-default',
+                                cfg.cls,
+                              )}
+                              aria-label={cfg.label}
+                            >
+                              {cfg.icon}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">{cfg.label}</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })()}
+
                 </div>
               </div>
 
@@ -2483,7 +2513,7 @@ export default function InboxMeta() {
         onChanged={fetchFolders}
       />
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
-      <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} />
+      <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} credor={contatoAtivo?.credor ?? null} />
       {contatoAtivo && (
         <AgendarRetornoDialog
           open={agendarRetornoOpen}
