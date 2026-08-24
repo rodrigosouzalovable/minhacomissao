@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ObjecoesCatalogoTab } from '@/components/admin/ObjecoesCatalogoTab';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -190,6 +191,7 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
               <TabsTrigger value="qa">Perguntas</TabsTrigger>
               <TabsTrigger value="proibido">Nunca fazer</TabsTrigger>
               <TabsTrigger value="aprendizado">Aprendizado</TabsTrigger>
+              <TabsTrigger value="objecoes">Objeções</TabsTrigger>
               <TabsTrigger value="followup">Follow-up</TabsTrigger>
               <TabsTrigger value="testar">Testar</TabsTrigger>
             </TabsList>
@@ -334,6 +336,12 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
                 </Button>
                 <ListaItens lista={porTipo.aprendizado} mostrarGatilho />
               </TabsContent>
+
+              <TabsContent value="objecoes" className="space-y-3 mt-0">
+                <ObjecoesCatalogoTab />
+              </TabsContent>
+
+
 
               <TabsContent value="followup" className="space-y-4 mt-0">
                 <div className="flex items-center justify-between border rounded-md p-3">

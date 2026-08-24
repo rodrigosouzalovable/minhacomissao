@@ -27,3 +27,5 @@
 - [Blacklist Bloquear Contato](mem://features/whatsapp/blacklist-bloquear-contato) — Botão "Bloquear contato" adiciona à blacklist; toggle "Bloquear Blacklist" no Envio Meta
 
 - [Controle de Ponto e Atividade](mem://features/ponto-e-atividade) — Ponto 4x/dia por IP do escritório, bloqueio total até bater entrada, cronômetro de inatividade 10min, relatório admin-only
+
+- [Copiloto de Objeções](mem://features/whatsapp/copiloto-objecoes) — Sugestões de resposta por IA no Inbox quando o cliente objeta; catálogo aprende por conversão (cron 06:45 UTC)

@@ -145,3 +145,9 @@ verify_jwt = false
 
 [functions.consultar-ume-desconto]
 verify_jwt = false
+
+[functions.sugerir-resposta-objecao]
+verify_jwt = false
+
+[functions.objecao-aprender]
+verify_jwt = false
