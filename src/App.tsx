@@ -285,6 +285,8 @@ const App = () => (
             <Route path="/admin/cotacoes" element={<AdminRoute><Cotacoes /></AdminRoute>} />
             <Route path="/admin/lembrete-meta" element={<AdminRoute><LembreteMeta /></AdminRoute>} />
             <Route path="/admin/google-maps-leads" element={<AdminRoute><GoogleMapsLeads /></AdminRoute>} />
+            <Route path="/admin/ponto" element={<AdminRoute><PontoAdmin /></AdminRoute>} />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
