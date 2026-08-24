@@ -182,7 +182,7 @@ export default function PortalConsulta() {
             <img src={config.logos.parceiro} alt="Souza e Ribeiro Advogados" className="h-16 sm:h-20 w-auto" />
             <div className="h-12 w-px" style={{ background: '#ddd' }} />
             {config.logos.principal ? (
-              <img src={config.logos.principal} alt={config.nome} className="h-16 sm:h-20 w-auto max-w-[180px] sm:max-w-[240px] object-contain" style={{ filter: 'brightness(0)' }} />
+              <img src={config.logos.principal} alt={config.nome} className="h-12 sm:h-14 w-auto max-w-[280px] sm:max-w-[380px] object-contain" style={{ filter: 'brightness(0)' }} />
             ) : (
               <span className="text-2xl font-black" style={{ color: '#1a1a2e' }}>{config.nome.toUpperCase()}</span>
             )}
