@@ -27,6 +27,11 @@ verify_jwt = false
 [functions.extract-modelo-mensagem]
 verify_jwt = false
 
+[functions.extract-modelo-ume]
+verify_jwt = false
+
+
+
 
 [functions.cleanup-acordos]
 verify_jwt = false
