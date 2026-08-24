@@ -103,6 +103,7 @@ type ClienteRow = {
   atraso?: string;
   saldo?: number;
   vars?: Record<string, string>;
+  credor?: string | null;
 };
 
 function normalizeTelKey(t: string): string {
