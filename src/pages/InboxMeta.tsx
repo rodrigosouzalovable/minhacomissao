@@ -14,7 +14,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, Bookmark,
+  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, Bookmark, Calculator,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -41,6 +41,7 @@ import { MetaNumerosConectadosDialog } from '@/components/inbox/meta/MetaNumeros
 import { CopyButton } from '@/components/CopyButton';
 import { CREDOR_MARCAS_LISTA, getCredorMarca } from "@/lib/credorMarcas";
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
+import { ConsultaUmeDialog } from '@/components/inbox/meta/ConsultaUmeDialog';
 import { AgendarRetornoDialog } from '@/components/inbox/meta/AgendarRetornoDialog';
 import { useMetaCall } from '@/contexts/MetaCallContext';
 
@@ -217,6 +218,7 @@ export default function InboxMeta() {
   const [filtroQualifs, setFiltroQualifs] = useState<Set<string>>(new Set());
   const [filtroQualifOpen, setFiltroQualifOpen] = useState(false);
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
+  const [consultaUmeOpen, setConsultaUmeOpen] = useState(false);
   const [agendarRetornoOpen, setAgendarRetornoOpen] = useState(false);
   const { ligarOuPedirPermissao, permissaoDe, estado: estadoChamada, chamadasHabilitadas } = useMetaCall();
 
@@ -2170,6 +2172,16 @@ export default function InboxMeta() {
                   >
                     <FileText className="h-3.5 w-3.5" />
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setConsultaUmeOpen(true)}
+                    title="Consultar UME (calculadora de desconto)"
+                    aria-label="Consultar UME"
+                  >
+                    <Calculator className="h-3.5 w-3.5" />
+                  </Button>
                   {contatoAtivo.telefone && (() => {
                     const instId = (contatoAtivo as any).instancia_id ?? instAtiva?.id ?? '';
                     const perm = instId ? permissaoDe(instId, contatoAtivo.telefone) : 'none';
@@ -2537,6 +2549,12 @@ export default function InboxMeta() {
       />
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
       <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} credor={contatoAtivo?.credor ?? null} />
+      <ConsultaUmeDialog
+        open={consultaUmeOpen}
+        onOpenChange={setConsultaUmeOpen}
+        cpfInicial={cpfDoContato ?? null}
+        onEnviar={(texto) => { void enviar(texto); }}
+      />
       {contatoAtivo && (
         <AgendarRetornoDialog
           open={agendarRetornoOpen}

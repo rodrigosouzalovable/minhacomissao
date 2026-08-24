@@ -2491,6 +2491,8 @@ export type Database = {
           limite_msgs_dia: number
           persona_nome: string
           tom: string
+          ume_consulta_ativa: boolean
+          ume_tabela: string
           updated_at: string
           user_id: string | null
         }
@@ -2516,6 +2518,8 @@ export type Database = {
           limite_msgs_dia?: number
           persona_nome?: string
           tom?: string
+          ume_consulta_ativa?: boolean
+          ume_tabela?: string
           updated_at?: string
           user_id?: string | null
         }
@@ -2541,6 +2545,8 @@ export type Database = {
           limite_msgs_dia?: number
           persona_nome?: string
           tom?: string
+          ume_consulta_ativa?: boolean
+          ume_tabela?: string
           updated_at?: string
           user_id?: string | null
         }
@@ -6446,6 +6452,27 @@ export type Database = {
           id?: string
           nome?: string
           qualificacao_id?: number
+        }
+        Relationships: []
+      }
+      ume_consultas_cache: {
+        Row: {
+          atualizado_em: string
+          cpf: string
+          encontrado: boolean
+          payload: Json
+        }
+        Insert: {
+          atualizado_em?: string
+          cpf: string
+          encontrado?: boolean
+          payload: Json
+        }
+        Update: {
+          atualizado_em?: string
+          cpf?: string
+          encontrado?: boolean
+          payload?: Json
         }
         Relationships: []
       }

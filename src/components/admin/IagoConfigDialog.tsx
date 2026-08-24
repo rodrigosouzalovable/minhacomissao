@@ -260,6 +260,30 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
                     Parcela mínima de R$ 100 e grade 2x a 24x continuam valendo.
                   </p>
                 </div>
+                <div className="border rounded-md p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Consulta UME (calculadora de desconto)</Label>
+                    <Switch
+                      checked={cfg.ume_consulta_ativa !== false}
+                      onCheckedChange={(v) => { setCfg({ ...cfg, ume_consulta_ativa: v }); void salvarCfg({ ume_consulta_ativa: v }); }}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={(cfg.ume_tabela ?? 'padrao') === 'padrao' ? 'default' : 'outline'}
+                      onClick={() => { setCfg({ ...cfg, ume_tabela: 'padrao' }); void salvarCfg({ ume_tabela: 'padrao' }); }}
+                    >Tabela Padrão</Button>
+                    <Button
+                      size="sm"
+                      variant={cfg.ume_tabela === 'especial' ? 'default' : 'outline'}
+                      onClick={() => { setCfg({ ...cfg, ume_tabela: 'especial' }); void salvarCfg({ ume_tabela: 'especial' }); }}
+                    >Desconto Especial</Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Nas caixas do credor UME, o IAGO busca as condições direto na calculadora oficial da UME pelo CPF do cliente e usa a tabela escolhida aqui.
+                  </p>
+                </div>
               </TabsContent>
 
 
