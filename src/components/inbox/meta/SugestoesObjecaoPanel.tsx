@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
-import { Lightbulb, Loader2, RefreshCw, Copy, CornerDownLeft, X } from 'lucide-react';
+import { Lightbulb, Loader2, RefreshCw, Copy, CornerDownLeft, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const OBJECAO_LABEL: Record<string, string> = {
@@ -48,6 +48,7 @@ export function SugestoesObjecaoPanel({
   const [objecao, setObjecao] = useState<string>(objecaoLocal || 'outro');
   const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
   const [logId, setLogId] = useState<string | null>(null);
+  const [minimizado, setMinimizado] = useState(false);
   const buscadoRef = useRef<string>('');
 
   const buscar = useCallback(async (forcar = false) => {
@@ -105,13 +106,17 @@ export function SugestoesObjecaoPanel({
             disabled={carregando} onClick={() => void buscar(true)}>
             <RefreshCw className={cn('h-3.5 w-3.5', carregando && 'animate-spin')} />
           </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" title={minimizado ? 'Maximizar' : 'Minimizar'}
+            onClick={() => setMinimizado(v => !v)}>
+            {minimizado ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </Button>
           <Button variant="ghost" size="icon" className="h-6 w-6" title="Fechar" onClick={onFechar}>
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
-      <div className="p-2 space-y-2 max-h-[45vh] overflow-y-auto">
+      {!minimizado && <div className="p-2 space-y-2 max-h-[45vh] overflow-y-auto">
         {carregando && !sugestoes.length && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground px-1 py-3">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisando a conversa...
@@ -134,7 +139,7 @@ export function SugestoesObjecaoPanel({
             </div>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
