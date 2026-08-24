@@ -512,14 +512,32 @@ export default function PontoAdmin() {
 
                 <div className="rounded-lg border p-3 text-sm">
                   <p className="text-muted-foreground">Seu IP atual</p>
-                  <p className="font-mono text-lg font-semibold">{meuIp?.ip ?? '...'}</p>
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    {meuIp?.autorizado ? 'Esta rede já está autorizada.' : 'Esta rede ainda não está autorizada.'}
+                  <p className="font-mono text-lg font-semibold">
+                    {ipCarregando ? 'Detectando...' : (meuIp?.ip || 'Não foi possível detectar')}
                   </p>
-                  <Button size="sm" onClick={() => autorizarAtual.mutate()} disabled={autorizarAtual.isPending || meuIp?.autorizado}>
-                    <Plus className="mr-2 h-4 w-4" />Autorizar o IP atual
-                  </Button>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    {ipCarregando
+                      ? 'Buscando o IP público desta rede.'
+                      : !meuIp?.ip
+                        ? 'Verifique a conexão e tente novamente, ou cadastre o IP manualmente abaixo.'
+                        : meuIp.autorizado
+                          ? 'Esta rede já está autorizada.'
+                          : 'Esta rede ainda não está autorizada.'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => autorizarAtual.mutate()}
+                      disabled={autorizarAtual.isPending || ipCarregando || !meuIp?.ip || meuIp?.autorizado}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />Autorizar o IP atual
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => recarregarIp()} disabled={ipCarregando}>
+                      <RefreshCw className={`mr-2 h-4 w-4 ${ipCarregando ? 'animate-spin' : ''}`} />Tentar de novo
+                    </Button>
+                  </div>
                 </div>
+
 
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="space-y-1">
