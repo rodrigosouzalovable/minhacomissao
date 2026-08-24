@@ -191,79 +191,43 @@ export default function NovoAcordoAdmin() {
     const valorPrimeiraParcela = parseCurrency(form.valorPrimeiraParcela);
     const valorDemaisParcelas = parseCurrency(form.valorDemaisParcelas);
 
-    if (parcelas <= 0 || diasAtraso < 0 || valorTotal <= 0) return null;
+    if (parcelas <= 0 || diasAtraso < 0 || valorTotal <= 0 || !empresa) return null;
 
     const usarValoresEspecificos = valorPrimeiraParcela > 0 && valorDemaisParcelas > 0;
 
-    // Lógica diferente para cada empresa
-    if (empresa === 'mundo_da_moda') {
-      // UME | APORTE: comissão (Honorário) em TODAS as parcelas, % por faixa de atraso
-      const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
-      
-      if (usarValoresEspecificos) {
-        const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
-        const comissaoDemais = valorDemaisParcelas * (percentual / 100);
-        const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
-        return {
-          percentual,
-          valorTotal,
-          valorPrimeiraParcela,
-          valorDemaisParcelas,
-          comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
-          comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
-          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: true as const,
-        };
-      } else {
-        const valorParcela = valorTotal / parcelas;
-        const comissaoPorParcela = valorParcela * (percentual / 100);
-        const comissaoTotal = comissaoPorParcela * parcelas;
-        return {
-          percentual,
-          valorTotal,
-          valorPrimeiraParcela: valorParcela,
-          valorDemaisParcelas: valorParcela,
-          comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
-          comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
-          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: false as const,
-        };
-      }
-    } else {
-      const { percentual } = calcularComissao(valorTotal, parcelas, diasAtraso);
+    // NOVO MUNDO e UME: mesma tabela de comissão por faixa de atraso,
+    // aplicada em TODAS as parcelas.
+    const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
 
-      if (usarValoresEspecificos) {
-        const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
-        const comissaoDemais = valorDemaisParcelas * (percentual / 100);
-        const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
-
-        return {
-          percentual,
-          valorTotal,
-          valorPrimeiraParcela,
-          valorDemaisParcelas,
-          comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
-          comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
-          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: true as const,
-        };
-      } else {
-        const valorParcela = valorTotal / parcelas;
-        const comissaoPorParcela = valorParcela * (percentual / 100);
-        const comissaoTotal = comissaoPorParcela * parcelas;
-
-        return {
-          percentual,
-          valorTotal,
-          valorPrimeiraParcela: valorParcela,
-          valorDemaisParcelas: valorParcela,
-          comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
-          comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
-          comissaoTotal: Math.round(comissaoTotal * 100) / 100,
-          usarValoresEspecificos: false as const,
-        };
-      }
+    if (usarValoresEspecificos) {
+      const comissaoPrimeira = valorPrimeiraParcela * (percentual / 100);
+      const comissaoDemais = valorDemaisParcelas * (percentual / 100);
+      const comissaoTotal = comissaoPrimeira + (comissaoDemais * (parcelas - 1));
+      return {
+        percentual,
+        valorTotal,
+        valorPrimeiraParcela,
+        valorDemaisParcelas,
+        comissaoPrimeiraParcela: Math.round(comissaoPrimeira * 100) / 100,
+        comissaoDemaisParcelas: Math.round(comissaoDemais * 100) / 100,
+        comissaoTotal: Math.round(comissaoTotal * 100) / 100,
+        usarValoresEspecificos: true as const,
+      };
     }
+
+    const valorParcela = valorTotal / parcelas;
+    const comissaoPorParcela = valorParcela * (percentual / 100);
+    const comissaoTotal = comissaoPorParcela * parcelas;
+    return {
+      percentual,
+      valorTotal,
+      valorPrimeiraParcela: valorParcela,
+      valorDemaisParcelas: valorParcela,
+      comissaoPrimeiraParcela: Math.round(comissaoPorParcela * 100) / 100,
+      comissaoDemaisParcelas: Math.round(comissaoPorParcela * 100) / 100,
+      comissaoTotal: Math.round(comissaoTotal * 100) / 100,
+      usarValoresEspecificos: false as const,
+    };
   }, [form.valorTotal, form.parcelas, form.diasAtraso, form.valorPrimeiraParcela, form.valorDemaisParcelas, empresa]);
 
   const validacaoSomaParcelas = useMemo(() => {
