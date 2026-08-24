@@ -8,7 +8,7 @@ import {
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
-  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade,
+  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa,
 
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     // ===== Contato / caixa =====
     const { data: contato } = await supabase
       .from('meta_whatsapp_contatos')
-      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id')
+      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id, credor')
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
@@ -67,18 +67,15 @@ Deno.serve(async (req) => {
     const atende = await iagoAtendeCaixa(supabase, iago.id, (contato as any).folder_id ?? null);
     if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
 
-    // ===== Credor definido na caixa (sobrepõe o credor vindo dos débitos) =====
-    const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
-    let credorCaixa = '';
-    {
-      const { data: cr } = await supabase
-        .from('meta_inbox_folder_credores')
-        .select('nome')
-        .eq('folder_id', (contato as any).folder_id ?? CAIXA_PADRAO_ID)
-        .eq('ativo', true)
-        .maybeSingle();
-      credorCaixa = String((cr as any)?.nome || '').trim();
-    }
+    // ===== Credor da conversa: cabeçalho da conversa > credor único ativo da caixa =====
+    const credorResolvido = await resolverCredorConversa(
+      supabase,
+      (contato as any).folder_id ?? null,
+      (contato as any).credor ?? null,
+    );
+    const credorCaixa = credorResolvido.nome;
+    const credorAmbiguo = credorResolvido.ambiguo;
+
 
     // ===== A conversa é do IAGO? (etiqueta de atendente) =====
     const tags = await etiquetasAtendente(supabase, contato_id);
@@ -530,7 +527,7 @@ Deno.serve(async (req) => {
     const etapaAnterior = String(estado.etapa || 'inicio');
 
     const resultado = await gerarResposta({
-      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
+      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa, credorAmbiguo,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
@@ -750,6 +747,8 @@ async function gerarResposta(args: {
   nomeCliente: string;
   primeiroToque: boolean;
   credorCaixa?: string;
+  credorAmbiguo?: boolean;
+
   cpfIdentificado?: boolean;
   cpfPorTelefone?: boolean;
   multiplosCandidatos?: boolean;
@@ -766,7 +765,7 @@ async function gerarResposta(args: {
   qualificacao?: string; qualificacao_motivo?: string;
 }> {
   const {
-    cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
+    cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa, credorAmbiguo,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
     imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome,
   } = args;
@@ -778,7 +777,8 @@ async function gerarResposta(args: {
   const proibidos = blocoConhecimento(itens, 'proibido');
   const aprendizados = blocoConhecimento(itens, 'aprendizado');
 
-  const credorFinal = String(credorCaixa || proposta?.credor || '').trim();
+  const credorFinal = credorAmbiguo ? '' : String(credorCaixa || proposta?.credor || '').trim();
+
 
   const semDebito = cpfIdentificado
     ? 'Já identifiquei o cliente pelo telefone, mas não há débitos em aberto para ele. NÃO peça o CPF: informe que não localizou débitos em aberto e escale para um humano conferir (escalar=true).'
@@ -884,7 +884,10 @@ async function gerarResposta(args: {
 
     credorFinal
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
-      : '',
+      : credorAmbiguo
+        ? 'CREDOR: o credor desta conversa ainda não está definido. É PROIBIDO afirmar ou adivinhar o nome do credor/empresa. Se o cliente perguntar de qual débito se trata, peça o CPF para confirmar no sistema (e, se ainda não der para confirmar, escale para um humano).'
+        : '',
+
 
     'Você NUNCA fecha ou registra acordo.',
     'FLUXO OBRIGATÓRIO APÓS A ESCOLHA:',

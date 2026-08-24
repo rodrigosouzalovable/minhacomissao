@@ -12,7 +12,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, agoraSP, primeiroNome, carregarConfig, perfilIago, iagoAtendeCaixa,
   etiquetasAtendente, temAtendenteHumanoNoTelefone, enviarTexto, chamarIA, extrairJson, ehNumeroErrado, ehFalecido, etiquetarAguardandoHumano, suprimirDestinatario,
-  nomePerfilConfiavel, nomeDeSaudacaoEnviada,
+  nomePerfilConfiavel, nomeDeSaudacaoEnviada, resolverCredorConversa,
 } from '../_shared/iago.ts';
 
 const HORA = 60 * 60 * 1000;
@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
 
       const { data: contato } = await supabase
         .from('meta_whatsapp_contatos')
-        .select('id, instancia_id, telefone, bsuid, nome, folder_id, ultima_msg_entrada_em')
+        .select('id, instancia_id, telefone, bsuid, nome, folder_id, credor, ultima_msg_entrada_em')
         .eq('id', est.contato_id)
         .maybeSingle();
       if (!contato) { pulados.push('contato inexistente'); continue; }
@@ -306,18 +306,13 @@ Deno.serve(async (req) => {
       );
 
 
-      // Credor configurado na caixa de mensagens (se houver)
-      let credor = '';
-      if ((contato as any).folder_id) {
-        const { data: cr } = await supabase
-          .from('meta_inbox_folder_credores')
-          .select('nome')
-          .eq('folder_id', (contato as any).folder_id)
-          .eq('ativo', true)
-          .limit(1)
-          .maybeSingle();
-        credor = String((cr as any)?.nome || '');
-      }
+      // Credor da conversa: cabeçalho da conversa > credor único ativo da caixa
+      const credor = (await resolverCredorConversa(
+        supabase,
+        (contato as any).folder_id ?? null,
+        (contato as any).credor ?? null,
+      )).nome;
+
 
       let texto = '';
       if (etapa === 1 && propostaEnviada) {
