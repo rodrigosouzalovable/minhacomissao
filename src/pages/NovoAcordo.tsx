@@ -103,7 +103,7 @@ export default function NovoAcordo() {
       clienteNome: filteredValue
     });
   };
-  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda' | null>(null);
   const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
   const [instanciasMinimizado, setInstanciasMinimizado] = useState<boolean>(() => localStorage.getItem('novoAcordo:instanciasMinimizado') === '1');
   const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null; ativo: boolean }>>([]);
