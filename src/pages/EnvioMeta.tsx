@@ -657,21 +657,9 @@ export default function EnvioMeta() {
     return map;
   }, [templateGroup, instanciaIds]);
 
-  // Variantes prontas para agendamento (mesma estrutura usada no disparo imediato)
-  const templateVariantesAgendamento = useMemo(() => {
-    return variantesGroups.map((g) => {
-      const byInst: Record<string, string> = {};
-      for (const r of g.rows) {
-        if (r.status === "approved" && instanciaIds.includes(r.instancia_id)) byInst[r.instancia_id] = r.id;
-      }
-      const first = g.rows.find((r) => r.status === "approved");
-      return {
-        template_id: first?.id || "",
-        nome_template: g.nome,
-        template_id_by_instance: byInst,
-      };
-    });
-  }, [variantesGroups, instanciaIds]);
+  // Agendamento por data e hora (quando ativo, o botão "Disparar" passa a "Agendar")
+  const [agendamento, setAgendamento] = useState<AgendamentoState>({ ativo: false, data: "", hora: "" });
+  const agendarParaISO = agendamentoParaISO(agendamento);
 
 
   const SEM_BM = "__sem_bm__";
