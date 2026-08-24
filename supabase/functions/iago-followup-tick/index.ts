@@ -359,13 +359,27 @@ Deno.serve(async (req) => {
         console.log('[IAGO followup] enviado', { contato_id: est.contato_id, etapa });
       } catch (e: any) {
         console.error('[IAGO followup] falha no envio', e?.message || e);
+        // Falha de envio (token/instância/rede) não é culpa do cliente: tenta de novo
+        // em 20 min, até 2 tentativas por etapa, antes de desistir da retomada.
+        const tentativas = Number((est.contexto || {})[`falhas_followup_${etapa}`] || 0) + 1;
+        const podeTentarDeNovo = tentativas < 2;
         await supabase.from('iago_conversa_estado')
           .update({
-            followup_feito: true,
-            followup_em: null,
-            followup_etapa: Math.max(Number(est.followup_etapa || 0), etapa),
+            followup_feito: !podeTentarDeNovo,
+            followup_em: podeTentarDeNovo
+              ? new Date(Date.now() + 20 * 60 * 1000).toISOString()
+              : null,
+            followup_etapa: podeTentarDeNovo
+              ? Number(est.followup_etapa || 0)
+              : Math.max(Number(est.followup_etapa || 0), etapa),
+            contexto: {
+              ...(est.contexto || {}),
+              [`falhas_followup_${etapa}`]: tentativas,
+              ultimo_erro_followup: String(e?.message || e).slice(0, 300),
+            },
           }).eq('id', est.id);
       }
+
     }
 
     console.log('[IAGO followup]', { candidatos: candidatos.size, enviados, pulados });
