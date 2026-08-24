@@ -366,6 +366,17 @@ export function EditPermissionsDialog({
               <Switch checked={veCampanhas} onCheckedChange={setVeCampanhas} />
             </div>
 
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label className="text-sm font-medium">Precisa bater ponto</Label>
+                <p className="text-xs text-muted-foreground">
+                  O sistema fica bloqueado para este usuário até ele registrar a entrada do dia, na rede do escritório.
+                </p>
+              </div>
+              <Switch checked={batePonto} onCheckedChange={setBatePonto} />
+            </div>
+
+
             <div className="space-y-3 rounded-md border p-3">
               <div className="flex items-center justify-between">
                 <div>
