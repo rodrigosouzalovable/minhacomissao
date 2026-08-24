@@ -359,35 +359,15 @@ export default function NovoAcordoAdmin() {
 
       if (acordoError) throw acordoError;
 
-      // Gerar parcelas - lógica diferente para cada empresa
-      let parcelas;
-      if (empresa === 'mundo_da_moda') {
-        // UME | APORTE: comissão em todas as parcelas
-        parcelas = gerarParcelasMundoDaModa(
-          new Date(validated.dataPrimeiroPagamento),
-          validated.parcelas,
-          calculo.valorDemaisParcelas,
-          calculo.comissaoDemaisParcelas,
-          calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined,
-          calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined
-        );
-      } else {
-        parcelas = calculo.usarValoresEspecificos
-          ? gerarParcelas(
-              new Date(validated.dataPrimeiroPagamento),
-              validated.parcelas,
-              calculo.valorDemaisParcelas,
-              calculo.comissaoDemaisParcelas,
-              calculo.valorPrimeiraParcela,
-              calculo.comissaoPrimeiraParcela
-            )
-          : gerarParcelas(
-              new Date(validated.dataPrimeiroPagamento),
-              validated.parcelas,
-              calculo.valorDemaisParcelas,
-              calculo.comissaoDemaisParcelas
-            );
-      }
+      // Gerar parcelas: comissão em todas as parcelas (NOVO MUNDO e UME)
+      const parcelas = gerarParcelasMundoDaModa(
+        new Date(validated.dataPrimeiroPagamento),
+        validated.parcelas,
+        calculo.valorDemaisParcelas,
+        calculo.comissaoDemaisParcelas,
+        calculo.usarValoresEspecificos ? calculo.valorPrimeiraParcela : undefined,
+        calculo.usarValoresEspecificos ? calculo.comissaoPrimeiraParcela : undefined
+      );
 
       // Inserir os pagamentos com status baseado nas parcelas marcadas como pagas
       const pagamentosData = parcelas.map(p => {
