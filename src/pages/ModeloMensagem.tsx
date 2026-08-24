@@ -1,6 +1,8 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
 import { LayoutPlanilhaTab } from '@/components/modelo-mensagem/LayoutPlanilhaTab';
+import { LayoutUmeTab } from '@/components/modelo-mensagem/LayoutUmeTab';
+
 import { LayoutUazapiTab } from '@/components/modelo-mensagem/LayoutUazapiTab';
 import { LayoutVistaParcelamentoTab } from '@/components/modelo-mensagem/LayoutVistaParcelamentoTab';
 import { ModeloUmeTab } from '@/components/modelo-mensagem/ModeloUmeTab';
