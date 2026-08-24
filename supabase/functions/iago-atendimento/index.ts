@@ -747,6 +747,8 @@ async function gerarResposta(args: {
   nomeCliente: string;
   primeiroToque: boolean;
   credorCaixa?: string;
+  credorAmbiguo?: boolean;
+
   cpfIdentificado?: boolean;
   cpfPorTelefone?: boolean;
   multiplosCandidatos?: boolean;
