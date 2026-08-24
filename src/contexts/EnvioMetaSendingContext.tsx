@@ -695,6 +695,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           modoRajada: p.modoRajada === true,
           msgsPorSegundo: p.msgsPorSegundo,
           folderId: p.folderId ?? null,
+          agendarPara: p.agendarPara ?? null,
         },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
