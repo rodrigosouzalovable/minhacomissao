@@ -279,8 +279,9 @@ export function MetaFolderConfigDialog({
           <div className="space-y-0.5">
             <Label className="text-sm">Credor da caixa</Label>
             <p className="text-xs text-muted-foreground">
-              O credor ativo é o que o IAGO informa ao cliente quando ele pergunta de qual débito se trata.
+              Pode deixar mais de um credor ativo. Com mais de um ativo, o IAGO usa o credor marcado no cabeçalho da conversa; com apenas um ativo, usa sempre esse.
             </p>
+
           </div>
 
           <div className="flex gap-2">
