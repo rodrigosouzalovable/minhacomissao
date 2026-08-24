@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
 import { LayoutUmeTab } from '@/components/modelo-mensagem/LayoutUmeTab';
+import { CREDOR_MARCAS } from '@/lib/credorMarcas';
 
 interface Props {
   open: boolean;
