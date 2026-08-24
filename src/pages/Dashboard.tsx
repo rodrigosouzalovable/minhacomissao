@@ -170,7 +170,10 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {!isAdmin && <PontoCard />}
+
         <HistoricoMesesCard />
+
 
         {!isAdmin && (
           <>
