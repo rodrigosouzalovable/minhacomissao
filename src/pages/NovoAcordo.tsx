@@ -676,13 +676,17 @@ export default function NovoAcordo() {
                 <Label>Empresa *</Label>
                 <div className="flex gap-3">
                   <Button type="button" variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'} className="flex-1" onClick={() => setEmpresa('ume_novo_mundo')}>
-                    UME | INADIMPLENTES
+                    NOVO MUNDO
                   </Button>
                   <Button type="button" variant={empresa === 'mundo_da_moda' ? 'default' : 'outline'} className="flex-1" onClick={() => setEmpresa('mundo_da_moda')}>
-                    UME | APORTE
+                    UME
                   </Button>
                 </div>
-                {empresa === 'mundo_da_moda'}
+                {!empresa && (
+                  <p className="text-sm text-muted-foreground">
+                    Selecione a empresa/credor do contrato para calcular a comissão.
+                  </p>
+                )}
               </div>
 
               {/* Seletor de Instância WhatsApp da negociação */}
