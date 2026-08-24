@@ -1,48 +1,29 @@
-# Modelo Mensagem: "Layout Novo Mundo" + nova aba "Layout Umi"
+# Inbox Meta: janela 24h como ícone + Modelo abre na aba do credor
 
-## 1. Renomear aba
-A aba **Colar imagem** passa a se chamar **Layout Novo Mundo**. Nenhuma mudança de comportamento.
+## 1. Selo da janela de 24h vira ícone
 
-## 2. Nova aba "Layout Umi"
-Funciona no mesmo estilo: o usuário cola (Ctrl+V), arrasta ou seleciona a imagem da tabela de desconto especial da UME, clica em **Extrair dados**, confere os campos e copia a mensagem pronta.
+No cabeçalho da conversa, o badge com texto ("Aberta · fecha em 3 horas", "Janela fecha em 40 minutos", "Fechada · envio bloqueado") passa a ser apenas um ícone quadrado do mesmo tamanho dos outros botões do cabeçalho (Qualificação, Modelo, Agendar retorno, Não precisa resposta):
 
-### O que a IA lê da imagem
-- Tabela de parcelas: cada linha `Nx` com seu valor de parcela (1x, 2x, 3x, ... até onde a imagem mostrar).
-- **Total - Até 3x** (ex.: R$ 5.514) — base de cálculo para 2x e 3x.
-- **Total - 4x ou mais** (ex.: R$ 5.974) — base de cálculo para 4x em diante.
-- Valor de 1x (ex.: R$ 5.055) = valor à vista.
+- Aberta: ícone de relógio verde.
+- Fecha em menos de 1h: ícone de alerta âmbar pulsante.
+- Fechada: ícone de alerta vermelho.
 
-Todos os campos ficam editáveis na tela caso a IA erre algo, e o nome do cliente é digitado à mão (a imagem não traz nome).
+Ao passar o mouse, um tooltip mostra a informação completa que hoje aparece no texto, incluindo o tempo restante ("Janela 24h aberta · fecha em 3 horas", "Janela fecha em 40 minutos", "Janela fechada · envio livre bloqueado").
 
-### Montagem das opções
-Opções exibidas na mensagem: **2x, 4x, 6x, 8x, 12x e 18x**.
-- Se a quantidade existe na tabela da imagem, usa exatamente o valor lido.
-- Se não existe (ex.: 12x e 18x, quando a tabela para em 11x), calcula `total ÷ n`, usando **Total até 3x** para n ≤ 3 e **Total 4x ou mais** para n ≥ 4.
-- Opção com parcela abaixo de R$ 100 é omitida.
-- À vista aparece com o valor da linha 1x.
+Os avisos maiores que já aparecem acima da caixa de digitação (faixa vermelha de janela encerrada e faixa âmbar de atenção) continuam como estão, então nenhuma informação é perdida.
 
-### Mensagem gerada (modelo)
-```text
-Meu nome é {nome_usuario}, falo referente à UME.
+## 2. Ícone Modelo abre direto na aba do credor
 
-Identificamos seu débito e hoje temos condições especiais para você:
+Quando a conversa tem credor definido no cabeçalho:
 
-✅ À VISTA: R$ 5.055,00
+- Credor UME: o diálogo de Modelo Mensagem abre já na aba "Layout UME".
+- Credor Novo Mundo: abre já na aba "Layout Novo Mundo".
+- Sem credor definido: abre na aba "Layout Novo Mundo" (comportamento atual).
 
-📄 PARCELADO:
-• 2x de R$ 2.757,00
-• 4x de R$ 1.494,00
-• 6x de R$ 996,00
-• 8x de R$ 747,00
-• 12x de R$ 497,83
-• 18x de R$ 331,89
-
-Qual opção é melhor para você? Que dia consegue realizar o pagamento?
-```
-O texto do modelo fica editável na própria aba e é salvo por usuário, como no layout Novo Mundo.
+O atendente continua podendo trocar de aba manualmente. Se ele alterar o credor no cabeçalho e reabrir o Modelo, a aba correta é reaplicada.
 
 ## Detalhes técnicos
-- `src/pages/ModeloMensagem.tsx`: renomeia o label da aba `imagem` para "Layout Novo Mundo" e adiciona a aba `umi` → novo componente `LayoutUmiTab`.
-- Novo `src/components/modelo-mensagem/LayoutUmiTab.tsx`: reaproveita a estrutura de colar/arrastar imagem do `ColarImagemTab`, com campos próprios (valor à vista, total até 3x, total 4x+, lista de parcelas lidas) e montagem local do texto (sem depender de `renderMensagem`).
-- Nova edge function `extract-modelo-ume`: mesmo padrão do `extract-modelo-mensagem` (Lovable AI, `google/gemini-2.5-flash`, tool calling) com schema `{ valor_avista, total_ate_3x, total_4x_ou_mais, parcelas: [{ n, valor }] }` e tratamento de 429/402.
-- Persistência opcional do template/nome do usuário reutilizando `modelo_mensagem_template` com uma coluna nova (`template_ume`) — sem novos crons, polling ou jobs, então sem impacto de custo recorrente; o custo de IA é por extração, igual ao fluxo atual.
+
+- `src/components/modelo-mensagem/ModeloMensagemDialog.tsx`: nova prop opcional `credor?: string | null`; a aba passa a ser estado controlado (`value`/`onValueChange`), inicializado por `credor === 'ume' ? 'layout-ume' : 'imagem'` e ressincronizado quando o diálogo abre.
+- `src/pages/InboxMeta.tsx`: passar `credor={contatoAtivo?.credor}` no `<ModeloMensagemDialog />`; substituir os três `Badge` de `janelaInfo` (linhas ~2218-2230) por um único botão/ícone com `Tooltip` (`TooltipProvider`/`TooltipTrigger`/`TooltipContent` do shadcn, já disponível no projeto) mantendo o mesmo cálculo de `janelaInfo` e `formatDistanceToNowStrict`.
+- Sem mudanças de banco, sem novas funções, sem cron, sem realtime: custo de backend inalterado.
