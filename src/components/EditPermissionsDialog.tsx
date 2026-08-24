@@ -32,8 +32,8 @@ const AVAILABLE_TABS = navItems.map((item) => ({
 }));
 
 const CREDORES = [
-  { value: 'ume_novo_mundo', label: 'UME | INADIMPLENTES' },
-  { value: 'mundo_da_moda', label: 'UME | APORTE' },
+  { value: 'ume_novo_mundo', label: 'NOVO MUNDO' },
+  { value: 'mundo_da_moda', label: 'UME' },
   { value: 'montreal', label: 'MONTREAL' },
 ];
 
