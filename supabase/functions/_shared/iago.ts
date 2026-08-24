@@ -962,3 +962,44 @@ export function respostaPagamentoHoje(texto: string): 'sim' | 'nao' | 'indefinid
   if (/\b(sim|consigo|hoje|claro|pode ser|vou pagar|posso|ok|beleza|isso)\b/.test(t)) return 'sim';
   return 'indefinido';
 }
+
+const CAIXA_PADRAO_ID_CREDOR = '00000000-0000-0000-0000-000000000000';
+
+function normCredor(v: string) {
+  return String(v || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Resolve o credor da conversa:
+ * - se o contato tem credor marcado no cabeçalho, ele prevalece;
+ * - senão, usa o único credor ativo da caixa;
+ * - com vários ativos e sem marcação no cabeçalho, devolve ambiguo=true (IAGO não afirma credor).
+ */
+export async function resolverCredorConversa(
+  supabase: any,
+  folderId: string | null | undefined,
+  contatoCredorSlug?: string | null,
+): Promise<{ nome: string; ambiguo: boolean }> {
+  const { data } = await supabase
+    .from('meta_inbox_folder_credores')
+    .select('nome')
+    .eq('folder_id', folderId ?? CAIXA_PADRAO_ID_CREDOR)
+    .eq('ativo', true);
+
+  const ativos = ((data || []) as any[]).map((r) => String(r?.nome || '').trim()).filter(Boolean);
+  const slug = normCredor(contatoCredorSlug || '');
+
+  if (slug) {
+    const achado = ativos.find((n) => normCredor(n) === slug);
+    if (achado) return { nome: achado, ambiguo: false };
+    // credor do cabeçalho não está entre os ativos: o cabeçalho prevalece
+    const rotulo = slug === 'novo mundo' ? 'Novo Mundo' : slug === 'ume' ? 'UME' : String(contatoCredorSlug || '').trim();
+    return { nome: rotulo, ambiguo: false };
+  }
+
+  if (ativos.length === 1) return { nome: ativos[0], ambiguo: false };
+  if (ativos.length > 1) return { nome: '', ambiguo: true };
+  return { nome: '', ambiguo: false };
+}
