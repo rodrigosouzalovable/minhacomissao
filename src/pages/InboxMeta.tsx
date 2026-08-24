@@ -197,7 +197,7 @@ export default function InboxMeta() {
 
   const [etiquetas, setEtiquetas] = useState<MetaEtiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
-  const [filtroEtiqueta, setFiltroEtiqueta] = useState<string | null>(null);
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState<Set<string>>(new Set());
   const [filtroEtOpen, setFiltroEtOpen] = useState(false);
   const [filtroJanela24h, setFiltroJanela24h] = useState(false);
   // Caixas de mensagens (folders) — null representa a caixa padrão (folder_id IS NULL)
@@ -982,9 +982,9 @@ export default function InboxMeta() {
             (bTemDigito && bDigits.length >= 4 && instDigits.includes(bDigits));
           if (!matchTexto && !matchTel && !matchInst) return false;
         }
-        if (filtroEtiqueta) {
+        if (filtroEtiqueta.size > 0) {
           const ids = contatoEtiquetas[c.id] || [];
-          if (!ids.includes(filtroEtiqueta)) return false;
+          if (!ids.some(id => filtroEtiqueta.has(id))) return false;
         }
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
         if (filtroJanela24h) {
@@ -1492,16 +1492,29 @@ export default function InboxMeta() {
               </div>
               <Popover open={filtroEtOpen} onOpenChange={setFiltroEtOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant={filtroEtiqueta ? 'default' : 'outline'} size="sm" className="h-8 px-2">
+                  <Button
+                    variant={filtroEtiqueta.size > 0 ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-8 px-2 gap-1"
+                    title="Filtrar por etiquetas"
+                    aria-label="Filtrar por etiquetas"
+                  >
                     <Tag className="h-3.5 w-3.5" />
+                    {filtroEtiqueta.size > 0 && <span className="text-[10px] leading-none">{filtroEtiqueta.size}</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-64 p-1 overflow-hidden" align="end">
-                  <button
-                    onClick={() => { setFiltroEtiqueta(null); setFiltroEtOpen(false); }}
-                    className={cn('w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent', !filtroEtiqueta && 'bg-accent')}>
-                    Todas as conversas
-                  </button>
+                <PopoverContent className="w-64 p-2" align="end">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">Etiquetas</span>
+                    {filtroEtiqueta.size > 0 && (
+                      <button
+                        onClick={() => setFiltroEtiqueta(new Set())}
+                        className="text-[11px] text-primary hover:underline"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
                   <div
                     className="label-filter-scroll h-[min(420px,calc(100vh-10rem))] min-h-0 overflow-y-scroll overscroll-contain pr-1"
                     style={{ scrollbarWidth: 'auto', scrollbarColor: 'hsl(var(--muted-foreground)) hsl(var(--muted))' }}
@@ -1510,6 +1523,7 @@ export default function InboxMeta() {
                   >
                   {etiquetasAtivas.map(et => {
                     const emEdicao = editEtId === et.id;
+                    const selecionada = filtroEtiqueta.has(et.id);
                     if (emEdicao) {
                       return (
                         <div key={et.id} className="p-2 rounded bg-accent/50 space-y-1.5">
@@ -1537,10 +1551,19 @@ export default function InboxMeta() {
                     }
                     return (
                       <div key={et.id}
-                        className={cn('w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-accent group', filtroEtiqueta === et.id && 'bg-accent')}>
+                        className={cn('w-full flex items-center gap-2 text-xs px-2 py-1.5 rounded hover:bg-accent group', selecionada && 'bg-accent')}>
                         <button
-                          onClick={() => { setFiltroEtiqueta(et.id); setFiltroEtOpen(false); }}
+                          onClick={() => setFiltroEtiqueta(prev => {
+                            const n = new Set(prev);
+                            if (n.has(et.id)) n.delete(et.id); else n.add(et.id);
+                            return n;
+                          })}
                           className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                          {selecionada ? (
+                            <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" />
+                          ) : (
+                            <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          )}
                           <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
                           <span className="truncate">{et.nome}</span>
                         </button>
