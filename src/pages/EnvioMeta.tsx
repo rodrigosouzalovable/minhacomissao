@@ -697,6 +697,12 @@ export default function EnvioMeta() {
   const enviar = async () => {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
+    if (agendamento.ativo) {
+      if (!agendarParaISO) return toast.error("Informe a data e a hora de início do agendamento");
+      if (new Date(agendarParaISO).getTime() <= Date.now()) {
+        return toast.error("A data e hora do agendamento precisam estar no futuro");
+      }
+    }
     if (String(templateGroup.categoria || '').toUpperCase() === 'MARKETING') {
       return toast.error(
         `Envio bloqueado: template "${templateGroup.nome}" é categoria MARKETING. Só templates UTILITY são permitidos. Peça ao admin liberar em Configurar Meta → Segurança de Custos.`,
