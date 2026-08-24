@@ -182,7 +182,13 @@ Deno.serve(async (req) => {
 
     const ETAPAS_ENCERRADAS = new Set(['numero_errado', 'falecido', 'optout']);
 
+    // Orçamento de tempo: evita 504 quando há muitos candidatos (IA + envio por conversa).
+    const inicioRun = Date.now();
+    const LIMITE_MS = 100_000;
+
     for (const { est, etapa } of candidatos.values()) {
+      if (Date.now() - inicioRun > LIMITE_MS) { pulados.push('tempo limite da execução'); break; }
+
       // Conversa já encerrada (pessoa errada / falecimento / opt-out): nunca retomar.
       if (ETAPAS_ENCERRADAS.has(String(est.etapa || '')) || est.optout === true) {
         await supabase.from('iago_conversa_estado')
@@ -353,13 +359,27 @@ Deno.serve(async (req) => {
         console.log('[IAGO followup] enviado', { contato_id: est.contato_id, etapa });
       } catch (e: any) {
         console.error('[IAGO followup] falha no envio', e?.message || e);
+        // Falha de envio (token/instância/rede) não é culpa do cliente: tenta de novo
+        // em 20 min, até 2 tentativas por etapa, antes de desistir da retomada.
+        const tentativas = Number((est.contexto || {})[`falhas_followup_${etapa}`] || 0) + 1;
+        const podeTentarDeNovo = tentativas < 2;
         await supabase.from('iago_conversa_estado')
           .update({
-            followup_feito: true,
-            followup_em: null,
-            followup_etapa: Math.max(Number(est.followup_etapa || 0), etapa),
+            followup_feito: !podeTentarDeNovo,
+            followup_em: podeTentarDeNovo
+              ? new Date(Date.now() + 20 * 60 * 1000).toISOString()
+              : null,
+            followup_etapa: podeTentarDeNovo
+              ? Number(est.followup_etapa || 0)
+              : Math.max(Number(est.followup_etapa || 0), etapa),
+            contexto: {
+              ...(est.contexto || {}),
+              [`falhas_followup_${etapa}`]: tentativas,
+              ultimo_erro_followup: String(e?.message || e).slice(0, 300),
+            },
           }).eq('id', est.id);
       }
+
     }
 
     console.log('[IAGO followup]', { candidatos: candidatos.size, enviados, pulados });
