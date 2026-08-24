@@ -33,11 +33,15 @@ import {
   Send,
   CreditCard,
   Coins,
-  MapPin
+  MapPin,
+  Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
 import { RetornoAlertChecker } from '@/components/RetornoAlertChecker';
+import { PontoGate } from '@/components/ponto/PontoGate';
+import { InatividadeFlutuante } from '@/components/ponto/InatividadeFlutuante';
+
 import { MetaAtendenteNotifier } from '@/components/MetaAtendenteNotifier';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import acordosIcon from '@/assets/acordos-icon.png';
