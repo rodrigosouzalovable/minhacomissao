@@ -45,6 +45,7 @@ type ClienteRow = {
   atraso?: string;
   saldo?: number;
   vars?: Record<string, string>;
+  credor?: string | null;
 };
 
 type InstanciaMin = { id: string; nome: string };
@@ -66,6 +67,8 @@ export type IniciarParams = {
   modoRajada?: boolean;
   msgsPorSegundo?: number;
   folderId?: string | null;
+  /** Credor padrão da campanha ("novo_mundo" | "ume" | null) */
+  credor?: string | null;
   /** ISO UTC: quando preenchido, a campanha fica registrada e só começa nesse momento. */
   agendarPara?: string | null;
   onAfterEnvio?: () => void;
@@ -696,6 +699,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           msgsPorSegundo: p.msgsPorSegundo,
           folderId: p.folderId ?? null,
           agendarPara: p.agendarPara ?? null,
+          credor: p.credor ?? null,
         },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
