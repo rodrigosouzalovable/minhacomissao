@@ -2035,7 +2035,7 @@ export default function EnvioMeta() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={validando || enviandoTeste || instanciasIncompatíveis.length > 0} size="lg">
+            <Button onClick={enviar} disabled={validando || enviandoTeste} size="lg">
               {validando
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : agendamento.ativo
@@ -2046,6 +2046,14 @@ export default function EnvioMeta() {
                 : `${agendamento.ativo ? "Agendar" : "Disparar"} ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
             </Button>
           </div>
+          {motivosBloqueio.length > 0 && (
+            <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-0.5">
+              {motivosBloqueio.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          )}
+
 
         </CardContent>
       </Card>
