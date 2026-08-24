@@ -59,6 +59,8 @@ export function EditPermissionsDialog({
   const [atendeInboxMeta, setAtendeInboxMeta] = useState(true);
   const [parceiroMeta, setParceiroMeta] = useState(false);
   const [veCampanhas, setVeCampanhas] = useState(false);
+  const [batePonto, setBatePonto] = useState(false);
+
   const [instanciasParceiro, setInstanciasParceiro] = useState<string[]>([]);
   const [buscaInstancia, setBuscaInstancia] = useState('');
   const [selectedTenants, setSelectedTenants] = useState<string[]>([]);
