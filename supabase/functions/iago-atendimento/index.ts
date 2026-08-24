@@ -527,7 +527,7 @@ Deno.serve(async (req) => {
     const etapaAnterior = String(estado.etapa || 'inicio');
 
     const resultado = await gerarResposta({
-      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa,
+      cfg, itens, historico, texto: textoAtual, proposta, temAcordo: false, credorCaixa, credorAmbiguo,
       nomeCliente, primeiroToque: estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
