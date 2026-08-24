@@ -8,7 +8,7 @@ import {
   avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
-  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade,
+  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa,
 
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
