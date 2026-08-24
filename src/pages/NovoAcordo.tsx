@@ -178,7 +178,7 @@ export default function NovoAcordo() {
     let credorDetectadoLabel = '';
     if (data.empresa === 'mundo_da_moda' || data.empresa === 'ume_novo_mundo') {
       setEmpresa(data.empresa);
-      credorDetectadoLabel = data.empresa === 'mundo_da_moda' ? 'UME | APORTE' : 'UME | INADIMPLENTES';
+      credorDetectadoLabel = getEmpresaLabel(data.empresa);
     }
 
     setForm({
