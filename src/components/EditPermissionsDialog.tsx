@@ -158,6 +158,8 @@ export function EditPermissionsDialog({
       setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? true);
       setParceiroMeta((permissions as any).parceiro_meta ?? false);
       setVeCampanhas((permissions as any).ve_campanhas ?? false);
+      setBatePonto((permissions as any).bate_ponto ?? false);
+
     } else {
       setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
       setCredores(['ume_novo_mundo']);
