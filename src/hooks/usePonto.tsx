@@ -71,22 +71,31 @@ export function usePonto() {
         body: { tipo, device_id: getDeviceId() },
       });
       if (error) {
-        // Extrai a mensagem devolvida pela função (403/409 etc.)
+        // Extrai a mensagem/código devolvidos pela função (403/409 etc.)
         let msg = error.message;
+        let codigo: string | undefined;
         try {
           const ctx = (error as any).context;
           if (ctx && typeof ctx.json === 'function') {
             const body = await ctx.json();
             if (body?.error) msg = body.error;
+            if (body?.codigo) codigo = body.codigo;
           }
         } catch {
           /* mantém a mensagem original */
         }
-        throw new Error(msg);
+        const err = new Error(msg) as Error & { codigo?: string };
+        err.codigo = codigo;
+        throw err;
       }
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if ((data as any)?.error) {
+        const err = new Error((data as any).error) as Error & { codigo?: string };
+        err.codigo = (data as any).codigo;
+        throw err;
+      }
       return data;
     },
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ponto-hoje'] });
     },

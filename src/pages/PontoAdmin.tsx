@@ -489,6 +489,16 @@ export default function PontoAdmin() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {ips.filter((r: any) => r.ativo).length === 0 && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                    <p className="font-semibold text-destructive">Nenhuma rede autorizada — ninguém consegue bater ponto</p>
+                    <p className="text-muted-foreground">
+                      Enquanto não existir uma rede ativa aqui, todo funcionário recebe erro ao tentar registrar o ponto.
+                      Estando em um computador do escritório, clique em "Autorizar o IP atual" abaixo.
+                    </p>
+                  </div>
+                )}
+
                 <div className="rounded-lg border p-3 text-sm">
                   <p className="text-muted-foreground">Seu IP atual</p>
                   <p className="font-mono text-lg font-semibold">{meuIp?.ip ?? '...'}</p>
