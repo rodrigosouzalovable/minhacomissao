@@ -3,6 +3,7 @@ import { ColarImagemTab } from '@/components/modelo-mensagem/ColarImagemTab';
 import { LayoutPlanilhaTab } from '@/components/modelo-mensagem/LayoutPlanilhaTab';
 import { LayoutUazapiTab } from '@/components/modelo-mensagem/LayoutUazapiTab';
 import { LayoutVistaParcelamentoTab } from '@/components/modelo-mensagem/LayoutVistaParcelamentoTab';
+import { ModeloUmeTab } from '@/components/modelo-mensagem/ModeloUmeTab';
 import { EditarTemplateMensagemDialog } from '@/components/EditarTemplateMensagemDialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -37,6 +38,7 @@ export default function ModeloMensagem() {
               <TabsTrigger value="planilha">Layout Parcelamento</TabsTrigger>
               <TabsTrigger value="vista-parcelamento">Layout à vista + parcelamento</TabsTrigger>
               <TabsTrigger value="uazapi">Layout Uazapi</TabsTrigger>
+              <TabsTrigger value="ume">Modelo UME</TabsTrigger>
             </TabsList>
             <TabsContent value="imagem" className="mt-4">
               <ColarImagemTab key={reloadKey} />
@@ -49,6 +51,9 @@ export default function ModeloMensagem() {
             </TabsContent>
             <TabsContent value="uazapi" className="mt-4">
               <LayoutUazapiTab />
+            </TabsContent>
+            <TabsContent value="ume" className="mt-4">
+              <ModeloUmeTab />
             </TabsContent>
           </Tabs>
         ) : (
