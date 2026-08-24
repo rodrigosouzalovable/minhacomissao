@@ -23,8 +23,9 @@ function horaBR(iso: string) {
 
 export function PontoCard({ compacto = false }: { compacto?: boolean }) {
   const { registros, tipos, proximo, bater, isLoading } = usePonto();
-  const { data: ipInfo } = useMeuIpPonto();
+  const { data: ipInfo, isError: ipErro } = useMeuIpPonto();
   const [agora, setAgora] = useState(new Date());
+  const [erro, setErro] = useState<{ msg: string; codigo?: string } | null>(null);
 
   useEffect(() => {
     const t = window.setInterval(() => setAgora(new Date()), 1000);
@@ -32,11 +33,16 @@ export function PontoCard({ compacto = false }: { compacto?: boolean }) {
   }, []);
 
   const registrar = (tipo: PontoTipo) => {
+    setErro(null);
     bater.mutate(tipo, {
       onSuccess: () => toast.success(`${LABEL_PONTO[tipo]} registrada às ${horaBR(new Date().toISOString())}`),
-      onError: (e: Error) => toast.error(e.message),
+      onError: (e: Error & { codigo?: string }) => {
+        setErro({ msg: e.message, codigo: e.codigo });
+        toast.error(e.message);
+      },
     });
   };
+
 
   const relogio = agora.toLocaleTimeString('pt-BR', {
     timeZone: 'America/Sao_Paulo',
