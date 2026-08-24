@@ -327,6 +327,13 @@ Deno.serve(async (req) => {
       console.error('[iniciar] falha ao gravar vinculos telefone->cpf', e);
     }
 
+    // Agendada: nada é disparado agora. O tick agendado assume quando proximo_em vencer.
+    if (agendarParaMs) {
+      console.log('[iniciar] job agendado', job.id, 'para', new Date(agendarParaMs).toISOString());
+      return new Response(JSON.stringify({ success: true, job_id: job.id, agendado_para: new Date(agendarParaMs).toISOString() }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     if (modoRajada) {
       // Dispara um worker paralelo POR INSTÂNCIA — cada worker envia em rajada.
