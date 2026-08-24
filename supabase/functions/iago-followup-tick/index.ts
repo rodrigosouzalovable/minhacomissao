@@ -182,7 +182,13 @@ Deno.serve(async (req) => {
 
     const ETAPAS_ENCERRADAS = new Set(['numero_errado', 'falecido', 'optout']);
 
+    // Orçamento de tempo: evita 504 quando há muitos candidatos (IA + envio por conversa).
+    const inicioRun = Date.now();
+    const LIMITE_MS = 100_000;
+
     for (const { est, etapa } of candidatos.values()) {
+      if (Date.now() - inicioRun > LIMITE_MS) { pulados.push('tempo limite da execução'); break; }
+
       // Conversa já encerrada (pessoa errada / falecimento / opt-out): nunca retomar.
       if (ETAPAS_ENCERRADAS.has(String(est.etapa || '')) || est.optout === true) {
         await supabase.from('iago_conversa_estado')
