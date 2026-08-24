@@ -14,7 +14,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, Bookmark, Calculator,
+  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, Bookmark, Calculator, Lightbulb,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -42,6 +42,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { CREDOR_MARCAS_LISTA, getCredorMarca } from "@/lib/credorMarcas";
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
 import { ConsultaUmeDialog } from '@/components/inbox/meta/ConsultaUmeDialog';
+import { SugestoesObjecaoPanel, detectarObjecaoLocal } from '@/components/inbox/meta/SugestoesObjecaoPanel';
 import { AgendarRetornoDialog } from '@/components/inbox/meta/AgendarRetornoDialog';
 import { useMetaCall } from '@/contexts/MetaCallContext';
 
@@ -272,6 +273,26 @@ export default function InboxMeta() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<MetaComposerHandle>(null);
+  // Copiloto de objeções (sugestões de resposta)
+  const [sugestoesFechadas, setSugestoesFechadas] = useState<Set<string>>(new Set());
+  const [sugestaoManualId, setSugestaoManualId] = useState<string | null>(null);
+  // Alvo do copiloto: última mensagem do cliente com objeção detectada (ou aberta manualmente)
+  const sugestaoAlvo = useMemo(() => {
+    if (!mensagens.length) return null;
+    const ultima = mensagens[mensagens.length - 1];
+    if (!ultima || ultima.direcao !== 'entrada') return null;
+    const texto = String(ultima.conteudo || ultima.transcricao || '').trim();
+    if (!texto) return null;
+    const objecao = detectarObjecaoLocal(texto);
+    if (!objecao && sugestaoManualId !== ultima.id) return null;
+    return {
+      instanciaId: ultima.instancia_id,
+      telefone: ultima.telefone,
+      mensagemId: ultima.id,
+      texto,
+      objecao,
+    };
+  }, [mensagens, sugestaoManualId]);
   const [modoGravacao, setModoGravacao] = useState<'audio' | 'transcrito'>('audio');
   const [atendenteNome, setAtendenteNome] = useState<string>('');
   const [pendingTranscricao, setPendingTranscricao] = useState<string>('');
@@ -2182,6 +2203,32 @@ export default function InboxMeta() {
                   >
                     <Calculator className="h-3.5 w-3.5" />
                   </Button>
+                  {(() => {
+                    const ultimaEntrada = [...mensagens].reverse().find((m) => m.direcao === 'entrada');
+                    if (!ultimaEntrada) return null;
+                    const aberto = !!sugestaoAlvo && !sugestoesFechadas.has(sugestaoAlvo.mensagemId);
+                    return (
+                      <Button
+                        size="sm"
+                        variant={aberto ? 'secondary' : 'outline'}
+                        className="h-7 w-7 p-0"
+                        onClick={() => {
+                          if (aberto) {
+                            setSugestoesFechadas((prev) => new Set(prev).add(sugestaoAlvo!.mensagemId));
+                          } else {
+                            setSugestoesFechadas((prev) => {
+                              const n = new Set(prev); n.delete(ultimaEntrada.id); return n;
+                            });
+                            setSugestaoManualId(ultimaEntrada.id);
+                          }
+                        }}
+                        title="Sugestões de resposta (copiloto de objeções)"
+                        aria-label="Sugestões de resposta"
+                      >
+                        <Lightbulb className="h-3.5 w-3.5" />
+                      </Button>
+                    );
+                  })()}
                   {contatoAtivo.telefone && (() => {
                     const instId = (contatoAtivo as any).instancia_id ?? instAtiva?.id ?? '';
                     const perm = instId ? permissaoDe(instId, contatoAtivo.telefone) : 'none';
@@ -2381,7 +2428,20 @@ export default function InboxMeta() {
                 )}
               </div>
 
-              <div className="border-t bg-card">
+              <div className="border-t bg-card relative">
+                {sugestaoAlvo && !sugestoesFechadas.has(sugestaoAlvo.mensagemId) && (
+                  <SugestoesObjecaoPanel
+                    key={sugestaoAlvo.mensagemId}
+                    instanciaId={sugestaoAlvo.instanciaId}
+                    telefone={sugestaoAlvo.telefone}
+                    mensagemId={sugestaoAlvo.mensagemId}
+                    textoCliente={sugestaoAlvo.texto}
+                    credor={contatoAtivo.credor ?? null}
+                    objecaoLocal={sugestaoAlvo.objecao}
+                    onUsar={(t) => { composerRef.current?.appendText(t); composerRef.current?.focus(); }}
+                    onFechar={() => setSugestoesFechadas((prev) => new Set(prev).add(sugestaoAlvo.mensagemId))}
+                  />
+                )}
                 {janelaInfo.status === 'fechada' && (
                   <div className="m-3 text-xs bg-red-500/10 border-2 border-red-500/40 rounded p-3 text-red-700 dark:text-red-400 space-y-1">
                     <div className="flex items-center gap-2 font-semibold">

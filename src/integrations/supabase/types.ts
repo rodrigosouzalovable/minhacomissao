@@ -5478,6 +5478,96 @@ export type Database = {
           },
         ]
       }
+      objecao_catalogo: {
+        Row: {
+          ativo: boolean
+          conversoes: number
+          credor: string | null
+          criado_em: string
+          fixada: boolean
+          id: string
+          objecao_chave: string
+          origem: string
+          resposta: string
+          score: number
+          updated_at: string
+          usos: number
+        }
+        Insert: {
+          ativo?: boolean
+          conversoes?: number
+          credor?: string | null
+          criado_em?: string
+          fixada?: boolean
+          id?: string
+          objecao_chave: string
+          origem?: string
+          resposta: string
+          score?: number
+          updated_at?: string
+          usos?: number
+        }
+        Update: {
+          ativo?: boolean
+          conversoes?: number
+          credor?: string | null
+          criado_em?: string
+          fixada?: boolean
+          id?: string
+          objecao_chave?: string
+          origem?: string
+          resposta?: string
+          score?: number
+          updated_at?: string
+          usos?: number
+        }
+        Relationships: []
+      }
+      objecao_sugestoes_log: {
+        Row: {
+          catalogo_ids: string[]
+          criado_em: string
+          id: string
+          instancia_id: string
+          mensagem_id: string
+          objecao_chave: string
+          resultado: string
+          sugestoes: Json
+          telefone: string
+          updated_at: string
+          usada_idx: number | null
+          usuario_id: string | null
+        }
+        Insert: {
+          catalogo_ids?: string[]
+          criado_em?: string
+          id?: string
+          instancia_id: string
+          mensagem_id: string
+          objecao_chave: string
+          resultado?: string
+          sugestoes?: Json
+          telefone: string
+          updated_at?: string
+          usada_idx?: number | null
+          usuario_id?: string | null
+        }
+        Update: {
+          catalogo_ids?: string[]
+          criado_em?: string
+          id?: string
+          instancia_id?: string
+          mensagem_id?: string
+          objecao_chave?: string
+          resultado?: string
+          sugestoes?: Json
+          telefone?: string
+          updated_at?: string
+          usada_idx?: number | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       pagamentos: {
         Row: {
           acordo_id: string
