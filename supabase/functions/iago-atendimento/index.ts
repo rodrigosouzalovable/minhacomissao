@@ -884,7 +884,10 @@ async function gerarResposta(args: {
 
     credorFinal
       ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
-      : '',
+      : credorAmbiguo
+        ? 'CREDOR: o credor desta conversa ainda não está definido. É PROIBIDO afirmar ou adivinhar o nome do credor/empresa. Se o cliente perguntar de qual débito se trata, peça o CPF para confirmar no sistema (e, se ainda não der para confirmar, escale para um humano).'
+        : '',
+
 
     'Você NUNCA fecha ou registra acordo.',
     'FLUXO OBRIGATÓRIO APÓS A ESCOLHA:',
