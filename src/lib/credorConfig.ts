@@ -44,8 +44,8 @@ export const CREDORES: Record<string, CredorConfig> = {
     phone: '5562982183144',
     phoneDisplay: '(62) 98218-3144',
     logos: {
-      principal: logoNovoMundo,
-      negociacao: logoNovoMundo,
+      principal: logoNovoMundoPortal.url,
+      negociacao: logoNovoMundoPortal.url,
       parceiro: logoSouzaRibeiro,
     },
     quemSomos:
