@@ -395,7 +395,16 @@ export default function NovoAcordo() {
   }, [form.parcelas, form.valorTotal, form.valorPrimeiraParcela, form.valorDemaisParcelas]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !calculo) return;
+    if (!user) return;
+    if (!empresa) {
+      toast({
+        variant: 'destructive',
+        title: 'Empresa não selecionada',
+        description: 'Selecione a empresa/credor do contrato (NOVO MUNDO ou UME).'
+      });
+      return;
+    }
+    if (!calculo) return;
     setIsLoading(true);
     try {
       const numParcelas = parseInt(form.parcelas);
