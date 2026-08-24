@@ -103,19 +103,49 @@ export function PontoCard({ compacto = false }: { compacto?: boolean }) {
           })}
         </div>
 
+        {erro && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+            {erro.codigo === 'sem_ip_cadastrado' ? (
+              <>
+                <p className="font-semibold text-destructive">A rede do escritório ainda não foi liberada</p>
+                <p className="text-muted-foreground">
+                  Nenhuma rede foi cadastrada no sistema, então o ponto está bloqueado para todos.
+                  Avise o administrador para autorizar a rede do escritório — depois disso você poderá bater o ponto.
+                </p>
+              </>
+            ) : erro.codigo === 'ip_nao_autorizado' ? (
+              <>
+                <p className="font-semibold text-destructive">Você não está na rede do escritório</p>
+                <p className="text-muted-foreground">
+                  O ponto só pode ser registrado no computador conectado à internet do escritório.
+                  Se você já está lá, avise o administrador para autorizar esta rede.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-destructive">Não foi possível registrar o ponto</p>
+                <p className="text-muted-foreground">{erro.msg}</p>
+              </>
+            )}
+          </div>
+        )}
+
         {!compacto && (
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <Wifi className="h-3.5 w-3.5" />
-              {ipInfo
-                ? ipInfo.autorizado
-                  ? `Rede autorizada (${ipInfo.ip})`
-                  : `Rede não autorizada (${ipInfo.ip})`
-                : 'Verificando rede...'}
+              {ipErro
+                ? 'Não foi possível verificar a rede'
+                : ipInfo
+                  ? ipInfo.autorizado
+                    ? `Rede autorizada (${ipInfo.ip})`
+                    : `Rede não autorizada (${ipInfo.ip})`
+                  : 'Verificando rede...'}
             </span>
             <span>{tipos.length}/4 marcações de hoje</span>
           </div>
         )}
+
       </CardContent>
     </Card>
   );
