@@ -197,7 +197,7 @@ export default function InboxMeta() {
 
   const [etiquetas, setEtiquetas] = useState<MetaEtiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
-  const [filtroEtiqueta, setFiltroEtiqueta] = useState<string | null>(null);
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState<Set<string>>(new Set());
   const [filtroEtOpen, setFiltroEtOpen] = useState(false);
   const [filtroJanela24h, setFiltroJanela24h] = useState(false);
   // Caixas de mensagens (folders) — null representa a caixa padrão (folder_id IS NULL)
@@ -982,9 +982,9 @@ export default function InboxMeta() {
             (bTemDigito && bDigits.length >= 4 && instDigits.includes(bDigits));
           if (!matchTexto && !matchTel && !matchInst) return false;
         }
-        if (filtroEtiqueta) {
+        if (filtroEtiqueta.size > 0) {
           const ids = contatoEtiquetas[c.id] || [];
-          if (!ids.includes(filtroEtiqueta)) return false;
+          if (!ids.some(id => filtroEtiqueta.has(id))) return false;
         }
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
         if (filtroJanela24h) {
