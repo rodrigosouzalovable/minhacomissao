@@ -458,13 +458,15 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Main Content */}
       <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
         <div className="p-6">
-          {children}
+          <PontoGate>{children}</PontoGate>
         </div>
       </main>
 
       {/* Global Retorno Alert Checker */}
       <RetornoAlertChecker />
       <MetaAtendenteNotifier />
+      <InatividadeFlutuante />
+
     </div>
   );
 }
