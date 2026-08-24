@@ -190,6 +190,7 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
               <TabsTrigger value="qa">Perguntas</TabsTrigger>
               <TabsTrigger value="proibido">Nunca fazer</TabsTrigger>
               <TabsTrigger value="aprendizado">Aprendizado</TabsTrigger>
+              <TabsTrigger value="objecoes">Objeções</TabsTrigger>
               <TabsTrigger value="followup">Follow-up</TabsTrigger>
               <TabsTrigger value="testar">Testar</TabsTrigger>
             </TabsList>
