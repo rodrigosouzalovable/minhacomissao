@@ -765,7 +765,7 @@ async function gerarResposta(args: {
   qualificacao?: string; qualificacao_motivo?: string;
 }> {
   const {
-    cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa,
+    cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa, credorAmbiguo,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
     imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome,
   } = args;
@@ -777,7 +777,8 @@ async function gerarResposta(args: {
   const proibidos = blocoConhecimento(itens, 'proibido');
   const aprendizados = blocoConhecimento(itens, 'aprendizado');
 
-  const credorFinal = String(credorCaixa || proposta?.credor || '').trim();
+  const credorFinal = credorAmbiguo ? '' : String(credorCaixa || proposta?.credor || '').trim();
+
 
   const semDebito = cpfIdentificado
     ? 'Já identifiquei o cliente pelo telefone, mas não há débitos em aberto para ele. NÃO peça o CPF: informe que não localizou débitos em aberto e escale para um humano conferir (escalar=true).'
