@@ -181,11 +181,11 @@ export function LayoutUmeTab({ compact }: Props) {
     const primeiroNome = nomeCliente.trim().split(/\s+/)[0] || '';
     const lista = opcoes.map((o) => `• ${o.n}x de R$ ${brl(o.valor)}`).join('\n');
     return template
-      .replaceAll('{nome_usuario}', nomeUsuario)
-      .replaceAll('{nome_cliente}', nomeCliente.trim())
-      .replaceAll('{primeiro_nome}', primeiroNome)
-      .replaceAll('{valor_avista}', valorAvista ? brl(num(valorAvista)) : '')
-      .replaceAll('{opcoes_parcelado}', lista)
+      .replace(/\{nome_usuario\}/g, nomeUsuario)
+      .replace(/\{nome_cliente\}/g, nomeCliente.trim())
+      .replace(/\{primeiro_nome\}/g, primeiroNome)
+      .replace(/\{valor_avista\}/g, valorAvista ? brl(num(valorAvista)) : '')
+      .replace(/\{opcoes_parcelado\}/g, lista)
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }, [template, nomeUsuario, nomeCliente, valorAvista, opcoes]);
