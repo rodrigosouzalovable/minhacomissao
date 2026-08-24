@@ -38,6 +38,7 @@ export default function ModeloMensagem() {
               <TabsTrigger value="planilha">Layout Parcelamento</TabsTrigger>
               <TabsTrigger value="vista-parcelamento">Layout à vista + parcelamento</TabsTrigger>
               <TabsTrigger value="uazapi">Layout Uazapi</TabsTrigger>
+              <TabsTrigger value="ume">Modelo UME</TabsTrigger>
             </TabsList>
             <TabsContent value="imagem" className="mt-4">
               <ColarImagemTab key={reloadKey} />
