@@ -63,6 +63,12 @@ Deno.serve(async (req) => {
 
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
     const folderId: string | null = typeof body?.folderId === 'string' && body.folderId ? body.folderId : null;
+    // Agendamento: ISO UTC no futuro. Job criado como 'rodando', mas só começa em proximo_em.
+    let agendarParaMs: number | null = null;
+    if (typeof body?.agendarPara === 'string' && body.agendarPara) {
+      const t = Date.parse(body.agendarPara);
+      if (!Number.isNaN(t) && t > Date.now() + 30_000) agendarParaMs = t;
+    }
 
     if (!template?.id) {
       console.error('[iniciar] recusado 400: template obrigatório');
