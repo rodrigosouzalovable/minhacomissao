@@ -8647,6 +8647,15 @@ export type Database = {
         }[]
       }
       master_tenant_id: { Args: never; Returns: string }
+      meta_atendimentos_por_atendente: {
+        Args: { p_fim: string; p_inicio: string }
+        Returns: {
+          atendidas: number
+          iniciadas: number
+          nome: string
+          user_id: string
+        }[]
+      }
       meta_bm_uso_24h: {
         Args: never
         Returns: {
