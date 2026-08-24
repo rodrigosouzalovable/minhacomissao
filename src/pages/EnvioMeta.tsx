@@ -975,6 +975,7 @@ export default function EnvioMeta() {
       folderId: folderId === "__default__" ? null : folderId,
       modoRajada,
       msgsPorSegundo: modoRajada ? Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1)) : undefined,
+      agendarPara: agendarParaISO,
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
@@ -992,7 +993,12 @@ export default function EnvioMeta() {
     setNomeCampanha("");
     setTimeout(() => { refreshStatus(); }, 1500);
     try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-    toast.success("Campanha iniciada. Acompanhe no botão Campanhas.");
+    if (agendarParaISO) {
+      toast.success(`Campanha agendada para ${new Date(agendarParaISO).toLocaleString("pt-BR")}. Acompanhe no botão Campanhas.`);
+      setAgendamento({ ativo: false, data: "", hora: "" });
+    } else {
+      toast.success("Campanha iniciada. Acompanhe no botão Campanhas.");
+    }
   };
 
   const enviarTeste = async () => {
