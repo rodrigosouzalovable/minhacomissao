@@ -2,6 +2,7 @@ import logoGrupoAltum from '@/assets/logo-grupo-altum.png';
 import logoGrupoAltumNegociacao from '@/assets/logo-grupo-altum-negociacao.png';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 import logoNovoMundo from '@/assets/logo-novo-mundo.png';
+import logoNovoMundoPortal from '@/assets/logo-novo-mundo-portal.png.asset.json';
 
 export interface CredorConfig {
   slug: string;
@@ -43,8 +44,8 @@ export const CREDORES: Record<string, CredorConfig> = {
     phone: '5562982183144',
     phoneDisplay: '(62) 98218-3144',
     logos: {
-      principal: logoNovoMundo,
-      negociacao: logoNovoMundo,
+      principal: logoNovoMundoPortal.url,
+      negociacao: logoNovoMundoPortal.url,
       parceiro: logoSouzaRibeiro,
     },
     quemSomos:
