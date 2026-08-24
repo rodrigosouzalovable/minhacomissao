@@ -67,15 +67,18 @@ export default function PontoAdmin() {
   const { data: perfis = [] } = useQuery({
     queryKey: ['ponto-perfis'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, nome, ativo')
-        .order('nome');
-      if (error) throw error;
-      return data ?? [];
+      const [{ data: perms, error: ePerm }, { data: profs, error: eProf }] = await Promise.all([
+        supabase.from('user_permissions').select('user_id').eq('bate_ponto' as any, true),
+        supabase.from('profiles').select('id, nome, ativo').order('nome'),
+      ]);
+      if (ePerm) throw ePerm;
+      if (eProf) throw eProf;
+      const obrigados = new Set((perms ?? []).map((p: any) => p.user_id));
+      return (profs ?? []).filter((p: any) => obrigados.has(p.id));
     },
     staleTime: 5 * 60_000,
   });
+
 
   const nomePorId = useMemo(
     () => new Map(perfis.map((p: any) => [p.id, p.nome ?? p.id])),
