@@ -272,7 +272,7 @@ Deno.serve(async (req) => {
         max_seg: maxSec,
         total: clientesEnvio.length,
         proximo_em: proximoEmInicial,
-        status_motivo: janela.aberta ? null : `Aguardando abertura da janela de envio (${janela.aberturaBrtLabel} BRT)`,
+        status_motivo: statusMotivoInicial,
         nome_campanha: nomeCampanha,
         modo_rajada: modoRajada,
         msgs_por_segundo: msgsPorSegundo,
