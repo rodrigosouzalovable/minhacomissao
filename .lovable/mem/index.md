@@ -29,3 +29,5 @@
 - [Controle de Ponto e Atividade](mem://features/ponto-e-atividade) — Ponto 4x/dia por IP do escritório, bloqueio total até bater entrada, cronômetro de inatividade 10min, relatório admin-only
 
 - [Copiloto de Objeções](mem://features/whatsapp/copiloto-objecoes) — Sugestões de resposta por IA no Inbox quando o cliente objeta; catálogo aprende por conversão (cron 06:45 UTC)
+
+- [Credor por Caixa Múltiplo](mem://features/whatsapp/credor-caixa-multiplos) — Vários credores ativos por caixa; IAGO resolve pelo credor do cabeçalho da conversa
