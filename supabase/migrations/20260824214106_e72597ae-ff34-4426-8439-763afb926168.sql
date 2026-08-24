@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.meta_inbox_folder_credores_um_ativo_uk;
