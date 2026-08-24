@@ -633,6 +633,22 @@ export default function EnvioMeta() {
     );
   }, [variantesGroups, instanciaIds, instancias]);
 
+  // Motivos que impedem disparar/agendar — exibidos na tela para não travar o botão sem explicação.
+  const motivosBloqueio = useMemo(() => {
+    const m: string[] = [];
+    if (!templateGroup) m.push("Selecione um template aprovado.");
+    if (instanciaIds.length === 0) m.push("Selecione ao menos uma instância.");
+    if (recipientsRaw.trim().length === 0) m.push("Importe a planilha com os destinatários.");
+    if (instanciasIncompatíveis.length > 0) {
+      m.push(
+        `${instanciasIncompatíveis.length} instância(s) selecionada(s) não têm este template aprovado — remova-as ou troque o template.`,
+      );
+    }
+    return m;
+  }, [templateGroup, instanciaIds, recipientsRaw, instanciasIncompatíveis]);
+
+
+
 
   // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
   const isentosDedup = useMemo(() => {
@@ -697,6 +713,13 @@ export default function EnvioMeta() {
   const enviar = async () => {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
+    if (recipients.length === 0) return toast.error("Importe a planilha com os destinatários");
+    if (instanciasIncompatíveis.length > 0) {
+      return toast.error(
+        `${instanciasIncompatíveis.length} instância(s) selecionada(s) não têm este template aprovado — remova-as ou troque o template.`,
+      );
+    }
+
     if (agendamento.ativo) {
       if (!agendarParaISO) return toast.error("Informe a data e a hora de início do agendamento");
       if (new Date(agendarParaISO).getTime() <= Date.now()) {
@@ -1743,8 +1766,8 @@ export default function EnvioMeta() {
       <AgendarCampanhaBox
         value={agendamento}
         onChange={setAgendamento}
-        disabled={enviando || validando || instanciasIncompatíveis.length > 0}
       />
+
 
       {/* Envio */}
       <Card>
@@ -2035,7 +2058,7 @@ export default function EnvioMeta() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={validando || enviandoTeste || instanciasIncompatíveis.length > 0} size="lg">
+            <Button onClick={enviar} disabled={validando || enviandoTeste} size="lg">
               {validando
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : agendamento.ativo
@@ -2046,6 +2069,14 @@ export default function EnvioMeta() {
                 : `${agendamento.ativo ? "Agendar" : "Disparar"} ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
             </Button>
           </div>
+          {motivosBloqueio.length > 0 && (
+            <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-0.5">
+              {motivosBloqueio.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          )}
+
 
         </CardContent>
       </Card>
