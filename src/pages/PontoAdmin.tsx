@@ -194,19 +194,29 @@ export default function PontoAdmin() {
     },
   });
 
-  const { data: meuIp } = useQuery({
+  const { data: meuIp, isFetching: ipCarregando, refetch: recarregarIp } = useQuery({
     queryKey: ['ponto-meu-ip-admin'],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('ponto-ip-autorizar', { body: { acao: 'consultar' } });
       if (error) throw error;
-      return data as { ip: string; autorizado: boolean };
+      const res = data as { ip: string; autorizado: boolean };
+      if (res?.ip) return { ...res, origem: 'servidor' as const };
+      // Fallback: o servidor não conseguiu determinar o IP -> consulta pelo navegador
+      try {
+        const r = await fetch('https://api.ipify.org?format=json');
+        const j = await r.json();
+        if (j?.ip) return { ip: String(j.ip), autorizado: false, origem: 'navegador' as const };
+      } catch { /* ignora */ }
+      return { ip: '', autorizado: false, origem: 'desconhecido' as const };
     },
+    retry: false,
   });
 
   const autorizarAtual = useMutation({
     mutationFn: async () => {
+      if (!meuIp?.ip) throw new Error('IP não detectado. Clique em "Tentar de novo".');
       const { data, error } = await supabase.functions.invoke('ponto-ip-autorizar', {
-        body: { acao: 'autorizar_atual', descricao: 'Rede do escritório' },
+        body: { acao: 'autorizar_atual', ip: meuIp.ip, descricao: 'Rede do escritório' },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -219,6 +229,7 @@ export default function PontoAdmin() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   const adicionarIp = useMutation({
     mutationFn: async () => {
