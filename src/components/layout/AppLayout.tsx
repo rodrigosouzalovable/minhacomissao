@@ -33,11 +33,15 @@ import {
   Send,
   CreditCard,
   Coins,
-  MapPin
+  MapPin,
+  Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
 import { RetornoAlertChecker } from '@/components/RetornoAlertChecker';
+import { PontoGate } from '@/components/ponto/PontoGate';
+import { InatividadeFlutuante } from '@/components/ponto/InatividadeFlutuante';
+
 import { MetaAtendenteNotifier } from '@/components/MetaAtendenteNotifier';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import acordosIcon from '@/assets/acordos-icon.png';
@@ -109,7 +113,9 @@ export const navItems: NavItem[] = [
   { href: '/admin/cotacoes', label: 'Cotações', icon: Coins, adminOnly: true },
   { href: '/admin/lembrete-meta', label: 'Lembrete Meta', icon: Bell, adminOnly: true },
   { href: '/admin/google-maps-leads', label: 'Google Maps Leads', icon: MapPin, adminOnly: true },
+  { href: '/admin/ponto', label: 'Controle de Ponto', icon: Clock, adminOnly: true },
 ];
+
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
   if (!savedOrder || savedOrder.length === 0) return items;
@@ -458,13 +464,15 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Main Content */}
       <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
         <div className="p-6">
-          {children}
+          <PontoGate>{children}</PontoGate>
         </div>
       </main>
 
       {/* Global Retorno Alert Checker */}
       <RetornoAlertChecker />
       <MetaAtendenteNotifier />
+      <InatividadeFlutuante />
+
     </div>
   );
 }

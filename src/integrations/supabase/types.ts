@@ -570,6 +570,63 @@ export type Database = {
           },
         ]
       }
+      atividade_inatividade: {
+        Row: {
+          created_at: string
+          data: string
+          duracao_seg: number | null
+          fim: string | null
+          id: string
+          inicio: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: string
+          duracao_seg?: number | null
+          fim?: string | null
+          id?: string
+          inicio: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          duracao_seg?: number | null
+          fim?: string | null
+          id?: string
+          inicio?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      atividade_presenca: {
+        Row: {
+          inativo_desde: string | null
+          pagina: string | null
+          status: Database["public"]["Enums"]["presenca_status"]
+          ultima_interacao: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          inativo_desde?: string | null
+          pagina?: string | null
+          status?: Database["public"]["Enums"]["presenca_status"]
+          ultima_interacao?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          inativo_desde?: string | null
+          pagina?: string | null
+          status?: Database["public"]["Enums"]["presenca_status"]
+          ultima_interacao?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       auditoria_divergencias: {
         Row: {
           acordo_id: string | null
@@ -5533,6 +5590,162 @@ export type Database = {
         }
         Relationships: []
       }
+      ponto_ajuste_solicitacoes: {
+        Row: {
+          aprovado_por: string | null
+          created_at: string
+          data: string
+          horario_solicitado: string
+          id: string
+          motivo: string
+          respondido_em: string | null
+          status: Database["public"]["Enums"]["ponto_ajuste_status"]
+          tipo: Database["public"]["Enums"]["ponto_tipo"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          aprovado_por?: string | null
+          created_at?: string
+          data: string
+          horario_solicitado: string
+          id?: string
+          motivo: string
+          respondido_em?: string | null
+          status?: Database["public"]["Enums"]["ponto_ajuste_status"]
+          tipo: Database["public"]["Enums"]["ponto_tipo"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          aprovado_por?: string | null
+          created_at?: string
+          data?: string
+          horario_solicitado?: string
+          id?: string
+          motivo?: string
+          respondido_em?: string | null
+          status?: Database["public"]["Enums"]["ponto_ajuste_status"]
+          tipo?: Database["public"]["Enums"]["ponto_tipo"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ponto_ips_autorizados: {
+        Row: {
+          ativo: boolean
+          cidr: string
+          created_at: string
+          criado_por: string | null
+          descricao: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          cidr: string
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          cidr?: string
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ponto_jornada_config: {
+        Row: {
+          created_at: string
+          dias_semana: number[]
+          entrada_prevista: string
+          minutos_almoco: number
+          ponto_obrigatorio: boolean
+          saida_prevista: string
+          tolerancia_min: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dias_semana?: number[]
+          entrada_prevista?: string
+          minutos_almoco?: number
+          ponto_obrigatorio?: boolean
+          saida_prevista?: string
+          tolerancia_min?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dias_semana?: number[]
+          entrada_prevista?: string
+          minutos_almoco?: number
+          ponto_obrigatorio?: boolean
+          saida_prevista?: string
+          tolerancia_min?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ponto_registros: {
+        Row: {
+          ajustado_por: string | null
+          created_at: string
+          data: string
+          device_id: string | null
+          id: string
+          ip: string | null
+          observacao: string | null
+          origem: string
+          registrado_em: string
+          tipo: Database["public"]["Enums"]["ponto_tipo"]
+          updated_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          ajustado_por?: string | null
+          created_at?: string
+          data: string
+          device_id?: string | null
+          id?: string
+          ip?: string | null
+          observacao?: string | null
+          origem?: string
+          registrado_em?: string
+          tipo: Database["public"]["Enums"]["ponto_tipo"]
+          updated_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          ajustado_por?: string | null
+          created_at?: string
+          data?: string
+          device_id?: string | null
+          id?: string
+          ip?: string | null
+          observacao?: string | null
+          origem?: string
+          registrado_em?: string
+          tipo?: Database["public"]["Enums"]["ponto_tipo"]
+          updated_at?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       premios_semanais: {
         Row: {
           atingido_em: string
@@ -8520,6 +8733,19 @@ export type Database = {
           dias_de: number
         }[]
       }
+      presenca_ao_vivo: {
+        Args: never
+        Returns: {
+          inativo_seg: number
+          nome: string
+          pagina: string
+          status: string
+          ultima_interacao: string
+          ultimo_ponto: Database["public"]["Enums"]["ponto_tipo"]
+          ultimo_ponto_em: string
+          user_id: string
+        }[]
+      }
       ranking_mensal: {
         Args: { p_mes_ano?: string }
         Returns: {
@@ -8578,6 +8804,9 @@ export type Database = {
         | "link"
       consultoria_status: "nao_iniciado" | "em_andamento" | "concluido"
       personalidade_chip: "rapido" | "equilibrado" | "reflexivo" | "noturno"
+      ponto_ajuste_status: "pendente" | "aprovado" | "recusado"
+      ponto_tipo: "entrada" | "saida_almoco" | "volta_almoco" | "saida"
+      presenca_status: "ativo" | "inativo" | "almoco" | "offline"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -8716,6 +8945,9 @@ export const Constants = {
       ],
       consultoria_status: ["nao_iniciado", "em_andamento", "concluido"],
       personalidade_chip: ["rapido", "equilibrado", "reflexivo", "noturno"],
+      ponto_ajuste_status: ["pendente", "aprovado", "recusado"],
+      ponto_tipo: ["entrada", "saida_almoco", "volta_almoco", "saida"],
+      presenca_status: ["ativo", "inativo", "almoco", "offline"],
     },
   },
 } as const

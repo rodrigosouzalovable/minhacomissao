@@ -25,6 +25,8 @@ import { MetaSemanalCard } from '@/components/MetaSemanalCard';
 import { RecordePessoalCard } from '@/components/RecordePessoalCard';
 import { ConfigMotivacaoDialog } from '@/components/ConfigMotivacaoDialog';
 import { HistoricoMesesCard } from '@/components/HistoricoMesesCard';
+import { PontoCard } from '@/components/ponto/PontoCard';
+
 
 
 export default function Dashboard() {
@@ -168,7 +170,10 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {!isAdmin && <PontoCard />}
+
         <HistoricoMesesCard />
+
 
         {!isAdmin && (
           <>
