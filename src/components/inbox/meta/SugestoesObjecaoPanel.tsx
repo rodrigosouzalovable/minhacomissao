@@ -139,7 +139,7 @@ export function SugestoesObjecaoPanel({
             </div>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
