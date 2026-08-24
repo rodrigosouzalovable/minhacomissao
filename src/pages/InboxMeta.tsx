@@ -1384,6 +1384,13 @@ export default function InboxMeta() {
   };
 
 
+  const definirCredorContato = async (id: string, slug: string | null) => {
+    const { error } = await supabase.from('meta_whatsapp_contatos').update({ credor: slug }).eq('id', id);
+    if (error) { toast({ title: 'Falha ao salvar credor', description: error.message, variant: 'destructive' }); return; }
+    setContatos(prev => prev.map(c => (c.id === id ? { ...c, credor: slug } : c)));
+    setContatoAtivo(prev => (prev && prev.id === id ? { ...prev, credor: slug } : prev));
+  };
+
   // Multi-seleção
   const toggleSel = (id: string) => {
     setSelecionados(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
