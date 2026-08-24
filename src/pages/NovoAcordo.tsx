@@ -450,16 +450,10 @@ export default function NovoAcordo() {
       } as any).select().single();
       if (acordoError) throw acordoError;
 
-      // Gerar parcelas - lógica diferente para cada empresa
-      let parcelas;
-      if (empresa === 'mundo_da_moda') {
-        // UME | APORTE: comissão em todas as parcelas
-        parcelas = calculo.usarValoresEspecificos
-          ? gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas, calculo.valorPrimeiraParcela, calculo.comissaoPrimeiraParcela)
-          : gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas);
-      } else {
-        parcelas = calculo.usarValoresEspecificos ? gerarParcelas(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas, calculo.valorPrimeiraParcela, calculo.comissaoPrimeiraParcela) : gerarParcelas(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas);
-      }
+      // Gerar parcelas: comissão em todas as parcelas (NOVO MUNDO e UME)
+      const parcelas = calculo.usarValoresEspecificos
+        ? gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas, calculo.valorPrimeiraParcela, calculo.comissaoPrimeiraParcela)
+        : gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas);
       const {
         error: parcelasError
       } = await supabase.from('pagamentos').insert(parcelas.map(p => ({
