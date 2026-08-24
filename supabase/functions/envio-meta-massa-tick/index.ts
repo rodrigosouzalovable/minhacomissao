@@ -502,6 +502,29 @@ Deno.serve(async (req) => {
       if (!claimed?.id) break;
       claimedTotal++;
 
+      // Campanha agendada em modo rajada: quando a hora chega, delega aos workers
+      // paralelos por instância em vez de processar serialmente aqui.
+      if (claimed.modo_rajada === true) {
+        const instIds: string[] = Array.isArray(claimed.instancia_ids) ? claimed.instancia_ids : [];
+        await supabase
+          .from('envio_meta_job')
+          .update({ status_motivo: null, worker_lock_token: null, worker_locked_until: null })
+          .eq('id', claimed.id)
+          .eq('worker_lock_token', claimed.worker_lock_token);
+        for (const instId of instIds) {
+          fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({ job_id: claimed.id, instancia_id: instId }),
+          }).catch(() => {});
+        }
+        if (jobId) break;
+        continue;
+      }
+
       try {
         const result = await processarItem(claimed);
         if (result.advanced) processadosTotal++;
