@@ -109,7 +109,9 @@ export const navItems: NavItem[] = [
   { href: '/admin/cotacoes', label: 'Cotações', icon: Coins, adminOnly: true },
   { href: '/admin/lembrete-meta', label: 'Lembrete Meta', icon: Bell, adminOnly: true },
   { href: '/admin/google-maps-leads', label: 'Google Maps Leads', icon: MapPin, adminOnly: true },
+  { href: '/admin/ponto', label: 'Controle de Ponto', icon: Clock, adminOnly: true },
 ];
+
 
 function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavItem[] {
   if (!savedOrder || savedOrder.length === 0) return items;
