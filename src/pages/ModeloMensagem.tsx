@@ -52,6 +52,9 @@ export default function ModeloMensagem() {
             <TabsContent value="uazapi" className="mt-4">
               <LayoutUazapiTab />
             </TabsContent>
+            <TabsContent value="ume" className="mt-4">
+              <ModeloUmeTab />
+            </TabsContent>
           </Tabs>
         ) : (
 
