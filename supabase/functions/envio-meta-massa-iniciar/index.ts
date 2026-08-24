@@ -16,6 +16,7 @@ type Cliente = {
   atraso?: string;
   saldo?: number;
   vars?: Record<string, string>;
+  credor?: string | null;
 };
 
 Deno.serve(async (req) => {
@@ -63,6 +64,7 @@ Deno.serve(async (req) => {
 
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
     const folderId: string | null = typeof body?.folderId === 'string' && body.folderId ? body.folderId : null;
+    const credorCampanha: string | null = body?.credor === 'novo_mundo' || body?.credor === 'ume' ? body.credor : null;
     // Agendamento: ISO UTC no futuro. Job criado como 'rodando', mas só começa em proximo_em.
     let agendarParaMs: number | null = null;
     if (typeof body?.agendarPara === 'string' && body.agendarPara) {
@@ -277,6 +279,7 @@ Deno.serve(async (req) => {
         modo_rajada: modoRajada,
         msgs_por_segundo: msgsPorSegundo,
         folder_id: folderId,
+        credor: credorCampanha,
       })
 
       .select('id')
@@ -306,6 +309,7 @@ Deno.serve(async (req) => {
           instancia_id: instId,
           instancia_nome: instId ? (nomeById.get(instId) ?? null) : null,
           variante_idx: templateVariantes.length > 1 ? globalIdx % templateVariantes.length : 0,
+          credor: (c.credor === 'novo_mundo' || c.credor === 'ume') ? c.credor : credorCampanha,
         };
       });
 

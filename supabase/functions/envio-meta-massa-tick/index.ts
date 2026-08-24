@@ -167,7 +167,7 @@ async function processarItem(job: any): Promise<ItemResult> {
 
   const { data: pend, error: pendErr } = await supabase
     .from('envio_meta_job_item')
-    .select('id, ordem, telefone, nome, cpf, atraso, saldo, vars, tentativas, variante_idx')
+    .select('id, ordem, telefone, nome, cpf, atraso, saldo, vars, tentativas, variante_idx, credor')
     .eq('job_id', job.id)
     .eq('status', 'pendente')
     .order('ordem', { ascending: true })
@@ -303,7 +303,7 @@ async function processarItem(job: any): Promise<ItemResult> {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
-      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null }),
+      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, credor: (pend as any).credor ?? job.credor ?? null }),
     }).then((r) => r.json());
 
     if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused || sendResp?.bm_quota_blocked) {

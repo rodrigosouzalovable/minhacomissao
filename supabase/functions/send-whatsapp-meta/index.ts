@@ -408,7 +408,7 @@ async function sendOne(
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { template_id, instancia_id, cliente: clienteRaw, user_id, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id } = await req.json();
+    const { template_id, instancia_id, cliente: clienteRaw, user_id, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor } = await req.json();
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
@@ -699,6 +699,7 @@ Deno.serve(async (req) => {
           if (folder_id) updContato.folder_id = folder_id;
           // Só preenche o CPF quando vier da planilha; nunca sobrescreve com vazio.
           if (cpfValido) updContato.cpf = cpfValido;
+          if (credor === 'novo_mundo' || credor === 'ume') updContato.credor = credor;
           await supabase.from('meta_whatsapp_contatos').update(updContato).eq('id', ex.id);
         } else {
           const { data: novo } = await supabase.from('meta_whatsapp_contatos').insert({
@@ -710,6 +711,7 @@ Deno.serve(async (req) => {
             ultima_mensagem: preview,
             ultima_mensagem_em: nowIso,
             folder_id: folder_id || null,
+            credor: (credor === 'novo_mundo' || credor === 'ume') ? credor : null,
           } as any).select('id').maybeSingle();
           contatoIdFinal = (novo as any)?.id ?? null;
         }
