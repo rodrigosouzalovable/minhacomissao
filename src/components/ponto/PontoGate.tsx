@@ -1,6 +1,8 @@
 import { ReactNode } from 'react';
 import { useUserRole } from '@/hooks/useUserRole';
 import { usePonto } from '@/hooks/usePonto';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
+
 import { PontoCard } from './PontoCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
