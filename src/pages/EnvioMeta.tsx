@@ -21,7 +21,7 @@ import { calcularCustoEstimado } from "@/hooks/useCustoEstimadoEnvio";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useMetaEnviosTotais } from "@/hooks/useMetaEnviosTotais";
 import { useAuth } from "@/hooks/useAuth";
-import { AgendarCampanhaBox, CampanhasAgendadasList } from "@/components/meta/CampanhaAgendadaSection";
+import { AgendarCampanhaBox, agendamentoParaISO, type AgendamentoState } from "@/components/meta/CampanhaAgendadaSection";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
