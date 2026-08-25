@@ -1,46 +1,36 @@
-# Corrigir IAGO na caixa AQUECIMENTO
+# Salvar o JID real da UAZAPI no contato e reutilizar no envio
 
-## Diagnóstico confirmado
+## Situação atual confirmada
 
-- A mensagem recente da conversa **Rodrigo - Certificadora CNPJ** entrou na caixa **AQUECIMENTO**, pela instância **THIAGO 4 N1**, com `provider = uazapi`.
-- A conversa recebeu a etiqueta **Atendente: Iago Ribeiro de Souza** corretamente.
-- O IAGO foi acionado, mas não respondeu porque encontrou o mesmo telefone em outra conversa fora da caixa AQUECIMENTO com a etiqueta **Atendente: RODRIGO RIBEIRO DE SOUZA**.
-- A regra atual bloqueia o IAGO quando existe qualquer atendente humano vinculado ao mesmo telefone em qualquer caixa/instância. Isso é correto para atendimento humano normal, mas está impedindo o IAGO de atender a caixa AQUECIMENTO quando o mesmo telefone já existe em outra conversa.
+- O webhook UAZAPI (`whatsapp-chatbot`) já recebe o identificador real do chat (`chatid` / `wa_chatid` / `sender_pn` / `key.remoteJid`), mas usa esse valor apenas para extrair dígitos.
+- O espelhamento no Inbox (`_shared/espelho-inbox-meta.ts`) grava somente o telefone normalizado em `meta_whatsapp_contatos`, e a tabela hoje não tem nenhuma coluna para guardar o JID original.
+- No envio (`send-whatsapp-meta-text`), o destino é reconstruído a partir do telefone salvo, testando variações (com e sem o 9º dígito). Quando o JID real é diferente dessas variações, a UAZAPI recusa o destino.
 
-## Alerta de custo Lovable Cloud
-
-Esta correção pode aumentar o consumo de IA, porque o IAGO deixará de ignorar mensagens da caixa AQUECIMENTO que antes eram bloqueadas por etiqueta humana em outra caixa.
-
-Impacto estimado: baixo a moderado, proporcional ao volume de mensagens recebidas nos números UAZAPI da caixa AQUECIMENTO. Não será criado cron, polling, loop novo ou canal em tempo real novo.
+Resultado: perdemos o identificador que a própria UAZAPI usou para entregar a mensagem, e as respostas passam a depender de adivinhação de formato.
 
 ## O que será feito
 
-1. **Criar exceção segura para AQUECIMENTO**
-   - Quando a conversa estiver na caixa **AQUECIMENTO** e a instância for `uazapi`, o IAGO não será bloqueado por etiqueta humana encontrada em outra conversa do mesmo telefone.
-   - Ele continuará respeitando a etiqueta da conversa atual: se a própria conversa não estiver com IAGO, ele não assume.
+1. **Guardar o JID real do chat**
+   - Nova coluna no cadastro de contatos do Inbox para armazenar o identificador original recebido da UAZAPI.
+   - O valor é gravado/atualizado a cada mensagem recebida desses números, sem alterar o telefone exibido na conversa.
 
-2. **Manter proteção nas outras caixas**
-   - A regra de silêncio por atendente humano continuará valendo para conversas fora da AQUECIMENTO.
-   - Assim, não desfazemos a proteção já criada para evitar que o IAGO entre em conversas de atendentes humanos.
+2. **Usar o JID salvo como primeiro destino no envio**
+   - Ao responder uma conversa de número não oficial, o sistema tenta primeiro exatamente o identificador que a UAZAPI entregou.
+   - Somente se ele falhar é que as variações atuais do telefone continuam sendo testadas, mantendo o comportamento de reserva já existente.
 
-3. **Garantir atendimento de mensagens futuras na AQUECIMENTO**
-   - O webhook UAZAPI continuará espelhando mensagens para o Inbox Meta Oficial.
-   - Toda nova mensagem de entrada na caixa AQUECIMENTO com etiqueta do IAGO deverá chamar `iago-atendimento` e gerar resposta, salvo casos de bloqueio definitivo como opt-out, número errado/falecimento ou destinatário recusado pela UAZAPI.
+3. **Preservar o que já funciona**
+   - O telefone continua sendo exibido e usado normalmente na interface e nas buscas por sufixo de 8 dígitos.
+   - O tratamento de "destinatário sem WhatsApp" permanece, apenas passa a ser acionado depois de tentar o identificador correto.
 
-4. **Responder pendências de hoje**
-   - Localizar conversas de hoje na caixa AQUECIMENTO em que a última mensagem é de entrada e não existe saída posterior.
-   - Reprocessar essas entradas com o IAGO depois da correção.
-   - A conversa exibida na imagem será incluída nessa verificação.
-
-5. **Validar**
-   - Consultar logs da função `iago-atendimento` depois do ajuste.
-   - Confirmar que a conversa deixa de retornar `atendente humano vinculado` e passa a gerar envio ou uma falha real de entrega, se o destinatário for recusado pela UAZAPI.
+4. **Validar**
+   - Enviar uma resposta de teste em uma conversa da caixa AQUECIMENTO e conferir se o envio sai pelo identificador salvo.
+   - Conferir no banco se o campo está sendo preenchido nas novas mensagens recebidas.
 
 ## Detalhes técnicos
 
-- Ajustar `temAtendenteHumanoNoTelefone` ou sua chamada em `iago-atendimento` para aceitar um modo de exceção quando:
-  - `contato.folder_id` for a pasta AQUECIMENTO; e
-  - `meta_whatsapp_instances.provider = 'uazapi'`.
-- Consultar a instância do contato dentro de `iago-atendimento` para saber se é UAZAPI.
-- Criar uma execução pontual de reprocessamento via chamada da função `iago-atendimento` para as mensagens elegíveis de hoje.
-- Não adicionar cron, polling ou automação recorrente nova.
+- Migration: adicionar `wa_jid text` (nullable) em `meta_whatsapp_contatos`, sem alterar RLS/grants existentes.
+- `whatsapp-chatbot`: repassar o `remoteJid` bruto para o espelhamento.
+- `_shared/espelho-inbox-meta.ts`: aceitar `waJid` em `EspelhoMensagem` e gravar/atualizar `wa_jid` no contato (apenas quando vier valor de chat individual, ignorando grupo/status).
+- `send-whatsapp-meta-text`: ler `wa_jid` do contato e passá-lo como primeiro item de `montarDestinosUazapi`, mantendo as variações atuais como fallback.
+- Também repassar o JID salvo no fluxo de mídia (`send-whatsapp-meta-media`) se ele usar a mesma montagem de destino.
+- Sem cron, polling, canal em tempo real ou consulta recorrente nova: custo praticamente zero (uma coluna e uma leitura já feita no envio).
