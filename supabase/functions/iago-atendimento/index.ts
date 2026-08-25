@@ -29,9 +29,14 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
+  // Trava adquirida nesta execução — liberada mesmo se algo falhar no meio (ver catch final).
+  let travaContatoId: string | null = null;
+  let travaEntradaId: string | null = null;
+
   try {
     const body = await req.json().catch(() => ({}));
     const { contato_id, texto, entrada_id, simular } = body || {};
+
 
     const cfg = await carregarConfig(supabase);
     if (!cfg) return json({ success: false, skipped: 'sem configuração' });
@@ -154,6 +159,24 @@ Deno.serve(async (req) => {
       return json({ success: true, skipped: 'limite diário atingido' });
     }
 
+    // ===== Rajada: o mesmo número escrevendo para vários chips ao mesmo tempo =====
+    // Espaça as execuções para não estourar o limite momentâneo da IA (sem cron, sem polling).
+    const telefoneContato = String((contato as any).telefone || '');
+    if (telefoneContato) {
+      const { count: emProcesso } = await supabase
+        .from('iago_conversa_estado')
+        .select('id', { count: 'exact', head: true })
+        .eq('telefone', telefoneContato)
+        .neq('contato_id', contato_id)
+        .gte('updated_at', new Date(Date.now() - 90_000).toISOString());
+      const simultaneas = Number(emProcesso || 0);
+      if (simultaneas > 0) {
+        const espera = Math.min(20_000, simultaneas * (1200 + Math.floor(Math.random() * 1800)));
+        console.log('[IAGO] rajada detectada — espaçando execução', { contato_id, simultaneas, espera });
+        await sleep(espera);
+      }
+    }
+
     // Uma única execução por conversa. Também deduplica reentregas do mesmo webhook.
     const { data: claimed, error: claimError } = await supabase.rpc('iago_claim_message', {
       p_contato_id: contato_id,
@@ -161,6 +184,9 @@ Deno.serve(async (req) => {
     });
     if (claimError) throw new Error(`falha ao reservar mensagem: ${claimError.message}`);
     if (!claimed) return json({ success: true, skipped: 'mensagem duplicada ou conversa em processamento' });
+    travaContatoId = String(contato_id);
+    travaEntradaId = String(entrada_id);
+
 
     // Pequena janela para incorporar ao histórico mensagens enviadas em sequência pelo cliente.
     await sleep(1000);
@@ -245,6 +271,41 @@ Deno.serve(async (req) => {
     let propostaPrevia = detectarPropostaPrevia(historico);
     // Resposta automática do cliente (ausência/atendimento automático): não é resposta real.
     let respostaAutomatica = ehRespostaAutomatica(textoAtual);
+
+    // ===== Divulgação em massa / robô escrevendo para vários chips =====
+    // Não vale negociar: marca para revisão humana e conclui a entrada normalmente.
+    if (ehDivulgacao(textoAtual)) {
+      let ehMassa = true;
+      if (telefoneContato) {
+        const trecho = textoAtual.trim().slice(0, 40);
+        const { data: iguais } = await supabase
+          .from('meta_whatsapp_mensagens')
+          .select('instancia_id')
+          .eq('telefone', telefoneContato)
+          .eq('direcao', 'entrada')
+          .ilike('conteudo', `${trecho}%`)
+          .gte('criado_em', new Date(Date.now() - 3600_000).toISOString())
+          .limit(50);
+        const instancias = new Set(((iguais || []) as any[]).map((m) => String(m.instancia_id)));
+        ehMassa = instancias.size >= 3;
+      }
+      if (ehMassa) {
+        await supabase.from('iago_conversa_estado').update({
+          etapa: 'divulgacao_em_massa',
+          aguardando_humano: true,
+          followup_em: null,
+          followup_feito: true,
+          ultima_msg_cliente_em: new Date().toISOString(),
+          contexto: { ...(estado.contexto || {}), ultimo_motivo: 'mensagem de divulgação em massa (robô)' },
+        }).eq('id', estado.id);
+        await etiquetarAguardandoHumano(supabase, contato_id);
+        await finalizarEntrada();
+        console.log('[IAGO] divulgação em massa — sem resposta automática', { contato_id });
+        return json({ success: true, skipped: 'divulgacao_em_massa' });
+      }
+    }
+
+
 
 
     // Se outra mensagem chegou enquanto esta execução aguardava a trava, processa a mais recente.
@@ -773,9 +834,30 @@ Deno.serve(async (req) => {
     console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo });
     return json({ success: true, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo: motivo || null });
   } catch (e: any) {
-    console.error('[IAGO] erro', e?.message || e);
-    return json({ success: false, error: String(e?.message || e) }, 500);
+    const motivoFalha = String(e?.message || e);
+    console.error('[IAGO] erro', motivoFalha);
+    // Uma execução que morre no meio NÃO pode deixar a conversa travada e sem resposta.
+    if (travaContatoId) {
+      try {
+        await supabase.from('iago_falhas').insert({
+          contato_id: travaContatoId,
+          entrada_id: travaEntradaId,
+          motivo: motivoFalha.slice(0, 300),
+          detalhe: String(e?.stack || '').slice(0, 2000) || null,
+        } as any);
+      } catch (_) { /* nunca deixa o registro de falha derrubar o fluxo */ }
+      try {
+        await supabase.rpc('iago_finish_message', {
+          p_contato_id: travaContatoId,
+          p_entrada_id: String(travaEntradaId || ''),
+        });
+      } catch (_) { /* ignore */ }
+      // Sem resposta automática: um humano precisa ver essa conversa.
+      try { await etiquetarAguardandoHumano(supabase, travaContatoId); } catch (_) { /* ignore */ }
+    }
+    return json({ success: false, error: motivoFalha }, 500);
   }
+
 });
 
 async function gerarResposta(args: {
@@ -1048,4 +1130,31 @@ function ehRespostaAutomatica(texto: string): boolean {
   const acertos = padroes.filter((p) => t.includes(p)).length;
   const temLink = /https?:\/\/|www\./.test(t);
   return acertos >= 2 || (acertos >= 1 && (temLink || t.length > 120));
+}
+
+/**
+ * Mensagem de divulgação/robô (não é cliente respondendo cobrança).
+ * Usada junto com a checagem de "mesmo texto em vários chips" antes de silenciar.
+ */
+function ehDivulgacao(texto: string): boolean {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (t.trim().length < 60) return false;
+  const padroes = [
+    'sua conta foi criada',
+    'clique no botao abaixo',
+    'basta clicar no botao',
+    'para mais informacoes, basta',
+    'aproveite nossa promocao',
+    'aproveite a promocao',
+    'cadastre-se',
+    'faca seu cadastro',
+    'ganhe bonus',
+    'bonus de boas',
+    'link de acesso',
+    'saiba mais em',
+    'aqui e a ',
+  ];
+  const acertos = padroes.filter((p) => t.includes(p)).length;
+  const temLink = /https?:\/\/|www\.|\.com\b/.test(t);
+  return acertos >= 2 || (acertos >= 1 && temLink);
 }

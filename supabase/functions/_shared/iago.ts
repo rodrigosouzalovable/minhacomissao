@@ -740,10 +740,10 @@ export async function calcularProposta(
 
 
 /** Chamada ao Lovable AI Gateway. Retorna o texto da resposta. */
-export async function chamarIA(
+async function chamarIAUmaVez(
   system: string,
   user: string,
-  modelo = 'google/gemini-3.6-flash',
+  modelo: string,
 ): Promise<string> {
   const key = Deno.env.get('LOVABLE_API_KEY');
   if (!key) throw new Error('LOVABLE_API_KEY não configurada');
@@ -761,6 +761,30 @@ export async function chamarIA(
   const data = await res.json();
   return String(data?.choices?.[0]?.message?.content || '');
 }
+
+/**
+ * Chamada ao Lovable AI Gateway com 1 nova tentativa.
+ * Rajadas de mensagens podem estourar o limite momentâneo do gateway; nesse caso
+ * espera alguns segundos e tenta de novo (a segunda tentativa usa modelo de reserva).
+ */
+export async function chamarIA(
+  system: string,
+  user: string,
+  modelo = 'google/gemini-3.6-flash',
+  modeloReserva = 'google/gemini-2.5-flash',
+): Promise<string> {
+  try {
+    return await chamarIAUmaVez(system, user, modelo);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    if (msg === 'sem_creditos') throw e;
+    const espera = msg === 'rate_limit' ? 4000 + Math.floor(Math.random() * 4000) : 1500;
+    console.error('[IAGO] IA falhou, tentando novamente', { erro: msg, espera });
+    await sleep(espera);
+    return await chamarIAUmaVez(system, user, modeloReserva);
+  }
+}
+
 
 export function extrairJson(txt: string): any {
   const bloco = txt.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
