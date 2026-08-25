@@ -6,7 +6,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useUserRole } from "@/hooks/useUserRole";
 import { cn } from "@/lib/utils";
 
 type Periodo = "hoje" | "semana" | "mes";
@@ -43,11 +42,10 @@ function intervalo(periodo: Periodo) {
 
 /**
  * Painel de mensuração: quantas conversas cada atendente atendeu (manual)
- * e quantas iniciou (template) no período. Admin vê todos; demais só a si.
+ * e quantas iniciou (template) no período. Visível para todos os usuários.
  */
 export function AtendimentosBell() {
   const { user } = useAuth();
-  const { isAdmin } = useUserRole() as any;
   const [open, setOpen] = useState(false);
   const [periodo, setPeriodo] = useState<Periodo>("hoje");
 
@@ -88,9 +86,8 @@ export function AtendimentosBell() {
 
   const badge = useMemo(() => {
     const linhas = (hoje || []) as any[];
-    const alvo = isAdmin ? linhas : linhas.filter((l) => l.user_id === user?.id);
-    return alvo.reduce((s, l) => s + Number(l.atendidas || 0) + Number(l.iniciadas || 0), 0);
-  }, [hoje, isAdmin, user?.id]);
+    return linhas.reduce((s, l) => s + Number(l.atendidas || 0) + Number(l.iniciadas || 0), 0);
+  }, [hoje]);
 
   const totais = useMemo(
     () => ({
