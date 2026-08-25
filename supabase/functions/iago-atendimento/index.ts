@@ -272,6 +272,41 @@ Deno.serve(async (req) => {
     // Resposta automática do cliente (ausência/atendimento automático): não é resposta real.
     let respostaAutomatica = ehRespostaAutomatica(textoAtual);
 
+    // ===== Divulgação em massa / robô escrevendo para vários chips =====
+    // Não vale negociar: marca para revisão humana e conclui a entrada normalmente.
+    if (ehDivulgacao(textoAtual)) {
+      let ehMassa = true;
+      if (telefoneContato) {
+        const trecho = textoAtual.trim().slice(0, 40);
+        const { data: iguais } = await supabase
+          .from('meta_whatsapp_mensagens')
+          .select('instancia_id')
+          .eq('telefone', telefoneContato)
+          .eq('direcao', 'entrada')
+          .ilike('conteudo', `${trecho}%`)
+          .gte('criado_em', new Date(Date.now() - 3600_000).toISOString())
+          .limit(50);
+        const instancias = new Set(((iguais || []) as any[]).map((m) => String(m.instancia_id)));
+        ehMassa = instancias.size >= 3;
+      }
+      if (ehMassa) {
+        await supabase.from('iago_conversa_estado').update({
+          etapa: 'divulgacao_em_massa',
+          aguardando_humano: true,
+          followup_em: null,
+          followup_feito: true,
+          ultima_msg_cliente_em: new Date().toISOString(),
+          contexto: { ...(estado.contexto || {}), ultimo_motivo: 'mensagem de divulgação em massa (robô)' },
+        }).eq('id', estado.id);
+        await etiquetarAguardandoHumano(supabase, contato_id);
+        await finalizarEntrada();
+        console.log('[IAGO] divulgação em massa — sem resposta automática', { contato_id });
+        return json({ success: true, skipped: 'divulgacao_em_massa' });
+      }
+    }
+
+
+
 
     // Se outra mensagem chegou enquanto esta execução aguardava a trava, processa a mais recente.
     if (ehOptOut(textoAtual)) {
