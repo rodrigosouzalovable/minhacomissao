@@ -13,10 +13,13 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
     s.includes("nao esta no whatsapp") ||
     s.includes("destinatário não tem whatsapp") ||
     s.includes("destinatario nao tem whatsapp") ||
+    s.includes("destinatário não tem whatsapp ativo") ||
+    s.includes("destinatario nao tem whatsapp ativo") ||
     s.includes("esse destinatário não tem whatsapp") ||
-    s.includes("esse destinatario nao tem whatsapp")
+    s.includes("esse destinatario nao tem whatsapp") ||
+    s.includes("recusado pela uazapi")
   ) {
-    return "A instância UAZAPI está conectada; o problema é o destinatário. A UAZAPI informou que esse número não tem WhatsApp ativo ou não pode receber resposta. O IAGO não vai insistir automaticamente nesse contato.";
+    return "A instância UAZAPI está conectada; o problema é o destinatário. Testei os formatos possíveis do número e a UAZAPI recusou esse contato como sem WhatsApp ativo/não respondível. O IAGO não vai insistir automaticamente nesse contato.";
   }
 
   // #100 — número/objeto inacessível pelo token atual (removido do WABA, migrou de BM

@@ -29,7 +29,92 @@ function ehDestinatarioSemWhatsapp(erro: unknown): boolean {
     s.includes('not a whatsapp') ||
     s.includes('number is not on whatsapp') ||
     s.includes('não está no whatsapp') ||
-    s.includes('nao esta no whatsapp');
+    s.includes('nao esta no whatsapp') ||
+    s.includes('sem whatsapp ativo') ||
+    s.includes('não respondível') ||
+    s.includes('nao respondivel');
+}
+
+function ehEndpointIncompativel(status: number, erro: unknown): boolean {
+  const s = String(erro || '').toLowerCase();
+  return status === 404 || status === 405 || s.includes('method not allowed') || s.includes('cannot post');
+}
+
+function montarDestinosUazapi(telefone: string): string[] {
+  const d = String(telefone || '').replace(/\D/g, '');
+  const destinos = new Set<string>();
+  const add = (v: string) => {
+    const clean = String(v || '').trim();
+    if (!clean) return;
+    destinos.add(clean);
+    if (!clean.includes('@')) destinos.add(`${clean}@s.whatsapp.net`);
+  };
+
+  add(d);
+
+  // Celular BR pode chegar pelo webhook com 9º dígito, mas algumas bridges
+  // respondem pelo JID antigo sem esse 9. Tentamos ambos antes de desistir.
+  if (d.startsWith('55') && d.length === 13 && d[4] === '9') {
+    add(`${d.slice(0, 4)}${d.slice(5)}`);
+  }
+
+  return Array.from(destinos);
+}
+
+async function enviarTextoUazapi(
+  cleanUrl: string,
+  token: string,
+  telefone: string,
+  texto: string,
+): Promise<{ ok: boolean; waId: string | null; destino: string; erro: string; tentativas: Array<{ endpoint: string; destino: string; status: number; erro: string }> }> {
+  const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
+  const destinos = montarDestinosUazapi(telefone);
+  const tentativas: Array<{ endpoint: string; destino: string; status: number; erro: string }> = [];
+
+  for (const destino of destinos) {
+    for (const endpoint of endpoints) {
+      try {
+        const r = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', token },
+          body: JSON.stringify({ number: destino, text: String(texto).slice(0, 4096) }),
+        });
+        const raw = await r.text();
+        let j: any = {};
+        try { j = raw ? JSON.parse(raw) : {}; } catch (_) { j = { message: raw }; }
+        if (r.ok) {
+          const waId = String(j?.id || j?.messageid || j?.key?.id || '').split(':').pop() || null;
+          return { ok: true, waId, destino, erro: '', tentativas };
+        }
+        tentativas.push({
+          endpoint: endpoint.replace(cleanUrl, ''),
+          destino,
+          status: r.status,
+          erro: String(j?.message || j?.error || raw || `HTTP ${r.status}`).slice(0, 300),
+        });
+      } catch (e) {
+        tentativas.push({
+          endpoint: endpoint.replace(cleanUrl, ''),
+          destino,
+          status: 0,
+          erro: e instanceof Error ? e.message : 'falha de rede UAZAPI',
+        });
+      }
+    }
+  }
+
+  const erroPrioritario =
+    tentativas.find((t) => ehDestinatarioSemWhatsapp(t.erro))?.erro ||
+    [...tentativas].reverse().find((t) => !ehEndpointIncompativel(t.status, t.erro))?.erro ||
+    tentativas.at(-1)?.erro;
+
+  return {
+    ok: false,
+    waId: null,
+    destino: destinos[0] || telefone,
+    erro: erroPrioritario || 'falha no envio UAZAPI',
+    tentativas,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -100,23 +185,15 @@ Deno.serve(async (req) => {
       }
 
       const cleanUrl = String(uz.server_url).replace(/\/+$/, '');
-      let waId: string | null = null;
-      let erroEnvio = '';
-      try {
-        const r = await fetch(`${cleanUrl}/send/text`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', token: uz.instance_token },
-          body: JSON.stringify({ number: to, text: String(texto).slice(0, 4096) }),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) erroEnvio = j?.message || j?.error || `HTTP ${r.status}`;
-        else waId = String(j?.id || j?.messageid || j?.key?.id || '').split(':').pop() || null;
-      } catch (e) {
-        erroEnvio = e instanceof Error ? e.message : 'falha de rede UAZAPI';
-      }
+      const envioUazapi = await enviarTextoUazapi(cleanUrl, uz.instance_token, to, texto);
+      const waId = envioUazapi.waId;
+      const erroEnvio = envioUazapi.erro;
 
-      if (erroEnvio) {
-        if (ehDestinatarioSemWhatsapp(erroEnvio)) {
+      if (!envioUazapi.ok) {
+        const tentativasComFalhaReal = envioUazapi.tentativas.filter((t) => !ehEndpointIncompativel(t.status, t.erro));
+        const recusadoPeloEndpointValido = tentativasComFalhaReal.length > 0
+          && tentativasComFalhaReal.every((t) => ehDestinatarioSemWhatsapp(t.erro));
+        if (recusadoPeloEndpointValido || ehDestinatarioSemWhatsapp(erroEnvio)) {
           const nowIso = new Date().toISOString();
           const erroLegivel = MSG_DESTINATARIO_SEM_WHATSAPP;
 
@@ -155,6 +232,7 @@ Deno.serve(async (req) => {
             not_on_whatsapp: true,
             error: erroLegivel,
             detalhe: erroEnvio,
+            tentativas: envioUazapi.tentativas,
             mensagem_id: (msgRow as any)?.id || null,
             provider: 'uazapi',
           }), {
@@ -162,7 +240,12 @@ Deno.serve(async (req) => {
           });
         }
 
-        return new Response(JSON.stringify({ success: false, error: erroEnvio }), {
+        return new Response(JSON.stringify({
+          success: false,
+          error: erroEnvio,
+          provider: 'uazapi',
+          tentativas: envioUazapi.tentativas,
+        }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -262,7 +345,7 @@ Deno.serve(async (req) => {
       try {
         const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
         const chave = `janela_bloqueio_texto_${uid}_${new Date().toISOString().slice(0, 10)}`;
-        await notificarAdmin(supabase, {
+        await notificarAdmin(supabase as any, {
           tipo: 'janela_24h_bloqueio',
           mensagem:
             `🔒 Tentativa de envio livre fora da janela 24h (BLOQUEADA)\n\n` +
@@ -313,14 +396,14 @@ Deno.serve(async (req) => {
     if (!res.ok) {
       const erro = data?.error?.message || `HTTP ${res.status}`;
       if (ehNumeroInacessivel(erro, data?.error?.code)) {
-        await tratarNumeroInacessivel(supabase, inst, erro);
+        await tratarNumeroInacessivel(supabase as any, inst, erro);
         return new Response(JSON.stringify({
           success: false, instance_restricted: true, numero_inacessivel: true,
           error: MSG_NUMERO_INACESSIVEL, detalhe: erro, instancia_id,
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       if (ehContaBloqueada(erro, data?.error?.code)) {
-        await tratarContaBloqueada(supabase, inst, erro);
+        await tratarContaBloqueada(supabase as any, inst, erro);
         return new Response(JSON.stringify({
           success: false, instance_restricted: true, conta_bloqueada: true,
           error: MSG_CONTA_BLOQUEADA, detalhe: erro, instancia_id,
