@@ -29,9 +29,14 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
+  // Trava adquirida nesta execução — liberada mesmo se algo falhar no meio (ver catch final).
+  let travaContatoId: string | null = null;
+  let travaEntradaId: string | null = null;
+
   try {
     const body = await req.json().catch(() => ({}));
     const { contato_id, texto, entrada_id, simular } = body || {};
+
 
     const cfg = await carregarConfig(supabase);
     if (!cfg) return json({ success: false, skipped: 'sem configuração' });
