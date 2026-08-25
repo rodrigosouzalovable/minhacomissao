@@ -617,7 +617,10 @@ export default function InboxMeta() {
     const contatoId = params.get('contato') || '';
     const telefone = (params.get('telefone') || '').replace(/\D/g, '');
     const instanciaId = params.get('instancia') || '';
-    if (!contatoId && !telefone) return;
+    if (!contatoId && !telefone) {
+      ultimoLinkDiretoRef.current = '';
+      return;
+    }
 
     const assinatura = `${contatoId}:${telefone}:${instanciaId}`;
     if (ultimoLinkDiretoRef.current === assinatura) return;
