@@ -29,7 +29,15 @@ function ehDestinatarioSemWhatsapp(erro: unknown): boolean {
     s.includes('not a whatsapp') ||
     s.includes('number is not on whatsapp') ||
     s.includes('não está no whatsapp') ||
-    s.includes('nao esta no whatsapp');
+    s.includes('nao esta no whatsapp') ||
+    s.includes('sem whatsapp ativo') ||
+    s.includes('não respondível') ||
+    s.includes('nao respondivel');
+}
+
+function ehEndpointIncompativel(status: number, erro: unknown): boolean {
+  const s = String(erro || '').toLowerCase();
+  return status === 404 || status === 405 || s.includes('method not allowed') || s.includes('cannot post');
 }
 
 function montarDestinosUazapi(telefone: string): string[] {
@@ -95,12 +103,16 @@ async function enviarTextoUazapi(
     }
   }
 
-  const ultimo = tentativas.at(-1);
+  const erroPrioritario =
+    tentativas.find((t) => ehDestinatarioSemWhatsapp(t.erro))?.erro ||
+    [...tentativas].reverse().find((t) => !ehEndpointIncompativel(t.status, t.erro))?.erro ||
+    tentativas.at(-1)?.erro;
+
   return {
     ok: false,
     waId: null,
     destino: destinos[0] || telefone,
-    erro: ultimo?.erro || 'falha no envio UAZAPI',
+    erro: erroPrioritario || 'falha no envio UAZAPI',
     tentativas,
   };
 }
@@ -178,9 +190,10 @@ Deno.serve(async (req) => {
       const erroEnvio = envioUazapi.erro;
 
       if (!envioUazapi.ok) {
-        const todosSemWhatsapp = envioUazapi.tentativas.length > 0
-          && envioUazapi.tentativas.every((t) => ehDestinatarioSemWhatsapp(t.erro));
-        if (todosSemWhatsapp || ehDestinatarioSemWhatsapp(erroEnvio)) {
+        const tentativasComFalhaReal = envioUazapi.tentativas.filter((t) => !ehEndpointIncompativel(t.status, t.erro));
+        const recusadoPeloEndpointValido = tentativasComFalhaReal.length > 0
+          && tentativasComFalhaReal.every((t) => ehDestinatarioSemWhatsapp(t.erro));
+        if (recusadoPeloEndpointValido || ehDestinatarioSemWhatsapp(erroEnvio)) {
           const nowIso = new Date().toISOString();
           const erroLegivel = MSG_DESTINATARIO_SEM_WHATSAPP;
 
