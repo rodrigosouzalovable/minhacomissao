@@ -32,6 +32,79 @@ function ehDestinatarioSemWhatsapp(erro: unknown): boolean {
     s.includes('nao esta no whatsapp');
 }
 
+function montarDestinosUazapi(telefone: string): string[] {
+  const d = String(telefone || '').replace(/\D/g, '');
+  const destinos = new Set<string>();
+  const add = (v: string) => {
+    const clean = String(v || '').trim();
+    if (!clean) return;
+    destinos.add(clean);
+    if (!clean.includes('@')) destinos.add(`${clean}@s.whatsapp.net`);
+  };
+
+  add(d);
+
+  // Celular BR pode chegar pelo webhook com 9º dígito, mas algumas bridges
+  // respondem pelo JID antigo sem esse 9. Tentamos ambos antes de desistir.
+  if (d.startsWith('55') && d.length === 13 && d[4] === '9') {
+    add(`${d.slice(0, 4)}${d.slice(5)}`);
+  }
+
+  return Array.from(destinos);
+}
+
+async function enviarTextoUazapi(
+  cleanUrl: string,
+  token: string,
+  telefone: string,
+  texto: string,
+): Promise<{ ok: boolean; waId: string | null; destino: string; erro: string; tentativas: Array<{ endpoint: string; destino: string; status: number; erro: string }> }> {
+  const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
+  const destinos = montarDestinosUazapi(telefone);
+  const tentativas: Array<{ endpoint: string; destino: string; status: number; erro: string }> = [];
+
+  for (const destino of destinos) {
+    for (const endpoint of endpoints) {
+      try {
+        const r = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', token },
+          body: JSON.stringify({ number: destino, text: String(texto).slice(0, 4096) }),
+        });
+        const raw = await r.text();
+        let j: any = {};
+        try { j = raw ? JSON.parse(raw) : {}; } catch (_) { j = { message: raw }; }
+        if (r.ok) {
+          const waId = String(j?.id || j?.messageid || j?.key?.id || '').split(':').pop() || null;
+          return { ok: true, waId, destino, erro: '', tentativas };
+        }
+        tentativas.push({
+          endpoint: endpoint.replace(cleanUrl, ''),
+          destino,
+          status: r.status,
+          erro: String(j?.message || j?.error || raw || `HTTP ${r.status}`).slice(0, 300),
+        });
+      } catch (e) {
+        tentativas.push({
+          endpoint: endpoint.replace(cleanUrl, ''),
+          destino,
+          status: 0,
+          erro: e instanceof Error ? e.message : 'falha de rede UAZAPI',
+        });
+      }
+    }
+  }
+
+  const ultimo = tentativas.at(-1);
+  return {
+    ok: false,
+    waId: null,
+    destino: destinos[0] || telefone,
+    erro: ultimo?.erro || 'falha no envio UAZAPI',
+    tentativas,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -100,23 +173,14 @@ Deno.serve(async (req) => {
       }
 
       const cleanUrl = String(uz.server_url).replace(/\/+$/, '');
-      let waId: string | null = null;
-      let erroEnvio = '';
-      try {
-        const r = await fetch(`${cleanUrl}/send/text`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', token: uz.instance_token },
-          body: JSON.stringify({ number: to, text: String(texto).slice(0, 4096) }),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) erroEnvio = j?.message || j?.error || `HTTP ${r.status}`;
-        else waId = String(j?.id || j?.messageid || j?.key?.id || '').split(':').pop() || null;
-      } catch (e) {
-        erroEnvio = e instanceof Error ? e.message : 'falha de rede UAZAPI';
-      }
+      const envioUazapi = await enviarTextoUazapi(cleanUrl, uz.instance_token, to, texto);
+      const waId = envioUazapi.waId;
+      const erroEnvio = envioUazapi.erro;
 
-      if (erroEnvio) {
-        if (ehDestinatarioSemWhatsapp(erroEnvio)) {
+      if (!envioUazapi.ok) {
+        const todosSemWhatsapp = envioUazapi.tentativas.length > 0
+          && envioUazapi.tentativas.every((t) => ehDestinatarioSemWhatsapp(t.erro));
+        if (todosSemWhatsapp || ehDestinatarioSemWhatsapp(erroEnvio)) {
           const nowIso = new Date().toISOString();
           const erroLegivel = MSG_DESTINATARIO_SEM_WHATSAPP;
 
@@ -155,6 +219,7 @@ Deno.serve(async (req) => {
             not_on_whatsapp: true,
             error: erroLegivel,
             detalhe: erroEnvio,
+            tentativas: envioUazapi.tentativas,
             mensagem_id: (msgRow as any)?.id || null,
             provider: 'uazapi',
           }), {
@@ -162,7 +227,12 @@ Deno.serve(async (req) => {
           });
         }
 
-        return new Response(JSON.stringify({ success: false, error: erroEnvio }), {
+        return new Response(JSON.stringify({
+          success: false,
+          error: erroEnvio,
+          provider: 'uazapi',
+          tentativas: envioUazapi.tentativas,
+        }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
