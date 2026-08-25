@@ -126,6 +126,8 @@ export async function espelharMensagemInboxMeta(
 
   let contatoId: string | null = (contato as any)?.id || null;
   const preview = String(msg.conteudo || '').slice(0, 200);
+  // JID real entregue pela UAZAPI: é o destino mais confiável para responder depois.
+  const waJid = msg.direcao === 'entrada' ? jidIndividualValido(msg.waJid) : null;
 
   if (contatoId) {
     const upd: Record<string, unknown> = {
@@ -134,6 +136,7 @@ export async function espelharMensagemInboxMeta(
       atualizado_em: agora,
       arquivado: false,
     };
+    if (waJid) upd.wa_jid = waJid;
     if (msg.direcao === 'entrada') {
       upd.ultima_msg_entrada_em = agora;
       upd.ultima_interacao_em = agora;
@@ -150,6 +153,7 @@ export async function espelharMensagemInboxMeta(
         folder_id: inst.folder_padrao_id,
         telefone: telefoneFinal,
         telefone_visivel: true,
+        wa_jid: waJid,
         nome: msg.nome || null,
         ultima_mensagem: preview,
         ultima_mensagem_em: agora,
@@ -161,6 +165,7 @@ export async function espelharMensagemInboxMeta(
       .maybeSingle();
     contatoId = (novo as any)?.id || null;
   }
+
 
   const { data: msgRow, error: msgErr } = await supabase
     .from('meta_whatsapp_mensagens')
