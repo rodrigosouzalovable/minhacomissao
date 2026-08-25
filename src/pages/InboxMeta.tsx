@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -138,6 +139,8 @@ export default function InboxMeta() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [instancias, setInstancias] = useState<MetaInstance[]>([]);
   const [filtroInstancia, setFiltroInstancia] = useState<string>('todas');
@@ -607,31 +610,50 @@ export default function InboxMeta() {
   useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim]);
 
   // Link direto (aviso "Cliente autorizou a chamada"): abre a conversa do cliente
-  const linkDiretoRef = useRef(false);
+  const ultimoLinkDiretoRef = useRef('');
   useEffect(() => {
-    if (!user || linkDiretoRef.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const contatoId = params.get('contato');
+    if (!user) return;
+    const params = new URLSearchParams(location.search);
+    const contatoId = params.get('contato') || '';
     const telefone = (params.get('telefone') || '').replace(/\D/g, '');
+    const instanciaId = params.get('instancia') || '';
     if (!contatoId && !telefone) return;
-    linkDiretoRef.current = true;
+
+    const assinatura = `${contatoId}:${telefone}:${instanciaId}`;
+    if (ultimoLinkDiretoRef.current === assinatura) return;
+    ultimoLinkDiretoRef.current = assinatura;
+
+    let cancelado = false;
     void (async () => {
       const cols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
       let q = supabase.from('meta_whatsapp_contatos').select(cols).limit(1);
-      q = contatoId ? q.eq('id', contatoId) : q.like('telefone', `%${telefone.slice(-8)}`);
+      if (contatoId) {
+        q = q.eq('id', contatoId);
+      } else {
+        q = q.like('telefone', `%${telefone.slice(-8)}`);
+        if (instanciaId) q = q.eq('instancia_id', instanciaId);
+      }
       const { data } = await q.maybeSingle();
+      if (cancelado) return;
       if (data) {
+        setModoMeusClientes(false);
+        setBusca('');
+        setBuscaDebounced('');
+        setFiltroInstancia('todas');
         setCurrentFolderId((data as any).folder_id ?? null);
         setAbaAtiva((data as any).arquivado ? 'arquivados' : 'conversas');
         setContatoAtivo(data as any);
       } else {
         toast({ title: 'Conversa não encontrada', description: 'O contato pode estar em outra caixa de mensagens.' });
       }
-      const url = new URL(window.location.href);
-      ['contato', 'telefone', 'instancia'].forEach(k => url.searchParams.delete(k));
-      window.history.replaceState({}, '', url.pathname + url.search);
+
+      const limpos = new URLSearchParams(location.search);
+      ['contato', 'telefone', 'instancia'].forEach(k => limpos.delete(k));
+      navigate({ pathname: location.pathname, search: limpos.toString() ? `?${limpos.toString()}` : '' }, { replace: true });
     })();
-  }, [user, toast]);
+
+    return () => { cancelado = true; };
+  }, [user, toast, location.pathname, location.search, navigate]);
 
 
   const fetchContatos = useCallback(async () => {
