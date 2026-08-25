@@ -19,6 +19,19 @@ function formatTel(tel: string): string {
   return d.startsWith('55') ? d : `55${d}`;
 }
 
+const MSG_DESTINATARIO_SEM_WHATSAPP =
+  'A instância UAZAPI está conectada, mas esse destinatário não tem WhatsApp ativo ou foi recusado pela UAZAPI. O IAGO não vai ficar tentando responder esse número automaticamente.';
+
+function ehDestinatarioSemWhatsapp(erro: unknown): boolean {
+  const s = String(erro || '').toLowerCase();
+  return s.includes('not on whatsapp') ||
+    s.includes('is not a whatsapp user') ||
+    s.includes('not a whatsapp') ||
+    s.includes('number is not on whatsapp') ||
+    s.includes('não está no whatsapp') ||
+    s.includes('nao esta no whatsapp');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -103,6 +116,52 @@ Deno.serve(async (req) => {
       }
 
       if (erroEnvio) {
+        if (ehDestinatarioSemWhatsapp(erroEnvio)) {
+          const nowIso = new Date().toISOString();
+          const erroLegivel = MSG_DESTINATARIO_SEM_WHATSAPP;
+
+          const { data: msgRow } = await supabase.from('meta_whatsapp_mensagens').insert({
+            user_id: uid,
+            instancia_id,
+            telefone: to,
+            direcao: 'saida',
+            conteudo: texto,
+            tipo_conteudo: 'texto',
+            timestamp_msg: nowIso,
+            status_envio: 'erro',
+            erro: erroLegivel,
+          } as any).select('id').maybeSingle();
+
+          const { data: ctUz } = await supabase
+            .from('meta_whatsapp_contatos')
+            .select('id')
+            .eq('instancia_id', instancia_id)
+            .eq('telefone', to)
+            .maybeSingle();
+
+          if ((ctUz as any)?.id) {
+            await supabase.from('meta_whatsapp_contatos')
+              .update({
+                ultima_mensagem: `Envio não realizado: número sem WhatsApp`,
+                ultima_mensagem_em: nowIso,
+                atualizado_em: nowIso,
+              })
+              .eq('id', (ctUz as any).id);
+          }
+
+          return new Response(JSON.stringify({
+            success: false,
+            destinatario_invalido: true,
+            not_on_whatsapp: true,
+            error: erroLegivel,
+            detalhe: erroEnvio,
+            mensagem_id: (msgRow as any)?.id || null,
+            provider: 'uazapi',
+          }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         return new Response(JSON.stringify({ success: false, error: erroEnvio }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
