@@ -161,18 +161,19 @@ Deno.serve(async (req) => {
 
     // Canonicaliza telefone pelos últimos 8 dígitos para reaproveitar o formato
     // já existente no contato (evita duplicar conversa com/sem o "9" do celular).
+    let waJidContato: string | null = null;
     if (to && to.length >= 8) {
       const sufixo = to.slice(-8);
       const { data: canon } = await supabase
         .from('meta_whatsapp_contatos')
-        .select('telefone')
+        .select('telefone, wa_jid')
         .eq('instancia_id', instancia_id)
         .ilike('telefone', `%${sufixo}`)
-        .neq('telefone', to)
         .order('atualizado_em', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (canon?.telefone) to = canon.telefone;
+      if ((canon as any)?.telefone && (canon as any).telefone !== to) to = (canon as any).telefone;
+      waJidContato = (canon as any)?.wa_jid || null;
     }
 
     // ===== Instâncias NÃO OFICIAIS (espelho UAZAPI / aba Acionamento) =====
@@ -191,7 +192,8 @@ Deno.serve(async (req) => {
       }
 
       const cleanUrl = String(uz.server_url).replace(/\/+$/, '');
-      const envioUazapi = await enviarTextoUazapi(cleanUrl, uz.instance_token, to, texto);
+      const envioUazapi = await enviarTextoUazapi(cleanUrl, uz.instance_token, to, texto, waJidContato);
+
       const waId = envioUazapi.waId;
       const erroEnvio = envioUazapi.erro;
 
