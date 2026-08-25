@@ -607,7 +607,7 @@ export default function InboxMeta() {
   const [carregandoMais, setCarregandoMais] = useState(false);
 
   // Troca de caixa/instância/aba/busca volta ao primeiro lote
-  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim]);
+  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim, filtroEtiqueta]);
 
   // Link direto (aviso "Cliente autorizou a chamada"): abre a conversa do cliente
   const ultimoLinkDiretoRef = useRef('');
