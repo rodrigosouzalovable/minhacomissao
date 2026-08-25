@@ -175,9 +175,9 @@ Deno.serve(async (req) => {
       .limit(16);
     // Áudio: usa a transcrição como se o cliente tivesse digitado.
     const conteudoLegivel = (m: any) => String(m?.transcricao || m?.conteudo || '').trim();
-    const historico = ((msgs || []) as any[]).slice().reverse()
+    let historico = ((msgs || []) as any[]).slice().reverse()
       .map((m) => ({ ...m, conteudo: conteudoLegivel(m) }));
-    const ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
+    let ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
     // Imagem: o webhook já mandou a leitura feita pela IA (descrição + classificação).
     const imagemCtx = (body?.imagem_contexto && String(body.imagem_contexto.descricao || '').trim())
       ? {
@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
       }
       : null;
     let textoAtual = String(ultimaEntrada?.conteudo || texto || '');
-    const ultimaEntradaId = String(ultimaEntrada?.wa_message_id || entrada_id);
+    let ultimaEntradaId = String(ultimaEntrada?.wa_message_id || entrada_id);
     if (imagemCtx) {
       const legenda = /^\[imagem\]$/i.test(textoAtual.trim()) ? '' : textoAtual.trim();
       textoAtual = [
@@ -236,15 +236,15 @@ Deno.serve(async (req) => {
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
-    const saidasRecentes = historico
+    let saidasRecentes = historico
       .filter((m) => m.direcao === 'saida')
       .map((m) => normalizarTexto(m.conteudo))
       .filter(Boolean);
 
     // ===== Proposta já enviada por nós antes do IAGO (campanha/template/atendente) =====
-    const propostaPrevia = detectarPropostaPrevia(historico);
+    let propostaPrevia = detectarPropostaPrevia(historico);
     // Resposta automática do cliente (ausência/atendimento automático): não é resposta real.
-    const respostaAutomatica = ehRespostaAutomatica(textoAtual);
+    let respostaAutomatica = ehRespostaAutomatica(textoAtual);
 
 
     // Se outra mensagem chegou enquanto esta execução aguardava a trava, processa a mais recente.
@@ -399,10 +399,51 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Durante a espera de segurança, o cliente pode enviar o CPF em uma nova mensagem.
+    // Recarrega o histórico antes de decidir, para não pedir CPF novamente com dados antigos.
+    {
+      const { data: msgsAtualizadas } = await supabase
+        .from('meta_whatsapp_mensagens')
+        .select('id, wa_message_id, direcao, conteudo, criado_em, tipo_conteudo, transcricao')
+        .eq('instancia_id', (contato as any).instancia_id)
+        .eq('telefone', (contato as any).telefone || '')
+        .order('criado_em', { ascending: false })
+        .limit(16);
+
+      const historicoAtualizado = ((msgsAtualizadas || []) as any[]).slice().reverse()
+        .map((m) => ({ ...m, conteudo: conteudoLegivel(m) }));
+      const ultimaEntradaAtualizada = [...historicoAtualizado].reverse().find((m) => m.direcao === 'entrada');
+
+      if (ultimaEntradaAtualizada) {
+        const entradaAnteriorId = ultimaEntradaId;
+        const novaEntradaId = String(ultimaEntradaAtualizada?.wa_message_id || entradaAnteriorId || entrada_id);
+        historico = historicoAtualizado;
+        ultimaEntrada = ultimaEntradaAtualizada;
+        ultimaEntradaId = novaEntradaId;
+
+        if (novaEntradaId !== entradaAnteriorId) {
+          textoAtual = String(ultimaEntradaAtualizada?.conteudo || textoAtual || '').trim();
+          console.log('[IAGO] nova entrada detectada durante espera — usando mensagem mais recente', { contato_id, entrada_id: novaEntradaId });
+        }
+
+        saidasRecentes = historico
+          .filter((m) => m.direcao === 'saida')
+          .map((m) => normalizarTexto(m.conteudo))
+          .filter(Boolean);
+        propostaPrevia = detectarPropostaPrevia(historico);
+        respostaAutomatica = ehRespostaAutomatica(textoAtual);
+      }
+    }
+
 
     // ===== Contexto financeiro real =====
     let cpf = estado.cpf || '';
-    const docMsg = extrairDoc(textoAtual);
+    const docHistorico = [...historico]
+      .reverse()
+      .filter((m) => m.direcao === 'entrada')
+      .map((m) => extrairDoc(String(m.conteudo || '')))
+      .find(Boolean) || '';
+    const docMsg = extrairDoc(textoAtual) || docHistorico;
     if (docMsg) cpf = docMsg;
     let cpfPorTelefone = false;
     let nomePorTelefone = '';
