@@ -755,8 +755,28 @@ Deno.serve(async (req) => {
     const novosIds: string[] = [];
     for (let i = 0; i < mensagens.length; i++) {
       if (delay) await sleep(i === 0 ? Math.min(delay, 6000) : Math.min(delay, 4000));
-      const id = await enviarTexto(supabase, contato, String(mensagens[i]).slice(0, 3500));
-      if (id) novosIds.push(id);
+      const envio = await enviarTexto(supabase, contato, String(mensagens[i]).slice(0, 3500));
+      if (envio.destinatarioInvalido) {
+        await supabase.from('iago_conversa_estado').update({
+          etapa: 'destinatario_sem_whatsapp',
+          aguardando_humano: true,
+          followup_em: null,
+          followup_feito: true,
+          followup_etapa: 3,
+          ultima_msg_cliente_em: new Date().toISOString(),
+          contexto: {
+            ...(estado.contexto || {}),
+            ultimo_motivo: 'UAZAPI recusou o destinatário: número sem WhatsApp ativo',
+            ultimo_erro_envio: envio.erro || null,
+          },
+        }).eq('id', estado.id);
+        await etiquetarAguardandoHumano(supabase, contato_id);
+        await qualificar('Não é o Cliente');
+        await finalizarEntrada();
+        console.log('[IAGO] destinatário sem WhatsApp — sem novas tentativas automáticas', { contato_id });
+        return json({ success: true, skipped: 'destinatario_sem_whatsapp' });
+      }
+      if (envio.mensagemId) novosIds.push(envio.mensagemId);
     }
 
     const agoraIso = new Date().toISOString();
