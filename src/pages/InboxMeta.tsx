@@ -607,7 +607,7 @@ export default function InboxMeta() {
   const [carregandoMais, setCarregandoMais] = useState(false);
 
   // Troca de caixa/instância/aba/busca volta ao primeiro lote
-  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim]);
+  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim, filtroEtiqueta]);
 
   // Link direto (aviso "Cliente autorizou a chamada"): abre a conversa do cliente
   const ultimoLinkDiretoRef = useRef('');
@@ -715,6 +715,55 @@ export default function InboxMeta() {
       return;
     }
 
+    // ===== Filtro por etiquetas: busca todo o histórico da caixa com essas etiquetas =====
+    if (filtroEtiqueta.size > 0) {
+      const etiquetaIds = Array.from(filtroEtiqueta);
+      const vinculos: string[] = [];
+      const PAG = 1000;
+      for (let p = 0; p < 20; p++) {
+        const { data: vs } = await supabase
+          .from('meta_whatsapp_contato_etiquetas')
+          .select('contato_id')
+          .in('etiqueta_id', etiquetaIds)
+          .range(p * PAG, p * PAG + PAG - 1);
+        const arr = ((vs as any[]) ?? []).map(v => v.contato_id).filter(Boolean);
+        vinculos.push(...arr);
+        if (arr.length < PAG) break;
+      }
+      const ids = Array.from(new Set(vinculos));
+      if (ids.length === 0) {
+        setContatos([]);
+        contatoIdsRef.current = [];
+        return;
+      }
+      const acumulado: MetaContato[] = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        let qc = supabase.from('meta_whatsapp_contatos')
+          .select(selectCols)
+          .in('id', ids.slice(i, i + 200))
+          .eq('arquivado', abaAtiva === 'arquivados')
+          .order('ultima_mensagem_em', { ascending: false, nullsFirst: false });
+        if (filtroInstancia !== 'todas') qc = qc.eq('instancia_id', filtroInstancia);
+        if (currentFolderId === null) qc = qc.is('folder_id', null);
+        else qc = qc.eq('folder_id', currentFolderId);
+        const { data: parte } = await qc;
+        acumulado.push(...((parte as MetaContato[]) ?? []));
+      }
+      acumulado.sort((a, b) => {
+        const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
+        const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
+        return tb - ta;
+      });
+      const lista = acumulado.slice(0, limiteContatos);
+      setContatos(lista);
+      contatoIdsRef.current = lista.map(c => c.id);
+      fetchContatoEtiquetas(contatoIdsRef.current);
+      fetchQualifContatos(contatoIdsRef.current);
+      return;
+    }
+
+
+
     // Lista base paginada (usa idx_meta_wa_contatos_arq_ult).
     let q = supabase.from('meta_whatsapp_contatos')
       .select(selectCols)
@@ -769,7 +818,7 @@ export default function InboxMeta() {
     // Etiquetas apenas dos contatos que entraram na lista
     fetchContatoEtiquetas(contatoIdsRef.current);
     fetchQualifContatos(contatoIdsRef.current);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, filtroEtiqueta]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
