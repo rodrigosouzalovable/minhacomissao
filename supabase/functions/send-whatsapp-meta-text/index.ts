@@ -345,7 +345,7 @@ Deno.serve(async (req) => {
       try {
         const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
         const chave = `janela_bloqueio_texto_${uid}_${new Date().toISOString().slice(0, 10)}`;
-        await notificarAdmin(supabase, {
+        await notificarAdmin(supabase as any, {
           tipo: 'janela_24h_bloqueio',
           mensagem:
             `🔒 Tentativa de envio livre fora da janela 24h (BLOQUEADA)\n\n` +
@@ -396,14 +396,14 @@ Deno.serve(async (req) => {
     if (!res.ok) {
       const erro = data?.error?.message || `HTTP ${res.status}`;
       if (ehNumeroInacessivel(erro, data?.error?.code)) {
-        await tratarNumeroInacessivel(supabase, inst, erro);
+        await tratarNumeroInacessivel(supabase as any, inst, erro);
         return new Response(JSON.stringify({
           success: false, instance_restricted: true, numero_inacessivel: true,
           error: MSG_NUMERO_INACESSIVEL, detalhe: erro, instancia_id,
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       if (ehContaBloqueada(erro, data?.error?.code)) {
-        await tratarContaBloqueada(supabase, inst, erro);
+        await tratarContaBloqueada(supabase as any, inst, erro);
         return new Response(JSON.stringify({
           success: false, instance_restricted: true, conta_bloqueada: true,
           error: MSG_CONTA_BLOQUEADA, detalhe: erro, instancia_id,
