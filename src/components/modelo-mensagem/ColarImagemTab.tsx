@@ -308,6 +308,25 @@ export function ColarImagemTab({ compact }: Props) {
           </div>
 
           <div className="pt-2 border-t space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm font-medium">Modelo da mensagem</Label>
+              <Button size="sm" variant="ghost" onClick={() => setTemplate(TEMPLATE_PADRAO)}>
+                Restaurar modelo padrão
+              </Button>
+            </div>
+            <Textarea
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              className="min-h-[120px] font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground">
+              Variáveis: {'{nome_usuario}'}, {'{nome_cliente}'}, {'{primeiro_nome}'}, {'{total_atraso}'},{' '}
+              {'{desconto_vista_pct}'}, {'{valor_quitacao}'}, {'{opcoes_parcelado}'}
+            </p>
+          </div>
+
+
+          <div className="pt-2 border-t space-y-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <Label className="text-sm font-medium">Mensagem gerada</Label>
               <div className="flex gap-1">
