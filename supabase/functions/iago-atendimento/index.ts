@@ -159,6 +159,24 @@ Deno.serve(async (req) => {
       return json({ success: true, skipped: 'limite diário atingido' });
     }
 
+    // ===== Rajada: o mesmo número escrevendo para vários chips ao mesmo tempo =====
+    // Espaça as execuções para não estourar o limite momentâneo da IA (sem cron, sem polling).
+    const telefoneContato = String((contato as any).telefone || '');
+    if (telefoneContato) {
+      const { count: emProcesso } = await supabase
+        .from('iago_conversa_estado')
+        .select('id', { count: 'exact', head: true })
+        .eq('telefone', telefoneContato)
+        .neq('contato_id', contato_id)
+        .gte('updated_at', new Date(Date.now() - 90_000).toISOString());
+      const simultaneas = Number(emProcesso || 0);
+      if (simultaneas > 0) {
+        const espera = Math.min(20_000, simultaneas * (1200 + Math.floor(Math.random() * 1800)));
+        console.log('[IAGO] rajada detectada — espaçando execução', { contato_id, simultaneas, espera });
+        await sleep(espera);
+      }
+    }
+
     // Uma única execução por conversa. Também deduplica reentregas do mesmo webhook.
     const { data: claimed, error: claimError } = await supabase.rpc('iago_claim_message', {
       p_contato_id: contato_id,
@@ -166,6 +184,9 @@ Deno.serve(async (req) => {
     });
     if (claimError) throw new Error(`falha ao reservar mensagem: ${claimError.message}`);
     if (!claimed) return json({ success: true, skipped: 'mensagem duplicada ou conversa em processamento' });
+    travaContatoId = String(contato_id);
+    travaEntradaId = String(entrada_id);
+
 
     // Pequena janela para incorporar ao histórico mensagens enviadas em sequência pelo cliente.
     await sleep(1000);
