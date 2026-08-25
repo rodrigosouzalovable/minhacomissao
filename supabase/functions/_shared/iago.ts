@@ -539,7 +539,7 @@ export async function enviarTexto(
   supabase: any,
   contato: any,
   texto: string,
-): Promise<string | null> {
+): Promise<{ mensagemId: string | null; destinatarioInvalido: boolean; erro?: string }> {
   const { data, error } = await supabase.functions.invoke('send-whatsapp-meta-text', {
     body: {
       instancia_id: contato.instancia_id,
@@ -550,8 +550,15 @@ export async function enviarTexto(
     },
   });
   if (error) throw new Error(error.message);
+  if (!data?.success && (data as any)?.destinatario_invalido) {
+    return {
+      mensagemId: (data as any)?.mensagem_id || null,
+      destinatarioInvalido: true,
+      erro: (data as any)?.error || 'destinatário sem WhatsApp',
+    };
+  }
   if (!data?.success) throw new Error(data?.error || 'falha no envio');
-  return (data as any)?.mensagem_id || null;
+  return { mensagemId: (data as any)?.mensagem_id || null, destinatarioInvalido: false };
 }
 
 export interface CandidatoTelefone {

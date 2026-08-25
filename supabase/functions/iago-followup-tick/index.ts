@@ -334,7 +334,24 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const id = await enviarTexto(supabase, contato, texto);
+        const envio = await enviarTexto(supabase, contato, texto);
+        if (envio.destinatarioInvalido) {
+          await supabase.from('iago_conversa_estado').update({
+            followup_feito: true,
+            followup_em: null,
+            followup_etapa: 3,
+            aguardando_humano: true,
+            etapa: 'destinatario_sem_whatsapp',
+            contexto: {
+              ...(est.contexto || {}),
+              ultimo_motivo: 'UAZAPI recusou o destinatário: número sem WhatsApp ativo',
+              ultimo_erro_followup: envio.erro || null,
+            },
+          }).eq('id', est.id);
+          try { await etiquetarAguardandoHumano(supabase, (contato as any).id); } catch (_) { /* noop */ }
+          pulados.push('destinatário sem WhatsApp');
+          continue;
+        }
         const ids = Array.isArray(est.contexto?.msgs_ia) ? est.contexto.msgs_ia : [];
         await supabase.from('iago_conversa_estado').update({
           followup_feito: true,
@@ -344,7 +361,7 @@ Deno.serve(async (req) => {
           ultima_msg_em: new Date().toISOString(),
           contexto: {
             ...(est.contexto || {}),
-            msgs_ia: [...ids, ...(id ? [id] : [])].slice(-30),
+            msgs_ia: [...ids, ...(envio.mensagemId ? [envio.mensagemId] : [])].slice(-30),
             ultimo_envio_ia: new Date(Date.now() + 2000).toISOString(),
             ultimo_followup_etapa: etapa,
             ultimo_followup_em: new Date().toISOString(),

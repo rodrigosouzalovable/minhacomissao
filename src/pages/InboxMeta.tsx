@@ -1315,6 +1315,16 @@ export default function InboxMeta() {
 
           });
           if (error) throw new Error(error.message);
+          if (!data?.success && (data as any)?.destinatario_invalido) {
+            setMensagens(prev => prev.filter(m => m.id !== tempId));
+            toast({
+              title: 'Número sem WhatsApp',
+              description: humanizarErroEnvio((data as any)?.error || (data as any)?.detalhe),
+              variant: 'destructive',
+              duration: 12000,
+            });
+            break;
+          }
           if (!data?.success) throw new Error(data?.error || 'Falha');
           setMensagens(prev => prev.filter(m => m.id !== tempId));
         } catch (e: any) {
