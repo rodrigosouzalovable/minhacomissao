@@ -773,9 +773,30 @@ Deno.serve(async (req) => {
     console.log('[IAGO] atendido', { contato_id, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo });
     return json({ success: true, enviadas: mensagens.length, escalar, etapa: etapaNova, motivo: motivo || null });
   } catch (e: any) {
-    console.error('[IAGO] erro', e?.message || e);
-    return json({ success: false, error: String(e?.message || e) }, 500);
+    const motivoFalha = String(e?.message || e);
+    console.error('[IAGO] erro', motivoFalha);
+    // Uma execução que morre no meio NÃO pode deixar a conversa travada e sem resposta.
+    if (travaContatoId) {
+      try {
+        await supabase.from('iago_falhas').insert({
+          contato_id: travaContatoId,
+          entrada_id: travaEntradaId,
+          motivo: motivoFalha.slice(0, 300),
+          detalhe: String(e?.stack || '').slice(0, 2000) || null,
+        } as any);
+      } catch (_) { /* nunca deixa o registro de falha derrubar o fluxo */ }
+      try {
+        await supabase.rpc('iago_finish_message', {
+          p_contato_id: travaContatoId,
+          p_entrada_id: String(travaEntradaId || ''),
+        });
+      } catch (_) { /* ignore */ }
+      // Sem resposta automática: um humano precisa ver essa conversa.
+      try { await etiquetarAguardandoHumano(supabase, travaContatoId); } catch (_) { /* ignore */ }
+    }
+    return json({ success: false, error: motivoFalha }, 500);
   }
+
 });
 
 async function gerarResposta(args: {
