@@ -54,7 +54,24 @@ export interface EspelhoMensagem {
   waMessageId?: string | null;
   direcao: 'entrada' | 'saida';
   timestamp?: string;
+  /** JID original do chat entregue pela UAZAPI (ex.: 5562981079590@s.whatsapp.net). */
+  waJid?: string | null;
 }
+
+/**
+ * JID individual utilizável para responder (ignora grupo, status e valores vazios).
+ * Retorna null quando o valor não serve como destino direto.
+ */
+export function jidIndividualValido(raw?: string | null): string | null {
+  const v = String(raw || '').trim();
+  if (!v) return null;
+  const lower = v.toLowerCase();
+  if (lower.includes('@g.us') || lower.includes('broadcast') || lower.includes('@newsletter')) return null;
+  if (!/^[0-9a-z._:-]+(@[a-z.]+)?$/i.test(lower)) return null;
+  if (!/\d{8,}/.test(lower)) return null;
+  return v;
+}
+
 
 export interface ResultadoEspelho {
   contatoId: string | null;
