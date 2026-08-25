@@ -1131,3 +1131,30 @@ function ehRespostaAutomatica(texto: string): boolean {
   const temLink = /https?:\/\/|www\./.test(t);
   return acertos >= 2 || (acertos >= 1 && (temLink || t.length > 120));
 }
+
+/**
+ * Mensagem de divulgação/robô (não é cliente respondendo cobrança).
+ * Usada junto com a checagem de "mesmo texto em vários chips" antes de silenciar.
+ */
+function ehDivulgacao(texto: string): boolean {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (t.trim().length < 60) return false;
+  const padroes = [
+    'sua conta foi criada',
+    'clique no botao abaixo',
+    'basta clicar no botao',
+    'para mais informacoes, basta',
+    'aproveite nossa promocao',
+    'aproveite a promocao',
+    'cadastre-se',
+    'faca seu cadastro',
+    'ganhe bonus',
+    'bonus de boas',
+    'link de acesso',
+    'saiba mais em',
+    'aqui e a ',
+  ];
+  const acertos = padroes.filter((p) => t.includes(p)).length;
+  const temLink = /https?:\/\/|www\.|\.com\b/.test(t);
+  return acertos >= 2 || (acertos >= 1 && temLink);
+}
