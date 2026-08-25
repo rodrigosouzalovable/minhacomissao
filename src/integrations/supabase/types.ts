@@ -2645,6 +2645,33 @@ export type Database = {
         }
         Relationships: []
       }
+      iago_falhas: {
+        Row: {
+          contato_id: string | null
+          criado_em: string
+          detalhe: string | null
+          entrada_id: string | null
+          id: string
+          motivo: string
+        }
+        Insert: {
+          contato_id?: string | null
+          criado_em?: string
+          detalhe?: string | null
+          entrada_id?: string | null
+          id?: string
+          motivo: string
+        }
+        Update: {
+          contato_id?: string | null
+          criado_em?: string
+          detalhe?: string | null
+          entrada_id?: string | null
+          id?: string
+          motivo?: string
+        }
+        Relationships: []
+      }
       iago_plantao_transferencia: {
         Row: {
           assumido_em: string
