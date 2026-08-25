@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_whatsapp_contatos ADD COLUMN IF NOT EXISTS wa_jid text;

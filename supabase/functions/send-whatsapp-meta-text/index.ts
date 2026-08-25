@@ -40,7 +40,7 @@ function ehEndpointIncompativel(status: number, erro: unknown): boolean {
   return status === 404 || status === 405 || s.includes('method not allowed') || s.includes('cannot post');
 }
 
-function montarDestinosUazapi(telefone: string): string[] {
+function montarDestinosUazapi(telefone: string, waJid?: string | null): string[] {
   const d = String(telefone || '').replace(/\D/g, '');
   const destinos = new Set<string>();
   const add = (v: string) => {
@@ -49,6 +49,10 @@ function montarDestinosUazapi(telefone: string): string[] {
     destinos.add(clean);
     if (!clean.includes('@')) destinos.add(`${clean}@s.whatsapp.net`);
   };
+
+  // JID real entregue pela UAZAPI tem prioridade: é o destino que já funcionou.
+  const jid = String(waJid || '').trim();
+  if (jid && !/@g\.us|broadcast|@newsletter/i.test(jid)) destinos.add(jid);
 
   add(d);
 
@@ -66,10 +70,12 @@ async function enviarTextoUazapi(
   token: string,
   telefone: string,
   texto: string,
+  waJid?: string | null,
 ): Promise<{ ok: boolean; waId: string | null; destino: string; erro: string; tentativas: Array<{ endpoint: string; destino: string; status: number; erro: string }> }> {
   const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
-  const destinos = montarDestinosUazapi(telefone);
+  const destinos = montarDestinosUazapi(telefone, waJid);
   const tentativas: Array<{ endpoint: string; destino: string; status: number; erro: string }> = [];
+
 
   for (const destino of destinos) {
     for (const endpoint of endpoints) {
@@ -155,18 +161,19 @@ Deno.serve(async (req) => {
 
     // Canonicaliza telefone pelos últimos 8 dígitos para reaproveitar o formato
     // já existente no contato (evita duplicar conversa com/sem o "9" do celular).
+    let waJidContato: string | null = null;
     if (to && to.length >= 8) {
       const sufixo = to.slice(-8);
       const { data: canon } = await supabase
         .from('meta_whatsapp_contatos')
-        .select('telefone')
+        .select('telefone, wa_jid')
         .eq('instancia_id', instancia_id)
         .ilike('telefone', `%${sufixo}`)
-        .neq('telefone', to)
         .order('atualizado_em', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (canon?.telefone) to = canon.telefone;
+      if ((canon as any)?.telefone && (canon as any).telefone !== to) to = (canon as any).telefone;
+      waJidContato = (canon as any)?.wa_jid || null;
     }
 
     // ===== Instâncias NÃO OFICIAIS (espelho UAZAPI / aba Acionamento) =====
@@ -185,7 +192,8 @@ Deno.serve(async (req) => {
       }
 
       const cleanUrl = String(uz.server_url).replace(/\/+$/, '');
-      const envioUazapi = await enviarTextoUazapi(cleanUrl, uz.instance_token, to, texto);
+      const envioUazapi = await enviarTextoUazapi(cleanUrl, uz.instance_token, to, texto, waJidContato);
+
       const waId = envioUazapi.waId;
       const erroEnvio = envioUazapi.erro;
 

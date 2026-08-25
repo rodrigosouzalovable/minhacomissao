@@ -4715,6 +4715,7 @@ export type Database = {
           ultima_mensagem_em: string | null
           ultima_msg_entrada_em: string | null
           user_id: string
+          wa_jid: string | null
           whatsapp_username: string | null
         }
         Insert: {
@@ -4740,6 +4741,7 @@ export type Database = {
           ultima_mensagem_em?: string | null
           ultima_msg_entrada_em?: string | null
           user_id: string
+          wa_jid?: string | null
           whatsapp_username?: string | null
         }
         Update: {
@@ -4765,6 +4767,7 @@ export type Database = {
           ultima_mensagem_em?: string | null
           ultima_msg_entrada_em?: string | null
           user_id?: string
+          wa_jid?: string | null
           whatsapp_username?: string | null
         }
         Relationships: [
