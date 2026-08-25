@@ -1518,6 +1518,7 @@ serve(async (req) => {
           tipoConteudo: inboxTipoConteudo,
           mediaUrl: inboxPermanentMediaUrl || inboxMediaUrl || null,
           waMessageId: (messageId && String(messageId).trim()) || null,
+          waJid: remoteJid || null,
           direcao: isFromMe ? 'saida' : 'entrada',
         });
 
