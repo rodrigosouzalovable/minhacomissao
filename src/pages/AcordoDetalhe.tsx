@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send, Trash2, MessageCircle } from 'lucide-react';
@@ -51,6 +52,9 @@ export default function AcordoDetalhe() {
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [editandoDataVencimento, setEditandoDataVencimento] = useState<string | null>(null);
   const [novaDataVencimento, setNovaDataVencimento] = useState<string>('');
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [excluindoLote, setExcluindoLote] = useState(false);
   const [isQuebraAcordo, setIsQuebraAcordo] = useState(false);
 
   // Verifica se o usuário logado é o dono do acordo
@@ -572,6 +576,56 @@ export default function AcordoDetalhe() {
     }
   };
 
+  const podeExcluirParcela = (p: Pagamento) => isAdmin || (isOwner && p.status !== 'pago');
+
+  const toggleSelecionada = (pagamentoId: string) => {
+    setSelecionadas(prev => {
+      const next = new Set(prev);
+      if (next.has(pagamentoId)) next.delete(pagamentoId);
+      else next.add(pagamentoId);
+      return next;
+    });
+  };
+
+  const sairModoSelecao = () => {
+    setModoSelecao(false);
+    setSelecionadas(new Set());
+  };
+
+  const excluirSelecionadas = async () => {
+    const alvos = pagamentos.filter(p => selecionadas.has(p.id) && podeExcluirParcela(p));
+    if (alvos.length === 0) return;
+    setExcluindoLote(true);
+    const excluidos: string[] = [];
+    const falhas: string[] = [];
+    for (const p of alvos) {
+      const { error } = await supabase.rpc('excluir_parcela_pendente' as any, { p_pagamento_id: p.id });
+      if (error) {
+        console.error('Erro ao excluir parcela:', p.numero_parcela, error);
+        falhas.push(`Parcela ${p.numero_parcela}: ${error.message}`);
+      } else {
+        excluidos.push(p.id);
+      }
+    }
+    if (excluidos.length > 0) {
+      setPagamentos(prev => prev.filter(p => !excluidos.includes(p.id)));
+    }
+    setExcluindoLote(false);
+    sairModoSelecao();
+    if (falhas.length === 0) {
+      toast({
+        title: 'Parcelas excluídas',
+        description: `${excluidos.length} parcela(s) removida(s) com sucesso.`,
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: `${excluidos.length} excluída(s), ${falhas.length} com erro`,
+        description: falhas.slice(0, 3).join(' • '),
+      });
+    }
+  };
+
   if (loading || !acordo) {
     return (
       <AppLayout>
@@ -862,10 +916,74 @@ export default function AcordoDetalhe() {
 
         {/* Lista de parcelas */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle>Parcelas</CardTitle>
+            {pagamentos.some(podeExcluirParcela) && !modoSelecao && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive hover:bg-destructive/10"
+                onClick={() => setModoSelecao(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Selecionar parcelas
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
+            {modoSelecao && (
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4 p-3 rounded-lg border bg-muted/40">
+                <p className="text-sm font-medium">
+                  {selecionadas.size} parcela(s) selecionada(s)
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      const elegiveis = pagamentos.filter(podeExcluirParcela).map(p => p.id);
+                      setSelecionadas(prev =>
+                        prev.size === elegiveis.length ? new Set() : new Set(elegiveis)
+                      );
+                    }}
+                  >
+                    Selecionar todas
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={sairModoSelecao}>
+                    Cancelar
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={selecionadas.size === 0 || excluindoLote}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Excluir selecionadas
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir parcelas selecionadas</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Tem certeza que deseja excluir as parcelas{' '}
+                          {pagamentos
+                            .filter(p => selecionadas.has(p.id))
+                            .map(p => p.numero_parcela)
+                            .join(', ')}
+                          ? Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={excluirSelecionadas}>Excluir</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               {pagamentos.map((pagamento) => (
                 <div
@@ -875,6 +993,14 @@ export default function AcordoDetalhe() {
                   }`}
                 >
                   <div className="flex items-center gap-4">
+                    {modoSelecao && (
+                      <Checkbox
+                        checked={selecionadas.has(pagamento.id)}
+                        disabled={!podeExcluirParcela(pagamento)}
+                        onCheckedChange={() => toggleSelecionada(pagamento.id)}
+                        aria-label={`Selecionar parcela ${pagamento.numero_parcela}`}
+                      />
+                    )}
                     <div className={`p-2 rounded-full ${
                       pagamento.status === 'pago' ? 'bg-secondary/20' : 'bg-muted'
                     }`}>
@@ -1091,7 +1217,7 @@ export default function AcordoDetalhe() {
                         </p>
                       ))}
                     </div>
-                    {(isAdmin || (isOwner && pagamento.status !== 'pago')) && (
+                    {!modoSelecao && podeExcluirParcela(pagamento) && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button
