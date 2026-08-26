@@ -1,6 +1,10 @@
 // Registra o ponto do funcionário validando IP autorizado, ordem das marcações e horário do servidor.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { notificarNumeros } from "../_shared/notificar-numeros.ts";
 import { dataBRT, ipDoRequest, ipAutorizado, proximoTipo, LABEL_PONTO, ORDEM_PONTO, type PontoTipo } from "../_shared/ponto.ts";
+
+const NOTIFICAR = ["62991672674"];
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
