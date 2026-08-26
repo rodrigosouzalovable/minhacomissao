@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
 
       const { data: contato } = await supabase
         .from('meta_whatsapp_contatos')
-        .select('id, instancia_id, telefone, bsuid, nome, folder_id, credor, ultima_msg_entrada_em')
+        .select('id, instancia_id, telefone, bsuid, nome, folder_id, credor, ultima_msg_entrada_em, meta_whatsapp_instances(provider)')
         .eq('id', est.contato_id)
         .maybeSingle();
       if (!contato) { pulados.push('contato inexistente'); continue; }
@@ -235,7 +235,10 @@ Deno.serve(async (req) => {
       const tags = await etiquetasAtendente(supabase, (contato as any).id);
       const nomeIago = String(iago.nome || '').trim().toLowerCase();
       const ehDoIago = tags.some((t) => t.replace(/^atendente:\s*/i, '').trim().toLowerCase() === nomeIago);
-      const humanoVinculado = await temAtendenteHumanoNoTelefone(supabase, (contato as any).id, iago.nome || '');
+      const humanoVinculado = await temAtendenteHumanoNoTelefone(supabase, (contato as any).id, iago.nome || '', {
+        folderId: (contato as any).folder_id ?? null,
+        provider: (contato as any).meta_whatsapp_instances?.provider ?? null,
+      });
       if (!atende || !ehDoIago || humanoVinculado) {
         await supabase.from('iago_conversa_estado')
           .update({ followup_feito: true, followup_em: null, followup_etapa: 3 }).eq('id', est.id);
