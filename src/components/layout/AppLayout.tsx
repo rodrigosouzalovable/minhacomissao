@@ -472,6 +472,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       <RetornoAlertChecker />
       <MetaAtendenteNotifier />
       <InatividadeFlutuante />
+      <PontoLembreteFlutuante />
+
 
     </div>
   );
