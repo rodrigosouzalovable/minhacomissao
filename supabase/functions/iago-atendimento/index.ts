@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     // ===== Contato / caixa =====
     const { data: contato } = await supabase
       .from('meta_whatsapp_contatos')
-      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id, credor')
+      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id, credor, meta_whatsapp_instances(provider)')
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
@@ -91,7 +91,10 @@ Deno.serve(async (req) => {
     }
 
     // ===== Atendente humano já vinculado a este telefone (qualquer caixa) => IAGO calado =====
-    const humanoVinculado = await temAtendenteHumanoNoTelefone(supabase, contato_id, iago.nome || '');
+    const humanoVinculado = await temAtendenteHumanoNoTelefone(supabase, contato_id, iago.nome || '', {
+      folderId: (contato as any).folder_id ?? null,
+      provider: (contato as any).meta_whatsapp_instances?.provider ?? null,
+    });
     if (humanoVinculado) {
       await supabase.from('iago_conversa_estado')
         .update({ followup_em: null, followup_feito: true })
