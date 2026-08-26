@@ -31,8 +31,12 @@ const fmtBRL = (v: number): string =>
 
 function normalizeDoc(value?: string | number | null): string {
   const d = String(value ?? '').replace(/\D/g, '');
-  return d.length === 11 || d.length === 14 ? d : '';
+  // Excel remove zeros à esquerda: 5-11 dígitos = CPF; 12-14 = CNPJ.
+  if (d.length >= 5 && d.length <= 11) return d.padStart(11, '0');
+  if (d.length >= 12 && d.length <= 14) return d.padStart(14, '0');
+  return '';
 }
+
 
 function getCpfCnpj(c: ClienteData): string {
   return normalizeDoc(c.cpf) || normalizeDoc(c.nome);
@@ -677,9 +681,10 @@ Deno.serve(async (req) => {
         let contatoIdFinal: string | null = null;
         const cpfDigits = String((cliente as any)?.cpf ?? '').replace(/\D/g, '');
         // Excel remove zeros à esquerda: recompõe CPF (11) / CNPJ (14).
-        const cpfValido = (cpfDigits.length >= 8 && cpfDigits.length <= 11)
+        const cpfValido = (cpfDigits.length >= 5 && cpfDigits.length <= 11)
           ? cpfDigits.padStart(11, '0')
           : ((cpfDigits.length >= 12 && cpfDigits.length <= 14) ? cpfDigits.padStart(14, '0') : null);
+
 
         const { data: ex } = await supabase
           .from('meta_whatsapp_contatos')

@@ -42,12 +42,15 @@ function detectRoleFromHeader(header: string): string {
 function detectRoleFromSample(samples: string[]): string {
   const nonEmpty = samples.map((s) => String(s || "").trim()).filter(Boolean);
   if (nonEmpty.length === 0) return "ignore";
-  const digitLike = nonEmpty.filter((v) => /^\+?\d[\d\s().-]{6,}$/.test(v));
+  const digitLike = nonEmpty.filter((v) => /^\+?\d[\d\s().-]{3,}$/.test(v));
   const digitRatio = digitLike.length / nonEmpty.length;
   if (digitRatio > 0.6) {
     const digitLengths = digitLike.map((v) => v.replace(/\D/g, "").length);
     const docRatio = digitLengths.filter((len) => len === 14 || len === 11).length / digitLengths.length;
     const phoneRatio = digitLengths.filter((len) => len >= 10 && len <= 13).length / digitLengths.length;
+    // CPF sem zeros à esquerda (Excel): 5 a 9 dígitos — nunca é telefone.
+    const shortDocRatio = digitLengths.filter((len) => len >= 5 && len <= 9).length / digitLengths.length;
+    if (shortDocRatio > 0.6) return "cpf";
     if (digitLengths.filter((len) => len === 14).length / digitLengths.length > 0.6) return "cpf";
     if (phoneRatio > 0.6) return "telefone";
     if (docRatio > 0.6) return "cpf";
@@ -61,8 +64,10 @@ function columnLooksLikeDocument(rows: any[][], col: number, skipHeader: boolean
     .map((r) => String((r || [])[col] ?? "").replace(/\D/g, ""))
     .filter(Boolean);
   if (samples.length === 0) return false;
-  return samples.filter((d) => d.length === 11 || d.length === 14).length / samples.length > 0.6;
+  // Aceita CPF encurtado pelo Excel (zeros à esquerda perdidos) e CNPJ.
+  return samples.filter((d) => (d.length >= 5 && d.length <= 11) || d.length === 14).length / samples.length > 0.6;
 }
+
 
 function normalizeTelKey(t: string): string {
   const d = String(t || "").replace(/\D+/g, "");
@@ -243,6 +248,16 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       toast.error(`A coluna ${colLetter(idxNome)} parece ser CPF/CNPJ. Marque como "CPF / CNPJ" para preencher a variável {cpf}.`);
       return;
     }
+
+    // Coluna ignorada que parece documento: avisa antes de perder o CPF da campanha.
+    if (idxCpf < 0) {
+      const idxDocIgnorado = mapping.findIndex((r, c) => r === "ignore" && c !== idxTel && columnLooksLikeDocument(rows, c, firstIsHeader));
+      if (idxDocIgnorado >= 0) {
+        toast.error(`A coluna ${colLetter(idxDocIgnorado)} parece ser CPF/CNPJ. Marque como "CPF / CNPJ" para que o CPF apareça no cabeçalho da conversa.`);
+        return;
+      }
+    }
+
 
     const tplvarCols: Array<{ col: number; key: string }> = mapping
       .map((r, c) => (r.startsWith("tplvar:") ? { col: c, key: r.slice("tplvar:".length) } : null))
