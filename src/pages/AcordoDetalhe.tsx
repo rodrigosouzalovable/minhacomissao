@@ -576,6 +576,56 @@ export default function AcordoDetalhe() {
     }
   };
 
+  const podeExcluirParcela = (p: Pagamento) => isAdmin || (isOwner && p.status !== 'pago');
+
+  const toggleSelecionada = (pagamentoId: string) => {
+    setSelecionadas(prev => {
+      const next = new Set(prev);
+      if (next.has(pagamentoId)) next.delete(pagamentoId);
+      else next.add(pagamentoId);
+      return next;
+    });
+  };
+
+  const sairModoSelecao = () => {
+    setModoSelecao(false);
+    setSelecionadas(new Set());
+  };
+
+  const excluirSelecionadas = async () => {
+    const alvos = pagamentos.filter(p => selecionadas.has(p.id) && podeExcluirParcela(p));
+    if (alvos.length === 0) return;
+    setExcluindoLote(true);
+    const excluidos: string[] = [];
+    const falhas: string[] = [];
+    for (const p of alvos) {
+      const { error } = await supabase.rpc('excluir_parcela_pendente' as any, { p_pagamento_id: p.id });
+      if (error) {
+        console.error('Erro ao excluir parcela:', p.numero_parcela, error);
+        falhas.push(`Parcela ${p.numero_parcela}: ${error.message}`);
+      } else {
+        excluidos.push(p.id);
+      }
+    }
+    if (excluidos.length > 0) {
+      setPagamentos(prev => prev.filter(p => !excluidos.includes(p.id)));
+    }
+    setExcluindoLote(false);
+    sairModoSelecao();
+    if (falhas.length === 0) {
+      toast({
+        title: 'Parcelas excluídas',
+        description: `${excluidos.length} parcela(s) removida(s) com sucesso.`,
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: `${excluidos.length} excluída(s), ${falhas.length} com erro`,
+        description: falhas.slice(0, 3).join(' • '),
+      });
+    }
+  };
+
   if (loading || !acordo) {
     return (
       <AppLayout>
