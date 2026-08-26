@@ -51,6 +51,9 @@ export default function AcordoDetalhe() {
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [editandoDataVencimento, setEditandoDataVencimento] = useState<string | null>(null);
   const [novaDataVencimento, setNovaDataVencimento] = useState<string>('');
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [excluindoLote, setExcluindoLote] = useState(false);
   const [isQuebraAcordo, setIsQuebraAcordo] = useState(false);
 
   // Verifica se o usuário logado é o dono do acordo
