@@ -88,8 +88,9 @@ Deno.serve(async (req) => {
     // 3) Contatos do Inbox sem CPF
     let contatos = 0;
     const sufixos = [...pares.keys()];
-    for (let i = 0; i < sufixos.length; i += 100) {
-      const bloco = sufixos.slice(i, i + 100);
+    for (let i = 0; i < sufixos.length; i += 20) {
+      const bloco = sufixos.slice(i, i + 20);
+
       const filtro = bloco.map((s) => `telefone.like.*${s}`).join(',');
       const { data: rows, error } = await supabase
         .from('meta_whatsapp_contatos')
