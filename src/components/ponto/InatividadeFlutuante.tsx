@@ -1,16 +1,19 @@
 import { useAtividadeMonitor, formatarDuracao } from '@/hooks/useAtividadeMonitor';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { Eye } from 'lucide-react';
 
 /**
  * Aviso flutuante (global) mostrando o tempo de inatividade a partir de 10 minutos.
- * Deixa explícito para o funcionário que a atividade é monitorada.
+ * Só para quem é obrigado a bater ponto (nunca admin/gestor).
  */
 export function InatividadeFlutuante() {
-  const { isAdmin, loading } = useUserRole();
-  const { inativo, segundos } = useAtividadeMonitor(!loading);
+  const { isAdmin, isGestor, loading } = useUserRole();
+  const { batePonto, isLoading: permLoading } = useUserPermissions();
+  const monitorar = !loading && !permLoading && !isAdmin && !isGestor && !!batePonto;
+  const { inativo, segundos } = useAtividadeMonitor(monitorar);
 
-  if (!inativo || isAdmin) return null;
+  if (!monitorar || !inativo) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-[100] pointer-events-none">

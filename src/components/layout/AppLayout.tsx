@@ -41,6 +41,8 @@ import { PaymentReminders } from '@/components/PaymentReminders';
 import { RetornoAlertChecker } from '@/components/RetornoAlertChecker';
 import { PontoGate } from '@/components/ponto/PontoGate';
 import { InatividadeFlutuante } from '@/components/ponto/InatividadeFlutuante';
+import { PontoLembreteFlutuante } from '@/components/ponto/PontoLembreteFlutuante';
+
 
 import { MetaAtendenteNotifier } from '@/components/MetaAtendenteNotifier';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -472,6 +474,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       <RetornoAlertChecker />
       <MetaAtendenteNotifier />
       <InatividadeFlutuante />
+      <PontoLembreteFlutuante />
+
 
     </div>
   );

@@ -63,6 +63,12 @@ export function useAtividadeMonitor(ativo: boolean) {
     void enviar('ativo');
 
     const timer = window.setInterval(() => {
+      // Aba oculta: congela a contagem (não acumula tempo nem grava janela falsa)
+      if (document.visibilityState !== 'visible') {
+        ultimaInteracao.current = Date.now();
+        if (estado.inativo) setEstado({ inativo: false, segundos: 0 });
+        return;
+      }
       const decorrido = Date.now() - ultimaInteracao.current;
       if (decorrido >= LIMITE_INATIVIDADE_MS) {
         setEstado({ inativo: true, segundos: Math.floor(decorrido / 1000) });
@@ -71,6 +77,7 @@ export function useAtividadeMonitor(ativo: boolean) {
         setEstado({ inativo: false, segundos: 0 });
       }
     }, 1000);
+
 
     return () => {
       EVENTOS.forEach((ev) => window.removeEventListener(ev, marcarInteracao));

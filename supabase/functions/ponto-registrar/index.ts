@@ -1,6 +1,10 @@
 // Registra o ponto do funcionário validando IP autorizado, ordem das marcações e horário do servidor.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
-import { dataBRT, ipDoRequest, ipAutorizado, proximoTipo, LABEL_PONTO, ORDEM_PONTO, type PontoTipo } from "../_shared/ponto.ts";
+import { notificarNumeros } from "../_shared/notificar-numeros.ts";
+import { dataBRT, horaBRT, ipDoRequest, ipAutorizado, proximoTipo, LABEL_PONTO, ORDEM_PONTO, type PontoTipo } from "../_shared/ponto.ts";
+
+const NOTIFICAR = ["62991672674"];
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,7 +121,40 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" });
 
+    // Notificação no WhatsApp do administrador (nunca bloqueia a batida)
+    try {
+      const { data: perfil } = await admin
+        .from("profiles")
+        .select("nome")
+        .eq("id", userId)
+        .maybeSingle();
+      const quando = new Date(inserido!.registrado_em);
+      const dataFmt = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(quando);
+      const horaFmt = horaBRT(quando);
+      const linhas = [
+        "*PONTO REGISTRADO*",
+        (perfil as { nome?: string } | null)?.nome || "Funcionário",
+        LABEL_PONTO[tipo],
+        `${dataFmt} às ${horaFmt} (BRT)`,
+      ];
+      if (ip) linhas.push(`Rede: ${ip}`);
+      await notificarNumeros(admin, {
+        tipo: "ponto_batida",
+        mensagem: linhas.join("\n"),
+        destinatarios: NOTIFICAR,
+        chaveIdempotencia: `ponto:${userId}:${data}:${tipo}`,
+      });
+    } catch (e) {
+      console.error("[ponto-registrar] falha ao notificar", e);
+    }
+
     return json({ ok: true, registro: inserido, proximo: proximoTipo([...registrados, tipo]) });
+
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "Erro inesperado" }, 500);
   }
