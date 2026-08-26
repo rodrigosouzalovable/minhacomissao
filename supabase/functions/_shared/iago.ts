@@ -328,17 +328,37 @@ export async function etiquetasAtendente(supabase: any, contatoId: string): Prom
  * Existe atendente HUMANO vinculado ao mesmo telefone (qualquer caixa/instância)?
  * Compara pelos últimos 8 dígitos, padrão do sistema.
  */
+const FOLDER_AQUECIMENTO_INBOX = '4f7a52c0-9c86-4b80-8867-4ade7a6df441';
+
 export async function temAtendenteHumanoNoTelefone(
   supabase: any,
   contatoId: string,
   nomeIago: string,
+  contexto: { folderId?: string | null; provider?: string | null } = {},
 ): Promise<string | null> {
   try {
     const { data: c } = await supabase
       .from('meta_whatsapp_contatos')
-      .select('telefone')
+      .select('telefone, folder_id, instancia_id')
       .eq('id', contatoId)
       .maybeSingle();
+    const folderId = contexto.folderId ?? (c as any)?.folder_id ?? null;
+    let provider = contexto.provider ?? null;
+
+    // AQUECIMENTO usa conversas espelhadas da UAZAPI. O mesmo telefone pode existir
+    // em outra caixa oficial com atendente humano, mas isso não deve calar o IAGO aqui.
+    if (folderId === FOLDER_AQUECIMENTO_INBOX) {
+      if (!provider && (c as any)?.instancia_id) {
+        const { data: inst } = await supabase
+          .from('meta_whatsapp_instances')
+          .select('provider')
+          .eq('id', (c as any).instancia_id)
+          .maybeSingle();
+        provider = (inst as any)?.provider ?? null;
+      }
+      if (String(provider || '').toLowerCase() === 'uazapi') return null;
+    }
+
     const tel = String((c as any)?.telefone || '').replace(/\D/g, '');
     if (!tel) return null;
     const sufixo = tel.slice(-8);
