@@ -993,6 +993,14 @@ export default function AcordoDetalhe() {
                   }`}
                 >
                   <div className="flex items-center gap-4">
+                    {modoSelecao && (
+                      <Checkbox
+                        checked={selecionadas.has(pagamento.id)}
+                        disabled={!podeExcluirParcela(pagamento)}
+                        onCheckedChange={() => toggleSelecionada(pagamento.id)}
+                        aria-label={`Selecionar parcela ${pagamento.numero_parcela}`}
+                      />
+                    )}
                     <div className={`p-2 rounded-full ${
                       pagamento.status === 'pago' ? 'bg-secondary/20' : 'bg-muted'
                     }`}>
