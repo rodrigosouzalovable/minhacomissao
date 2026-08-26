@@ -10,7 +10,7 @@
 - [Data de Pagamento IAGO](mem://features/whatsapp/iago-confirmacao-data-pagamento) — Após a escolha: pergunta se paga hoje, depois que dia; data fora do mês escala para humano
 
 - [IAGO Silêncio Humano/Dúvida](mem://features/whatsapp/iago-silencio-humano-e-duvida) — Não responde quando não sabe (só escala) e fica calado 10 min após resposta humana, inclusive no plantão
-- [IAGO respeita etiqueta humana](mem://features/whatsapp/iago-respeita-etiqueta-humana) — Telefone com etiqueta "Atendente: <humano>" em qualquer caixa (sufixo 8 dígitos) silencia IAGO e follow-up
+- [IAGO respeita etiqueta humana](mem://features/whatsapp/iago-respeita-etiqueta-humana) — IAGO cala se o telefone tiver humano, exceto AQUECIMENTO+UAZAPI onde deve responder sempre
 - [IAGO entende imagens](mem://features/whatsapp/iago-entende-imagens) — Leitura de imagem via meta-descrever-imagem; comprovante escala para humano, ilegível não é respondida
 - [Conversas nunca desaparecem](mem://constraints/whatsapp/inbox-meta-conversas-nunca-desaparecem) — Conversa com resposta do cliente não pode ser excluída/arquivada; exclusão admin-only; retenção 3 dias com dupla checagem
 - [Admin de caixa Inbox Meta](mem://features/whatsapp/inbox-meta-admin-de-caixa) — Coluna admin nos membros da caixa permite gerenciar atendentes só daquela caixa

@@ -91,7 +91,9 @@ Deno.serve(async (req) => {
     }
 
     // ===== Atendente humano já vinculado a este telefone (qualquer caixa) => IAGO calado =====
-    const humanoVinculado = await temAtendenteHumanoNoTelefone(supabase, contato_id, iago.nome || '');
+    const humanoVinculado = await temAtendenteHumanoNoTelefone(supabase, contato_id, iago.nome || '', {
+      folderId: (contato as any).folder_id ?? null,
+    });
     if (humanoVinculado) {
       await supabase.from('iago_conversa_estado')
         .update({ followup_em: null, followup_feito: true })
