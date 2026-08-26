@@ -1217,7 +1217,7 @@ export default function AcordoDetalhe() {
                         </p>
                       ))}
                     </div>
-                    {(isAdmin || (isOwner && pagamento.status !== 'pago')) && (
+                    {!modoSelecao && podeExcluirParcela(pagamento) && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button
