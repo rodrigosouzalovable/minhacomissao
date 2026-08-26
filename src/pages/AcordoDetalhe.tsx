@@ -916,10 +916,74 @@ export default function AcordoDetalhe() {
 
         {/* Lista de parcelas */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle>Parcelas</CardTitle>
+            {pagamentos.some(podeExcluirParcela) && !modoSelecao && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive hover:bg-destructive/10"
+                onClick={() => setModoSelecao(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Selecionar parcelas
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
+            {modoSelecao && (
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4 p-3 rounded-lg border bg-muted/40">
+                <p className="text-sm font-medium">
+                  {selecionadas.size} parcela(s) selecionada(s)
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      const elegiveis = pagamentos.filter(podeExcluirParcela).map(p => p.id);
+                      setSelecionadas(prev =>
+                        prev.size === elegiveis.length ? new Set() : new Set(elegiveis)
+                      );
+                    }}
+                  >
+                    Selecionar todas
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={sairModoSelecao}>
+                    Cancelar
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={selecionadas.size === 0 || excluindoLote}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Excluir selecionadas
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir parcelas selecionadas</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Tem certeza que deseja excluir as parcelas{' '}
+                          {pagamentos
+                            .filter(p => selecionadas.has(p.id))
+                            .map(p => p.numero_parcela)
+                            .join(', ')}
+                          ? Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={excluirSelecionadas}>Excluir</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               {pagamentos.map((pagamento) => (
                 <div
