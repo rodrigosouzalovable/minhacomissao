@@ -776,6 +776,13 @@ Deno.serve(async (req) => {
         mensagens = [`Recebi${pn ? `, ${pn}` : ''}! Vou encaminhar seu comprovante para a equipe validar o pagamento e já te damos retorno. 🙏`];
       }
     }
+    // Caixa AQUECIMENTO: nunca escala. Sempre responde e mantém a conversa viva.
+    if (modoAquecimento) {
+      escalar = false;
+      if (etapaNova === 'aguardando_humano') etapaNova = 'conversando';
+      const transferencia = /(especialista|colega|transferir|transfiro|outro atendente|vou passar|nossa equipe vai)/i;
+      mensagens = mensagens.filter((m) => !transferencia.test(String(m)));
+    }
     if (escalar) etapaNova = 'aguardando_humano';
 
     // Não deixa a IA prometer transferência quando ainda falta confirmar a data.
