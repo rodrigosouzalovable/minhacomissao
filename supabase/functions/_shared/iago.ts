@@ -328,7 +328,7 @@ export async function etiquetasAtendente(supabase: any, contatoId: string): Prom
  * Existe atendente HUMANO vinculado ao mesmo telefone (qualquer caixa/instância)?
  * Compara pelos últimos 8 dígitos, padrão do sistema.
  */
-const FOLDER_AQUECIMENTO_INBOX = '4f7a52c0-9c86-4b80-8867-4ade7a6df441';
+export const FOLDER_AQUECIMENTO_INBOX = '4f7a52c0-9c86-4b80-8867-4ade7a6df441';
 
 export async function temAtendenteHumanoNoTelefone(
   supabase: any,

@@ -5,11 +5,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, ehNumeroErrado, ehFalecido, MSG_FALECIDO, suprimirDestinatario, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente, temAtendenteHumanoNoTelefone,
-  avisarEmergencia, etiquetarAguardandoHumano, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
+  avisarEmergencia as avisarEmergenciaBase, etiquetarAguardandoHumano as etiquetarAguardandoHumanoBase, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
   nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa,
-
+  FOLDER_AQUECIMENTO_INBOX,
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
 
@@ -32,6 +32,23 @@ Deno.serve(async (req) => {
   // Trava adquirida nesta execução — liberada mesmo se algo falhar no meio (ver catch final).
   let travaContatoId: string | null = null;
   let travaEntradaId: string | null = null;
+
+  // Caixa AQUECIMENTO: o IAGO responde TUDO e nunca chama humano (serve para aquecer os chips).
+  let modoAquecimento = false;
+  const etiquetarAguardandoHumano = async (sb: any, contatoId: string) => {
+    if (modoAquecimento) {
+      console.log('[IAGO] modo aquecimento — não escala para humano', { contatoId });
+      return;
+    }
+    return await etiquetarAguardandoHumanoBase(sb, contatoId);
+  };
+  const avisarEmergencia = async (sb: any, mensagem: string, contatoId?: string) => {
+    if (modoAquecimento) return;
+    return await avisarEmergenciaBase(sb, mensagem, contatoId);
+  };
+  /** No aquecimento a conversa nunca fica travada esperando humano. */
+  const travaHumano = () => !modoAquecimento;
+
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -68,6 +85,9 @@ Deno.serve(async (req) => {
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
+
+    modoAquecimento = String((contato as any).folder_id || '') === FOLDER_AQUECIMENTO_INBOX;
+
 
     const atende = await iagoAtendeCaixa(supabase, iago.id, (contato as any).folder_id ?? null);
     if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
@@ -152,7 +172,13 @@ Deno.serve(async (req) => {
       return json({ success: true, etapa: 'optout' });
     }
     if (estado.optout) return json({ success: true, skipped: 'contato bloqueado' });
-    if (estado.aguardando_humano) return json({ success: true, skipped: 'aguardando humano' });
+    if (estado.aguardando_humano) {
+      if (!modoAquecimento) return json({ success: true, skipped: 'aguardando humano' });
+      // Aquecimento: destrava e segue respondendo.
+      await supabase.from('iago_conversa_estado')
+        .update({ aguardando_humano: false }).eq('id', estado.id);
+      (estado as any).aguardando_humano = false;
+    }
 
     // ===== Limite diário anti-loop =====
     const dia = hojeSP();
@@ -228,6 +254,24 @@ Deno.serve(async (req) => {
     const semConteudoUtil = !imagemCtx
       && /^\[(áudio|audio|imagem|vídeo|video|documento)\]$/i.test(textoAtual.trim());
     if (semConteudoUtil) {
+      if (modoAquecimento) {
+        // Aquecimento: nunca deixa sem resposta — responde curto e segue a conversa.
+        const respostas = [
+          'Recebi aqui! 👍 Não consegui abrir direito, pode me escrever?',
+          'Chegou, mas não consegui visualizar. Pode mandar por texto?',
+          'Recebi! Me conta por mensagem que eu te ajudo. 🙂',
+        ];
+        try {
+          await enviarTexto(supabase, contato, respostas[Math.floor(Math.random() * respostas.length)]);
+        } catch (e: any) {
+          console.error('[IAGO] falha ao responder mídia no aquecimento', e?.message || e);
+        }
+        await supabase.rpc('iago_finish_message', {
+          p_contato_id: contato_id,
+          p_entrada_id: String(entrada_id || ultimaEntradaId),
+        });
+        return json({ success: true, enviadas: 1, motivo: 'aquecimento_midia_sem_texto' });
+      }
       await etiquetarAguardandoHumano(supabase, contato_id);
       await supabase.rpc('iago_finish_message', {
         p_contato_id: contato_id,
@@ -276,7 +320,7 @@ Deno.serve(async (req) => {
 
     // ===== Divulgação em massa / robô escrevendo para vários chips =====
     // Não vale negociar: marca para revisão humana e conclui a entrada normalmente.
-    if (ehDivulgacao(textoAtual)) {
+    if (!modoAquecimento && ehDivulgacao(textoAtual)) {
       let ehMassa = true;
       if (telefoneContato) {
         const trecho = textoAtual.trim().slice(0, 40);
@@ -294,7 +338,7 @@ Deno.serve(async (req) => {
       if (ehMassa) {
         await supabase.from('iago_conversa_estado').update({
           etapa: 'divulgacao_em_massa',
-          aguardando_humano: true,
+          aguardando_humano: travaHumano(),
           followup_em: null,
           followup_feito: true,
           ultima_msg_cliente_em: new Date().toISOString(),
@@ -336,7 +380,7 @@ Deno.serve(async (req) => {
       }
       await supabase.from('iago_conversa_estado').update({
         etapa: 'numero_errado',
-        aguardando_humano: true,
+        aguardando_humano: travaHumano(),
         followup_em: null,
         followup_feito: true,
         followup_etapa: 3,
@@ -376,7 +420,7 @@ Deno.serve(async (req) => {
       }
       await supabase.from('iago_conversa_estado').update({
         etapa: 'falecido',
-        aguardando_humano: true,
+        aguardando_humano: travaHumano(),
         followup_em: null,
         followup_feito: true,
         followup_etapa: 3,
@@ -608,10 +652,10 @@ Deno.serve(async (req) => {
 
 
 
-    // ===== Cliente já tem acordo => humano assume =====
-    if (temAcordo) {
+    // ===== Cliente já tem acordo => humano assume (no aquecimento, o IAGO segue conversando) =====
+    if (temAcordo && !modoAquecimento) {
       await supabase.from('iago_conversa_estado')
-        .update({ cpf, aguardando_humano: true, etapa: 'ja_tem_acordo', followup_em: null })
+        .update({ cpf, aguardando_humano: travaHumano(), etapa: 'ja_tem_acordo', followup_em: null })
         .eq('id', estado.id);
       await avisarEmergencia(supabase,
         `👤 *IAGO — atendimento humano necessário*\n\n` +
@@ -636,7 +680,7 @@ Deno.serve(async (req) => {
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
       qualificacoes: await quals(),
-      propostaPrevia, respostaAutomatica, precisaPerguntarNome,
+      propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento,
     });
 
     // ===== A IA entendeu que não é o titular (mesmo com erro de escrita) => encerra =====
@@ -663,8 +707,8 @@ Deno.serve(async (req) => {
       : [];
 
     // ===== Escolha da forma de pagamento => confirmar a DATA antes de chamar humano =====
-    let escalar = !!resultado?.escalar;
-    const escalouPorDuvida = !!resultado?.escalar;
+    let escalar = modoAquecimento ? false : !!resultado?.escalar;
+    const escalouPorDuvida = modoAquecimento ? false : !!resultado?.escalar;
 
     let motivo = String(resultado?.motivo || '');
     let etapaNova = escalar ? 'aguardando_humano' : (proposta ? 'proposta' : 'conversando');
@@ -732,6 +776,13 @@ Deno.serve(async (req) => {
         mensagens = [`Recebi${pn ? `, ${pn}` : ''}! Vou encaminhar seu comprovante para a equipe validar o pagamento e já te damos retorno. 🙏`];
       }
     }
+    // Caixa AQUECIMENTO: nunca escala. Sempre responde e mantém a conversa viva.
+    if (modoAquecimento) {
+      escalar = false;
+      if (etapaNova === 'aguardando_humano') etapaNova = 'conversando';
+      const transferencia = /(especialista|colega|transferir|transfiro|outro atendente|vou passar|nossa equipe vai)/i;
+      mensagens = mensagens.filter((m) => !transferencia.test(String(m)));
+    }
     if (escalar) etapaNova = 'aguardando_humano';
 
     // Não deixa a IA prometer transferência quando ainda falta confirmar a data.
@@ -751,6 +802,16 @@ Deno.serve(async (req) => {
       console.log('[IAGO] escalada por dúvida — nenhuma mensagem enviada', { contato_id, motivo });
     }
 
+    // Aquecimento: a conversa nunca pode ficar sem resposta.
+    if (modoAquecimento && !mensagens.length) {
+      const pn = primeiroNome(nomeCliente);
+      const genericas = [
+        `Entendi${pn ? `, ${pn}` : ''}! Me conta um pouco mais, por favor.`,
+        'Certo! Pode me explicar melhor pra eu te ajudar?',
+        `Obrigado pela resposta${pn ? `, ${pn}` : ''}! Como posso te ajudar?`,
+      ];
+      mensagens = [genericas[Math.floor(Math.random() * genericas.length)]];
+    }
 
 
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
@@ -761,7 +822,7 @@ Deno.serve(async (req) => {
       if (envio.destinatarioInvalido) {
         await supabase.from('iago_conversa_estado').update({
           etapa: 'destinatario_sem_whatsapp',
-          aguardando_humano: true,
+          aguardando_humano: travaHumano(),
           followup_em: null,
           followup_feito: true,
           followup_etapa: 3,
@@ -904,6 +965,7 @@ async function gerarResposta(args: {
   propostaPrevia?: { valor: string; texto: string } | null;
   respostaAutomatica?: boolean;
   precisaPerguntarNome?: boolean;
+  modoAquecimento?: boolean;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
@@ -912,7 +974,7 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa, credorAmbiguo,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome,
+    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento,
   } = args;
 
 
@@ -1046,7 +1108,9 @@ async function gerarResposta(args: {
       : etapaNegociacao === 'aguardando_data'
         ? `ETAPA ATUAL: você já perguntou que dia ele consegue pagar${escolhaAnterior ? ` (opção escolhida: ${escolhaAnterior})` : ''}. Interprete a data informada.`
         : '',
-    'Escale para humano (escalar=true) quando: a data do pagamento estiver definida (ou fora do mês); o cliente pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
+    modoAquecimento
+      ? 'MODO AQUECIMENTO: é PROIBIDO escalar (use SEMPRE escalar=false), prometer transferência, dizer que vai chamar outro atendente ou deixar a mensagem sem resposta. Responda SEMPRE de forma curta, educada e natural, e mantenha a conversa fluindo com uma pergunta leve.'
+      : 'Escale para humano (escalar=true) quando: a data do pagamento estiver definida (ou fora do mês); o cliente pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
     '',
     instrucoes ? `INSTRUÇÕES DO ADMINISTRADOR:\n${instrucoes}` : '',
     qa ? `PERGUNTAS E RESPOSTAS PRONTAS:\n${qa}` : '',
