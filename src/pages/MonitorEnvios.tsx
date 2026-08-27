@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/dialog';
 import { useMonitorEnvios, InstanceStats } from '@/hooks/useMonitorEnvios';
 import { PoolMetaPanel } from '@/components/meta/PoolMetaPanel';
+import { RecuperacaoQualidadePanel } from '@/components/meta/RecuperacaoQualidadePanel';
+
 import { RampupTierAvisoCard } from '@/components/meta/RampupTierAvisoCard';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
