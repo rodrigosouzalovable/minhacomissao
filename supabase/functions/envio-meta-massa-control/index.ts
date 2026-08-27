@@ -201,25 +201,25 @@ Deno.serve(async (req) => {
       const freioMap = new Map<string, any>();
       for (const f of freios || []) freioMap.set(f.instancia_id, f);
 
-      const livres = (insts || [])
-        .filter((i: any) => !jaNoJob.includes(i.id))
-        .filter((i: any) => !i.recuperacao_ativa && i.estado_pool !== 'restrita')
-        .filter((i: any) => String(i.saude_quality || '').toUpperCase() !== 'RED')
-        .map((i: any) => {
-          const f = freioMap.get(i.id);
-          const teto = f ? Number(f.teto_efetivo || 0) : Number(i.tier_diario || 0);
-          const enviados = f ? Number(f.enviados || 0) : 0;
-          return {
-            id: i.id,
-            nome: i.nome || i.display_phone || i.id.slice(0, 8),
-            qualidade: i.saude_quality || null,
-            teto,
-            enviados,
-            folga: Math.max(0, teto - enviados),
-          };
-        })
-        .filter((i: any) => i.folga > 0)
-        .sort((a: any, b: any) => b.folga - a.folga);
+       const livres = (insts || [])
+         .filter((i: any) => !jaNoJob.includes(i.id))
+         .filter((i: any) => !i.recuperacao_ativa && i.estado_pool !== 'restrita')
+         .filter((i: any) => ['GREEN', ''].includes(String(i.saude_quality || '').toUpperCase()))
+         .map((i: any) => {
+           const f = freioMap.get(i.id);
+           const teto = f ? Number(f.teto_efetivo || 0) : Number(i.tier_diario || 0);
+           const enviados = f ? Number(f.enviados || 0) : 0;
+           return {
+             id: i.id,
+             nome: i.nome || i.display_phone || i.id.slice(0, 8),
+             qualidade: i.saude_quality || null,
+             teto,
+             enviados,
+             folga: Math.max(0, teto - enviados),
+           };
+         })
+         .filter((i: any) => i.folga > 0)
+         .sort((a: any, b: any) => b.folga - a.folga);
 
       if (acao === 'instancias_livres') {
         return new Response(JSON.stringify({ success: true, instancias: livres }), {
