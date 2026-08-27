@@ -53,7 +53,7 @@ Quantidade e momento (calculados pelo sistema, sem você mexer):
 - Os números que estão em campanha também recebem um mínimo diário de entrada (3–5 conversas com os UAZAPI), para não chegarem em YELLOW.
 
 
-### 3. Escada de retorno automática
+### 4. Escada de retorno automática
 - Número sai da quarentena com teto 20/dia; se ficar GREEN por 3 dias sobe para 40, depois 80, depois teto normal da fase. Cai de degrau ao primeiro YELLOW.
 - A escada já tem campos (`teto_escada`, `escada_retorno`), falta o agendador aplicar a promoção diária.
 
