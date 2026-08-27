@@ -32,3 +32,4 @@
 - [Copiloto de Objeções](mem://features/whatsapp/copiloto-objecoes) — Sugestões de resposta por IA no Inbox quando o cliente objeta; catálogo aprende por conversão (cron 06:45 UTC)
 
 - [Credor por Caixa Múltiplo](mem://features/whatsapp/credor-caixa-multiplos) — Vários credores ativos por caixa; IAGO resolve pelo credor do cabeçalho da conversa
+- [Notificações Remetente Único](mem://features/whatsapp/notificacoes-remetente-unico) — Avisos saem só por 1 instância fixa com failover + linha "BM:" abaixo do número
