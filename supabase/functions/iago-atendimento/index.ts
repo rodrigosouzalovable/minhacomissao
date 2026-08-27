@@ -802,6 +802,16 @@ Deno.serve(async (req) => {
       console.log('[IAGO] escalada por dúvida — nenhuma mensagem enviada', { contato_id, motivo });
     }
 
+    // Aquecimento: a conversa nunca pode ficar sem resposta.
+    if (modoAquecimento && !mensagens.length) {
+      const pn = primeiroNome(nomeCliente);
+      const genericas = [
+        `Entendi${pn ? `, ${pn}` : ''}! Me conta um pouco mais, por favor.`,
+        'Certo! Pode me explicar melhor pra eu te ajudar?',
+        `Obrigado pela resposta${pn ? `, ${pn}` : ''}! Como posso te ajudar?`,
+      ];
+      mensagens = [genericas[Math.floor(Math.random() * genericas.length)]];
+    }
 
 
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
