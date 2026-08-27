@@ -71,6 +71,7 @@ const Cotacoes = lazy(() => retryImport(() => import("./pages/Cotacoes")));
 const LembreteMeta = lazy(() => retryImport(() => import("./pages/LembreteMeta")));
 const GoogleMapsLeads = lazy(() => retryImport(() => import("./pages/GoogleMapsLeads")));
 const PontoAdmin = lazy(() => retryImport(() => import("./pages/PontoAdmin")));
+const Blacklist = lazy(() => retryImport(() => import("./pages/Blacklist")));
 
 const TenantLayout = lazy(() => retryImport(() => import("./pages/tenant/TenantLayout")));
 
@@ -286,6 +287,7 @@ const App = () => (
             <Route path="/admin/lembrete-meta" element={<AdminRoute><LembreteMeta /></AdminRoute>} />
             <Route path="/admin/google-maps-leads" element={<AdminRoute><GoogleMapsLeads /></AdminRoute>} />
             <Route path="/admin/ponto" element={<AdminRoute><PontoAdmin /></AdminRoute>} />
+            <Route path="/admin/blacklist" element={<ProtectedRoute><Blacklist /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

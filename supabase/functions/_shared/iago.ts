@@ -227,17 +227,29 @@ export async function suprimirDestinatario(
   supabase: any,
   telefone: unknown,
   motivo: string,
+  origem?: {
+    instancia_id?: string | null;
+    origem_user_id?: string | null;
+    contato_nome?: string | null;
+    credor?: string | null;
+  },
 ): Promise<void> {
   try {
     const dig = soDigitos(telefone);
     const sufixo = dig.length >= 8 ? dig.slice(-8) : dig;
     if (!sufixo) return;
-    await supabase.from('meta_destinatario_supressao').upsert({
+    const row: Record<string, unknown> = {
       telefone_sufixo: sufixo,
       telefone: dig,
       motivo: String(motivo || '').slice(0, 160),
       criado_em: new Date().toISOString(),
-    }, { onConflict: 'telefone_sufixo' });
+    };
+    // Só grava a origem quando conhecida — não sobrescreve dados anteriores com nulo.
+    if (origem?.instancia_id) row.instancia_id = origem.instancia_id;
+    if (origem?.origem_user_id) row.origem_user_id = origem.origem_user_id;
+    if (origem?.contato_nome) row.contato_nome = String(origem.contato_nome).slice(0, 160);
+    if (origem?.credor) row.credor = String(origem.credor).slice(0, 80);
+    await supabase.from('meta_destinatario_supressao').upsert(row, { onConflict: 'telefone_sufixo' });
   } catch (e) {
     console.log('[IAGO] falha ao suprimir destinatário:', String(e).slice(0, 160));
   }

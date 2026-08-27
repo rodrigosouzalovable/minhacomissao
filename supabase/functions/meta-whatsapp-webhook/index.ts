@@ -1308,10 +1308,25 @@ serve(async (req) => {
               const { data: cfgBl } = await supabase
                 .from('meta_envio_pool_config').select('blacklist_ativa').eq('id', 1).maybeSingle();
               if ((cfgBl as any)?.blacklist_ativa !== false) {
+                let dadosContato: any = null;
+                if (contatoIdFinal) {
+                  const { data: ctBl } = await supabase
+                    .from('meta_whatsapp_contatos')
+                    .select('nome, credor')
+                    .eq('id', contatoIdFinal)
+                    .maybeSingle();
+                  dadosContato = ctBl;
+                }
                 await suprimirDestinatario(
                   supabase,
                   outroLado,
                   'blacklist: cliente pediu bloqueio de contato',
+                  {
+                    instancia_id: inst.id,
+                    origem_user_id: inst.user_id,
+                    contato_nome: dadosContato?.nome ?? null,
+                    credor: dadosContato?.credor ?? null,
+                  },
                 );
                 console.log('[MetaWebhook] contato adicionado à blacklist', { telefone: outroLado });
               }

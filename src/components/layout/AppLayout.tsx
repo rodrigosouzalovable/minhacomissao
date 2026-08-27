@@ -34,7 +34,8 @@ import {
   CreditCard,
   Coins,
   MapPin,
-  Clock
+  Clock,
+  Ban
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -116,6 +117,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/lembrete-meta', label: 'Lembrete Meta', icon: Bell, adminOnly: true },
   { href: '/admin/google-maps-leads', label: 'Google Maps Leads', icon: MapPin, adminOnly: true },
   { href: '/admin/ponto', label: 'Controle de Ponto', icon: Clock, adminOnly: true },
+  { href: '/admin/blacklist', label: 'Blacklist', icon: Ban, adminOnly: true },
 ];
 
 
@@ -144,7 +146,7 @@ function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavIte
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin, isGestor } = useUserRole();
-  const { abasPermitidas, acordosCompartilhados } = useUserPermissions();
+  const { abasPermitidas, acordosCompartilhados, parceiroMeta } = useUserPermissions();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -326,6 +328,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const filteredNavItems = navItems.filter((item) => {
     // /admin/usuarios sempre visível para admin (fail-safe: não pode ser desabilitada)
     if (isAdmin && item.href === '/admin/usuarios') return true;
+    // Parceiros Meta sempre veem a Blacklist (só os bloqueios das instâncias deles, via RLS)
+    if (parceiroMeta && item.href === '/admin/blacklist') return true;
     if (abasPermitidas) {
       return abasPermitidas.includes(item.href);
     }
