@@ -18,9 +18,20 @@ export function rotuloInstancia(inst: any): string {
  */
 export async function linhaBmInstancia(supabase: any, inst: any): Promise<string> {
   try {
-    const bmId = (inst?.meta_bm_id || '').toString().trim();
-    const businessId = (inst?.business_id || '').toString().trim();
+    let bmId = (inst?.meta_bm_id || '').toString().trim();
+    let businessId = (inst?.business_id || '').toString().trim();
+    // Alguns emissores passam a instância com poucos campos: buscamos o vínculo.
+    if (!bmId && !businessId && inst?.id) {
+      const { data: row } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('meta_bm_id, business_id')
+        .eq('id', inst.id)
+        .maybeSingle();
+      bmId = (row?.meta_bm_id || '').toString().trim();
+      businessId = (row?.business_id || '').toString().trim();
+    }
     let nome = '';
+
 
     if (bmId) {
       const { data } = await supabase
