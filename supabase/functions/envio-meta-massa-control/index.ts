@@ -183,6 +183,75 @@ Deno.serve(async (req) => {
       }).eq('id', jobId);
       dispararWorker(job);
 
+    } else if (acao === 'instancias_livres' || acao === 'adicionar_instancias_livres') {
+      // Instâncias Meta aptas que ainda têm cota livre HOJE (BRT) e não estão no job.
+      const hojeBrt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+      const jaNoJob: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+
+      const { data: insts } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, nome, display_phone, ativo, provider, saude_quality, estado_pool, recuperacao_ativa, tier_diario')
+        .eq('ativo', true)
+        .eq('provider', 'meta');
+
+      const { data: freios } = await supabase
+        .from('meta_instance_freio_diario')
+        .select('instancia_id, teto_efetivo, enviados, motivo_reducao')
+        .eq('dia', hojeBrt);
+      const freioMap = new Map<string, any>();
+      for (const f of freios || []) freioMap.set(f.instancia_id, f);
+
+      const livres = (insts || [])
+        .filter((i: any) => !jaNoJob.includes(i.id))
+        .filter((i: any) => !i.recuperacao_ativa && i.estado_pool !== 'restrita')
+        .filter((i: any) => String(i.saude_quality || '').toUpperCase() !== 'RED')
+        .map((i: any) => {
+          const f = freioMap.get(i.id);
+          const teto = f ? Number(f.teto_efetivo || 0) : Number(i.tier_diario || 0);
+          const enviados = f ? Number(f.enviados || 0) : 0;
+          return {
+            id: i.id,
+            nome: i.nome || i.display_phone || i.id.slice(0, 8),
+            qualidade: i.saude_quality || null,
+            teto,
+            enviados,
+            folga: Math.max(0, teto - enviados),
+          };
+        })
+        .filter((i: any) => i.folga > 0)
+        .sort((a: any, b: any) => b.folga - a.folga);
+
+      if (acao === 'instancias_livres') {
+        return new Response(JSON.stringify({ success: true, instancias: livres }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const escolhidas: string[] = Array.isArray(body?.instancia_ids) && body.instancia_ids.length > 0
+        ? livres.filter((i: any) => body.instancia_ids.includes(i.id)).map((i: any) => i.id)
+        : livres.map((i: any) => i.id);
+
+      if (escolhidas.length === 0) {
+        return new Response(JSON.stringify({ success: false, error: 'Nenhuma instância com cota livre agora' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      await supabase.from('envio_meta_job').update({
+        instancia_ids: [...jaNoJob, ...escolhidas],
+        instancias_bloqueadas_run: [],
+        falhas_por_instancia_run: {},
+        status: 'rodando',
+        concluido_em: null,
+        status_motivo: null,
+        proximo_em: new Date().toISOString(),
+      }).eq('id', jobId);
+      await devolverProcessandoParaFila();
+      dispararWorker({ ...job, instancia_ids: [...jaNoJob, ...escolhidas] });
+
+      return new Response(JSON.stringify({ success: true, adicionadas: escolhidas.length }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     } else if (acao === 'limpar') {
       // Só remove jobs concluídos/cancelados
       if (!['concluido', 'cancelado', 'erro'].includes(job.status)) {
@@ -191,6 +260,7 @@ Deno.serve(async (req) => {
         });
       }
       await supabase.from('envio_meta_job').delete().eq('id', jobId);
+
     } else {
       return new Response(JSON.stringify({ success: false, error: 'ação inválida' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

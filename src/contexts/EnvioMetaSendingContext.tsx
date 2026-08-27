@@ -33,10 +33,44 @@ export type EnvioProgresso = {
   /** true quando o job está apenas esperando a janela de envio (horário/domingo) */
   aguardandoJanela?: boolean;
   janelaMotivo?: string;
+  /** true quando o job está esperando cota diária/qualidade liberar */
+  aguardandoCota?: boolean;
+  cotaMotivo?: string;
+  /** ISO da retomada automática quando aguardando cota */
+  cotaRetomaEm?: string;
 
 };
 
+
 export type EnvioResultado = { enviados: number; erros: number; total: number; statusMotivo?: string } | null;
+
+/** Instância Meta com cota diária sobrando hoje. */
+export type InstanciaLivre = {
+  id: string;
+  nome: string;
+  qualidade: string | null;
+  teto: number;
+  enviados: number;
+  folga: number;
+};
+
+
+/**
+ * Motivo gravado pelo worker no formato `AGUARDANDO_COTA:<retomaISO>:<detalhe>`.
+ * Indica campanha viva, apenas esperando cota diária/qualidade liberar.
+ */
+export function parseAguardandoCota(motivo?: string | null): { retomaEm: string; detalhe: string } | null {
+  const m = /^AGUARDANDO_COTA:([^:]+T[^Z]+Z):?([\s\S]*)$/.exec(String(motivo || ""));
+  if (!m) return null;
+  return { retomaEm: m[1], detalhe: m[2] || "Todas as instâncias atingiram o teto diário" };
+}
+
+
+/** Motivos que NÃO devem disparar retomada automática — esperar é o certo. */
+function motivoEsperaObrigatoria(motivo?: string | null): boolean {
+  return /AGUARDANDO_COTA|teto di[aá]rio|cota|quarentena|qualidade|freio/i.test(String(motivo || ""));
+}
+
 
 type ClienteRow = {
   telefone: string;
@@ -130,7 +164,10 @@ type Ctx = {
   carregarMaisItensJob: (jobId: string) => Promise<void>;
   getPaginacaoJob: (jobId: string) => { carregados: number; temMais: boolean };
   refreshCountersJob: (jobId: string) => Promise<void>;
+  listarInstanciasLivres: (jobId: string) => Promise<InstanciaLivre[]>;
+  adicionarInstanciasLivres: (jobId: string, ids?: string[]) => Promise<boolean>;
   marcarJobAberto: (jobId: string, aberto: boolean) => void;
+
   exportarItensJob: (
     jobId: string,
     onProgresso?: (n: number) => void,
@@ -231,6 +268,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const seenConcludedRef = useRef<Set<string>>(new Set());
   const manuallyCanceledRef = useRef<Set<string>>(new Set());
   const autoResumeAtRef = useRef<Map<string, number>>(new Map()); // jobId -> last auto-resume ts
+  const autoResumeTriesRef = useRef<Map<string, number>>(new Map()); // jobId -> tentativas automáticas
+
   const sessionRefreshRef = useRef<Promise<string> | null>(null);
 
   // A API de autenticação rejeita corretamente JWTs cuja sessão foi revogada.
@@ -252,13 +291,34 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     return sessionRefreshRef.current;
   }, []);
 
-  const invokeControle = useCallback(async (jobId: string, acao: string) => {
+  const invokeControle = useCallback(async (jobId: string, acao: string, extra?: Record<string, unknown>) => {
     const accessToken = await refreshAccessToken();
     return supabase.functions.invoke("envio-meta-massa-control", {
-      body: { job_id: jobId, acao },
+      body: { job_id: jobId, acao, ...(extra || {}) },
       headers: { Authorization: `Bearer ${accessToken}` },
     });
   }, [refreshAccessToken]);
+
+  // Instâncias Meta aptas com cota livre hoje que ainda não estão na campanha.
+  const listarInstanciasLivres = useCallback(async (jobId: string): Promise<InstanciaLivre[]> => {
+    const { data, error } = await invokeControle(jobId, "instancias_livres");
+    if (error || !data?.success) return [];
+    return (data.instancias || []) as InstanciaLivre[];
+  }, [invokeControle]);
+
+  const adicionarInstanciasLivres = useCallback(async (jobId: string, ids?: string[]): Promise<boolean> => {
+    const { data, error } = await invokeControle(jobId, "adicionar_instancias_livres", ids ? { instancia_ids: ids } : undefined);
+    if (error || !data?.success) {
+      toast.error(data?.error || "Não foi possível adicionar instâncias agora");
+      return false;
+    }
+    autoResumeTriesRef.current.delete(jobId);
+    toast.success(`${data.adicionadas} instância(s) adicionada(s) — campanha retomada`);
+    await carregarJobs();
+    return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invokeControle]);
+
 
   const carregarJobs = useCallback(async () => {
     if (!uid) { setJobs([]); setItensByJob(new Map()); setLogByJob(new Map()); return; }
@@ -454,12 +514,12 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
 
 
-  // Refresh parcial: atualiza APENAS contadores/current do job (não mexe em status/status_motivo).
-  // Usado pelo botão "Atualizar" no diálogo — nunca faz o botão "Reativar" aparecer sozinho.
+  // Refresh parcial: contadores + status/motivo reais do banco.
+  // O motivo precisa aparecer: sem ele a campanha parecia "Rodando" mesmo parada.
   const refreshCountersJob = useCallback(async (jobId: string) => {
     const { data } = await (supabase as any)
       .from("envio_meta_job")
-      .select("enviados, erros, total, atual_telefone, atual_instancia, proximo_em")
+      .select("enviados, erros, total, atual_telefone, atual_instancia, proximo_em, status, status_motivo")
       .eq("id", jobId)
       .maybeSingle();
     if (!data) return;
@@ -476,11 +536,13 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         atual_telefone: data.atual_telefone ?? j.atual_telefone,
         atual_instancia: data.atual_instancia ?? j.atual_instancia,
         proximo_em: data.proximo_em ?? j.proximo_em,
+        status: data.status || j.status,
+        status_motivo: data.status_motivo ?? null,
         restantes: Math.max(0, total - enviados - erros),
-        // status e status_motivo preservados de propósito
       };
     }));
   }, []);
+
 
   useEffect(() => { carregarJobs(); }, [carregarJobs]);
 
@@ -609,7 +671,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     if (j.status !== "rodando" && j.status !== "pausado") return null;
     const proximoMs = j.proximo_em ? new Date(j.proximo_em).getTime() - Date.now() : 0;
     const motivo = j.status_motivo || "";
-    const aguardandoJanela = /fora do hor|abertura da janela|domingo/i.test(motivo);
+    const cota = parseAguardandoCota(motivo);
+    const aguardandoJanela = !cota && /fora do hor|abertura da janela|domingo/i.test(motivo);
     return {
       enviados: j.enviados,
       erros: j.erros,
@@ -619,7 +682,11 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       proximoEmSeg: Math.max(0, Math.ceil(proximoMs / 1000)),
       aguardandoJanela,
       janelaMotivo: aguardandoJanela ? motivo : undefined,
+      aguardandoCota: !!cota,
+      cotaMotivo: cota?.detalhe,
+      cotaRetomaEm: cota?.retomaEm,
     };
+
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, tick]);
@@ -797,6 +864,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
     manuallyCanceledRef.current.delete(jobId);
     autoResumeAtRef.current.delete(jobId);
+    autoResumeTriesRef.current.delete(jobId);
+
     const ok = await reativarJobInterno(jobId);
     if (ok) {
       toast.success(`Campanha reativada — ${j.restantes} contatos restantes`);
@@ -806,22 +875,31 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
   }, [jobs, carregarJobs, reativarJobInterno]);
 
-  // Auto-retomada: só para jobs que caíram por erro/conclusão prematura.
-  // Campanhas CANCELADAS nunca são retomadas automaticamente — só via "Reativar".
+  // Auto-retomada: só para jobs que caíram por erro/conclusão prematura, e nunca
+  // quando o motivo é cota/qualidade (nesse caso o worker já agendou a retomada).
+  // Máximo de 3 tentativas por campanha, para não criar loop invisível.
   useEffect(() => {
     const now = Date.now();
     for (const j of jobs) {
       if (!["erro", "concluido"].includes(j.status)) continue;
       if (j.restantes <= 0) continue;
       if (manuallyCanceledRef.current.has(j.id)) continue;
+      if (motivoEsperaObrigatoria(j.status_motivo)) continue;
+      const tentativas = autoResumeTriesRef.current.get(j.id) || 0;
+      if (tentativas >= 3) continue;
       const last = autoResumeAtRef.current.get(j.id) || 0;
       if (now - last < 60_000) continue;
       autoResumeAtRef.current.set(j.id, now);
+      autoResumeTriesRef.current.set(j.id, tentativas + 1);
       reativarJobInterno(j.id).then((ok) => {
-        if (ok) carregarJobs();
+        if (ok) {
+          toast.info(`Campanha retomada automaticamente — tentativa ${tentativas + 1}/3`);
+          carregarJobs();
+        }
       });
     }
   }, [jobs, reativarJobInterno, carregarJobs]);
+
 
 
 
@@ -890,7 +968,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, marcarJobAberto, exportarItensJob,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, adicionarInstanciasLivres, marcarJobAberto, exportarItensJob,
       }}
     >
       {children}

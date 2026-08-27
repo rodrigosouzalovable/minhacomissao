@@ -56,7 +56,46 @@ function resolverTemplateId(job: any, instId: string, varianteIdx: number): stri
 }
 
 
+// Bloqueio TEMPORÁRIO (cota diária, freio de qualidade, quarentena, rate limit):
+// a campanha não é encerrada — fica aguardando e o tick reavalia mais tarde.
+function ehBloqueioTemporario(motivo: string): boolean {
+  return /teto di[aá]rio|cota|quarentena|qualidade|freio|rate\s*limit|pausa/i.test(String(motivo || ''));
+}
+
+// Próxima reavaliação: 30 min à frente, mas nunca depois das 08:00 BRT do
+// próximo dia útil (o dia BRT zera os contadores de cota).
+function proximaReavaliacao(): string {
+  const agora = Date.now();
+  const em30 = agora + 30 * 60 * 1000;
+  const nowBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  const offsetMs = agora - nowBrt.getTime();
+  const abertura = new Date(nowBrt);
+  abertura.setHours(8, 0, 0, 0);
+  // Se já passou das 08:00 hoje, a próxima abertura é amanhã (pulando domingo).
+  if (nowBrt.getTime() >= abertura.getTime()) abertura.setDate(abertura.getDate() + 1);
+  while (abertura.getDay() === 0) abertura.setDate(abertura.getDate() + 1);
+  const aberturaUtc = abertura.getTime() + offsetMs;
+  // Dentro da janela do dia: reavalia em 30min. Fora dela: espera a abertura.
+  const hh = nowBrt.getHours() + nowBrt.getMinutes() / 60;
+  const dentroJanela = nowBrt.getDay() !== 0 && hh >= 8 && hh < 19;
+  const alvo = dentroJanela ? Math.min(em30, aberturaUtc) : aberturaUtc;
+  return new Date(alvo).toISOString();
+}
+
 async function encerrarJobSemDisponibilidade(job: any, motivo: string) {
+  // Cota/qualidade: mantém a campanha viva em espera explícita, sem loop de erro.
+  if (ehBloqueioTemporario(motivo)) {
+    const retoma = proximaReavaliacao();
+    const { data: esperando } = await supabase.from('envio_meta_job').update({
+      status_motivo: `AGUARDANDO_COTA:${retoma}:${motivo}`,
+      atual_telefone: null,
+      atual_instancia: null,
+      proximo_em: retoma,
+    }).eq('id', job.id).eq('status', 'rodando').select('id').maybeSingle();
+    if (esperando) await notificarEsperaCota(job.id, motivo, retoma);
+    return;
+  }
+
   const { data: transitioned } = await supabase.from('envio_meta_job').update({
     status: 'erro',
     status_motivo: motivo,
@@ -69,6 +108,35 @@ async function encerrarJobSemDisponibilidade(job: any, motivo: string) {
     await notificarConclusao(job.id, 'erro', motivo);
   }
 }
+
+// Aviso único por campanha/dia quando ela entra em espera por cota.
+async function notificarEsperaCota(jobId: string, motivo: string, retomaIso: string) {
+  try {
+    const { data: job } = await supabase
+      .from('envio_meta_job')
+      .select('nome_campanha, template_nome, total, enviados, erros')
+      .eq('id', jobId).maybeSingle();
+    if (!job) return;
+    const restantes = Math.max(0, (job.total || 0) - (job.enviados || 0) - (job.erros || 0));
+    const retomaBrt = new Date(retomaIso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const diaBrt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+    await notificarAdmin(supabase, {
+      tipo: 'envio_meta_aguardando_cota',
+      mensagem:
+        `⏳ *Campanha aguardando cota*\n\n` +
+        `Campanha: ${job.nome_campanha || job.template_nome || 'sem nome'}\n` +
+        `Enviados: ${job.enviados || 0}/${job.total || 0} — restam ${restantes}\n` +
+        `Motivo: ${motivo}\n\n` +
+        `Ela retoma automaticamente em ${retomaBrt}. Nenhuma ação necessária.`,
+      chaveIdempotencia: `envio_meta_cota_${jobId}_${diaBrt}`,
+      umaVezPorChave: true,
+    });
+  } catch (e) {
+    console.error('[tick] notificarEsperaCota falhou:', String(e).slice(0, 300));
+  }
+}
+
 
 
 async function notificarConclusao(jobId: string, statusFinal: 'concluido' | 'erro', motivo?: string) {
