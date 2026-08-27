@@ -241,6 +241,11 @@ export default function MonitorEnvios() {
         {/* Pool Meta Oficial */}
         <PoolMetaPanel />
 
+        {/* Recuperação automática de qualidade */}
+        <RecuperacaoQualidadePanel />
+
+
+
         {/* Números prontos pra subir de TIER */}
         <RampupTierAvisoCard />
 
