@@ -201,25 +201,25 @@ Deno.serve(async (req) => {
       const freioMap = new Map<string, any>();
       for (const f of freios || []) freioMap.set(f.instancia_id, f);
 
-      const livres = (insts || [])
-        .filter((i: any) => !jaNoJob.includes(i.id))
-        .filter((i: any) => !i.recuperacao_ativa && i.estado_pool !== 'restrita')
-        .filter((i: any) => String(i.saude_quality || '').toUpperCase() !== 'RED')
-        .map((i: any) => {
-          const f = freioMap.get(i.id);
-          const teto = f ? Number(f.teto_efetivo || 0) : Number(i.tier_diario || 0);
-          const enviados = f ? Number(f.enviados || 0) : 0;
-          return {
-            id: i.id,
-            nome: i.nome || i.display_phone || i.id.slice(0, 8),
-            qualidade: i.saude_quality || null,
-            teto,
-            enviados,
-            folga: Math.max(0, teto - enviados),
-          };
-        })
-        .filter((i: any) => i.folga > 0)
-        .sort((a: any, b: any) => b.folga - a.folga);
+       const livres = (insts || [])
+         .filter((i: any) => !jaNoJob.includes(i.id))
+         .filter((i: any) => !i.recuperacao_ativa && i.estado_pool !== 'restrita')
+         .filter((i: any) => ['GREEN', ''].includes(String(i.saude_quality || '').toUpperCase()))
+         .map((i: any) => {
+           const f = freioMap.get(i.id);
+           const teto = f ? Number(f.teto_efetivo || 0) : Number(i.tier_diario || 0);
+           const enviados = f ? Number(f.enviados || 0) : 0;
+           return {
+             id: i.id,
+             nome: i.nome || i.display_phone || i.id.slice(0, 8),
+             qualidade: i.saude_quality || null,
+             teto,
+             enviados,
+             folga: Math.max(0, teto - enviados),
+           };
+         })
+         .filter((i: any) => i.folga > 0)
+         .sort((a: any, b: any) => b.folga - a.folga);
 
       if (acao === 'instancias_livres') {
         return new Response(JSON.stringify({ success: true, instancias: livres }), {
@@ -285,10 +285,11 @@ Deno.serve(async (req) => {
       }
 
       const { data: cfg } = await supabase
-        .from('meta_envio_pool_config').select('pct_max_cota_meta').eq('id', 1).maybeSingle();
-      const pct = Number(cfg?.pct_max_cota_meta ?? 60) / 100;
+        .from('meta_envio_pool_config').select('pct_max_cota_meta, sem_teto_global').eq('id', 1).maybeSingle();
+      const semTetoGlobal = cfg?.sem_teto_global === true;
+      const pct = semTetoGlobal ? 1 : Number(cfg?.pct_max_cota_meta ?? 60) / 100;
       const limiteSeguro = Math.max(10, Math.floor(Number(inst.tier_diario ?? 250) * pct));
-      const pedido = Number(body?.teto ?? 250);
+      const pedido = Number(body?.teto ?? (semTetoGlobal ? limiteSeguro : 250));
       const novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
 
       const hojeBrt2 = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
@@ -301,9 +302,11 @@ Deno.serve(async (req) => {
         dia: hojeBrt2,
         teto_efetivo: novoTeto,
         enviados: Number(freioAtual?.enviados || 0),
+        liberado_manual: true,
         motivo_reducao: `teto liberado manualmente para ${novoTeto} por ${user.id}`,
         atualizado_em: new Date().toISOString(),
       }, { onConflict: 'instancia_id,dia' });
+
 
       await devolverProcessandoParaFila();
       await supabase.from('envio_meta_job').update({

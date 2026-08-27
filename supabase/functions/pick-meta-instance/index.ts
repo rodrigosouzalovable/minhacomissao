@@ -202,7 +202,11 @@ Deno.serve(async (req) => {
       const fase = inst.data_ativacao_api ? faseFromDias(diasAtivo) : 'livre';
 
       // ===== Teto diário efetivo + teto horário =====
-      if (freioAtivo) {
+      // Modo "sem teto": números GREEN enviam até a cota da própria Meta.
+      // YELLOW/RED/quarentena/recuperação continuam com todas as travas.
+      const qualidadeUp = String(inst.saude_quality || '').toUpperCase();
+      const semTeto = cfg?.sem_teto_global === true && qualidadeUp === 'GREEN';
+      if (freioAtivo && !semTeto) {
         const freio = freioMap.get(inst.id);
         const tetoDia = freio ? Number(freio.teto_efetivo) : tetoBase(inst, cfg, fase);
         const enviadosDia = await enviadosHojeBrt(supabase, inst.id);
@@ -219,7 +223,19 @@ Deno.serve(async (req) => {
           descartados.push(`${rotulo}: teto por hora atingido (${naHora}/${cotaMaxHora})`);
           continue;
         }
+      } else if (semTeto) {
+        // Única trava restante: a cota real da Meta do número.
+        const cotaMeta = Number(inst.tier_diario || 0);
+        if (cotaMeta > 0) {
+          const enviadosDia = await enviadosHojeBrt(supabase, inst.id);
+          if (enviadosDia >= cotaMeta) {
+            descartados.push(`${rotulo}: cota da Meta atingida (${enviadosDia}/${cotaMeta})`);
+            continue;
+          }
+        }
       }
+
+
 
 
       // Guardrails baseados em métricas de ontem.

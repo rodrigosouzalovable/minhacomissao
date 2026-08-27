@@ -3653,6 +3653,7 @@ export type Database = {
           recuperacao_msgs_max_dia: number
           recuperacao_msgs_min_dia: number
           resposta_min_pct: number
+          sem_teto_global: boolean
           supressao_ativa: boolean
           tenant_id: string
         }
@@ -3696,6 +3697,7 @@ export type Database = {
           recuperacao_msgs_max_dia?: number
           recuperacao_msgs_min_dia?: number
           resposta_min_pct?: number
+          sem_teto_global?: boolean
           supressao_ativa?: boolean
           tenant_id?: string
         }
@@ -3739,6 +3741,7 @@ export type Database = {
           recuperacao_msgs_max_dia?: number
           recuperacao_msgs_min_dia?: number
           resposta_min_pct?: number
+          sem_teto_global?: boolean
           supressao_ativa?: boolean
           tenant_id?: string
         }
@@ -4205,6 +4208,7 @@ export type Database = {
           dia: string
           enviados: number
           instancia_id: string
+          liberado_manual: boolean
           motivo_reducao: string | null
           nao_lidas_pct: number | null
           resposta_pct: number | null
@@ -4216,6 +4220,7 @@ export type Database = {
           dia?: string
           enviados?: number
           instancia_id: string
+          liberado_manual?: boolean
           motivo_reducao?: string | null
           nao_lidas_pct?: number | null
           resposta_pct?: number | null
@@ -4227,6 +4232,7 @@ export type Database = {
           dia?: string
           enviados?: number
           instancia_id?: string
+          liberado_manual?: boolean
           motivo_reducao?: string | null
           nao_lidas_pct?: number | null
           resposta_pct?: number | null

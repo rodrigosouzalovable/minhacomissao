@@ -57,16 +57,29 @@ Deno.serve(async (req) => {
       const { teto, motivo } = aplicarFreio(base, m, cfg);
       const enviados = await enviadosHojeBrt(supabase, inst.id);
 
+      // Nunca desfazer liberação manual, e não rebaixar GREEN no modo "sem teto".
+      const { data: freioAtual } = await supabase
+        .from("meta_instance_freio_diario")
+        .select("teto_efetivo, liberado_manual")
+        .eq("instancia_id", inst.id).eq("dia", hoje).maybeSingle();
+      const qualidadeUp = String(inst.saude_quality || "").toUpperCase();
+      const preservarTeto = freioAtual?.liberado_manual === true ||
+        (cfg?.sem_teto_global === true && qualidadeUp === "GREEN");
+
       await supabase.from("meta_instance_freio_diario").upsert({
         instancia_id: inst.id,
         dia: hoje,
-        teto_efetivo: teto,
+        teto_efetivo: preservarTeto
+          ? Math.max(Number(freioAtual?.teto_efetivo || 0), Number(inst.tier_diario || 0), teto)
+          : teto,
         enviados,
         resposta_pct: Number(m.respostaPct.toFixed(2)),
         nao_lidas_pct: Number(m.naoLidasPct.toFixed(2)),
-        motivo_reducao: motivo,
+        motivo_reducao: preservarTeto ? (motivo ? `${motivo} (teto livre — não aplicado)` : null) : motivo,
+        liberado_manual: freioAtual?.liberado_manual === true,
         atualizado_em: new Date().toISOString(),
       }, { onConflict: "instancia_id,dia" });
+
 
       resultados.push({
         instancia: inst.nome || inst.display_phone,

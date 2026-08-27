@@ -42,6 +42,7 @@ type PoolConfig = {
   horario_inicio: string; horario_fim: string;
   freio_ativo: boolean | null;
   cota_max_hora: number | null;
+  sem_teto_global: boolean | null;
 };
 
 
@@ -101,6 +102,17 @@ export function PoolMetaPanel() {
     toast.success(turbo ? "Modo Turbo ligado — sem teto de rampa" : "Freio de rampa reativado");
     await carregar();
   };
+
+  const salvarSemTeto = async (semTeto: boolean) => {
+    setSavingTurbo(true);
+    const { error } = await (supabase as any).from("meta_envio_pool_config")
+      .update({ sem_teto_global: semTeto, atualizado_em: new Date().toISOString() }).eq("id", 1);
+    setSavingTurbo(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(semTeto ? "Sem teto ligado — GREEN usa a cota da Meta" : "Limites internos reativados");
+    await carregar();
+  };
+
 
 
   const carregar = async () => {
@@ -228,7 +240,8 @@ export function PoolMetaPanel() {
   const enviadosHoje = instancias.reduce((s, i) => s + (i.enviados_hoje || 0), 0);
   const cotaTotal = instancias.reduce((s, i) => {
     if (i.estado_pool !== "ativo") return s;
-    const c = Math.min(cotaDaFase(i.fase_rampup, cfg), i.tier_diario || 250);
+    const greenSemTeto = cfg?.sem_teto_global === true && String(i.saude_quality || "").toUpperCase() === "GREEN";
+    const c = greenSemTeto ? (i.tier_diario || 0) : Math.min(cotaDaFase(i.fase_rampup, cfg), i.tier_diario || 250);
     return s + c;
   }, 0);
 
@@ -302,7 +315,22 @@ export function PoolMetaPanel() {
           )}
         </div>
 
-        {/* Resumo */}
+         {/* Modo sem teto */}
+         <div className={`rounded-md border p-3 space-y-2 ${cfg?.sem_teto_global ? "border-amber-500/60 bg-amber-500/10" : ""}`}>
+           <div className="flex items-center justify-between gap-3 flex-wrap">
+             <div className="flex items-center gap-2">
+               <ShieldCheck className={`h-4 w-4 ${cfg?.sem_teto_global ? "text-amber-600" : "text-muted-foreground"}`} />
+               <div>
+                 <p className="text-sm font-semibold">Sem teto interno para números GREEN</p>
+                 <p className="text-xs text-muted-foreground">Números GREEN usam a cota real da Meta; YELLOW e RED continuam protegidos pelo aquecimento automático.</p>
+               </div>
+             </div>
+             <Switch checked={cfg?.sem_teto_global === true} disabled={savingTurbo} onCheckedChange={salvarSemTeto} />
+           </div>
+           {cfg?.sem_teto_global && <p className="text-xs text-amber-700 dark:text-amber-400">⚠️ O volume GREEN pode aumentar. Quarentena e recuperação de qualidade permanecem obrigatórias.</p>}
+         </div>
+
+
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-md border p-3">
@@ -330,11 +358,12 @@ export function PoolMetaPanel() {
           <div className="text-sm text-muted-foreground py-4">Nenhum número Meta conectado.</div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
-            {instancias.map((inst) => {
-              const est = estadoBadge(inst.estado_pool);
-              const cota = Math.min(cotaDaFase(inst.fase_rampup, cfg), inst.tier_diario || 250);
-              const uso = inst.enviados_hoje || 0;
-              const pct = cota > 0 ? Math.min(100, (uso / cota) * 100) : 0;
+             {instancias.map((inst) => {
+               const est = estadoBadge(inst.estado_pool);
+               const greenSemTeto = cfg?.sem_teto_global === true && String(inst.saude_quality || "").toUpperCase() === "GREEN";
+               const cota = greenSemTeto ? (inst.tier_diario || 0) : Math.min(cotaDaFase(inst.fase_rampup, cfg), inst.tier_diario || 250);
+               const uso = inst.enviados_hoje || 0;
+               const pct = cota > 0 ? Math.min(100, (uso / cota) * 100) : 0;
               const dias = inst.data_ativacao_api
                 ? Math.floor((Date.now() - new Date(inst.data_ativacao_api).getTime()) / 86400000) + 1
                 : 0;
