@@ -323,11 +323,10 @@ export async function notificarAdmin(
 
       let ultimoErro = "sem_tentativas";
       const errosTentativas: string[] = [];
-      const connectedStartIdx = cfg.ultima_instancia_id
-        ? Math.max(0, (orderedInsts.findIndex((i: any) => i.id === cfg.ultima_instancia_id) + 1) % orderedInsts.length)
-        : 0;
+      // Ordem fixa: remetente único primeiro; as demais são só plano B.
       for (let t = 0; t < orderedInsts.length; t++) {
-        const inst: any = orderedInsts[(connectedStartIdx + t) % orderedInsts.length];
+        const inst: any = orderedInsts[t];
+
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
           const ctrl = new AbortController();
