@@ -57,13 +57,13 @@ Quantidade e momento (calculados pelo sistema, sem você mexer):
 - Número sai da quarentena com teto 20/dia; se ficar GREEN por 3 dias sobe para 40, depois 80, depois teto normal da fase. Cai de degrau ao primeiro YELLOW.
 - A escada já tem campos (`teto_escada`, `escada_retorno`), falta o agendador aplicar a promoção diária.
 
-### 4. Higiene da base antes de voltar a disparar
+### 5. Higiene da base antes de voltar a disparar
 - Só voltar a mandar campanha desses números para listas filtradas: sem quem já falhou entrega 2x, sem quem recebeu 3 campanhas sem responder, sem quem está na blacklist.
 - Rotação de templates e frase de opt-out ("responda SAIR") nas campanhas — denúncia é o gatilho mais forte de queda.
 
-### 5. Acompanhamento
+### 6. Acompanhamento
 - Checagem de saúde 3x/dia nos números em recuperação e aviso no WhatsApp na transição RED→YELLOW→GREEN, com volume das 24h para relacionar causa e efeito.
-- Painel simples no Monitor de Envios: número, qualidade, dia da quarentena, teto do degrau, enviados hoje, % de entrada.
+- Painel simples no Monitor de Envios: número, qualidade, dia da quarentena/recuperação, mensagens de aquecimento enviadas hoje, teto do degrau, % de entrada.
 
 ## Expectativa realista
 
