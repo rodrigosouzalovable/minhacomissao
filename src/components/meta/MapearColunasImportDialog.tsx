@@ -254,12 +254,11 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       return;
     }
 
-    // Coluna ignorada que parece documento: avisa antes de perder o CPF da campanha.
+    // Coluna ignorada que parece documento: avisa (sem travar) para não perder o CPF da campanha.
     if (idxCpf < 0) {
       const idxDocIgnorado = mapping.findIndex((r, c) => r === "ignore" && c !== idxTel && columnLooksLikeDocument(rows, c, firstIsHeader));
       if (idxDocIgnorado >= 0) {
-        toast.error(`A coluna ${colLetter(idxDocIgnorado)} parece ser CPF/CNPJ. Marque como "CPF / CNPJ" para que o CPF apareça no cabeçalho da conversa.`);
-        return;
+        toast.warning(`A coluna ${colLetter(idxDocIgnorado)} parece ser CPF/CNPJ. Marque como "CPF / CNPJ" se quiser o CPF no cabeçalho da conversa.`);
       }
     }
 
