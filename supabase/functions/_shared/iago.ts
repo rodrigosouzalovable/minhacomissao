@@ -802,9 +802,9 @@ async function chamarIAUmaVez(
 }
 
 /**
- * Chamada ao Lovable AI Gateway com 1 nova tentativa.
- * Rajadas de mensagens podem estourar o limite momentâneo do gateway; nesse caso
- * espera alguns segundos e tenta de novo (a segunda tentativa usa modelo de reserva).
+ * Chamada ao Lovable AI Gateway com backoff.
+ * Falhas transitórias (429 e 5xx, ex.: 503 upstream_error) são retentadas até 3x,
+ * alternando para o modelo de reserva. Falhas terminais (400/401/403/sem crédito) não retentam.
  */
 export async function chamarIA(
   system: string,
@@ -812,16 +812,23 @@ export async function chamarIA(
   modelo = 'google/gemini-3.6-flash',
   modeloReserva = 'google/gemini-2.5-flash',
 ): Promise<string> {
-  try {
-    return await chamarIAUmaVez(system, user, modelo);
-  } catch (e: any) {
-    const msg = String(e?.message || e);
-    if (msg === 'sem_creditos') throw e;
-    const espera = msg === 'rate_limit' ? 4000 + Math.floor(Math.random() * 4000) : 1500;
-    console.error('[IAGO] IA falhou, tentando novamente', { erro: msg, espera });
-    await sleep(espera);
-    return await chamarIAUmaVez(system, user, modeloReserva);
+  const terminal = (m: string) => m === 'sem_creditos' || /^ai_(400|401|403)/.test(m);
+  let ultimo: any = null;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    try {
+      return await chamarIAUmaVez(system, user, tentativa === 0 ? modelo : modeloReserva);
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      ultimo = e;
+      if (terminal(msg)) throw e;
+      if (tentativa === 2) break;
+      const base = msg === 'rate_limit' ? 4000 : 1500;
+      const espera = base * (tentativa + 1) + Math.floor(Math.random() * 2000);
+      console.error('[IAGO] IA falhou, nova tentativa', { erro: msg, tentativa: tentativa + 1, espera });
+      await sleep(espera);
+    }
   }
+  throw ultimo;
 }
 
 
