@@ -158,11 +158,11 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
   const rateLimitInfo = parseRateLimitMotivo((job as any).status_motivo || resultado?.statusMotivo);
-  const retomaLabel = progresso?.cotaRetomaEm
-    ? new Date(progresso.cotaRetomaEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-    : progresso && progresso.proximoEmSeg > 0
-      ? `em ${Math.ceil(progresso.proximoEmSeg / 60)} min`
-      : "em breve";
+  const motivoBruto = String((job as any).status_motivo || resultado?.statusMotivo || "");
+  // Também cobre campanhas antigas que ficaram em "erro" por teto diário.
+  const cotaBloqueio = Boolean(progresso?.aguardandoCota)
+    || (job.status === "erro" && /teto di[aá]rio|cota|quarentena|qualidade|freio/i.test(motivoBruto));
+  const cotaMotivoTexto = progresso?.cotaMotivo || motivoBruto;
 
 
   // ===== Previsão de término (estimativa) =====
