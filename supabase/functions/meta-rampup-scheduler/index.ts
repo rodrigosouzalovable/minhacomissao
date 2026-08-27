@@ -35,25 +35,29 @@ Deno.serve(async (req) => {
     }
 
     // ===== Escada de retorno pós-quarentena =====
-    // Números que saíram da quarentena sobem de degrau quando estão GREEN;
-    // quem não está GREEN volta ao primeiro degrau.
+    // Números que saíram da quarentena sobem de degrau após N dias seguidos em
+    // GREEN; quem não está GREEN volta ao primeiro degrau.
     const { data: cfg } = await supabase
-      .from('meta_envio_pool_config').select('escada_retorno').eq('id', 1).maybeSingle();
+      .from('meta_envio_pool_config')
+      .select('escada_retorno, recuperacao_dias_green_alta')
+      .eq('id', 1).maybeSingle();
     const escada: number[] = Array.isArray(cfg?.escada_retorno) ? cfg!.escada_retorno : [20, 40, 80];
+    const diasGreenAlta = Math.max(1, Number(cfg?.recuperacao_dias_green_alta ?? 3));
 
     const { data: comEscada } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, saude_quality, teto_escada, quarentena_ate')
+      .select('id, nome, saude_quality, teto_escada, quarentena_ate, recuperacao_ativa, dias_green_consecutivos')
       .not('teto_escada', 'is', null);
 
     const escadaUpdates: any[] = [];
     for (const inst of (comEscada || []) as any[]) {
       const emQuarentena = inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date();
-      if (emQuarentena) continue;
+      if (emQuarentena || inst.recuperacao_ativa === true) continue;
       const qual = String(inst.saude_quality || '').toUpperCase();
       const atual = Number(inst.teto_escada);
       let novo: number | null = atual;
       if (qual === 'GREEN') {
+        if (Number(inst.dias_green_consecutivos || 0) < diasGreenAlta) continue;
         const idx = escada.findIndex((v) => Number(v) >= atual);
         const proximo = idx >= 0 && idx + 1 < escada.length ? Number(escada[idx + 1]) : null;
         // Último degrau concluído com GREEN → libera o teto normal da fase.
@@ -66,6 +70,7 @@ Deno.serve(async (req) => {
         escadaUpdates.push({ id: inst.id, nome: inst.nome, de: atual, para: novo });
       }
     }
+
 
     return new Response(JSON.stringify({ success: true, atualizadas: updates.length, updates, escada: escadaUpdates }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
