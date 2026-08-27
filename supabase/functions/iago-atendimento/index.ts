@@ -652,8 +652,8 @@ Deno.serve(async (req) => {
 
 
 
-    // ===== Cliente já tem acordo => humano assume =====
-    if (temAcordo) {
+    // ===== Cliente já tem acordo => humano assume (no aquecimento, o IAGO segue conversando) =====
+    if (temAcordo && !modoAquecimento) {
       await supabase.from('iago_conversa_estado')
         .update({ cpf, aguardando_humano: travaHumano(), etapa: 'ja_tem_acordo', followup_em: null })
         .eq('id', estado.id);
