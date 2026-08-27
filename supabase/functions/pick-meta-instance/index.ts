@@ -223,7 +223,18 @@ Deno.serve(async (req) => {
           descartados.push(`${rotulo}: teto por hora atingido (${naHora}/${cotaMaxHora})`);
           continue;
         }
+      } else if (semTeto) {
+        // Única trava restante: a cota real da Meta do número.
+        const cotaMeta = Number(inst.messaging_limit_manual || inst.tier_diario || 0);
+        if (cotaMeta > 0) {
+          const enviadosDia = await enviadosHojeBrt(supabase, inst.id);
+          if (enviadosDia >= cotaMeta) {
+            descartados.push(`${rotulo}: cota da Meta atingida (${enviadosDia}/${cotaMeta})`);
+            continue;
+          }
+        }
       }
+
 
 
 
