@@ -3,6 +3,7 @@
 // e ban_info da WABA. Persiste snapshot em meta_whatsapp_instances.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
+import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -197,7 +198,6 @@ Deno.serve(async (req) => {
         if (r.liberada) {
           try {
             const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
-            const { linhaBmInstancia } = await import('../_shared/rotulo-instancia.ts');
             const bmLinha = await linhaBmInstancia(supabase, inst);
             const hojeBrt = new Date().toISOString().slice(0, 10);
             await notificarAdmin(supabase, {
