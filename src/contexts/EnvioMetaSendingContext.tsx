@@ -166,6 +166,7 @@ type Ctx = {
   refreshCountersJob: (jobId: string) => Promise<void>;
   listarInstanciasLivres: (jobId: string) => Promise<InstanciaLivre[]>;
   adicionarInstanciasLivres: (jobId: string, ids?: string[]) => Promise<boolean>;
+  liberarTetoHoje: (jobId: string, instanciaId?: string, teto?: number) => Promise<boolean>;
   marcarJobAberto: (jobId: string, aberto: boolean) => void;
 
   exportarItensJob: (
@@ -314,6 +315,20 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
     autoResumeTriesRef.current.delete(jobId);
     toast.success(`${data.adicionadas} instância(s) adicionada(s) — campanha retomada`);
+    await carregarJobs();
+    return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invokeControle]);
+
+  /** Admin: libera mais envios hoje para uma instância da campanha e retoma imediatamente. */
+  const liberarTetoHoje = useCallback(async (jobId: string, instanciaId?: string, teto = 250): Promise<boolean> => {
+    const { data, error } = await invokeControle(jobId, "liberar_teto_hoje", { instancia_id: instanciaId, teto });
+    if (error || !data?.success) {
+      toast.error(data?.error || "Não foi possível liberar o teto agora");
+      return false;
+    }
+    autoResumeTriesRef.current.delete(jobId);
+    toast.success(`Teto de hoje liberado para ${data.teto} em ${data.instancia} — campanha retomada`);
     await carregarJobs();
     return true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -968,7 +983,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, adicionarInstanciasLivres, marcarJobAberto, exportarItensJob,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, adicionarInstanciasLivres, liberarTetoHoje, marcarJobAberto, exportarItensJob,
       }}
     >
       {children}
