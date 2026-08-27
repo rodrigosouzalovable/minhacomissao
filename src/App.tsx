@@ -71,6 +71,7 @@ const Cotacoes = lazy(() => retryImport(() => import("./pages/Cotacoes")));
 const LembreteMeta = lazy(() => retryImport(() => import("./pages/LembreteMeta")));
 const GoogleMapsLeads = lazy(() => retryImport(() => import("./pages/GoogleMapsLeads")));
 const PontoAdmin = lazy(() => retryImport(() => import("./pages/PontoAdmin")));
+const Blacklist = lazy(() => retryImport(() => import("./pages/Blacklist")));
 
 const TenantLayout = lazy(() => retryImport(() => import("./pages/tenant/TenantLayout")));
 
