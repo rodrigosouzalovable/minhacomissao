@@ -59,11 +59,16 @@ function detectRoleFromSample(samples: string[]): string {
 }
 
 function columnLooksLikeDocument(rows: any[][], col: number, skipHeader: boolean): boolean {
-  const samples = rows
+  const raw = rows
     .slice(skipHeader ? 1 : 0, skipHeader ? 11 : 10)
-    .map((r) => String((r || [])[col] ?? "").replace(/\D/g, ""))
+    .map((r) => String((r || [])[col] ?? "").trim())
     .filter(Boolean);
-  if (samples.length === 0) return false;
+  if (raw.length === 0) return false;
+  // Datas e valores monetários NÃO são documento (evita travar a importação).
+  const ehDataOuValor = (s: string) =>
+    /\d{1,4}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/.test(s) || /[,]\d{1,2}\b/.test(s) || /R\$/i.test(s);
+  const samples = raw.filter((s) => !ehDataOuValor(s)).map((s) => s.replace(/\D/g, "")).filter(Boolean);
+  if (samples.length / raw.length < 0.6) return false;
   // Aceita CPF encurtado pelo Excel (zeros à esquerda perdidos) e CNPJ.
   return samples.filter((d) => (d.length >= 5 && d.length <= 11) || d.length === 14).length / samples.length > 0.6;
 }
@@ -249,12 +254,11 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       return;
     }
 
-    // Coluna ignorada que parece documento: avisa antes de perder o CPF da campanha.
+    // Coluna ignorada que parece documento: avisa (sem travar) para não perder o CPF da campanha.
     if (idxCpf < 0) {
       const idxDocIgnorado = mapping.findIndex((r, c) => r === "ignore" && c !== idxTel && columnLooksLikeDocument(rows, c, firstIsHeader));
       if (idxDocIgnorado >= 0) {
-        toast.error(`A coluna ${colLetter(idxDocIgnorado)} parece ser CPF/CNPJ. Marque como "CPF / CNPJ" para que o CPF apareça no cabeçalho da conversa.`);
-        return;
+        toast.warning(`A coluna ${colLetter(idxDocIgnorado)} parece ser CPF/CNPJ. Marque como "CPF / CNPJ" se quiser o CPF no cabeçalho da conversa.`);
       }
     }
 

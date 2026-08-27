@@ -442,8 +442,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   ))}
                 </div>
                 <div>
-                  Reavaliação automática a cada <strong>5 min</strong> — nada a reativar. Assim que qualquer número
-                  liberar cota, a campanha volta sozinha.
+                  {job.status === "erro"
+                    ? "Esta campanha ficou parada em erro por cota/qualidade — ela não volta sozinha. Use \"Reativar\" (ou libere o teto abaixo) para retomar."
+                    : <>Reavaliação automática a cada <strong>5 min</strong> — nada a reativar. Assim que qualquer número liberar cota, a campanha volta sozinha.</>}
                 </div>
                 {isAdmin && (
                   <div className="pt-1">

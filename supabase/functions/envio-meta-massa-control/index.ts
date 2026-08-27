@@ -1,5 +1,6 @@
 // Controla um job de envio massa Meta: pausar / retomar / cancelar / limpar.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { enviadosHojeBrt } from '../_shared/meta-freio.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -290,12 +291,22 @@ Deno.serve(async (req) => {
       const pct = semTetoGlobal ? 1 : Number(cfg?.pct_max_cota_meta ?? 60) / 100;
       const limiteSeguro = Math.max(10, Math.floor(Number(inst.tier_diario ?? 250) * pct));
       const pedido = Number(body?.teto ?? (semTetoGlobal ? limiteSeguro : 250));
-      const novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
+      let novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
 
       const hojeBrt2 = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
       const { data: freioAtual } = await supabase
         .from('meta_instance_freio_diario')
         .select('enviados').eq('instancia_id', instId).eq('dia', hojeBrt2).maybeSingle();
+
+      // O bloqueio real usa os envios efetivos de hoje: um teto abaixo disso não libera nada.
+      const enviadosHoje = await enviadosHojeBrt(supabase, instId);
+      if (limiteSeguro <= enviadosHoje) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `este número já enviou ${enviadosHoje} hoje e o limite de segurança da cota Meta é ${limiteSeguro} — escolha outro número ou aguarde a virada do dia`,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      novoTeto = Math.min(limiteSeguro, Math.max(novoTeto, enviadosHoje + 10));
 
       await supabase.from('meta_instance_freio_diario').upsert({
         instancia_id: instId,
