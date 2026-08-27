@@ -11,3 +11,37 @@ export function rotuloInstancia(inst: any): string {
   const sufixo = verificado && verificado !== principal ? ` (${verificado})` : '';
   return `${principal}${sufixo}`;
 }
+
+/**
+ * Linha "BM: <nome>" da Business Manager vinculada à instância.
+ * Resolve por meta_bm_id e, como fallback, pelo business_id.
+ */
+export async function linhaBmInstancia(supabase: any, inst: any): Promise<string> {
+  try {
+    const bmId = (inst?.meta_bm_id || '').toString().trim();
+    const businessId = (inst?.business_id || '').toString().trim();
+    let nome = '';
+
+    if (bmId) {
+      const { data } = await supabase
+        .from('meta_business_managers')
+        .select('nome, business_id')
+        .eq('id', bmId)
+        .maybeSingle();
+      nome = (data?.nome || '').toString().trim();
+    }
+    if (!nome && businessId) {
+      const { data } = await supabase
+        .from('meta_business_managers')
+        .select('nome')
+        .eq('business_id', businessId)
+        .maybeSingle();
+      nome = (data?.nome || '').toString().trim();
+    }
+    if (!nome && businessId) nome = `Business ID ${businessId}`;
+    return `BM: *${nome || 'não vinculada'}*`;
+  } catch (_) {
+    return 'BM: *não vinculada*';
+  }
+}
+
