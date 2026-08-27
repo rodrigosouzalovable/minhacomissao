@@ -86,6 +86,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
 
+    modoAquecimento = String((contato as any).folder_id || '') === FOLDER_AQUECIMENTO_INBOX;
+
+
     const atende = await iagoAtendeCaixa(supabase, iago.id, (contato as any).folder_id ?? null);
     if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
 
