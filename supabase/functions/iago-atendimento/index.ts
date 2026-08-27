@@ -172,7 +172,13 @@ Deno.serve(async (req) => {
       return json({ success: true, etapa: 'optout' });
     }
     if (estado.optout) return json({ success: true, skipped: 'contato bloqueado' });
-    if (estado.aguardando_humano) return json({ success: true, skipped: 'aguardando humano' });
+    if (estado.aguardando_humano) {
+      if (!modoAquecimento) return json({ success: true, skipped: 'aguardando humano' });
+      // Aquecimento: destrava e segue respondendo.
+      await supabase.from('iago_conversa_estado')
+        .update({ aguardando_humano: false }).eq('id', estado.id);
+      (estado as any).aguardando_humano = false;
+    }
 
     // ===== Limite diário anti-loop =====
     const dia = hojeSP();
