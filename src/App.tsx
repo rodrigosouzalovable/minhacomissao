@@ -287,6 +287,7 @@ const App = () => (
             <Route path="/admin/lembrete-meta" element={<AdminRoute><LembreteMeta /></AdminRoute>} />
             <Route path="/admin/google-maps-leads" element={<AdminRoute><GoogleMapsLeads /></AdminRoute>} />
             <Route path="/admin/ponto" element={<AdminRoute><PontoAdmin /></AdminRoute>} />
+            <Route path="/admin/blacklist" element={<ProtectedRoute><Blacklist /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
