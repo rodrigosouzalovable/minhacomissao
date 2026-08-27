@@ -282,16 +282,19 @@ export default function InboxMeta() {
   // Alvo do copiloto: última mensagem do cliente com objeção detectada (ou aberta manualmente)
   const sugestaoAlvo = useMemo(() => {
     if (!mensagens.length) return null;
+    // Abertura manual pelo botão: usa a mensagem escolhida, mesmo que o atendente já tenha respondido.
+    const manual = sugestaoManualId ? mensagens.find((m) => m.id === sugestaoManualId) : null;
     const ultima = mensagens[mensagens.length - 1];
-    if (!ultima || ultima.direcao !== 'entrada') return null;
-    const texto = String(ultima.conteudo || ultima.transcricao || '').trim();
+    const alvo = manual || (ultima && ultima.direcao === 'entrada' ? ultima : null);
+    if (!alvo || alvo.direcao !== 'entrada') return null;
+    const texto = String(alvo.conteudo || alvo.transcricao || '').trim();
     if (!texto) return null;
     const objecao = detectarObjecaoLocal(texto);
-    if (!objecao && sugestaoManualId !== ultima.id) return null;
+    if (!objecao && sugestaoManualId !== alvo.id) return null;
     return {
-      instanciaId: ultima.instancia_id,
-      telefone: ultima.telefone,
-      mensagemId: ultima.id,
+      instanciaId: alvo.instancia_id,
+      telefone: alvo.telefone,
+      mensagemId: alvo.id,
       texto,
       objecao,
     };
