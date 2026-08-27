@@ -222,7 +222,8 @@ export async function notificarAdmin(
     }
 
 
-    // Round-robin: pega próxima instância ativa após a última usada
+    // Remetente ÚNICO: todas as notificações saem sempre pelo mesmo número.
+    // Só troca (e persiste o novo) se o remetente fixo estiver fora do ar.
     const { data: insts } = await supabase
       .from("user_whatsapp_instances")
       .select("id, server_url, instance_token, nome")
@@ -233,16 +234,26 @@ export async function notificarAdmin(
 
     if (!insts?.length) return { success: false, error: "sem_instancia_ativa", fallback: true };
 
-    const statusChecks = await Promise.allSettled(
-      insts.map(async (inst: any) => ({ inst, connected: await checkInstanceConnected(inst) })),
-    );
-    const connectedIds = new Set(
-      statusChecks
-        .filter((r): r is PromiseFulfilledResult<{ inst: any; connected: boolean }> => r.status === "fulfilled")
-        .filter((r) => r.value.connected)
-        .map((r) => r.value.inst.id),
-    );
-    const orderedInsts = insts.filter((inst: any) => connectedIds.has(inst.id));
+    const fixaId: string | null = (cfg as any).instancia_notificacao_id ?? null;
+    const fixa = fixaId ? insts.find((i: any) => i.id === fixaId) : null;
+
+    let orderedInsts: any[] = [];
+    if (fixa && (await checkInstanceConnected(fixa))) {
+      // Caminho normal: nem verifica as outras (mais rápido e mais barato).
+      orderedInsts = [fixa];
+    } else {
+      const statusChecks = await Promise.allSettled(
+        insts.map(async (inst: any) => ({ inst, connected: await checkInstanceConnected(inst) })),
+      );
+      const connectedIds = new Set(
+        statusChecks
+          .filter((r): r is PromiseFulfilledResult<{ inst: any; connected: boolean }> => r.status === "fulfilled")
+          .filter((r) => r.value.connected)
+          .map((r) => r.value.inst.id),
+      );
+      orderedInsts = insts.filter((inst: any) => connectedIds.has(inst.id));
+    }
+
 
     if (!orderedInsts.length) {
       const erroFinal = `nenhuma_instancia_conectada; ativas_verificadas=${insts.length}`;
@@ -312,11 +323,10 @@ export async function notificarAdmin(
 
       let ultimoErro = "sem_tentativas";
       const errosTentativas: string[] = [];
-      const connectedStartIdx = cfg.ultima_instancia_id
-        ? Math.max(0, (orderedInsts.findIndex((i: any) => i.id === cfg.ultima_instancia_id) + 1) % orderedInsts.length)
-        : 0;
+      // Ordem fixa: remetente único primeiro; as demais são só plano B.
       for (let t = 0; t < orderedInsts.length; t++) {
-        const inst: any = orderedInsts[(connectedStartIdx + t) % orderedInsts.length];
+        const inst: any = orderedInsts[t];
+
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
           const ctrl = new AbortController();
@@ -338,8 +348,13 @@ export async function notificarAdmin(
               await registrar({ instancia_envio_id: inst.id, status: "enviado", enviado_em: new Date().toISOString() });
               await supabase
                 .from("admin_notificacoes_config")
-                .update({ ultima_instancia_id: inst.id, updated_at: new Date().toISOString() })
+                .update({
+                  ultima_instancia_id: inst.id,
+                  instancia_notificacao_id: inst.id,
+                  updated_at: new Date().toISOString(),
+                })
                 .eq("id", 1);
+
               return { ok: true };
             }
 

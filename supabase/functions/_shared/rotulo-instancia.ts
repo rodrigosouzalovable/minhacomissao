@@ -11,3 +11,48 @@ export function rotuloInstancia(inst: any): string {
   const sufixo = verificado && verificado !== principal ? ` (${verificado})` : '';
   return `${principal}${sufixo}`;
 }
+
+/**
+ * Linha "BM: <nome>" da Business Manager vinculada à instância.
+ * Resolve por meta_bm_id e, como fallback, pelo business_id.
+ */
+export async function linhaBmInstancia(supabase: any, inst: any): Promise<string> {
+  try {
+    let bmId = (inst?.meta_bm_id || '').toString().trim();
+    let businessId = (inst?.business_id || '').toString().trim();
+    // Alguns emissores passam a instância com poucos campos: buscamos o vínculo.
+    if (!bmId && !businessId && inst?.id) {
+      const { data: row } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('meta_bm_id, business_id')
+        .eq('id', inst.id)
+        .maybeSingle();
+      bmId = (row?.meta_bm_id || '').toString().trim();
+      businessId = (row?.business_id || '').toString().trim();
+    }
+    let nome = '';
+
+
+    if (bmId) {
+      const { data } = await supabase
+        .from('meta_business_managers')
+        .select('nome, business_id')
+        .eq('id', bmId)
+        .maybeSingle();
+      nome = (data?.nome || '').toString().trim();
+    }
+    if (!nome && businessId) {
+      const { data } = await supabase
+        .from('meta_business_managers')
+        .select('nome')
+        .eq('business_id', businessId)
+        .maybeSingle();
+      nome = (data?.nome || '').toString().trim();
+    }
+    if (!nome && businessId) nome = `Business ID ${businessId}`;
+    return `BM: *${nome || 'não vinculada'}*`;
+  } catch (_) {
+    return 'BM: *não vinculada*';
+  }
+}
+
