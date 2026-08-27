@@ -163,6 +163,7 @@ Deno.serve(async (req) => {
           alertaQueda =
             `⚠️ *Qualidade caiu para ${qual}*\n\n` +
             `Número: *${inst.nome || inst.display_phone}*\n` +
+            `${await linhaBmInstancia(supabase, inst)}\n` +
             `Antes: ${qualAnterior || 'desconhecida'} → Agora: ${qual}\n` +
             (updatePayload.quarentena_ate
               ? `Quarentena até ${new Date(updatePayload.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (fora das campanhas; segue atendendo conversas recebidas).\n`
@@ -196,12 +197,15 @@ Deno.serve(async (req) => {
         if (r.liberada) {
           try {
             const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            const { linhaBmInstancia } = await import('../_shared/rotulo-instancia.ts');
+            const bmLinha = await linhaBmInstancia(supabase, inst);
             const hojeBrt = new Date().toISOString().slice(0, 10);
             await notificarAdmin(supabase, {
               tipo: 'meta_bloqueio_liberado',
               mensagem:
                 `✅ *Bloqueio da Meta liberado*\n\n` +
                 `Número: *${inst.nome || inst.display_phone}*\n` +
+                `${bmLinha}\n` +
                 (r.liberada_pagamento
                   ? `A pendência de pagamento/elegibilidade da Business Manager foi regularizada — a Meta voltou a aceitar envios.`
                   : `A Meta voltou a responder normalmente (CONNECTED, sem restrição).`) +
@@ -247,6 +251,7 @@ Deno.serve(async (req) => {
               mensagem:
                 `🛑 Meta pausou número automaticamente\n\n` +
                 `Número: *${inst.nome || inst.display_phone}*\n` +
+                `${await linhaBmInstancia(supabase, inst)}\n` +
                 `Motivo: ${notificarPausa.motivo}\n` +
                 (notificarPausa.alcance === 'waba' ? `⚠️ Toda a WABA foi pausada preventivamente.\n` : '') +
                 `\nRetome manualmente em Monitor de Envios → Pool Meta quando quiser.`,
