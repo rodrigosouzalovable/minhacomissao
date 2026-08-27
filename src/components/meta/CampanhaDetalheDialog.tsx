@@ -110,6 +110,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const [livres, setLivres] = useState<InstanciaLivre[] | null>(null);
   const [buscandoLivres, setBuscandoLivres] = useState(false);
   const [adicionando, setAdicionando] = useState(false);
+  const [liberando, setLiberando] = useState(false);
+  const { role } = useUserRole();
+  const isAdmin = role === "admin";
 
   const carregarLivres = async () => {
     if (!jobId) return;
