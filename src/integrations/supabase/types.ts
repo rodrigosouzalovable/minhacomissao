@@ -5012,6 +5012,7 @@ export type Database = {
           estado_pool: string | null
           fase_rampup: string | null
           folder_padrao_id: string | null
+          green_contado_dia: string | null
           id: string
           messaging_limit_manual: string | null
           messaging_limit_source: string | null
@@ -5077,6 +5078,7 @@ export type Database = {
           estado_pool?: string | null
           fase_rampup?: string | null
           folder_padrao_id?: string | null
+          green_contado_dia?: string | null
           id?: string
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
@@ -5142,6 +5144,7 @@ export type Database = {
           estado_pool?: string | null
           fase_rampup?: string | null
           folder_padrao_id?: string | null
+          green_contado_dia?: string | null
           id?: string
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
