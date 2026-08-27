@@ -59,11 +59,16 @@ function detectRoleFromSample(samples: string[]): string {
 }
 
 function columnLooksLikeDocument(rows: any[][], col: number, skipHeader: boolean): boolean {
-  const samples = rows
+  const raw = rows
     .slice(skipHeader ? 1 : 0, skipHeader ? 11 : 10)
-    .map((r) => String((r || [])[col] ?? "").replace(/\D/g, ""))
+    .map((r) => String((r || [])[col] ?? "").trim())
     .filter(Boolean);
-  if (samples.length === 0) return false;
+  if (raw.length === 0) return false;
+  // Datas e valores monetários NÃO são documento (evita travar a importação).
+  const ehDataOuValor = (s: string) =>
+    /\d{1,4}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/.test(s) || /[,]\d{1,2}\b/.test(s) || /R\$/i.test(s);
+  const samples = raw.filter((s) => !ehDataOuValor(s)).map((s) => s.replace(/\D/g, "")).filter(Boolean);
+  if (samples.length / raw.length < 0.6) return false;
   // Aceita CPF encurtado pelo Excel (zeros à esquerda perdidos) e CNPJ.
   return samples.filter((d) => (d.length >= 5 && d.length <= 11) || d.length === 14).length / samples.length > 0.6;
 }
