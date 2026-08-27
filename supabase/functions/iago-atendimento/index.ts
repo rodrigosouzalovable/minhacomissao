@@ -707,8 +707,8 @@ Deno.serve(async (req) => {
       : [];
 
     // ===== Escolha da forma de pagamento => confirmar a DATA antes de chamar humano =====
-    let escalar = !!resultado?.escalar;
-    const escalouPorDuvida = !!resultado?.escalar;
+    let escalar = modoAquecimento ? false : !!resultado?.escalar;
+    const escalouPorDuvida = modoAquecimento ? false : !!resultado?.escalar;
 
     let motivo = String(resultado?.motivo || '');
     let etapaNova = escalar ? 'aguardando_humano' : (proposta ? 'proposta' : 'conversando');
