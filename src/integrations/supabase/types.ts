@@ -3565,32 +3565,52 @@ export type Database = {
       meta_destinatario_supressao: {
         Row: {
           atualizado_em: string
+          contato_nome: string | null
+          credor: string | null
           criado_em: string
           falhas: number
+          instancia_id: string | null
           motivo: string
+          origem_user_id: string | null
           telefone: string
           telefone_sufixo: string
           tenant_id: string
         }
         Insert: {
           atualizado_em?: string
+          contato_nome?: string | null
+          credor?: string | null
           criado_em?: string
           falhas?: number
+          instancia_id?: string | null
           motivo: string
+          origem_user_id?: string | null
           telefone: string
           telefone_sufixo: string
           tenant_id?: string
         }
         Update: {
           atualizado_em?: string
+          contato_nome?: string | null
+          credor?: string | null
           criado_em?: string
           falhas?: number
+          instancia_id?: string | null
           motivo?: string
+          origem_user_id?: string | null
           telefone?: string
           telefone_sufixo?: string
           tenant_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "meta_destinatario_supressao_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meta_envio_pool_config: {
         Row: {
