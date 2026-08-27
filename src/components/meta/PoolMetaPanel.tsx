@@ -314,7 +314,22 @@ export function PoolMetaPanel() {
           )}
         </div>
 
-        {/* Resumo */}
+         {/* Modo sem teto */}
+         <div className={`rounded-md border p-3 space-y-2 ${cfg?.sem_teto_global ? "border-amber-500/60 bg-amber-500/10" : ""}`}>
+           <div className="flex items-center justify-between gap-3 flex-wrap">
+             <div className="flex items-center gap-2">
+               <ShieldCheck className={`h-4 w-4 ${cfg?.sem_teto_global ? "text-amber-600" : "text-muted-foreground"}`} />
+               <div>
+                 <p className="text-sm font-semibold">Sem teto interno para números GREEN</p>
+                 <p className="text-xs text-muted-foreground">Números GREEN usam a cota real da Meta; YELLOW e RED continuam protegidos pelo aquecimento automático.</p>
+               </div>
+             </div>
+             <Switch checked={cfg?.sem_teto_global === true} disabled={savingTurbo} onCheckedChange={salvarSemTeto} />
+           </div>
+           {cfg?.sem_teto_global && <p className="text-xs text-amber-700 dark:text-amber-400">⚠️ O volume GREEN pode aumentar. Quarentena e recuperação de qualidade permanecem obrigatórias.</p>}
+         </div>
+
+
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-md border p-3">
