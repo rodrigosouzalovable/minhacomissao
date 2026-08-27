@@ -328,6 +328,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const filteredNavItems = navItems.filter((item) => {
     // /admin/usuarios sempre visível para admin (fail-safe: não pode ser desabilitada)
     if (isAdmin && item.href === '/admin/usuarios') return true;
+    // Parceiros Meta sempre veem a Blacklist (só os bloqueios das instâncias deles, via RLS)
+    if (parceiroMeta && item.href === '/admin/blacklist') return true;
     if (abasPermitidas) {
       return abasPermitidas.includes(item.href);
     }
