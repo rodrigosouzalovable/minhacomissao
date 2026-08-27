@@ -680,7 +680,7 @@ Deno.serve(async (req) => {
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
       qualificacoes: await quals(),
-      propostaPrevia, respostaAutomatica, precisaPerguntarNome,
+      propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento,
     });
 
     // ===== A IA entendeu que não é o titular (mesmo com erro de escrita) => encerra =====
@@ -965,6 +965,7 @@ async function gerarResposta(args: {
   propostaPrevia?: { valor: string; texto: string } | null;
   respostaAutomatica?: boolean;
   precisaPerguntarNome?: boolean;
+  modoAquecimento?: boolean;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
@@ -973,7 +974,7 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa, credorAmbiguo,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome,
+    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento,
   } = args;
 
 
@@ -1107,7 +1108,9 @@ async function gerarResposta(args: {
       : etapaNegociacao === 'aguardando_data'
         ? `ETAPA ATUAL: você já perguntou que dia ele consegue pagar${escolhaAnterior ? ` (opção escolhida: ${escolhaAnterior})` : ''}. Interprete a data informada.`
         : '',
-    'Escale para humano (escalar=true) quando: a data do pagamento estiver definida (ou fora do mês); o cliente pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
+    modoAquecimento
+      ? 'MODO AQUECIMENTO: é PROIBIDO escalar (use SEMPRE escalar=false), prometer transferência, dizer que vai chamar outro atendente ou deixar a mensagem sem resposta. Responda SEMPRE de forma curta, educada e natural, e mantenha a conversa fluindo com uma pergunta leve.'
+      : 'Escale para humano (escalar=true) quando: a data do pagamento estiver definida (ou fora do mês); o cliente pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
     '',
     instrucoes ? `INSTRUÇÕES DO ADMINISTRADOR:\n${instrucoes}` : '',
     qa ? `PERGUNTAS E RESPOSTAS PRONTAS:\n${qa}` : '',
