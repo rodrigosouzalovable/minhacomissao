@@ -139,9 +139,10 @@ export function LayoutUmeTab({ compact }: Props) {
         .sort((a, b) => a.n - b.n);
       setParcelas(lidas);
       const avista = d.valor_avista ?? lidas.find((p) => p.n === 1)?.valor ?? null;
-      setValorAvista(avista != null ? String(avista) : '');
-      setTotalAte3x(d.total_ate_3x != null ? String(d.total_ate_3x) : '');
-      setTotal4xMais(d.total_4x_ou_mais != null ? String(d.total_4x_ou_mais) : '');
+      const fmtBR = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      setValorAvista(avista != null ? fmtBR(Number(avista)) : '');
+      setTotalAte3x(d.total_ate_3x != null ? fmtBR(Number(d.total_ate_3x)) : '');
+      setTotal4xMais(d.total_4x_ou_mais != null ? fmtBR(Number(d.total_4x_ou_mais)) : '');
       toast.success('Tabela extraída!');
     } catch (e: any) {
       toast.error(e.message || 'Erro ao extrair dados');
