@@ -285,10 +285,11 @@ Deno.serve(async (req) => {
       }
 
       const { data: cfg } = await supabase
-        .from('meta_envio_pool_config').select('pct_max_cota_meta').eq('id', 1).maybeSingle();
-      const pct = Number(cfg?.pct_max_cota_meta ?? 60) / 100;
+        .from('meta_envio_pool_config').select('pct_max_cota_meta, sem_teto_global').eq('id', 1).maybeSingle();
+      const semTetoGlobal = cfg?.sem_teto_global === true;
+      const pct = semTetoGlobal ? 1 : Number(cfg?.pct_max_cota_meta ?? 60) / 100;
       const limiteSeguro = Math.max(10, Math.floor(Number(inst.tier_diario ?? 250) * pct));
-      const pedido = Number(body?.teto ?? 250);
+      const pedido = Number(body?.teto ?? (semTetoGlobal ? limiteSeguro : 250));
       const novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
 
       const hojeBrt2 = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
@@ -301,9 +302,11 @@ Deno.serve(async (req) => {
         dia: hojeBrt2,
         teto_efetivo: novoTeto,
         enviados: Number(freioAtual?.enviados || 0),
+        liberado_manual: true,
         motivo_reducao: `teto liberado manualmente para ${novoTeto} por ${user.id}`,
         atualizado_em: new Date().toISOString(),
       }, { onConflict: 'instancia_id,dia' });
+
 
       await devolverProcessandoParaFila();
       await supabase.from('envio_meta_job').update({
