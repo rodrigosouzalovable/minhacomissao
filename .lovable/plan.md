@@ -1,33 +1,43 @@
-# CPF da planilha no cabeçalho da conversa
+# Notificações do sistema: um único número remetente + BM na mensagem
 
-## O que aconteceu
+## O que está acontecendo hoje (verificado)
 
-A campanha que está rodando agora (1.710 contatos) foi criada **sem o CPF**: todos os 1.710 itens do disparo estão com o campo CPF vazio, e por isso os contatos criados no Inbox (Ivanda, Maria, etc.) também estão sem CPF — nada aparece no cabeçalho.
+- Os avisos do sistema (ex.: "Bloqueio da Meta liberado") são enviados em **round-robin**: a cada aviso o sistema pula para a próxima instância conectada. Nos últimos 4 dias **mais de 25 instâncias diferentes** já enviaram avisos para o seu número — é exatamente o comportamento que você quer eliminar.
+- A mensagem de liberação mostra hoje apenas `Número: SOUZA 62 8269-3446`, sem a Business Manager.
+- O vínculo da BM existe no cadastro da instância Meta (campo de BM e/ou `business_id`), mas hoje só 26 das 109 instâncias têm a BM preenchida diretamente — para as demais o sistema tentará descobrir pelo `business_id` e, se não achar, mostra "BM não vinculada".
 
-O motivo: na planilha `UME_NOVO_MUNDO_1.xlsx` não existe linha de cabeçalho e os CPFs da coluna C vêm sem os zeros à esquerda (`7144296`, `25827243`, `30980100`). A detecção automática de coluna só reconhece documento quando os valores têm 11 ou 14 dígitos, então a coluna C não foi identificada como "CPF / CNPJ" e acabou ignorada na importação. Confirmado na base: `00030980100` e `00025827243` são CPFs reais da carteira UME Novo Mundo.
+## O que vai mudar
 
-## Correções
+### 1. Um único número remetente das notificações (com troca automática)
 
-### 1. Reconhecer CPF curto na importação (evita o problema de novo)
+- Passa a existir um **remetente fixo** das notificações, guardado na configuração de notificações.
+- Todo aviso sai sempre por esse número, desde que ele esteja conectado.
+- Se ele estiver desconectado, com token inválido, banido ou falhar no envio, o sistema **elege automaticamente outro número apto**, grava como novo remetente fixo e passa a usar sempre ele — sem voltar a alternar entre vários.
+- O fallback pela API Oficial da Meta continua existindo, só como último recurso quando nenhum número UAZAPI entrega.
+- Vale para todos os avisos que hoje usam esse mesmo canal (saúde de instância, bloqueio/liberação da Meta, resumos diários, alertas de ponto, etc.).
 
-No diálogo de mapeamento de colunas:
+### 2. BM vinculada abaixo do nome da instância
 
-- A detecção automática passa a marcar como **CPF / CNPJ** colunas numéricas com 7 a 11 dígitos (além das de 11/14), desde que não sejam a coluna de telefone (telefones brasileiros têm 10-13 dígitos e DDD válido).
-- Ao confirmar, se sobrar alguma coluna ignorada que pareça documento (7-11 dígitos puros), aparece um aviso pedindo para marcá-la como "CPF / CNPJ" antes de continuar — mesmo comportamento que já existe hoje para a coluna de nome.
-- Os valores continuam sendo completados com zeros à esquerda até 11 dígitos (CPF) ou 14 (CNPJ), como já é feito.
+Todas as notificações que citam uma instância Meta passam a mostrar a BM logo abaixo do número:
 
-### 2. Corrigir a campanha que está rodando agora
+```text
+✅ Bloqueio da Meta liberado
 
-Vinculação em massa, a partir da própria planilha enviada:
+Número: SOUZA 62 8269-3446
+BM: NOVO MUNDO BM 02
 
-- Preencher o CPF nos 1.710 itens da campanha em execução (telefone → CPF da planilha), para que todo envio que ainda falta já grave o CPF no contato.
-- Preencher o CPF nos contatos do Inbox que já receberam mensagem dessa campanha (sem sobrescrever CPF já existente).
-- Registrar os pares telefone → CPF na base de vínculo (`acionamento_telefone_cpf`), que é a mesma usada pelo cabeçalho como segunda fonte e pelos relatórios UME.
+A Meta voltou a responder normalmente (CONNECTED, sem restrição).
+O número voltou para o pool de envios.
+```
 
-Depois disso o cabeçalho passa a mostrar `CPF 000.309.801-00` ao lado do nome/telefone, junto do selo do credor, exatamente como no exemplo enviado.
+Quando não houver BM vinculada, aparece `BM: não vinculada`, para você saber que falta o cadastro.
 
 ## Detalhes técnicos
 
-- `src/components/meta/MapearColunasImportDialog.tsx`: ampliar `columnLooksLikeDocument`/`detectRole` para faixa de 7-11 dígitos com guarda anti-telefone; validação extra em `confirmar()`.
-- Correção de dados via `run_sql`: `UPDATE envio_meta_job_item` e `UPDATE meta_whatsapp_contatos` casando pelo sufixo de 8 dígitos do telefone (padrão do projeto), mais `acionamento_vincular_telefone_cpf`.
-- Nenhuma mudança de schema, cron, polling ou realtime — custo de backend inalterado.
+- Migração: adicionar `instancia_notificacao_id` (uuid, nullable) em `admin_notificacoes_config`, referenciando `user_whatsapp_instances`.
+- `supabase/functions/_shared/notificar-admin.ts`:
+  - substituir o cursor round-robin (`ultima_instancia_id` + índice rotativo) por: usar `instancia_notificacao_id` se estiver na lista de conectadas; senão eleger a primeira conectada (ordem estável) e persistir em `instancia_notificacao_id`.
+  - em falha de entrega/instância morta, tentar as demais conectadas e, ao ter sucesso, gravar a nova escolhida como remetente fixo.
+- `supabase/functions/_shared/rotulo-instancia.ts`: nova função auxiliar `linhaBmInstancia(supabase, inst)` que resolve o nome da BM por `meta_bm_id` e, como fallback, por `business_id` em `meta_business_managers`, devolvendo a linha `BM: <nome>` ou `BM: não vinculada`.
+- Aplicar a linha de BM nas mensagens de: `check-meta-instance-health` (bloqueio liberado, restrição/pausa), `_shared/meta-conta-bloqueada.ts` (#131031 e #131042) e `_shared/meta-numero-inacessivel.ts`.
+- Nenhuma mudança de custo: sem novos crons, polling ou queries em loop; a resolução da BM é uma consulta pontual por aviso.
