@@ -320,7 +320,7 @@ Deno.serve(async (req) => {
 
     // ===== Divulgação em massa / robô escrevendo para vários chips =====
     // Não vale negociar: marca para revisão humana e conclui a entrada normalmente.
-    if (ehDivulgacao(textoAtual)) {
+    if (!modoAquecimento && ehDivulgacao(textoAtual)) {
       let ehMassa = true;
       if (telefoneContato) {
         const trecho = textoAtual.trim().slice(0, 40);
