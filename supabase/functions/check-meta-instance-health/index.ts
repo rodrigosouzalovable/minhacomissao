@@ -142,12 +142,22 @@ Deno.serve(async (req) => {
           notificarPausa = { motivo: `Status Meta = ${st} — pausa preventiva`, alcance: 'numero' };
         }
 
-        // ===== Quarentena por queda de qualidade =====
-        // Número que cai para YELLOW/RED sai do pool de campanha por N dias e
-        // volta com teto baixo (primeiro degrau da escada de retorno).
+        // ===== Quarentena + recuperação automática por queda de qualidade =====
+        // Número que cai para YELLOW/RED sai do pool de campanha por N dias,
+        // entra em modo recuperação (aquecimento automático com os números UAZAPI
+        // da pasta AQUECIMENTO) e volta com teto baixo (escada de retorno).
         const qualAnterior = String(inst.saude_quality || '').toUpperCase();
         const caiu = (qual === 'YELLOW' || qual === 'RED') && qualAnterior !== qual;
         const escada: number[] = Array.isArray(cfg?.escada_retorno) ? cfg.escada_retorno : [20, 40, 80];
+        const recupAuto = cfg?.recuperacao_auto !== false;
+        const msgsMin = Math.max(1, Number(cfg?.recuperacao_msgs_min_dia ?? 10));
+        const msgsMax = Math.max(msgsMin, Number(cfg?.recuperacao_msgs_max_dia ?? 20));
+        const msgsPiora = Math.max(1, Number(cfg?.recuperacao_msgs_dia_piora ?? 5));
+        const diasGreenAlta = Math.max(1, Number(cfg?.recuperacao_dias_green_alta ?? 3));
+        const hojeBrtDia = new Date(
+          new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }),
+        ).toISOString().slice(0, 10);
+
         if (caiu && !liberadaManual) {
           const dias = Math.max(1, Number(cfg?.quarentena_dias ?? 7));
           const quarentenaAtual = inst.quarentena_ate ? new Date(inst.quarentena_ate).getTime() : 0;
@@ -157,6 +167,47 @@ Deno.serve(async (req) => {
             updatePayload.quarentena_motivo = `qualidade ${qual}`;
           }
           updatePayload.teto_escada = Number(escada[0] ?? 20);
+          updatePayload.dias_green_consecutivos = 0;
+          updatePayload.green_contado_dia = null;
+
+          if (recupAuto) {
+            // Já estava em recuperação e piorou → reduz o volume em vez de subir.
+            const piorou = inst.recuperacao_ativa === true;
+            updatePayload.recuperacao_ativa = true;
+            updatePayload.recuperacao_desde = inst.recuperacao_desde || new Date().toISOString();
+            updatePayload.recuperacao_msgs_meta_dia = piorou
+              ? msgsPiora
+              : Math.floor(msgsMin + Math.random() * (msgsMax - msgsMin + 1));
+            updatePayload.recuperacao_proximo_envio_em = new Date().toISOString();
+          }
+        }
+
+        // ===== Volta para GREEN: conta os dias e encerra a recuperação =====
+        let alertaRecuperado: string | null = null;
+        if (qual === 'GREEN') {
+          const contadoHoje = inst.green_contado_dia === hojeBrtDia;
+          const diasGreen = contadoHoje
+            ? Number(inst.dias_green_consecutivos || 0)
+            : Number(inst.dias_green_consecutivos || 0) + 1;
+          if (!contadoHoje) {
+            updatePayload.dias_green_consecutivos = diasGreen;
+            updatePayload.green_contado_dia = hojeBrtDia;
+          }
+          if (inst.recuperacao_ativa === true && diasGreen >= diasGreenAlta) {
+            updatePayload.recuperacao_ativa = false;
+            updatePayload.recuperacao_msgs_meta_dia = null;
+            updatePayload.quarentena_ate = null;
+            updatePayload.quarentena_motivo = null;
+            updatePayload.estado_pool = 'ativo';
+            alertaRecuperado =
+              `✅ *Número recuperado — qualidade GREEN*\n\n` +
+              `Número: *${inst.nome || inst.display_phone}*\n` +
+              `${await linhaBmInstancia(supabase, inst)}\n` +
+              `${diasGreen} dias seguidos em GREEN. Aquecimento automático encerrado; o número volta ao pool com teto de ${inst.teto_escada ?? escada[0] ?? 20}/dia e sobe em escada.`;
+          }
+        } else if (qual === 'YELLOW' || qual === 'RED') {
+          updatePayload.dias_green_consecutivos = 0;
+          updatePayload.green_contado_dia = null;
         }
         // Alerta imediato de degradação (1 aviso por número por dia)
         let alertaQueda: string | null = null;
@@ -169,8 +220,12 @@ Deno.serve(async (req) => {
             (updatePayload.quarentena_ate
               ? `Quarentena até ${new Date(updatePayload.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (fora das campanhas; segue atendendo conversas recebidas).\n`
               : '') +
+            (updatePayload.recuperacao_ativa
+              ? `🔥 Aquecimento automático ligado: ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia para os números UAZAPI da caixa AQUECIMENTO (09h–19h, intervalos de 20–40 min). Nada a fazer da sua parte.\n`
+              : '') +
             `Volta com teto de ${escada[0] ?? 20}/dia e sobe em escada se ficar GREEN.`;
         }
+
 
         // ===== Auto-liberação de bloqueio real da Meta =====
         // Se a instância foi restringida por bloqueio da Meta (#131031 Business
@@ -240,6 +295,22 @@ Deno.serve(async (req) => {
             console.log('[health] alerta de queda falhou:', String(e).slice(0, 200));
           }
         }
+
+        if (alertaRecuperado) {
+          try {
+            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            await notificarAdmin(supabase, {
+              tipo: 'meta_qualidade_recuperada',
+              mensagem: alertaRecuperado,
+              chaveIdempotencia: `meta_recuperado_${inst.id}_${new Date().toISOString().slice(0, 10)}`,
+              umaVezPorChave: true,
+            });
+          } catch (e) {
+            console.log('[health] aviso de recuperação falhou:', String(e).slice(0, 200));
+          }
+        }
+
+
 
 
         if (notificarPausa) {

@@ -3642,7 +3642,16 @@ export type Database = {
           id: number
           nao_lidas_max_pct: number
           pct_max_cota_meta: number
+          preventivo_msgs_dia: number
           quarentena_dias: number
+          recuperacao_auto: boolean
+          recuperacao_dias_green_alta: number
+          recuperacao_intervalo_max_seg: number
+          recuperacao_intervalo_min_seg: number
+          recuperacao_max_por_destino_dia: number
+          recuperacao_msgs_dia_piora: number
+          recuperacao_msgs_max_dia: number
+          recuperacao_msgs_min_dia: number
           resposta_min_pct: number
           supressao_ativa: boolean
           tenant_id: string
@@ -3676,7 +3685,16 @@ export type Database = {
           id?: number
           nao_lidas_max_pct?: number
           pct_max_cota_meta?: number
+          preventivo_msgs_dia?: number
           quarentena_dias?: number
+          recuperacao_auto?: boolean
+          recuperacao_dias_green_alta?: number
+          recuperacao_intervalo_max_seg?: number
+          recuperacao_intervalo_min_seg?: number
+          recuperacao_max_por_destino_dia?: number
+          recuperacao_msgs_dia_piora?: number
+          recuperacao_msgs_max_dia?: number
+          recuperacao_msgs_min_dia?: number
           resposta_min_pct?: number
           supressao_ativa?: boolean
           tenant_id?: string
@@ -3710,7 +3728,16 @@ export type Database = {
           id?: number
           nao_lidas_max_pct?: number
           pct_max_cota_meta?: number
+          preventivo_msgs_dia?: number
           quarentena_dias?: number
+          recuperacao_auto?: boolean
+          recuperacao_dias_green_alta?: number
+          recuperacao_intervalo_max_seg?: number
+          recuperacao_intervalo_min_seg?: number
+          recuperacao_max_por_destino_dia?: number
+          recuperacao_msgs_dia_piora?: number
+          recuperacao_msgs_max_dia?: number
+          recuperacao_msgs_min_dia?: number
           resposta_min_pct?: number
           supressao_ativa?: boolean
           tenant_id?: string
@@ -4471,6 +4498,66 @@ export type Database = {
           },
         ]
       }
+      meta_recuperacao_log: {
+        Row: {
+          created_at: string
+          destino_instancia_id: string | null
+          destino_telefone: string | null
+          dia: string
+          enviado_em: string
+          erro: string | null
+          id: string
+          instancia_id: string
+          resposta_em: string | null
+          status: string
+          tipo: string
+          wamid: string | null
+        }
+        Insert: {
+          created_at?: string
+          destino_instancia_id?: string | null
+          destino_telefone?: string | null
+          dia?: string
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          instancia_id: string
+          resposta_em?: string | null
+          status?: string
+          tipo?: string
+          wamid?: string | null
+        }
+        Update: {
+          created_at?: string
+          destino_instancia_id?: string | null
+          destino_telefone?: string | null
+          dia?: string
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          instancia_id?: string
+          resposta_em?: string | null
+          status?: string
+          tipo?: string
+          wamid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_recuperacao_log_destino_instancia_id_fkey"
+            columns: ["destino_instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_recuperacao_log_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_templates_instancia: {
         Row: {
           atualizado_em: string
@@ -4919,11 +5006,13 @@ export type Database = {
           chamadas_habilitadas: boolean
           criado_em: string
           data_ativacao_api: string | null
+          dias_green_consecutivos: number
           display_phone: string | null
           enviados_hoje: number
           estado_pool: string | null
           fase_rampup: string | null
           folder_padrao_id: string | null
+          green_contado_dia: string | null
           id: string
           messaging_limit_manual: string | null
           messaging_limit_source: string | null
@@ -4946,6 +5035,11 @@ export type Database = {
           rajada_taxa_atual: number
           rajada_ultimo_ajuste_em: string | null
           rate_limit_ate: string | null
+          recuperacao_ativa: boolean
+          recuperacao_desde: string | null
+          recuperacao_msgs_meta_dia: number | null
+          recuperacao_proximo_envio_em: string | null
+          recuperacao_ultimo_envio_em: string | null
           saude_ban_info: Json | null
           saude_checked_at: string | null
           saude_name_status: string | null
@@ -4978,11 +5072,13 @@ export type Database = {
           chamadas_habilitadas?: boolean
           criado_em?: string
           data_ativacao_api?: string | null
+          dias_green_consecutivos?: number
           display_phone?: string | null
           enviados_hoje?: number
           estado_pool?: string | null
           fase_rampup?: string | null
           folder_padrao_id?: string | null
+          green_contado_dia?: string | null
           id?: string
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
@@ -5005,6 +5101,11 @@ export type Database = {
           rajada_taxa_atual?: number
           rajada_ultimo_ajuste_em?: string | null
           rate_limit_ate?: string | null
+          recuperacao_ativa?: boolean
+          recuperacao_desde?: string | null
+          recuperacao_msgs_meta_dia?: number | null
+          recuperacao_proximo_envio_em?: string | null
+          recuperacao_ultimo_envio_em?: string | null
           saude_ban_info?: Json | null
           saude_checked_at?: string | null
           saude_name_status?: string | null
@@ -5037,11 +5138,13 @@ export type Database = {
           chamadas_habilitadas?: boolean
           criado_em?: string
           data_ativacao_api?: string | null
+          dias_green_consecutivos?: number
           display_phone?: string | null
           enviados_hoje?: number
           estado_pool?: string | null
           fase_rampup?: string | null
           folder_padrao_id?: string | null
+          green_contado_dia?: string | null
           id?: string
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
@@ -5064,6 +5167,11 @@ export type Database = {
           rajada_taxa_atual?: number
           rajada_ultimo_ajuste_em?: string | null
           rate_limit_ate?: string | null
+          recuperacao_ativa?: boolean
+          recuperacao_desde?: string | null
+          recuperacao_msgs_meta_dia?: number | null
+          recuperacao_proximo_envio_em?: string | null
+          recuperacao_ultimo_envio_em?: string | null
           saude_ban_info?: Json | null
           saude_checked_at?: string | null
           saude_name_status?: string | null
