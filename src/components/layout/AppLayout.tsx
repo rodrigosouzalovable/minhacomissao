@@ -117,6 +117,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/lembrete-meta', label: 'Lembrete Meta', icon: Bell, adminOnly: true },
   { href: '/admin/google-maps-leads', label: 'Google Maps Leads', icon: MapPin, adminOnly: true },
   { href: '/admin/ponto', label: 'Controle de Ponto', icon: Clock, adminOnly: true },
+  { href: '/admin/blacklist', label: 'Blacklist', icon: Ban, adminOnly: true },
 ];
 
 
