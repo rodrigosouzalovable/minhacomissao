@@ -33,6 +33,23 @@ Deno.serve(async (req) => {
   let travaContatoId: string | null = null;
   let travaEntradaId: string | null = null;
 
+  // Caixa AQUECIMENTO: o IAGO responde TUDO e nunca chama humano (serve para aquecer os chips).
+  let modoAquecimento = false;
+  const etiquetarAguardandoHumano = async (sb: any, contatoId: string) => {
+    if (modoAquecimento) {
+      console.log('[IAGO] modo aquecimento — não escala para humano', { contatoId });
+      return;
+    }
+    return await etiquetarAguardandoHumanoBase(sb, contatoId);
+  };
+  const avisarEmergencia = async (sb: any, mensagem: string, contatoId?: string) => {
+    if (modoAquecimento) return;
+    return await avisarEmergenciaBase(sb, mensagem, contatoId);
+  };
+  /** No aquecimento a conversa nunca fica travada esperando humano. */
+  const travaHumano = () => !modoAquecimento;
+
+
   try {
     const body = await req.json().catch(() => ({}));
     const { contato_id, texto, entrada_id, simular } = body || {};
