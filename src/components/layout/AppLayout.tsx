@@ -34,7 +34,8 @@ import {
   CreditCard,
   Coins,
   MapPin,
-  Clock
+  Clock,
+  Ban
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
