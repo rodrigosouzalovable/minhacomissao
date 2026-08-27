@@ -296,6 +296,22 @@ Deno.serve(async (req) => {
           }
         }
 
+        if (alertaRecuperado) {
+          try {
+            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            await notificarAdmin(supabase, {
+              tipo: 'meta_qualidade_recuperada',
+              mensagem: alertaRecuperado,
+              chaveIdempotencia: `meta_recuperado_${inst.id}_${new Date().toISOString().slice(0, 10)}`,
+              umaVezPorChave: true,
+            });
+          } catch (e) {
+            console.log('[health] aviso de recuperação falhou:', String(e).slice(0, 200));
+          }
+        }
+
+
+
 
         if (notificarPausa) {
           try {
