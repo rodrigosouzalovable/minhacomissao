@@ -290,7 +290,7 @@ Deno.serve(async (req) => {
       const pct = semTetoGlobal ? 1 : Number(cfg?.pct_max_cota_meta ?? 60) / 100;
       const limiteSeguro = Math.max(10, Math.floor(Number(inst.tier_diario ?? 250) * pct));
       const pedido = Number(body?.teto ?? (semTetoGlobal ? limiteSeguro : 250));
-      const novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
+      let novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
 
       const hojeBrt2 = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
       const { data: freioAtual } = await supabase
