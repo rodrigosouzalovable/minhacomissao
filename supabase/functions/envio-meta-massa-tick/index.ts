@@ -62,11 +62,12 @@ function ehBloqueioTemporario(motivo: string): boolean {
   return /teto di[aá]rio|cota|quarentena|qualidade|freio|rate\s*limit|pausa/i.test(String(motivo || ''));
 }
 
-// Próxima reavaliação: 30 min à frente, mas nunca depois das 08:00 BRT do
+// Próxima reavaliação: 5 min à frente, mas nunca depois das 08:00 BRT do
 // próximo dia útil (o dia BRT zera os contadores de cota).
+const REAVALIACAO_MS = 5 * 60 * 1000;
 function proximaReavaliacao(): string {
   const agora = Date.now();
-  const em30 = agora + 30 * 60 * 1000;
+  const emBreve = agora + REAVALIACAO_MS;
   const nowBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
   const offsetMs = agora - nowBrt.getTime();
   const abertura = new Date(nowBrt);
@@ -75,10 +76,10 @@ function proximaReavaliacao(): string {
   if (nowBrt.getTime() >= abertura.getTime()) abertura.setDate(abertura.getDate() + 1);
   while (abertura.getDay() === 0) abertura.setDate(abertura.getDate() + 1);
   const aberturaUtc = abertura.getTime() + offsetMs;
-  // Dentro da janela do dia: reavalia em 30min. Fora dela: espera a abertura.
+  // Dentro da janela do dia: reavalia em 5min. Fora dela: espera a abertura.
   const hh = nowBrt.getHours() + nowBrt.getMinutes() / 60;
   const dentroJanela = nowBrt.getDay() !== 0 && hh >= 8 && hh < 19;
-  const alvo = dentroJanela ? Math.min(em30, aberturaUtc) : aberturaUtc;
+  const alvo = dentroJanela ? Math.min(emBreve, aberturaUtc) : aberturaUtc;
   return new Date(alvo).toISOString();
 }
 
