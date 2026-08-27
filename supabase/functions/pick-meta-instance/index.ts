@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
         }
       } else if (semTeto) {
         // Única trava restante: a cota real da Meta do número.
-        const cotaMeta = Number(inst.messaging_limit_manual || inst.tier_diario || 0);
+        const cotaMeta = Number(inst.tier_diario || 0);
         if (cotaMeta > 0) {
           const enviadosDia = await enviadosHojeBrt(supabase, inst.id);
           if (enviadosDia >= cotaMeta) {
