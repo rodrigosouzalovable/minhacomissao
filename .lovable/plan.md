@@ -71,12 +71,15 @@ Com volume frio zerado e aquecimento leve, a qualidade normalmente sai de RED em
 
 ## Detalhes técnicos
 
-- `pick-meta-instance` / `envio-meta-massa-*`: excluir instância com `quarentena_ate > now()`, `estado_pool <> 'ativo'`, ou teto do dia (`meta_instance_freio_diario.teto_efetivo`) já consumido.
-- `meta-envio-pool-config`: `freio_ativo = true`, `aquecimento_ativo = true`, `aquecimento_max_pares_dia` reduzido para 2, novo `aquecimento_msgs_dia_por_numero` (padrão 15) e `aquecimento_intervalo_min/max_seg` (1200/2400).
-- `meta-aquecimento-tick`: alvo passa a ser `meta_whatsapp_instances` com `provider = 'uazapi'` (ou `user_whatsapp_instances.telefone`) vinculadas à pasta AQUECIMENTO; manter registro em `meta_aquecimento_pares` para o rodízio e o limite diário; permitir emissor com qualidade RED **apenas** neste fluxo (hoje RED é filtrado).
-- `meta-rampup-scheduler` (diário): para instância com `quarentena_ate` vencida e 3 dias GREEN consecutivos, promover `teto_escada` no próximo degrau de `escada_retorno`; ao detectar YELLOW, voltar um degrau.
-- `check-meta-instance-health`: manter a quarentena atual e passar a rodar 3x/dia para os números em recuperação; alerta na subida de qualidade também (hoje só na queda).
+- `pick-meta-instance` / `envio-meta-massa-*`: excluir instância com `quarentena_ate > now()`, `recuperacao_ativa = true`, `estado_pool <> 'ativo'`, ou teto do dia (`meta_instance_freio_diario.teto_efetivo`) já consumido.
+- Migração: em `meta_whatsapp_instances`, campos `recuperacao_ativa`, `recuperacao_desde`, `recuperacao_msgs_meta_dia`, `dias_green_consecutivos`; nova tabela `meta_recuperacao_log` (instância, destino UAZAPI, enviado_em, resposta_em, status) com grants e RLS igual às demais tabelas Meta.
+- `check-meta-instance-health`: ao detectar queda para YELLOW/RED, além da quarentena atual, ligar `recuperacao_ativa` e sortear `recuperacao_msgs_meta_dia` entre 10 e 20 (5 se a qualidade piorar de novo); ao detectar GREEN, incrementar `dias_green_consecutivos` e, ao chegar a 3, desligar a recuperação; avisar no WhatsApp em cada transição. Passa a rodar 3x/dia.
+- Novo `meta-recuperacao-tick` (cron a cada 10 min, 09–19h BRT, sem domingo): para cada instância em recuperação, se o intervalo aleatório de 20–40 min desde o último envio já passou e a meta do dia não foi atingida, escolhe por rodízio um telefone UAZAPI vinculado à pasta AQUECIMENTO (máx. 2/dia por destino), envia o template utility pela Graph API e registra em `meta_recuperacao_log` + `meta_aquecimento_pares`. Diferente do tick atual, aqui emissor RED é permitido.
+- `meta-aquecimento-tick`: reaproveitado para o preventivo dos GREEN, com alvo trocado de Meta→Meta para os telefones UAZAPI da pasta AQUECIMENTO (hoje falha porque quase nenhuma instância Meta tem `display_phone`).
+- `meta-envio-pool-config`: `freio_ativo = true`, `aquecimento_ativo = true`, novos campos `recuperacao_auto` (liga/desliga tudo), `recuperacao_msgs_min/max_dia` (10/20), `recuperacao_intervalo_min/max_seg` (1200/2400), `preventivo_msgs_dia` (3).
+- `meta-rampup-scheduler` (diário): instância com quarentena vencida e 3 dias GREEN volta ao pool no degrau seguinte de `escada_retorno`; ao detectar YELLOW, volta um degrau.
 - Backfill: preencher `display_phone` das instâncias Meta a partir de `display_phone_number` da Graph API, para os relatórios ficarem legíveis.
+- Controles de segurança do job: teto por número e por dia gravado no banco (idempotente), lock por instância, e parada automática do ciclo se a Graph API responder erro de bloqueio/pagamento.
 
 ## Custo (Lovable Cloud)
 
