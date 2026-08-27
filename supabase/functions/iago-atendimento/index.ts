@@ -254,6 +254,24 @@ Deno.serve(async (req) => {
     const semConteudoUtil = !imagemCtx
       && /^\[(áudio|audio|imagem|vídeo|video|documento)\]$/i.test(textoAtual.trim());
     if (semConteudoUtil) {
+      if (modoAquecimento) {
+        // Aquecimento: nunca deixa sem resposta — responde curto e segue a conversa.
+        const respostas = [
+          'Recebi aqui! 👍 Não consegui abrir direito, pode me escrever?',
+          'Chegou, mas não consegui visualizar. Pode mandar por texto?',
+          'Recebi! Me conta por mensagem que eu te ajudo. 🙂',
+        ];
+        try {
+          await enviarTexto(supabase, contato, respostas[Math.floor(Math.random() * respostas.length)]);
+        } catch (e: any) {
+          console.error('[IAGO] falha ao responder mídia no aquecimento', e?.message || e);
+        }
+        await supabase.rpc('iago_finish_message', {
+          p_contato_id: contato_id,
+          p_entrada_id: String(entrada_id || ultimaEntradaId),
+        });
+        return json({ success: true, enviadas: 1, motivo: 'aquecimento_midia_sem_texto' });
+      }
       await etiquetarAguardandoHumano(supabase, contato_id);
       await supabase.rpc('iago_finish_message', {
         p_contato_id: contato_id,
