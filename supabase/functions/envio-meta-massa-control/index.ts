@@ -252,6 +252,77 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true, adicionadas: escolhidas.length }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    } else if (acao === 'liberar_teto_hoje') {
+      // Libera mais envios HOJE para uma instância do job (rampa por idade é regra nossa).
+      // Somente admin; nunca acima de pct_max_cota_meta da cota real da Meta.
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ success: false, error: 'apenas administradores podem liberar teto' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const jobInsts: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+      const instId: string = body?.instancia_id || jobInsts[0];
+      if (!instId || !jobInsts.includes(instId)) {
+        return new Response(JSON.stringify({ success: false, error: 'instância não pertence a esta campanha' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: inst } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, nome, display_phone, tier_diario, saude_quality, recuperacao_ativa, quarentena_ate')
+        .eq('id', instId).maybeSingle();
+      if (!inst) {
+        return new Response(JSON.stringify({ success: false, error: 'instância não encontrada' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (inst.recuperacao_ativa || String(inst.saude_quality || '').toUpperCase() === 'RED') {
+        return new Response(JSON.stringify({ success: false, error: 'número em recuperação de qualidade — teto não pode ser liberado' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: cfg } = await supabase
+        .from('meta_envio_pool_config').select('pct_max_cota_meta').eq('id', 1).maybeSingle();
+      const pct = Number(cfg?.pct_max_cota_meta ?? 60) / 100;
+      const limiteSeguro = Math.max(10, Math.floor(Number(inst.tier_diario ?? 250) * pct));
+      const pedido = Number(body?.teto ?? 250);
+      const novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
+
+      const hojeBrt2 = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+      const { data: freioAtual } = await supabase
+        .from('meta_instance_freio_diario')
+        .select('enviados').eq('instancia_id', instId).eq('dia', hojeBrt2).maybeSingle();
+
+      await supabase.from('meta_instance_freio_diario').upsert({
+        instancia_id: instId,
+        dia: hojeBrt2,
+        teto_efetivo: novoTeto,
+        enviados: Number(freioAtual?.enviados || 0),
+        motivo_reducao: `teto liberado manualmente para ${novoTeto} por ${user.id}`,
+        atualizado_em: new Date().toISOString(),
+      }, { onConflict: 'instancia_id,dia' });
+
+      await devolverProcessandoParaFila();
+      await supabase.from('envio_meta_job').update({
+        status: 'rodando',
+        concluido_em: null,
+        status_motivo: null,
+        instancias_bloqueadas_run: [],
+        falhas_por_instancia_run: {},
+        proximo_em: new Date().toISOString(),
+      }).eq('id', jobId);
+      dispararWorker(job);
+
+      return new Response(JSON.stringify({
+        success: true,
+        instancia: inst.nome || inst.display_phone,
+        teto: novoTeto,
+        limite_seguro: limiteSeguro,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
     } else if (acao === 'limpar') {
       // Só remove jobs concluídos/cancelados
       if (!['concluido', 'cancelado', 'erro'].includes(job.status)) {
