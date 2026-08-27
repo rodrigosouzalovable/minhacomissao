@@ -297,6 +297,16 @@ Deno.serve(async (req) => {
         .from('meta_instance_freio_diario')
         .select('enviados').eq('instancia_id', instId).eq('dia', hojeBrt2).maybeSingle();
 
+      // O bloqueio real usa os envios efetivos de hoje: um teto abaixo disso não libera nada.
+      const enviadosHoje = await enviadosHojeBrt(supabase, instId);
+      if (limiteSeguro <= enviadosHoje) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: `este número já enviou ${enviadosHoje} hoje e o limite de segurança da cota Meta é ${limiteSeguro} — escolha outro número ou aguarde a virada do dia`,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      novoTeto = Math.min(limiteSeguro, Math.max(novoTeto, enviadosHoje + 10));
+
       await supabase.from('meta_instance_freio_diario').upsert({
         instancia_id: instId,
         dia: hojeBrt2,
