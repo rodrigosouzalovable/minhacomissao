@@ -722,19 +722,30 @@ serve(async (req) => {
 
 
               // ---- Responsáveis da caixa de mensagens da conversa ----
+              // Admins da caixa apenas acompanham: não entram no rodízio automático.
+              // Exceção: se TODOS os responsáveis forem admins, eles voltam a participar.
               const permitidosCaixa = new Set<string>();
-              if (_folderIdContato) {
-                const { data: mem } = await supabase
-                  .from('meta_inbox_folder_members')
-                  .select('user_id')
-                  .eq('folder_id', _folderIdContato);
-                for (const m of (mem || [])) permitidosCaixa.add((m as any).user_id);
-              } else {
-                const { data: mem } = await supabase
-                  .from('meta_inbox_default_members')
-                  .select('user_id');
-                for (const m of (mem || [])) permitidosCaixa.add((m as any).user_id);
+              {
+                let mem: any[] | null = null;
+                if (_folderIdContato) {
+                  const r = await supabase
+                    .from('meta_inbox_folder_members')
+                    .select('user_id, admin')
+                    .eq('folder_id', _folderIdContato);
+                  mem = r.data as any[];
+                } else {
+                  const r = await supabase
+                    .from('meta_inbox_default_members')
+                    .select('user_id, admin');
+                  mem = r.data as any[];
+                }
+                const lista = mem || [];
+                const temNaoAdmin = lista.some((m: any) => !m.admin);
+                for (const m of lista) {
+                  if (!temNaoAdmin || !(m as any).admin) permitidosCaixa.add((m as any).user_id);
+                }
               }
+
 
               // ---- Elegibilidade: apenas usuários com "Atende no Inbox Meta Oficial" ativo ----
               // Casa etiqueta "Atendente: <nome>" com profiles.nome e user_permissions.atende_inbox_meta.

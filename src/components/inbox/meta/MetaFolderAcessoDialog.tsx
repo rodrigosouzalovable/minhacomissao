@@ -185,7 +185,12 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
                   IA
                 </span>
               )}
-              {membros.has(u.user_id) && !naFila.has(u.user_id) && (
+              {membros.has(u.user_id) && admins.has(u.user_id) && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                  só acompanha
+                </span>
+              )}
+              {membros.has(u.user_id) && !admins.has(u.user_id) && !naFila.has(u.user_id) && (
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 shrink-0">
                   fora da fila
                 </span>
