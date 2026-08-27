@@ -60,14 +60,11 @@ export type InstanciaLivre = {
  * Indica campanha viva, apenas esperando cota diária/qualidade liberar.
  */
 export function parseAguardandoCota(motivo?: string | null): { retomaEm: string; detalhe: string } | null {
-  const raw = String(motivo || "");
-  if (!raw.startsWith("AGUARDANDO_COTA:")) return null;
-  const resto = raw.slice("AGUARDANDO_COTA:".length);
-  const sep = resto.indexOf(":", 10); // pula o "T" e os ":" do próprio ISO
-  const iso = resto.slice(0, resto.indexOf("Z") + 1) || resto.slice(0, sep);
-  const detalhe = resto.slice(iso.length + 1) || "Todas as instâncias atingiram o teto diário";
-  return { retomaEm: iso, detalhe };
+  const m = /^AGUARDANDO_COTA:([^:]+T[^Z]+Z):?([\s\S]*)$/.exec(String(motivo || ""));
+  if (!m) return null;
+  return { retomaEm: m[1], detalhe: m[2] || "Todas as instâncias atingiram o teto diário" };
 }
+
 
 /** Motivos que NÃO devem disparar retomada automática — esperar é o certo. */
 function motivoEsperaObrigatoria(motivo?: string | null): boolean {
