@@ -338,7 +338,7 @@ Deno.serve(async (req) => {
       if (ehMassa) {
         await supabase.from('iago_conversa_estado').update({
           etapa: 'divulgacao_em_massa',
-          aguardando_humano: true,
+          aguardando_humano: travaHumano(),
           followup_em: null,
           followup_feito: true,
           ultima_msg_cliente_em: new Date().toISOString(),
@@ -380,7 +380,7 @@ Deno.serve(async (req) => {
       }
       await supabase.from('iago_conversa_estado').update({
         etapa: 'numero_errado',
-        aguardando_humano: true,
+        aguardando_humano: travaHumano(),
         followup_em: null,
         followup_feito: true,
         followup_etapa: 3,
@@ -420,7 +420,7 @@ Deno.serve(async (req) => {
       }
       await supabase.from('iago_conversa_estado').update({
         etapa: 'falecido',
-        aguardando_humano: true,
+        aguardando_humano: travaHumano(),
         followup_em: null,
         followup_feito: true,
         followup_etapa: 3,
@@ -655,7 +655,7 @@ Deno.serve(async (req) => {
     // ===== Cliente já tem acordo => humano assume =====
     if (temAcordo) {
       await supabase.from('iago_conversa_estado')
-        .update({ cpf, aguardando_humano: true, etapa: 'ja_tem_acordo', followup_em: null })
+        .update({ cpf, aguardando_humano: travaHumano(), etapa: 'ja_tem_acordo', followup_em: null })
         .eq('id', estado.id);
       await avisarEmergencia(supabase,
         `👤 *IAGO — atendimento humano necessário*\n\n` +
@@ -805,7 +805,7 @@ Deno.serve(async (req) => {
       if (envio.destinatarioInvalido) {
         await supabase.from('iago_conversa_estado').update({
           etapa: 'destinatario_sem_whatsapp',
-          aguardando_humano: true,
+          aguardando_humano: travaHumano(),
           followup_em: null,
           followup_feito: true,
           followup_etapa: 3,
