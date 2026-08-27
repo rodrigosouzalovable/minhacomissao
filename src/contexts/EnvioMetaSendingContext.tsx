@@ -983,7 +983,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, adicionarInstanciasLivres, marcarJobAberto, exportarItensJob,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, adicionarInstanciasLivres, liberarTetoHoje, marcarJobAberto, exportarItensJob,
       }}
     >
       {children}
