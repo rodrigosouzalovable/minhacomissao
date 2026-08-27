@@ -42,6 +42,7 @@ type PoolConfig = {
   horario_inicio: string; horario_fim: string;
   freio_ativo: boolean | null;
   cota_max_hora: number | null;
+  sem_teto_global: boolean | null;
 };
 
 
