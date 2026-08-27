@@ -428,17 +428,38 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   : null}
             </div>
 
-            {progresso?.aguardandoCota && (
+            {cotaBloqueio && (
               <div className="text-xs rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 space-y-1.5 text-amber-800 dark:text-amber-200">
                 <div className="font-semibold">⏳ Parada: todas as instâncias atingiram o teto diário</div>
                 <div className="whitespace-pre-wrap break-words">
-                  {(progresso.cotaMotivo || "").split(" | ").map((linha, i) => (
+                  {(cotaMotivoTexto || "").split(" | ").map((linha, i) => (
                     <div key={i}>• {linha.replace(/^Nenhuma instância disponível\s*—\s*/, "")}</div>
                   ))}
                 </div>
                 <div>
-                  Retomada automática: <strong>{retomaLabel}</strong> — não é preciso reativar nada.
+                  Reavaliação automática a cada <strong>5 min</strong> — nada a reativar. Assim que qualquer número
+                  liberar cota, a campanha volta sozinha.
                 </div>
+                {isAdmin && (
+                  <div className="pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      disabled={liberando}
+                      onClick={async () => {
+                        setLiberando(true);
+                        await liberarTetoHoje(job.id, job.instancia_ids?.[0], 250);
+                        setLiberando(false);
+                      }}
+                    >
+                      {liberando ? "Liberando..." : "Liberar mais envios hoje neste número"}
+                    </Button>
+                    <div className="text-[11px] pt-1">
+                      Libera o teto de hoje para 250 envios (respeitando o limite de segurança da cota Meta) e retoma na hora.
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <Button
                     size="sm"
