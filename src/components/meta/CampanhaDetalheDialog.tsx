@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
+import { useEnvioMetaSending, type InstanciaLivre } from "@/contexts/EnvioMetaSendingContext";
 import { exportarParaExcel } from "@/lib/exportExcel";
 import { humanizarErroEnvio } from "@/lib/humanizarErroEnvio";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -61,7 +61,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     carregarMaisItensJob,
     getPaginacaoJob,
     refreshCountersJob,
+    listarInstanciasLivres,
+    adicionarInstanciasLivres,
     marcarJobAberto,
+
     refreshStatus,
     exportarItensJob,
   } = useEnvioMetaSending();
@@ -104,6 +107,20 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [exportando, setExportando] = useState<string | null>(null);
   const [exportProgresso, setExportProgresso] = useState(0);
+  const [livres, setLivres] = useState<InstanciaLivre[] | null>(null);
+  const [buscandoLivres, setBuscandoLivres] = useState(false);
+  const [adicionando, setAdicionando] = useState(false);
+
+  const carregarLivres = async () => {
+    if (!jobId) return;
+    setBuscandoLivres(true);
+    try {
+      setLivres(await listarInstanciasLivres(jobId));
+    } finally {
+      setBuscandoLivres(false);
+    }
+  };
+
 
 
   // Estado local dos <details> — controlado pelo usuário, sem re-forçar a cada polling.
@@ -141,6 +158,12 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
   const rateLimitInfo = parseRateLimitMotivo((job as any).status_motivo || resultado?.statusMotivo);
+  const retomaLabel = progresso?.cotaRetomaEm
+    ? new Date(progresso.cotaRetomaEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : progresso && progresso.proximoEmSeg > 0
+      ? `em ${Math.ceil(progresso.proximoEmSeg / 60)} min`
+      : "em breve";
+
 
   // ===== Previsão de término (estimativa) =====
   const eta = (() => {
@@ -360,7 +383,12 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
         <DialogHeader>
           <div className="flex items-center gap-2 flex-wrap">
             <DialogTitle className="text-xl">{nome}</DialogTitle>
-            <Badge className={statusColor(job.status)}>{statusLabel(job.status)}</Badge>
+            {progresso?.aguardandoCota ? (
+              <Badge className="bg-amber-500 text-white">Aguardando cota</Badge>
+            ) : (
+              <Badge className={statusColor(job.status)}>{statusLabel(job.status)}</Badge>
+            )}
+
           </div>
           <DialogDescription className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
             {job.nome_campanha && job.template_nome && <span>Template: <code>{job.template_nome}</code></span>}
@@ -399,6 +427,61 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   ? `Próximo envio em ${progresso.proximoEmSeg}s`
                   : null}
             </div>
+
+            {progresso?.aguardandoCota && (
+              <div className="text-xs rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 space-y-1.5 text-amber-800 dark:text-amber-200">
+                <div className="font-semibold">⏳ Parada: todas as instâncias atingiram o teto diário</div>
+                <div className="whitespace-pre-wrap break-words">
+                  {(progresso.cotaMotivo || "").split(" | ").map((linha, i) => (
+                    <div key={i}>• {linha.replace(/^Nenhuma instância disponível\s*—\s*/, "")}</div>
+                  ))}
+                </div>
+                <div>
+                  Retomada automática: <strong>{retomaLabel}</strong> — não é preciso reativar nada.
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    disabled={buscandoLivres}
+                    onClick={carregarLivres}
+                  >
+                    {buscandoLivres ? "Buscando..." : "Instâncias com cota livre"}
+                  </Button>
+                  {livres !== null && livres.length === 0 && (
+                    <span className="text-[11px]">Nenhuma instância com cota livre agora.</span>
+                  )}
+                </div>
+                {livres !== null && livres.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <div className="text-[11px]">
+                      {livres.length} instância(s) com folga hoje ({livres.reduce((s, i) => s + i.folga, 0)} envios disponíveis):
+                    </div>
+                    <div className="max-h-24 overflow-auto text-[11px] space-y-0.5">
+                      {livres.map((i) => (
+                        <div key={i.id}>• {i.nome} — {i.enviados}/{i.teto} ({i.folga} livres){i.qualidade ? ` • ${i.qualidade}` : ""}</div>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={adicionando}
+                      onClick={async () => {
+                        setAdicionando(true);
+                        const ok = await adicionarInstanciasLivres(job.id, livres.map((i) => i.id));
+                        setAdicionando(false);
+                        if (ok) setLivres(null);
+                      }}
+                    >
+                      {adicionando ? "Adicionando..." : "Adicionar instâncias e retomar agora"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+
 
             {eta && (
               <div className="text-xs rounded border bg-muted/40 px-2 py-1.5 space-y-0.5">
