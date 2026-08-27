@@ -103,6 +103,17 @@ export function PoolMetaPanel() {
     await carregar();
   };
 
+  const salvarSemTeto = async (semTeto: boolean) => {
+    setSavingTurbo(true);
+    const { error } = await (supabase as any).from("meta_envio_pool_config")
+      .update({ sem_teto_global: semTeto, atualizado_em: new Date().toISOString() }).eq("id", 1);
+    setSavingTurbo(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(semTeto ? "Sem teto ligado — GREEN usa a cota da Meta" : "Limites internos reativados");
+    await carregar();
+  };
+
+
 
   const carregar = async () => {
     setLoading(true);
