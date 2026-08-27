@@ -348,8 +348,13 @@ export async function notificarAdmin(
               await registrar({ instancia_envio_id: inst.id, status: "enviado", enviado_em: new Date().toISOString() });
               await supabase
                 .from("admin_notificacoes_config")
-                .update({ ultima_instancia_id: inst.id, updated_at: new Date().toISOString() })
+                .update({
+                  ultima_instancia_id: inst.id,
+                  instancia_notificacao_id: inst.id,
+                  updated_at: new Date().toISOString(),
+                })
                 .eq("id", 1);
+
               return { ok: true };
             }
 
