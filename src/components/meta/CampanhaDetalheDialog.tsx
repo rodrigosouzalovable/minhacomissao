@@ -7,6 +7,7 @@ import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, Help
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useEnvioMetaSending, type InstanciaLivre } from "@/contexts/EnvioMetaSendingContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import { exportarParaExcel } from "@/lib/exportExcel";
 import { humanizarErroEnvio } from "@/lib/humanizarErroEnvio";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -63,6 +64,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     refreshCountersJob,
     listarInstanciasLivres,
     adicionarInstanciasLivres,
+    liberarTetoHoje,
     marcarJobAberto,
 
     refreshStatus,
