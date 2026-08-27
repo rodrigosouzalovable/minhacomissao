@@ -159,7 +159,15 @@ export function LayoutUmeTab({ compact }: Props) {
     setTotal4xMais('');
   };
 
-  const num = (v: string) => Number(String(v).replace(/\./g, '').replace(',', '.')) || 0;
+  // Aceita "1.494,50" (BR) e "1494.5" (decimal cru vindo da IA).
+  const num = (v: string) => {
+    const s = String(v ?? '').trim().replace(/\s|R\$/gi, '');
+    if (!s) return 0;
+    if (s.includes(',')) return Number(s.replace(/\./g, '').replace(',', '.')) || 0;
+    // Sem vírgula: ponto só é separador de milhar quando agrupa 3 dígitos.
+    if (/^\d{1,3}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, '')) || 0;
+    return Number(s) || 0;
+  };
 
   const opcoes = useMemo(() => {
     const base3 = num(totalAte3x);
