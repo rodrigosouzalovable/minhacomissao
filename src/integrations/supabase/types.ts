@@ -204,6 +204,7 @@ export type Database = {
           admin_phone: string
           created_at: string
           id: number
+          instancia_notificacao_id: string | null
           notificar_chip_desconectado: boolean
           notificar_chip_pausado: boolean
           notificar_proxies_faltando: boolean
@@ -215,6 +216,7 @@ export type Database = {
           admin_phone?: string
           created_at?: string
           id?: number
+          instancia_notificacao_id?: string | null
           notificar_chip_desconectado?: boolean
           notificar_chip_pausado?: boolean
           notificar_proxies_faltando?: boolean
@@ -226,6 +228,7 @@ export type Database = {
           admin_phone?: string
           created_at?: string
           id?: number
+          instancia_notificacao_id?: string | null
           notificar_chip_desconectado?: boolean
           notificar_chip_pausado?: boolean
           notificar_proxies_faltando?: boolean
@@ -233,7 +236,15 @@ export type Database = {
           ultima_instancia_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_notificacoes_config_instancia_notificacao_id_fkey"
+            columns: ["instancia_notificacao_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_notificacoes_log: {
         Row: {
