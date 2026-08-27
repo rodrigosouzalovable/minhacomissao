@@ -3,7 +3,7 @@
 // atual (removido/desabilitado do WABA, migrou de Business Manager ou o app perdeu
 // permissão). Nesse caso a instância é restringida no pool e o admin é avisado 1x/dia.
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
-import { rotuloInstancia } from "./rotulo-instancia.ts";
+import { rotuloInstancia, linhaBmInstancia } from "./rotulo-instancia.ts";
 
 export const MSG_NUMERO_INACESSIVEL =
   "Esse número não está mais acessível pela API da Meta (#100). Normalmente significa que ele foi removido/desabilitado do WhatsApp Business Account, migrou de Business Manager, ou o token do app perdeu permissão sobre ele. Reconecte a instância (token e Phone Number ID) no Business Manager ou use outra instância.";
@@ -46,6 +46,7 @@ export async function tratarNumeroInacessivel(
       mensagem:
         `🚫 *Número Meta inacessível*\n\n` +
         `Instância: *${rotuloInstancia(inst)}*\n` +
+        `${await linhaBmInstancia(supabase, inst)}\n` +
         `Phone Number ID: ${inst.phone_number_id}\n\n` +
         `A Meta respondeu erro #100 (objeto não existe / sem permissão). O número saiu do pool de envios automaticamente.\n\n` +
         `Verifique no Business Manager se o número ainda está no WABA e se o token do app tem permissão, depois atualize token/Phone Number ID no card da instância.\n\n` +

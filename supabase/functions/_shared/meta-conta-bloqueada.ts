@@ -3,7 +3,7 @@
 // número são recusados, mesmo respondendo cliente dentro da janela de 24h.
 // Nesse caso a instância é restringida no pool e o admin é avisado 1x/dia.
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
-import { rotuloInstancia } from "./rotulo-instancia.ts";
+import { rotuloInstancia, linhaBmInstancia } from "./rotulo-instancia.ts";
 
 export const MOTIVO_CONTA_BLOQUEADA = "Business Account locked";
 
@@ -82,7 +82,8 @@ export async function tratarContaBloqueada(
       tipo: "meta_conta_bloqueada",
       mensagem:
         `⛔ *Business Account bloqueada pela Meta (#131031)*\n\n` +
-        `Instância: *${rotuloInstancia(inst)}*\n\n` +
+        `Instância: *${rotuloInstancia(inst)}*\n` +
+        `${await linhaBmInstancia(supabase, inst)}\n\n` +
         `A Meta está recusando todos os envios desse número — inclusive respostas na janela de 24h. Não é qualidade nem contato.\n\n` +
         `Resolva no Business Manager (restrição da conta / apelação / método de pagamento). O número saiu do pool automaticamente e volta sozinho quando a Meta liberar.\n\n` +
         `Detalhe técnico: ${String(msgOriginal).slice(0, 180)}`,
