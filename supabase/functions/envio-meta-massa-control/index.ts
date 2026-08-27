@@ -1,5 +1,6 @@
 // Controla um job de envio massa Meta: pausar / retomar / cancelar / limpar.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { enviadosHojeBrt } from '../_shared/meta-freio.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
