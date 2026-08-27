@@ -184,6 +184,14 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Modo recuperação: número só faz aquecimento interno, nunca campanha.
+      if (inst.recuperacao_ativa === true && !ignoraQualidadeGlobal) {
+        descartados.push(`${rotulo}: em recuperação de qualidade (aquecimento automático em andamento)`);
+        continue;
+      }
+
+
+
       // Reset diário (telemetria — não bloqueia envio)
       let uso = inst.enviados_hoje || 0;
       if (inst.ultimo_reset !== hoje) uso = 0;
