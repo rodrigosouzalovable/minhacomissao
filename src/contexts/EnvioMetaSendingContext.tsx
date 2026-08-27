@@ -166,6 +166,7 @@ type Ctx = {
   refreshCountersJob: (jobId: string) => Promise<void>;
   listarInstanciasLivres: (jobId: string) => Promise<InstanciaLivre[]>;
   adicionarInstanciasLivres: (jobId: string, ids?: string[]) => Promise<boolean>;
+  liberarTetoHoje: (jobId: string, instanciaId?: string, teto?: number) => Promise<boolean>;
   marcarJobAberto: (jobId: string, aberto: boolean) => void;
 
   exportarItensJob: (
