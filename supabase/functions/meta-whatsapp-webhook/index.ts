@@ -1299,7 +1299,7 @@ serve(async (req) => {
             }
           }
 
-          // ===== Blacklist: cliente clicou/respondeu "Bloquear contato" =====
+          // ===== Blacklist: cliente clicou/respondeu "Bloquear contato" ou "Bloquear número" =====
           // Entra na lista de bloqueio e nunca mais recebe campanha/lembrete.
           let pediuBloqueio = false;
           if (!isEcho && !msgError && ehPedidoBloqueioContato(texto)) {
