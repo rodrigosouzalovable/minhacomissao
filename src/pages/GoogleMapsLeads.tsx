@@ -128,6 +128,9 @@ export default function GoogleMapsLeads() {
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
   const [somenteComTel, setSomenteComTel] = useState(true);
   const [somenteComWhats, setSomenteComWhats] = useState(false);
+  const [somenteSemSite, setSomenteSemSite] = useState(false);
+  const [ordenarPotencial, setOrdenarPotencial] = useState(false);
+
   const [verificandoWhats, setVerificandoWhats] = useState(false);
   const [erroBusca, setErroBusca] = useState<FunctionErrorPayload | null>(null);
 
