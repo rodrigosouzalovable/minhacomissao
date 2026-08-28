@@ -207,6 +207,18 @@ export default function GoogleMapsLeads() {
   const leadsProspeccao = leadsBase.filter(
     (l) => classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true,
   );
+  // Quantos leads sobrariam se cada filtro fosse aplicado sozinho (sobre a busca inteira)
+  const todos = leads ?? [];
+  const qtdComTel = todos.filter((l) => !!l.telefone).length;
+  const qtdComWhats = todos.filter((l) => l.tem_whatsapp === true).length;
+  const qtdSemSite = todos.filter((l) => classificarSite(l.site) !== "com_site").length;
+  const filtrosAtivos = somenteComTel || somenteComWhats || somenteSemSite;
+  function limparFiltros() {
+    setSomenteComTel(false);
+    setSomenteComWhats(false);
+    setSomenteSemSite(false);
+  }
+
 
 
   async function verificarWhatsapp(buscaId: string, silencioso = false) {
