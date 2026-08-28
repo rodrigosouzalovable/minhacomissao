@@ -1,12 +1,18 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Clipboard, Download, Wand2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Clipboard, Download, FileDown, Loader2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
+import { EsbocoSitePreview } from "./EsbocoSitePreview";
+import { ESTILOS_ESBOCO, montarConteudoEsboco, paletaPorEstilo, type EstiloEsboco } from "./esbocoSite";
+import { gerarPdfEsboco } from "./esbocoPdf";
+
 
 export interface LeadPrompt {
   id: string;
