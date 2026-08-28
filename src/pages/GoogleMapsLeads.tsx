@@ -721,9 +721,21 @@ export default function GoogleMapsLeads() {
             {buscaSel && (
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <Badge variant="default">{totComSite} com site</Badge>
-                <Badge variant="secondary">{totSemSite} sem site</Badge>
+                <Badge
+                  variant="secondary"
+                  className={qtdSemSite > 0 ? "cursor-pointer" : undefined}
+                  onClick={() => qtdSemSite > 0 && setSomenteSemSite((v) => !v)}
+                >
+                  {totSemSite} sem site
+                </Badge>
                 {totRedeSocial > 0 && <Badge variant="outline">{totRedeSocial} só rede social</Badge>}
-                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">{totComWhats} com WhatsApp</Badge>
+                <Badge
+                  className={`bg-emerald-600 text-white hover:bg-emerald-600 ${qtdComWhats > 0 ? "cursor-pointer" : ""}`}
+                  onClick={() => qtdComWhats > 0 && setSomenteComWhats((v) => !v)}
+                >
+                  {totComWhats} com WhatsApp
+                </Badge>
+
                 <Badge variant="secondary">{totSemWhats} sem WhatsApp</Badge>
                 {totNaoVerif > 0 && <Badge variant="outline" className="border-amber-500 text-amber-600">{totNaoVerif} não verificado(s)</Badge>}
                 {leadsProspeccao.length > 0 && <Badge variant="outline" className="border-primary text-primary">{leadsProspeccao.length} oportunidades</Badge>}
