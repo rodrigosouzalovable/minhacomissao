@@ -170,7 +170,8 @@ Deno.serve(async (req) => {
           updatePayload.dias_green_consecutivos = 0;
           updatePayload.green_contado_dia = null;
 
-          if (recupAuto) {
+          // Aquecimento automático só nos números próprios (parceiro Meta não usa).
+          if (recupAuto && inst.aquecimento_qualidade_permitido !== false) {
             // Já estava em recuperação e piorou → reduz o volume em vez de subir.
             const piorou = inst.recuperacao_ativa === true;
             updatePayload.recuperacao_ativa = true;
