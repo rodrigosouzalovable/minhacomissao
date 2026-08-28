@@ -610,6 +610,13 @@ export default function GoogleMapsLeads() {
         </Alert>
       )}
 
+      <AnalisarNichoCard
+        buscaId={buscaSel}
+        categoria={buscas?.find((b) => b.id === buscaSel)?.categoria}
+        localizacao={buscas?.find((b) => b.id === buscaSel)?.localizacao}
+        leads={leads ?? []}
+      />
+
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <Card>
           <CardHeader>
@@ -648,13 +655,6 @@ export default function GoogleMapsLeads() {
             {!buscas?.length && <p className="text-xs text-muted-foreground">Nenhuma busca ainda.</p>}
           </CardContent>
         </Card>
-
-        <AnalisarNichoCard
-          buscaId={buscaSel}
-          categoria={buscas?.find((b) => b.id === buscaSel)?.categoria}
-          localizacao={buscas?.find((b) => b.id === buscaSel)?.localizacao}
-          leads={leads ?? []}
-        />
 
         <Card>
           <CardHeader className="space-y-3">
