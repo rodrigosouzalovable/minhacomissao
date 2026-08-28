@@ -183,8 +183,11 @@ Deno.serve(async (req) => {
           }
         }
 
+        const { linhaPrevisao } = await import('../_shared/meta-recuperacao-aviso.ts');
+
         // ===== Volta para GREEN: conta os dias e encerra a recuperação =====
         let alertaRecuperado: string | null = null;
+        let alertaProgressoGreen: { texto: string; dias: number } | null = null;
         if (qual === 'GREEN') {
           const contadoHoje = inst.green_contado_dia === hojeBrtDia;
           const diasGreen = contadoHoje
@@ -205,6 +208,20 @@ Deno.serve(async (req) => {
               `Número: *${inst.nome || inst.display_phone}*\n` +
               `${await linhaBmInstancia(supabase, inst)}\n` +
               `${diasGreen} dias seguidos em GREEN. Aquecimento automático encerrado; o número volta ao pool com teto de ${inst.teto_escada ?? escada[0] ?? 20}/dia e sobe em escada.`;
+          } else if (inst.recuperacao_ativa === true && !contadoHoje) {
+            // Voltou/segue em GREEN mas ainda não completou os dias necessários
+            alertaProgressoGreen = {
+              dias: diasGreen,
+              texto:
+                `🟢 *Qualidade em GREEN* (${diasGreen}/${diasGreenAlta} dias)\n\n` +
+                `Número: *${inst.nome || inst.display_phone}*\n` +
+                `${await linhaBmInstancia(supabase, inst)}\n` +
+                (qualAnterior && qualAnterior !== 'GREEN'
+                  ? `Subiu de ${qualAnterior} para GREEN — o aquecimento está funcionando.\n`
+                  : `Mantendo GREEN com o aquecimento automático.\n`) +
+                `O aquecimento continua até completar ${diasGreenAlta} dias seguidos.\n` +
+                `${linhaPrevisao(qual, diasGreen, diasGreenAlta)}`,
+            };
           }
         } else if (qual === 'YELLOW' || qual === 'RED') {
           updatePayload.dias_green_consecutivos = 0;
@@ -213,19 +230,25 @@ Deno.serve(async (req) => {
         // Alerta imediato de degradação (1 aviso por número por dia)
         let alertaQueda: string | null = null;
         if (caiu) {
+          const piorouEmRecup = inst.recuperacao_ativa === true;
           alertaQueda =
             `⚠️ *Qualidade caiu para ${qual}*\n\n` +
             `Número: *${inst.nome || inst.display_phone}*\n` +
             `${await linhaBmInstancia(supabase, inst)}\n` +
             `Antes: ${qualAnterior || 'desconhecida'} → Agora: ${qual}\n` +
+            (piorouEmRecup
+              ? `❗ Já estava em recuperação e piorou — volume do aquecimento reduzido para ${updatePayload.recuperacao_msgs_meta_dia}/dia. Sinal de bloqueio/denúncia real: vale revisar base e conteúdo.\n`
+              : '') +
             (updatePayload.quarentena_ate
               ? `Quarentena até ${new Date(updatePayload.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (fora das campanhas; segue atendendo conversas recebidas).\n`
               : '') +
             (updatePayload.recuperacao_ativa
               ? `🔥 Aquecimento automático ligado: ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia para os números UAZAPI da caixa AQUECIMENTO (09h–19h, intervalos de 20–40 min). Nada a fazer da sua parte.\n`
-              : '') +
-            `Volta com teto de ${escada[0] ?? 20}/dia e sobe em escada se ficar GREEN.`;
+              : `ℹ️ Aquecimento automático não está liberado para este número.\n`) +
+            `Volta com teto de ${escada[0] ?? 20}/dia e sobe em escada se ficar GREEN.\n` +
+            `${linhaPrevisao(qual, 0, diasGreenAlta)}`;
         }
+
 
 
         // ===== Auto-liberação de bloqueio real da Meta =====
