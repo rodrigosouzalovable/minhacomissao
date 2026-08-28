@@ -320,12 +320,33 @@ Deno.serve(async (req) => {
           }
         }
 
-        if (alertaRecuperado) {
+        if (alertaProgressoGreen) {
           try {
             const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
             await notificarAdmin(supabase, {
+              tipo: 'meta_qualidade_progresso_green',
+              mensagem: alertaProgressoGreen.texto,
+              chaveIdempotencia: `meta_green_dia${alertaProgressoGreen.dias}_${inst.id}_${hojeBrtDia}`,
+              umaVezPorChave: true,
+            });
+          } catch (e) {
+            console.log('[health] aviso de progresso GREEN falhou:', String(e).slice(0, 200));
+          }
+        }
+
+        if (alertaRecuperado) {
+          try {
+            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            const { count: totalAquec } = await supabase
+              .from('meta_recuperacao_log')
+              .select('id', { count: 'exact', head: true })
+              .eq('instancia_id', inst.id)
+              .eq('status', 'enviado');
+            await notificarAdmin(supabase, {
               tipo: 'meta_qualidade_recuperada',
-              mensagem: alertaRecuperado,
+              mensagem:
+                `${alertaRecuperado}\n` +
+                `📨 Total de mensagens de aquecimento enviadas por este número: ${totalAquec ?? 0}.`,
               chaveIdempotencia: `meta_recuperado_${inst.id}_${new Date().toISOString().slice(0, 10)}`,
               umaVezPorChave: true,
             });
@@ -333,6 +354,7 @@ Deno.serve(async (req) => {
             console.log('[health] aviso de recuperação falhou:', String(e).slice(0, 200));
           }
         }
+
 
 
 
