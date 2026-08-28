@@ -668,6 +668,17 @@ export default function GoogleMapsLeads() {
                   <Checkbox checked={ordenarPotencial} onCheckedChange={(v) => setOrdenarPotencial(!!v)} />
                   Melhor potencial
                 </label>
+                <div className="flex items-center gap-1 rounded-md border p-1">
+                  <Button size="sm" variant={modoVisualizacao === "tabela" ? "secondary" : "ghost"} onClick={() => setModoVisualizacao("tabela")} title="Visualização em tabela">
+                    <Table2 className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant={modoVisualizacao === "mapa" ? "secondary" : "ghost"} onClick={() => setModoVisualizacao("mapa")} title="Visualização no mapa">
+                    <Map className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => abrirBuscaNoMaps(buscas?.find((b) => b.id === buscaSel))} disabled={!buscaSel}>
+                  <MapPin className="h-4 w-4 mr-2" /> Ver no Google Maps
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
