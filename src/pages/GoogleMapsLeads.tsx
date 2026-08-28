@@ -18,6 +18,7 @@ import * as XLSX from "xlsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LeadsMapa, linkGoogleMaps, type LeadMapa } from "@/components/googlemaps/LeadsMapa";
+import { AnalisarNichoCard } from "@/components/googlemaps/AnalisarNichoCard";
 import { NICHOS, NICHOS_DESTAQUE, TODOS_NICHOS, dicaDoNicho } from "@/components/googlemaps/nichos";
 
 type SiteTipo = "sem_site" | "rede_social" | "com_site";
