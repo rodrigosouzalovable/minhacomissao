@@ -13,8 +13,46 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Clipboard, KeyRound, Loader2, Download, MapPin, MessageCircle, Phone, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Clipboard, Globe, KeyRound, Loader2, Download, MapPin, MessageCircle, Phone, Search, Sparkles, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
+
+type SiteTipo = "sem_site" | "rede_social" | "com_site";
+
+const REDES_SOCIAIS = ["instagram.com", "facebook.com", "fb.com", "linktr.ee", "linktree", "wa.me", "api.whatsapp.com", "linkedin.com", "tiktok.com", "youtube.com", "twitter.com", "x.com", "bit.ly"];
+
+function classificarSite(site: string | null): SiteTipo {
+  const url = (site ?? "").trim().toLowerCase();
+  if (!url) return "sem_site";
+  if (REDES_SOCIAIS.some((d) => url.includes(d))) return "rede_social";
+  return "com_site";
+}
+
+/** Quanto maior, melhor o lead para prospecção de site (negócio ativo, sem site próprio). */
+function pontuarLead(l: Lead): number {
+  const tipo = classificarSite(l.site);
+  let score = 0;
+  if (tipo === "sem_site") score += 40;
+  else if (tipo === "rede_social") score += 30;
+  if (l.tem_whatsapp === true) score += 25;
+  const av = l.total_avaliacoes ?? 0;
+  score += Math.min(25, Math.round(av / 4));
+  if ((l.avaliacao ?? 0) >= 4.3) score += 10;
+  return score;
+}
+
+function mensagemProspeccao(l: Lead): string {
+  const tipo = classificarSite(l.site);
+  const primeiroNome = (l.nome ?? "").split(" ").slice(0, 4).join(" ");
+  const prova = l.total_avaliacoes
+    ? ` Vi que vocês têm ${l.total_avaliacoes} avaliações no Google${l.avaliacao ? ` com nota ${l.avaliacao}` : ""} — reputação muito boa.`
+    : "";
+  const gancho =
+    tipo === "rede_social"
+      ? "Notei que vocês aparecem no Google Maps mas o link é de rede social, sem um site próprio."
+      : "Notei que vocês aparecem no Google Maps mas ainda não têm um site próprio.";
+  return `Olá! Tudo bem? Falo com o responsável pela ${primeiroNome}?\n\n${gancho}${prova}\n\nEu crio sites profissionais para empresas como a sua: página com seus serviços, fotos, localização e botão direto para o WhatsApp — pronto em poucos dias, por R$ 500 (setup) e sem complicação.\n\nPosso te mandar um modelo já com o nome da ${primeiroNome} para você ver como ficaria?`;
+}
+
 
 interface FunctionErrorPayload {
   error?: string;
@@ -90,6 +128,9 @@ export default function GoogleMapsLeads() {
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
   const [somenteComTel, setSomenteComTel] = useState(true);
   const [somenteComWhats, setSomenteComWhats] = useState(false);
+  const [somenteSemSite, setSomenteSemSite] = useState(false);
+  const [ordenarPotencial, setOrdenarPotencial] = useState(false);
+
   const [verificandoWhats, setVerificandoWhats] = useState(false);
   const [erroBusca, setErroBusca] = useState<FunctionErrorPayload | null>(null);
 
@@ -143,10 +184,21 @@ export default function GoogleMapsLeads() {
   });
 
   const leadsBase = (leads ?? []).filter((l) => (somenteComTel ? !!l.telefone : true));
-  const leadsFiltrados = leadsBase.filter((l) => (somenteComWhats ? l.tem_whatsapp === true : true));
+  const leadsFiltrados = leadsBase
+    .filter((l) => (somenteComWhats ? l.tem_whatsapp === true : true))
+    .filter((l) => (somenteSemSite ? classificarSite(l.site) !== "com_site" : true))
+    .slice()
+    .sort((a, b) => (ordenarPotencial ? pontuarLead(b) - pontuarLead(a) : 0));
   const totComWhats = leadsBase.filter((l) => l.tem_whatsapp === true).length;
   const totSemWhats = leadsBase.filter((l) => l.tem_whatsapp === false).length;
   const totNaoVerif = leadsBase.filter((l) => l.tem_whatsapp === null && !!l.telefone).length;
+  const totSemSite = leadsBase.filter((l) => classificarSite(l.site) === "sem_site").length;
+  const totRedeSocial = leadsBase.filter((l) => classificarSite(l.site) === "rede_social").length;
+  const totComSite = leadsBase.filter((l) => classificarSite(l.site) === "com_site").length;
+  const leadsProspeccao = leadsBase.filter(
+    (l) => classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true,
+  );
+
 
   async function verificarWhatsapp(buscaId: string, silencioso = false) {
     setVerificandoWhats(true);
@@ -220,27 +272,81 @@ export default function GoogleMapsLeads() {
 
 
 
-  function exportarExcel() {
-    const comWhats = leadsBase.filter((l) => l.tem_whatsapp === true);
-    if (!comWhats.length) {
-      toast.error("Nenhum lead com WhatsApp confirmado. Rode a verificação de WhatsApp antes de exportar.");
-      return;
-    }
-    const rows = comWhats.map((l) => ({
-      Nome: l.nome,
-      Telefone: l.telefone_internacional ?? l.telefone ?? "",
-    }));
-
-
+  function baixarPlanilha(rows: Record<string, string | number>[], prefixo: string) {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Leads");
     const buscaAtual = buscas?.find((b) => b.id === buscaSel);
-    const nomeArq = `leads-${(buscaAtual?.categoria ?? "gm").replace(/\s+/g, "-")}-${new Date()
+    const nomeArq = `${prefixo}-${(buscaAtual?.categoria ?? "gm").replace(/\s+/g, "-")}-${new Date()
       .toISOString()
       .slice(0, 10)}.xlsx`;
     XLSX.writeFile(wb, nomeArq);
   }
+
+  const rotuloSite: Record<SiteTipo, string> = {
+    sem_site: "Sem site",
+    rede_social: "Só rede social",
+    com_site: "Tem site",
+  };
+
+  function exportarExcel() {
+    const comWhats = leadsFiltrados.filter((l) => l.tem_whatsapp === true);
+    if (!comWhats.length) {
+      toast.error("Nenhum lead com WhatsApp confirmado. Rode a verificação de WhatsApp antes de exportar.");
+      return;
+    }
+    baixarPlanilha(
+      comWhats.map((l) => ({
+        Nome: l.nome,
+        Telefone: l.telefone_internacional ?? l.telefone ?? "",
+        Site: l.site ?? "",
+        "Situação do site": rotuloSite[classificarSite(l.site)],
+        Categoria: l.categoria ?? "",
+        Nota: l.avaliacao ?? "",
+        Avaliações: l.total_avaliacoes ?? "",
+        Potencial: pontuarLead(l),
+      })),
+      "leads",
+    );
+  }
+
+  function exportarProspeccao() {
+    if (!leadsProspeccao.length) {
+      toast.error("Nenhum lead sem site com WhatsApp confirmado nesta busca.");
+      return;
+    }
+    const ordenados = leadsProspeccao.slice().sort((a, b) => pontuarLead(b) - pontuarLead(a));
+    baixarPlanilha(
+      ordenados.map((l) => ({
+        Nome: l.nome,
+        Telefone: l.telefone_internacional ?? l.telefone ?? "",
+        Categoria: l.categoria ?? "",
+        "Situação do site": rotuloSite[classificarSite(l.site)],
+        Nota: l.avaliacao ?? "",
+        Avaliações: l.total_avaliacoes ?? "",
+        Potencial: pontuarLead(l),
+        Mensagem: mensagemProspeccao(l),
+      })),
+      "prospeccao-sem-site",
+    );
+    toast.success(`${ordenados.length} leads exportados para prospecção`);
+  }
+
+  function copiarMensagem(l: Lead) {
+    navigator.clipboard.writeText(mensagemProspeccao(l));
+    toast.success("Mensagem de prospecção copiada");
+  }
+
+  function abrirWhatsApp(l: Lead) {
+    const tel = (l.telefone_internacional ?? l.telefone ?? "").replace(/\D/g, "");
+    if (!tel) {
+      toast.error("Lead sem telefone");
+      return;
+    }
+    const numero = tel.startsWith("55") ? tel : `55${tel}`;
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(mensagemProspeccao(l))}`, "_blank");
+  }
+
 
   function copiarTelefones() {
     const tels = leadsFiltrados.map((l) => l.telefone_internacional ?? l.telefone).filter(Boolean);
@@ -471,21 +577,28 @@ export default function GoogleMapsLeads() {
                   <Checkbox checked={somenteComWhats} onCheckedChange={(v) => setSomenteComWhats(!!v)} />
                   Só com WhatsApp
                 </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={somenteSemSite} onCheckedChange={(v) => setSomenteSemSite(!!v)} />
+                  Só sem site
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={ordenarPotencial} onCheckedChange={(v) => setOrdenarPotencial(!!v)} />
+                  Melhor potencial
+                </label>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => buscaSel && verificarWhatsapp(buscaSel)}
                   disabled={!buscaSel || verificandoWhats}
                 >
-                  {verificandoWhats ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                  )}
+                  {verificandoWhats ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-2" />}
                   Verificar WhatsApp
                 </Button>
                 <Button size="sm" variant="outline" onClick={copiarTelefones} disabled={!leadsFiltrados.length}>
                   <Phone className="h-4 w-4 mr-2" /> Copiar telefones
+                </Button>
+                <Button size="sm" variant="outline" onClick={exportarProspeccao} disabled={!leadsProspeccao.length}>
+                  <Sparkles className="h-4 w-4 mr-2" /> Exportar prospecção
                 </Button>
                 <Button size="sm" onClick={exportarExcel} disabled={!leadsFiltrados.length}>
                   <Download className="h-4 w-4 mr-2" /> Exportar Excel
@@ -494,15 +607,13 @@ export default function GoogleMapsLeads() {
             </div>
             {buscaSel && (
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                  {totComWhats} com WhatsApp
-                </Badge>
+                <Badge variant="default">{totComSite} com site</Badge>
+                <Badge variant="secondary">{totSemSite} sem site</Badge>
+                {totRedeSocial > 0 && <Badge variant="outline">{totRedeSocial} só rede social</Badge>}
+                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">{totComWhats} com WhatsApp</Badge>
                 <Badge variant="secondary">{totSemWhats} sem WhatsApp</Badge>
-                {totNaoVerif > 0 && (
-                  <Badge variant="outline" className="border-amber-500 text-amber-600">
-                    {totNaoVerif} não verificado(s)
-                  </Badge>
-                )}
+                {totNaoVerif > 0 && <Badge variant="outline" className="border-amber-500 text-amber-600">{totNaoVerif} não verificado(s)</Badge>}
+                {leadsProspeccao.length > 0 && <Badge variant="outline" className="border-primary text-primary">{leadsProspeccao.length} oportunidades</Badge>}
               </div>
             )}
           </CardHeader>
@@ -515,9 +626,11 @@ export default function GoogleMapsLeads() {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>Telefone</TableHead>
+                      <TableHead>Site</TableHead>
                       <TableHead>WhatsApp</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead className="text-right">⭐</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -528,31 +641,46 @@ export default function GoogleMapsLeads() {
                           {l.telefone_internacional ?? l.telefone ?? "—"}
                         </TableCell>
                         <TableCell className="text-xs">
-                          {!l.telefone ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : l.tem_whatsapp === true ? (
-                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                              <MessageCircle className="h-3 w-3 mr-1" /> Sim
-                            </Badge>
-                          ) : l.tem_whatsapp === false ? (
-                            <Badge variant="secondary">Não</Badge>
+                          {classificarSite(l.site) === "com_site" ? (
+                            <a href={l.site ?? undefined} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline max-w-40 truncate" title={l.site ?? undefined}>
+                              <Globe className="h-3 w-3 shrink-0" /> Site
+                            </a>
+                          ) : classificarSite(l.site) === "rede_social" ? (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600">Só rede social</Badge>
                           ) : (
-                            <Badge variant="outline" className="border-amber-500 text-amber-600">
-                              ?
-                            </Badge>
+                            <Badge variant="secondary">Sem site</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {!l.telefone ? <span className="text-muted-foreground">—</span> : l.tem_whatsapp === true ? (
+                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600"><MessageCircle className="h-3 w-3 mr-1" /> Sim</Badge>
+                          ) : l.tem_whatsapp === false ? <Badge variant="secondary">Não</Badge> : (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600">?</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-xs">{l.categoria ?? "—"}</TableCell>
                         <TableCell className="text-right text-xs">
                           {l.avaliacao ? `${l.avaliacao} (${l.total_avaliacoes ?? 0})` : "—"}
                         </TableCell>
+                        <TableCell className="text-right">
+                          {classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true && (
+                            <div className="flex justify-end gap-1">
+                              <Button size="icon" variant="ghost" title="Copiar mensagem de prospecção" onClick={() => copiarMensagem(l)}>
+                                <Clipboard className="h-4 w-4" />
+                              </Button>
+                              <Button size="icon" variant="ghost" title="Abrir WhatsApp com mensagem" onClick={() => abrirWhatsApp(l)}>
+                                <MessageCircle className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
 
                     {!leadsFiltrados.length && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">
-                          Nenhum lead {somenteComTel ? "com telefone" : ""} nesta busca.
+                        <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                          Nenhum lead {somenteComTel ? "com telefone" : ""}{somenteSemSite ? " sem site" : ""} nesta busca.
                         </TableCell>
                       </TableRow>
                     )}
