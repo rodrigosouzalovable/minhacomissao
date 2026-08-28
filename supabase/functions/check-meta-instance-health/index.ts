@@ -51,6 +51,8 @@ Deno.serve(async (req) => {
           'name_status', 'code_verification_status', 'status',
           'throughput', 'messaging_limit_tier', 'platform_type', 'account_mode',
         ].join(',');
+
+
         const phoneResp = await fetchJson(
           `${GRAPH}/${inst.phone_number_id}?fields=${fields}`,
           inst.access_token,
@@ -80,7 +82,41 @@ Deno.serve(async (req) => {
           } else {
             r.waba_error = wabaResp.data?.error?.message || `HTTP ${wabaResp.status}`;
           }
+
+          // Restrições de envio da WABA (ex.: RESTRICTED_BIZ_INITIATED_MESSAGING).
+          // Chamada separada porque o campo não existe em todas as contas/versões —
+          // um erro aqui não pode derrubar o restante do check.
+          const restrResp = await fetchJson(
+            `${GRAPH}/${inst.waba_id}?fields=health_status`,
+            inst.access_token,
+          );
+          if (restrResp.ok) r.waba_health = restrResp.data?.health_status || null;
         }
+
+        // Restrição no próprio número (health_status), também isolada.
+        const phoneHealth = await fetchJson(
+          `${GRAPH}/${inst.phone_number_id}?fields=health_status`,
+          inst.access_token,
+        );
+        if (phoneHealth.ok) r.phone_health = phoneHealth.data?.health_status || null;
+
+        // Restrição real de envio da Meta: can_send_message = BLOCKED/LIMITED
+        // (na raiz ou em qualquer entidade: número, WABA, business, app).
+        const restricoes: any = {
+          phone_health: r.phone_health || null,
+          waba_health: r.waba_health || null,
+        };
+        const RUIM = new Set(['BLOCKED', 'LIMITED', 'RESTRICTED']);
+        const avaliaHealth = (h: any): boolean => {
+          if (!h || typeof h !== 'object') return false;
+          if (RUIM.has(String(h.can_send_message || '').toUpperCase())) return true;
+          const ents = Array.isArray(h.entities) ? h.entities : [];
+          return ents.some((e: any) => RUIM.has(String(e?.can_send_message || '').toUpperCase()));
+        };
+        const restritoMeta = avaliaHealth(r.phone_health) || avaliaHealth(r.waba_health);
+        r.restrito_meta = restritoMeta;
+
+        r.restricoes = restricoes;
 
         const updatePayload: any = {
           saude_status: r.status,
@@ -89,12 +125,14 @@ Deno.serve(async (req) => {
           saude_name_status: r.name_status,
           saude_throughput: r.throughput,
           saude_ban_info: r.ban_info,
-          saude_raw: { phone: r.raw, waba: r.waba || null },
+          saude_restricoes: restricoes,
+          saude_raw: { phone: r.raw, waba: r.waba || null, restricoes },
           saude_checked_at: new Date().toISOString(),
           throughput_level: r.throughput?.level || null,
           meta_verified_name: r.raw?.verified_name || null,
           meta_name_status: r.name_status || null,
         };
+
 
         // Se a Graph API retornou tier, marca origem como meta_api
         // (só sobrescreve source se ainda não há override manual do usuário)
@@ -252,10 +290,11 @@ Deno.serve(async (req) => {
 
 
         // ===== Auto-liberação de bloqueio real da Meta =====
-        // Se a instância foi restringida por bloqueio da Meta (#131031 Business
-        // Account locked, número inacessível #100 ou pendência de pagamento
-        // #131042) e agora a Graph API responde normalmente (número CONNECTED,
-        // sem ban_info), devolvemos o número ao pool.
+        // Só devolve o número ao pool quando está realmente saudável:
+        // CONNECTED, sem ban_info, qualidade GREEN, sem quarentena ativa e sem
+        // restrição de envio informada pela Meta. Se o bloqueio saiu mas a
+        // qualidade continua YELLOW/RED (ou a conta segue restrita), o número
+        // permanece fora das campanhas e em aquecimento automático.
         const { ehMotivoBloqueioMeta, ehMotivoPagamento } = await import('../_shared/meta-conta-bloqueada.ts');
         const motivoAtual = String(inst.pausa_automatica_motivo || '');
         const eraBloqueioMeta = ehMotivoBloqueioMeta(motivoAtual);
@@ -263,40 +302,69 @@ Deno.serve(async (req) => {
         const semBanAgora = !r.ban_info ||
           (typeof r.ban_info === 'object' && Object.keys(r.ban_info).length === 0);
         const graphOk = !r.error && st === 'CONNECTED' && semBanAgora;
+        const quarentenaAlvo = updatePayload.quarentena_ate !== undefined
+          ? updatePayload.quarentena_ate
+          : inst.quarentena_ate;
+        const quarentenaAtiva = !!quarentenaAlvo && new Date(quarentenaAlvo).getTime() > Date.now();
+        const saudavel = qual === 'GREEN' && !quarentenaAtiva && !restritoMeta;
+
         if (eraBloqueioMeta && graphOk && !notificarPausa) {
-          updatePayload.estado_pool = 'ativo';
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
-          r.liberada = true;
+          if (saudavel) {
+            updatePayload.estado_pool = 'ativo';
+            r.liberada = true;
+          } else {
+            // Bloqueio saiu, mas o número não está apto: fica restrito.
+            updatePayload.estado_pool = 'restrita';
+            r.liberada_parcial = true;
+          }
           r.liberada_pagamento = eraPagamento;
         }
 
 
         await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
 
-        if (r.liberada) {
+        if (r.liberada || r.liberada_parcial) {
           try {
             const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
             const bmLinha = await linhaBmInstancia(supabase, inst);
             const hojeBrt = new Date().toISOString().slice(0, 10);
-            await notificarAdmin(supabase, {
-              tipo: 'meta_bloqueio_liberado',
-              mensagem:
-                `✅ *Bloqueio da Meta liberado*\n\n` +
+            const causa = r.liberada_pagamento
+              ? `A pendência de pagamento/elegibilidade da Business Manager foi regularizada — a Meta voltou a aceitar a conexão.`
+              : `A Meta voltou a responder normalmente (CONNECTED, sem bloqueio de conta).`;
+            const diasGreenAtual = Number(
+              updatePayload.dias_green_consecutivos ?? inst.dias_green_consecutivos ?? 0,
+            );
+            const mensagem = r.liberada
+              ? `✅ *Bloqueio da Meta liberado*\n\n` +
                 `Número: *${inst.nome || inst.display_phone}*\n` +
                 `${bmLinha}\n` +
-                (r.liberada_pagamento
-                  ? `A pendência de pagamento/elegibilidade da Business Manager foi regularizada — a Meta voltou a aceitar envios.`
-                  : `A Meta voltou a responder normalmente (CONNECTED, sem restrição).`) +
-                ` O número voltou para o pool de envios.`,
+                `${causa} Qualidade GREEN e sem restrição — o número voltou para o pool de envios.`
+              : `⚠️ *Bloqueio da Meta liberado — número ainda NÃO liberado para campanhas*\n\n` +
+                `Número: *${inst.nome || inst.display_phone}*\n` +
+                `${bmLinha}\n` +
+                `${causa}\n` +
+                `Mas o número continua ${qual === 'GREEN' ? 'com pendência' : `com qualidade *${qual || 'desconhecida'}*`}` +
+                (restritoMeta ? ` e *restrito pela Meta* (envio limitado no painel)` : '') +
+                (quarentenaAtiva
+                  ? ` e em quarentena até ${new Date(quarentenaAlvo).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
+                  : '') +
+                `.\n` +
+                `Segue fora das campanhas e em aquecimento automático — atende normalmente as conversas recebidas.\n` +
+                `${linhaPrevisao(qual, diasGreenAtual, diasGreenAlta)}`;
 
-              chaveIdempotencia: `meta_bloqueio_liberado_${inst.id}_${hojeBrt}`,
+            await notificarAdmin(supabase, {
+              tipo: 'meta_bloqueio_liberado',
+              mensagem,
+              chaveIdempotencia: `meta_bloqueio_liberado_${inst.id}_${r.liberada ? 'ok' : 'parcial'}_${hojeBrt}`,
               umaVezPorChave: true,
             });
           } catch (e) {
             console.log('[health] aviso de liberação falhou:', String(e).slice(0, 200));
           }
         }
+
 
         if (alertaQueda) {
           try {
