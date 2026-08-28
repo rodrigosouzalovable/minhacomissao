@@ -170,6 +170,79 @@ Deno.serve(async (req) => {
       await supabase.from("meta_whatsapp_instances").update(patch).eq("id", inst.id);
 
       if (envio.ok) usoDestino.set(destino.id, (usoDestino.get(destino.id) || 0) + 1);
+
+      // ===== Avisos no WhatsApp: início do aquecimento do dia e meta concluída =====
+      const enviadosAgora = meus.length + (envio.ok ? 1 : 0);
+      const diasGreenAlta = Math.max(1, Number(cfg?.recuperacao_dias_green_alta ?? 3));
+      const rotulo = inst.nome || inst.display_phone;
+      try {
+        const { notificarAdmin } = await import("../_shared/notificar-admin.ts");
+        const { linhaBmInstancia } = await import("../_shared/rotulo-instancia.ts");
+        const { linhaPrevisao } = await import("../_shared/meta-recuperacao-aviso.ts");
+        const previsao = linhaPrevisao(inst.saude_quality, inst.dias_green_consecutivos, diasGreenAlta);
+        const diasEmRecup = inst.recuperacao_desde
+          ? Math.max(1, Math.ceil((Date.now() - new Date(inst.recuperacao_desde).getTime()) / 86400000))
+          : 1;
+
+        if (envio.ok && meus.length === 0) {
+          await notificarAdmin(supabase, {
+            tipo: "meta_aquecimento_inicio",
+            mensagem:
+              `🔥 *Aquecimento iniciado hoje*\n\n` +
+              `Número: *${rotulo}*\n` +
+              `${await linhaBmInstancia(supabase, inst)}\n` +
+              `Qualidade atual: ${String(inst.saude_quality || "UNKNOWN").toUpperCase()} · dia ${diasEmRecup} de recuperação\n` +
+              `Meta de hoje: ${metaDia} mensagens (intervalos de 20–40 min, 09h–19h)\n` +
+              `Destino: números UAZAPI da caixa AQUECIMENTO — o IAGO responde tudo, gerando entrada real\n` +
+              (inst.quarentena_ate
+                ? `Fora das campanhas até ${new Date(inst.quarentena_ate).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}\n`
+                : "") +
+              `${previsao}`,
+            chaveIdempotencia: `meta_aquec_inicio_${inst.id}_${dia}`,
+            umaVezPorChave: true,
+          });
+        }
+
+        if (envio.ok && enviadosAgora >= metaDia) {
+          const falhasHoje = (logsHoje || []).filter(
+            (l: any) => l.instancia_id === inst.id && l.status === "falha",
+          ).length;
+          await notificarAdmin(supabase, {
+            tipo: "meta_aquecimento_meta_dia",
+            mensagem:
+              `✅ *Aquecimento do dia concluído*\n\n` +
+              `Número: *${rotulo}*\n` +
+              `${enviadosAgora}/${metaDia} mensagens enviadas${falhasHoje ? ` · ${falhasHoje} falha(s)` : " · nenhuma falha"}\n` +
+              `Qualidade atual: ${String(inst.saude_quality || "UNKNOWN").toUpperCase()}\n` +
+              `${previsao}`,
+            chaveIdempotencia: `meta_aquec_meta_${inst.id}_${dia}`,
+            umaVezPorChave: true,
+          });
+        }
+
+        if (!envio.ok) {
+          const falhasSeguidas = (logsHoje || [])
+            .filter((l: any) => l.instancia_id === inst.id)
+            .sort((a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime())
+            .slice(0, 2)
+            .filter((l: any) => l.status === "falha").length + 1;
+          if (falhasSeguidas >= 3) {
+            await notificarAdmin(supabase, {
+              tipo: "meta_aquecimento_falhas",
+              mensagem:
+                `⚠️ *Aquecimento com falhas*\n\n` +
+                `Número: *${rotulo}*\n` +
+                `3 tentativas seguidas falharam hoje.\nÚltimo erro: ${envio.erro}\n\n` +
+                `Enquanto não enviar, a qualidade não sobe. ${previsao}`,
+              chaveIdempotencia: `meta_aquec_falhas_${inst.id}_${dia}`,
+              umaVezPorChave: true,
+            });
+          }
+        }
+      } catch (e) {
+        console.log("[recuperacao] aviso falhou:", String(e).slice(0, 200));
+      }
+
       processadas++;
       resultados.push({
         instancia: inst.nome || inst.display_phone,
