@@ -1,12 +1,18 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Clipboard, Download, Wand2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Clipboard, Download, FileDown, Loader2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
+import { EsbocoSitePreview } from "./EsbocoSitePreview";
+import { ESTILOS_ESBOCO, montarConteudoEsboco, paletaPorEstilo, type EstiloEsboco } from "./esbocoSite";
+import { gerarPdfEsboco } from "./esbocoPdf";
+
 
 export interface LeadPrompt {
   id: string;
@@ -113,6 +119,11 @@ interface Props {
 
 export function PromptSiteLeadDialog({ lead, buscaId, categoriaBusca, localizacao, onClose }: Props) {
   const [editado, setEditado] = useState<string | null>(null);
+  const [aba, setAba] = useState("prompt");
+  const [estilo, setEstilo] = useState<EstiloEsboco>("moderno");
+  const [usarPaletaNicho, setUsarPaletaNicho] = useState("nicho");
+  const [gerando, setGerando] = useState(false);
+  const esbocoRef = useRef<HTMLDivElement>(null);
 
   const { data: analise } = useQuery({
     queryKey: ["gm-nicho-analise", buscaId],
@@ -137,9 +148,24 @@ export function PromptSiteLeadDialog({ lead, buscaId, categoriaBusca, localizaca
 
   const prompt = editado ?? promptBase;
 
+  const conteudo = useMemo(() => {
+    if (!lead) return null;
+    return montarConteudoEsboco(lead, {
+      categoriaBusca,
+      localizacao,
+      secoesNicho: analise?.resumo?.secoes_recomendadas ?? null,
+    });
+  }, [lead, categoriaBusca, localizacao, analise]);
+
+  const paleta = useMemo(
+    () => paletaPorEstilo(estilo, usarPaletaNicho === "nicho" ? analise?.resumo?.paleta ?? null : null),
+    [estilo, usarPaletaNicho, analise],
+  );
+
   function fechar(open: boolean) {
     if (!open) {
       setEditado(null);
+      setAba("prompt");
       onClose();
     }
   }
@@ -161,12 +187,25 @@ export function PromptSiteLeadDialog({ lead, buscaId, categoriaBusca, localizaca
     URL.revokeObjectURL(url);
   }
 
+  async function baixarPdf() {
+    if (!esbocoRef.current || !lead) return;
+    setGerando(true);
+    try {
+      await gerarPdfEsboco(esbocoRef.current, lead.nome);
+      toast.success("PDF do esboço gerado — pronto para enviar ao cliente");
+    } catch (e) {
+      toast.error(`Não foi possível gerar o PDF: ${(e as Error).message}`);
+    } finally {
+      setGerando(false);
+    }
+  }
+
   return (
     <Dialog open={!!lead} onOpenChange={fechar}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wand2 className="h-4 w-4" /> Prompt do site — {lead?.nome}
+            <Wand2 className="h-4 w-4" /> Prompt e esboço do site — {lead?.nome}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
@@ -178,17 +217,71 @@ export function PromptSiteLeadDialog({ lead, buscaId, categoriaBusca, localizaca
               <span className="text-muted-foreground">Sem análise de nicho salva — usando dados do lead</span>
             )}
           </div>
-          <Textarea
-            className="min-h-[360px] font-mono text-xs"
-            value={prompt}
-            onChange={(e) => setEditado(e.target.value)}
-          />
-          <div className="flex gap-2">
-            <Button onClick={copiar}><Clipboard className="h-4 w-4 mr-2" /> Copiar prompt</Button>
-            <Button variant="outline" onClick={baixar}><Download className="h-4 w-4 mr-2" /> Baixar .txt</Button>
-          </div>
+
+          <Tabs value={aba} onValueChange={setAba}>
+            <TabsList>
+              <TabsTrigger value="prompt">Prompt</TabsTrigger>
+              <TabsTrigger value="esboco">Esboço do site</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="prompt" className="space-y-3">
+              <Textarea
+                className="min-h-[360px] font-mono text-xs"
+                value={prompt}
+                onChange={(e) => setEditado(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <Button onClick={copiar}><Clipboard className="h-4 w-4 mr-2" /> Copiar prompt</Button>
+                <Button variant="outline" onClick={baixar}><Download className="h-4 w-4 mr-2" /> Baixar .txt</Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="esboco" className="space-y-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Estilo visual</span>
+                  <Select value={estilo} onValueChange={(v) => setEstilo(v as EstiloEsboco)}>
+                    <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ESTILOS_ESBOCO.map((e) => (
+                        <SelectItem key={e.valor} value={e.valor}>{e.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Paleta</span>
+                  <Select value={usarPaletaNicho} onValueChange={setUsarPaletaNicho}>
+                    <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nicho" disabled={!analise?.resumo?.paleta?.length}>
+                        Cores observadas no nicho
+                      </SelectItem>
+                      <SelectItem value="estilo">Cores do estilo escolhido</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={baixarPdf} disabled={gerando || !conteudo}>
+                  {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
+                  Baixar esboço em PDF
+                </Button>
+              </div>
+
+              {aba === "esboco" && lead && conteudo && (
+                <div className="max-h-[60vh] overflow-auto rounded-md border bg-muted/30 p-3">
+                  <div className="origin-top-left" style={{ transform: "scale(0.72)", width: 1000, transformOrigin: "top left", marginBottom: -700 }}>
+                    <EsbocoSitePreview ref={esbocoRef} lead={lead} conteudo={conteudo} paleta={paleta} />
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                O PDF sai em A4 com capa, todas as seções do site e a página final "Como contratar" (investimento R$ 500,00).
+              </p>
+            </TabsContent>
+          </Tabs>
         </div>
       </DialogContent>
     </Dialog>
   );
+
 }
