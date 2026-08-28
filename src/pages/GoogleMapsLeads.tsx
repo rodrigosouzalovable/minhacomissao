@@ -574,6 +574,10 @@ export default function GoogleMapsLeads() {
                   Só com telefone
                 </label>
                 <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={somenteComWhats} onCheckedChange={(v) => setSomenteComWhats(!!v)} />
+                  Só com WhatsApp
+                </label>
+                <label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={somenteSemSite} onCheckedChange={(v) => setSomenteSemSite(!!v)} />
                   Só sem site
                 </label>
@@ -587,11 +591,7 @@ export default function GoogleMapsLeads() {
                   onClick={() => buscaSel && verificarWhatsapp(buscaSel)}
                   disabled={!buscaSel || verificandoWhats}
                 >
-                  {verificandoWhats ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                  )}
+                  {verificandoWhats ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-2" />}
                   Verificar WhatsApp
                 </Button>
                 <Button size="sm" variant="outline" onClick={copiarTelefones} disabled={!leadsFiltrados.length}>
@@ -607,29 +607,15 @@ export default function GoogleMapsLeads() {
             </div>
             {buscaSel && (
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Badge variant="default">
-                  {totComSite} com site
-                </Badge>
+                <Badge variant="default">{totComSite} com site</Badge>
                 <Badge variant="secondary">{totSemSite} sem site</Badge>
                 {totRedeSocial > 0 && <Badge variant="outline">{totRedeSocial} só rede social</Badge>}
-                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                  {totComWhats} com WhatsApp
-                </Badge>
+                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">{totComWhats} com WhatsApp</Badge>
                 <Badge variant="secondary">{totSemWhats} sem WhatsApp</Badge>
-                {totNaoVerif > 0 && (
-                  <Badge variant="outline" className="border-amber-500 text-amber-600">
-                    {totNaoVerif} não verificado(s)
-                  </Badge>
-                )}
-                {leadsProspeccao.length > 0 && (
-                  <Badge variant="outline" className="border-primary text-primary">
-                    {leadsProspeccao.length} oportunidades
-                  </Badge>
-                )}
+                {totNaoVerif > 0 && <Badge variant="outline" className="border-amber-500 text-amber-600">{totNaoVerif} não verificado(s)</Badge>}
+                {leadsProspeccao.length > 0 && <Badge variant="outline" className="border-primary text-primary">{leadsProspeccao.length} oportunidades</Badge>}
               </div>
             )}
-          </CardHeader>
-          <CardContent>
           </CardHeader>
           <CardContent>
             {!buscaSel && <p className="text-sm text-muted-foreground">Selecione uma busca ou crie uma nova.</p>}
@@ -640,9 +626,11 @@ export default function GoogleMapsLeads() {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>Telefone</TableHead>
+                      <TableHead>Site</TableHead>
                       <TableHead>WhatsApp</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead className="text-right">⭐</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
