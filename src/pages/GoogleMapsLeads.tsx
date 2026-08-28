@@ -822,11 +822,29 @@ export default function GoogleMapsLeads() {
 
                     {!leadsFiltrados.length && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
-                          Nenhum lead {somenteComTel ? "com telefone" : ""}{somenteSemSite ? " sem site" : ""} nesta busca.
+                        <TableCell colSpan={7} className="py-6 text-center text-sm text-muted-foreground">
+                          {todos.length === 0 ? (
+                            "Esta busca não retornou nenhum lead."
+                          ) : (
+                            <div className="space-y-2">
+                              <p>
+                                Esta busca tem {todos.length} lead(s), mas os filtros marcados não deixaram nenhum:
+                                {somenteComTel && qtdComTel === 0 ? " nenhum tem telefone;" : ""}
+                                {somenteComWhats && qtdComWhats === 0 ? " nenhum tem WhatsApp confirmado (rode \"Verificar WhatsApp\");" : ""}
+                                {somenteSemSite && qtdSemSite === 0 ? " todos já têm site;" : ""}
+                                {filtrosAtivos && qtdComTel > 0 && qtdSemSite > 0 && qtdComWhats > 0 ? " a combinação de filtros não tem interseção." : ""}
+                              </p>
+                              {filtrosAtivos && (
+                                <Button size="sm" variant="outline" onClick={limparFiltros}>
+                                  Limpar filtros e ver os {todos.length} leads
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     )}
+
                   </TableBody>
                 </Table>
               </div>
