@@ -574,8 +574,12 @@ export default function GoogleMapsLeads() {
                   Só com telefone
                 </label>
                 <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={somenteComWhats} onCheckedChange={(v) => setSomenteComWhats(!!v)} />
-                  Só com WhatsApp
+                  <Checkbox checked={somenteSemSite} onCheckedChange={(v) => setSomenteSemSite(!!v)} />
+                  Só sem site
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={ordenarPotencial} onCheckedChange={(v) => setOrdenarPotencial(!!v)} />
+                  Melhor potencial
                 </label>
                 <Button
                   size="sm"
@@ -593,6 +597,9 @@ export default function GoogleMapsLeads() {
                 <Button size="sm" variant="outline" onClick={copiarTelefones} disabled={!leadsFiltrados.length}>
                   <Phone className="h-4 w-4 mr-2" /> Copiar telefones
                 </Button>
+                <Button size="sm" variant="outline" onClick={exportarProspeccao} disabled={!leadsProspeccao.length}>
+                  <Sparkles className="h-4 w-4 mr-2" /> Exportar prospecção
+                </Button>
                 <Button size="sm" onClick={exportarExcel} disabled={!leadsFiltrados.length}>
                   <Download className="h-4 w-4 mr-2" /> Exportar Excel
                 </Button>
@@ -600,6 +607,11 @@ export default function GoogleMapsLeads() {
             </div>
             {buscaSel && (
               <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge variant="default">
+                  {totComSite} com site
+                </Badge>
+                <Badge variant="secondary">{totSemSite} sem site</Badge>
+                {totRedeSocial > 0 && <Badge variant="outline">{totRedeSocial} só rede social</Badge>}
                 <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
                   {totComWhats} com WhatsApp
                 </Badge>
@@ -609,8 +621,15 @@ export default function GoogleMapsLeads() {
                     {totNaoVerif} não verificado(s)
                   </Badge>
                 )}
+                {leadsProspeccao.length > 0 && (
+                  <Badge variant="outline" className="border-primary text-primary">
+                    {leadsProspeccao.length} oportunidades
+                  </Badge>
+                )}
               </div>
             )}
+          </CardHeader>
+          <CardContent>
           </CardHeader>
           <CardContent>
             {!buscaSel && <p className="text-sm text-muted-foreground">Selecione uma busca ou crie uma nova.</p>}
