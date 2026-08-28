@@ -82,7 +82,38 @@ Deno.serve(async (req) => {
           } else {
             r.waba_error = wabaResp.data?.error?.message || `HTTP ${wabaResp.status}`;
           }
+
+          // Restrições de envio da WABA (ex.: RESTRICTED_BIZ_INITIATED_MESSAGING).
+          // Chamada separada porque o campo não existe em todas as contas/versões —
+          // um erro aqui não pode derrubar o restante do check.
+          const restrResp = await fetchJson(
+            `${GRAPH}/${inst.waba_id}?fields=health_status`,
+            inst.access_token,
+          );
+          if (restrResp.ok) r.waba_health = restrResp.data?.health_status || null;
         }
+
+        // Restrição no próprio número (health_status), também isolada.
+        const phoneHealth = await fetchJson(
+          `${GRAPH}/${inst.phone_number_id}?fields=health_status`,
+          inst.access_token,
+        );
+        if (phoneHealth.ok) r.phone_health = phoneHealth.data?.health_status || null;
+
+        // Qualquer entidade "blocked" ou restrição de mensagens iniciadas pela
+        // empresa mantém o número fora das campanhas, mesmo com status CONNECTED.
+        const restricoes: any = {
+          phone_health: r.phone_health || null,
+          waba_health: r.waba_health || null,
+        };
+        const textoRestricoes = JSON.stringify(restricoes).toUpperCase();
+        const restritoMeta =
+          /"CAN_SEND_MESSAGE"\s*:\s*"BLOCKED"/.test(textoRestricoes) ||
+          textoRestricoes.includes('RESTRICTED_BIZ_INITIATED_MESSAGING') ||
+          textoRestricoes.includes('ACCOUNT_RESTRICTED') ||
+          textoRestricoes.includes('BUSINESS_RESTRICTED');
+        r.restrito_meta = restritoMeta;
+        r.restricoes = restricoes;
 
         const updatePayload: any = {
           saude_status: r.status,
@@ -91,12 +122,14 @@ Deno.serve(async (req) => {
           saude_name_status: r.name_status,
           saude_throughput: r.throughput,
           saude_ban_info: r.ban_info,
-          saude_raw: { phone: r.raw, waba: r.waba || null },
+          saude_restricoes: restricoes,
+          saude_raw: { phone: r.raw, waba: r.waba || null, restricoes },
           saude_checked_at: new Date().toISOString(),
           throughput_level: r.throughput?.level || null,
           meta_verified_name: r.raw?.verified_name || null,
           meta_name_status: r.name_status || null,
         };
+
 
         // Se a Graph API retornou tier, marca origem como meta_api
         // (só sobrescreve source se ainda não há override manual do usuário)
