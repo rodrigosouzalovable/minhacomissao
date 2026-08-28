@@ -84,6 +84,9 @@ interface Lead {
   total_avaliacoes: number | null;
   tem_whatsapp: boolean | null;
   whatsapp_verificado_em: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  place_id: string | null;
 }
 
 
