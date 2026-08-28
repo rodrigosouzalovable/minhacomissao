@@ -134,6 +134,8 @@ export default function GoogleMapsLeads() {
   const [somenteComWhats, setSomenteComWhats] = useState(false);
   const [somenteSemSite, setSomenteSemSite] = useState(false);
   const [ordenarPotencial, setOrdenarPotencial] = useState(false);
+  const [modoVisualizacao, setModoVisualizacao] = useState<"tabela" | "mapa">("tabela");
+  const [dialogNichosAberto, setDialogNichosAberto] = useState(false);
 
   const [verificandoWhats, setVerificandoWhats] = useState(false);
   const [erroBusca, setErroBusca] = useState<FunctionErrorPayload | null>(null);
