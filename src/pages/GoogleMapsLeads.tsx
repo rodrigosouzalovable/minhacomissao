@@ -649,6 +649,13 @@ export default function GoogleMapsLeads() {
           </CardContent>
         </Card>
 
+        <AnalisarNichoCard
+          buscaId={buscaSel}
+          categoria={buscas?.find((b) => b.id === buscaSel)?.categoria}
+          localizacao={buscas?.find((b) => b.id === buscaSel)?.localizacao}
+          leads={leads ?? []}
+        />
+
         <Card>
           <CardHeader className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
