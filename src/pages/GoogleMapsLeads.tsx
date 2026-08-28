@@ -13,8 +13,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Clipboard, Globe, KeyRound, Loader2, Download, MapPin, MessageCircle, Phone, Search, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, Clipboard, Globe, KeyRound, Loader2, Download, Map, MapPin, MessageCircle, Phone, Search, Shuffle, Sparkles, Table2, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { LeadsMapa, linkGoogleMaps, type LeadMapa } from "@/components/googlemaps/LeadsMapa";
+import { NICHOS, NICHOS_DESTAQUE, TODOS_NICHOS, dicaDoNicho } from "@/components/googlemaps/nichos";
 
 type SiteTipo = "sem_site" | "rede_social" | "com_site";
 
@@ -80,6 +84,9 @@ interface Lead {
   total_avaliacoes: number | null;
   tem_whatsapp: boolean | null;
   whatsapp_verificado_em: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  place_id: string | null;
 }
 
 
@@ -130,6 +137,8 @@ export default function GoogleMapsLeads() {
   const [somenteComWhats, setSomenteComWhats] = useState(false);
   const [somenteSemSite, setSomenteSemSite] = useState(false);
   const [ordenarPotencial, setOrdenarPotencial] = useState(false);
+  const [modoVisualizacao, setModoVisualizacao] = useState<"tabela" | "mapa">("tabela");
+  const [dialogNichosAberto, setDialogNichosAberto] = useState(false);
 
   const [verificandoWhats, setVerificandoWhats] = useState(false);
   const [erroBusca, setErroBusca] = useState<FunctionErrorPayload | null>(null);
@@ -347,6 +356,34 @@ export default function GoogleMapsLeads() {
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(mensagemProspeccao(l))}`, "_blank");
   }
 
+  function abrirBuscaNoMaps(busca: Busca | undefined) {
+    if (!busca) return;
+    const query = encodeURIComponent(`${busca.categoria} em ${busca.localizacao}`);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
+  }
+
+  const localizacoesRecentes = Array.from(new Set((buscas ?? []).map((b) => b.localizacao.trim()).filter(Boolean))).slice(0, 6);
+  const nichosFiltrados = TODOS_NICHOS
+    .filter((n, index, all) => all.findIndex((item) => item.nome === n.nome) === index)
+    .filter((n) => !categoria.trim() || n.nome.toLowerCase().includes(categoria.toLowerCase()))
+    .slice(0, 8);
+
+  function selecionarNicho(nicho: string) {
+    setCategoria(nicho);
+    setDialogNichosAberto(false);
+  }
+
+  function sortearNicho() {
+    const nicho = TODOS_NICHOS[Math.floor(Math.random() * TODOS_NICHOS.length)];
+    if (nicho) setCategoria(nicho.nome);
+  }
+
+  const leadsMapa = leadsFiltrados.map((l): LeadMapa => ({
+    ...l,
+    place_id: (l as Lead & { place_id?: string | null }).place_id ?? null,
+    siteTipo: classificarSite(l.site),
+  }));
+
 
   function copiarTelefones() {
     const tels = leadsFiltrados.map((l) => l.telefone_internacional ?? l.telefone).filter(Boolean);
@@ -455,6 +492,47 @@ export default function GoogleMapsLeads() {
               value={categoria}
               onChange={(e) => setCategoria(e.target.value)}
             />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {nichosFiltrados.slice(0, 5).map((nicho) => (
+                <TooltipProvider key={nicho.nome}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => selecionarNicho(nicho.nome)}>
+                        {nicho.nome}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{nicho.dica}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={sortearNicho}>
+                <Shuffle className="h-3 w-3 mr-1" /> Sortear nicho
+              </Button>
+              <Dialog open={dialogNichosAberto} onOpenChange={setDialogNichosAberto}>
+                <DialogTrigger asChild>
+                  <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs">Ver todos</Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[80vh] overflow-y-auto">
+                  <DialogHeader><DialogTitle>Ideias de nichos</DialogTitle></DialogHeader>
+                  <div className="space-y-4">
+                    {NICHOS.map((grupo) => (
+                      <section key={grupo.grupo}>
+                        <h3 className="mb-2 text-sm font-semibold">{grupo.grupo}</h3>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {grupo.itens.map((nicho) => (
+                            <Button key={nicho.nome} type="button" variant="outline" className="h-auto justify-start whitespace-normal text-left" onClick={() => selecionarNicho(nicho.nome)}>
+                              <span><span className="block text-sm">{nicho.nome}</span><span className="block text-xs font-normal text-muted-foreground">{nicho.dica}</span></span>
+                            </Button>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
           <div className="md:col-span-2">
             <Label>Localização</Label>
@@ -463,6 +541,14 @@ export default function GoogleMapsLeads() {
               value={localizacao}
               onChange={(e) => setLocalizacao(e.target.value)}
             />
+            {!!localizacoesRecentes.length && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="self-center text-xs text-muted-foreground">Recentes:</span>
+                {localizacoesRecentes.map((local) => (
+                  <Button key={local} type="button" size="sm" variant="outline" className="h-7 max-w-full truncate px-2 text-xs" onClick={() => setLocalizacao(local)}>{local}</Button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <Label>Máx. resultados (até 60)</Label>
@@ -585,6 +671,17 @@ export default function GoogleMapsLeads() {
                   <Checkbox checked={ordenarPotencial} onCheckedChange={(v) => setOrdenarPotencial(!!v)} />
                   Melhor potencial
                 </label>
+                <div className="flex items-center gap-1 rounded-md border p-1">
+                  <Button size="sm" variant={modoVisualizacao === "tabela" ? "secondary" : "ghost"} onClick={() => setModoVisualizacao("tabela")} title="Visualização em tabela">
+                    <Table2 className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant={modoVisualizacao === "mapa" ? "secondary" : "ghost"} onClick={() => setModoVisualizacao("mapa")} title="Visualização no mapa">
+                    <Map className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => abrirBuscaNoMaps(buscas?.find((b) => b.id === buscaSel))} disabled={!buscaSel}>
+                  <MapPin className="h-4 w-4 mr-2" /> Ver no Google Maps
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
@@ -619,7 +716,20 @@ export default function GoogleMapsLeads() {
           </CardHeader>
           <CardContent>
             {!buscaSel && <p className="text-sm text-muted-foreground">Selecione uma busca ou crie uma nova.</p>}
-            {buscaSel && (
+            {buscaSel && modoVisualizacao === "mapa" && (
+              <LeadsMapa
+                leads={leadsMapa}
+                onCopiarMensagem={(id) => {
+                  const lead = leadsFiltrados.find((l) => l.id === id);
+                  if (lead) copiarMensagem(lead);
+                }}
+                onAbrirWhatsApp={(id) => {
+                  const lead = leadsFiltrados.find((l) => l.id === id);
+                  if (lead) abrirWhatsApp(lead);
+                }}
+              />
+            )}
+            {buscaSel && modoVisualizacao === "tabela" && (
               <div className="max-h-[600px] overflow-auto">
                 <Table>
                   <TableHeader>
@@ -663,16 +773,21 @@ export default function GoogleMapsLeads() {
                           {l.avaliacao ? `${l.avaliacao} (${l.total_avaliacoes ?? 0})` : "—"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true && (
-                            <div className="flex justify-end gap-1">
-                              <Button size="icon" variant="ghost" title="Copiar mensagem de prospecção" onClick={() => copiarMensagem(l)}>
-                                <Clipboard className="h-4 w-4" />
-                              </Button>
-                              <Button size="icon" variant="ghost" title="Abrir WhatsApp com mensagem" onClick={() => abrirWhatsApp(l)}>
-                                <MessageCircle className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
+                          <div className="flex justify-end gap-1">
+                            <a href={linkGoogleMaps({ place_id: (l as Lead & { place_id?: string | null }).place_id ?? null, nome: l.nome, endereco: l.endereco })} target="_blank" rel="noreferrer">
+                              <Button size="icon" variant="ghost" title="Abrir no Google Maps"><MapPin className="h-4 w-4" /></Button>
+                            </a>
+                            {classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true && (
+                              <>
+                                <Button size="icon" variant="ghost" title="Copiar mensagem de prospecção" onClick={() => copiarMensagem(l)}>
+                                  <Clipboard className="h-4 w-4" />
+                                </Button>
+                                <Button size="icon" variant="ghost" title="Abrir WhatsApp com mensagem" onClick={() => abrirWhatsApp(l)}>
+                                  <MessageCircle className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
