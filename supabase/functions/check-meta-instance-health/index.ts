@@ -100,19 +100,22 @@ Deno.serve(async (req) => {
         );
         if (phoneHealth.ok) r.phone_health = phoneHealth.data?.health_status || null;
 
-        // Qualquer entidade "blocked" ou restrição de mensagens iniciadas pela
-        // empresa mantém o número fora das campanhas, mesmo com status CONNECTED.
+        // Restrição real de envio da Meta: can_send_message = BLOCKED/LIMITED
+        // (na raiz ou em qualquer entidade: número, WABA, business, app).
         const restricoes: any = {
           phone_health: r.phone_health || null,
           waba_health: r.waba_health || null,
         };
-        const textoRestricoes = JSON.stringify(restricoes).toUpperCase();
-        const restritoMeta =
-          /"CAN_SEND_MESSAGE"\s*:\s*"BLOCKED"/.test(textoRestricoes) ||
-          textoRestricoes.includes('RESTRICTED_BIZ_INITIATED_MESSAGING') ||
-          textoRestricoes.includes('ACCOUNT_RESTRICTED') ||
-          textoRestricoes.includes('BUSINESS_RESTRICTED');
+        const RUIM = new Set(['BLOCKED', 'LIMITED', 'RESTRICTED']);
+        const avaliaHealth = (h: any): boolean => {
+          if (!h || typeof h !== 'object') return false;
+          if (RUIM.has(String(h.can_send_message || '').toUpperCase())) return true;
+          const ents = Array.isArray(h.entities) ? h.entities : [];
+          return ents.some((e: any) => RUIM.has(String(e?.can_send_message || '').toUpperCase()));
+        };
+        const restritoMeta = avaliaHealth(r.phone_health) || avaliaHealth(r.waba_health);
         r.restrito_meta = restritoMeta;
+
         r.restricoes = restricoes;
 
         const updatePayload: any = {
