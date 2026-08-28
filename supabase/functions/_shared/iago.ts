@@ -179,21 +179,23 @@ export const ETIQUETA_ACORDO_FECHADO = 'ACORDO FECHADO';
 /** Cliente pediu para não ser mais contatado => IAGO fica em silêncio para sempre. */
 export function ehOptOut(texto: string): boolean {
   const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  return /(bloquear\s*contato|bloquear|me\s*bloqueia|nao\s*quero\s*mais\s*receber|nao\s*quero\s*receber|sair\s*da\s*lista|descadastr|para\s*de\s*me\s*mandar|pare\s*de\s*me\s*enviar|remover\s*meu\s*numero)/.test(t);
+  return /(bloquear\s*contato|bloquear\s*(o\s*|meu\s*|esse\s*|este\s*|ess[ae]\s*)?(numero|numer\w*|nmr|num|n\u00ba|no)\b|bloquear|me\s*bloqueia|nao\s*quero\s*mais\s*receber|nao\s*quero\s*receber|sair\s*da\s*lista|descadastr|para\s*de\s*me\s*mandar|pare\s*de\s*me\s*enviar|remover\s*meu\s*numero)/.test(t);
 }
 
 /**
- * Cliente clicou/respondeu "Bloquear contato" (botão do template) ou pediu bloqueio
- * explícito => entra na BLACKLIST e nunca mais recebe campanha/lembrete.
+ * Cliente clicou/respondeu "Bloquear contato" ou "Bloquear número" (botões do template)
+ * ou pediu bloqueio explícito => entra na BLACKLIST e nunca mais recebe campanha/lembrete.
  */
 export function ehPedidoBloqueioContato(texto: string): boolean {
   const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   if (!t) return false;
-  if (/^bloquear\s*(o\s*)?contato\b/.test(t)) return true;
-  if (/\bbloquear\s*(o\s*)?contato\b/.test(t)) return true;
+  if (/\bbloque(ar|ie|ia|ar\s*ai)?\s*(o\s*|a\s*)?contato\b/.test(t)) return true;
+  // "bloquear numero", "bloqueie meu numero", "bloquear esse/este numero", "bloquear nº"
+  if (/\bbloque(ar|ie|ia|io)?\s*(o\s*|a\s*|meu\s*|esse\s*|este\s*|ess[ae]\s*|est[ae]\s*)?(numero|nunero|numro|numer\w*|nmr|num|n\u00ba|tel(efone)?|fone|whats\w*)\b/.test(t)) return true;
   if (/(me\s*bloqueia|bloqueia\s*me|quero\s*ser\s*bloqueado|nao\s*quero\s*mais\s*receber|sair\s*da\s*lista|descadastr\w*|remover?\s*meu\s*numero|pare?\s*de\s*me\s*(mandar|enviar))/.test(t)) return true;
   return false;
 }
+
 
 /** Cliente avisou que não é a pessoa procurada / número errado. */
 export function ehNumeroErrado(texto: string): boolean {
