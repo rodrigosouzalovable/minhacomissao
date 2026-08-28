@@ -489,6 +489,47 @@ export default function GoogleMapsLeads() {
               value={categoria}
               onChange={(e) => setCategoria(e.target.value)}
             />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {nichosFiltrados.slice(0, 5).map((nicho) => (
+                <TooltipProvider key={nicho.nome}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => selecionarNicho(nicho.nome)}>
+                        {nicho.nome}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{nicho.dica}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={sortearNicho}>
+                <Shuffle className="h-3 w-3 mr-1" /> Sortear nicho
+              </Button>
+              <Dialog open={dialogNichosAberto} onOpenChange={setDialogNichosAberto}>
+                <DialogTrigger asChild>
+                  <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs">Ver todos</Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[80vh] overflow-y-auto">
+                  <DialogHeader><DialogTitle>Ideias de nichos</DialogTitle></DialogHeader>
+                  <div className="space-y-4">
+                    {NICHOS.map((grupo) => (
+                      <section key={grupo.grupo}>
+                        <h3 className="mb-2 text-sm font-semibold">{grupo.grupo}</h3>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {grupo.itens.map((nicho) => (
+                            <Button key={nicho.nome} type="button" variant="outline" className="h-auto justify-start whitespace-normal text-left" onClick={() => selecionarNicho(nicho.nome)}>
+                              <span><span className="block text-sm">{nicho.nome}</span><span className="block text-xs font-normal text-muted-foreground">{nicho.dica}</span></span>
+                            </Button>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
           <div className="md:col-span-2">
             <Label>Localização</Label>
@@ -497,6 +538,14 @@ export default function GoogleMapsLeads() {
               value={localizacao}
               onChange={(e) => setLocalizacao(e.target.value)}
             />
+            {!!localizacoesRecentes.length && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="self-center text-xs text-muted-foreground">Recentes:</span>
+                {localizacoesRecentes.map((local) => (
+                  <Button key={local} type="button" size="sm" variant="outline" className="h-7 max-w-full truncate px-2 text-xs" onClick={() => setLocalizacao(local)}>{local}</Button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <Label>Máx. resultados (até 60)</Label>
