@@ -5052,6 +5052,7 @@ export type Database = {
           saude_name_status: string | null
           saude_quality: string | null
           saude_raw: Json | null
+          saude_restricoes: Json | null
           saude_status: string | null
           saude_throughput: Json | null
           saude_tier: string | null
@@ -5119,6 +5120,7 @@ export type Database = {
           saude_name_status?: string | null
           saude_quality?: string | null
           saude_raw?: Json | null
+          saude_restricoes?: Json | null
           saude_status?: string | null
           saude_throughput?: Json | null
           saude_tier?: string | null
@@ -5186,6 +5188,7 @@ export type Database = {
           saude_name_status?: string | null
           saude_quality?: string | null
           saude_raw?: Json | null
+          saude_restricoes?: Json | null
           saude_status?: string | null
           saude_throughput?: Json | null
           saude_tier?: string | null
