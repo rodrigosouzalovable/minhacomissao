@@ -713,7 +713,20 @@ export default function GoogleMapsLeads() {
           </CardHeader>
           <CardContent>
             {!buscaSel && <p className="text-sm text-muted-foreground">Selecione uma busca ou crie uma nova.</p>}
-            {buscaSel && (
+            {buscaSel && modoVisualizacao === "mapa" && (
+              <LeadsMapa
+                leads={leadsMapa}
+                onCopiarMensagem={(id) => {
+                  const lead = leadsFiltrados.find((l) => l.id === id);
+                  if (lead) copiarMensagem(lead);
+                }}
+                onAbrirWhatsApp={(id) => {
+                  const lead = leadsFiltrados.find((l) => l.id === id);
+                  if (lead) abrirWhatsApp(lead);
+                }}
+              />
+            )}
+            {buscaSel && modoVisualizacao === "tabela" && (
               <div className="max-h-[600px] overflow-auto">
                 <Table>
                   <TableHeader>
@@ -757,16 +770,21 @@ export default function GoogleMapsLeads() {
                           {l.avaliacao ? `${l.avaliacao} (${l.total_avaliacoes ?? 0})` : "—"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true && (
-                            <div className="flex justify-end gap-1">
-                              <Button size="icon" variant="ghost" title="Copiar mensagem de prospecção" onClick={() => copiarMensagem(l)}>
-                                <Clipboard className="h-4 w-4" />
-                              </Button>
-                              <Button size="icon" variant="ghost" title="Abrir WhatsApp com mensagem" onClick={() => abrirWhatsApp(l)}>
-                                <MessageCircle className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
+                          <div className="flex justify-end gap-1">
+                            <a href={linkGoogleMaps({ place_id: (l as Lead & { place_id?: string | null }).place_id ?? null, nome: l.nome, endereco: l.endereco })} target="_blank" rel="noreferrer">
+                              <Button size="icon" variant="ghost" title="Abrir no Google Maps"><MapPin className="h-4 w-4" /></Button>
+                            </a>
+                            {classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true && (
+                              <>
+                                <Button size="icon" variant="ghost" title="Copiar mensagem de prospecção" onClick={() => copiarMensagem(l)}>
+                                  <Clipboard className="h-4 w-4" />
+                                </Button>
+                                <Button size="icon" variant="ghost" title="Abrir WhatsApp com mensagem" onClick={() => abrirWhatsApp(l)}>
+                                  <MessageCircle className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
