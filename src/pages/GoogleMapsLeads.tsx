@@ -13,8 +13,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Clipboard, Globe, KeyRound, Loader2, Download, MapPin, MessageCircle, Phone, Search, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, Clipboard, Globe, KeyRound, Loader2, Download, Map, MapPin, MessageCircle, Phone, Search, Shuffle, Sparkles, Table2, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { LeadsMapa, linkGoogleMaps, type LeadMapa } from "@/components/googlemaps/LeadsMapa";
+import { NICHOS, NICHOS_DESTAQUE, TODOS_NICHOS, dicaDoNicho } from "@/components/googlemaps/nichos";
 
 type SiteTipo = "sem_site" | "rede_social" | "com_site";
 
