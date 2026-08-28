@@ -207,18 +207,6 @@ export default function GoogleMapsLeads() {
   const leadsProspeccao = leadsBase.filter(
     (l) => classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true,
   );
-  // Quantos leads sobrariam se cada filtro fosse aplicado sozinho (sobre a busca inteira)
-  const todos = leads ?? [];
-  const qtdComTel = todos.filter((l) => !!l.telefone).length;
-  const qtdComWhats = todos.filter((l) => l.tem_whatsapp === true).length;
-  const qtdSemSite = todos.filter((l) => classificarSite(l.site) !== "com_site").length;
-  const filtrosAtivos = somenteComTel || somenteComWhats || somenteSemSite;
-  function limparFiltros() {
-    setSomenteComTel(false);
-    setSomenteComWhats(false);
-    setSomenteSemSite(false);
-  }
-
 
 
   async function verificarWhatsapp(buscaId: string, silencioso = false) {
@@ -667,25 +655,22 @@ export default function GoogleMapsLeads() {
                 Leads {buscaSel ? `(${leadsFiltrados.length})` : ""}
               </CardTitle>
               <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-sm" title={`${qtdComTel} lead(s) com telefone`}>
-                  <Checkbox checked={somenteComTel} disabled={qtdComTel === 0} onCheckedChange={(v) => setSomenteComTel(!!v)} />
-                  Só com telefone ({qtdComTel})
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={somenteComTel} onCheckedChange={(v) => setSomenteComTel(!!v)} />
+                  Só com telefone
                 </label>
-                <label className="flex items-center gap-2 text-sm" title={qtdComWhats === 0 ? "Nenhum lead com WhatsApp confirmado — rode 'Verificar WhatsApp' primeiro" : `${qtdComWhats} lead(s) com WhatsApp`}>
-                  <Checkbox checked={somenteComWhats} disabled={qtdComWhats === 0} onCheckedChange={(v) => setSomenteComWhats(!!v)} />
-                  Só com WhatsApp ({qtdComWhats})
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={somenteComWhats} onCheckedChange={(v) => setSomenteComWhats(!!v)} />
+                  Só com WhatsApp
                 </label>
-                <label className="flex items-center gap-2 text-sm" title={qtdSemSite === 0 ? "Todos os leads desta busca têm site" : `${qtdSemSite} lead(s) sem site próprio`}>
-                  <Checkbox checked={somenteSemSite} disabled={qtdSemSite === 0} onCheckedChange={(v) => setSomenteSemSite(!!v)} />
-                  Só sem site ({qtdSemSite})
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={somenteSemSite} onCheckedChange={(v) => setSomenteSemSite(!!v)} />
+                  Só sem site
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={ordenarPotencial} onCheckedChange={(v) => setOrdenarPotencial(!!v)} />
                   Melhor potencial
                 </label>
-                {filtrosAtivos && (
-                  <Button size="sm" variant="ghost" onClick={limparFiltros}>Limpar filtros</Button>
-                )}
                 <div className="flex items-center gap-1 rounded-md border p-1">
                   <Button size="sm" variant={modoVisualizacao === "tabela" ? "secondary" : "ghost"} onClick={() => setModoVisualizacao("tabela")} title="Visualização em tabela">
                     <Table2 className="h-4 w-4" />
@@ -697,7 +682,6 @@ export default function GoogleMapsLeads() {
                 <Button size="sm" variant="outline" onClick={() => abrirBuscaNoMaps(buscas?.find((b) => b.id === buscaSel))} disabled={!buscaSel}>
                   <MapPin className="h-4 w-4 mr-2" /> Ver no Google Maps
                 </Button>
-
                 <Button
                   size="sm"
                   variant="outline"
@@ -721,21 +705,9 @@ export default function GoogleMapsLeads() {
             {buscaSel && (
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <Badge variant="default">{totComSite} com site</Badge>
-                <Badge
-                  variant="secondary"
-                  className={qtdSemSite > 0 ? "cursor-pointer" : undefined}
-                  onClick={() => qtdSemSite > 0 && setSomenteSemSite((v) => !v)}
-                >
-                  {totSemSite} sem site
-                </Badge>
+                <Badge variant="secondary">{totSemSite} sem site</Badge>
                 {totRedeSocial > 0 && <Badge variant="outline">{totRedeSocial} só rede social</Badge>}
-                <Badge
-                  className={`bg-emerald-600 text-white hover:bg-emerald-600 ${qtdComWhats > 0 ? "cursor-pointer" : ""}`}
-                  onClick={() => qtdComWhats > 0 && setSomenteComWhats((v) => !v)}
-                >
-                  {totComWhats} com WhatsApp
-                </Badge>
-
+                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">{totComWhats} com WhatsApp</Badge>
                 <Badge variant="secondary">{totSemWhats} sem WhatsApp</Badge>
                 {totNaoVerif > 0 && <Badge variant="outline" className="border-amber-500 text-amber-600">{totNaoVerif} não verificado(s)</Badge>}
                 {leadsProspeccao.length > 0 && <Badge variant="outline" className="border-primary text-primary">{leadsProspeccao.length} oportunidades</Badge>}
@@ -822,29 +794,11 @@ export default function GoogleMapsLeads() {
 
                     {!leadsFiltrados.length && (
                       <TableRow>
-                        <TableCell colSpan={7} className="py-6 text-center text-sm text-muted-foreground">
-                          {todos.length === 0 ? (
-                            "Esta busca não retornou nenhum lead."
-                          ) : (
-                            <div className="space-y-2">
-                              <p>
-                                Esta busca tem {todos.length} lead(s), mas os filtros marcados não deixaram nenhum:
-                                {somenteComTel && qtdComTel === 0 ? " nenhum tem telefone;" : ""}
-                                {somenteComWhats && qtdComWhats === 0 ? " nenhum tem WhatsApp confirmado (rode \"Verificar WhatsApp\");" : ""}
-                                {somenteSemSite && qtdSemSite === 0 ? " todos já têm site;" : ""}
-                                {filtrosAtivos && qtdComTel > 0 && qtdSemSite > 0 && qtdComWhats > 0 ? " a combinação de filtros não tem interseção." : ""}
-                              </p>
-                              {filtrosAtivos && (
-                                <Button size="sm" variant="outline" onClick={limparFiltros}>
-                                  Limpar filtros e ver os {todos.length} leads
-                                </Button>
-                              )}
-                            </div>
-                          )}
+                        <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                          Nenhum lead {somenteComTel ? "com telefone" : ""}{somenteSemSite ? " sem site" : ""} nesta busca.
                         </TableCell>
                       </TableRow>
                     )}
-
                   </TableBody>
                 </Table>
               </div>
