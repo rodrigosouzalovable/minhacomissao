@@ -35,3 +35,4 @@
 - [Notificações Remetente Único](mem://features/whatsapp/notificacoes-remetente-unico) — Avisos saem só por 1 instância fixa com failover + linha "BM:" abaixo do número
 - [IAGO Modo Aquecimento](mem://features/whatsapp/iago-modo-aquecimento) — Caixa AQUECIMENTO: IAGO responde tudo e nunca chama humano
 - [Campanha Aguardando Cota](mem://features/whatsapp/campanha-aguardando-cota) — Campanha Meta sem cota fica "Aguardando cota", retoma sozinha e oferece instâncias livres
+- [Liberação Meta só se saudável](mem://features/whatsapp/meta-liberacao-so-se-saudavel) — Bloqueio liberado só devolve ao pool se GREEN, sem quarentena e sem restrição de envio da Meta
