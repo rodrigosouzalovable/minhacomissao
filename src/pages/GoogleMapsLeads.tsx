@@ -13,12 +13,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Clipboard, Globe, KeyRound, Loader2, Download, Map, MapPin, MessageCircle, Phone, Search, Shuffle, Sparkles, Table2, Trash2 } from "lucide-react";
+import { AlertTriangle, Clipboard, Globe, KeyRound, Loader2, Download, Map, MapPin, MessageCircle, Phone, Search, Shuffle, Sparkles, Table2, Trash2, Wand2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LeadsMapa, linkGoogleMaps, type LeadMapa } from "@/components/googlemaps/LeadsMapa";
 import { AnalisarNichoCard } from "@/components/googlemaps/AnalisarNichoCard";
+import { PromptSiteLeadDialog } from "@/components/googlemaps/PromptSiteLeadDialog";
 import { NICHOS, NICHOS_DESTAQUE, TODOS_NICHOS, dicaDoNicho } from "@/components/googlemaps/nichos";
 
 type SiteTipo = "sem_site" | "rede_social" | "com_site";
@@ -139,6 +140,7 @@ export default function GoogleMapsLeads() {
   const [somenteSemSite, setSomenteSemSite] = useState(false);
   const [ordenarPotencial, setOrdenarPotencial] = useState(false);
   const [modoVisualizacao, setModoVisualizacao] = useState<"tabela" | "mapa">("tabela");
+  const [leadPrompt, setLeadPrompt] = useState<Lead | null>(null);
   const [dialogNichosAberto, setDialogNichosAberto] = useState(false);
 
   const [verificandoWhats, setVerificandoWhats] = useState(false);
@@ -785,6 +787,11 @@ export default function GoogleMapsLeads() {
                             <a href={linkGoogleMaps({ place_id: (l as Lead & { place_id?: string | null }).place_id ?? null, nome: l.nome, endereco: l.endereco })} target="_blank" rel="noreferrer">
                               <Button size="icon" variant="ghost" title="Abrir no Google Maps"><MapPin className="h-4 w-4" /></Button>
                             </a>
+                            {classificarSite(l.site) !== "com_site" && (
+                              <Button size="icon" variant="ghost" title="Gerar prompt do site deste cliente" onClick={() => setLeadPrompt(l)}>
+                                <Wand2 className="h-4 w-4" />
+                              </Button>
+                            )}
                             {classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true && (
                               <>
                                 <Button size="icon" variant="ghost" title="Copiar mensagem de prospecção" onClick={() => copiarMensagem(l)}>
@@ -815,6 +822,13 @@ export default function GoogleMapsLeads() {
         </Card>
       </div>
     </div>
+      <PromptSiteLeadDialog
+        lead={leadPrompt}
+        buscaId={buscaSel}
+        categoriaBusca={buscas?.find((b) => b.id === buscaSel)?.categoria}
+        localizacao={buscas?.find((b) => b.id === buscaSel)?.localizacao}
+        onClose={() => setLeadPrompt(null)}
+      />
     </AppLayout>
   );
 }
