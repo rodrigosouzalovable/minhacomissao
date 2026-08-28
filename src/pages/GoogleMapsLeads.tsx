@@ -272,27 +272,81 @@ export default function GoogleMapsLeads() {
 
 
 
-  function exportarExcel() {
-    const comWhats = leadsBase.filter((l) => l.tem_whatsapp === true);
-    if (!comWhats.length) {
-      toast.error("Nenhum lead com WhatsApp confirmado. Rode a verificação de WhatsApp antes de exportar.");
-      return;
-    }
-    const rows = comWhats.map((l) => ({
-      Nome: l.nome,
-      Telefone: l.telefone_internacional ?? l.telefone ?? "",
-    }));
-
-
+  function baixarPlanilha(rows: Record<string, string | number>[], prefixo: string) {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Leads");
     const buscaAtual = buscas?.find((b) => b.id === buscaSel);
-    const nomeArq = `leads-${(buscaAtual?.categoria ?? "gm").replace(/\s+/g, "-")}-${new Date()
+    const nomeArq = `${prefixo}-${(buscaAtual?.categoria ?? "gm").replace(/\s+/g, "-")}-${new Date()
       .toISOString()
       .slice(0, 10)}.xlsx`;
     XLSX.writeFile(wb, nomeArq);
   }
+
+  const rotuloSite: Record<SiteTipo, string> = {
+    sem_site: "Sem site",
+    rede_social: "Só rede social",
+    com_site: "Tem site",
+  };
+
+  function exportarExcel() {
+    const comWhats = leadsFiltrados.filter((l) => l.tem_whatsapp === true);
+    if (!comWhats.length) {
+      toast.error("Nenhum lead com WhatsApp confirmado. Rode a verificação de WhatsApp antes de exportar.");
+      return;
+    }
+    baixarPlanilha(
+      comWhats.map((l) => ({
+        Nome: l.nome,
+        Telefone: l.telefone_internacional ?? l.telefone ?? "",
+        Site: l.site ?? "",
+        "Situação do site": rotuloSite[classificarSite(l.site)],
+        Categoria: l.categoria ?? "",
+        Nota: l.avaliacao ?? "",
+        Avaliações: l.total_avaliacoes ?? "",
+        Potencial: pontuarLead(l),
+      })),
+      "leads",
+    );
+  }
+
+  function exportarProspeccao() {
+    if (!leadsProspeccao.length) {
+      toast.error("Nenhum lead sem site com WhatsApp confirmado nesta busca.");
+      return;
+    }
+    const ordenados = leadsProspeccao.slice().sort((a, b) => pontuarLead(b) - pontuarLead(a));
+    baixarPlanilha(
+      ordenados.map((l) => ({
+        Nome: l.nome,
+        Telefone: l.telefone_internacional ?? l.telefone ?? "",
+        Categoria: l.categoria ?? "",
+        "Situação do site": rotuloSite[classificarSite(l.site)],
+        Nota: l.avaliacao ?? "",
+        Avaliações: l.total_avaliacoes ?? "",
+        Potencial: pontuarLead(l),
+        Mensagem: mensagemProspeccao(l),
+      })),
+      "prospeccao-sem-site",
+    );
+    toast.success(`${ordenados.length} leads exportados para prospecção`);
+  }
+
+  function copiarMensagem(l: Lead) {
+    navigator.clipboard.writeText(mensagemProspeccao(l));
+    toast.success("Mensagem de prospecção copiada");
+  }
+
+  function abrirWhatsApp(l: Lead) {
+    const tel = (l.telefone_internacional ?? l.telefone ?? "").replace(/\D/g, "");
+    if (!tel) {
+      toast.error("Lead sem telefone");
+      return;
+    }
+    const numero = tel.startsWith("55") ? tel : `55${tel}`;
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(mensagemProspeccao(l))}`, "_blank");
+  }
+
 
   function copiarTelefones() {
     const tels = leadsFiltrados.map((l) => l.telefone_internacional ?? l.telefone).filter(Boolean);
