@@ -353,6 +353,34 @@ export default function GoogleMapsLeads() {
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(mensagemProspeccao(l))}`, "_blank");
   }
 
+  function abrirBuscaNoMaps(busca: Busca | undefined) {
+    if (!busca) return;
+    const query = encodeURIComponent(`${busca.categoria} em ${busca.localizacao}`);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
+  }
+
+  const localizacoesRecentes = Array.from(new Set((buscas ?? []).map((b) => b.localizacao.trim()).filter(Boolean))).slice(0, 6);
+  const nichosFiltrados = TODOS_NICHOS
+    .filter((n, index, all) => all.findIndex((item) => item.nome === n.nome) === index)
+    .filter((n) => !categoria.trim() || n.nome.toLowerCase().includes(categoria.toLowerCase()))
+    .slice(0, 8);
+
+  function selecionarNicho(nicho: string) {
+    setCategoria(nicho);
+    setDialogNichosAberto(false);
+  }
+
+  function sortearNicho() {
+    const nicho = TODOS_NICHOS[Math.floor(Math.random() * TODOS_NICHOS.length)];
+    if (nicho) setCategoria(nicho.nome);
+  }
+
+  const leadsMapa = leadsFiltrados.map((l): LeadMapa => ({
+    ...l,
+    place_id: (l as Lead & { place_id?: string | null }).place_id ?? null,
+    siteTipo: classificarSite(l.site),
+  }));
+
 
   function copiarTelefones() {
     const tels = leadsFiltrados.map((l) => l.telefone_internacional ?? l.telefone).filter(Boolean);
