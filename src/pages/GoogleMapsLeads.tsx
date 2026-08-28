@@ -667,33 +667,26 @@ export default function GoogleMapsLeads() {
                 Leads {buscaSel ? `(${leadsFiltrados.length})` : ""}
               </CardTitle>
               <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={somenteComTel} onCheckedChange={(v) => setSomenteComTel(!!v)} />
-                  Só com telefone
+                <label className="flex items-center gap-2 text-sm" title={`${qtdComTel} lead(s) com telefone`}>
+                  <Checkbox checked={somenteComTel} disabled={qtdComTel === 0} onCheckedChange={(v) => setSomenteComTel(!!v)} />
+                  Só com telefone ({qtdComTel})
                 </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={somenteComWhats} onCheckedChange={(v) => setSomenteComWhats(!!v)} />
-                  Só com WhatsApp
+                <label className="flex items-center gap-2 text-sm" title={qtdComWhats === 0 ? "Nenhum lead com WhatsApp confirmado — rode 'Verificar WhatsApp' primeiro" : `${qtdComWhats} lead(s) com WhatsApp`}>
+                  <Checkbox checked={somenteComWhats} disabled={qtdComWhats === 0} onCheckedChange={(v) => setSomenteComWhats(!!v)} />
+                  Só com WhatsApp ({qtdComWhats})
                 </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={somenteSemSite} onCheckedChange={(v) => setSomenteSemSite(!!v)} />
-                  Só sem site
+                <label className="flex items-center gap-2 text-sm" title={qtdSemSite === 0 ? "Todos os leads desta busca têm site" : `${qtdSemSite} lead(s) sem site próprio`}>
+                  <Checkbox checked={somenteSemSite} disabled={qtdSemSite === 0} onCheckedChange={(v) => setSomenteSemSite(!!v)} />
+                  Só sem site ({qtdSemSite})
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={ordenarPotencial} onCheckedChange={(v) => setOrdenarPotencial(!!v)} />
                   Melhor potencial
                 </label>
-                <div className="flex items-center gap-1 rounded-md border p-1">
-                  <Button size="sm" variant={modoVisualizacao === "tabela" ? "secondary" : "ghost"} onClick={() => setModoVisualizacao("tabela")} title="Visualização em tabela">
-                    <Table2 className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant={modoVisualizacao === "mapa" ? "secondary" : "ghost"} onClick={() => setModoVisualizacao("mapa")} title="Visualização no mapa">
-                    <Map className="h-4 w-4" />
-                  </Button>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => abrirBuscaNoMaps(buscas?.find((b) => b.id === buscaSel))} disabled={!buscaSel}>
-                  <MapPin className="h-4 w-4 mr-2" /> Ver no Google Maps
-                </Button>
+                {filtrosAtivos && (
+                  <Button size="sm" variant="ghost" onClick={limparFiltros}>Limpar filtros</Button>
+                )}
+
                 <Button
                   size="sm"
                   variant="outline"
