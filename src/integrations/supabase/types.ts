@@ -2419,6 +2419,59 @@ export type Database = {
           },
         ]
       }
+      google_maps_nicho_analises: {
+        Row: {
+          busca_id: string
+          categoria: string
+          created_at: string
+          estilo: string | null
+          id: string
+          lead_alvo_id: string | null
+          localizacao: string
+          prompt: string | null
+          resumo: Json | null
+          sites_falharam: number
+          sites_lidos: number
+          user_id: string
+        }
+        Insert: {
+          busca_id: string
+          categoria: string
+          created_at?: string
+          estilo?: string | null
+          id?: string
+          lead_alvo_id?: string | null
+          localizacao: string
+          prompt?: string | null
+          resumo?: Json | null
+          sites_falharam?: number
+          sites_lidos?: number
+          user_id: string
+        }
+        Update: {
+          busca_id?: string
+          categoria?: string
+          created_at?: string
+          estilo?: string | null
+          id?: string
+          lead_alvo_id?: string | null
+          localizacao?: string
+          prompt?: string | null
+          resumo?: Json | null
+          sites_falharam?: number
+          sites_lidos?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_maps_nicho_analises_busca_id_fkey"
+            columns: ["busca_id"]
+            isOneToOne: false
+            referencedRelation: "google_maps_buscas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_maps_uso_mensal: {
         Row: {
           alerta_percentual: number
