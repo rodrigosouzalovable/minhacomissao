@@ -53,9 +53,10 @@ interface Props {
   categoria?: string;
   localizacao?: string;
   leads: LeadSimples[];
+  className?: string;
 }
 
-export function AnalisarNichoCard({ buscaId, categoria, localizacao, leads }: Props) {
+export function AnalisarNichoCard({ buscaId, categoria, localizacao, leads, className }: Props) {
   const qc = useQueryClient();
   const [limiteSites, setLimiteSites] = useState(8);
   const [estilo, setEstilo] = useState("moderno");
