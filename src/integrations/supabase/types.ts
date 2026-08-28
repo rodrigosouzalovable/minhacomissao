@@ -5006,6 +5006,7 @@ export type Database = {
       meta_whatsapp_instances: {
         Row: {
           access_token: string | null
+          aquecimento_qualidade_permitido: boolean
           ativo: boolean
           atualizado_em: string
           business_id: string | null
@@ -5072,6 +5073,7 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
+          aquecimento_qualidade_permitido?: boolean
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null
@@ -5138,6 +5140,7 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
+          aquecimento_qualidade_permitido?: boolean
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null
