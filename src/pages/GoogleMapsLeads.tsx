@@ -641,31 +641,46 @@ export default function GoogleMapsLeads() {
                           {l.telefone_internacional ?? l.telefone ?? "—"}
                         </TableCell>
                         <TableCell className="text-xs">
-                          {!l.telefone ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : l.tem_whatsapp === true ? (
-                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                              <MessageCircle className="h-3 w-3 mr-1" /> Sim
-                            </Badge>
-                          ) : l.tem_whatsapp === false ? (
-                            <Badge variant="secondary">Não</Badge>
+                          {classificarSite(l.site) === "com_site" ? (
+                            <a href={l.site ?? undefined} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline max-w-40 truncate" title={l.site ?? undefined}>
+                              <Globe className="h-3 w-3 shrink-0" /> Site
+                            </a>
+                          ) : classificarSite(l.site) === "rede_social" ? (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600">Só rede social</Badge>
                           ) : (
-                            <Badge variant="outline" className="border-amber-500 text-amber-600">
-                              ?
-                            </Badge>
+                            <Badge variant="secondary">Sem site</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {!l.telefone ? <span className="text-muted-foreground">—</span> : l.tem_whatsapp === true ? (
+                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600"><MessageCircle className="h-3 w-3 mr-1" /> Sim</Badge>
+                          ) : l.tem_whatsapp === false ? <Badge variant="secondary">Não</Badge> : (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600">?</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-xs">{l.categoria ?? "—"}</TableCell>
                         <TableCell className="text-right text-xs">
                           {l.avaliacao ? `${l.avaliacao} (${l.total_avaliacoes ?? 0})` : "—"}
                         </TableCell>
+                        <TableCell className="text-right">
+                          {classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true && (
+                            <div className="flex justify-end gap-1">
+                              <Button size="icon" variant="ghost" title="Copiar mensagem de prospecção" onClick={() => copiarMensagem(l)}>
+                                <Clipboard className="h-4 w-4" />
+                              </Button>
+                              <Button size="icon" variant="ghost" title="Abrir WhatsApp com mensagem" onClick={() => abrirWhatsApp(l)}>
+                                <MessageCircle className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
 
                     {!leadsFiltrados.length && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">
-                          Nenhum lead {somenteComTel ? "com telefone" : ""} nesta busca.
+                        <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                          Nenhum lead {somenteComTel ? "com telefone" : ""}{somenteSemSite ? " sem site" : ""} nesta busca.
                         </TableCell>
                       </TableRow>
                     )}
