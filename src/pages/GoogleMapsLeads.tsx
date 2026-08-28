@@ -184,10 +184,21 @@ export default function GoogleMapsLeads() {
   });
 
   const leadsBase = (leads ?? []).filter((l) => (somenteComTel ? !!l.telefone : true));
-  const leadsFiltrados = leadsBase.filter((l) => (somenteComWhats ? l.tem_whatsapp === true : true));
+  const leadsFiltrados = leadsBase
+    .filter((l) => (somenteComWhats ? l.tem_whatsapp === true : true))
+    .filter((l) => (somenteSemSite ? classificarSite(l.site) !== "com_site" : true))
+    .slice()
+    .sort((a, b) => (ordenarPotencial ? pontuarLead(b) - pontuarLead(a) : 0));
   const totComWhats = leadsBase.filter((l) => l.tem_whatsapp === true).length;
   const totSemWhats = leadsBase.filter((l) => l.tem_whatsapp === false).length;
   const totNaoVerif = leadsBase.filter((l) => l.tem_whatsapp === null && !!l.telefone).length;
+  const totSemSite = leadsBase.filter((l) => classificarSite(l.site) === "sem_site").length;
+  const totRedeSocial = leadsBase.filter((l) => classificarSite(l.site) === "rede_social").length;
+  const totComSite = leadsBase.filter((l) => classificarSite(l.site) === "com_site").length;
+  const leadsProspeccao = leadsBase.filter(
+    (l) => classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true,
+  );
+
 
   async function verificarWhatsapp(buscaId: string, silencioso = false) {
     setVerificandoWhats(true);
