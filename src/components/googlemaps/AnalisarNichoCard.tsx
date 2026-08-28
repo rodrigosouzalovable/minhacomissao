@@ -69,10 +69,11 @@ export function AnalisarNichoCard({ buscaId, categoria, localizacao, leads, clas
     queryKey: ["gm-nicho-analise", buscaId],
     enabled: !!buscaId,
     queryFn: async () => {
+      if (!buscaId) return null;
       const { data, error } = await supabase
         .from("google_maps_nicho_analises")
         .select("*")
-        .eq("busca_id", buscaId!)
+        .eq("busca_id", buscaId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
