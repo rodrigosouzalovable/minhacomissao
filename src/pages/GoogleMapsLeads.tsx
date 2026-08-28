@@ -13,8 +13,46 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Clipboard, KeyRound, Loader2, Download, MapPin, MessageCircle, Phone, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Clipboard, Globe, KeyRound, Loader2, Download, MapPin, MessageCircle, Phone, Search, Sparkles, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
+
+type SiteTipo = "sem_site" | "rede_social" | "com_site";
+
+const REDES_SOCIAIS = ["instagram.com", "facebook.com", "fb.com", "linktr.ee", "linktree", "wa.me", "api.whatsapp.com", "linkedin.com", "tiktok.com", "youtube.com", "twitter.com", "x.com", "bit.ly"];
+
+function classificarSite(site: string | null): SiteTipo {
+  const url = (site ?? "").trim().toLowerCase();
+  if (!url) return "sem_site";
+  if (REDES_SOCIAIS.some((d) => url.includes(d))) return "rede_social";
+  return "com_site";
+}
+
+/** Quanto maior, melhor o lead para prospecção de site (negócio ativo, sem site próprio). */
+function pontuarLead(l: Lead): number {
+  const tipo = classificarSite(l.site);
+  let score = 0;
+  if (tipo === "sem_site") score += 40;
+  else if (tipo === "rede_social") score += 30;
+  if (l.tem_whatsapp === true) score += 25;
+  const av = l.total_avaliacoes ?? 0;
+  score += Math.min(25, Math.round(av / 4));
+  if ((l.avaliacao ?? 0) >= 4.3) score += 10;
+  return score;
+}
+
+function mensagemProspeccao(l: Lead): string {
+  const tipo = classificarSite(l.site);
+  const primeiroNome = (l.nome ?? "").split(" ").slice(0, 4).join(" ");
+  const prova = l.total_avaliacoes
+    ? ` Vi que vocês têm ${l.total_avaliacoes} avaliações no Google${l.avaliacao ? ` com nota ${l.avaliacao}` : ""} — reputação muito boa.`
+    : "";
+  const gancho =
+    tipo === "rede_social"
+      ? "Notei que vocês aparecem no Google Maps mas o link é de rede social, sem um site próprio."
+      : "Notei que vocês aparecem no Google Maps mas ainda não têm um site próprio.";
+  return `Olá! Tudo bem? Falo com o responsável pela ${primeiroNome}?\n\n${gancho}${prova}\n\nEu crio sites profissionais para empresas como a sua: página com seus serviços, fotos, localização e botão direto para o WhatsApp — pronto em poucos dias, por R$ 500 (setup) e sem complicação.\n\nPosso te mandar um modelo já com o nome da ${primeiroNome} para você ver como ficaria?`;
+}
+
 
 interface FunctionErrorPayload {
   error?: string;
