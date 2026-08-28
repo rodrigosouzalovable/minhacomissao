@@ -50,8 +50,8 @@ Deno.serve(async (req) => {
           'display_phone_number', 'verified_name', 'quality_rating',
           'name_status', 'code_verification_status', 'status',
           'throughput', 'messaging_limit_tier', 'platform_type', 'account_mode',
-          'health_status',
         ].join(',');
+
 
         const phoneResp = await fetchJson(
           `${GRAPH}/${inst.phone_number_id}?fields=${fields}`,
