@@ -35,7 +35,8 @@ import {
   Coins,
   MapPin,
   Clock,
-  Ban
+  Ban,
+  FileKey2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -116,6 +117,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/cotacoes', label: 'Cotações', icon: Coins, adminOnly: true },
   { href: '/admin/lembrete-meta', label: 'Lembrete Meta', icon: Bell, adminOnly: true },
   { href: '/admin/google-maps-leads', label: 'Google Maps Leads', icon: MapPin, adminOnly: true },
+  { href: '/admin/certificado-digital', label: 'Certificado Digital', icon: FileKey2, adminOnly: true },
   { href: '/admin/ponto', label: 'Controle de Ponto', icon: Clock, adminOnly: true },
   { href: '/admin/blacklist', label: 'Blacklist', icon: Ban, adminOnly: true },
 ];
