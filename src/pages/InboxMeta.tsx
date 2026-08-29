@@ -482,6 +482,20 @@ export default function InboxMeta() {
     setAdminCaixas(new Set(((adm as any[]) ?? []).map((r) => r.folder_id as string)));
   }, [user, isAdmin]);
 
+  const handleApagarCaixa = useCallback(async (folder: MetaInboxFolder) => {
+    if (!window.confirm(`Tem certeza que deseja apagar a caixa "${folder.nome}"?\n\nAs conversas não serão excluídas, apenas voltarão para a caixa padrão.`)) return;
+    const { error } = await supabase.from('meta_inbox_folders').delete().eq('id', folder.id);
+    if (error) {
+      toast({ title: 'Erro ao apagar caixa', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Caixa apagada', description: `A caixa "${folder.nome}" foi removida.` });
+    if (currentFolderId === folder.id) {
+      setCurrentFolderId(null);
+    }
+    fetchFolders();
+  }, [currentFolderId, fetchFolders, toast]);
+
 
   useEffect(() => { fetchFolders(); }, [fetchFolders]);
 
