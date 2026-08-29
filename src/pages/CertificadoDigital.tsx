@@ -62,7 +62,7 @@ export default function CertificadoDigital() {
     queryFn: async () => {
       const { data, error } = await supabase.from("certificado_config" as any).select("*").limit(1).maybeSingle();
       if (error) throw error;
-      return data as Config | null;
+      return data as unknown as Config | null;
     },
     staleTime: 60_000,
   });
@@ -72,7 +72,7 @@ export default function CertificadoDigital() {
     queryFn: async () => {
       const { data, error } = await supabase.from("certificado_leads" as any).select("*").order("created_at", { ascending: false }).limit(5000);
       if (error) throw error;
-      return (data ?? []) as Lead[];
+      return (data ?? []) as unknown as Lead[];
     },
     staleTime: 60_000,
   });
@@ -82,7 +82,7 @@ export default function CertificadoDigital() {
     queryFn: async () => {
       const { data, error } = await supabase.from("certificado_coleta_log" as any).select("*").order("created_at", { ascending: false }).limit(100);
       if (error) throw error;
-      return (data ?? []) as Log[];
+      return (data ?? []) as unknown as Log[];
     },
     staleTime: 60_000,
   });
