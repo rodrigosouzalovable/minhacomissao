@@ -51,7 +51,7 @@ import { useMetaCall } from '@/contexts/MetaCallContext';
 
 import { useUserRole } from '@/hooks/useUserRole';
 import {
-  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger,
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 
 
