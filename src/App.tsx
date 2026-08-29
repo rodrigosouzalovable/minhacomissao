@@ -52,6 +52,7 @@ const WhatsAppInbox = lazy(() => retryImport(() => import("./pages/WhatsAppInbox
 const Aquecimento = lazy(() => retryImport(() => import("./pages/Aquecimento")));
 const MonitorEnvios = lazy(() => retryImport(() => import("./pages/MonitorEnvios")));
 const ExportarDados = lazy(() => retryImport(() => import("./pages/ExportarDados")));
+const CertificadoDigital = lazy(() => retryImport(() => import("./pages/CertificadoDigital")));
 const RedirectBoleto = lazy(() => retryImport(() => import("./pages/RedirectBoleto")));
 const RedirectVerificarProposta = lazy(() => retryImport(() => import("./pages/RedirectVerificarProposta")));
 
