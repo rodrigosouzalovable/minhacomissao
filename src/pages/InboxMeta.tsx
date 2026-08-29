@@ -1972,6 +1972,10 @@ export default function InboxMeta() {
                             <Bot className="h-4 w-4 mr-2" /> Configurar IA
                           </ContextMenuItem>
                         )}
+                        <ContextMenuSeparator />
+                        <ContextMenuItem onClick={() => handleApagarCaixa(f)} className="text-destructive focus:text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" /> Apagar caixa
+                        </ContextMenuItem>
                       </ContextMenuContent>
                     )}
                   </ContextMenu>
