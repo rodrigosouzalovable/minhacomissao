@@ -832,6 +832,162 @@ export type Database = {
           },
         ]
       }
+      certificado_coleta_log: {
+        Row: {
+          created_at: string
+          data_referencia: string | null
+          duplicados: number
+          encontrados: number
+          erro: string | null
+          id: string
+          janela: number | null
+          manual: boolean
+          novos: number
+          sem_telefone: number
+        }
+        Insert: {
+          created_at?: string
+          data_referencia?: string | null
+          duplicados?: number
+          encontrados?: number
+          erro?: string | null
+          id?: string
+          janela?: number | null
+          manual?: boolean
+          novos?: number
+          sem_telefone?: number
+        }
+        Update: {
+          created_at?: string
+          data_referencia?: string | null
+          duplicados?: number
+          encontrados?: number
+          erro?: string | null
+          id?: string
+          janela?: number | null
+          manual?: boolean
+          novos?: number
+          sem_telefone?: number
+        }
+        Relationships: []
+      }
+      certificado_config: {
+        Row: {
+          cnaes: string[]
+          created_at: string
+          hora_execucao: number
+          id: string
+          janelas_dias: number[]
+          motor_ativo: boolean
+          somente_celular: boolean
+          somente_mei: boolean
+          total_coletado: number
+          ufs: string[]
+          ultima_execucao: string | null
+          ultimo_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          cnaes?: string[]
+          created_at?: string
+          hora_execucao?: number
+          id?: string
+          janelas_dias?: number[]
+          motor_ativo?: boolean
+          somente_celular?: boolean
+          somente_mei?: boolean
+          total_coletado?: number
+          ufs?: string[]
+          ultima_execucao?: string | null
+          ultimo_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cnaes?: string[]
+          created_at?: string
+          hora_execucao?: number
+          id?: string
+          janelas_dias?: number[]
+          motor_ativo?: boolean
+          somente_celular?: boolean
+          somente_mei?: boolean
+          total_coletado?: number
+          ufs?: string[]
+          ultima_execucao?: string | null
+          ultimo_status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      certificado_leads: {
+        Row: {
+          cnae: string | null
+          cnae_descricao: string | null
+          cnpj: string
+          created_at: string
+          data_abertura: string | null
+          dias_desde_abertura: number | null
+          email: string | null
+          id: string
+          mei: boolean | null
+          municipio: string | null
+          nome_fantasia: string | null
+          observacao: string | null
+          origem_janela: number | null
+          porte: string | null
+          razao_social: string | null
+          situacao: string
+          telefone_principal: string | null
+          telefones: Json
+          uf: string | null
+          updated_at: string
+        }
+        Insert: {
+          cnae?: string | null
+          cnae_descricao?: string | null
+          cnpj: string
+          created_at?: string
+          data_abertura?: string | null
+          dias_desde_abertura?: number | null
+          email?: string | null
+          id?: string
+          mei?: boolean | null
+          municipio?: string | null
+          nome_fantasia?: string | null
+          observacao?: string | null
+          origem_janela?: number | null
+          porte?: string | null
+          razao_social?: string | null
+          situacao?: string
+          telefone_principal?: string | null
+          telefones?: Json
+          uf?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cnae?: string | null
+          cnae_descricao?: string | null
+          cnpj?: string
+          created_at?: string
+          data_abertura?: string | null
+          dias_desde_abertura?: number | null
+          email?: string | null
+          id?: string
+          mei?: boolean | null
+          municipio?: string | null
+          nome_fantasia?: string | null
+          observacao?: string | null
+          origem_janela?: number | null
+          porte?: string | null
+          razao_social?: string | null
+          situacao?: string
+          telefone_principal?: string | null
+          telefones?: Json
+          uf?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_ia_mensagens: {
         Row: {
           content: string

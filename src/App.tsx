@@ -52,6 +52,7 @@ const WhatsAppInbox = lazy(() => retryImport(() => import("./pages/WhatsAppInbox
 const Aquecimento = lazy(() => retryImport(() => import("./pages/Aquecimento")));
 const MonitorEnvios = lazy(() => retryImport(() => import("./pages/MonitorEnvios")));
 const ExportarDados = lazy(() => retryImport(() => import("./pages/ExportarDados")));
+const CertificadoDigital = lazy(() => retryImport(() => import("./pages/CertificadoDigital")));
 const RedirectBoleto = lazy(() => retryImport(() => import("./pages/RedirectBoleto")));
 const RedirectVerificarProposta = lazy(() => retryImport(() => import("./pages/RedirectVerificarProposta")));
 
@@ -276,6 +277,7 @@ const App = () => (
             <Route path="/admin/comite-novomundo" element={<AdminRoute><ComiteNovoMundo /></AdminRoute>} />
             <Route path="/admin/validar-emails" element={<AdminRoute><ValidarEmails /></AdminRoute>} />
             <Route path="/admin/notificacoes" element={<PermissionRoute><Notificacoes /></PermissionRoute>} />
+            <Route path="/admin/certificado-digital" element={<AdminRoute><CertificadoDigital /></AdminRoute>} />
             <Route path="/estrategias" element={<PermissionRoute><Estrategias /></PermissionRoute>} />
             <Route path="/modelo-mensagem" element={<ProtectedRoute><ModeloMensagem /></ProtectedRoute>} />
             <Route path="/admin/configurar-meta" element={<PermissionRoute><ConfigurarMeta /></PermissionRoute>} />
