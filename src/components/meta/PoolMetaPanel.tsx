@@ -387,8 +387,9 @@ export function PoolMetaPanel() {
           <div className="grid gap-3 md:grid-cols-2">
              {instancias.map((inst) => {
                const est = estadoBadge(inst.estado_pool);
-               const greenSemTeto = cfg?.sem_teto_global === true && String(inst.saude_quality || "").toUpperCase() === "GREEN";
-               const cota = greenSemTeto ? (inst.tier_diario || 0) : Math.min(cotaDaFase(inst.fase_rampup, cfg), inst.tier_diario || 250);
+               const cota = cfg?.sem_teto_global === true
+                 ? (inst.tier_diario || 0)
+                 : Math.min(cotaDaFase(inst.fase_rampup, cfg), inst.tier_diario || 250);
                const uso = inst.enviados_hoje || 0;
                const pct = cota > 0 ? Math.min(100, (uso / cota) * 100) : 0;
               const dias = inst.data_ativacao_api
