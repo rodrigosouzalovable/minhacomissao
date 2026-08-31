@@ -406,7 +406,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
         </DialogHeader>
 
         <div
-          className="flex-1 min-h-0 overflow-hidden flex flex-col gap-3"
+          className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1 flex flex-col gap-3"
           style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}
         >
           {/* Progresso */}
@@ -689,7 +689,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           </div>
 
           {/* Enviados */}
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3" style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}>
+          <div className="space-y-3" style={{ overflowAnchor: "none" }}>
           <details className="rounded-md border bg-card" open={openEnviados} onToggle={(e) => setOpenEnviados((e.currentTarget as HTMLDetailsElement).open)}>
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between min-h-[36px]">
               <span className="text-green-700 dark:text-green-400">
