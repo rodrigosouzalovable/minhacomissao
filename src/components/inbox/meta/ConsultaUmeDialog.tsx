@@ -91,7 +91,7 @@ export function ConsultaUmeDialog({
   const [cpf, setCpf] = useState('');
   const [loading, setLoading] = useState(false);
   const [consulta, setConsulta] = useState<Consulta | null>(null);
-  const [tabela, setTabela] = useState<'padrao' | 'especial'>('padrao');
+  const [tabela, setTabela] = useState<TabelaKey>('padrao');
   const [erro, setErro] = useState('');
 
   useEffect(() => {
