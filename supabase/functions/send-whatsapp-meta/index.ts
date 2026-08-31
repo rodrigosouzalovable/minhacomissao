@@ -560,7 +560,7 @@ Deno.serve(async (req) => {
       }
     }
     if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
-      const bloqueiaPausa = !(ignoraQualidade && pausaPorQualidade);
+      const bloqueiaPausa = !(ignoraQualidade && pausaLiberavel);
       if (bloqueiaPausa) {
         return new Response(JSON.stringify({
           success: false, error: `Pausa automática até ${new Date(inst.pausa_automatica_ate).toLocaleString('pt-BR')} — motivo: ${inst.pausa_automatica_motivo || 'não informado'}`,
