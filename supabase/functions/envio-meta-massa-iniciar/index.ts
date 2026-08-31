@@ -91,11 +91,17 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Chave global "Liberar YELLOW/RED": quando ligada, nenhuma instância é recusada
+    // por qualidade nem por quarentena — vale para todos os usuários (inclusive parceiros).
+    const { data: cfgQualidade } = await supabase
+      .from('meta_envio_pool_config').select('liberar_qualidade_global').eq('id', 1).maybeSingle();
+    const liberacaoGlobal = cfgQualidade?.liberar_qualidade_global === true;
+
     // Filtro server-side: remove apenas instâncias com qualidade RED (bloqueio real).
     // YELLOW passa a ser permitido — a Meta ainda entrega e o usuário quer disparar.
     // No modo RAJADA não filtramos nada: só encerramos quando a Meta responder banido/restrito.
     let instanciaIdsFiltradas = instanciaIds;
-    if (modoRajada !== true) {
+    if (modoRajada !== true && !liberacaoGlobal) {
       const { data: instancesRows } = await supabase
         .from('meta_whatsapp_instances')
         .select('id, nome, saude_quality')
