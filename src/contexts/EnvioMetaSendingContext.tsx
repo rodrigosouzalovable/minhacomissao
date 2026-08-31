@@ -307,6 +307,30 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     return (data.instancias || []) as InstanciaLivre[];
   }, [invokeControle]);
 
+  /** Instâncias da campanha: ativas (enviando) x ignoradas, com contagens deste job. */
+  const listarInstanciasStatusJob = useCallback(async (jobId: string): Promise<InstanciaStatusJob[]> => {
+    const { data, error } = await invokeControle(jobId, "instancias_status");
+    if (error || !data?.success) {
+      toast.error(data?.error || "Não foi possível carregar as instâncias da campanha");
+      return [];
+    }
+    return (data.instancias || []) as InstanciaStatusJob[];
+  }, [invokeControle]);
+
+  /** Admin: devolve uma instância ignorada para a campanha. */
+  const reativarInstanciaJob = useCallback(async (jobId: string, instanciaId: string): Promise<boolean> => {
+    const { data, error } = await invokeControle(jobId, "desbloquear_instancia_run", { instancia_id: instanciaId });
+    if (error || !data?.success) {
+      toast.error(data?.error || "Não foi possível reativar a instância agora");
+      return false;
+    }
+    toast.success("Instância devolvida para a campanha");
+    await carregarJobs();
+    return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invokeControle]);
+
+
   const adicionarInstanciasLivres = useCallback(async (jobId: string, ids?: string[]): Promise<boolean> => {
     const { data, error } = await invokeControle(jobId, "adicionar_instancias_livres", ids ? { instancia_ids: ids } : undefined);
     if (error || !data?.success) {
