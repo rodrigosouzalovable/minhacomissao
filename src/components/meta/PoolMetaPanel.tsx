@@ -251,8 +251,9 @@ export function PoolMetaPanel() {
   const enviadosHoje = instancias.reduce((s, i) => s + (i.enviados_hoje || 0), 0);
   const cotaTotal = instancias.reduce((s, i) => {
     if (i.estado_pool !== "ativo") return s;
-    const greenSemTeto = cfg?.sem_teto_global === true && String(i.saude_quality || "").toUpperCase() === "GREEN";
-    const c = greenSemTeto ? (i.tier_diario || 0) : Math.min(cotaDaFase(i.fase_rampup, cfg), i.tier_diario || 250);
+    const c = cfg?.sem_teto_global === true
+      ? (i.tier_diario || 0)
+      : Math.min(cotaDaFase(i.fase_rampup, cfg), i.tier_diario || 250);
     return s + c;
   }, 0);
 
