@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleOff, Loader2, RefreshCw, RotateCcw, Send, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEnvioMetaSending, type InstanciaStatusJob } from "@/contexts/EnvioMetaSendingContext";
 import { toast } from "sonner";
 
