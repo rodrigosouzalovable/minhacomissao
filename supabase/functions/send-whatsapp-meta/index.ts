@@ -541,12 +541,16 @@ Deno.serve(async (req) => {
     const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
     const pausaPorStatus = motivoPausaLower.startsWith('status=');
     const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
-    // Liberação manual (botão "Retomar") também ignora bloqueios por qualidade.
-    const ignoraQualidade = ignorar_pausa_qualidade === true || inst.qualidade_liberada_manual === true;
+    // Liberação manual (botão "Retomar") ou chave global "Liberar YELLOW/RED"
+    // também ignoram bloqueios por qualidade (status Meta continua bloqueando).
+    const liberacaoGlobal = cfg?.liberar_qualidade_global === true;
+    const ignoraQualidade = ignorar_pausa_qualidade === true || inst.qualidade_liberada_manual === true || liberacaoGlobal;
+    const pausaLiberavel = pausaPorQualidade || motivoPausaLower === '';
 
     if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste) {
-      // Estado 'restrita' sempre bloqueia. 'pausado' por qualidade é ignorado no modo rajada.
-      const bloqueiaEstado = inst.estado_pool === 'restrita' || !(ignoraQualidade && pausaPorQualidade);
+      // Estado 'restrita' bloqueia, salvo liberação global. 'pausado' por qualidade é ignorado no modo rajada.
+      const bloqueiaEstado = (inst.estado_pool === 'restrita' && !liberacaoGlobal) ||
+        !(ignoraQualidade && pausaLiberavel);
       if (bloqueiaEstado) {
         return new Response(JSON.stringify({
           success: false, error: `Instância não está ativa no pool (estado: ${inst.estado_pool})`,
