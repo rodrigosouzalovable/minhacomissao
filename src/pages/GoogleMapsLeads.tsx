@@ -253,7 +253,7 @@ export default function GoogleMapsLeads() {
     setErroBusca(null);
     try {
       const { data, error } = await supabase.functions.invoke("google-maps-buscar-leads", {
-        body: { categoria, localizacao, max_resultados: maxResultados },
+        body: { categoria, localizacao, max_resultados: maxResultados, somente_novos: somenteNovos },
       });
       if (error) {
         const payload = await getFunctionErrorPayload(error);
@@ -268,10 +268,20 @@ export default function GoogleMapsLeads() {
         return;
       }
       setErroBusca(null);
+      const ignorados = Number(data?.ignorados_duplicados ?? 0);
       toast.success(
-        `Busca concluída: ${data.total} resultados (${data.com_telefone} com telefone) — custo ~US$${data.custo_estimado_usd}`,
+        `Busca concluída: ${data.total} ${somenteNovos ? "novas" : "resultados"}` +
+          (ignorados > 0 ? ` • ${ignorados} já existiam (ignoradas)` : "") +
+          ` — custo ~US$${data.custo_estimado_usd}`,
       );
+      if (data?.esgotou_resultados && data.total < maxResultados) {
+        toast.warning(
+          `O Google esgotou os resultados inéditos para "${categoria}" em "${localizacao}". Tente variar o nicho ou usar um bairro em vez da cidade.`,
+          { duration: 8000 },
+        );
+      }
       setBuscaSel(data.busca_id);
+
       qc.invalidateQueries({ queryKey: ["gm-buscas"] });
       refetchLimite();
       // Verificação automática de WhatsApp dos telefones encontrados
