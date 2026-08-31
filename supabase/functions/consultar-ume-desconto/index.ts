@@ -32,10 +32,11 @@ serve(async (req) => {
     const forcar = !!(body as any)?.forcar;
     if (cpf.length !== 11) return json({ error: 'CPF inválido' }, 400);
 
-    let tabela: 'padrao' | 'especial' = 'padrao';
+    let tabela: 'padrao' | 'especial' | 'sem_juros_10' = 'sem_juros_10';
     try {
       const { data: cfg } = await service.from('iago_config').select('ume_tabela').limit(1).maybeSingle();
-      if (String((cfg as any)?.ume_tabela) === 'especial') tabela = 'especial';
+      const v = String((cfg as any)?.ume_tabela || '');
+      if (v === 'especial' || v === 'padrao' || v === 'sem_juros_10') tabela = v;
     } catch { /* padrão */ }
 
     const consulta = await consultarUme(service, cpf, { forcar });
