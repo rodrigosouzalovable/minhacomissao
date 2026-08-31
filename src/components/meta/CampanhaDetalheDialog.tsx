@@ -435,7 +435,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
             {cotaBloqueio && (
               <div className="text-xs rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 space-y-1.5 text-amber-800 dark:text-amber-200">
-                <div className="font-semibold">⏳ Parada: todas as instâncias atingiram o teto diário</div>
+                <div className="font-semibold">⏳ Parada: cota real da Meta atingida</div>
                 <div className="whitespace-pre-wrap break-words">
                   {(cotaMotivoTexto || "").split(" | ").map((linha, i) => (
                     <div key={i}>• {linha.replace(/^Nenhuma instância disponível\s*—\s*/, "")}</div>
@@ -443,8 +443,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 </div>
                 <div>
                   {job.status === "erro"
-                    ? "Esta campanha ficou parada em erro por cota/qualidade — ela não volta sozinha. Use \"Reativar\" (ou libere o teto abaixo) para retomar."
-                    : <>Reavaliação automática a cada <strong>5 min</strong> — nada a reativar. Assim que qualquer número liberar cota, a campanha volta sozinha.</>}
+                    ? "Esta campanha ficou parada — use \"Reativar\" para retomar depois que a cota da Meta renovar."
+                    : <>A campanha continua acompanhando a cota real da Meta; o limite interno está desativado.</>}
                 </div>
                 {isAdmin && (
                   <div className="pt-1">
