@@ -23,6 +23,8 @@ import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useUserRole } from "@/hooks/useUserRole";
+import ParceirosMetaTab from "@/components/meta/ParceirosMetaTab";
 
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
@@ -88,6 +90,7 @@ type Template = {
 export default function ConfigurarMeta() {
   const { cotaDaBm, recarregar: recarregarCotas } = useBmCotas();
   const { parceiroMeta } = useUserPermissions();
+  const { isAdmin } = useUserRole();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
 
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -1055,6 +1058,9 @@ export default function ConfigurarMeta() {
         <TabsList>
           <TabsTrigger value="instancias">Instâncias ({instanciasFiltradas.length})</TabsTrigger>
           <TabsTrigger value="templates">Templates HSM ({templates.length})</TabsTrigger>
+          {isAdmin && !parceiroMeta && (
+            <TabsTrigger value="parceiros">Parceiros</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="instancias">
@@ -1611,6 +1617,12 @@ export default function ConfigurarMeta() {
 
           )}
         </TabsContent>
+
+        {isAdmin && !parceiroMeta && (
+          <TabsContent value="parceiros">
+            <ParceirosMetaTab />
+          </TabsContent>
+        )}
 
       </Tabs>
 

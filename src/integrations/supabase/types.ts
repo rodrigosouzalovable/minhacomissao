@@ -3529,6 +3529,7 @@ export type Database = {
           id: string
           nome: string
           padrao: boolean
+          partner_client_id: string | null
           tenant_id: string
           tier_diario: number
           tier_ilimitado: boolean
@@ -3545,6 +3546,7 @@ export type Database = {
           id?: string
           nome: string
           padrao?: boolean
+          partner_client_id?: string | null
           tenant_id?: string
           tier_diario?: number
           tier_ilimitado?: boolean
@@ -3561,12 +3563,21 @@ export type Database = {
           id?: string
           nome?: string
           padrao?: boolean
+          partner_client_id?: string | null
           tenant_id?: string
           tier_diario?: number
           tier_ilimitado?: boolean
           tier_manual?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "meta_business_managers_partner_client_id_fkey"
+            columns: ["partner_client_id"]
+            isOneToOne: false
+            referencedRelation: "meta_partner_clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meta_call_permissions: {
         Row: {
@@ -4654,6 +4665,89 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_partner_client_users: {
+        Row: {
+          cliente_id: string
+          criado_em: string
+          papel: string
+          user_id: string
+        }
+        Insert: {
+          cliente_id: string
+          criado_em?: string
+          papel?: string
+          user_id: string
+        }
+        Update: {
+          cliente_id?: string
+          criado_em?: string
+          papel?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_partner_client_users_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "meta_partner_clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_partner_clients: {
+        Row: {
+          access_token: string | null
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          documento: string | null
+          id: string
+          meta_app_id: string | null
+          meta_business_id: string | null
+          meta_system_user_id: string | null
+          nome: string
+          refresh_token: string | null
+          responsavel_email: string | null
+          responsavel_nome: string | null
+          responsavel_telefone: string | null
+          token_expira_em: string | null
+        }
+        Insert: {
+          access_token?: string | null
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          documento?: string | null
+          id?: string
+          meta_app_id?: string | null
+          meta_business_id?: string | null
+          meta_system_user_id?: string | null
+          nome: string
+          refresh_token?: string | null
+          responsavel_email?: string | null
+          responsavel_nome?: string | null
+          responsavel_telefone?: string | null
+          token_expira_em?: string | null
+        }
+        Update: {
+          access_token?: string | null
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          documento?: string | null
+          id?: string
+          meta_app_id?: string | null
+          meta_business_id?: string | null
+          meta_system_user_id?: string | null
+          nome?: string
+          refresh_token?: string | null
+          responsavel_email?: string | null
+          responsavel_nome?: string | null
+          responsavel_telefone?: string | null
+          token_expira_em?: string | null
+        }
+        Relationships: []
+      }
       meta_qualificacao_caixa: {
         Row: {
           alerta_espera_ativo: boolean
@@ -5243,6 +5337,7 @@ export type Database = {
           meta_profile_pic_url: string | null
           meta_verified_name: string | null
           nome: string
+          partner_client_id: string | null
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
           phone_number_id: string | null
@@ -5311,6 +5406,7 @@ export type Database = {
           meta_profile_pic_url?: string | null
           meta_verified_name?: string | null
           nome: string
+          partner_client_id?: string | null
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id?: string | null
@@ -5379,6 +5475,7 @@ export type Database = {
           meta_profile_pic_url?: string | null
           meta_verified_name?: string | null
           nome?: string
+          partner_client_id?: string | null
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id?: string | null
@@ -5433,6 +5530,13 @@ export type Database = {
             columns: ["meta_bm_id"]
             isOneToOne: false
             referencedRelation: "meta_business_managers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_whatsapp_instances_partner_client_id_fkey"
+            columns: ["partner_client_id"]
+            isOneToOne: false
+            referencedRelation: "meta_partner_clients"
             referencedColumns: ["id"]
           },
           {
@@ -9242,6 +9346,10 @@ export type Database = {
       }
       phone_suffix8: { Args: { tel: string }; Returns: string }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
+      pode_ver_cliente_parceiro: {
+        Args: { _cliente_id: string; _uid: string }
+        Returns: boolean
+      }
       pode_ver_instancia_meta: {
         Args: { _instancia: string; _uid: string }
         Returns: boolean
@@ -9314,6 +9422,7 @@ export type Database = {
         Returns: boolean
       }
       user_tenants: { Args: { _uid: string }; Returns: string[] }
+      usuario_cliente_parceiro: { Args: { _uid: string }; Returns: string }
     }
     Enums: {
       app_role: "funcionario" | "gestor" | "admin"
