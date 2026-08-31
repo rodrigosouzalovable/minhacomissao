@@ -206,7 +206,6 @@ Deno.serve(async (req) => {
       // ===== Teto diário efetivo + teto horário =====
       // Modo "sem teto": qualquer número liberado no pool envia até a cota da
       // própria Meta (tier), independente de GREEN/YELLOW/RED.
-      const qualidadeUp = String(inst.saude_quality || '').toUpperCase();
       const semTeto = cfg?.sem_teto_global === true;
       if (freioAtivo && !semTeto) {
         const freio = freioMap.get(inst.id);
