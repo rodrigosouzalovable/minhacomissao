@@ -204,10 +204,10 @@ Deno.serve(async (req) => {
       const fase = inst.data_ativacao_api ? faseFromDias(diasAtivo) : 'livre';
 
       // ===== Teto diário efetivo + teto horário =====
-      // Modo "sem teto": números GREEN enviam até a cota da própria Meta.
-      // YELLOW/RED/quarentena/recuperação continuam com todas as travas.
+      // Modo "sem teto": qualquer número liberado no pool envia até a cota da
+      // própria Meta (tier), independente de GREEN/YELLOW/RED.
       const qualidadeUp = String(inst.saude_quality || '').toUpperCase();
-      const semTeto = cfg?.sem_teto_global === true && qualidadeUp === 'GREEN';
+      const semTeto = cfg?.sem_teto_global === true;
       if (freioAtivo && !semTeto) {
         const freio = freioMap.get(inst.id);
         const tetoDia = freio ? Number(freio.teto_efetivo) : tetoBase(inst, cfg, fase);
