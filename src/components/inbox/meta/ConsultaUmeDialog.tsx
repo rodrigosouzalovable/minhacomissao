@@ -62,7 +62,7 @@ function textoProposta(c: Consulta, tabela: TabelaKey) {
   if (!t) return '';
 
   const avista = t.parcelas.find((p) => p.parcelas === 1)?.valorParcela ?? null;
-  const total = c.valorComJuros ?? c.valorSemJuros ?? null;
+  const total = tabela === 'sem_juros_10' ? baseSemJuros10(c) : (c.valorComJuros ?? c.valorSemJuros ?? null);
   const opcoes = t.parcelas.filter((p) => p.parcelas >= 2 && p.valorParcela >= 100);
   const nome = (c.nome || '').split(' ')[0];
   return [
