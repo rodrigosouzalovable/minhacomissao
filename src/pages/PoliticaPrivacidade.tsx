@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Phone, MessageCircle, MapPin, Shield } from 'lucide-react';
+import { ArrowLeft, Phone, MessageCircle, MapPin, Shield, Mail } from 'lucide-react';
 import logoGrupoAltum from '@/assets/logo-grupo-altum.png';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 
@@ -203,6 +203,10 @@ export default function PoliticaPrivacidade() {
                 <a href={`https://wa.me/${PHONE}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
                   <Phone className="h-4 w-4" />
                   {PHONE_DISPLAY}
+                </a>
+                <a href="mailto:meusacordos@souzaeribeiro.com.br" className="flex items-center gap-2 mt-2 text-sm hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                  <Mail className="h-4 w-4" />
+                  meusacordos@souzaeribeiro.com.br
                 </a>
                 <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
                   <MapPin className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
