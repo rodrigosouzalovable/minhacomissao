@@ -202,10 +202,14 @@ Deno.serve(async (req) => {
       const freioMap = new Map<string, any>();
       for (const f of freios || []) freioMap.set(f.instancia_id, f);
 
+      const { data: cfgLib } = await supabase
+        .from('meta_envio_pool_config').select('liberar_qualidade_global').eq('id', 1).maybeSingle();
+      const liberacaoGlobalLivres = cfgLib?.liberar_qualidade_global === true;
+
        const livres = (insts || [])
          .filter((i: any) => !jaNoJob.includes(i.id))
-         .filter((i: any) => !i.recuperacao_ativa && i.estado_pool !== 'restrita')
-         .filter((i: any) => ['GREEN', ''].includes(String(i.saude_quality || '').toUpperCase()))
+         .filter((i: any) => liberacaoGlobalLivres || (!i.recuperacao_ativa && i.estado_pool !== 'restrita'))
+         .filter((i: any) => liberacaoGlobalLivres || ['GREEN', ''].includes(String(i.saude_quality || '').toUpperCase()))
          .map((i: any) => {
            const f = freioMap.get(i.id);
            const teto = f ? Number(f.teto_efetivo || 0) : Number(i.tier_diario || 0);
