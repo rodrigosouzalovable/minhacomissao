@@ -31,8 +31,36 @@ const soDigitos = (v: string) => (v || '').replace(/\D/g, '');
 const formatCpf = (d: string) =>
   d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
 
-function textoProposta(c: Consulta, tabela: 'padrao' | 'especial') {
-  const t = tabela === 'especial' ? c.especial : c.padrao;
+type TabelaKey = 'padrao' | 'especial' | 'sem_juros_10';
+
+const PARCELAS_SEM_JUROS_10 = [1, 2, 4, 8, 10, 12, 18];
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+function baseSemJuros10(c: Consulta): number | null {
+  return c.valorSemJuros == null ? null : round2(c.valorSemJuros * 1.1);
+}
+
+function tabelaSemJuros10(c: Consulta): Tabela | null {
+  const base = baseSemJuros10(c);
+  if (base == null) return null;
+  return {
+    parcelas: PARCELAS_SEM_JUROS_10.map((n) => ({ parcelas: n, valorParcela: round2(base / n) })),
+    totalAte3x: null,
+    total4xMais: null,
+  };
+}
+
+function tabelaDe(c: Consulta, tabela: TabelaKey): Tabela | null {
+  if (tabela === 'especial') return c.especial;
+  if (tabela === 'sem_juros_10') return tabelaSemJuros10(c);
+  return c.padrao;
+}
+
+function textoProposta(c: Consulta, tabela: TabelaKey) {
+  const t = tabelaDe(c, tabela);
+  if (!t) return '';
+
   const avista = t.parcelas.find((p) => p.parcelas === 1)?.valorParcela ?? null;
   const total = c.valorComJuros ?? c.valorSemJuros ?? null;
   const opcoes = t.parcelas.filter((p) => p.parcelas >= 2 && p.valorParcela >= 100);
