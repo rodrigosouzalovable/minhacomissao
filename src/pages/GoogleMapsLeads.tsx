@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -133,6 +135,8 @@ export default function GoogleMapsLeads() {
   const [categoria, setCategoria] = useState("");
   const [localizacao, setLocalizacao] = useState("");
   const [maxResultados, setMaxResultados] = useState(60);
+  const [somenteNovos, setSomenteNovos] = useState(true);
+
   const [buscando, setBuscando] = useState(false);
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
   const [somenteComTel, setSomenteComTel] = useState(true);
@@ -251,7 +255,7 @@ export default function GoogleMapsLeads() {
     setErroBusca(null);
     try {
       const { data, error } = await supabase.functions.invoke("google-maps-buscar-leads", {
-        body: { categoria, localizacao, max_resultados: maxResultados },
+        body: { categoria, localizacao, max_resultados: maxResultados, somente_novos: somenteNovos },
       });
       if (error) {
         const payload = await getFunctionErrorPayload(error);
@@ -266,10 +270,20 @@ export default function GoogleMapsLeads() {
         return;
       }
       setErroBusca(null);
+      const ignorados = Number(data?.ignorados_duplicados ?? 0);
       toast.success(
-        `Busca concluída: ${data.total} resultados (${data.com_telefone} com telefone) — custo ~US$${data.custo_estimado_usd}`,
+        `Busca concluída: ${data.total} ${somenteNovos ? "novas" : "resultados"}` +
+          (ignorados > 0 ? ` • ${ignorados} já existiam (ignoradas)` : "") +
+          ` — custo ~US$${data.custo_estimado_usd}`,
       );
+      if (data?.esgotou_resultados && data.total < maxResultados) {
+        toast.warning(
+          `O Google esgotou os resultados inéditos para "${categoria}" em "${localizacao}". Tente variar o nicho ou usar um bairro em vez da cidade.`,
+          { duration: 8000 },
+        );
+      }
       setBuscaSel(data.busca_id);
+
       qc.invalidateQueries({ queryKey: ["gm-buscas"] });
       refetchLimite();
       // Verificação automática de WhatsApp dos telefones encontrados
@@ -562,7 +576,15 @@ export default function GoogleMapsLeads() {
               value={maxResultados}
               onChange={(e) => setMaxResultados(Number(e.target.value) || 60)}
             />
+            <div className="mt-3 flex items-start gap-2">
+              <Switch id="somente-novos" checked={somenteNovos} onCheckedChange={setSomenteNovos} />
+              <Label htmlFor="somente-novos" className="text-xs font-normal leading-tight">
+                Trazer somente empresas novas
+                <span className="block text-muted-foreground">Ignora empresas já trazidas em buscas anteriores</span>
+              </Label>
+            </div>
           </div>
+
           <div className="md:col-span-4 flex items-center justify-between gap-4">
             <p className="text-xs text-muted-foreground">
               {(() => {

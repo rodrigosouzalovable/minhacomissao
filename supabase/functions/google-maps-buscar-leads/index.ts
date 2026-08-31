@@ -8,7 +8,30 @@ interface Body {
   localizacao: string;
   raio_metros?: number;
   max_resultados?: number; // padrão 60 (3 páginas x 20)
+  somente_novos?: boolean; // ignora empresas já trazidas em buscas anteriores
+  max_variacoes?: number; // variações extras de consulta quando faltam leads novos
 }
+
+function normalizarChave(v: string | null | undefined) {
+  return String(v ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/** Variações de consulta para descobrir empresas fora das 60 do termo original. */
+function gerarVariacoes(categoria: string, localizacao: string, max: number) {
+  const base = [
+    `${categoria} ${localizacao}`,
+    `${categoria} perto de ${localizacao}`,
+    `melhores ${categoria} em ${localizacao}`,
+    `${categoria} residencial em ${localizacao}`,
+    `empresas de ${categoria} em ${localizacao}`,
+  ];
+  return base.slice(0, Math.max(0, max));
+}
+
 
 function getEnvOrThrow(name: string) {
   const value = Deno.env.get(name);
@@ -179,10 +202,35 @@ Deno.serve(async (req) => {
       .single();
     if (buscaErr || !busca) throw buscaErr || new Error("Falha ao criar busca");
 
-    const textQuery = `${categoria} em ${localizacao}`;
+    const somenteNovos = body.somente_novos !== false;
+    const maxVariacoes = Math.min(Math.max(body.max_variacoes ?? 3, 0), 5);
+
+    // Empresas já trazidas em buscas anteriores deste usuário
+    const jaVistosPlaceId = new Set<string>();
+    const jaVistosNomeTel = new Set<string>();
+    if (somenteNovos) {
+      const pageSizeDb = 1000;
+      for (let from = 0; ; from += pageSizeDb) {
+        const { data: antigos, error: antErr } = await supabase
+          .from("google_maps_leads")
+          .select("place_id, nome, telefone")
+          .eq("user_id", user.id)
+          .range(from, from + pageSizeDb - 1);
+        if (antErr) throw antErr;
+        for (const l of antigos ?? []) {
+          if (l.place_id) jaVistosPlaceId.add(l.place_id);
+          jaVistosNomeTel.add(`${normalizarChave(l.nome)}|${normalizarChave(l.telefone)}`);
+        }
+        if (!antigos || antigos.length < pageSizeDb) break;
+      }
+    }
+
     const collected: any[] = [];
-    let pageToken: string | undefined;
+    const chavesColetadas = new Set<string>();
     let pages = 0;
+    let ignoradosDuplicados = 0;
+    let variacoesUsadas = 0;
+    let limiteAtingidoNoMeio = false;
 
     // Chave própria da Places API (New), se configurada na tela Google Maps Leads
     const { data: cfg } = await supabase
@@ -209,66 +257,107 @@ Deno.serve(async (req) => {
       ? { "X-Goog-Api-Key": chavePropria }
       : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
 
-    while (collected.length < maxRes && pages < 3) {
-      const reqBody: any = {
-        textQuery,
-        languageCode: "pt-BR",
-        regionCode: "BR",
-        pageSize: 20,
-      };
-      if (pageToken) reqBody.pageToken = pageToken;
-
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          ...authHeaders,
-          "Content-Type": "application/json",
-          // Só cobramos o que precisamos: id/nome/telefone/endereco/local + avaliação básica
-          "X-Goog-FieldMask":
-            "places.id,places.displayName,places.nationalPhoneNumber,places.internationalPhoneNumber,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.websiteUri,places.primaryTypeDisplayName,nextPageToken",
-        },
-        body: JSON.stringify(reqBody),
-      });
-
-      if (!resp.ok) {
-        const errBody = await resp.text();
-        const permissionError = parseGooglePermissionError(resp.status, errBody);
-        await supabase
-          .from("google_maps_buscas")
-          .update({ status: "erro", erro: `[${resp.status}] ${permissionError?.message ?? errBody}`.slice(0, 500) })
-          .eq("id", busca.id);
-        return new Response(
-          JSON.stringify({
-            error: "Falha no Google Maps",
-            status: resp.status,
-            details: errBody,
-            ...(permissionError ?? {}),
-          }),
-          { status: resp.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+    /** Guarda apenas empresas inéditas. Retorna quantas foram aceitas. */
+    function absorver(places: any[]) {
+      let aceitos = 0;
+      for (const p of places) {
+        if (collected.length >= maxRes) break;
+        const pid = p.id ?? null;
+        const chaveNomeTel = `${normalizarChave(p.displayName?.text)}|${normalizarChave(p.nationalPhoneNumber)}`;
+        const chaveInterna = pid ?? chaveNomeTel;
+        if (chavesColetadas.has(chaveInterna)) continue;
+        if (somenteNovos && ((pid && jaVistosPlaceId.has(pid)) || jaVistosNomeTel.has(chaveNomeTel))) {
+          ignoradosDuplicados++;
+          continue;
+        }
+        chavesColetadas.add(chaveInterna);
+        collected.push(p);
+        aceitos++;
       }
-      const data = await resp.json();
-      const places: any[] = data.places || [];
-      collected.push(...places);
-      pageToken = data.nextPageToken;
-      pages++;
+      return aceitos;
+    }
 
-      // Incrementa contador de uso mensal (1 chamada Places consumida)
-      const { data: novoTotal } = await supabase.rpc("gm_incrementar_uso", { qtd: 1 });
-      // Se atingiu o bloqueio no meio da busca, interrompe paginação
-      const { data: st2 } = await supabase.rpc("gm_status_uso");
-      const s2 = Array.isArray(st2) ? st2[0] : st2;
-      if (s2 && !s2.pode_buscar) {
-        await supabase
-          .from("google_maps_buscas")
-          .update({ status: "parcial_limite" })
-          .eq("id", busca.id);
-        break;
+    type ErroGoogle = { status: number; body: string };
+    let erroGoogle: ErroGoogle | null = null;
+
+    /** Roda um textQuery paginando até 3 páginas ou até completar a meta. */
+    async function rodarConsulta(textQuery: string) {
+      let pageToken: string | undefined;
+      let paginasQuery = 0;
+
+      while (collected.length < maxRes && paginasQuery < 3) {
+        const reqBody: any = {
+          textQuery,
+          languageCode: "pt-BR",
+          regionCode: "BR",
+          pageSize: 20,
+        };
+        if (pageToken) reqBody.pageToken = pageToken;
+
+        const resp = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            ...authHeaders,
+            "Content-Type": "application/json",
+            // Só cobramos o que precisamos: id/nome/telefone/endereco/local + avaliação básica
+            "X-Goog-FieldMask":
+              "places.id,places.displayName,places.nationalPhoneNumber,places.internationalPhoneNumber,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.websiteUri,places.primaryTypeDisplayName,nextPageToken",
+          },
+          body: JSON.stringify(reqBody),
+        });
+
+        if (!resp.ok) {
+          erroGoogle = { status: resp.status, body: await resp.text() };
+          return;
+        }
+
+        const data = await resp.json();
+        absorver(data.places || []);
+        pageToken = data.nextPageToken;
+        paginasQuery++;
+        pages++;
+
+        // Incrementa contador de uso mensal (1 chamada Places consumida)
+        await supabase.rpc("gm_incrementar_uso", { qtd: 1 });
+        const { data: st2 } = await supabase.rpc("gm_status_uso");
+        const s2 = Array.isArray(st2) ? st2[0] : st2;
+        if (s2 && !s2.pode_buscar) {
+          limiteAtingidoNoMeio = true;
+          return;
+        }
+
+        if (!pageToken) return;
+        // Google requires ~2s delay between pageToken requests
+        await new Promise((r) => setTimeout(r, 2000));
       }
+    }
 
-      if (!pageToken) break;
-      // Google requires ~2s delay between pageToken requests
-      await new Promise((r) => setTimeout(r, 2000));
+    await rodarConsulta(`${categoria} em ${localizacao}`);
+
+    // Se faltaram leads inéditos, tenta variações da consulta para achar empresas diferentes
+    if (!erroGoogle && !limiteAtingidoNoMeio && somenteNovos && collected.length < maxRes) {
+      for (const variacao of gerarVariacoes(categoria, localizacao, maxVariacoes)) {
+        if (collected.length >= maxRes || erroGoogle || limiteAtingidoNoMeio) break;
+        variacoesUsadas++;
+        await rodarConsulta(variacao);
+      }
+    }
+
+    if (erroGoogle && collected.length === 0) {
+      const permissionError = parseGooglePermissionError(erroGoogle.status, erroGoogle.body);
+      await supabase
+        .from("google_maps_buscas")
+        .update({ status: "erro", erro: `[${erroGoogle.status}] ${permissionError?.message ?? erroGoogle.body}`.slice(0, 500) })
+        .eq("id", busca.id);
+      return new Response(
+        JSON.stringify({
+          error: "Falha no Google Maps",
+          status: erroGoogle.status,
+          details: erroGoogle.body,
+          ...(permissionError ?? {}),
+        }),
+        { status: erroGoogle.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const trimmed = collected.slice(0, maxRes);
@@ -298,11 +387,12 @@ Deno.serve(async (req) => {
     // Estimativa de custo: Text Search (Pro) ~ US$0.032 POR REQUISIÇÃO (página de até 20 resultados),
     // não por resultado. A franquia gratuita mensal do SKU pode zerar esse valor na fatura do Google.
     const custo = +(Math.max(pages, 1) * 0.032).toFixed(4);
+    const esgotouResultados = somenteNovos && rows.length < maxRes && !limiteAtingidoNoMeio;
 
     await supabase
       .from("google_maps_buscas")
       .update({
-        status: "concluida",
+        status: limiteAtingidoNoMeio ? "parcial_limite" : "concluida",
         total_resultados: rows.length,
         custo_estimado_usd: custo,
       })
@@ -312,11 +402,17 @@ Deno.serve(async (req) => {
       JSON.stringify({
         busca_id: busca.id,
         total: rows.length,
+        novos: rows.length,
+        ignorados_duplicados: ignoradosDuplicados,
+        esgotou_resultados: esgotouResultados,
+        variacoes_usadas: variacoesUsadas,
+        somente_novos: somenteNovos,
         com_telefone: rows.filter((r) => r.telefone).length,
         custo_estimado_usd: custo,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+
   } catch (err) {
     console.error("google-maps-buscar-leads erro:", err);
     return new Response(JSON.stringify({ error: String(err?.message ?? err) }), {
