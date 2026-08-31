@@ -290,7 +290,7 @@ Deno.serve(async (req) => {
       await devolverProcessandoParaFila();
       dispararWorker({ ...job, status: 'rodando', instancias_bloqueadas_run: bloqRun });
 
-      return new Response(JSON.stringify({ success: true }),
+      return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
 
