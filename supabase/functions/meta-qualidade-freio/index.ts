@@ -57,14 +57,14 @@ Deno.serve(async (req) => {
       const { teto, motivo } = aplicarFreio(base, m, cfg);
       const enviados = await enviadosHojeBrt(supabase, inst.id);
 
-      // Nunca desfazer liberação manual, e não rebaixar GREEN no modo "sem teto".
+      // Nunca desfazer liberação manual, e no modo "sem teto" não rebaixar
+      // nenhum número (independente da qualidade).
       const { data: freioAtual } = await supabase
         .from("meta_instance_freio_diario")
         .select("teto_efetivo, liberado_manual")
         .eq("instancia_id", inst.id).eq("dia", hoje).maybeSingle();
-      const qualidadeUp = String(inst.saude_quality || "").toUpperCase();
       const preservarTeto = freioAtual?.liberado_manual === true ||
-        (cfg?.sem_teto_global === true && qualidadeUp === "GREEN");
+        cfg?.sem_teto_global === true;
 
       await supabase.from("meta_instance_freio_diario").upsert({
         instancia_id: inst.id,
