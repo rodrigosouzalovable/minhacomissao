@@ -1058,6 +1058,9 @@ export default function ConfigurarMeta() {
         <TabsList>
           <TabsTrigger value="instancias">Instâncias ({instanciasFiltradas.length})</TabsTrigger>
           <TabsTrigger value="templates">Templates HSM ({templates.length})</TabsTrigger>
+          {isAdmin && !parceiroMeta && (
+            <TabsTrigger value="parceiros">Parceiros</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="instancias">
