@@ -332,13 +332,13 @@ export function PoolMetaPanel() {
              <div className="flex items-center gap-2">
                <ShieldCheck className={`h-4 w-4 ${cfg?.sem_teto_global ? "text-amber-600" : "text-muted-foreground"}`} />
                <div>
-                 <p className="text-sm font-semibold">Sem teto interno para números GREEN</p>
-                 <p className="text-xs text-muted-foreground">Números GREEN usam a cota real da Meta; YELLOW e RED continuam protegidos pelo aquecimento automático.</p>
+                 <p className="text-sm font-semibold">Sem teto interno (todos os números)</p>
+                 <p className="text-xs text-muted-foreground">Todos os números liberados no pool usam a cota real da Meta, independente de GREEN, YELLOW ou RED. Só bloqueios reais da Meta barram o envio.</p>
                </div>
              </div>
              <Switch checked={cfg?.sem_teto_global === true} disabled={savingTurbo} onCheckedChange={salvarSemTeto} />
            </div>
-           {cfg?.sem_teto_global && <p className="text-xs text-amber-700 dark:text-amber-400">⚠️ O volume GREEN pode aumentar. Quarentena e recuperação de qualidade permanecem obrigatórias.</p>}
+           {cfg?.sem_teto_global && <p className="text-xs text-amber-700 dark:text-amber-400">⚠️ Sem teto interno, números YELLOW e RED disparam em volume alto — o risco de restrição ou banimento pela Meta aumenta.</p>}
          </div>
 
          {/* Liberar YELLOW/RED */}
