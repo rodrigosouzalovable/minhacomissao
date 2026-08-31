@@ -135,7 +135,9 @@ export function ConsultaUmeDialog({
     }
   };
 
-  const t = consulta ? (tabela === 'especial' ? consulta.especial : consulta.padrao) : null;
+  const t = consulta ? tabelaDe(consulta, tabela) : null;
+  const base10 = consulta ? baseSemJuros10(consulta) : null;
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
