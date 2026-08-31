@@ -4696,37 +4696,55 @@ export type Database = {
       }
       meta_partner_clients: {
         Row: {
+          access_token: string | null
           ativo: boolean
           atualizado_em: string
           criado_em: string
           documento: string | null
           id: string
+          meta_app_id: string | null
+          meta_business_id: string | null
+          meta_system_user_id: string | null
           nome: string
+          refresh_token: string | null
           responsavel_email: string | null
           responsavel_nome: string | null
           responsavel_telefone: string | null
+          token_expira_em: string | null
         }
         Insert: {
+          access_token?: string | null
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
           documento?: string | null
           id?: string
+          meta_app_id?: string | null
+          meta_business_id?: string | null
+          meta_system_user_id?: string | null
           nome: string
+          refresh_token?: string | null
           responsavel_email?: string | null
           responsavel_nome?: string | null
           responsavel_telefone?: string | null
+          token_expira_em?: string | null
         }
         Update: {
+          access_token?: string | null
           ativo?: boolean
           atualizado_em?: string
           criado_em?: string
           documento?: string | null
           id?: string
+          meta_app_id?: string | null
+          meta_business_id?: string | null
+          meta_system_user_id?: string | null
           nome?: string
+          refresh_token?: string | null
           responsavel_email?: string | null
           responsavel_nome?: string | null
           responsavel_telefone?: string | null
+          token_expira_em?: string | null
         }
         Relationships: []
       }
