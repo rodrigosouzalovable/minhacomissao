@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock } from "lucide-react";
+import CampanhaInstanciasPanel from "@/components/meta/CampanhaInstanciasPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useEnvioMetaSending, type InstanciaLivre } from "@/contexts/EnvioMetaSendingContext";
@@ -128,15 +129,17 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
 
 
-  // Estado local dos <details> — controlado pelo usuário, sem re-forçar a cada polling.
+  // Estado local dos detalhes — controlado pelo usuário, sem re-forçar a cada polling.
   const [openEnviados, setOpenEnviados] = useState<boolean>(false);
   const [openErros, setOpenErros] = useState<boolean>(true);
   const [openFalhas, setOpenFalhas] = useState<boolean>(true);
+  const [abrirInstancias, setAbrirInstancias] = useState(false);
   useEffect(() => {
     if (open && jobId) {
       setOpenEnviados(false);
       setOpenErros(true);
       setOpenFalhas(true);
+      setAbrirInstancias(false);
     }
   }, [open, jobId]);
 
@@ -593,8 +596,11 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
               <div className="text-xs text-amber-600">Nenhuma mensagem foi enviada: {resultado.statusMotivo}</div>
             )}
             {job.instancias_bloqueadas_run.length > 0 && (
-              <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
-                ⚠️ {job.instancias_bloqueadas_run.length} instância(s) ignorada(s) automaticamente após falhas consecutivas. Envios continuam com as demais.
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+                <span>⚠️ {job.instancias_bloqueadas_run.length} instância(s) ignorada(s) automaticamente após falhas consecutivas. Envios continuam com as demais.</span>
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-amber-800 hover:bg-amber-500/15 dark:text-amber-200" onClick={() => setAbrirInstancias(true)}>
+                  Ver quais
+                </Button>
               </div>
             )}
             {rateLimitInfo && job.status === "rodando" && (
@@ -609,9 +615,11 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 ⛔ {(job as any).instancias_bloqueadas.length} instância(s) desativada(s) neste envio por template pausado pela Meta. Pendentes redistribuídos para as ativas.
               </div>
             )}
-          </div>
+           </div>
 
-          {/* Delivery resumo */}
+           <CampanhaInstanciasPanel jobId={job.id} isAdmin={isAdmin} initialOpen={abrirInstancias} />
+
+           {/* Delivery resumo */}
           <div className="min-h-[24px] flex items-center overflow-hidden">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <Badge variant="secondary">Aceito: {resumo.aceito}</Badge>
