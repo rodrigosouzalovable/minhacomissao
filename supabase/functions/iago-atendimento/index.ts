@@ -589,26 +589,26 @@ Deno.serve(async (req) => {
           atendenteAcordo = String(at || '');
         } catch { /* opcional */ }
       } else {
-        // Credor UME: as condições vêm da calculadora de desconto oficial da UME.
+        // Credor UME: as condições vêm exclusivamente da tabela calculada
+        // "Sem Juros + 10%" da calculadora oficial da UME.
         const ehUme = /\bUME\b/i.test(credorCaixa);
         if (ehUme && (cfg as any).ume_consulta_ativa !== false) {
           try {
             const consulta = await consultarUme(supabase, cpf);
-            // UME: o IAGO está autorizado a negociar exclusivamente pela tabela
-            // calculada "Sem Juros + 10%", independentemente da configuração antiga.
             const tabela = 'sem_juros_10' as const;
             const pUme = propostaDaUme(consulta, tabela);
             if (pUme) {
               proposta = pUme as any;
               console.log('[IAGO] proposta UME', { cpf, tabela, total: pUme.total, opcoes: pUme.opcoes.length });
             } else {
-              console.log('[IAGO] CPF não localizado na UME', { cpf });
+              console.log('[IAGO] CPF não localizado ou sem valor sem juros na UME', { cpf });
             }
           } catch (e) {
             console.error('[IAGO] falha na consulta UME', String((e as Error)?.message || e));
           }
         }
-        if (!proposta) {
+        // Nunca substitua a tabela UME por uma proposta genérica do credor.
+        if (!proposta && !ehUme) {
           proposta = await calcularProposta(supabase, cpf, {
             descAvista: (cfg as any).desconto_avista_pct,
             descParcelado: (cfg as any).desconto_parcelado_pct,
