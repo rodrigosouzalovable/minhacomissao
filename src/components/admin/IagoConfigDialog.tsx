@@ -270,10 +270,10 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
                       onCheckedChange={(v) => { setCfg({ ...cfg, ume_consulta_ativa: v }); void salvarCfg({ ume_consulta_ativa: v }); }}
                     />
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button
                       size="sm"
-                      variant={(cfg.ume_tabela ?? 'padrao') === 'padrao' ? 'default' : 'outline'}
+                      variant={cfg.ume_tabela === 'padrao' ? 'default' : 'outline'}
                       onClick={() => { setCfg({ ...cfg, ume_tabela: 'padrao' }); void salvarCfg({ ume_tabela: 'padrao' }); }}
                     >Tabela Padrão</Button>
                     <Button
@@ -281,10 +281,17 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
                       variant={cfg.ume_tabela === 'especial' ? 'default' : 'outline'}
                       onClick={() => { setCfg({ ...cfg, ume_tabela: 'especial' }); void salvarCfg({ ume_tabela: 'especial' }); }}
                     >Desconto Especial</Button>
+                    <Button
+                      size="sm"
+                      variant={(cfg.ume_tabela ?? 'sem_juros_10') === 'sem_juros_10' ? 'default' : 'outline'}
+                      onClick={() => { setCfg({ ...cfg, ume_tabela: 'sem_juros_10' }); void salvarCfg({ ume_tabela: 'sem_juros_10' }); }}
+                    >Sem Juros + 10%</Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Nas caixas do credor UME, o IAGO busca as condições direto na calculadora oficial da UME pelo CPF do cliente e usa a tabela escolhida aqui.
+                    Na opção “Sem Juros + 10%”, o sistema calcula o parcelamento em 1x, 2x, 4x, 8x, 10x, 12x e 18x sobre o total sem juros acrescido de 10%, com parcela mínima de R$ 100.
                   </p>
+
                 </div>
               </TabsContent>
 
