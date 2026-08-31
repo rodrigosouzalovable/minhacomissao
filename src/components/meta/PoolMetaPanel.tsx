@@ -340,6 +340,21 @@ export function PoolMetaPanel() {
            {cfg?.sem_teto_global && <p className="text-xs text-amber-700 dark:text-amber-400">⚠️ O volume GREEN pode aumentar. Quarentena e recuperação de qualidade permanecem obrigatórias.</p>}
          </div>
 
+         {/* Liberar YELLOW/RED */}
+         <div className={`rounded-md border p-3 space-y-2 ${cfg?.liberar_qualidade_global ? "border-destructive/60 bg-destructive/10" : ""}`}>
+           <div className="flex items-center justify-between gap-3 flex-wrap">
+             <div className="flex items-center gap-2">
+               <ShieldCheck className={`h-4 w-4 ${cfg?.liberar_qualidade_global ? "text-destructive" : "text-muted-foreground"}`} />
+               <div>
+                 <p className="text-sm font-semibold">Liberar números YELLOW e RED para envio</p>
+                 <p className="text-xs text-muted-foreground">Ignora quarentena, pausa por qualidade e modo recuperação para todos os usuários (inclusive parceiros).</p>
+               </div>
+             </div>
+             <Switch checked={cfg?.liberar_qualidade_global === true} disabled={savingTurbo} onCheckedChange={salvarLiberarQualidade} />
+           </div>
+           {cfg?.liberar_qualidade_global && <p className="text-xs text-destructive">⚠️ Risco de banimento maior. Bloqueios reais da Meta (BANNED/FLAGGED/pagamento) continuam valendo.</p>}
+         </div>
+
 
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
