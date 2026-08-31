@@ -8,7 +8,30 @@ interface Body {
   localizacao: string;
   raio_metros?: number;
   max_resultados?: number; // padrão 60 (3 páginas x 20)
+  somente_novos?: boolean; // ignora empresas já trazidas em buscas anteriores
+  max_variacoes?: number; // variações extras de consulta quando faltam leads novos
 }
+
+function normalizarChave(v: string | null | undefined) {
+  return String(v ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/** Variações de consulta para descobrir empresas fora das 60 do termo original. */
+function gerarVariacoes(categoria: string, localizacao: string, max: number) {
+  const base = [
+    `${categoria} ${localizacao}`,
+    `${categoria} perto de ${localizacao}`,
+    `melhores ${categoria} em ${localizacao}`,
+    `${categoria} residencial em ${localizacao}`,
+    `empresas de ${categoria} em ${localizacao}`,
+  ];
+  return base.slice(0, Math.max(0, max));
+}
+
 
 function getEnvOrThrow(name: string) {
   const value = Deno.env.get(name);
