@@ -31,10 +31,38 @@ const soDigitos = (v: string) => (v || '').replace(/\D/g, '');
 const formatCpf = (d: string) =>
   d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
 
-function textoProposta(c: Consulta, tabela: 'padrao' | 'especial') {
-  const t = tabela === 'especial' ? c.especial : c.padrao;
+type TabelaKey = 'padrao' | 'especial' | 'sem_juros_10';
+
+const PARCELAS_SEM_JUROS_10 = [1, 2, 4, 8, 10, 12, 18];
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+function baseSemJuros10(c: Consulta): number | null {
+  return c.valorSemJuros == null ? null : round2(c.valorSemJuros * 1.1);
+}
+
+function tabelaSemJuros10(c: Consulta): Tabela | null {
+  const base = baseSemJuros10(c);
+  if (base == null) return null;
+  return {
+    parcelas: PARCELAS_SEM_JUROS_10.map((n) => ({ parcelas: n, valorParcela: round2(base / n) })),
+    totalAte3x: null,
+    total4xMais: null,
+  };
+}
+
+function tabelaDe(c: Consulta, tabela: TabelaKey): Tabela | null {
+  if (tabela === 'especial') return c.especial;
+  if (tabela === 'sem_juros_10') return tabelaSemJuros10(c);
+  return c.padrao;
+}
+
+function textoProposta(c: Consulta, tabela: TabelaKey) {
+  const t = tabelaDe(c, tabela);
+  if (!t) return '';
+
   const avista = t.parcelas.find((p) => p.parcelas === 1)?.valorParcela ?? null;
-  const total = c.valorComJuros ?? c.valorSemJuros ?? null;
+  const total = tabela === 'sem_juros_10' ? baseSemJuros10(c) : (c.valorComJuros ?? c.valorSemJuros ?? null);
   const opcoes = t.parcelas.filter((p) => p.parcelas >= 2 && p.valorParcela >= 100);
   const nome = (c.nome || '').split(' ')[0];
   return [
@@ -63,7 +91,7 @@ export function ConsultaUmeDialog({
   const [cpf, setCpf] = useState('');
   const [loading, setLoading] = useState(false);
   const [consulta, setConsulta] = useState<Consulta | null>(null);
-  const [tabela, setTabela] = useState<'padrao' | 'especial'>('padrao');
+  const [tabela, setTabela] = useState<TabelaKey>('padrao');
   const [erro, setErro] = useState('');
 
   useEffect(() => {
@@ -107,7 +135,9 @@ export function ConsultaUmeDialog({
     }
   };
 
-  const t = consulta ? (tabela === 'especial' ? consulta.especial : consulta.padrao) : null;
+  const t = consulta ? tabelaDe(consulta, tabela) : null;
+  const base10 = consulta ? baseSemJuros10(consulta) : null;
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -150,19 +180,35 @@ export function ConsultaUmeDialog({
               <div><div className="text-xs text-muted-foreground">Total com juros</div><div className="font-medium">{fmt(consulta.valorComJuros)}</div></div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" variant={tabela === 'padrao' ? 'default' : 'outline'} onClick={() => setTabela('padrao')}>Tabela Padrão</Button>
               <Button size="sm" variant={tabela === 'especial' ? 'default' : 'outline'} onClick={() => setTabela('especial')}>Desconto Especial</Button>
+              <Button
+                size="sm"
+                variant={tabela === 'sem_juros_10' ? 'default' : 'outline'}
+                onClick={() => setTabela('sem_juros_10')}
+                disabled={base10 == null}
+                title={base10 == null ? 'Total sem juros indisponível' : undefined}
+              >
+                Sem Juros + 10%
+              </Button>
             </div>
 
             <div className="rounded border">
               <div className="flex items-center justify-between border-b px-3 py-2 text-sm">
                 <span className="font-medium">Parcelamento</span>
                 <span className="flex gap-2 text-xs text-muted-foreground">
-                  <Badge variant="secondary">Até 3x: {fmt(t.totalAte3x)}</Badge>
-                  <Badge variant="secondary">4x ou mais: {fmt(t.total4xMais)}</Badge>
+                  {tabela === 'sem_juros_10' ? (
+                    <Badge variant="secondary">Total com +10%: {fmt(base10)}</Badge>
+                  ) : (
+                    <>
+                      <Badge variant="secondary">Até 3x: {fmt(t?.totalAte3x)}</Badge>
+                      <Badge variant="secondary">4x ou mais: {fmt(t?.total4xMais)}</Badge>
+                    </>
+                  )}
                 </span>
               </div>
+
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 p-3 text-sm sm:grid-cols-3">
                 {t.parcelas.map((p) => (
                   <div key={p.parcelas} className="flex justify-between">
