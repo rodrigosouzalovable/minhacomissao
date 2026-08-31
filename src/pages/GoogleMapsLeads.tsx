@@ -574,7 +574,15 @@ export default function GoogleMapsLeads() {
               value={maxResultados}
               onChange={(e) => setMaxResultados(Number(e.target.value) || 60)}
             />
+            <div className="mt-3 flex items-start gap-2">
+              <Switch id="somente-novos" checked={somenteNovos} onCheckedChange={setSomenteNovos} />
+              <Label htmlFor="somente-novos" className="text-xs font-normal leading-tight">
+                Trazer somente empresas novas
+                <span className="block text-muted-foreground">Ignora empresas já trazidas em buscas anteriores</span>
+              </Label>
+            </div>
           </div>
+
           <div className="md:col-span-4 flex items-center justify-between gap-4">
             <p className="text-xs text-muted-foreground">
               {(() => {
