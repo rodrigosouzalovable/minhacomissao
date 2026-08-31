@@ -43,6 +43,7 @@ type PoolConfig = {
   freio_ativo: boolean | null;
   cota_max_hora: number | null;
   sem_teto_global: boolean | null;
+  liberar_qualidade_global: boolean | null;
 };
 
 
