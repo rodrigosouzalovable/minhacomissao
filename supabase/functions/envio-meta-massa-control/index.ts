@@ -295,23 +295,23 @@ Deno.serve(async (req) => {
       const semTetoGlobal = cfg?.sem_teto_global === true;
       const pct = semTetoGlobal ? 1 : Number(cfg?.pct_max_cota_meta ?? 60) / 100;
       const limiteSeguro = Math.max(10, Math.floor(Number(inst.tier_diario ?? 250) * pct));
-      const pedido = Number(body?.teto ?? (semTetoGlobal ? limiteSeguro : 250));
-      let novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
+      const pedido = Number(body?.teto ?? limiteSeguro);
+      const novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
 
       const hojeBrt2 = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
       const { data: freioAtual } = await supabase
         .from('meta_instance_freio_diario')
         .select('enviados').eq('instancia_id', instId).eq('dia', hojeBrt2).maybeSingle();
 
-      // O bloqueio real usa os envios efetivos de hoje: um teto abaixo disso não libera nada.
+      // O bloqueio real usa a cota da Meta; o teto interno não participa quando
+      // o modo sem teto está ligado.
       const enviadosHoje = await enviadosHojeBrt(supabase, instId);
       if (limiteSeguro <= enviadosHoje) {
         return new Response(JSON.stringify({
           success: false,
-          error: `este número já enviou ${enviadosHoje} hoje e o limite de segurança da cota Meta é ${limiteSeguro} — escolha outro número ou aguarde a virada do dia`,
+          error: `este número já atingiu a cota real da Meta (${enviadosHoje}/${limiteSeguro}) — aguarde a renovação da cota`,
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      novoTeto = Math.min(limiteSeguro, Math.max(novoTeto, enviadosHoje + 10));
 
       await supabase.from('meta_instance_freio_diario').upsert({
         instancia_id: instId,
