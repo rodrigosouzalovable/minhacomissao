@@ -274,8 +274,7 @@ Deno.serve(async (req) => {
       }
       const bloqRun: string[] = (Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [])
         .filter((x: string) => x !== instId);
-      const bloqTpl: string[] = (Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [])
-        .filter((x: string) => x !== instId);
+      const bloqTpl: string[] = Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [];
       const falhas: Record<string, number> = { ...((job as any).falhas_por_instancia_run || {}) };
       delete falhas[instId];
 
