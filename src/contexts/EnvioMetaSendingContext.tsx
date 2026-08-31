@@ -55,6 +55,21 @@ export type InstanciaLivre = {
 };
 
 
+export type InstanciaStatusJob = {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  bm: string | null;
+  qualidade: string | null;
+  ativa_cadastro: boolean;
+  enviados: number;
+  erros: number;
+  falhas_consecutivas: number;
+  ignorada: boolean;
+  motivo_ignorada: string | null;
+  em_uso: boolean;
+};
+
 /**
  * Motivo gravado pelo worker no formato `AGUARDANDO_COTA:<retomaISO>:<detalhe>`.
  * Indica campanha viva, apenas esperando cota diária/qualidade liberar.
@@ -165,6 +180,8 @@ type Ctx = {
   getPaginacaoJob: (jobId: string) => { carregados: number; temMais: boolean };
   refreshCountersJob: (jobId: string) => Promise<void>;
   listarInstanciasLivres: (jobId: string) => Promise<InstanciaLivre[]>;
+  listarInstanciasStatusJob: (jobId: string) => Promise<InstanciaStatusJob[]>;
+  reativarInstanciaJob: (jobId: string, instanciaId: string) => Promise<boolean>;
   adicionarInstanciasLivres: (jobId: string, ids?: string[]) => Promise<boolean>;
   liberarTetoHoje: (jobId: string, instanciaId?: string, teto?: number) => Promise<boolean>;
   marcarJobAberto: (jobId: string, aberto: boolean) => void;
@@ -306,6 +323,30 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     if (error || !data?.success) return [];
     return (data.instancias || []) as InstanciaLivre[];
   }, [invokeControle]);
+
+  /** Instâncias da campanha: ativas (enviando) x ignoradas, com contagens deste job. */
+  const listarInstanciasStatusJob = useCallback(async (jobId: string): Promise<InstanciaStatusJob[]> => {
+    const { data, error } = await invokeControle(jobId, "instancias_status");
+    if (error || !data?.success) {
+      toast.error(data?.error || "Não foi possível carregar as instâncias da campanha");
+      return [];
+    }
+    return (data.instancias || []) as InstanciaStatusJob[];
+  }, [invokeControle]);
+
+  /** Admin: devolve uma instância ignorada para a campanha. */
+  const reativarInstanciaJob = useCallback(async (jobId: string, instanciaId: string): Promise<boolean> => {
+    const { data, error } = await invokeControle(jobId, "desbloquear_instancia_run", { instancia_id: instanciaId });
+    if (error || !data?.success) {
+      toast.error(data?.error || "Não foi possível reativar a instância agora");
+      return false;
+    }
+    toast.success("Instância devolvida para a campanha");
+    await carregarJobs();
+    return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invokeControle]);
+
 
   const adicionarInstanciasLivres = useCallback(async (jobId: string, ids?: string[]): Promise<boolean> => {
     const { data, error } = await invokeControle(jobId, "adicionar_instancias_livres", ids ? { instancia_ids: ids } : undefined);
@@ -983,7 +1024,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, adicionarInstanciasLivres, liberarTetoHoje, marcarJobAberto, exportarItensJob,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, listarInstanciasStatusJob, reativarInstanciaJob, adicionarInstanciasLivres, liberarTetoHoje, marcarJobAberto, exportarItensJob,
       }}
     >
       {children}

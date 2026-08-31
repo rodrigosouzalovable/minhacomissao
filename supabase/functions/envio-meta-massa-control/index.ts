@@ -184,7 +184,118 @@ Deno.serve(async (req) => {
       }).eq('id', jobId);
       dispararWorker(job);
 
+    } else if (acao === 'instancias_status') {
+      // Lista as instâncias da campanha separando ativas x ignoradas, com contagens deste job.
+      const jobInsts: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+      const bloqRun: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
+      const bloqTpl: string[] = Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [];
+      const falhas: Record<string, number> = (job as any).falhas_por_instancia_run || {};
+
+      const { data: insts } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, nome, display_phone, saude_quality, tier_diario, meta_bm_id, ativo')
+        .in('id', jobInsts.length > 0 ? jobInsts : ['00000000-0000-0000-0000-000000000000']);
+
+      const bmIds = Array.from(new Set((insts || []).map((i: any) => i.meta_bm_id).filter(Boolean)));
+      const bmMap = new Map<string, string>();
+      if (bmIds.length > 0) {
+        const { data: bms } = await supabase
+          .from('meta_business_managers')
+          .select('id, nome')
+          .in('id', bmIds as string[]);
+        for (const b of bms || []) bmMap.set(b.id, b.nome || '');
+      }
+
+      // Contagens por instância neste job (enviado / erro).
+      const contagem = new Map<string, { enviados: number; erros: number }>();
+      const porNome = new Map<string, { enviados: number; erros: number }>();
+      let from = 0;
+      const pagina = 1000;
+      for (let i = 0; i < 40; i++) {
+        const { data: itens } = await supabase
+          .from('envio_meta_job_item')
+          .select('instancia_id, instancia_nome, status')
+          .eq('job_id', jobId)
+          .in('status', ['enviado', 'erro'])
+          .range(from, from + pagina - 1);
+        for (const it of itens || []) {
+          const bucket = (map: Map<string, any>, key: string) => {
+            const cur = map.get(key) || { enviados: 0, erros: 0 };
+            if (it.status === 'erro') cur.erros++; else cur.enviados++;
+            map.set(key, cur);
+          };
+          if (it.instancia_id) bucket(contagem, it.instancia_id);
+          else if (it.instancia_nome) bucket(porNome, it.instancia_nome);
+        }
+        if (!itens || itens.length < pagina) break;
+        from += pagina;
+      }
+
+      const linhas = jobInsts.map((id) => {
+        const i: any = (insts || []).find((x: any) => x.id === id) || {};
+        const nome = i.nome || i.display_phone || id.slice(0, 8);
+        const c = contagem.get(id) || porNome.get(nome) || { enviados: 0, erros: 0 };
+        const ignorada = bloqRun.includes(id) || bloqTpl.includes(id);
+        return {
+          id,
+          nome,
+          telefone: i.display_phone || null,
+          bm: i.meta_bm_id ? (bmMap.get(i.meta_bm_id) || null) : null,
+          qualidade: i.saude_quality || null,
+          ativa_cadastro: i.ativo !== false,
+          enviados: c.enviados,
+          erros: c.erros,
+          falhas_consecutivas: Number(falhas[id] || 0),
+          ignorada,
+          motivo_ignorada: bloqTpl.includes(id)
+            ? 'template pausado pela Meta'
+            : bloqRun.includes(id) ? 'falhas consecutivas' : null,
+          em_uso: (job.atual_instancia || '') === nome,
+        };
+      }).sort((a, b) => Number(a.ignorada) - Number(b.ignorada) || b.enviados - a.enviados);
+
+      return new Response(JSON.stringify({ success: true, instancias: linhas }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
+    } else if (acao === 'desbloquear_instancia_run') {
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ success: false, error: 'apenas administradores podem reativar instâncias' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const instId: string = body?.instancia_id;
+      const jobInsts: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+      if (!instId || !jobInsts.includes(instId)) {
+        return new Response(JSON.stringify({ success: false, error: 'instância não pertence a esta campanha' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const bloqRun: string[] = (Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [])
+        .filter((x: string) => x !== instId);
+      const bloqTpl: string[] = Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [];
+      const falhas: Record<string, number> = { ...((job as any).falhas_por_instancia_run || {}) };
+      delete falhas[instId];
+
+      await supabase.from('envio_meta_job').update({
+        instancias_bloqueadas_run: bloqRun,
+        instancias_bloqueadas: bloqTpl,
+        falhas_por_instancia_run: falhas,
+        status: 'rodando',
+        status_motivo: null,
+        concluido_em: null,
+        proximo_em: new Date().toISOString(),
+      }).eq('id', jobId);
+      await devolverProcessandoParaFila();
+      dispararWorker({ ...job, status: 'rodando', instancias_bloqueadas_run: bloqRun });
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
     } else if (acao === 'instancias_livres' || acao === 'adicionar_instancias_livres') {
+
       // Instâncias Meta aptas que ainda têm cota livre HOJE (BRT) e não estão no job.
       const hojeBrt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
       const jaNoJob: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
