@@ -90,6 +90,7 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = 
   }, [jobId, listarInstanciasStatusJob]);
 
   useEffect(() => {
+    setOpen(initialOpen);
     if (initialOpen) void carregar();
   }, [initialOpen, carregar]);
 
@@ -113,11 +114,11 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = 
   return (
     <div className="rounded-md border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-        <button type="button" className="flex min-w-0 items-center gap-2 text-left text-sm font-medium" onClick={abrir} aria-expanded={open}>
+        <Button type="button" variant="ghost" className="h-auto min-w-0 justify-start gap-2 px-0 py-0 text-left text-sm font-medium" onClick={abrir} aria-expanded={open}>
           <Send className="h-4 w-4 text-muted-foreground" />
           <span>Instâncias do disparo</span>
           {instancias && <span className="text-xs font-normal text-muted-foreground">{ativas.length} ativas · {ignoradas.length} ignoradas</span>}
-        </button>
+        </Button>
         {open && (
           <Button size="sm" variant="ghost" onClick={() => void carregar()} disabled={carregando} aria-label="Atualizar instâncias">
             <RefreshCw className={carregando ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
