@@ -203,8 +203,8 @@ Deno.serve(async (req) => {
       for (const f of freios || []) freioMap.set(f.instancia_id, f);
 
       const { data: cfgLib } = await supabase
-        .from('meta_envio_pool_config').select('liberar_qualidade_global').eq('id', 1).maybeSingle();
-      const liberacaoGlobalLivres = cfgLib?.liberar_qualidade_global === true;
+        .from('meta_envio_pool_config').select('liberar_qualidade_global, sem_teto_global').eq('id', 1).maybeSingle();
+      const liberacaoGlobalLivres = cfgLib?.liberar_qualidade_global === true || cfgLib?.sem_teto_global === true;
 
        const livres = (insts || [])
          .filter((i: any) => !jaNoJob.includes(i.id))
@@ -212,7 +212,9 @@ Deno.serve(async (req) => {
          .filter((i: any) => liberacaoGlobalLivres || ['GREEN', ''].includes(String(i.saude_quality || '').toUpperCase()))
          .map((i: any) => {
            const f = freioMap.get(i.id);
-           const teto = f ? Number(f.teto_efetivo || 0) : Number(i.tier_diario || 0);
+           const teto = cfgLib?.sem_teto_global === true
+             ? Number(i.tier_diario || 0)
+             : (f ? Number(f.teto_efetivo || 0) : Number(i.tier_diario || 0));
            const enviados = f ? Number(f.enviados || 0) : 0;
            return {
              id: i.id,
@@ -285,7 +287,7 @@ Deno.serve(async (req) => {
       }
       const { data: cfg } = await supabase
         .from('meta_envio_pool_config').select('pct_max_cota_meta, sem_teto_global, liberar_qualidade_global').eq('id', 1).maybeSingle();
-      const liberacaoGlobalTeto = cfg?.liberar_qualidade_global === true;
+      const liberacaoGlobalTeto = cfg?.liberar_qualidade_global === true || cfg?.sem_teto_global === true;
       if (!liberacaoGlobalTeto && (inst.recuperacao_ativa || String(inst.saude_quality || '').toUpperCase() === 'RED')) {
         return new Response(JSON.stringify({ success: false, error: 'número em recuperação de qualidade — teto não pode ser liberado' }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -295,23 +297,23 @@ Deno.serve(async (req) => {
       const semTetoGlobal = cfg?.sem_teto_global === true;
       const pct = semTetoGlobal ? 1 : Number(cfg?.pct_max_cota_meta ?? 60) / 100;
       const limiteSeguro = Math.max(10, Math.floor(Number(inst.tier_diario ?? 250) * pct));
-      const pedido = Number(body?.teto ?? (semTetoGlobal ? limiteSeguro : 250));
-      let novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
+      const pedido = Number(body?.teto ?? limiteSeguro);
+      const novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
 
       const hojeBrt2 = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
       const { data: freioAtual } = await supabase
         .from('meta_instance_freio_diario')
         .select('enviados').eq('instancia_id', instId).eq('dia', hojeBrt2).maybeSingle();
 
-      // O bloqueio real usa os envios efetivos de hoje: um teto abaixo disso não libera nada.
+      // O bloqueio real usa a cota da Meta; o teto interno não participa quando
+      // o modo sem teto está ligado.
       const enviadosHoje = await enviadosHojeBrt(supabase, instId);
       if (limiteSeguro <= enviadosHoje) {
         return new Response(JSON.stringify({
           success: false,
-          error: `este número já enviou ${enviadosHoje} hoje e o limite de segurança da cota Meta é ${limiteSeguro} — escolha outro número ou aguarde a virada do dia`,
+          error: `este número já atingiu a cota real da Meta (${enviadosHoje}/${limiteSeguro}) — aguarde a renovação da cota`,
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-      novoTeto = Math.min(limiteSeguro, Math.max(novoTeto, enviadosHoje + 10));
 
       await supabase.from('meta_instance_freio_diario').upsert({
         instancia_id: instId,
