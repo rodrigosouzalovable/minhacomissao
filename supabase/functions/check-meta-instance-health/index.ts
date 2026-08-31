@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
           ? updatePayload.quarentena_ate
           : inst.quarentena_ate;
         const quarentenaAtiva = !!quarentenaAlvo && new Date(quarentenaAlvo).getTime() > Date.now();
-        const saudavel = qual === 'GREEN' && !quarentenaAtiva && !restritoMeta;
+        const saudavel = liberacaoGlobal || (qual === 'GREEN' && !quarentenaAtiva && !restritoMeta);
 
         if (eraBloqueioMeta && graphOk && !notificarPausa) {
           updatePayload.pausa_automatica_ate = null;
