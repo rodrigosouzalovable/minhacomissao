@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_google_maps_leads_user_place ON public.google_maps_leads (user_id, place_id) WHERE place_id IS NOT NULL;
