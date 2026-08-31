@@ -214,7 +214,7 @@ export default function PoliticaPrivacidade() {
         </div>
         <div className="px-4 py-5">
           <div className="max-w-5xl mx-auto text-center">
-            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Portal de Acordos é um serviço da SOUZA E RIBEIRO ADVOGADOS</p>
+            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Meus Acordos é uma plataforma da Souza e Ribeiro Sociedade de Advogados - CNPJ: 05.950.717/0001-18</p>
             <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.3)' }}>© {new Date().getFullYear()} Grupo Altum — Todos os direitos reservados</p>
           </div>
         </div>
