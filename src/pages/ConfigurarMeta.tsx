@@ -23,6 +23,8 @@ import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
 import { useMetaBillingConciliacao } from "@/hooks/useMetaBillingConciliacao";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useUserRole } from "@/hooks/useUserRole";
+import ParceirosMetaTab from "@/components/meta/ParceirosMetaTab";
 
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
