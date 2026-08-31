@@ -150,7 +150,10 @@ Deno.serve(async (req) => {
 
         let notificarPausa: { motivo: string; alcance: 'numero' | 'waba' } | null = null;
 
-        const liberadaManual = inst.qualidade_liberada_manual === true;
+        // Liberação global (chave "Liberar YELLOW/RED" do pool): não aplica
+        // pausa por qualidade, quarentena nem modo recuperação.
+        const liberacaoGlobal = cfg?.liberar_qualidade_global === true;
+        const liberadaManual = inst.qualidade_liberada_manual === true || liberacaoGlobal;
 
         if (!liberadaManual && cfg?.auto_pausa_yellow !== false && qual === 'YELLOW' && !inst.pausa_automatica_ate) {
           updatePayload.pausa_automatica_ate = new Date(Date.now() + dur).toISOString();
