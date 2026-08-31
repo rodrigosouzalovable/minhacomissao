@@ -131,7 +131,7 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = 
           {carregando && !instancias ? (
             <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando instâncias…</div>
           ) : instancias?.length ? (
-            <div>
+            <ScrollArea className="h-[320px] pr-1">
               {ativas.length > 0 && (
                 <div>
                   <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1.5 text-xs font-semibold text-green-700 dark:text-green-300"><CheckCircle2 className="h-3.5 w-3.5" /> Ativas (enviando)</div>
@@ -144,7 +144,7 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = 
                   {ignoradas.map((instancia) => <InstanciaRow key={instancia.id} instancia={instancia} isAdmin={isAdmin} reativando={reativando === instancia.id} onReativar={() => void reativar(instancia.id)} />)}
                 </div>
               )}
-            </div>
+            </ScrollArea>
           ) : (
             <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground"><XCircle className="h-4 w-4" /> Nenhuma instância encontrada nesta campanha.</div>
           )}
