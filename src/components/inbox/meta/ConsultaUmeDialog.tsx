@@ -180,19 +180,35 @@ export function ConsultaUmeDialog({
               <div><div className="text-xs text-muted-foreground">Total com juros</div><div className="font-medium">{fmt(consulta.valorComJuros)}</div></div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" variant={tabela === 'padrao' ? 'default' : 'outline'} onClick={() => setTabela('padrao')}>Tabela Padrão</Button>
               <Button size="sm" variant={tabela === 'especial' ? 'default' : 'outline'} onClick={() => setTabela('especial')}>Desconto Especial</Button>
+              <Button
+                size="sm"
+                variant={tabela === 'sem_juros_10' ? 'default' : 'outline'}
+                onClick={() => setTabela('sem_juros_10')}
+                disabled={base10 == null}
+                title={base10 == null ? 'Total sem juros indisponível' : undefined}
+              >
+                Sem Juros + 10%
+              </Button>
             </div>
 
             <div className="rounded border">
               <div className="flex items-center justify-between border-b px-3 py-2 text-sm">
                 <span className="font-medium">Parcelamento</span>
                 <span className="flex gap-2 text-xs text-muted-foreground">
-                  <Badge variant="secondary">Até 3x: {fmt(t.totalAte3x)}</Badge>
-                  <Badge variant="secondary">4x ou mais: {fmt(t.total4xMais)}</Badge>
+                  {tabela === 'sem_juros_10' ? (
+                    <Badge variant="secondary">Total com +10%: {fmt(base10)}</Badge>
+                  ) : (
+                    <>
+                      <Badge variant="secondary">Até 3x: {fmt(t?.totalAte3x)}</Badge>
+                      <Badge variant="secondary">4x ou mais: {fmt(t?.total4xMais)}</Badge>
+                    </>
+                  )}
                 </span>
               </div>
+
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 p-3 text-sm sm:grid-cols-3">
                 {t.parcelas.map((p) => (
                   <div key={p.parcelas} className="flex justify-between">
