@@ -113,6 +113,16 @@ export function PoolMetaPanel() {
     await carregar();
   };
 
+  const salvarLiberarQualidade = async (liberar: boolean) => {
+    setSavingTurbo(true);
+    const { error } = await (supabase as any).from("meta_envio_pool_config")
+      .update({ liberar_qualidade_global: liberar, atualizado_em: new Date().toISOString() }).eq("id", 1);
+    setSavingTurbo(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(liberar ? "YELLOW/RED liberados para todos os usuários" : "Proteção por qualidade reativada");
+    await carregar();
+  };
+
 
 
   const carregar = async () => {
