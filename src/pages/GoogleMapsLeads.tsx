@@ -133,6 +133,8 @@ export default function GoogleMapsLeads() {
   const [categoria, setCategoria] = useState("");
   const [localizacao, setLocalizacao] = useState("");
   const [maxResultados, setMaxResultados] = useState(60);
+  const [somenteNovos, setSomenteNovos] = useState(true);
+
   const [buscando, setBuscando] = useState(false);
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
   const [somenteComTel, setSomenteComTel] = useState(true);
