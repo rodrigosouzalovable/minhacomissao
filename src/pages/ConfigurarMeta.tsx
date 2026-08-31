@@ -1618,6 +1618,12 @@ export default function ConfigurarMeta() {
           )}
         </TabsContent>
 
+        {isAdmin && !parceiroMeta && (
+          <TabsContent value="parceiros">
+            <ParceirosMetaTab />
+          </TabsContent>
+        )}
+
       </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
