@@ -110,7 +110,7 @@ export function PoolMetaPanel() {
       .update({ sem_teto_global: semTeto, atualizado_em: new Date().toISOString() }).eq("id", 1);
     setSavingTurbo(false);
     if (error) { toast.error(error.message); return; }
-    toast.success(semTeto ? "Sem teto ligado — GREEN usa a cota da Meta" : "Limites internos reativados");
+    toast.success(semTeto ? "Sem teto ligado — todos os números usam a cota da Meta" : "Limites internos reativados");
     await carregar();
   };
 
