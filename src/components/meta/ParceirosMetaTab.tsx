@@ -139,8 +139,12 @@ export default function ParceirosMetaTab() {
       async (response: any) => {
         if (response.authResponse?.code) {
           try {
-            const { data, error } = await supabase.functions.invoke("meta-partner-onboarding", {
-              body: { code: response.authResponse.code, cliente_id: clienteId },
+          const { data, error } = await supabase.functions.invoke("meta-partner-onboarding", {
+              body: {
+                code: response.authResponse.code,
+                cliente_id: clienteId,
+                redirect_uri: window.location.origin + window.location.pathname,
+              },
             });
             if (error) throw error;
             if (!data?.success) throw new Error(data?.error || "Falha no onboarding");
