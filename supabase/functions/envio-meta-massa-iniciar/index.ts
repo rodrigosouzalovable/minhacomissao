@@ -123,8 +123,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Remove instâncias em quarentena por queda de qualidade (exceto modo rajada).
-    if (modoRajada !== true) {
+    // Remove instâncias em quarentena por queda de qualidade (exceto rajada/liberação global).
+    if (modoRajada !== true && !liberacaoGlobal) {
       const { data: quarentena } = await supabase
         .from('meta_whatsapp_instances')
         .select('id, nome, quarentena_ate')
