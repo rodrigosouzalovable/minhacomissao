@@ -90,6 +90,7 @@ type Template = {
 export default function ConfigurarMeta() {
   const { cotaDaBm, recarregar: recarregarCotas } = useBmCotas();
   const { parceiroMeta } = useUserPermissions();
+  const { isAdmin } = useUserRole();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
 
   const [templates, setTemplates] = useState<Template[]>([]);
