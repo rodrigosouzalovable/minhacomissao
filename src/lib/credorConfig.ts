@@ -34,7 +34,7 @@ export const CREDORES: Record<string, CredorConfig> = {
     },
     quemSomos:
       'O Portal de Acordos é a plataforma de gestão e recuperação de crédito da Souza e Ribeiro Advogados, autorizada e homologada pelo Grupo Altum, com foco nas melhores oportunidades de negociação para seus clientes. Todo o processo é online, de forma rápida e segura.',
-    footerTexto: 'Portal de Acordos é um serviço da SOUZA E RIBEIRO ADVOGADOS',
+    footerTexto: 'Meus Acordos é uma plataforma da Souza e Ribeiro Sociedade de Advogados - CNPJ: 05.950.717/0001-18',
     copyrightTexto: 'Grupo Altum',
     credorFiltro: 'GRUPO ALTUM',
   },
@@ -50,7 +50,7 @@ export const CREDORES: Record<string, CredorConfig> = {
     },
     quemSomos:
       'O Portal de Acordos é a plataforma de gestão e recuperação de crédito da Souza e Ribeiro Advogados, autorizada e homologada pelo Novo Mundo, com foco nas melhores oportunidades de negociação para seus clientes. Todo o processo é online, de forma rápida e segura.',
-    footerTexto: 'Portal de Acordos é um serviço da SOUZA E RIBEIRO ADVOGADOS',
+    footerTexto: 'Meus Acordos é uma plataforma da Souza e Ribeiro Sociedade de Advogados - CNPJ: 05.950.717/0001-18',
     copyrightTexto: 'Novo Mundo',
     credorFiltro: 'ume_novo_mundo',
   },
