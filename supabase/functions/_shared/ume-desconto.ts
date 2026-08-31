@@ -160,13 +160,34 @@ export async function consultarUme(
   return consulta;
 }
 
+export type UmeTabelaKey = 'padrao' | 'especial' | 'sem_juros_10';
+
+const PARCELAS_SEM_JUROS_10 = [1, 2, 4, 8, 10, 12, 18];
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/** Base da tabela "Sem Juros + 10%": total sem juros acrescido de 10%. */
+export function baseSemJuros10(c: UmeConsulta): number | null {
+  return c.valorSemJuros == null ? null : round2(c.valorSemJuros * 1.1);
+}
+
+/** Tabela calculada pelo sistema: base (sem juros + 10%) dividida em 1/2/4/8/10/12/18x. */
+export function tabelaSemJuros10(c: UmeConsulta): UmeTabela | null {
+  const base = baseSemJuros10(c);
+  if (base == null || base <= 0) return null;
+  return {
+    parcelas: PARCELAS_SEM_JUROS_10.map((n) => ({ parcelas: n, valorParcela: round2(base / n) })),
+    totalAte3x: base,
+    total4xMais: base,
+  };
+}
+
 /**
  * Converte a consulta UME no mesmo formato de proposta usado pelo IAGO.
- * Parcela mínima R$ 100. `tabela` = 'padrao' | 'especial'.
+ * Parcela mínima R$ 100. `tabela` = 'padrao' | 'especial' | 'sem_juros_10'.
  */
 export function propostaDaUme(
   c: UmeConsulta,
-  tabela: 'padrao' | 'especial' = 'padrao',
+  tabela: UmeTabelaKey = 'padrao',
   parcelaMinima = 100,
 ): {
   total: number;
@@ -180,7 +201,14 @@ export function propostaDaUme(
   fonte: 'ume';
 } | null {
   if (!c.encontrado) return null;
-  const t = tabela === 'especial' ? c.especial : c.padrao;
+
+  let t: UmeTabela | null;
+  if (tabela === 'sem_juros_10') t = tabelaSemJuros10(c);
+  else if (tabela === 'especial') t = c.especial;
+  else t = c.padrao;
+  // Sem valor sem juros na consulta, cai para a tabela padrão da UME.
+  if (!t) t = c.padrao;
+
   const avista = t.parcelas.find((p) => p.parcelas === 1)?.valorParcela ?? null;
   const total = c.valorComJuros ?? c.valorSemJuros ?? null;
   if (!avista || !total) return null;
@@ -201,3 +229,4 @@ export function propostaDaUme(
     fonte: 'ume',
   };
 }
+
