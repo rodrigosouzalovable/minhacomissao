@@ -3849,6 +3849,7 @@ export type Database = {
           horario_fim: string
           horario_inicio: string
           id: number
+          liberar_qualidade_global: boolean
           nao_lidas_max_pct: number
           pct_max_cota_meta: number
           preventivo_msgs_dia: number
@@ -3893,6 +3894,7 @@ export type Database = {
           horario_fim?: string
           horario_inicio?: string
           id?: number
+          liberar_qualidade_global?: boolean
           nao_lidas_max_pct?: number
           pct_max_cota_meta?: number
           preventivo_msgs_dia?: number
@@ -3937,6 +3939,7 @@ export type Database = {
           horario_fim?: string
           horario_inicio?: string
           id?: number
+          liberar_qualidade_global?: boolean
           nao_lidas_max_pct?: number
           pct_max_cota_meta?: number
           preventivo_msgs_dia?: number

@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = await req.json();
-    const ignoraQualidadeGlobal = ignorar_pausa_qualidade === true;
+    let ignoraQualidadeGlobal = ignorar_pausa_qualidade === true;
     const excluidas: string[] = Array.isArray(excluir_ids) ? excluir_ids : [];
 
     if (!Array.isArray(instancia_ids) || instancia_ids.length === 0) {
@@ -68,6 +68,8 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
+    // Chave global "Liberar YELLOW/RED": ignora quarentena, recuperação e pausa por qualidade.
+    if (cfg?.liberar_qualidade_global === true) ignoraQualidadeGlobal = true;
 
     // Bloqueio de domingo/horário BRT
     const nowBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
