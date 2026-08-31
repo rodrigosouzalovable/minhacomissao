@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Phone, MessageCircle, MapPin, Shield } from 'lucide-react';
+import { ArrowLeft, Phone, MessageCircle, MapPin, Shield, Mail } from 'lucide-react';
 import logoGrupoAltum from '@/assets/logo-grupo-altum.png';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 
