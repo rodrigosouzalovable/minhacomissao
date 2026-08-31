@@ -283,14 +283,15 @@ Deno.serve(async (req) => {
           status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (inst.recuperacao_ativa || String(inst.saude_quality || '').toUpperCase() === 'RED') {
+      const { data: cfg } = await supabase
+        .from('meta_envio_pool_config').select('pct_max_cota_meta, sem_teto_global, liberar_qualidade_global').eq('id', 1).maybeSingle();
+      const liberacaoGlobalTeto = cfg?.liberar_qualidade_global === true;
+      if (!liberacaoGlobalTeto && (inst.recuperacao_ativa || String(inst.saude_quality || '').toUpperCase() === 'RED')) {
         return new Response(JSON.stringify({ success: false, error: 'número em recuperação de qualidade — teto não pode ser liberado' }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const { data: cfg } = await supabase
-        .from('meta_envio_pool_config').select('pct_max_cota_meta, sem_teto_global').eq('id', 1).maybeSingle();
       const semTetoGlobal = cfg?.sem_teto_global === true;
       const pct = semTetoGlobal ? 1 : Number(cfg?.pct_max_cota_meta ?? 60) / 100;
       const limiteSeguro = Math.max(10, Math.floor(Number(inst.tier_diario ?? 250) * pct));
