@@ -594,8 +594,10 @@ Deno.serve(async (req) => {
         if (ehUme && (cfg as any).ume_consulta_ativa !== false) {
           try {
             const consulta = await consultarUme(supabase, cpf);
-            const tabela = String((cfg as any).ume_tabela) === 'especial' ? 'especial' : 'padrao';
-            const pUme = propostaDaUme(consulta, tabela as 'padrao' | 'especial');
+            const cfgTab = String((cfg as any).ume_tabela || '');
+            // Padrão: tabela calculada "Sem Juros + 10%".
+            const tabela = cfgTab === 'especial' ? 'especial' : cfgTab === 'padrao' ? 'padrao' : 'sem_juros_10';
+            const pUme = propostaDaUme(consulta, tabela as 'padrao' | 'especial' | 'sem_juros_10');
             if (pUme) {
               proposta = pUme as any;
               console.log('[IAGO] proposta UME', { cpf, tabela, total: pUme.total, opcoes: pUme.opcoes.length });
