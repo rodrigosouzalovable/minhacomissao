@@ -9,6 +9,7 @@ import {
 } from '@/lib/contatoPorDominio';
 
 const META_ID = 'robots-dominio';
+const META_FB_ID = 'facebook-domain-verification-dominio';
 
 /**
  * Retorna o contato do portal conforme o domínio acessado (tabela portal_dominios,
