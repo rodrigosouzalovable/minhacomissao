@@ -40,6 +40,8 @@ type DominioRow = {
   noindex: boolean;
   ativo: boolean;
   txt_verify: string | null;
+  meta_verification: string | null;
+  meta_txt_verify: string | null;
   criado_por: string | null;
   created_at: string;
   updated_at: string;
@@ -53,6 +55,8 @@ type FormState = {
   email: string;
   noindex: boolean;
   txt_verify: string;
+  meta_verification: string;
+  meta_txt_verify: string;
 };
 
 const FORM_INITIAL: FormState = {
@@ -63,10 +67,21 @@ const FORM_INITIAL: FormState = {
   email: '',
   noindex: true,
   txt_verify: '',
+  meta_verification: '',
+  meta_txt_verify: '',
 };
 
 function prefixoDeHost(hostname: string) {
   return hostname.replace(new RegExp(`\\.${DOMINIO_BASE.replace('.', '\\.')}$`), '');
+}
+
+/** Aceita a tag completa colada da Meta ou apenas o código. */
+function extrairCodigoMeta(valor: string) {
+  const bruto = valor.trim();
+  if (!bruto) return '';
+  const match = bruto.match(/content\s*=\s*["']([^"']+)["']/i);
+  if (match) return match[1].trim();
+  return bruto.replace(/^facebook-domain-verification=/i, '').trim();
 }
 
 function normalizarTelefone(value: string) {
