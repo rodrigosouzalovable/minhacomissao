@@ -142,9 +142,10 @@ Deno.serve(async (req) => {
     for (const inst of insts) {
       const rotulo = inst.nome || inst.phone_number_id || inst.id;
       if (excluidas.includes(inst.id)) { descartados.push(`${rotulo}: já falhou na entrega para este contato`); continue; }
-      // Nome de exibição reprovado/em análise costuma gerar falha de entrega (#131000)
+      // Nome de exibição REPROVADO gera falha de entrega (#131000).
+      // Nome em análise (PENDING_REVIEW) continua enviando normalmente.
       const nameStatus = String(inst.meta_name_status || '').toUpperCase();
-      if (nameStatus === 'REJECTED' || nameStatus === 'PENDING_REVIEW') {
+      if (nameStatus === 'REJECTED') {
         descartados.push(`${rotulo}: nome de exibição ${nameStatus} na Meta (entrega bloqueada)`);
         continue;
       }
