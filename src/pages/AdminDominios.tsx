@@ -154,6 +154,28 @@ export default function AdminDominios() {
   const [dnsChecking, setDnsChecking] = useState<string | null>(null);
   const [dnsResultados, setDnsResultados] = useState<Record<string, DnsResultado>>({});
 
+  async function verificarDns(dominio: DominioRow) {
+    setDnsChecking(dominio.id);
+    const { data, error } = await supabase.functions.invoke('dns-check', {
+      body: {
+        hostname: dominio.hostname,
+        a_esperado: DNS_A_VALUE,
+        txt_lovable: dominio.txt_verify ?? '',
+        txt_meta: dominio.meta_txt_verify ?? '',
+      },
+    });
+    setDnsChecking(null);
+    if (error || !data || (data as { error?: string }).error) {
+      toast({
+        title: 'Não foi possível consultar o DNS',
+        description: error?.message ?? (data as { error?: string })?.error ?? 'Tente novamente em instantes.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setDnsResultados((current) => ({ ...current, [dominio.id]: data as DnsResultado }));
+  }
+
 
   const { data: dominios = [], isLoading, isError } = useQuery({
     queryKey: ['admin-portal-dominios'],
