@@ -24,11 +24,30 @@ import {
   Copy,
   ExternalLink,
   Globe,
+  Loader2,
   Pencil,
   Plus,
   Power,
+  RefreshCw,
   Trash2,
+  X,
 } from 'lucide-react';
+
+type DnsRegistro = {
+  tipo: 'A' | 'TXT';
+  nome: string;
+  esperado: string;
+  encontrado: string[];
+  ok: boolean;
+};
+
+type DnsResultado = {
+  hostname: string;
+  registros: DnsRegistro[];
+  todosOk: boolean;
+  verificadoEm: string;
+};
+
 
 type DominioRow = {
   id: string;
