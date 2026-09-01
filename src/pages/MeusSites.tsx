@@ -276,7 +276,7 @@ export default function MeusSites() {
                         >
                           {s.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                         </a>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => copiar(s.url!)}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => s.url && copiar(s.url)}>
                           <Copy className="h-3 w-3" />
                         </Button>
                         <a href={s.url} target="_blank" rel="noopener noreferrer">
