@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Phone, Search, FileText, MessageCircle, Shield, HandshakeIcon, Clock, HelpCircle, Star, MapPin, Lock } from 'lucide-react';
+import { Phone, Mail, Search, FileText, MessageCircle, Shield, HandshakeIcon, Clock, HelpCircle, Star, MapPin, Lock } from 'lucide-react';
 import { getCredorConfig, isValidCredorSlug } from '@/lib/credorConfig';
+import { useContatoPortal } from '@/hooks/useContatoPortal';
 
 function formatCpfInput(value: string) {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -32,6 +33,7 @@ const FAQ_ITEMS = [
 
 export default function PortalConsulta() {
   const { creditor } = useParams<{ creditor: string }>();
+  const contato = useContatoPortal();
   const [cpf, setCpf] = useState('');
   const [faqSearch, setFaqSearch] = useState('');
   const navigate = useNavigate();
@@ -41,8 +43,9 @@ export default function PortalConsulta() {
   }
 
   const config = getCredorConfig(creditor)!;
-  const PHONE = config.phone;
-  const PHONE_DISPLAY = config.phoneDisplay;
+  const PHONE = contato.phone;
+  const PHONE_DISPLAY = contato.phoneDisplay;
+  const EMAIL = contato.email;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,6 +286,10 @@ export default function PortalConsulta() {
                 <a href={`https://wa.me/${PHONE}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
                   <Phone className="h-4 w-4" />
                   {PHONE_DISPLAY}
+                </a>
+                <a href={`mailto:${EMAIL}`} className="flex items-center gap-2 mt-2 text-sm hover:opacity-80 transition-opacity justify-center sm:justify-start" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                  <Mail className="h-4 w-4" />
+                  {EMAIL}
                 </a>
                 <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
                   <MapPin className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.5)' }} />

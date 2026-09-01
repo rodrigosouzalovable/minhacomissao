@@ -2,11 +2,14 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Phone, MessageCircle, MapPin, ShieldAlert, AlertTriangle, CreditCard, Mail, Eye, CheckCircle } from 'lucide-react';
 import logoGrupoAltum from '@/assets/logo-grupo-altum.png';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
-
-const PHONE = '5562982183144';
-const PHONE_DISPLAY = '(62) 98218-3144';
+import { useContatoPortal } from '@/hooks/useContatoPortal';
 
 export default function Antifraude() {
+  const contato = useContatoPortal();
+  const PHONE = contato.phone;
+  const PHONE_DISPLAY = contato.phoneDisplay;
+  const EMAIL = contato.email;
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#f7f8fa' }}>
       {/* Header */}
@@ -133,6 +136,10 @@ export default function Antifraude() {
                     <Eye className="h-4 w-4" style={{ color: '#003366' }} />
                     <span className="text-sm"><strong>Portal:</strong> Este site que você está acessando</span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4" style={{ color: '#003366' }} />
+                    <span className="text-sm"><strong>E-mail:</strong> {EMAIL}</span>
+                  </div>
                 </div>
               </div>
 
@@ -178,6 +185,10 @@ export default function Antifraude() {
                 <a href={`https://wa.me/${PHONE}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm" style={{ color: '#00a86b' }}>
                   <Phone className="h-4 w-4" />
                   {PHONE_DISPLAY}
+                </a>
+                <a href={`mailto:${EMAIL}`} className="flex items-center gap-2 mt-2 text-sm hover:opacity-80 transition-opacity justify-center sm:justify-start" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                  <Mail className="h-4 w-4" />
+                  {EMAIL}
                 </a>
                 <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
                   <MapPin className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
