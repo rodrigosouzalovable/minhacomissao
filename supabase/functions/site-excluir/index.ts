@@ -1,5 +1,6 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { getCloudflareCreds } from '../_shared/cloudflareCreds.ts';
 
 const CF_API = 'https://api.cloudflare.com/client/v4';
 
@@ -35,8 +36,7 @@ Deno.serve(async (req) => {
     if (erroBusca) return json({ success: false, error: erroBusca.message }, 500);
     if (!site) return json({ success: false, error: 'Site não encontrado.' }, 404);
 
-    const token = Deno.env.get('CLOUDFLARE_API_TOKEN');
-    const accountId = Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
+    const { token, accountId } = await getCloudflareCreds();
     if (site.worker_name && token && accountId) {
       const del = await fetch(`${CF_API}/accounts/${accountId}/workers/scripts/${site.worker_name}?force=true`, {
         method: 'DELETE',

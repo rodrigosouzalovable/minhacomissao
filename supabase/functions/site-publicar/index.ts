@@ -1,6 +1,7 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { gerarHtmlSite, type SiteData } from '../_shared/siteTemplate.ts';
+import { getCloudflareCreds } from '../_shared/cloudflareCreds.ts';
 
 const CF_API = 'https://api.cloudflare.com/client/v4';
 
@@ -43,10 +44,11 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   try {
-    const token = Deno.env.get('CLOUDFLARE_API_TOKEN');
-    const accountId = Deno.env.get('CLOUDFLARE_ACCOUNT_ID');
+    const creds = await getCloudflareCreds();
+    const token = creds.token;
+    const accountId = creds.accountId;
     if (!token || !accountId) {
-      return json({ success: false, error: 'Cloudflare não configurado: faltam CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID.' }, 400);
+      return json({ success: false, error: 'Cloudflare não configurada. Abra "Configurar Cloudflare" na aba Meus Sites e informe o API Token e o Account ID.' }, 400);
     }
 
     // Valida o token da Cloudflare antes de qualquer coisa (erro mais comum: token inválido/sem permissão)
@@ -112,7 +114,7 @@ Deno.serve(async (req) => {
       workerName = `${slugify(registro.nome_site || razao) || 'empresa'}-${sufixo}`;
     }
 
-    const subdominio = await cfSubdomain(accountId, token, Deno.env.get('CLOUDFLARE_WORKERS_SUBDOMAIN') ?? undefined);
+    const subdominio = await cfSubdomain(accountId, token, creds.subdominio ?? undefined);
     if (!subdominio) {
       return json({ success: false, error: 'Não foi possível descobrir o subdomínio workers.dev da conta Cloudflare. Ative-o no painel Cloudflare (Workers → Subdomínio).' }, 400);
     }
