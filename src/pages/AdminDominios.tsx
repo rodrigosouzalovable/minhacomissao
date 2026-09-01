@@ -24,11 +24,30 @@ import {
   Copy,
   ExternalLink,
   Globe,
+  Loader2,
   Pencil,
   Plus,
   Power,
+  RefreshCw,
   Trash2,
+  X,
 } from 'lucide-react';
+
+type DnsRegistro = {
+  tipo: 'A' | 'TXT';
+  nome: string;
+  esperado: string;
+  encontrado: string[];
+  ok: boolean;
+};
+
+type DnsResultado = {
+  hostname: string;
+  registros: DnsRegistro[];
+  todosOk: boolean;
+  verificadoEm: string;
+};
+
 
 type DominioRow = {
   id: string;
@@ -132,6 +151,31 @@ export default function AdminDominios() {
   const [form, setForm] = useState<FormState>(FORM_INITIAL);
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [dnsChecking, setDnsChecking] = useState<string | null>(null);
+  const [dnsResultados, setDnsResultados] = useState<Record<string, DnsResultado>>({});
+
+  async function verificarDns(dominio: DominioRow) {
+    setDnsChecking(dominio.id);
+    const { data, error } = await supabase.functions.invoke('dns-check', {
+      body: {
+        hostname: dominio.hostname,
+        a_esperado: DNS_A_VALUE,
+        txt_lovable: dominio.txt_verify ?? '',
+        txt_meta: dominio.meta_txt_verify ?? '',
+      },
+    });
+    setDnsChecking(null);
+    if (error || !data || (data as { error?: string }).error) {
+      toast({
+        title: 'Não foi possível consultar o DNS',
+        description: error?.message ?? (data as { error?: string })?.error ?? 'Tente novamente em instantes.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setDnsResultados((current) => ({ ...current, [dominio.id]: data as DnsResultado }));
+  }
+
 
   const { data: dominios = [], isLoading, isError } = useQuery({
     queryKey: ['admin-portal-dominios'],
@@ -331,7 +375,11 @@ export default function AdminDominios() {
                     </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" title="Verificar DNS" onClick={() => { setSelectedId(dominio.id); verificarDns(dominio); }} disabled={dnsChecking === dominio.id}>
+                          {dnsChecking === dominio.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        </Button>
                         <Button variant="ghost" size="icon" title="Ver instruções" onClick={() => setSelectedId(dominio.id)}><Clipboard className="h-4 w-4" /></Button>
+
                         <Button variant="ghost" size="icon" title="Editar subdomínio" onClick={() => openEdit(dominio)}><Pencil className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" title={dominio.ativo ? 'Desativar' : 'Ativar'} onClick={() => toggleAtivo(dominio)}><Power className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" title="Remover" onClick={() => remove(dominio)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
@@ -352,10 +400,52 @@ export default function AdminDominios() {
                   <CardTitle>Como registrar {selected.hostname}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">Copie os dados abaixo e conclua a conexão nos dois painéis.</p>
                 </div>
-                <Badge variant={selected.ativo ? 'outline' : 'secondary'}>{selected.ativo ? 'Portal ativo' : 'Portal desativado'}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={selected.ativo ? 'outline' : 'secondary'}>{selected.ativo ? 'Portal ativo' : 'Portal desativado'}</Badge>
+                  <Button type="button" variant="outline" size="sm" onClick={() => verificarDns(selected)} disabled={dnsChecking === selected.id}>
+                    {dnsChecking === selected.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    Verificar DNS
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
+              {dnsResultados[selected.id] && (
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">Status dos registros DNS</p>
+                    <span className="text-xs text-muted-foreground">
+                      Verificado às {new Date(dnsResultados[selected.id].verificadoEm).toLocaleTimeString('pt-BR')}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {dnsResultados[selected.id].registros.map((registro) => (
+                      <div key={`${registro.tipo}-${registro.nome}-${registro.esperado}`} className="rounded-md border bg-muted/30 p-3 text-sm">
+                        <div className="flex items-center gap-2">
+                          {registro.ok ? <Check className="h-4 w-4 text-primary" /> : <X className="h-4 w-4 text-destructive" />}
+                          <span className="font-medium">Registro {registro.tipo}</span>
+                          <span className="text-muted-foreground break-all">{registro.nome}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground break-all">Esperado: {registro.esperado}</p>
+                        <p className="text-xs text-muted-foreground break-all">
+                          Encontrado: {registro.encontrado.length ? registro.encontrado.join(' · ') : 'nenhum valor publicado'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  {dnsResultados[selected.id].todosOk ? (
+                    <p className="text-sm text-primary">
+                      Registros propagados. Conclua em Configurações do Projeto &gt; Domínios (Complete setup / Check status). Se aparecer
+                      &quot;Domain Service Error&quot;, recarregue a página antes de clicar.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-destructive">
+                      Algum registro ainda não propagou ou está com valor diferente. Corrija no registro.br e verifique novamente — a propagação pode levar algumas horas.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <CopyField label="Registro A — nome" value={prefixoDeHost(selected.hostname)} description="No registro.br, use este valor no campo Nome/Host." />
                 <CopyField label="Registro A — valor" value={DNS_A_VALUE} description="Endereço de destino da hospedagem Lovable." />
