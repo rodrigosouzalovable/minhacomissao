@@ -375,7 +375,11 @@ export default function AdminDominios() {
                     </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" title="Verificar DNS" onClick={() => { setSelectedId(dominio.id); verificarDns(dominio); }} disabled={dnsChecking === dominio.id}>
+                          {dnsChecking === dominio.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        </Button>
                         <Button variant="ghost" size="icon" title="Ver instruções" onClick={() => setSelectedId(dominio.id)}><Clipboard className="h-4 w-4" /></Button>
+
                         <Button variant="ghost" size="icon" title="Editar subdomínio" onClick={() => openEdit(dominio)}><Pencil className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" title={dominio.ativo ? 'Desativar' : 'Ativar'} onClick={() => toggleAtivo(dominio)}><Power className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" title="Remover" onClick={() => remove(dominio)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
