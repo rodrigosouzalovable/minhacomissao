@@ -6339,6 +6339,48 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_dominios: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          criado_por: string | null
+          email: string
+          hostname: string
+          id: string
+          noindex: boolean
+          responsavel_nome: string | null
+          telefone: string
+          telefone_display: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          criado_por?: string | null
+          email: string
+          hostname: string
+          id?: string
+          noindex?: boolean
+          responsavel_nome?: string | null
+          telefone: string
+          telefone_display: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          criado_por?: string | null
+          email?: string
+          hostname?: string
+          id?: string
+          noindex?: boolean
+          responsavel_nome?: string | null
+          telefone?: string
+          telefone_display?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       premios_semanais: {
         Row: {
           atingido_em: string
