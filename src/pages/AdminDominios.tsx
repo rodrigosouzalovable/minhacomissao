@@ -39,6 +39,7 @@ type DominioRow = {
   email: string;
   noindex: boolean;
   ativo: boolean;
+  txt_verify: string | null;
   criado_por: string | null;
   created_at: string;
   updated_at: string;
@@ -51,6 +52,7 @@ type FormState = {
   telefone_display: string;
   email: string;
   noindex: boolean;
+  txt_verify: string;
 };
 
 const FORM_INITIAL: FormState = {
@@ -60,6 +62,7 @@ const FORM_INITIAL: FormState = {
   telefone_display: '',
   email: '',
   noindex: true,
+  txt_verify: '',
 };
 
 function prefixoDeHost(hostname: string) {
@@ -144,6 +147,7 @@ export default function AdminDominios() {
       telefone_display: dominio.telefone_display,
       email: dominio.email,
       noindex: dominio.noindex,
+      txt_verify: dominio.txt_verify ?? '',
     });
     setDialogOpen(true);
   }
@@ -179,6 +183,7 @@ export default function AdminDominios() {
       telefone_display: form.telefone_display.trim(),
       email,
       noindex: form.noindex,
+      txt_verify: form.txt_verify.trim() || null,
       ...(editing ? {} : { criado_por: user?.id ?? null }),
     };
 
@@ -332,7 +337,24 @@ export default function AdminDominios() {
                 <CopyField label="Registro A — nome" value={prefixoDeHost(selected.hostname)} description="No registro.br, use este valor no campo Nome/Host." />
                 <CopyField label="Registro A — valor" value={DNS_A_VALUE} description="Endereço de destino da hospedagem Lovable." />
                 <CopyField label="Domínio completo para conectar" value={selected.hostname} description="Digite exatamente este host em Configurações do Projeto > Domínios > Connect Domain." />
-                <CopyField label="Registro TXT — nome" value="_lovable" description="O valor de verificação é específico e aparece no fluxo Connect Domain da Lovable." />
+                <CopyField
+                  label="Registro TXT — nome"
+                  value={`_lovable.${prefixoDeHost(selected.hostname)}`}
+                  description={`No registro.br, digite exatamente isso no campo Nome — ele completa sozinho com .${DOMINIO_BASE}.`}
+                />
+                <div className="md:col-span-2">
+                  {selected.txt_verify ? (
+                    <CopyField label="Registro TXT — valor" value={selected.txt_verify} description="Cole este conteúdo no campo de valor/dados do registro TXT." />
+                  ) : (
+                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground">Registro TXT — valor não cadastrado</p>
+                      <p className="mt-1">
+                        Copie o valor <code>lovable_verify=...</code> exibido no fluxo Connect Domain da Lovable e salve-o em
+                        {' '}<strong className="text-foreground">Editar subdomínio</strong>.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="rounded-lg border bg-muted/30 p-4 text-sm">
@@ -340,7 +362,10 @@ export default function AdminDominios() {
                 <ol className="list-decimal space-y-1.5 pl-5 text-muted-foreground">
                   <li>No registro.br, crie o registro A para <strong className="text-foreground">{prefixoDeHost(selected.hostname)}</strong> apontando para <strong className="text-foreground">{DNS_A_VALUE}</strong>.</li>
                   <li>Na Lovable, abra Configurações do Projeto &gt; Domínios &gt; Connect Domain e informe <strong className="text-foreground">{selected.hostname}</strong>.</li>
-                  <li>Copie o TXT de verificação exibido pela Lovable e crie-o no registro.br com nome <strong className="text-foreground">_lovable</strong>.</li>
+                  <li>
+                    No registro.br, crie o registro TXT com nome <strong className="text-foreground">_lovable.{prefixoDeHost(selected.hostname)}</strong>
+                    {selected.txt_verify ? <> e valor <strong className="text-foreground break-all">{selected.txt_verify}</strong>.</> : ' e o valor de verificação exibido pela Lovable.'}
+                  </li>
                   <li>Aguarde a propagação DNS e a validação automática do certificado.</li>
                 </ol>
               </div>
@@ -385,6 +410,11 @@ export default function AdminDominios() {
               <div className="space-y-2"><Label htmlFor="telefone_display">Telefone para exibição</Label><Input id="telefone_display" value={form.telefone_display} onChange={(event) => updateForm('telefone_display', event.target.value)} placeholder="(62) 98147-4256" required /></div>
             </div>
             <div className="space-y-2"><Label htmlFor="email">E-mail</Label><Input id="email" type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} placeholder="contato@exemplo.com.br" required /></div>
+            <div className="space-y-2">
+              <Label htmlFor="txt_verify">Valor do registro TXT (verificação Lovable)</Label>
+              <Input id="txt_verify" value={form.txt_verify} onChange={(event) => updateForm('txt_verify', event.target.value)} placeholder="lovable_verify=..." />
+              <p className="text-xs text-muted-foreground">Copie do fluxo Connect Domain da Lovable. Fica disponível para copiar nas instruções.</p>
+            </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div><p className="text-sm font-medium">Não aparecer em buscas</p><p className="text-xs text-muted-foreground">Envia noindex, nofollow neste subdomínio.</p></div>
               <Switch checked={form.noindex} onCheckedChange={(checked) => updateForm('noindex', checked)} aria-label="Não aparecer em buscas" />

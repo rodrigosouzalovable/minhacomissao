@@ -1,0 +1,1 @@
+ALTER TABLE public.portal_dominios ADD COLUMN IF NOT EXISTS txt_verify text;
