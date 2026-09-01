@@ -51,16 +51,16 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Cloudflare não configurada. Abra "Configurar Cloudflare" na aba Meus Sites e informe o API Token e o Account ID.' }, 400);
     }
 
-    // Valida o token da Cloudflare antes de qualquer coisa (erro mais comum: token inválido/sem permissão)
-    const verify = await fetch(`${CF_API}/user/tokens/verify`, {
+    // Valida o token da Cloudflare acessando a própria conta (funciona para tokens de usuário e de conta cfat_...)
+    const acc = await fetch(`${CF_API}/accounts/${accountId}`, {
       headers: { Authorization: `Bearer ${token}` },
     }).catch(() => null);
-    const verifyJson = await verify?.json().catch(() => ({}));
-    if (!verify?.ok || verifyJson?.success !== true) {
+    const accJson = await acc?.json().catch(() => ({}));
+    if (!acc?.ok || accJson?.success !== true) {
       return json({
         success: false,
         error:
-          'O token da Cloudflare foi recusado (Authentication error). Crie um API Token em Cloudflare → My Profile → API Tokens com as permissões "Account · Workers Scripts · Edit" e "User · User Details · Read", e me envie o novo token junto com o Account ID.',
+          'O token da Cloudflare foi recusado ou não tem acesso a essa conta. Abra "Configurar Cloudflare" e informe um API Token com a permissão "Account · Workers Scripts · Edit" e o Account ID correto.',
       }, 400);
     }
 
