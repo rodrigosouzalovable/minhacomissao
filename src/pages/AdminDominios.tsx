@@ -151,6 +151,9 @@ export default function AdminDominios() {
   const [form, setForm] = useState<FormState>(FORM_INITIAL);
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [dnsChecking, setDnsChecking] = useState<string | null>(null);
+  const [dnsResultados, setDnsResultados] = useState<Record<string, DnsResultado>>({});
+
 
   const { data: dominios = [], isLoading, isError } = useQuery({
     queryKey: ['admin-portal-dominios'],
