@@ -355,7 +355,7 @@ export default function NovoAcordoAdmin() {
         .select()
         .single();
 
-      if (acordoError) throw acordoError;
+      if (acordoError) throw new Error(acordoError.message || 'Falha ao criar acordo');
 
       // Gerar parcelas: comissão em todas as parcelas (NOVO MUNDO e UME)
       const parcelas = gerarParcelasMundoDaModa(
@@ -385,7 +385,7 @@ export default function NovoAcordoAdmin() {
         .from('pagamentos')
         .insert(pagamentosData);
 
-      if (parcelasError) throw parcelasError;
+      if (parcelasError) throw new Error(parcelasError.message || 'Falha ao criar parcelas');
 
       // Verificar se todas as parcelas foram marcadas como pagas
       const todasPagas = parcelas.every(p => parcelasPagas[p.numero_parcela]?.pago);

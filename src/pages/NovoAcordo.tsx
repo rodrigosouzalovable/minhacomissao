@@ -458,7 +458,7 @@ export default function NovoAcordo() {
         empresa: empresa,
         instancia_negociacao_id: instanciaNegociacaoId || null
       } as any).select().single();
-      if (acordoError) throw acordoError;
+      if (acordoError) throw new Error(acordoError.message || 'Falha ao criar acordo');
 
       // Gerar parcelas: comissão em todas as parcelas (NOVO MUNDO e UME)
       const parcelas = calculo.usarValoresEspecificos
@@ -474,7 +474,7 @@ export default function NovoAcordo() {
         comissao_parcela: p.comissao_parcela,
         status: p.status
       })));
-      if (parcelasError) throw parcelasError;
+      if (parcelasError) throw new Error(parcelasError.message || 'Falha ao criar parcelas');
       const operadorEscolhido = operadores.find(o => o.id === selectedUserId);
       const operadorLabel = isAdmin && selectedUserId && selectedUserId !== user.id && operadorEscolhido
         ? ` — vinculado a ${operadorEscolhido.nome || operadorEscolhido.email || 'operador'}`
