@@ -147,6 +147,7 @@ export default function AdminDominios() {
       telefone_display: dominio.telefone_display,
       email: dominio.email,
       noindex: dominio.noindex,
+      txt_verify: dominio.txt_verify ?? '',
     });
     setDialogOpen(true);
   }
