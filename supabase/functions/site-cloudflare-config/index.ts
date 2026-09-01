@@ -3,24 +3,32 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CF_API = 'https://api.cloudflare.com/client/v4';
 
-async function validar(token: string, accountId: string) {
-  const verify = await fetch(`${CF_API}/user/tokens/verify`, {
-    headers: { Authorization: `Bearer ${token}` },
-  }).catch(() => null);
-  const vj = await verify?.json().catch(() => ({}));
-  if (!verify?.ok || vj?.success !== true) {
-    return {
-      ok: false,
-      erro:
-        'Token da Cloudflare inválido ou sem permissão. Crie em Cloudflare → My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" (permissões: Account · Workers Scripts · Edit e User · User Details · Read).',
-    };
+async function verificarToken(token: string, accountId: string) {
+  // Tokens de conta (cfat_...) só validam em /accounts/{id}/tokens/verify;
+  // tokens de usuário validam em /user/tokens/verify.
+  for (const path of [`/accounts/${accountId}/tokens/verify`, '/user/tokens/verify']) {
+    const r = await fetch(`${CF_API}${path}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+    const j = await r?.json().catch(() => ({}));
+    if (r?.ok && j?.success === true) return true;
   }
+  return false;
+}
 
+async function validar(token: string, accountId: string) {
   const acc = await fetch(`${CF_API}/accounts/${accountId}`, {
     headers: { Authorization: `Bearer ${token}` },
   }).catch(() => null);
   const aj = await acc?.json().catch(() => ({}));
-  if (!acc?.ok || aj?.success !== true) {
+  const contaOk = !!acc?.ok && aj?.success === true;
+
+  if (!contaOk && !(await verificarToken(token, accountId))) {
+    return {
+      ok: false,
+      erro:
+        'Token da Cloudflare inválido ou sem permissão. Crie em Cloudflare → My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" (permissões: Account · Workers Scripts · Edit).',
+    };
+  }
+  if (!contaOk) {
     return { ok: false, erro: 'Account ID não encontrado ou o token não tem acesso a essa conta.' };
   }
 
