@@ -161,8 +161,10 @@ export default function AdminDominios() {
       telefone: dominio.telefone,
       telefone_display: dominio.telefone_display,
       email: dominio.email,
-      noindex: dominio.noindex,
-      txt_verify: dominio.txt_verify ?? '',
+       noindex: dominio.noindex,
+       txt_verify: dominio.txt_verify ?? '',
+       meta_verification: dominio.meta_verification ?? '',
+       meta_txt_verify: dominio.meta_txt_verify ?? '',
     });
     setDialogOpen(true);
   }
@@ -197,9 +199,11 @@ export default function AdminDominios() {
       telefone,
       telefone_display: form.telefone_display.trim(),
       email,
-      noindex: form.noindex,
-      txt_verify: form.txt_verify.trim() || null,
-      ...(editing ? {} : { criado_por: user?.id ?? null }),
+       noindex: form.noindex,
+       txt_verify: form.txt_verify.trim() || null,
+       meta_verification: extrairCodigoMeta(form.meta_verification) || null,
+       meta_txt_verify: form.meta_txt_verify.trim() || null,
+       ...(editing ? {} : { criado_por: user?.id ?? null }),
     };
 
     const result = editing
@@ -357,19 +361,32 @@ export default function AdminDominios() {
                   value={`_lovable.${prefixoDeHost(selected.hostname)}`}
                   description={`No registro.br, digite exatamente isso no campo Nome — ele completa sozinho com .${DOMINIO_BASE}.`}
                 />
-                <div className="md:col-span-2">
-                  {selected.txt_verify ? (
-                    <CopyField label="Registro TXT — valor" value={selected.txt_verify} description="Cole este conteúdo no campo de valor/dados do registro TXT." />
-                  ) : (
-                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                      <p className="font-medium text-foreground">Registro TXT — valor não cadastrado</p>
-                      <p className="mt-1">
-                        Copie o valor <code>lovable_verify=...</code> exibido no fluxo Connect Domain da Lovable e salve-o em
-                        {' '}<strong className="text-foreground">Editar subdomínio</strong>.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                 <div className="md:col-span-2">
+                   {selected.txt_verify ? (
+                     <CopyField label="Registro TXT — valor" value={selected.txt_verify} description="Cole este conteúdo no campo de valor/dados do registro TXT." />
+                   ) : (
+                     <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                       <p className="font-medium text-foreground">Registro TXT — valor não cadastrado</p>
+                       <p className="mt-1">
+                         Copie o valor <code>lovable_verify=...</code> exibido no fluxo Connect Domain da Lovable e salve-o em
+                         {' '}<strong className="text-foreground">Editar subdomínio</strong>.
+                       </p>
+                     </div>
+                   )}
+                 </div>
+                 <div className="md:col-span-2 space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                   <div>
+                     <p className="font-medium">Verificação de domínio na Meta</p>
+                     <p className="mt-1 text-sm text-muted-foreground">Use a tag salva no site ou, preferencialmente, o registro TXT abaixo para verificar este subdomínio no Business Manager.</p>
+                   </div>
+                   {selected.meta_verification ? <CopyField label="Meta tag — código" value={selected.meta_verification} description="O sistema insere este código no portal deste subdomínio." /> : <p className="text-sm text-muted-foreground">Nenhum código de meta tag cadastrado.</p>}
+                   {selected.meta_txt_verify ? <CopyField label="TXT Meta — valor" value={selected.meta_txt_verify} description="Cole este valor no campo de dados do TXT da Meta." /> : <p className="text-sm text-muted-foreground">Para vários subdomínios, prefira a verificação TXT da Meta. Cadastre o valor em Editar subdomínio.</p>}
+                   <CopyField label="TXT Meta — nome" value={prefixoDeHost(selected.hostname)} description="No registro.br, use este nome e o registro.br completará o domínio." />
+                   <div className="flex flex-wrap gap-2">
+                     <Button type="button" variant="outline" onClick={() => window.open('https://business.facebook.com/settings/domains', '_blank', 'noopener,noreferrer')}><ExternalLink className="mr-2 h-4 w-4" />Abrir verificação na Meta</Button>
+                     <Button type="button" variant="ghost" onClick={() => openEdit(selected)}><Pencil className="mr-2 h-4 w-4" />Editar dados</Button>
+                   </div>
+                 </div>
               </div>
 
               <div className="rounded-lg border bg-muted/30 p-4 text-sm">
@@ -425,11 +442,18 @@ export default function AdminDominios() {
               <div className="space-y-2"><Label htmlFor="telefone_display">Telefone para exibição</Label><Input id="telefone_display" value={form.telefone_display} onChange={(event) => updateForm('telefone_display', event.target.value)} placeholder="(62) 98147-4256" required /></div>
             </div>
             <div className="space-y-2"><Label htmlFor="email">E-mail</Label><Input id="email" type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} placeholder="contato@exemplo.com.br" required /></div>
-            <div className="space-y-2">
-              <Label htmlFor="txt_verify">Valor do registro TXT (verificação Lovable)</Label>
-              <Input id="txt_verify" value={form.txt_verify} onChange={(event) => updateForm('txt_verify', event.target.value)} placeholder="lovable_verify=..." />
-              <p className="text-xs text-muted-foreground">Copie do fluxo Connect Domain da Lovable. Fica disponível para copiar nas instruções.</p>
-            </div>
+             <div className="space-y-2"><Label htmlFor="txt_verify">Valor do registro TXT (verificação Lovable)</Label>
+               <Input id="txt_verify" value={form.txt_verify} onChange={(event) => updateForm('txt_verify', event.target.value)} placeholder="lovable_verify=..." />
+               <p className="text-xs text-muted-foreground">Copie do fluxo Connect Domain da Lovable. Fica disponível para copiar nas instruções.</p>
+             </div>
+             <div className="space-y-2"><Label htmlFor="meta_verification">Código da meta tag de verificação Meta</Label>
+               <Input id="meta_verification" value={form.meta_verification} onChange={(event) => updateForm('meta_verification', event.target.value)} placeholder="Cole a tag completa ou apenas o código" />
+               <p className="text-xs text-muted-foreground">Aceita a tag completa ou somente o código após <code>content=</code>. O sistema salva apenas o código.</p>
+             </div>
+             <div className="space-y-2"><Label htmlFor="meta_txt_verify">Valor do TXT de verificação Meta</Label>
+               <Input id="meta_txt_verify" value={form.meta_txt_verify} onChange={(event) => updateForm('meta_txt_verify', event.target.value)} placeholder="facebook-domain-verification=..." />
+               <p className="text-xs text-muted-foreground">Opção recomendada para subdomínios: copie o valor exibido pela Meta e cadastre-o no registro.br.</p>
+             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div><p className="text-sm font-medium">Não aparecer em buscas</p><p className="text-xs text-muted-foreground">Envia noindex, nofollow neste subdomínio.</p></div>
               <Switch checked={form.noindex} onCheckedChange={(checked) => updateForm('noindex', checked)} aria-label="Não aparecer em buscas" />
