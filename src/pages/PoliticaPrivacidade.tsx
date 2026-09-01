@@ -1,13 +1,18 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Phone, MessageCircle, MapPin, Shield, Mail } from 'lucide-react';
+import { useContatoPortal } from '@/hooks/useContatoPortal';
 import logoGrupoAltum from '@/assets/logo-grupo-altum.png';
 import logoSouzaRibeiro from '@/assets/logo-souza-ribeiro.png';
 
-const PHONE = '5562982183144';
-const PHONE_DISPLAY = '(62) 98218-3144';
+
 const EMPRESA = 'SOUZA E RIBEIRO SOCIEDADE DE ADVOGADOS';
 
 export default function PoliticaPrivacidade() {
+  const contato = useContatoPortal();
+  const PHONE = contato.phone;
+  const PHONE_DISPLAY = contato.phoneDisplay;
+  const EMAIL = contato.email;
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#f7f8fa' }}>
       {/* Header */}
@@ -204,9 +209,9 @@ export default function PoliticaPrivacidade() {
                   <Phone className="h-4 w-4" />
                   {PHONE_DISPLAY}
                 </a>
-                <a href="mailto:meusacordos@souzaeribeiro.com.br" className="flex items-center gap-2 mt-2 text-sm hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                <a href={`mailto:${EMAIL}`} className="flex items-center gap-2 mt-2 text-sm hover:opacity-80 transition-opacity" style={{ color: 'rgba(255,255,255,0.6)' }}>
                   <Mail className="h-4 w-4" />
-                  meusacordos@souzaeribeiro.com.br
+                  {EMAIL}
                 </a>
                 <div className="flex items-center gap-2 mt-2 justify-center sm:justify-start">
                   <MapPin className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
