@@ -337,7 +337,24 @@ export default function AdminDominios() {
                 <CopyField label="Registro A — nome" value={prefixoDeHost(selected.hostname)} description="No registro.br, use este valor no campo Nome/Host." />
                 <CopyField label="Registro A — valor" value={DNS_A_VALUE} description="Endereço de destino da hospedagem Lovable." />
                 <CopyField label="Domínio completo para conectar" value={selected.hostname} description="Digite exatamente este host em Configurações do Projeto > Domínios > Connect Domain." />
-                <CopyField label="Registro TXT — nome" value="_lovable" description="O valor de verificação é específico e aparece no fluxo Connect Domain da Lovable." />
+                <CopyField
+                  label="Registro TXT — nome"
+                  value={`_lovable.${prefixoDeHost(selected.hostname)}`}
+                  description={`No registro.br, digite exatamente isso no campo Nome — ele completa sozinho com .${DOMINIO_BASE}.`}
+                />
+                <div className="md:col-span-2">
+                  {selected.txt_verify ? (
+                    <CopyField label="Registro TXT — valor" value={selected.txt_verify} description="Cole este conteúdo no campo de valor/dados do registro TXT." />
+                  ) : (
+                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground">Registro TXT — valor não cadastrado</p>
+                      <p className="mt-1">
+                        Copie o valor <code>lovable_verify=...</code> exibido no fluxo Connect Domain da Lovable e salve-o em
+                        {' '}<strong className="text-foreground">Editar subdomínio</strong>.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="rounded-lg border bg-muted/30 p-4 text-sm">
@@ -345,7 +362,10 @@ export default function AdminDominios() {
                 <ol className="list-decimal space-y-1.5 pl-5 text-muted-foreground">
                   <li>No registro.br, crie o registro A para <strong className="text-foreground">{prefixoDeHost(selected.hostname)}</strong> apontando para <strong className="text-foreground">{DNS_A_VALUE}</strong>.</li>
                   <li>Na Lovable, abra Configurações do Projeto &gt; Domínios &gt; Connect Domain e informe <strong className="text-foreground">{selected.hostname}</strong>.</li>
-                  <li>Copie o TXT de verificação exibido pela Lovable e crie-o no registro.br com nome <strong className="text-foreground">_lovable</strong>.</li>
+                  <li>
+                    No registro.br, crie o registro TXT com nome <strong className="text-foreground">_lovable.{prefixoDeHost(selected.hostname)}</strong>
+                    {selected.txt_verify ? <> e valor <strong className="text-foreground break-all">{selected.txt_verify}</strong>.</> : ' e o valor de verificação exibido pela Lovable.'}
+                  </li>
                   <li>Aguarde a propagação DNS e a validação automática do certificado.</li>
                 </ol>
               </div>
