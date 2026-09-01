@@ -49,6 +49,19 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Cloudflare não configurado: faltam CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID.' }, 400);
     }
 
+    // Valida o token da Cloudflare antes de qualquer coisa (erro mais comum: token inválido/sem permissão)
+    const verify = await fetch(`${CF_API}/user/tokens/verify`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => null);
+    const verifyJson = await verify?.json().catch(() => ({}));
+    if (!verify?.ok || verifyJson?.success !== true) {
+      return json({
+        success: false,
+        error:
+          'O token da Cloudflare foi recusado (Authentication error). Crie um API Token em Cloudflare → My Profile → API Tokens com as permissões "Account · Workers Scripts · Edit" e "User · User Details · Read", e me envie o novo token junto com o Account ID.',
+      }, 400);
+    }
+
     const authHeader = req.headers.get('Authorization') ?? '';
     if (!authHeader) return json({ success: false, error: 'Não autenticado' }, 401);
 
