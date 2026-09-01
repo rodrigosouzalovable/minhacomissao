@@ -1572,25 +1572,69 @@ serve(async (req) => {
         const webhookLast8 = inboxTelefone.replace(/\D/g, '').slice(-8);
         console.log(`[AQUECIMENTO] Verificando se ${inboxTelefone} (last8: ${webhookLast8}) é instância interna...`);
 
-        // Fetch all active instances and match by extracting phone from nome
+        // Identifica o chip que enviou a mensagem. O fluxo legado usa
+        // user_whatsapp_instances; a recuperação Meta usa a instância oficial e
+        // o espelho UAZAPI em meta_whatsapp_instances.
         const { data: allInstances } = await supabase
           .from('user_whatsapp_instances')
           .select('id, nome')
           .eq('ativo', true);
+        const { data: metaInstances } = await supabase
+          .from('meta_whatsapp_instances')
+          .select('id, nome, display_phone, provider, uazapi_instance_id')
+          .eq('ativo', true)
+          .in('provider', ['meta', 'uazapi']);
+
+        const porSufixo = (inst: any) => {
+          const telefones = [inst?.display_phone, inst?.nome]
+            .map((v) => String(v || '').replace(/\D/g, ''))
+            .filter((v) => v.length >= 8);
+          return telefones.some((v) => v.slice(-8) === webhookLast8);
+        };
 
         let senderInstance: { id: string } | null = null;
-        if (allInstances) {
-          for (const inst of allInstances) {
-            const phoneFromName = (inst.nome || '').match(/^(\d+)/)?.[1] || '';
-            const instLast8 = phoneFromName.slice(-8);
-            if (instLast8.length >= 8 && instLast8 === webhookLast8) {
-              senderInstance = { id: inst.id };
-              console.log(`[AQUECIMENTO] ✅ Match encontrado: ${inst.nome} (phone: ${phoneFromName}, last8: ${instLast8})`);
-              break;
-            }
+        for (const inst of allInstances || []) {
+          const phoneFromName = String(inst.nome || '').replace(/\D/g, '');
+          if (phoneFromName.length >= 8 && phoneFromName.slice(-8) === webhookLast8) {
+            senderInstance = { id: inst.id };
+            console.log(`[AQUECIMENTO] ✅ Match legado: ${inst.nome} (last8: ${webhookLast8})`);
+            break;
           }
-          if (!senderInstance) {
-            console.log(`[AQUECIMENTO] Nenhuma instância interna encontrou match para ${inboxTelefone}`);
+        }
+
+        const senderMeta = (metaInstances || []).find(
+          (inst: any) => inst.provider === 'meta' && porSufixo(inst),
+        );
+        const destinoMeta = (metaInstances || []).find(
+          (inst: any) => inst.provider === 'uazapi' && inst.uazapi_instance_id === instanciaId,
+        );
+
+        if (!senderInstance && !senderMeta) {
+          console.log(`[AQUECIMENTO] Nenhuma instância interna encontrou match para ${inboxTelefone}`);
+        }
+
+        // Recuperação Meta → UAZAPI: a entrada chega pelo webhook da instância
+        // UAZAPI (user_whatsapp_instances), mas o log guarda os IDs dos espelhos
+        // em meta_whatsapp_instances. Marca a primeira tentativa pendente do par.
+        if (senderMeta && destinoMeta) {
+          const { data: recoveryLog } = await supabase
+            .from('meta_recuperacao_log')
+            .select('id, enviado_em')
+            .eq('instancia_id', senderMeta.id)
+            .eq('destino_instancia_id', destinoMeta.id)
+            .eq('status', 'enviado')
+            .is('resposta_em', null)
+            .gte('enviado_em', new Date(Date.now() - 24 * 3600000).toISOString())
+            .order('enviado_em', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (recoveryLog?.id) {
+            await supabase
+              .from('meta_recuperacao_log')
+              .update({ resposta_em: new Date().toISOString() })
+              .eq('id', recoveryLog.id);
+            console.log(`[AQUECIMENTO] ✅ Resposta vinculada à recuperação Meta: ${senderMeta.nome || senderMeta.display_phone} → ${destinoMeta.nome || destinoMeta.display_phone}`);
           }
         }
 
