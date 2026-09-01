@@ -183,6 +183,7 @@ export default function AdminDominios() {
       telefone_display: form.telefone_display.trim(),
       email,
       noindex: form.noindex,
+      txt_verify: form.txt_verify.trim() || null,
       ...(editing ? {} : { criado_por: user?.id ?? null }),
     };
 
