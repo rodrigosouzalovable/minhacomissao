@@ -120,6 +120,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/certificado-digital', label: 'Certificado Digital', icon: FileKey2, adminOnly: true },
   { href: '/admin/ponto', label: 'Controle de Ponto', icon: Clock, adminOnly: true },
   { href: '/admin/blacklist', label: 'Blacklist', icon: Ban, adminOnly: true },
+  { href: '/admin/dominios', label: 'Domínios', icon: Globe, adminOnly: true },
 ];
 
 
