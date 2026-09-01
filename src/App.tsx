@@ -294,6 +294,7 @@ const App = () => (
             <Route path="/admin/ponto" element={<AdminRoute><PontoAdmin /></AdminRoute>} />
              <Route path="/admin/blacklist" element={<ProtectedRoute><Blacklist /></ProtectedRoute>} />
               <Route path="/admin/dominios" element={<AdminRoute><AdminDominios /></AdminRoute>} />
+              <Route path="/admin/calculadora-ume" element={<AdminRoute><CalculadoraUme /></AdminRoute>} />
               <Route path="/admin/meus-sites" element={<AdminRoute><MeusSites /></AdminRoute>} />
 
             <Route path="*" element={<NotFound />} />
