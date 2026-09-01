@@ -6815,6 +6815,84 @@ export type Database = {
         }
         Relationships: []
       }
+      sites_gerados: {
+        Row: {
+          abertura: string | null
+          atualizado_em: string
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          cnae: string | null
+          cnpj: string
+          criado_em: string
+          criado_por: string
+          email: string | null
+          endereco: string | null
+          foto_url: string | null
+          id: string
+          meta_verification: string | null
+          nome_site: string | null
+          publicado_em: string | null
+          razao_social: string
+          sobre: string | null
+          status: string
+          telefone: string | null
+          uf: string | null
+          url: string | null
+          worker_name: string | null
+        }
+        Insert: {
+          abertura?: string | null
+          atualizado_em?: string
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnae?: string | null
+          cnpj: string
+          criado_em?: string
+          criado_por?: string
+          email?: string | null
+          endereco?: string | null
+          foto_url?: string | null
+          id?: string
+          meta_verification?: string | null
+          nome_site?: string | null
+          publicado_em?: string | null
+          razao_social: string
+          sobre?: string | null
+          status?: string
+          telefone?: string | null
+          uf?: string | null
+          url?: string | null
+          worker_name?: string | null
+        }
+        Update: {
+          abertura?: string | null
+          atualizado_em?: string
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnae?: string | null
+          cnpj?: string
+          criado_em?: string
+          criado_por?: string
+          email?: string | null
+          endereco?: string | null
+          foto_url?: string | null
+          id?: string
+          meta_verification?: string | null
+          nome_site?: string | null
+          publicado_em?: string | null
+          razao_social?: string
+          sobre?: string | null
+          status?: string
+          telefone?: string | null
+          uf?: string | null
+          url?: string | null
+          worker_name?: string | null
+        }
+        Relationships: []
+      }
       solicitacoes_planilha: {
         Row: {
           atualizado_em: string
@@ -7236,6 +7314,7 @@ export type Database = {
           criado_em: string
           id: string
           inbox_compartilhado: boolean
+          meus_sites: boolean
           parceiro_meta: boolean
           permite_cpf_duplicado: boolean
           pode_excluir_acordos: boolean
@@ -7256,6 +7335,7 @@ export type Database = {
           criado_em?: string
           id?: string
           inbox_compartilhado?: boolean
+          meus_sites?: boolean
           parceiro_meta?: boolean
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean
@@ -7276,6 +7356,7 @@ export type Database = {
           criado_em?: string
           id?: string
           inbox_compartilhado?: boolean
+          meus_sites?: boolean
           parceiro_meta?: boolean
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean
