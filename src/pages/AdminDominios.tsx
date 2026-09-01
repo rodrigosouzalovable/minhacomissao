@@ -396,10 +396,52 @@ export default function AdminDominios() {
                   <CardTitle>Como registrar {selected.hostname}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">Copie os dados abaixo e conclua a conexão nos dois painéis.</p>
                 </div>
-                <Badge variant={selected.ativo ? 'outline' : 'secondary'}>{selected.ativo ? 'Portal ativo' : 'Portal desativado'}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={selected.ativo ? 'outline' : 'secondary'}>{selected.ativo ? 'Portal ativo' : 'Portal desativado'}</Badge>
+                  <Button type="button" variant="outline" size="sm" onClick={() => verificarDns(selected)} disabled={dnsChecking === selected.id}>
+                    {dnsChecking === selected.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    Verificar DNS
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
+              {dnsResultados[selected.id] && (
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">Status dos registros DNS</p>
+                    <span className="text-xs text-muted-foreground">
+                      Verificado às {new Date(dnsResultados[selected.id].verificadoEm).toLocaleTimeString('pt-BR')}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {dnsResultados[selected.id].registros.map((registro) => (
+                      <div key={`${registro.tipo}-${registro.nome}-${registro.esperado}`} className="rounded-md border bg-muted/30 p-3 text-sm">
+                        <div className="flex items-center gap-2">
+                          {registro.ok ? <Check className="h-4 w-4 text-primary" /> : <X className="h-4 w-4 text-destructive" />}
+                          <span className="font-medium">Registro {registro.tipo}</span>
+                          <span className="text-muted-foreground break-all">{registro.nome}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground break-all">Esperado: {registro.esperado}</p>
+                        <p className="text-xs text-muted-foreground break-all">
+                          Encontrado: {registro.encontrado.length ? registro.encontrado.join(' · ') : 'nenhum valor publicado'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  {dnsResultados[selected.id].todosOk ? (
+                    <p className="text-sm text-primary">
+                      Registros propagados. Conclua em Configurações do Projeto &gt; Domínios (Complete setup / Check status). Se aparecer
+                      &quot;Domain Service Error&quot;, recarregue a página antes de clicar.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-destructive">
+                      Algum registro ainda não propagou ou está com valor diferente. Corrija no registro.br e verifique novamente — a propagação pode levar algumas horas.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <CopyField label="Registro A — nome" value={prefixoDeHost(selected.hostname)} description="No registro.br, use este valor no campo Nome/Host." />
                 <CopyField label="Registro A — valor" value={DNS_A_VALUE} description="Endereço de destino da hospedagem Lovable." />
