@@ -410,6 +410,11 @@ export default function AdminDominios() {
               <div className="space-y-2"><Label htmlFor="telefone_display">Telefone para exibição</Label><Input id="telefone_display" value={form.telefone_display} onChange={(event) => updateForm('telefone_display', event.target.value)} placeholder="(62) 98147-4256" required /></div>
             </div>
             <div className="space-y-2"><Label htmlFor="email">E-mail</Label><Input id="email" type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} placeholder="contato@exemplo.com.br" required /></div>
+            <div className="space-y-2">
+              <Label htmlFor="txt_verify">Valor do registro TXT (verificação Lovable)</Label>
+              <Input id="txt_verify" value={form.txt_verify} onChange={(event) => updateForm('txt_verify', event.target.value)} placeholder="lovable_verify=..." />
+              <p className="text-xs text-muted-foreground">Copie do fluxo Connect Domain da Lovable. Fica disponível para copiar nas instruções.</p>
+            </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div><p className="text-sm font-medium">Não aparecer em buscas</p><p className="text-xs text-muted-foreground">Envia noindex, nofollow neste subdomínio.</p></div>
               <Switch checked={form.noindex} onCheckedChange={(checked) => updateForm('noindex', checked)} aria-label="Não aparecer em buscas" />
