@@ -6347,6 +6347,8 @@ export type Database = {
           email: string
           hostname: string
           id: string
+          meta_txt_verify: string | null
+          meta_verification: string | null
           noindex: boolean
           responsavel_nome: string | null
           telefone: string
@@ -6361,6 +6363,8 @@ export type Database = {
           email: string
           hostname: string
           id?: string
+          meta_txt_verify?: string | null
+          meta_verification?: string | null
           noindex?: boolean
           responsavel_nome?: string | null
           telefone: string
@@ -6375,6 +6379,8 @@ export type Database = {
           email?: string
           hostname?: string
           id?: string
+          meta_txt_verify?: string | null
+          meta_verification?: string | null
           noindex?: boolean
           responsavel_nome?: string | null
           telefone?: string

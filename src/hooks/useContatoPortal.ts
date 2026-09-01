@@ -9,6 +9,7 @@ import {
 } from '@/lib/contatoPorDominio';
 
 const META_ID = 'robots-dominio';
+const META_FB_ID = 'facebook-domain-verification-dominio';
 
 /**
  * Retorna o contato do portal conforme o domínio acessado (tabela portal_dominios,
@@ -25,7 +26,7 @@ export function useContatoPortal(): ContatoPortal {
       const alvo = host.replace(/^www\./, '');
       const { data, error } = await supabase
         .from('portal_dominios')
-        .select('hostname, telefone, telefone_display, email, noindex')
+        .select('hostname, telefone, telefone_display, email, noindex, meta_verification')
         .eq('hostname', alvo)
         .eq('ativo', true)
         .maybeSingle();
@@ -53,6 +54,23 @@ export function useContatoPortal(): ContatoPortal {
       tag?.remove();
     };
   }, [contato.noindex]);
+
+  // Meta tag de verificação de domínio da Meta (Business Manager) por subdomínio.
+  const metaVerification = data?.meta_verification ?? null;
+  useEffect(() => {
+    if (!metaVerification) return;
+    let tag = document.getElementById(META_FB_ID) as HTMLMetaElement | null;
+    if (!tag) {
+      tag = document.createElement('meta');
+      tag.id = META_FB_ID;
+      tag.name = 'facebook-domain-verification';
+      document.head.appendChild(tag);
+    }
+    tag.content = metaVerification;
+    return () => {
+      tag?.remove();
+    };
+  }, [metaVerification]);
 
   return contato;
 }
