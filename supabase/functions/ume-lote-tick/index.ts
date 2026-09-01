@@ -1,12 +1,8 @@
 // Processa um lote de consultas UME em blocos e se auto-reencadeia até terminar.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { consultarUme } from '../_shared/ume-desconto.ts';
 import { notificarAdmin } from '../_shared/notificar-admin.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
