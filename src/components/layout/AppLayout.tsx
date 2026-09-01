@@ -37,6 +37,7 @@ import {
   Clock,
   Ban,
   FileKey2
+  Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
