@@ -1,0 +1,1 @@
+ALTER TABLE public.portal_dominios ADD COLUMN IF NOT EXISTS meta_verification text, ADD COLUMN IF NOT EXISTS meta_txt_verify text;
