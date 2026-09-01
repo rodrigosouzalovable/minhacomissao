@@ -7114,6 +7114,116 @@ export type Database = {
         }
         Relationships: []
       }
+      ume_lote_itens: {
+        Row: {
+          cpf: string
+          created_at: string
+          dias_atraso: number | null
+          erro: string | null
+          fase: string | null
+          id: string
+          limite_total: number | null
+          lote_id: string
+          nome: string | null
+          status: string
+          telefone: string | null
+          tentativas: number
+          updated_at: string
+          valor_com_juros: number | null
+          valor_sem_juros: number | null
+        }
+        Insert: {
+          cpf: string
+          created_at?: string
+          dias_atraso?: number | null
+          erro?: string | null
+          fase?: string | null
+          id?: string
+          limite_total?: number | null
+          lote_id: string
+          nome?: string | null
+          status?: string
+          telefone?: string | null
+          tentativas?: number
+          updated_at?: string
+          valor_com_juros?: number | null
+          valor_sem_juros?: number | null
+        }
+        Update: {
+          cpf?: string
+          created_at?: string
+          dias_atraso?: number | null
+          erro?: string | null
+          fase?: string | null
+          id?: string
+          limite_total?: number | null
+          lote_id?: string
+          nome?: string | null
+          status?: string
+          telefone?: string | null
+          tentativas?: number
+          updated_at?: string
+          valor_com_juros?: number | null
+          valor_sem_juros?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ume_lote_itens_lote_id_fkey"
+            columns: ["lote_id"]
+            isOneToOne: false
+            referencedRelation: "ume_lotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ume_lotes: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          encontrados: number
+          erro: string | null
+          erros: number
+          forcar: boolean
+          id: string
+          nao_localizados: number
+          nome_arquivo: string
+          processados: number
+          status: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          encontrados?: number
+          erro?: string | null
+          erros?: number
+          forcar?: boolean
+          id?: string
+          nao_localizados?: number
+          nome_arquivo?: string
+          processados?: number
+          status?: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          encontrados?: number
+          erro?: string | null
+          erros?: number
+          forcar?: boolean
+          id?: string
+          nao_localizados?: number
+          nome_arquivo?: string
+          processados?: number
+          status?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_permissions: {
         Row: {
           abas_permitidas: string[]
