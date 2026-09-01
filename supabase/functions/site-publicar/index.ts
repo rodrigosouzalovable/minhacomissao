@@ -52,9 +52,12 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization') ?? '';
     if (!authHeader) return json({ success: false, error: 'Não autenticado' }, 401);
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!supabaseUrl || !supabaseAnonKey) return json({ success: false, error: 'Configuração do backend incompleta.' }, 500);
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
+      supabaseUrl,
+      supabaseAnonKey,
       { global: { headers: { Authorization: authHeader } } },
     );
     const { data: userData } = await supabase.auth.getUser();
@@ -137,7 +140,7 @@ export default {
     }
 
     const sub = await fetch(`${CF_API}/accounts/${accountId}/workers/scripts/${workerName}/subdomain`, {
-      method: 'POST',
+      method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: true, previews_enabled: false }),
     });

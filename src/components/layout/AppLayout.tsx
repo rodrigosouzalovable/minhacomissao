@@ -123,6 +123,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/ponto', label: 'Controle de Ponto', icon: Clock, adminOnly: true },
   { href: '/admin/blacklist', label: 'Blacklist', icon: Ban, adminOnly: true },
   { href: '/admin/dominios', label: 'Domínios', icon: Globe, adminOnly: true },
+  { href: '/admin/meus-sites', label: 'Meus Sites', icon: Globe },
 ];
 
 

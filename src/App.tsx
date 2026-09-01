@@ -75,6 +75,7 @@ const PontoAdmin = lazy(() => retryImport(() => import("./pages/PontoAdmin")));
 const Blacklist = lazy(() => retryImport(() => import("./pages/Blacklist")));
 const AdminDominios = lazy(() => retryImport(() => import("./pages/AdminDominios")));
 const CalculadoraUme = lazy(() => retryImport(() => import("./pages/CalculadoraUme")));
+const MeusSites = lazy(() => retryImport(() => import("./pages/MeusSites")));
 
 const TenantLayout = lazy(() => retryImport(() => import("./pages/tenant/TenantLayout")));
 
@@ -294,6 +295,7 @@ const App = () => (
              <Route path="/admin/blacklist" element={<ProtectedRoute><Blacklist /></ProtectedRoute>} />
               <Route path="/admin/dominios" element={<AdminRoute><AdminDominios /></AdminRoute>} />
               <Route path="/admin/calculadora-ume" element={<AdminRoute><CalculadoraUme /></AdminRoute>} />
+              <Route path="/admin/meus-sites" element={<PermissionRoute><MeusSites /></PermissionRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
