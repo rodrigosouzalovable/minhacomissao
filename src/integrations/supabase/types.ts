@@ -6351,6 +6351,7 @@ export type Database = {
           responsavel_nome: string | null
           telefone: string
           telefone_display: string
+          txt_verify: string | null
           updated_at: string
         }
         Insert: {
@@ -6364,6 +6365,7 @@ export type Database = {
           responsavel_nome?: string | null
           telefone: string
           telefone_display: string
+          txt_verify?: string | null
           updated_at?: string
         }
         Update: {
@@ -6377,6 +6379,7 @@ export type Database = {
           responsavel_nome?: string | null
           telefone?: string
           telefone_display?: string
+          txt_verify?: string | null
           updated_at?: string
         }
         Relationships: []
