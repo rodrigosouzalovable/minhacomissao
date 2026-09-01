@@ -26,7 +26,7 @@ export function useContatoPortal(): ContatoPortal {
       const alvo = host.replace(/^www\./, '');
       const { data, error } = await supabase
         .from('portal_dominios')
-        .select('hostname, telefone, telefone_display, email, noindex')
+        .select('hostname, telefone, telefone_display, email, noindex, meta_verification')
         .eq('hostname', alvo)
         .eq('ativo', true)
         .maybeSingle();
