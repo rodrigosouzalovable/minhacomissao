@@ -1129,6 +1129,36 @@ export type Database = {
         }
         Relationships: []
       }
+      cloudflare_config: {
+        Row: {
+          account_id: string | null
+          api_token: string | null
+          atualizado_em: string
+          criado_em: string
+          id: string
+          subdominio: string | null
+          validado_em: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          api_token?: string | null
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          subdominio?: string | null
+          validado_em?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          api_token?: string | null
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          subdominio?: string | null
+          validado_em?: string | null
+        }
+        Relationships: []
+      }
       cobmais_conhecimento: {
         Row: {
           acao: string

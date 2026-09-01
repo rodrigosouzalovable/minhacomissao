@@ -14,8 +14,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
-  Loader2, Plus, Search, ExternalLink, Pencil, Trash2, Globe, ShieldCheck, Copy, Building2,
+  Loader2, Plus, Search, ExternalLink, Pencil, Trash2, Globe, ShieldCheck, Copy, Building2, Settings,
 } from 'lucide-react';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { CloudflareConfigDialog } from '@/components/sites/CloudflareConfigDialog';
 
 interface SiteRow {
   id: string;
@@ -86,6 +88,7 @@ export default function MeusSites() {
   const [form, setForm] = useState<Form>(vazio);
   const [consultando, setConsultando] = useState(false);
   const [excluir, setExcluir] = useState<SiteRow | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
 
   const { data: sites = [], isLoading } = useQuery({
     queryKey: ['sites-gerados'],
@@ -208,6 +211,7 @@ export default function MeusSites() {
   };
 
   return (
+    <AppLayout>
     <div className="container mx-auto p-4 space-y-4 max-w-6xl">
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -220,10 +224,16 @@ export default function MeusSites() {
               Meta é lida na hora.
             </CardDescription>
           </div>
-          <Button onClick={abrirNovo}>
-            <Plus className="h-4 w-4 mr-2" /> Criar site
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setConfigOpen(true)}>
+              <Settings className="h-4 w-4 mr-2" /> Configurar Cloudflare
+            </Button>
+            <Button onClick={abrirNovo}>
+              <Plus className="h-4 w-4 mr-2" /> Criar site
+            </Button>
+          </div>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -443,6 +453,8 @@ export default function MeusSites() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CloudflareConfigDialog open={configOpen} onOpenChange={setConfigOpen} />
     </div>
+    </AppLayout>
   );
 }
