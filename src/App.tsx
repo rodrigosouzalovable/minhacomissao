@@ -75,6 +75,7 @@ const PontoAdmin = lazy(() => retryImport(() => import("./pages/PontoAdmin")));
 const Blacklist = lazy(() => retryImport(() => import("./pages/Blacklist")));
 const AdminDominios = lazy(() => retryImport(() => import("./pages/AdminDominios")));
 const CalculadoraUme = lazy(() => retryImport(() => import("./pages/CalculadoraUme")));
+const MeusSites = lazy(() => retryImport(() => import("./pages/MeusSites")));
 
 const TenantLayout = lazy(() => retryImport(() => import("./pages/tenant/TenantLayout")));
 
