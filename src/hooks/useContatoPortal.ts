@@ -55,5 +55,22 @@ export function useContatoPortal(): ContatoPortal {
     };
   }, [contato.noindex]);
 
+  // Meta tag de verificação de domínio da Meta (Business Manager) por subdomínio.
+  const metaVerification = data?.meta_verification ?? null;
+  useEffect(() => {
+    if (!metaVerification) return;
+    let tag = document.getElementById(META_FB_ID) as HTMLMetaElement | null;
+    if (!tag) {
+      tag = document.createElement('meta');
+      tag.id = META_FB_ID;
+      tag.name = 'facebook-domain-verification';
+      document.head.appendChild(tag);
+    }
+    tag.content = metaVerification;
+    return () => {
+      tag?.remove();
+    };
+  }, [metaVerification]);
+
   return contato;
 }
