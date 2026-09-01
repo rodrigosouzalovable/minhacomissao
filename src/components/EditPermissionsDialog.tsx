@@ -273,10 +273,12 @@ export function EditPermissionsDialog({
         description: `Permissões de ${userName} atualizadas com sucesso.`,
       });
     },
-    onError: () => {
+    onError: (err: any) => {
       toast({
         title: 'Erro',
-        description: 'Não foi possível salvar as permissões.',
+        description: err?.message
+          ? `Não foi possível salvar as permissões: ${err.message}`
+          : 'Não foi possível salvar as permissões.',
         variant: 'destructive',
       });
     },
