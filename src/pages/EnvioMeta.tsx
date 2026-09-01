@@ -1543,9 +1543,9 @@ export default function EnvioMeta() {
                           <SaudeBadgeStatus status={i.saude_status} />
                           <SaudeBadgeQuality quality={i.saude_quality} />
                           {i.saude_tier && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{i.saude_tier}</Badge>}
-                          {["PENDING_REVIEW", "REJECTED"].includes(String(i.meta_name_status || "").toUpperCase()) && (
+                          {String(i.meta_name_status || "").toUpperCase() === "REJECTED" && (
                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3" /> NÃO RECOMENDADA — nome {String(i.meta_name_status).toUpperCase()}
+                              <AlertTriangle className="h-3 w-3" /> NÃO RECOMENDADA — nome REJECTED
                             </Badge>
                           )}
                           {i.saude_ban_info && (
