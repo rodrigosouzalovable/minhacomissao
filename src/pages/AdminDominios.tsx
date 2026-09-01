@@ -84,6 +84,10 @@ function extrairCodigoMeta(valor: string) {
   return bruto.replace(/^facebook-domain-verification=/i, '').trim();
 }
 
+function formatarMetaTag(codigo: string) {
+  return `<meta name="facebook-domain-verification" content="${codigo}" />`;
+}
+
 function normalizarTelefone(value: string) {
   return value.replace(/\D/g, '');
 }
@@ -379,8 +383,13 @@ export default function AdminDominios() {
                      <p className="font-medium">Verificação de domínio na Meta</p>
                      <p className="mt-1 text-sm text-muted-foreground">Use a tag salva no site ou, preferencialmente, o registro TXT abaixo para verificar este subdomínio no Business Manager.</p>
                    </div>
-                   {selected.meta_verification ? <CopyField label="Meta tag — código" value={selected.meta_verification} description="O sistema insere este código no portal deste subdomínio." /> : <p className="text-sm text-muted-foreground">Nenhum código de meta tag cadastrado.</p>}
-                   {selected.meta_txt_verify ? <CopyField label="TXT Meta — valor" value={selected.meta_txt_verify} description="Cole este valor no campo de dados do TXT da Meta." /> : <p className="text-sm text-muted-foreground">Para vários subdomínios, prefira a verificação TXT da Meta. Cadastre o valor em Editar subdomínio.</p>}
+                    {selected.meta_verification ? (
+                      <>
+                        <CopyField label="Meta tag — código" value={selected.meta_verification} description="O sistema insere este código no portal deste subdomínio." />
+                        <CopyField label="Meta tag — tag completa" value={formatarMetaTag(selected.meta_verification)} description="Copie esta tag completa se precisar colá-la em outra configuração." />
+                      </>
+                    ) : <p className="text-sm text-muted-foreground">Nenhum código de meta tag cadastrado.</p>}
+                    {selected.meta_txt_verify ? <CopyField label="TXT Meta — valor" value={selected.meta_txt_verify} description="Cole este valor no campo de dados do TXT da Meta." /> : <p className="text-sm text-muted-foreground">Para vários subdomínios, prefira a verificação TXT da Meta. Cadastre o valor em Editar subdomínio.</p>}
                    <CopyField label="TXT Meta — nome" value={prefixoDeHost(selected.hostname)} description="No registro.br, use este nome e o registro.br completará o domínio." />
                    <div className="flex flex-wrap gap-2">
                      <Button type="button" variant="outline" onClick={() => window.open('https://business.facebook.com/settings/domains', '_blank', 'noopener,noreferrer')}><ExternalLink className="mr-2 h-4 w-4" />Abrir verificação na Meta</Button>
