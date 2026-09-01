@@ -151,3 +151,9 @@ verify_jwt = false
 
 [functions.objecao-aprender]
 verify_jwt = false
+
+[functions.ume-lote-iniciar]
+verify_jwt = false
+
+[functions.ume-lote-tick]
+verify_jwt = false

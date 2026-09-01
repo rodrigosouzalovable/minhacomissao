@@ -117,6 +117,7 @@ export const navItems: NavItem[] = [
   { href: '/modelo-mensagem', label: 'Modelo Mensagem', icon: MessageSquareText },
   { href: '/admin/cotacoes', label: 'Cotações', icon: Coins, adminOnly: true },
   { href: '/admin/lembrete-meta', label: 'Lembrete Meta', icon: Bell, adminOnly: true },
+  { href: '/admin/calculadora-ume', label: 'Calculadora UME', icon: FileSpreadsheet, adminOnly: true },
   { href: '/admin/google-maps-leads', label: 'Google Maps Leads', icon: MapPin, adminOnly: true },
   { href: '/admin/certificado-digital', label: 'Certificado Digital', icon: FileKey2, adminOnly: true },
   { href: '/admin/ponto', label: 'Controle de Ponto', icon: Clock, adminOnly: true },
