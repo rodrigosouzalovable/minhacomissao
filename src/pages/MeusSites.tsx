@@ -14,8 +14,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
-  Loader2, Plus, Search, ExternalLink, Pencil, Trash2, Globe, ShieldCheck, Copy, Building2,
+  Loader2, Plus, Search, ExternalLink, Pencil, Trash2, Globe, ShieldCheck, Copy, Building2, Settings,
 } from 'lucide-react';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { CloudflareConfigDialog } from '@/components/sites/CloudflareConfigDialog';
 
 interface SiteRow {
   id: string;
@@ -86,6 +88,7 @@ export default function MeusSites() {
   const [form, setForm] = useState<Form>(vazio);
   const [consultando, setConsultando] = useState(false);
   const [excluir, setExcluir] = useState<SiteRow | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
 
   const { data: sites = [], isLoading } = useQuery({
     queryKey: ['sites-gerados'],
@@ -450,6 +453,8 @@ export default function MeusSites() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CloudflareConfigDialog open={configOpen} onOpenChange={setConfigOpen} />
     </div>
+    </AppLayout>
   );
 }
