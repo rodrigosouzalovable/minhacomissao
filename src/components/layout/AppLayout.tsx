@@ -36,7 +36,7 @@ import {
   MapPin,
   Clock,
   Ban,
-  FileKey2
+  FileKey2,
   Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
