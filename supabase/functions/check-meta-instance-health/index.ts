@@ -150,6 +150,8 @@ Deno.serve(async (req) => {
 
         r.restricoes = restricoes;
 
+        // Leitura de qualidade confirmada? (false = token inválido / API falhou)
+        const leituraOk = !r.error && !!r.quality_rating;
         const updatePayload: any = {
           saude_status: r.status,
           saude_quality: r.quality_rating,
@@ -158,12 +160,17 @@ Deno.serve(async (req) => {
           saude_throughput: r.throughput,
           saude_ban_info: r.ban_info,
           saude_restricoes: restricoes,
-          saude_raw: { phone: r.raw, waba: r.waba || null, restricoes },
+          saude_raw: { phone: r.raw, waba: r.waba || null, restricoes, quality_lista: r.quality_lista || null },
           saude_checked_at: new Date().toISOString(),
           throughput_level: r.throughput?.level || null,
           meta_verified_name: r.raw?.verified_name || null,
           meta_name_status: r.name_status || null,
+          qualidade_leitura_ok: leituraOk,
+          qualidade_leitura_erro: leituraOk
+            ? null
+            : (r.error || r.lista_error || 'Meta não retornou a classificação de qualidade'),
         };
+
 
 
         // Se a Graph API retornou tier, marca origem como meta_api
