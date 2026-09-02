@@ -243,7 +243,10 @@ export default function EnvioMeta() {
   };
   const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("1");
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
+  const [uazConectadasIds, setUazConectadasIds] = useState<string[] | null>(null);
+  const [checandoUazConexao, setChecandoUazConexao] = useState<boolean>(false);
   const [validadorId, setValidadorId] = useState<string>("");
+
   const [validando, setValidando] = useState<boolean>(false);
   const [enviandoTeste, setEnviandoTeste] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
