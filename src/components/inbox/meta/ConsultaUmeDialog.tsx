@@ -172,7 +172,22 @@ export function ConsultaUmeDialog({
 
         {erro && <div className="rounded border border-destructive/40 bg-destructive/10 p-3 text-sm">{erro}</div>}
 
+        {consulta?.encontrado && !t && (
+          <div className="space-y-3 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+            <p>
+              A tabela <strong>{tabela === 'sem_juros_10' ? 'Sem Juros + 10%' : tabela === 'especial' ? 'Desconto Especial' : 'Padrão'}</strong> não
+              pode ser calculada para este CPF (a UME não devolveu os valores necessários). Escolha outra tabela abaixo.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setTabela('padrao')}>Tabela Padrão</Button>
+              <Button size="sm" variant="outline" onClick={() => setTabela('especial')}>Desconto Especial</Button>
+              <Button size="sm" variant="outline" disabled={base10 == null} onClick={() => setTabela('sem_juros_10')}>Sem Juros + 10%</Button>
+            </div>
+          </div>
+        )}
+
         {consulta?.encontrado && t && (
+
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 text-sm">
               <div><div className="text-xs text-muted-foreground">Nome</div><div className="font-medium">{consulta.nome || '—'}</div></div>
