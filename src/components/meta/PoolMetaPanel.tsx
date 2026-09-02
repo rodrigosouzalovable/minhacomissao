@@ -387,24 +387,24 @@ export function PoolMetaPanel() {
              <div className="flex items-center gap-2">
                <ShieldCheck className={`h-4 w-4 ${cfg?.liberar_qualidade_global ? "text-destructive" : "text-muted-foreground"}`} />
                <div>
-                <p className="text-sm font-semibold">Liberar números YELLOW e RED (só aquecimento)</p>
-                <p className="text-xs text-muted-foreground">Vale apenas para aquecimento e recuperação de qualidade. Campanhas e disparos em massa continuam exigindo qualidade GREEN confirmada na Meta.</p>
+                <p className="text-sm font-semibold">Liberar números YELLOW, RED e sem qualidade</p>
+                <p className="text-xs text-muted-foreground">Vale para aquecimento, recuperação, campanhas e disparos em massa. Com a chave ligada, qualquer qualidade pode enviar; bloqueios reais da Meta continuam valendo.</p>
 
                </div>
              </div>
              <Switch checked={cfg?.liberar_qualidade_global === true} disabled={savingTurbo} onCheckedChange={salvarLiberarQualidade} />
            </div>
-          {cfg?.liberar_qualidade_global && <p className="text-xs text-destructive">⚠️ Liberação ativa no aquecimento. Campanha nunca usa YELLOW/RED, nem qualidade desconhecida ou sem leitura.</p>}
+          {cfg?.liberar_qualidade_global && <p className="text-xs text-destructive">⚠️ Liberação ativa para campanhas: YELLOW, RED, UNKNOWN e números sem leitura podem disparar. Reduza o volume para evitar restrições ou banimento.</p>}
         </div>
 
         {/* Aviso: números sem leitura de qualidade */}
-        {instancias.some((i) => estadoQualidade(i).liberado === false) && (
+        {instancias.some((i) => estadoQualidade(i, cfg?.liberar_qualidade_global === true).liberado === false) && (
           <div className="rounded-md border border-destructive/60 bg-destructive/10 p-3">
             <p className="text-sm font-semibold text-destructive">
-              {instancias.filter((i) => estadoQualidade(i).liberado === false).length} número(s) fora de campanha
+              {instancias.filter((i) => estadoQualidade(i, cfg?.liberar_qualidade_global === true).liberado === false).length} número(s) fora de campanha
             </p>
             <p className="text-xs text-muted-foreground">
-              Inclui números com qualidade YELLOW/RED e números cuja qualidade não pôde ser lida na Meta (token de acesso inválido ou expirado). Atualize o token desses números para que voltem às campanhas.
+              Inclui números com bloqueio real da Meta ou que ainda precisam de liberação. Qualidade baixa ou sem leitura só fica fora quando a chave global está desligada.
             </p>
           </div>
         )}
@@ -449,7 +449,7 @@ export function PoolMetaPanel() {
                 ? Math.floor((Date.now() - new Date(inst.data_ativacao_api).getTime()) / 86400000) + 1
                 : 0;
               const pausado = inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date();
-              const qEstado = estadoQualidade(inst);
+              const qEstado = estadoQualidade(inst, cfg?.liberar_qualidade_global === true);
               return (
                 <div key={inst.id} className="rounded-lg border p-3 space-y-2 bg-card">
                   <div className="flex items-start justify-between gap-2">
