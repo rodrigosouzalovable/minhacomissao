@@ -125,7 +125,7 @@ function placeholderContext(bodyText: string, key: string): string {
   return around;
 }
 
-export default function MapearColunasImportDialog({ open, onOpenChange, rows, template, requireCredor = false, isentosDedup, onConfirm }: Props) {
+export default function MapearColunasImportDialog({ open, onOpenChange, rows, template, requireCredor = false, requireCpf = true, isentosDedup, onConfirm }: Props) {
   const nCols = useMemo(() => rows.reduce((m, r) => Math.max(m, (r || []).length), 0), [rows]);
 
   const firstRow = rows[0] || [];
