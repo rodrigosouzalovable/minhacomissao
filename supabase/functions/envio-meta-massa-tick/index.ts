@@ -40,11 +40,18 @@ const ORCAMENTO_MS = 120_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Variação de templates: resolve o template aprovado na instância escolhida.
-// Para o par UME/Novo Mundo, o credor da linha vence o round-robin.
-function resolverTemplateId(job: any, instId: string, varianteIdx: number, credor?: string | null): string {
+// REGRA DURA: se o item tem credor e a campanha tem variante desse credor, só
+// pode sair o template daquele credor. Nunca cai no round-robin nem no fallback
+// (isso fazia cliente UME receber o layout Novo Mundo).
+function resolverTemplateId(job: any, instId: string, varianteIdx: number, credor?: string | null): string | null {
   const variantes = Array.isArray(job?.template_variantes) ? job.template_variantes : [];
-  const porCredor = variantes.find((v: any) => v?.credor === credor);
-  if (porCredor?.template_id_by_instance?.[instId]) return porCredor.template_id_by_instance[instId];
+  const cred = credor === 'ume' || credor === 'novo_mundo' ? credor : null;
+  if (cred) {
+    const porCredor = variantes.find((v: any) => v?.credor === cred);
+    if (porCredor) {
+      return porCredor?.template_id_by_instance?.[instId] || porCredor?.template_id || null;
+    }
+  }
   const n = variantes.length;
   if (n > 0) {
     const start = (((Number(varianteIdx) || 0) % n) + n) % n;
@@ -53,8 +60,9 @@ function resolverTemplateId(job: any, instId: string, varianteIdx: number, credo
       if (byInst[instId]) return byInst[instId];
     }
   }
-  return (job?.template_id_by_instance || {})[instId] || job?.template_id;
+  return (job?.template_id_by_instance || {})[instId] || job?.template_id || null;
 }
+
 
 
 // Bloqueio TEMPORÁRIO (cota diária, freio de qualidade, quarentena, rate limit):
