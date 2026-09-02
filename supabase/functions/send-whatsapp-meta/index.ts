@@ -550,7 +550,7 @@ Deno.serve(async (req) => {
     if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste) {
       // A chave global libera estados causados por qualidade; bloqueios reais da Meta permanecem.
       const bloqueioReal = pausaPorStatus ||
-        (inst.estado_pool === 'restrita' && !pausaPorQualidade && motivoPausaLower !== '');
+        (inst.estado_pool === 'restrita' && !pausaPorQualidade);
       const bloqueiaEstado = bloqueioReal ||
         !(ignoraQualidade && pausaLiberavel);
       if (bloqueiaEstado) {
