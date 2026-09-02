@@ -54,8 +54,13 @@ function faseFromDias(d: number): string {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = await req.json();
-    let ignoraQualidadeGlobal = ignorar_pausa_qualidade === true;
+    const reqBody = await req.json();
+    const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = reqBody;
+    // contexto 'aquecimento' = recuperação/aquecimento interno (YELLOW/RED permitidos).
+    // Qualquer outro valor é tratado como CAMPANHA: exige GREEN confirmado.
+    const modoCampanha = String(reqBody?.contexto || 'campanha') !== 'aquecimento';
+    let ignoraQualidadeGlobal = !modoCampanha && ignorar_pausa_qualidade === true;
+
     const excluidas: string[] = Array.isArray(excluir_ids) ? excluir_ids : [];
 
     if (!Array.isArray(instancia_ids) || instancia_ids.length === 0) {
