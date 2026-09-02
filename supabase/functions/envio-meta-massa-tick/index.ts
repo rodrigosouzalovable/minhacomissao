@@ -360,6 +360,23 @@ async function processarItem(job: any): Promise<ItemResult> {
   }).eq('id', job.id);
 
   const tplId = resolverTemplateId(job, instId, Number((pend as any).variante_idx || 0), (pend as any).credor);
+  if (!tplId) {
+    // Sem template do credor da linha nesta instância: não enviar nada em vez de
+    // usar o layout do credor errado.
+    const msg = `Template do credor ${(pend as any).credor} não aprovado na instância ${instNome} — envio bloqueado para não usar o layout do outro credor.`;
+    console.error('[tick] template do credor indisponível', pend.id, msg);
+    await supabase.from('envio_meta_job_item')
+      .update({ status: 'erro', erro: msg, processado_em: new Date().toISOString() })
+      .eq('id', pend.id);
+    await supabase.rpc('envio_meta_job_bump', {
+      _job_id: job.id, _enviados_inc: 0, _erros_inc: 1,
+      _proximo_em: new Date(Date.now() + 1_000).toISOString(),
+    });
+    return { advanced: true, waitMs: 1_000 };
+  }
+  await supabase.from('envio_meta_job_item')
+    .update({ template_id_resolvido: tplId }).eq('id', pend.id);
+
   const cliente = {
     telefone: pend.telefone,
     nome: pend.nome,
