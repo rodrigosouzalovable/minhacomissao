@@ -46,7 +46,7 @@ function estadoQualidade(inst: {
   saude_checked_at?: string | null;
   qualidade_leitura_ok?: boolean | null;
   qualidade_leitura_erro?: string | null;
-}) {
+}, liberacaoGlobal = false) {
   const q = String(inst.saude_quality || "").toUpperCase();
   const checado = inst.saude_checked_at ? new Date(inst.saude_checked_at).getTime() : 0;
   const idadeH = checado ? (Date.now() - checado) / 3600000 : Infinity;
@@ -54,23 +54,23 @@ function estadoQualidade(inst: {
     return {
       label: "SEM LEITURA",
       cls: "border-destructive text-destructive",
-      title: inst.qualidade_leitura_erro || "A Meta não devolveu a qualidade deste número (token inválido ou sem permissão). Campanha bloqueada.",
-      liberado: false,
+      title: liberacaoGlobal ? "Sem leitura de qualidade — liberado pela chave global." : inst.qualidade_leitura_erro || "A Meta não devolveu a qualidade deste número. Campanha bloqueada.",
+      liberado: liberacaoGlobal,
     };
   }
   if (idadeH > 6) {
     return {
       label: `DESATUALIZADA (${Math.round(idadeH)}h)`,
       cls: "border-amber-500 text-amber-600",
-      title: "Última leitura de qualidade há mais de 6 horas. Campanha bloqueada até nova checagem.",
-      liberado: false,
+      title: liberacaoGlobal ? "Leitura desatualizada — liberado pela chave global." : "Última leitura de qualidade há mais de 6 horas. Campanha bloqueada até nova checagem.",
+      liberado: liberacaoGlobal,
     };
   }
   return {
     label: q || "UNKNOWN",
     cls: q === "GREEN" ? "border-emerald-500 text-emerald-600" : "border-amber-500 text-amber-600",
-    title: q === "GREEN" ? "Qualidade confirmada na Meta" : "Campanha exige GREEN — este número só é usado em aquecimento/recuperação.",
-    liberado: q === "GREEN",
+    title: liberacaoGlobal ? `Qualidade ${q || "UNKNOWN"} — liberado pela chave global.` : q === "GREEN" ? "Qualidade confirmada na Meta" : "Campanha exige GREEN — este número só é usado em aquecimento/recuperação.",
+    liberado: liberacaoGlobal || q === "GREEN",
   };
 }
 
