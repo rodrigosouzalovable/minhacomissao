@@ -216,6 +216,8 @@ export default function EnvioMeta() {
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [recipientsHeaders, setRecipientsHeaders] = useState<string[]>([]);
   const [editAsText, setEditAsText] = useState<boolean>(false);
+  // CPF obrigatório na importação — sempre começa ligado.
+  const [cpfObrigatorio, setCpfObrigatorio] = useState<boolean>(true);
   
   const [nomeCampanha, setNomeCampanha] = useState<string>("");
   const [folderId, setFolderId] = useState<string>("__default__"); // __default__ = caixa padrão
@@ -1717,11 +1719,24 @@ export default function EnvioMeta() {
             <div>
               <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
               <CardDescription>
-                Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>. Apenas <code>telefone</code> é obrigatório.
-                Ou importe uma planilha Excel — ao importar, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Atraso, Saldo).
+                Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>.
+                Ao importar uma planilha Excel, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Atraso, Saldo). O CPF/CNPJ vem obrigatório por padrão.
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={cpfObrigatorio ? "default" : "outline"}
+                onClick={() => setCpfObrigatorio((v) => !v)}
+                title={cpfObrigatorio
+                  ? "CPF obrigatório: a importação exige uma coluna marcada como CPF / CNPJ"
+                  : "CPF opcional: a importação aceita planilha sem coluna de CPF"}
+              >
+                <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                {cpfObrigatorio ? "CPF obrigatório" : "CPF opcional"}
+              </Button>
+
 
               <input
                 ref={fileInputRef}
@@ -2316,6 +2331,7 @@ export default function EnvioMeta() {
         onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
         rows={mapDlg.rows}
         requireCredor={templatePorCredor}
+        requireCpf={cpfObrigatorio}
         isentosDedup={isentosDedup}
         template={template ? {
           nome_template: template.nome_template,

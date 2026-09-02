@@ -76,6 +76,14 @@ function columnLooksLikeDocument(rows: any[][], col: number, skipHeader: boolean
 }
 
 
+function normalizeDocument(value: unknown): string {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  // Excel pode remover zeros à esquerda: recompõe CPF (11) ou CNPJ (14).
+  if (digits.length >= 5 && digits.length <= 11) return digits.padStart(11, "0");
+  if (digits.length >= 12 && digits.length <= 14) return digits.padStart(14, "0");
+  return "";
+}
+
 function normalizeTelKey(t: string): string {
   const d = String(t || "").replace(/\D+/g, "");
   return d.length >= 8 ? d.slice(-8) : d;
@@ -94,6 +102,8 @@ type Props = {
   template?: TemplateInfo;
   /** Exige a coluna Credor quando templates são roteados por carteira. */
   requireCredor?: boolean;
+  /** Exige a coluna CPF / CNPJ (padrão do Envio Meta). */
+  requireCpf?: boolean;
   /** Sufixos (8 dígitos) de números nossos da UAZAPI — isentos de deduplicação. */
   isentosDedup?: Set<string>;
   onConfirm: (
@@ -123,7 +133,7 @@ function placeholderContext(bodyText: string, key: string): string {
   return around;
 }
 
-export default function MapearColunasImportDialog({ open, onOpenChange, rows, template, requireCredor = false, isentosDedup, onConfirm }: Props) {
+export default function MapearColunasImportDialog({ open, onOpenChange, rows, template, requireCredor = false, requireCpf = true, isentosDedup, onConfirm }: Props) {
   const nCols = useMemo(() => rows.reduce((m, r) => Math.max(m, (r || []).length), 0), [rows]);
 
   const firstRow = rows[0] || [];
@@ -253,6 +263,10 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     const idxSaldo = mapping.findIndex((r) => r === "saldo");
     const idxCredor = mapping.findIndex((r) => r === "credor");
 
+    if (requireCpf && idxCpf < 0) {
+      toast.error("Selecione a coluna de CPF / CNPJ — ela é obrigatória para esta importação.");
+      return;
+    }
     if (requireCredor && idxCredor < 0) {
       toast.error("Selecione a coluna Credor para direcionar UME e Novo Mundo aos templates corretos.");
       return;
@@ -290,7 +304,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     const cols: OutCol[] = [];
     cols.push({ header: "Telefone", get: (arr) => String(arr[idxTel] ?? "").trim() });
     if (idxNome >= 0) cols.push({ header: "Nome", get: (arr) => String(arr[idxNome] ?? "").trim() });
-    if (idxCpf >= 0) cols.push({ header: "CPF/CNPJ", get: (arr) => String(arr[idxCpf] ?? "").replace(/\D/g, "") });
+    if (idxCpf >= 0) cols.push({ header: "CPF/CNPJ", get: (arr) => normalizeDocument(arr[idxCpf]) });
     if (idxAtraso >= 0) cols.push({ header: "Atraso", get: (arr) => String(arr[idxAtraso] ?? "").trim() });
     if (idxSaldo >= 0) cols.push({
       header: "Saldo",
@@ -401,8 +415,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
         <DialogHeader>
           <DialogTitle>Mapear colunas da planilha</DialogTitle>
           <DialogDescription>
-            Para cada coluna, escolha se ela representa um campo padrão ou uma variável do template.
-            Somente <strong>Telefone</strong> é obrigatório.
+            Para cada coluna, escolha se ela representa um campo padrão ou uma variável do template. <strong>Telefone</strong> é obrigatório{requireCpf ? <> e <strong>CPF / CNPJ</strong> também é obrigatório.</> : "."}
             {firstIsHeader && " A primeira linha foi detectada como cabeçalho e será ignorada."}
           </DialogDescription>
         </DialogHeader>
