@@ -199,22 +199,24 @@ export function MapearColunasPlanilha({ rows, mapeamento, onChange }: Props) {
 export function extrairLinhas(
   rows: any[][],
   m: MapeamentoPlanilha,
-): { nome: string; telefone: string; valor: number }[] {
+): { nome: string; telefone: string; valor: number; cpf: string }[] {
   const idxNome = m.papeis.indexOf('nome');
   const idxTel = m.papeis.indexOf('telefone');
   const idxValor = m.papeis.indexOf('valor');
+  const idxCpf = m.papeis.indexOf('cpf');
   if (idxTel < 0 || idxValor < 0) return [];
   const vistos = new Set<string>();
-  const out: { nome: string; telefone: string; valor: number }[] = [];
+  const out: { nome: string; telefone: string; valor: number; cpf: string }[] = [];
   for (const row of rows.slice(m.temCabecalho ? 1 : 0)) {
     const nome = idxNome >= 0 ? String(row?.[idxNome] ?? '').trim() : '';
     const telefone = String(row?.[idxTel] ?? '').replace(/\D+/g, '');
     const valor = parseValorPlanilha(row?.[idxValor]);
+    const cpf = idxCpf >= 0 ? normalizarDocumento(row?.[idxCpf]) : '';
     if (!telefone || valor <= 0) continue;
     const key = `${nome.toLowerCase()}|${telefone}|${valor.toFixed(2)}`;
     if (vistos.has(key)) continue;
     vistos.add(key);
-    out.push({ nome, telefone, valor });
+    out.push({ nome, telefone, valor, cpf });
   }
   return out;
 }
