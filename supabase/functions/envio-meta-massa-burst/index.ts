@@ -250,7 +250,19 @@ function resolverTemplateId(job: any, instId: string, varianteIdx: number, credo
   return (job?.template_id_by_instance || {})[instId] || job?.template_id || null;
 }
 
+// Nome do template efetivamente usado (auditoria por destinatário).
+function nomeTemplatePorId(job: any, tplId: string): string | null {
+  const variantes = Array.isArray(job?.template_variantes) ? job.template_variantes : [];
+  for (const v of variantes) {
+    if (v?.template_id === tplId) return v?.nome_template ?? null;
+    const byInst = v?.template_id_by_instance || {};
+    if (Object.values(byInst).includes(tplId)) return v?.nome_template ?? null;
+  }
+  return job?.template_nome ?? null;
+}
+
 async function enviarUm(item: any, job: any): Promise<SendResult> {
+
   const tplId = resolverTemplateId(job, item.instancia_id, Number(item.variante_idx || 0), item.credor);
   if (!tplId) {
     return {
