@@ -18,6 +18,8 @@ import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
 import CustoEstimadoEnvio, { LIMITE_CUSTO_BRL_DEFAULT } from "@/components/meta/CustoEstimadoEnvio";
 import { calcularCustoEstimado } from "@/hooks/useCustoEstimadoEnvio";
+import { checkUazapiConnection, isResultConnected } from "@/lib/uazapiConnectionCache";
+
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useMetaEnviosTotais } from "@/hooks/useMetaEnviosTotais";
 import { useAuth } from "@/hooks/useAuth";
@@ -243,7 +245,43 @@ export default function EnvioMeta() {
   };
   const [msgsPorSegundo, setMsgsPorSegundo] = useState<string>("1");
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
+  const [uazConectadasIds, setUazConectadasIds] = useState<string[] | null>(null);
+  const [checandoUazConexao, setChecandoUazConexao] = useState<boolean>(false);
   const [validadorId, setValidadorId] = useState<string>("");
+
+  // Checa conexão real das instâncias UAZAPI (cache de 5 min), em lotes de 5.
+  const checarConexoesUaz = async (force = false) => {
+    if (uazInstancias.length === 0) { setUazConectadasIds([]); return; }
+    setChecandoUazConexao(true);
+    const conectadas: string[] = [];
+    try {
+      for (let i = 0; i < uazInstancias.length; i += 5) {
+        const lote = uazInstancias.slice(i, i + 5);
+        const res = await Promise.all(
+          lote.map(async (u) => {
+            const r = await checkUazapiConnection(u.id, u.server_url, u.instance_token, { force });
+            return isResultConnected(r) ? u.id : null;
+          }),
+        );
+        for (const id of res) if (id) conectadas.push(id);
+      }
+      setUazConectadasIds(conectadas);
+      if (validadorId && !conectadas.includes(validadorId)) {
+        setValidadorId("");
+        toast.warning("O número escolhido para validação está desconectado — validação desativada.");
+      }
+    } finally {
+      setChecandoUazConexao(false);
+    }
+  };
+
+  const uazDisponiveis = useMemo(
+    () => (uazConectadasIds === null ? [] : uazInstancias.filter((u) => uazConectadasIds.includes(u.id))),
+    [uazInstancias, uazConectadasIds],
+  );
+
+
+
   const [validando, setValidando] = useState<boolean>(false);
   const [enviandoTeste, setEnviandoTeste] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1953,18 +1991,41 @@ export default function EnvioMeta() {
           </div>
 
           <div className="max-w-md space-y-1.5">
-            <Label>Validar WhatsApp antes do disparo (opcional)</Label>
-            <Select value={validadorId || "__none__"} onValueChange={(v) => setValidadorId(v === "__none__" ? "" : v)}>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Validar WhatsApp antes do disparo (opcional)</Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={() => checarConexoesUaz(true)}
+                disabled={checandoUazConexao}
+              >
+                {checandoUazConexao ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+            <Select
+              value={validadorId || "__none__"}
+              onValueChange={(v) => setValidadorId(v === "__none__" ? "" : v)}
+              onOpenChange={(o) => { if (o && uazConectadasIds === null && !checandoUazConexao) checarConexoesUaz(); }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Sem validação (envia para todos)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">Sem validação (envia para todos)</SelectItem>
-                {uazInstancias.map((u) => (
+                {checandoUazConexao && (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Verificando números conectados...</div>
+                )}
+                {!checandoUazConexao && uazConectadasIds !== null && uazDisponiveis.length === 0 && (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum número UAZAPI conectado no momento</div>
+                )}
+                {!checandoUazConexao && uazDisponiveis.map((u) => (
                   <SelectItem key={u.id} value={u.id}>
                     {u.nome} {u.telefone ? `• ${u.telefone}` : ""}
                   </SelectItem>
                 ))}
+
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
