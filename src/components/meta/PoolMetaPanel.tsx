@@ -435,12 +435,13 @@ export function PoolMetaPanel() {
                 ? Math.floor((Date.now() - new Date(inst.data_ativacao_api).getTime()) / 86400000) + 1
                 : 0;
               const pausado = inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date();
+              const qEstado = estadoQualidade(inst);
               return (
                 <div key={inst.id} className="rounded-lg border p-3 space-y-2 bg-card">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={`h-2.5 w-2.5 rounded-full ${qualityColor(inst.saude_quality)}`} title={inst.saude_quality || "UNKNOWN"} />
+                        <span className={`h-2.5 w-2.5 rounded-full ${qualityColor(inst.saude_quality)}`} title={qEstado.title} />
                         <p className="font-medium truncate">{inst.nome}</p>
                       </div>
                       <p className="text-xs text-muted-foreground">{inst.display_phone}</p>
@@ -449,7 +450,15 @@ export function PoolMetaPanel() {
                   </div>
 
                   <div className="flex flex-wrap gap-1.5 text-[11px]">
-                    <Badge variant="outline">Qualidade: {inst.saude_quality || "UNKNOWN"}</Badge>
+                    <Badge variant="outline" className={qEstado.cls} title={qEstado.title}>
+                      Qualidade: {qEstado.label}
+                    </Badge>
+                    {!qEstado.liberado && (
+                      <Badge variant="outline" className="border-destructive text-destructive" title="Só aquecimento/recuperação usam este número.">
+                        Fora de campanha
+                      </Badge>
+                    )}
+
                     <Badge variant="outline" title={inst.messaging_limit_source === "manual" ? "Definido manualmente" : inst.messaging_limit_source === "meta_api" ? `Sincronizado da Meta ${inst.messaging_limit_synced_at ? "em " + new Date(inst.messaging_limit_synced_at).toLocaleString("pt-BR") : ""}` : "Padrão (permissão Meta pendente)"}>
                       {inst.messaging_limit_source === "manual" ? "✋" : inst.messaging_limit_source === "meta_api" ? "🔄" : "•"} Tier: {(inst.messaging_limit_manual || inst.saude_tier)?.replace("MESSAGING_LIMIT_TIER_", "").replace("MESSAGING_LIMIT_", "") || "—"}
                     </Badge>
