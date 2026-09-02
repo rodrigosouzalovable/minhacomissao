@@ -54,8 +54,13 @@ function faseFromDias(d: number): string {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = await req.json();
-    let ignoraQualidadeGlobal = ignorar_pausa_qualidade === true;
+    const reqBody = await req.json();
+    const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = reqBody;
+    // contexto 'aquecimento' = recuperação/aquecimento interno (YELLOW/RED permitidos).
+    // Qualquer outro valor é tratado como CAMPANHA: exige GREEN confirmado.
+    const modoCampanha = String(reqBody?.contexto || 'campanha') !== 'aquecimento';
+    let ignoraQualidadeGlobal = !modoCampanha && ignorar_pausa_qualidade === true;
+
     const excluidas: string[] = Array.isArray(excluir_ids) ? excluir_ids : [];
 
     if (!Array.isArray(instancia_ids) || instancia_ids.length === 0) {
@@ -68,8 +73,9 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
-    // Chave global "Liberar YELLOW/RED": ignora quarentena, recuperação e pausa por qualidade.
-    if (cfg?.liberar_qualidade_global === true) ignoraQualidadeGlobal = true;
+    // Chave global "Liberar YELLOW/RED": vale só fora de campanha (aquecimento/recuperação).
+    if (!modoCampanha && cfg?.liberar_qualidade_global === true) ignoraQualidadeGlobal = true;
+
 
     // Bloqueio de domingo/horário BRT
     const nowBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
@@ -152,6 +158,28 @@ Deno.serve(async (req) => {
       const motivoBm = motivoBloqueioBm(cotasBm, inst.meta_bm_id);
       if (motivoBm) { descartados.push(`${rotulo}: ${motivoBm}`); continue; }
 
+      // ===== CAMPANHA: só GREEN com leitura recente e bem-sucedida =====
+      if (modoCampanha) {
+        const qCamp = String(inst.saude_quality || '').toUpperCase();
+        const checado = inst.saude_checked_at ? new Date(inst.saude_checked_at).getTime() : 0;
+        const idadeH = checado ? (Date.now() - checado) / 3600000 : 9999;
+        if (inst.qualidade_leitura_ok === false || !checado) {
+          descartados.push(
+            `${rotulo}: qualidade não confirmada — falha ao ler na Meta` +
+            `${inst.qualidade_leitura_erro ? ` (${inst.qualidade_leitura_erro})` : ''}`,
+          );
+          continue;
+        }
+        if (idadeH > 6) {
+          descartados.push(`${rotulo}: qualidade desatualizada (última leitura há ${Math.round(idadeH)}h)`);
+          continue;
+        }
+        if (qCamp !== 'GREEN') {
+          descartados.push(`${rotulo}: qualidade ${qCamp || 'desconhecida'} — campanha exige GREEN`);
+          continue;
+        }
+      }
+
       const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
       const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
       const pausaPorStatus = motivoPausaLower.startsWith('status=');
@@ -159,10 +187,13 @@ Deno.serve(async (req) => {
       const estadoBloqueado = inst.estado_pool === 'restrita' || inst.estado_pool === 'pausado';
       // Liberação de PAUSA: botão "Retomar" OU instância sem pausa/restrição ativa.
       const ignoraQualidade =
-        ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true || (!pausaAtiva && !estadoBloqueado);
-      // Gate de QUALIDADE (mais estrito): YELLOW/RED só passam em rajada ou com
-      // liberação manual explícita — proteger o número vem antes do volume.
-      const ignoraQualidadeGate = ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true;
+        ignoraQualidadeGlobal ||
+        (!modoCampanha && inst.qualidade_liberada_manual === true) ||
+        (!pausaAtiva && !estadoBloqueado);
+      // Gate de QUALIDADE: em campanha nunca é ignorado (já validado acima).
+      const ignoraQualidadeGate =
+        !modoCampanha && (ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true);
+
 
 
 

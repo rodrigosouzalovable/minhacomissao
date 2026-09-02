@@ -91,40 +91,58 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Chave global "Liberar YELLOW/RED": quando ligada, nenhuma instância é recusada
-    // por qualidade nem por quarentena — vale para todos os usuários (inclusive parceiros).
-    const { data: cfgQualidade } = await supabase
-      .from('meta_envio_pool_config').select('liberar_qualidade_global').eq('id', 1).maybeSingle();
-    const liberacaoGlobal = cfgQualidade?.liberar_qualidade_global === true;
+    // Chave global "Liberar YELLOW/RED" vale APENAS para aquecimento/recuperação.
+    // Campanha exige qualidade GREEN confirmada e leitura recente da Meta.
 
-    // Filtro server-side: remove apenas instâncias com qualidade RED (bloqueio real).
-    // YELLOW passa a ser permitido — a Meta ainda entrega e o usuário quer disparar.
-    // No modo RAJADA não filtramos nada: só encerramos quando a Meta responder banido/restrito.
+
+    // Filtro server-side de qualidade para CAMPANHA: só GREEN com leitura fresca.
+    // Qualidade nula/UNKNOWN, leitura falhada (token inválido) ou leitura com mais
+    // de 6h são recusadas — nunca disparar sem saber a qualidade real do número.
     let instanciaIdsFiltradas = instanciaIds;
-    if (modoRajada !== true && !liberacaoGlobal) {
+    {
       const { data: instancesRows } = await supabase
         .from('meta_whatsapp_instances')
-        .select('id, nome, saude_quality')
+        .select('id, nome, saude_quality, saude_checked_at, qualidade_leitura_ok, qualidade_leitura_erro')
         .in('id', instanciaIds);
-      const badIds = new Set(
-        (instancesRows || [])
-          .filter((r: any) => String(r.saude_quality || '').toUpperCase() === 'RED')
-          .map((r: any) => r.id),
-      );
+      const motivos: string[] = [];
+      const badIds = new Set<string>();
+      for (const r of instancesRows || []) {
+        const rotulo = (r as any).nome || (r as any).id;
+        const q = String((r as any).saude_quality || '').toUpperCase();
+        const checado = (r as any).saude_checked_at ? new Date((r as any).saude_checked_at).getTime() : 0;
+        const idadeH = checado ? (Date.now() - checado) / 3600000 : 9999;
+        if ((r as any).qualidade_leitura_ok === false || !checado) {
+          badIds.add((r as any).id);
+          motivos.push(`${rotulo}: qualidade não confirmada (falha ao ler na Meta${(r as any).qualidade_leitura_erro ? ` — ${(r as any).qualidade_leitura_erro}` : ''})`);
+          continue;
+        }
+        if (idadeH > 6) {
+          badIds.add((r as any).id);
+          motivos.push(`${rotulo}: qualidade desatualizada (última leitura há ${Math.round(idadeH)}h)`);
+          continue;
+        }
+        if (q !== 'GREEN') {
+          badIds.add((r as any).id);
+          motivos.push(`${rotulo}: qualidade ${q || 'desconhecida'} — campanha exige GREEN`);
+        }
+      }
       instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
       if (instanciaIdsFiltradas.length === 0) {
-        console.error('[iniciar] recusado 400: todas as instâncias com qualidade RED');
+        console.error('[iniciar] recusado 400: nenhuma instância GREEN confirmada', motivos);
         return new Response(JSON.stringify({
           success: false,
-          error: 'Todas as instâncias selecionadas estão com qualidade RED (bloqueadas pela Meta). Selecione outras instâncias ou use o Modo Rajada.',
+          error: `Nenhuma instância liberada para campanha — ${motivos.join(' | ')}`,
+          motivos,
         }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
     }
 
-    // Remove instâncias em quarentena por queda de qualidade (exceto rajada/liberação global).
-    if (modoRajada !== true && !liberacaoGlobal) {
+
+    // Remove instâncias em quarentena por queda de qualidade (sempre vale em campanha).
+    {
+
       const { data: quarentena } = await supabase
         .from('meta_whatsapp_instances')
         .select('id, nome, quarentena_ate')

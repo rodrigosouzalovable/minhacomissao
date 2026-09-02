@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
         let chosenInstId = item.instancia_id;
         try {
           const { data: pick } = await supabase.functions.invoke('pick-meta-instance', {
-            body: { instancia_ids: campanha.instancia_ids },
+            body: { instancia_ids: campanha.instancia_ids, contexto: 'campanha' },
           });
           if (pick?.success && pick.instancia_id) {
             chosenInstId = pick.instancia_id;

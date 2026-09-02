@@ -34,7 +34,46 @@ type MetaInst = {
   teto_escada: number | null;
   quarentena_ate: string | null;
   quarentena_motivo: string | null;
+  saude_checked_at?: string | null;
+  qualidade_leitura_ok?: boolean | null;
+  qualidade_leitura_erro?: string | null;
 };
+
+/** Estado da leitura de qualidade na Meta — separa "Meta disse UNKNOWN" de
+ *  "não conseguimos ler" e de "leitura velha". Campanha só aceita GREEN fresco. */
+function estadoQualidade(inst: {
+  saude_quality?: string | null;
+  saude_checked_at?: string | null;
+  qualidade_leitura_ok?: boolean | null;
+  qualidade_leitura_erro?: string | null;
+}) {
+  const q = String(inst.saude_quality || "").toUpperCase();
+  const checado = inst.saude_checked_at ? new Date(inst.saude_checked_at).getTime() : 0;
+  const idadeH = checado ? (Date.now() - checado) / 3600000 : Infinity;
+  if (inst.qualidade_leitura_ok === false || !checado) {
+    return {
+      label: "SEM LEITURA",
+      cls: "border-destructive text-destructive",
+      title: inst.qualidade_leitura_erro || "A Meta não devolveu a qualidade deste número (token inválido ou sem permissão). Campanha bloqueada.",
+      liberado: false,
+    };
+  }
+  if (idadeH > 6) {
+    return {
+      label: `DESATUALIZADA (${Math.round(idadeH)}h)`,
+      cls: "border-amber-500 text-amber-600",
+      title: "Última leitura de qualidade há mais de 6 horas. Campanha bloqueada até nova checagem.",
+      liberado: false,
+    };
+  }
+  return {
+    label: q || "UNKNOWN",
+    cls: q === "GREEN" ? "border-emerald-500 text-emerald-600" : "border-amber-500 text-amber-600",
+    title: q === "GREEN" ? "Qualidade confirmada na Meta" : "Campanha exige GREEN — este número só é usado em aquecimento/recuperação.",
+    liberado: q === "GREEN",
+  };
+}
+
 
 type PoolConfig = {
   cota_fase1: number; cota_fase2: number; cota_fase3: number; cota_fase4: number;
@@ -348,14 +387,28 @@ export function PoolMetaPanel() {
              <div className="flex items-center gap-2">
                <ShieldCheck className={`h-4 w-4 ${cfg?.liberar_qualidade_global ? "text-destructive" : "text-muted-foreground"}`} />
                <div>
-                 <p className="text-sm font-semibold">Liberar números YELLOW e RED para envio</p>
-                 <p className="text-xs text-muted-foreground">Ignora quarentena, pausa por qualidade e modo recuperação para todos os usuários (inclusive parceiros).</p>
+                <p className="text-sm font-semibold">Liberar números YELLOW e RED (só aquecimento)</p>
+                <p className="text-xs text-muted-foreground">Vale apenas para aquecimento e recuperação de qualidade. Campanhas e disparos em massa continuam exigindo qualidade GREEN confirmada na Meta.</p>
+
                </div>
              </div>
              <Switch checked={cfg?.liberar_qualidade_global === true} disabled={savingTurbo} onCheckedChange={salvarLiberarQualidade} />
            </div>
-           {cfg?.liberar_qualidade_global && <p className="text-xs text-destructive">⚠️ Risco de banimento maior. Bloqueios reais da Meta (BANNED/FLAGGED/pagamento) continuam valendo.</p>}
-         </div>
+          {cfg?.liberar_qualidade_global && <p className="text-xs text-destructive">⚠️ Liberação ativa no aquecimento. Campanha nunca usa YELLOW/RED, nem qualidade desconhecida ou sem leitura.</p>}
+        </div>
+
+        {/* Aviso: números sem leitura de qualidade */}
+        {instancias.some((i) => estadoQualidade(i).liberado === false) && (
+          <div className="rounded-md border border-destructive/60 bg-destructive/10 p-3">
+            <p className="text-sm font-semibold text-destructive">
+              {instancias.filter((i) => estadoQualidade(i).liberado === false).length} número(s) fora de campanha
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Inclui números com qualidade YELLOW/RED e números cuja qualidade não pôde ser lida na Meta (token de acesso inválido ou expirado). Atualize o token desses números para que voltem às campanhas.
+            </p>
+          </div>
+        )}
+
 
 
 
@@ -396,12 +449,13 @@ export function PoolMetaPanel() {
                 ? Math.floor((Date.now() - new Date(inst.data_ativacao_api).getTime()) / 86400000) + 1
                 : 0;
               const pausado = inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date();
+              const qEstado = estadoQualidade(inst);
               return (
                 <div key={inst.id} className="rounded-lg border p-3 space-y-2 bg-card">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={`h-2.5 w-2.5 rounded-full ${qualityColor(inst.saude_quality)}`} title={inst.saude_quality || "UNKNOWN"} />
+                        <span className={`h-2.5 w-2.5 rounded-full ${qualityColor(inst.saude_quality)}`} title={qEstado.title} />
                         <p className="font-medium truncate">{inst.nome}</p>
                       </div>
                       <p className="text-xs text-muted-foreground">{inst.display_phone}</p>
@@ -410,7 +464,15 @@ export function PoolMetaPanel() {
                   </div>
 
                   <div className="flex flex-wrap gap-1.5 text-[11px]">
-                    <Badge variant="outline">Qualidade: {inst.saude_quality || "UNKNOWN"}</Badge>
+                    <Badge variant="outline" className={qEstado.cls} title={qEstado.title}>
+                      Qualidade: {qEstado.label}
+                    </Badge>
+                    {!qEstado.liberado && (
+                      <Badge variant="outline" className="border-destructive text-destructive" title="Só aquecimento/recuperação usam este número.">
+                        Fora de campanha
+                      </Badge>
+                    )}
+
                     <Badge variant="outline" title={inst.messaging_limit_source === "manual" ? "Definido manualmente" : inst.messaging_limit_source === "meta_api" ? `Sincronizado da Meta ${inst.messaging_limit_synced_at ? "em " + new Date(inst.messaging_limit_synced_at).toLocaleString("pt-BR") : ""}` : "Padrão (permissão Meta pendente)"}>
                       {inst.messaging_limit_source === "manual" ? "✋" : inst.messaging_limit_source === "meta_api" ? "🔄" : "•"} Tier: {(inst.messaging_limit_manual || inst.saude_tier)?.replace("MESSAGING_LIMIT_TIER_", "").replace("MESSAGING_LIMIT_", "") || "—"}
                     </Badge>

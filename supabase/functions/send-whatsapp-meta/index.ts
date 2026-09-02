@@ -544,7 +544,7 @@ Deno.serve(async (req) => {
     // Liberação manual (botão "Retomar") ou chave global "Liberar YELLOW/RED"
     // também ignoram bloqueios por qualidade (status Meta continua bloqueando).
     const liberacaoGlobal = cfg?.liberar_qualidade_global === true;
-    const ignoraQualidade = ignorar_pausa_qualidade === true || inst.qualidade_liberada_manual === true || liberacaoGlobal;
+    const ignoraQualidade = ignorar_pausa_qualidade === true || inst.qualidade_liberada_manual === true;
     const pausaLiberavel = pausaPorQualidade || motivoPausaLower === '';
 
     if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste) {

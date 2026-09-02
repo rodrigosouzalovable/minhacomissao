@@ -37,3 +37,4 @@
 - [Campanha Aguardando Cota](mem://features/whatsapp/campanha-aguardando-cota) — Campanha Meta sem cota fica "Aguardando cota", retoma sozinha e oferece instâncias livres
 - [Liberação Meta só se saudável](mem://features/whatsapp/meta-liberacao-so-se-saudavel) — Bloqueio liberado só devolve ao pool se GREEN, sem quarentena e sem restrição de envio da Meta
 - [Liberar YELLOW/RED global](mem://features/whatsapp/meta-liberar-qualidade-global) — Chave liberar_qualidade_global libera quarentena/pausa por qualidade para todos; só bloqueio real da Meta persiste
+- [Campanha Só GREEN](mem://features/whatsapp/campanha-somente-green-confirmado) — Campanha Meta exige GREEN confirmado e leitura <6h; liberar_qualidade_global vale só para aquecimento
