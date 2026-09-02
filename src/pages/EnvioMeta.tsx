@@ -216,6 +216,8 @@ export default function EnvioMeta() {
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [recipientsHeaders, setRecipientsHeaders] = useState<string[]>([]);
   const [editAsText, setEditAsText] = useState<boolean>(false);
+  // CPF obrigatório na importação — sempre começa ligado.
+  const [cpfObrigatorio, setCpfObrigatorio] = useState<boolean>(true);
   
   const [nomeCampanha, setNomeCampanha] = useState<string>("");
   const [folderId, setFolderId] = useState<string>("__default__"); // __default__ = caixa padrão
