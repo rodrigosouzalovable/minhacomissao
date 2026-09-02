@@ -92,6 +92,8 @@ type Props = {
   onOpenChange: (v: boolean) => void;
   rows: any[][];
   template?: TemplateInfo;
+  /** Exige a coluna Credor quando templates são roteados por carteira. */
+  requireCredor?: boolean;
   /** Sufixos (8 dígitos) de números nossos da UAZAPI — isentos de deduplicação. */
   isentosDedup?: Set<string>;
   onConfirm: (
@@ -121,7 +123,7 @@ function placeholderContext(bodyText: string, key: string): string {
   return around;
 }
 
-export default function MapearColunasImportDialog({ open, onOpenChange, rows, template, isentosDedup, onConfirm }: Props) {
+export default function MapearColunasImportDialog({ open, onOpenChange, rows, template, requireCredor = false, isentosDedup, onConfirm }: Props) {
   const nCols = useMemo(() => rows.reduce((m, r) => Math.max(m, (r || []).length), 0), [rows]);
 
   const firstRow = rows[0] || [];
@@ -250,6 +252,18 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     const idxAtraso = mapping.findIndex((r) => r === "atraso");
     const idxSaldo = mapping.findIndex((r) => r === "saldo");
     const idxCredor = mapping.findIndex((r) => r === "credor");
+
+    if (requireCredor && idxCredor < 0) {
+      toast.error("Selecione a coluna Credor para direcionar UME e Novo Mundo aos templates corretos.");
+      return;
+    }
+    if (requireCredor && idxCredor >= 0) {
+      const invalidCredor = (firstIsHeader ? rows.slice(1) : rows).filter((row) => row?.[idxTel] && !normalizarCredor(String(row?.[idxCredor] ?? ""))).length;
+      if (invalidCredor > 0) {
+        toast.error(`${invalidCredor} linha(s) têm credor vazio ou não reconhecido. Use UME ou NOVO MUNDO.`);
+        return;
+      }
+    }
 
     if (idxCpf < 0 && idxNome >= 0 && columnLooksLikeDocument(rows, idxNome, firstIsHeader)) {
       toast.error(`A coluna ${colLetter(idxNome)} parece ser CPF/CNPJ. Marque como "CPF / CNPJ" para preencher a variável {cpf}.`);
