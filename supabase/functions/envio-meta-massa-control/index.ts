@@ -409,7 +409,7 @@ Deno.serve(async (req) => {
       const pct = semTetoGlobal ? 1 : Number(cfg?.pct_max_cota_meta ?? 60) / 100;
       const limiteSeguro = Math.max(10, Math.floor(Number(inst.tier_diario ?? 250) * pct));
       const pedido = Number(body?.teto ?? limiteSeguro);
-      const novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
+      let novoTeto = Math.max(10, Math.min(pedido, limiteSeguro));
 
       const hojeBrt2 = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
       const { data: freioAtual } = await supabase
@@ -424,6 +424,12 @@ Deno.serve(async (req) => {
           success: false,
           error: `este número já atingiu a cota real da Meta (${enviadosHoje}/${limiteSeguro}) — aguarde a renovação da cota`,
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // O teto nunca pode ficar igual/abaixo do que já foi enviado hoje —
+      // isso gravava "sucesso" mas mantinha a campanha travada.
+      if (novoTeto <= enviadosHoje) {
+        novoTeto = Math.min(limiteSeguro, enviadosHoje + Math.max(10, pedido > 0 ? pedido : 10));
       }
 
       await supabase.from('meta_instance_freio_diario').upsert({

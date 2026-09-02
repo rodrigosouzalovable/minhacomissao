@@ -484,9 +484,20 @@ export default function InboxMeta() {
 
   const handleApagarCaixa = useCallback(async (folder: MetaInboxFolder) => {
     if (!window.confirm(`Tem certeza que deseja apagar a caixa "${folder.nome}"?\n\nAs conversas não serão excluídas, apenas voltarão para a caixa padrão.`)) return;
-    const { error } = await supabase.from('meta_inbox_folders').delete().eq('id', folder.id);
+    const { data: apagadas, error } = await supabase
+      .from('meta_inbox_folders').delete().eq('id', folder.id).select('id');
     if (error) {
       toast({ title: 'Erro ao apagar caixa', description: error.message, variant: 'destructive' });
+      return;
+    }
+    if (!apagadas || apagadas.length === 0) {
+      // RLS não permitiu o DELETE: o Supabase devolve zero linhas sem erro.
+      toast({
+        title: 'Caixa não foi apagada',
+        description: 'Você não tem permissão para excluir esta caixa. Peça a um administrador do sistema.',
+        variant: 'destructive',
+      });
+      fetchFolders();
       return;
     }
     toast({ title: 'Caixa apagada', description: `A caixa "${folder.nome}" foi removida.` });
