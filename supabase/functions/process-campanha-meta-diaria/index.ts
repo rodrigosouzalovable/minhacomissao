@@ -28,10 +28,12 @@ async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
-// Variação de templates: rotaciona entre as variantes escolhidas, sempre usando
-// o template aprovado na instância que fará o envio.
-function resolverTemplateId(campanha: any, instId: string, varianteIdx: number): string {
+// Variação de templates: usa o credor da linha quando o par UME/Novo Mundo
+// estiver configurado; caso contrário mantém a alternância existente.
+function resolverTemplateId(campanha: any, instId: string, varianteIdx: number, credor?: string | null): string {
   const variantes = Array.isArray(campanha?.template_variantes) ? campanha.template_variantes : [];
+  const porCredor = variantes.find((v: any) => v?.credor === credor);
+  if (porCredor?.template_id_by_instance?.[instId]) return porCredor.template_id_by_instance[instId];
   const n = variantes.length;
   if (n > 0) {
     const start = (((Number(varianteIdx) || 0) % n) + n) % n;
@@ -44,7 +46,7 @@ function resolverTemplateId(campanha: any, instId: string, varianteIdx: number):
 }
 
 async function invokeSend(supabase: any, item: any, campanha: any, varianteIdx = 0) {
-  const templateId = resolverTemplateId(campanha, item.instancia_id, varianteIdx);
+  const templateId = resolverTemplateId(campanha, item.instancia_id, varianteIdx, item.credor);
 
   const { data, error } = await supabase.functions.invoke('send-whatsapp-meta', {
     body: {
