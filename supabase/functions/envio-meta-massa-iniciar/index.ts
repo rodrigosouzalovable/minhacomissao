@@ -143,8 +143,10 @@ Deno.serve(async (req) => {
     }
 
 
-    // Remove instâncias em quarentena por queda de qualidade (sempre vale em campanha).
-    {
+    // Remove instâncias em quarentena por queda de qualidade
+    // (ignorado quando a chave "Liberar YELLOW/RED" está ligada).
+    if (!liberacaoQualidadeGlobal) {
+
 
       const { data: quarentena } = await supabase
         .from('meta_whatsapp_instances')
