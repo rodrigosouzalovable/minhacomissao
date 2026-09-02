@@ -415,7 +415,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
         <DialogHeader>
           <DialogTitle>Mapear colunas da planilha</DialogTitle>
           <DialogDescription>
-            Para cada coluna, escolha se ela representa um campo padrão ou uma variável do template. <strong>Telefone</strong> é obrigatório{requireCpf ? <> e <strong>CPF / CNPJ</strong> também é obrigatório.</> : "."}
+            Para cada coluna, escolha se ela representa um campo padrão ou uma variável do template. <strong>Telefone</strong> é obrigatório{requireCpf && <>, <strong>CPF / CNPJ</strong> também é obrigatório</>}{requireCredor && <> e <strong>Credor</strong> (UME ou Novo Mundo) também é obrigatório</>}.
             {firstIsHeader && " A primeira linha foi detectada como cabeçalho e será ignorada."}
           </DialogDescription>
         </DialogHeader>
