@@ -304,7 +304,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     const cols: OutCol[] = [];
     cols.push({ header: "Telefone", get: (arr) => String(arr[idxTel] ?? "").trim() });
     if (idxNome >= 0) cols.push({ header: "Nome", get: (arr) => String(arr[idxNome] ?? "").trim() });
-    if (idxCpf >= 0) cols.push({ header: "CPF/CNPJ", get: (arr) => String(arr[idxCpf] ?? "").replace(/\D/g, "") });
+    if (idxCpf >= 0) cols.push({ header: "CPF/CNPJ", get: (arr) => normalizeDocument(arr[idxCpf]) });
     if (idxAtraso >= 0) cols.push({ header: "Atraso", get: (arr) => String(arr[idxAtraso] ?? "").trim() });
     if (idxSaldo >= 0) cols.push({
       header: "Saldo",
