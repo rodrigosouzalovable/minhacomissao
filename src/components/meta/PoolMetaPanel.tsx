@@ -34,7 +34,46 @@ type MetaInst = {
   teto_escada: number | null;
   quarentena_ate: string | null;
   quarentena_motivo: string | null;
+  saude_checked_at?: string | null;
+  qualidade_leitura_ok?: boolean | null;
+  qualidade_leitura_erro?: string | null;
 };
+
+/** Estado da leitura de qualidade na Meta — separa "Meta disse UNKNOWN" de
+ *  "não conseguimos ler" e de "leitura velha". Campanha só aceita GREEN fresco. */
+function estadoQualidade(inst: {
+  saude_quality?: string | null;
+  saude_checked_at?: string | null;
+  qualidade_leitura_ok?: boolean | null;
+  qualidade_leitura_erro?: string | null;
+}) {
+  const q = String(inst.saude_quality || "").toUpperCase();
+  const checado = inst.saude_checked_at ? new Date(inst.saude_checked_at).getTime() : 0;
+  const idadeH = checado ? (Date.now() - checado) / 3600000 : Infinity;
+  if (inst.qualidade_leitura_ok === false || !checado) {
+    return {
+      label: "SEM LEITURA",
+      cls: "border-destructive text-destructive",
+      title: inst.qualidade_leitura_erro || "A Meta não devolveu a qualidade deste número (token inválido ou sem permissão). Campanha bloqueada.",
+      liberado: false,
+    };
+  }
+  if (idadeH > 6) {
+    return {
+      label: `DESATUALIZADA (${Math.round(idadeH)}h)`,
+      cls: "border-amber-500 text-amber-600",
+      title: "Última leitura de qualidade há mais de 6 horas. Campanha bloqueada até nova checagem.",
+      liberado: false,
+    };
+  }
+  return {
+    label: q || "UNKNOWN",
+    cls: q === "GREEN" ? "border-emerald-500 text-emerald-600" : "border-amber-500 text-amber-600",
+    title: q === "GREEN" ? "Qualidade confirmada na Meta" : "Campanha exige GREEN — este número só é usado em aquecimento/recuperação.",
+    liberado: q === "GREEN",
+  };
+}
+
 
 type PoolConfig = {
   cota_fase1: number; cota_fase2: number; cota_fase3: number; cota_fase4: number;
