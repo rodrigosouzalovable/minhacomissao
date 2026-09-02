@@ -124,9 +124,14 @@ export function ConsultaUmeDialog({
       }
       if (!(data as any)?.success) throw new Error((data as any)?.error || 'Falha na consulta');
       const c = (data as any).consulta as Consulta;
-      if ((data as any).tabelaPadraoConfig) setTabela((data as any).tabelaPadraoConfig);
+      const preferida = (data as any).tabelaPadraoConfig as TabelaKey | undefined;
+      // Se a tabela configurada não pode ser calculada (sem "total sem juros"),
+      // cai para a tabela padrão em vez de deixar a calculadora em branco.
+      if (preferida) setTabela(tabelaDe(c, preferida) ? preferida : 'padrao');
+      else if (!tabelaDe(c, 'padrao')) setTabela('especial');
       setConsulta(c);
       if (!c.encontrado) setErro('CPF não localizado na base da UME.');
+
     } catch (e) {
       setErro(String((e as Error)?.message || e));
       setConsulta(null);
