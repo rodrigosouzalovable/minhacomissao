@@ -92,15 +92,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Chave global "Liberar YELLOW/RED" vale APENAS para aquecimento/recuperação.
-    // Campanha exige qualidade GREEN confirmada e leitura recente da Meta.
-
+    // Chave global "Liberar YELLOW/RED": quando ligada, vale também para CAMPANHA —
+    // YELLOW, RED, UNKNOWN, qualidade nula e leitura desatualizada/falhada podem disparar.
+    const { data: cfgQualidade } = await supabase
+      .from('meta_envio_pool_config').select('liberar_qualidade_global').eq('id', 1).maybeSingle();
+    const liberacaoQualidadeGlobal = cfgQualidade?.liberar_qualidade_global === true;
 
     // Filtro server-side de qualidade para CAMPANHA: só GREEN com leitura fresca.
     // Qualidade nula/UNKNOWN, leitura falhada (token inválido) ou leitura com mais
     // de 6h são recusadas — nunca disparar sem saber a qualidade real do número.
     let instanciaIdsFiltradas = instanciaIds;
-    {
+    if (!liberacaoQualidadeGlobal) {
       const { data: instancesRows } = await supabase
         .from('meta_whatsapp_instances')
         .select('id, nome, saude_quality, saude_checked_at, qualidade_leitura_ok, qualidade_leitura_erro')
