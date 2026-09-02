@@ -63,6 +63,18 @@ function resolverTemplateId(job: any, instId: string, varianteIdx: number, credo
   return (job?.template_id_by_instance || {})[instId] || job?.template_id || null;
 }
 
+// Nome do template efetivamente usado (auditoria por destinatário).
+function nomeTemplatePorId(job: any, tplId: string): string | null {
+  const variantes = Array.isArray(job?.template_variantes) ? job.template_variantes : [];
+  for (const v of variantes) {
+    if (v?.template_id === tplId) return v?.nome_template ?? null;
+    const byInst = v?.template_id_by_instance || {};
+    if (Object.values(byInst).includes(tplId)) return v?.nome_template ?? null;
+  }
+  return job?.template_nome ?? null;
+}
+
+
 
 
 // Bloqueio TEMPORÁRIO (cota diária, freio de qualidade, quarentena, rate limit):
