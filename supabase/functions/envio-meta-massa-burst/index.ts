@@ -219,7 +219,7 @@ async function desativarInstanciaERedistribuir(
 
 
 type SendResult =
-  | { id: string; kind: 'ok'; waId: string | null }
+  | { id: string; kind: 'ok'; waId: string | null; tplNome?: string | null }
   | { id: string; kind: 'rate_limit'; retryMs: number; erro: string }
   | { id: string; kind: 'transient'; retryMs: number; erro: string }
   | { id: string; kind: 'restricted'; erro: string }
