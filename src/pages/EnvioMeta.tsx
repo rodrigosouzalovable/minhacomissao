@@ -1724,6 +1724,19 @@ export default function EnvioMeta() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={cpfObrigatorio ? "default" : "outline"}
+                onClick={() => setCpfObrigatorio((v) => !v)}
+                title={cpfObrigatorio
+                  ? "CPF obrigatório: a importação exige uma coluna marcada como CPF / CNPJ"
+                  : "CPF opcional: a importação aceita planilha sem coluna de CPF"}
+              >
+                <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                {cpfObrigatorio ? "CPF obrigatório" : "CPF opcional"}
+              </Button>
+
 
               <input
                 ref={fileInputRef}
