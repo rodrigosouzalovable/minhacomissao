@@ -2170,6 +2170,8 @@ export type Database = {
           saldo: number | null
           status: string
           telefone: string
+          template_id_resolvido: string | null
+          template_nome_enviado: string | null
           tenant_id: string
           tentativas: number
           updated_at: string
@@ -2193,6 +2195,8 @@ export type Database = {
           saldo?: number | null
           status?: string
           telefone: string
+          template_id_resolvido?: string | null
+          template_nome_enviado?: string | null
           tenant_id?: string
           tentativas?: number
           updated_at?: string
@@ -2216,6 +2220,8 @@ export type Database = {
           saldo?: number | null
           status?: string
           telefone?: string
+          template_id_resolvido?: string | null
+          template_nome_enviado?: string | null
           tenant_id?: string
           tentativas?: number
           updated_at?: string

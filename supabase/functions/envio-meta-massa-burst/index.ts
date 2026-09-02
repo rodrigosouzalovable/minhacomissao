@@ -219,7 +219,7 @@ async function desativarInstanciaERedistribuir(
 
 
 type SendResult =
-  | { id: string; kind: 'ok'; waId: string | null }
+  | { id: string; kind: 'ok'; waId: string | null; tplNome?: string | null }
   | { id: string; kind: 'rate_limit'; retryMs: number; erro: string }
   | { id: string; kind: 'transient'; retryMs: number; erro: string }
   | { id: string; kind: 'restricted'; erro: string }
@@ -227,11 +227,18 @@ type SendResult =
   | { id: string; kind: 'error'; erro: string };
 
 // Variação de templates: resolve o template aprovado na instância escolhida.
-// Para o par UME/Novo Mundo, o credor da linha vence o round-robin.
-function resolverTemplateId(job: any, instId: string, varianteIdx: number, credor?: string | null): string {
+// REGRA DURA: se o item tem credor e a campanha tem variante desse credor, só
+// pode sair o template daquele credor. Nunca cai no round-robin nem no fallback
+// (isso fazia cliente UME receber o layout Novo Mundo).
+function resolverTemplateId(job: any, instId: string, varianteIdx: number, credor?: string | null): string | null {
   const variantes = Array.isArray(job?.template_variantes) ? job.template_variantes : [];
-  const porCredor = variantes.find((v: any) => v?.credor === credor);
-  if (porCredor?.template_id_by_instance?.[instId]) return porCredor.template_id_by_instance[instId];
+  const cred = credor === 'ume' || credor === 'novo_mundo' ? credor : null;
+  if (cred) {
+    const porCredor = variantes.find((v: any) => v?.credor === cred);
+    if (porCredor) {
+      return porCredor?.template_id_by_instance?.[instId] || porCredor?.template_id || null;
+    }
+  }
   const n = variantes.length;
   if (n > 0) {
     const start = (((Number(varianteIdx) || 0) % n) + n) % n;
@@ -240,11 +247,33 @@ function resolverTemplateId(job: any, instId: string, varianteIdx: number, credo
       if (byInst[instId]) return byInst[instId];
     }
   }
-  return (job?.template_id_by_instance || {})[instId] || job?.template_id;
+  return (job?.template_id_by_instance || {})[instId] || job?.template_id || null;
+}
+
+// Nome do template efetivamente usado (auditoria por destinatário).
+function nomeTemplatePorId(job: any, tplId: string): string | null {
+  const variantes = Array.isArray(job?.template_variantes) ? job.template_variantes : [];
+  for (const v of variantes) {
+    if (v?.template_id === tplId) return v?.nome_template ?? null;
+    const byInst = v?.template_id_by_instance || {};
+    if (Object.values(byInst).includes(tplId)) return v?.nome_template ?? null;
+  }
+  return job?.template_nome ?? null;
 }
 
 async function enviarUm(item: any, job: any): Promise<SendResult> {
+
   const tplId = resolverTemplateId(job, item.instancia_id, Number(item.variante_idx || 0), item.credor);
+  if (!tplId) {
+    return {
+      id: item.id,
+      kind: 'error',
+      erro: `Template do credor ${item.credor} não aprovado nesta instância — envio bloqueado para não usar o layout do outro credor.`,
+    };
+  }
+  await supabase.from('envio_meta_job_item')
+    .update({ template_id_resolvido: tplId }).eq('id', item.id);
+
 
   const cliente = {
     telefone: item.telefone,
@@ -272,7 +301,7 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
       }),
     }).then((r) => r.json());
 
-    if (resp?.success) return { id: item.id, kind: 'ok', waId: resp?.waId ?? null };
+    if (resp?.success) return { id: item.id, kind: 'ok', waId: resp?.waId ?? null, tplNome: nomeTemplatePorId(job, tplId) };
     if (resp?.rate_limited) {
       return { id: item.id, kind: 'rate_limit', retryMs: Number(resp?.retry_after_ms) || 30_000, erro: resp?.error || 'rate limit' };
     }
@@ -511,7 +540,9 @@ Deno.serve(async (req) => {
         if (r.kind === 'ok') {
           await supabase.from('envio_meta_job_item').update({
             status: 'enviado', erro: null, processado_em: nowIso, wa_message_id: r.waId,
+            template_nome_enviado: r.tplNome ?? null,
           }).eq('id', it.id);
+
           okCount++;
         } else if (r.kind === 'rate_limit') {
           await supabase.from('envio_meta_job_item').update({
