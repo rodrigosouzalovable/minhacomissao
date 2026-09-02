@@ -93,9 +93,7 @@ Deno.serve(async (req) => {
 
     // Chave global "Liberar YELLOW/RED" vale APENAS para aquecimento/recuperação.
     // Campanha exige qualidade GREEN confirmada e leitura recente da Meta.
-    const { data: cfgQualidade } = await supabase
-      .from('meta_envio_pool_config').select('liberar_qualidade_global').eq('id', 1).maybeSingle();
-    const liberacaoGlobal = cfgQualidade?.liberar_qualidade_global === true;
+
 
     // Filtro server-side de qualidade para CAMPANHA: só GREEN com leitura fresca.
     // Qualidade nula/UNKNOWN, leitura falhada (token inválido) ou leitura com mais
