@@ -62,7 +62,13 @@ async function tresc(base: string, token: string, path: string, params: Record<s
     });
   } catch (e) {
     console.error(`3C ${path} sem resposta após ${Date.now() - t0}ms:`, e);
-    throw new Error(`3C ${path}: sem resposta em ${Math.round((Date.now() - t0) / 1000)}s (timeout da API 3C)`);
+    const detalhe = e instanceof Error ? e.message : String(e);
+    const tls = /certificate|UnknownIssuer|tls/i.test(detalhe);
+    throw new Error(
+      tls
+        ? `3C ${path}: a API 3C Plus recusou a conexão segura (certificado TLS não confiável em ${base}). Confirme a URL base configurada. Detalhe: ${detalhe.slice(0, 200)}`
+        : `3C ${path}: sem resposta em ${Math.round((Date.now() - t0) / 1000)}s. Detalhe: ${detalhe.slice(0, 200)}`,
+    );
   }
   const body = await res.text();
   console.log(`3C ${path} [${res.status}] em ${Date.now() - t0}ms (${body.length} bytes)`);
