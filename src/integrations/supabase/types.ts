@@ -5372,6 +5372,8 @@ export type Database = {
           pausa_automatica_motivo: string | null
           phone_number_id: string | null
           provider: string
+          qualidade_leitura_erro: string | null
+          qualidade_leitura_ok: boolean | null
           qualidade_liberada_em: string | null
           qualidade_liberada_manual: boolean
           quarentena_ate: string | null
@@ -5441,6 +5443,8 @@ export type Database = {
           pausa_automatica_motivo?: string | null
           phone_number_id?: string | null
           provider?: string
+          qualidade_leitura_erro?: string | null
+          qualidade_leitura_ok?: boolean | null
           qualidade_liberada_em?: string | null
           qualidade_liberada_manual?: boolean
           quarentena_ate?: string | null
@@ -5510,6 +5514,8 @@ export type Database = {
           pausa_automatica_motivo?: string | null
           phone_number_id?: string | null
           provider?: string
+          qualidade_leitura_erro?: string | null
+          qualidade_leitura_ok?: boolean | null
           qualidade_liberada_em?: string | null
           qualidade_liberada_manual?: boolean
           quarentena_ate?: string | null
