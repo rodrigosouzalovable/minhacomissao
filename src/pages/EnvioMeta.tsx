@@ -801,30 +801,10 @@ export default function EnvioMeta() {
       );
     }
 
-    // Filtro automático: só remove instâncias RED/YELLOW que estejam realmente
-    // pausadas/restritas pelo sistema. Se não há pausa ativa (sem botão "Retomar")
-    // ou se você liberou manualmente, o envio é permitido.
-    const badQuality = instanciaIds.filter((id) => {
-      const inst = instancias.find((x) => x.id === id) as any;
-      if (!inst) return false;
-      if (inst.qualidade_liberada_manual) return false;
-      const q = String(inst.saude_quality || "").toUpperCase();
-      if (q !== "RED" && q !== "YELLOW") return false;
-      const pausada = inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date();
-      const restrita = inst.estado_pool === "restrita" || inst.estado_pool === "pausado";
-      return Boolean(pausada || restrita);
-    });
-    const filteredInstanciaIds = instanciaIds.filter((id) => !badQuality.includes(id));
-    if (filteredInstanciaIds.length === 0) {
-      return toast.error("Nenhuma instância disponível. As RED/YELLOW pausadas foram bloqueadas — clique em \"Retomar\" na instância para liberar o envio mesmo assim.");
-    }
-    if (badQuality.length > 0) {
-      const nomes = badQuality
-        .map((id) => instancias.find((x) => x.id === id)?.nome || id)
-        .slice(0, 5)
-        .join(", ");
-      toast.warning(`${badQuality.length} instância(s) RED/YELLOW removidas automaticamente: ${nomes}`);
-    }
+    // A chave global de qualidade é validada no backend, que mantém os bloqueios
+    // reais da Meta (banimento, restrição, cobrança e nome reprovado). A tela não
+    // remove YELLOW, RED ou sem leitura antes de enviar.
+    const filteredInstanciaIds = instanciaIds;
 
     // Nome de exibição REPROVADO na Meta = entrega rejeitada (#131000).
     // Nome em análise (PENDING_REVIEW) envia normalmente.
@@ -1448,13 +1428,13 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona apenas instâncias conectadas com qualidade GREEN ou sem qualidade conhecida. Yellow/Red devem ser escolhidas manualmente."
+              title="Seleciona instâncias conectadas e elegíveis pela Meta, independentemente da qualidade."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
                  const boasInstancias = instanciasVisiveis.filter((i) => {
                    const status = (i.saude_status || "").toUpperCase();
-                   const qual = (i.saude_quality || "").toUpperCase();
-                   return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED" && !bmSemSaldo(i.meta_bm_id);
+                   const nomeStatus = (i.meta_name_status || "").toUpperCase();
+                   return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
                  });
                 const boaIds = boasInstancias.map((i) => i.id);
                 const todasMarcadas = boaIds.length > 0 && boaIds.every((id) => instanciaIds.includes(id));
@@ -1468,8 +1448,8 @@ export default function EnvioMeta() {
               {instanciasVisiveis.length > 0 && instanciasVisiveis
                 .filter((i) => {
                   const status = (i.saude_status || "").toUpperCase();
-                  const qual = (i.saude_quality || "").toUpperCase();
-                  return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED" && !bmSemSaldo(i.meta_bm_id);
+                  const nomeStatus = (i.meta_name_status || "").toUpperCase();
+                  return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
                 })
                 .every((i) => instanciaIds.includes(i.id))
                 ? "Limpar seleção"

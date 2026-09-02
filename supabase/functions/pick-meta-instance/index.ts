@@ -60,6 +60,8 @@ Deno.serve(async (req) => {
     // Qualquer outro valor é tratado como CAMPANHA: exige GREEN confirmado.
     const modoCampanha = String(reqBody?.contexto || 'campanha') !== 'aquecimento';
     let ignoraQualidadeGlobal = !modoCampanha && ignorar_pausa_qualidade === true;
+    // Preenchido após ler a config: chave global "Liberar YELLOW/RED".
+    let liberacaoQualidadeGlobal = false;
 
     const excluidas: string[] = Array.isArray(excluir_ids) ? excluir_ids : [];
 
@@ -73,8 +75,10 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
-    // Chave global "Liberar YELLOW/RED": vale só fora de campanha (aquecimento/recuperação).
-    if (!modoCampanha && cfg?.liberar_qualidade_global === true) ignoraQualidadeGlobal = true;
+    // Chave global "Liberar YELLOW/RED": quando ligada vale para TODOS os contextos,
+    // inclusive campanha — YELLOW/RED/UNKNOWN/sem leitura podem disparar.
+    liberacaoQualidadeGlobal = cfg?.liberar_qualidade_global === true;
+    if (liberacaoQualidadeGlobal) ignoraQualidadeGlobal = true;
 
 
     // Bloqueio de domingo/horário BRT
@@ -159,7 +163,8 @@ Deno.serve(async (req) => {
       if (motivoBm) { descartados.push(`${rotulo}: ${motivoBm}`); continue; }
 
       // ===== CAMPANHA: só GREEN com leitura recente e bem-sucedida =====
-      if (modoCampanha) {
+      // (dispensado quando a chave "Liberar YELLOW/RED" está ligada)
+      if (modoCampanha && !liberacaoQualidadeGlobal) {
         const qCamp = String(inst.saude_quality || '').toUpperCase();
         const checado = inst.saude_checked_at ? new Date(inst.saude_checked_at).getTime() : 0;
         const idadeH = checado ? (Date.now() - checado) / 3600000 : 9999;
@@ -188,18 +193,21 @@ Deno.serve(async (req) => {
       // Liberação de PAUSA: botão "Retomar" OU instância sem pausa/restrição ativa.
       const ignoraQualidade =
         ignoraQualidadeGlobal ||
-        (!modoCampanha && inst.qualidade_liberada_manual === true) ||
+        ((!modoCampanha || liberacaoQualidadeGlobal) && inst.qualidade_liberada_manual === true) ||
         (!pausaAtiva && !estadoBloqueado);
       // Gate de QUALIDADE: em campanha nunca é ignorado (já validado acima).
       const ignoraQualidadeGate =
-        !modoCampanha && (ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true);
+        (!modoCampanha || liberacaoQualidadeGlobal) &&
+        (ignoraQualidadeGlobal || inst.qualidade_liberada_manual === true);
 
 
 
 
       if (inst.estado_pool && inst.estado_pool !== 'ativo') {
-        // Em modo rajada, ignora pausa por qualidade (só bloqueia restrita ou pausa por status).
-        const bloqueia = inst.estado_pool === 'restrita' || !(ignoraQualidade && pausaPorQualidade);
+        // A chave global libera estados causados por qualidade; status reais da Meta continuam bloqueando.
+        const bloqueia = pausaPorStatus ||
+          (inst.estado_pool === 'restrita' && !pausaPorQualidade) ||
+          (inst.estado_pool === 'pausado' && !(ignoraQualidade && pausaPorQualidade));
         if (bloqueia) { descartados.push(`${rotulo}: estado do pool = ${inst.estado_pool}`); continue; }
       }
       if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
