@@ -73,8 +73,9 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
-    // Chave global "Liberar YELLOW/RED": ignora quarentena, recuperação e pausa por qualidade.
-    if (cfg?.liberar_qualidade_global === true) ignoraQualidadeGlobal = true;
+    // Chave global "Liberar YELLOW/RED": vale só fora de campanha (aquecimento/recuperação).
+    if (!modoCampanha && cfg?.liberar_qualidade_global === true) ignoraQualidadeGlobal = true;
+
 
     // Bloqueio de domingo/horário BRT
     const nowBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
