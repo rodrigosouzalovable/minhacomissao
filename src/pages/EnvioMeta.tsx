@@ -2331,6 +2331,7 @@ export default function EnvioMeta() {
         onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
         rows={mapDlg.rows}
         requireCredor={templatePorCredor}
+        requireCpf={cpfObrigatorio}
         isentosDedup={isentosDedup}
         template={template ? {
           nome_template: template.nome_template,
