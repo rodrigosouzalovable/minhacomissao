@@ -512,7 +512,9 @@ async function processarItem(job: any): Promise<ItemResult> {
       processado_em: new Date().toISOString(),
       tentativas: proximasTentativas,
       wa_message_id: ok ? waIdOk : (pend as any).wa_message_id ?? null,
+      template_nome_enviado: ok ? nomeTemplatePorId(job, tplId) : null,
     }).eq('id', pend.id);
+
 
     // Higiene de base: número inválido/inexistente vai para supressão
     // (não faz sentido queimar qualidade tentando de novo).
