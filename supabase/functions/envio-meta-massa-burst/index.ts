@@ -540,7 +540,9 @@ Deno.serve(async (req) => {
         if (r.kind === 'ok') {
           await supabase.from('envio_meta_job_item').update({
             status: 'enviado', erro: null, processado_em: nowIso, wa_message_id: r.waId,
+            template_nome_enviado: r.tplNome ?? null,
           }).eq('id', it.id);
+
           okCount++;
         } else if (r.kind === 'rate_limit') {
           await supabase.from('envio_meta_job_item').update({
