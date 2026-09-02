@@ -94,6 +94,8 @@ type Props = {
   template?: TemplateInfo;
   /** Exige a coluna Credor quando templates são roteados por carteira. */
   requireCredor?: boolean;
+  /** Exige a coluna CPF / CNPJ (padrão do Envio Meta). */
+  requireCpf?: boolean;
   /** Sufixos (8 dígitos) de números nossos da UAZAPI — isentos de deduplicação. */
   isentosDedup?: Set<string>;
   onConfirm: (
