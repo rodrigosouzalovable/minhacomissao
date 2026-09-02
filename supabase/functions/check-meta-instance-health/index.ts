@@ -83,6 +83,37 @@ Deno.serve(async (req) => {
             r.waba_error = wabaResp.data?.error?.message || `HTTP ${wabaResp.status}`;
           }
 
+          // Segunda fonte de qualidade: lista phone_numbers da WABA — é a mesma
+          // origem do portfólio da Meta e às vezes traz a classificação real
+          // quando a leitura direta do número devolve UNKNOWN.
+          const listResp = await fetchJson(
+            `${GRAPH}/${inst.waba_id}/phone_numbers?fields=id,display_phone_number,quality_rating,messaging_limit_tier,name_status,status&limit=100`,
+            inst.access_token,
+          );
+          if (listResp.ok && Array.isArray(listResp.data?.data)) {
+            const row = listResp.data.data.find((p: any) => String(p?.id) === String(inst.phone_number_id));
+            if (row) {
+              r.quality_lista = row.quality_rating || null;
+              // Consolida pelo PIOR valor entre as duas leituras.
+              const ordem: Record<string, number> = { GREEN: 3, YELLOW: 2, RED: 1 };
+              const a = String(r.quality_rating || '').toUpperCase();
+              const b = String(row.quality_rating || '').toUpperCase();
+              const na = ordem[a] ?? 0;
+              const nb = ordem[b] ?? 0;
+              if (nb > 0 && (na === 0 || nb < na)) r.quality_rating = b;
+              if (!r.status && row.status) r.status = row.status;
+              if (!r.name_status && row.name_status) r.name_status = row.name_status;
+              if (!r.messaging_limit_tier && row.messaging_limit_tier) r.messaging_limit_tier = row.messaging_limit_tier;
+              if (!phoneResp.ok) {
+                // A leitura direta falhou, mas a lista da WABA respondeu:
+                // qualidade passa a ser considerada confirmada.
+                r.error = undefined;
+              }
+            }
+          } else if (!listResp.ok) {
+            r.lista_error = listResp.data?.error?.message || `HTTP ${listResp.status}`;
+          }
+
           // Restrições de envio da WABA (ex.: RESTRICTED_BIZ_INITIATED_MESSAGING).
           // Chamada separada porque o campo não existe em todas as contas/versões —
           // um erro aqui não pode derrubar o restante do check.
@@ -92,6 +123,7 @@ Deno.serve(async (req) => {
           );
           if (restrResp.ok) r.waba_health = restrResp.data?.health_status || null;
         }
+
 
         // Restrição no próprio número (health_status), também isolada.
         const phoneHealth = await fetchJson(
