@@ -321,6 +321,13 @@ Deno.serve(async (req) => {
         const instId = modoRajada
           ? instanciaIdsFiltradas[globalIdx % instanciaIdsFiltradas.length]
           : null;
+        const credorItem = (c.credor === 'novo_mundo' || c.credor === 'ume') ? c.credor : credorCampanha;
+        // Pré-resolve o template do credor da linha (quando a instância já é conhecida).
+        let tplResolvido: string | null = null;
+        if (instId && (credorItem === 'ume' || credorItem === 'novo_mundo')) {
+          const v = templateVariantes.find((x) => x?.credor === credorItem);
+          if (v) tplResolvido = v.template_id_by_instance?.[instId] || v.template_id || null;
+        }
         return {
           job_id: job.id,
           ordem: globalIdx,
@@ -334,9 +341,11 @@ Deno.serve(async (req) => {
           instancia_id: instId,
           instancia_nome: instId ? (nomeById.get(instId) ?? null) : null,
           variante_idx: templateVariantes.length > 1 ? globalIdx % templateVariantes.length : 0,
-          credor: (c.credor === 'novo_mundo' || c.credor === 'ume') ? c.credor : credorCampanha,
+          credor: credorItem,
+          template_id_resolvido: tplResolvido,
         };
       });
+
 
       const { error } = await supabase.from('envio_meta_job_item').insert(slice);
       if (error) throw error;
