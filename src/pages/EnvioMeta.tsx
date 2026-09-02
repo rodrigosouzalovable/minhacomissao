@@ -653,6 +653,18 @@ export default function EnvioMeta() {
     );
   }, [variantesGroups, instanciaIds, instancias]);
 
+  // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
+  const isentosDedup = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of uazInstancias as any[]) {
+      const suf = telSuffix8(String(u?.telefone || ""));
+      if (suf.length === 8) s.add(suf);
+    }
+    return s;
+  }, [uazInstancias]);
+
+  const recipients = useMemo(() => parseRecipients(recipientsRaw, isentosDedup), [recipientsRaw, isentosDedup]);
+
   // Motivos que impedem disparar/agendar — exibidos na tela para não travar o botão sem explicação.
   const motivosBloqueio = useMemo(() => {
     const m: string[] = [];
@@ -670,21 +682,6 @@ export default function EnvioMeta() {
     }
     return m;
   }, [templateGroup, instanciaIds, recipientsRaw, recipients, credorByTel, templatePorCredor, instanciasIncompatíveis]);
-
-
-
-
-  // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
-  const isentosDedup = useMemo(() => {
-    const s = new Set<string>();
-    for (const u of uazInstancias as any[]) {
-      const suf = telSuffix8(String(u?.telefone || ""));
-      if (suf.length === 8) s.add(suf);
-    }
-    return s;
-  }, [uazInstancias]);
-
-  const recipients = useMemo(() => parseRecipients(recipientsRaw, isentosDedup), [recipientsRaw, isentosDedup]);
 
   const templateIdByInstance = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};

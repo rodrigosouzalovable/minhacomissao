@@ -57,9 +57,10 @@ Deno.serve(async (req) => {
       ? Math.max(1, Math.min(60, Number(body?.msgsPorSegundo ?? 30)))
       : 10;
     const templateIdByInstance = (body?.templateIdByInstance ?? {}) as Record<string, string>;
-    // Variação de templates: round-robin entre variantes (mesma qtd de variáveis)
+    // Variação de templates: round-robin ou roteamento determinístico por credor.
     const templateVariantes = (Array.isArray(body?.templateVariantes) ? body.templateVariantes : []) as Array<{
       template_id: string; nome_template?: string; template_id_by_instance?: Record<string, string>;
+      credor?: 'novo_mundo' | 'ume' | null;
     }>;
 
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;

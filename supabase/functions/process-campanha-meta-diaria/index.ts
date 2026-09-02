@@ -53,6 +53,7 @@ async function invokeSend(supabase: any, item: any, campanha: any, varianteIdx =
       template_id: templateId,
       instancia_id: item.instancia_id,
       cliente: item.cliente,
+      credor: item.credor ?? null,
     },
   });
   if (error) throw error;
