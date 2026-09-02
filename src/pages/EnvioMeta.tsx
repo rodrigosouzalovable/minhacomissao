@@ -18,6 +18,8 @@ import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
 import CustoEstimadoEnvio, { LIMITE_CUSTO_BRL_DEFAULT } from "@/components/meta/CustoEstimadoEnvio";
 import { calcularCustoEstimado } from "@/hooks/useCustoEstimadoEnvio";
+import { checkUazapiConnection, isResultConnected } from "@/lib/uazapiConnectionCache";
+
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useMetaEnviosTotais } from "@/hooks/useMetaEnviosTotais";
 import { useAuth } from "@/hooks/useAuth";
