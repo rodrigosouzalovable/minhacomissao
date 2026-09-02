@@ -394,8 +394,21 @@ export function PoolMetaPanel() {
              </div>
              <Switch checked={cfg?.liberar_qualidade_global === true} disabled={savingTurbo} onCheckedChange={salvarLiberarQualidade} />
            </div>
-           {cfg?.liberar_qualidade_global && <p className="text-xs text-destructive">⚠️ Risco de banimento maior. Bloqueios reais da Meta (BANNED/FLAGGED/pagamento) continuam valendo.</p>}
-         </div>
+          {cfg?.liberar_qualidade_global && <p className="text-xs text-destructive">⚠️ Liberação ativa no aquecimento. Campanha nunca usa YELLOW/RED, nem qualidade desconhecida ou sem leitura.</p>}
+        </div>
+
+        {/* Aviso: números sem leitura de qualidade */}
+        {instancias.some((i) => estadoQualidade(i).liberado === false) && (
+          <div className="rounded-md border border-destructive/60 bg-destructive/10 p-3">
+            <p className="text-sm font-semibold text-destructive">
+              {instancias.filter((i) => estadoQualidade(i).liberado === false).length} número(s) fora de campanha
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Inclui números com qualidade YELLOW/RED e números cuja qualidade não pôde ser lida na Meta (token de acesso inválido ou expirado). Atualize o token desses números para que voltem às campanhas.
+            </p>
+          </div>
+        )}
+
 
 
 
