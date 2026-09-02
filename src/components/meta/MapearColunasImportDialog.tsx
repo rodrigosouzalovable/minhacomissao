@@ -42,6 +42,8 @@ function detectRoleFromHeader(header: string): string {
 function detectRoleFromSample(samples: string[]): string {
   const nonEmpty = samples.map((s) => String(s || "").trim()).filter(Boolean);
   if (nonEmpty.length === 0) return "ignore";
+  const credorLike = nonEmpty.filter((v) => normalizarCredor(v));
+  if (credorLike.length / nonEmpty.length > 0.6) return "credor";
   const digitLike = nonEmpty.filter((v) => /^\+?\d[\d\s().-]{3,}$/.test(v));
   const digitRatio = digitLike.length / nonEmpty.length;
   if (digitRatio > 0.6) {

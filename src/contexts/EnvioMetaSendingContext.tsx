@@ -110,7 +110,7 @@ export type IniciarParams = {
   erroValidacao?: string[];
   templateIdByInstance?: Record<string, string>;
   /** Variação de templates: round-robin entre variantes (mesma qtd de variáveis) */
-  templateVariantes?: Array<{ template_id: string; nome_template: string; template_id_by_instance: Record<string, string> }>;
+  templateVariantes?: Array<{ template_id: string; nome_template: string; template_id_by_instance: Record<string, string>; credor?: 'novo_mundo' | 'ume' | null }>;
 
   nomeCampanha?: string;
   modoRajada?: boolean;
