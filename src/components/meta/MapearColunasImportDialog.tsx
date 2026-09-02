@@ -355,6 +355,46 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
 
   const bodyPreview = template?.body_text || "";
 
+  // Primeira linha de dados — usada como exemplo na prévia do template.
+  const linhaExemplo: any[] = (firstIsHeader ? rows[1] : rows[0]) || [];
+
+  const colPorPlaceholder = useMemo(() => {
+    const m = new Map<string, number>();
+    mapping.forEach((r, c) => {
+      if (r && r.startsWith("tplvar:")) m.set(r.slice("tplvar:".length), c);
+    });
+    return m;
+  }, [mapping]);
+
+  const previewNodes = useMemo(() => {
+    const nodes: (string | JSX.Element)[] = [];
+    let last = 0;
+    let i = 0;
+    const rx = /\{\{\s*([^}\s]+)\s*\}\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = rx.exec(bodyPreview)) !== null) {
+      if (m.index > last) nodes.push(bodyPreview.slice(last, m.index));
+      const key = m[1];
+      const col = colPorPlaceholder.get(key);
+      const valor = col != null ? String(valorCelula(col, linhaExemplo[col]) ?? "").trim() : "";
+      nodes.push(
+        valor ? (
+          <span key={`p-${i++}`} className="rounded bg-emerald-500/20 px-1 py-0.5 font-semibold text-emerald-700 dark:text-emerald-400">
+            {valor}
+          </span>
+        ) : (
+          <span key={`p-${i++}`} className="rounded bg-primary/15 px-1 py-0.5 font-semibold text-primary">
+            {`{{${key}}}`}
+          </span>
+        ),
+      );
+      last = m.index + m[0].length;
+    }
+    if (last < bodyPreview.length) nodes.push(bodyPreview.slice(last));
+    return nodes;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bodyPreview, colPorPlaceholder, formatoPorColuna, rows, firstIsHeader]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
@@ -372,14 +412,10 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
             <div className="text-xs font-semibold uppercase text-muted-foreground">
               Template: {template.nome_template}
             </div>
-            <div
-              className="text-xs whitespace-pre-wrap font-mono leading-relaxed"
-              dangerouslySetInnerHTML={{
-                __html: bodyPreview
-                  .replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] as string))
-                  .replace(/\{\{\s*([^}\s]+)\s*\}\}/g, '<span class="rounded bg-primary/15 px-1 py-0.5 font-semibold text-primary">{{$1}}</span>'),
-              }}
-            />
+            <div className="text-xs whitespace-pre-wrap font-mono leading-relaxed">{previewNodes}</div>
+            <div className="text-[10px] text-muted-foreground">
+              Exemplo com os dados da primeira linha da planilha.
+            </div>
             <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
               {placeholders.map((k) => (
                 <span key={k} className="rounded border px-1.5 py-0.5">
@@ -390,6 +426,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
             </div>
           </div>
         )}
+
 
         <div className="overflow-auto max-h-[50vh] border rounded-md">
           <table className="w-full text-xs">
