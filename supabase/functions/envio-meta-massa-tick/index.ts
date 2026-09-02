@@ -295,6 +295,7 @@ async function processarItem(job: any): Promise<ItemResult> {
       excluir_id: job.ultima_instancia_id || null,
       excluir_ids: exclItem,
       ignorar_pausa_qualidade: job.modo_rajada === true,
+      contexto: 'campanha',
     }),
 
 
