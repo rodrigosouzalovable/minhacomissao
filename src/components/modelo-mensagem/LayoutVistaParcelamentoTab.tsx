@@ -186,9 +186,6 @@ export function LayoutVistaParcelamentoTab() {
             <Button onClick={aplicar} disabled={rows.length === 0}>
               <Wand2 className="h-4 w-4 mr-2" /> Aplicar
             </Button>
-            <Button variant="outline" onClick={baixar} disabled={preview.length === 0}>
-              <Download className="h-4 w-4 mr-2" /> Baixar Excel
-            </Button>
             {rows.length > 0 && (
               <Button variant="ghost" onClick={limpar}>
                 <Trash2 className="h-4 w-4 mr-2" /> Limpar
@@ -207,12 +204,51 @@ export function LayoutVistaParcelamentoTab() {
 
       {preview.length > 0 && (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1 w-52">
+                <Label>Credor</Label>
+                <Select
+                  value={credor}
+                  onValueChange={(v) => setCredor(v as CredorPlanilha)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(GRADE_POR_CREDOR) as CredorPlanilha[]).map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {CREDOR_LABEL[c]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="secondary" onClick={aplicar}>
+                <Wand2 className="h-4 w-4 mr-2" /> Reaplicar
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => exportar(comParcelamento, true, 'avista-parcelamento')}
+                disabled={comParcelamento.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" /> À vista + parcelado ({comParcelamento.length})
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => exportar(somenteAVista, false, 'somente-a-vista')}
+                disabled={somenteAVista.length === 0}
+              >
+                <Download className="h-4 w-4 mr-2" /> Somente à vista ({somenteAVista.length})
+              </Button>
+            </div>
+
             <div className="max-h-[60vh] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Telefone</TableHead>
+                    <TableHead>CPF</TableHead>
                     <TableHead>Nome</TableHead>
                     <TableHead>Valor original</TableHead>
                     <TableHead>À vista</TableHead>
@@ -223,6 +259,7 @@ export function LayoutVistaParcelamentoTab() {
                   {preview.map((l, i) => (
                     <TableRow key={`${l.telefone}-${i}`}>
                       <TableCell className="whitespace-nowrap">{l.telefone}</TableCell>
+                      <TableCell className="whitespace-nowrap">{l.cpf || '—'}</TableCell>
                       <TableCell className="whitespace-nowrap">{l.nome}</TableCell>
                       <TableCell className="whitespace-nowrap">{moeda(l.valor)}</TableCell>
                       <TableCell className="whitespace-nowrap font-medium">
