@@ -1719,8 +1719,8 @@ export default function EnvioMeta() {
             <div>
               <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
               <CardDescription>
-                Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>. Apenas <code>telefone</code> é obrigatório.
-                Ou importe uma planilha Excel — ao importar, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Atraso, Saldo).
+                Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>.
+                Ao importar uma planilha Excel, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Atraso, Saldo). O CPF/CNPJ vem obrigatório por padrão.
               </CardDescription>
             </div>
             <div className="flex gap-2">
