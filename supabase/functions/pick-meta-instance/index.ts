@@ -205,7 +205,9 @@ Deno.serve(async (req) => {
 
       if (inst.estado_pool && inst.estado_pool !== 'ativo') {
         // A chave global libera estados causados por qualidade; status reais da Meta continuam bloqueando.
-        const bloqueia = (inst.estado_pool === 'restrita' && !ignoraQualidade) || !(ignoraQualidade && pausaPorQualidade);
+        const bloqueia = pausaPorStatus ||
+          (inst.estado_pool === 'restrita' && !ignoraQualidade) ||
+          (inst.estado_pool === 'pausado' && !(ignoraQualidade && pausaPorQualidade));
         if (bloqueia) { descartados.push(`${rotulo}: estado do pool = ${inst.estado_pool}`); continue; }
       }
       if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
