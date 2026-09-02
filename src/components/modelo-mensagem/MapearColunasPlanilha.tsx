@@ -10,9 +10,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { parseValorPlanilha } from '@/lib/gradeCredor';
+import { parseValorPlanilha, normalizarDocumento } from '@/lib/gradeCredor';
 
-export type PapelColuna = 'ignore' | 'nome' | 'telefone' | 'valor';
+export type PapelColuna = 'ignore' | 'nome' | 'telefone' | 'valor' | 'cpf';
 
 export interface MapeamentoPlanilha {
   papeis: PapelColuna[];
@@ -23,12 +23,14 @@ const LABELS: Record<PapelColuna, string> = {
   ignore: 'Ignorar',
   nome: 'Nome',
   telefone: 'Telefone',
+  cpf: 'CPF',
   valor: 'Valor total devido',
 };
 
 const RX_TEL = /(telefone|celular|whats|fone|phone|n[uú]mero|tel)/i;
 const RX_NOME = /(nome|cliente|raz[aã]o|contato|devedor)/i;
 const RX_VALOR = /(saldo|valor|d[ií]vida|debito|débito|montante|total|aberto)/i;
+const RX_CPF = /(cpf|cnpj|documento|doc\b)/i;
 
 const soDigitos = (s: any) => String(s ?? '').replace(/\D+/g, '');
 
@@ -58,7 +60,8 @@ function detectar(rows: any[][], temCabecalho: boolean): PapelColuna[] {
   for (let i = 0; i < nCols; i++) {
     const h = String(header?.[i] ?? '').trim();
     if (!h) continue;
-    if (RX_TEL.test(h)) setar(i, 'telefone');
+    if (RX_CPF.test(h)) setar(i, 'cpf');
+    else if (RX_TEL.test(h)) setar(i, 'telefone');
     else if (RX_VALOR.test(h)) setar(i, 'valor');
     else if (RX_NOME.test(h)) setar(i, 'nome');
   }
@@ -71,11 +74,17 @@ function detectar(rows: any[][], temCabecalho: boolean): PapelColuna[] {
     const digitos = amostras.map((s) => soDigitos(s));
     const telLike = digitos.filter((d) => d.length >= 10 && d.length <= 13).length / amostras.length;
     const temLetras = amostras.filter((s) => /[a-zA-ZÀ-ÿ]{3,}/.test(s)).length / amostras.length;
+    const cpfLike =
+      amostras.filter((s) => {
+        const d = soDigitos(s);
+        return !/[a-zA-ZÀ-ÿ]/.test(s) && (d.length === 11 || d.length === 14);
+      }).length / amostras.length;
     const valorLike =
       amostras.filter((s) => parseValorPlanilha(s) > 0 && !/^\d{10,}$/.test(soDigitos(s))).length /
       amostras.length;
 
-    if (!usado.has('telefone') && telLike > 0.6 && temLetras < 0.3) setar(i, 'telefone');
+    if (!usado.has('cpf') && cpfLike > 0.6) setar(i, 'cpf');
+    else if (!usado.has('telefone') && telLike > 0.6 && temLetras < 0.3) setar(i, 'telefone');
     else if (!usado.has('nome') && temLetras > 0.6) setar(i, 'nome');
     else if (!usado.has('valor') && valorLike > 0.6) setar(i, 'valor');
   }
@@ -190,22 +199,24 @@ export function MapearColunasPlanilha({ rows, mapeamento, onChange }: Props) {
 export function extrairLinhas(
   rows: any[][],
   m: MapeamentoPlanilha,
-): { nome: string; telefone: string; valor: number }[] {
+): { nome: string; telefone: string; valor: number; cpf: string }[] {
   const idxNome = m.papeis.indexOf('nome');
   const idxTel = m.papeis.indexOf('telefone');
   const idxValor = m.papeis.indexOf('valor');
+  const idxCpf = m.papeis.indexOf('cpf');
   if (idxTel < 0 || idxValor < 0) return [];
   const vistos = new Set<string>();
-  const out: { nome: string; telefone: string; valor: number }[] = [];
+  const out: { nome: string; telefone: string; valor: number; cpf: string }[] = [];
   for (const row of rows.slice(m.temCabecalho ? 1 : 0)) {
     const nome = idxNome >= 0 ? String(row?.[idxNome] ?? '').trim() : '';
     const telefone = String(row?.[idxTel] ?? '').replace(/\D+/g, '');
     const valor = parseValorPlanilha(row?.[idxValor]);
+    const cpf = idxCpf >= 0 ? normalizarDocumento(row?.[idxCpf]) : '';
     if (!telefone || valor <= 0) continue;
     const key = `${nome.toLowerCase()}|${telefone}|${valor.toFixed(2)}`;
     if (vistos.has(key)) continue;
     vistos.add(key);
-    out.push({ nome, telefone, valor });
+    out.push({ nome, telefone, valor, cpf });
   }
   return out;
 }
