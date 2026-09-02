@@ -10,9 +10,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { parseValorPlanilha } from '@/lib/gradeCredor';
+import { parseValorPlanilha, normalizarDocumento } from '@/lib/gradeCredor';
 
-export type PapelColuna = 'ignore' | 'nome' | 'telefone' | 'valor';
+export type PapelColuna = 'ignore' | 'nome' | 'telefone' | 'valor' | 'cpf';
 
 export interface MapeamentoPlanilha {
   papeis: PapelColuna[];
@@ -23,12 +23,14 @@ const LABELS: Record<PapelColuna, string> = {
   ignore: 'Ignorar',
   nome: 'Nome',
   telefone: 'Telefone',
+  cpf: 'CPF',
   valor: 'Valor total devido',
 };
 
 const RX_TEL = /(telefone|celular|whats|fone|phone|n[uú]mero|tel)/i;
 const RX_NOME = /(nome|cliente|raz[aã]o|contato|devedor)/i;
 const RX_VALOR = /(saldo|valor|d[ií]vida|debito|débito|montante|total|aberto)/i;
+const RX_CPF = /(cpf|cnpj|documento|doc\b)/i;
 
 const soDigitos = (s: any) => String(s ?? '').replace(/\D+/g, '');
 
