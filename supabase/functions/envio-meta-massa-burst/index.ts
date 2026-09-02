@@ -226,11 +226,12 @@ type SendResult =
   | { id: string; kind: 'template_paused'; erro: string }
   | { id: string; kind: 'error'; erro: string };
 
-// Variação de templates: resolve o template_id da variante atribuída ao item,
-// já aprovado na instância escolhida. Se a variante não existe nessa instância,
-// cai para a próxima variante e, por fim, para o template principal do job.
-function resolverTemplateId(job: any, instId: string, varianteIdx: number): string {
+// Variação de templates: resolve o template aprovado na instância escolhida.
+// Para o par UME/Novo Mundo, o credor da linha vence o round-robin.
+function resolverTemplateId(job: any, instId: string, varianteIdx: number, credor?: string | null): string {
   const variantes = Array.isArray(job?.template_variantes) ? job.template_variantes : [];
+  const porCredor = variantes.find((v: any) => v?.credor === credor);
+  if (porCredor?.template_id_by_instance?.[instId]) return porCredor.template_id_by_instance[instId];
   const n = variantes.length;
   if (n > 0) {
     const start = (((Number(varianteIdx) || 0) % n) + n) % n;
@@ -243,7 +244,7 @@ function resolverTemplateId(job: any, instId: string, varianteIdx: number): stri
 }
 
 async function enviarUm(item: any, job: any): Promise<SendResult> {
-  const tplId = resolverTemplateId(job, item.instancia_id, Number(item.variante_idx || 0));
+  const tplId = resolverTemplateId(job, item.instancia_id, Number(item.variante_idx || 0), item.credor);
 
   const cliente = {
     telefone: item.telefone,

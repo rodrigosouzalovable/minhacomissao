@@ -626,6 +626,21 @@ export default function EnvioMeta() {
     return [templateGroup, ...extras];
   }, [templateGroup, variantesExtraKeys, templateGroups]);
 
+  // Quando os dois templates de acordo estão selecionados, a coluna Credor
+  // roteia cada cliente para o template correto em vez de alternar por sorteio.
+  const templatePorCredor = useMemo(() => {
+    const nomes = new Set(variantesGroups.map((g) => g.nome));
+    const temUme = nomes.has("autorizado_a_vista_ou_parcelado_ume");
+    const temNovoMundo = nomes.has("autorizado_a_vista_ou_parcelado");
+    return temUme && temNovoMundo;
+  }, [variantesGroups]);
+
+  const credorDoTemplate = (nome: string): CredorSlug | null => {
+    if (nome === "autorizado_a_vista_ou_parcelado_ume") return "ume";
+    if (nome === "autorizado_a_vista_ou_parcelado") return "novo_mundo";
+    return null;
+  };
+
   const toggleVariante = (key: string) => {
     setVariantesExtraKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
@@ -638,23 +653,6 @@ export default function EnvioMeta() {
     );
   }, [variantesGroups, instanciaIds, instancias]);
 
-  // Motivos que impedem disparar/agendar — exibidos na tela para não travar o botão sem explicação.
-  const motivosBloqueio = useMemo(() => {
-    const m: string[] = [];
-    if (!templateGroup) m.push("Selecione um template aprovado.");
-    if (instanciaIds.length === 0) m.push("Selecione ao menos uma instância.");
-    if (recipientsRaw.trim().length === 0) m.push("Importe a planilha com os destinatários.");
-    if (instanciasIncompatíveis.length > 0) {
-      m.push(
-        `${instanciasIncompatíveis.length} instância(s) selecionada(s) não têm este template aprovado — remova-as ou troque o template.`,
-      );
-    }
-    return m;
-  }, [templateGroup, instanciaIds, recipientsRaw, instanciasIncompatíveis]);
-
-
-
-
   // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
   const isentosDedup = useMemo(() => {
     const s = new Set<string>();
@@ -666,6 +664,24 @@ export default function EnvioMeta() {
   }, [uazInstancias]);
 
   const recipients = useMemo(() => parseRecipients(recipientsRaw, isentosDedup), [recipientsRaw, isentosDedup]);
+
+  // Motivos que impedem disparar/agendar — exibidos na tela para não travar o botão sem explicação.
+  const motivosBloqueio = useMemo(() => {
+    const m: string[] = [];
+    if (!templateGroup) m.push("Selecione um template aprovado.");
+    if (instanciaIds.length === 0) m.push("Selecione ao menos uma instância.");
+    if (recipientsRaw.trim().length === 0) m.push("Importe a planilha com os destinatários.");
+    if (templatePorCredor && recipients.length > 0) {
+      const semCredor = recipients.filter((c) => !credorByTel[telSuffix8(c.telefone)]).length;
+      if (semCredor > 0) m.push(`Mapeie a coluna Credor para ${semCredor} linha(s) — UME usa o template com sufixo _ume e Novo Mundo usa o template padrão.`);
+    }
+    if (instanciasIncompatíveis.length > 0) {
+      m.push(
+        `${instanciasIncompatíveis.length} instância(s) selecionada(s) não têm este template aprovado — remova-as ou troque o template.`,
+      );
+    }
+    return m;
+  }, [templateGroup, instanciaIds, recipientsRaw, recipients, credorByTel, templatePorCredor, instanciasIncompatíveis]);
 
   const templateIdByInstance = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -719,6 +735,12 @@ export default function EnvioMeta() {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
     if (recipients.length === 0) return toast.error("Importe a planilha com os destinatários");
+    if (templatePorCredor) {
+      const semCredor = recipients.filter((c) => !credorByTel[telSuffix8(c.telefone)]).length;
+      if (semCredor > 0) {
+        return toast.error(`A coluna Credor é obrigatória: ${semCredor} linha(s) não têm UME ou NOVO MUNDO reconhecido.`);
+      }
+    }
     if (instanciasIncompatíveis.length > 0) {
       return toast.error(
         `${instanciasIncompatíveis.length} instância(s) selecionada(s) não têm este template aprovado — remova-as ou troque o template.`,
@@ -964,6 +986,7 @@ export default function EnvioMeta() {
         template_id: g.sample.id,
         nome_template: g.nome,
         template_id_by_instance: byInst,
+        credor: templatePorCredor ? credorDoTemplate(g.nome) : null,
       };
     });
 
@@ -1228,8 +1251,9 @@ export default function EnvioMeta() {
                 )}
                 {variantesGroups.length > 1 && (
                   <p className="text-xs text-primary">
-                    {variantesGroups.length} templates selecionados · {templateGroup.varsCount} variável
-                    {templateGroup.varsCount === 1 ? "" : "is"} · alternando a cada envio
+                    {templatePorCredor
+                      ? "Roteamento automático pela coluna Credor: UME → template _ume · Novo Mundo → template padrão"
+                      : `${variantesGroups.length} templates selecionados · ${templateGroup.varsCount} variável${templateGroup.varsCount === 1 ? "" : "is"} · alternando a cada envio`}
                   </p>
                 )}
               </div>
@@ -2230,6 +2254,7 @@ export default function EnvioMeta() {
         open={mapDlg.open}
         onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
         rows={mapDlg.rows}
+        requireCredor={templatePorCredor}
         isentosDedup={isentosDedup}
         template={template ? {
           nome_template: template.nome_template,
