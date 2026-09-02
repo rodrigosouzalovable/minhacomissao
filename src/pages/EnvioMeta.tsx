@@ -249,6 +249,39 @@ export default function EnvioMeta() {
   const [checandoUazConexao, setChecandoUazConexao] = useState<boolean>(false);
   const [validadorId, setValidadorId] = useState<string>("");
 
+  // Checa conexão real das instâncias UAZAPI (cache de 5 min), em lotes de 5.
+  const checarConexoesUaz = async (force = false) => {
+    if (uazInstancias.length === 0) { setUazConectadasIds([]); return; }
+    setChecandoUazConexao(true);
+    const conectadas: string[] = [];
+    try {
+      for (let i = 0; i < uazInstancias.length; i += 5) {
+        const lote = uazInstancias.slice(i, i + 5);
+        const res = await Promise.all(
+          lote.map(async (u) => {
+            const r = await checkUazapiConnection(u.id, u.server_url, u.instance_token, { force });
+            return isResultConnected(r) ? u.id : null;
+          }),
+        );
+        for (const id of res) if (id) conectadas.push(id);
+      }
+      setUazConectadasIds(conectadas);
+      if (validadorId && !conectadas.includes(validadorId)) {
+        setValidadorId("");
+        toast.warning("O número escolhido para validação está desconectado — validação desativada.");
+      }
+    } finally {
+      setChecandoUazConexao(false);
+    }
+  };
+
+  const uazDisponiveis = useMemo(
+    () => (uazConectadasIds === null ? [] : uazInstancias.filter((u) => uazConectadasIds.includes(u.id))),
+    [uazInstancias, uazConectadasIds],
+  );
+
+
+
   const [validando, setValidando] = useState<boolean>(false);
   const [enviandoTeste, setEnviandoTeste] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
