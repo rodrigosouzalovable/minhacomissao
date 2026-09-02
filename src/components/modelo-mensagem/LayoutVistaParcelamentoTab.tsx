@@ -19,6 +19,7 @@ import {
   CREDOR_LABEL,
   GRADE_POR_CREDOR,
   montarParcelamentoTexto,
+  primeiroNome,
   type CredorPlanilha,
 } from '@/lib/gradeCredor';
 import {
@@ -29,11 +30,14 @@ import {
 
 interface LinhaPreview {
   nome: string;
+  cpf: string;
   telefone: string;
   valor: number;
   aVista: number;
   parcelamento: string;
 }
+
+const SOMENTE_AVISTA = 'Somente à vista';
 
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -49,6 +53,9 @@ export function LayoutVistaParcelamentoTab() {
   const [descVista, setDescVista] = useState(50);
   const [descParcelado, setDescParcelado] = useState(30);
   const [preview, setPreview] = useState<LinhaPreview[]>([]);
+
+  const comParcelamento = preview.filter((l) => l.parcelamento !== SOMENTE_AVISTA);
+  const somenteAVista = preview.filter((l) => l.parcelamento === SOMENTE_AVISTA);
 
   async function handleFile(file: File) {
     try {
@@ -79,6 +86,7 @@ export function LayoutVistaParcelamentoTab() {
     setPreview(
       base.map((l) => ({
         ...l,
+        nome: primeiroNome(l.nome),
         aVista: l.valor * (1 - (descVista || 0) / 100),
         parcelamento: montarParcelamentoTexto(l.valor * (1 - (descParcelado || 0) / 100), grade),
       })),
@@ -86,17 +94,29 @@ export function LayoutVistaParcelamentoTab() {
     toast.success(`${base.length} clientes processados`);
   }
 
-  function baixar() {
-    if (preview.length === 0) return;
+  function exportar(linhas: LinhaPreview[], comColunaParcelamento: boolean, nome: string) {
+    if (linhas.length === 0) return;
+    const head = ['Telefone', 'CPF', 'Nome', 'Valor original', 'À vista'];
+    if (comColunaParcelamento) head.push('Parcelamento');
     const aoa = [
-      ['Telefone', 'Nome', 'Valor original', 'À vista', 'Parcelamento'],
-      ...preview.map((l) => [l.telefone, l.nome, moeda(l.valor), moeda(l.aVista), l.parcelamento]),
+      head,
+      ...linhas.map((l) => {
+        const linha: (string | number)[] = [
+          l.telefone,
+          l.cpf,
+          l.nome,
+          moeda(l.valor),
+          moeda(l.aVista),
+        ];
+        if (comColunaParcelamento) linha.push(l.parcelamento);
+        return linha;
+      }),
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 18 }, { wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 120 }];
+    ws['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 120 }];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'A vista e Parcelado');
-    XLSX.writeFile(wb, `avista-parcelamento-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, comColunaParcelamento ? 'A vista e Parcelado' : 'Somente a vista');
+    XLSX.writeFile(wb, `${nome}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   function limpar() {
