@@ -301,7 +301,7 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
       }),
     }).then((r) => r.json());
 
-    if (resp?.success) return { id: item.id, kind: 'ok', waId: resp?.waId ?? null };
+    if (resp?.success) return { id: item.id, kind: 'ok', waId: resp?.waId ?? null, tplNome: nomeTemplatePorId(job, tplId) };
     if (resp?.rate_limited) {
       return { id: item.id, kind: 'rate_limit', retryMs: Number(resp?.retry_after_ms) || 30_000, erro: resp?.error || 'rate limit' };
     }
