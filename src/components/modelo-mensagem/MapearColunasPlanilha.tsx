@@ -60,7 +60,8 @@ function detectar(rows: any[][], temCabecalho: boolean): PapelColuna[] {
   for (let i = 0; i < nCols; i++) {
     const h = String(header?.[i] ?? '').trim();
     if (!h) continue;
-    if (RX_TEL.test(h)) setar(i, 'telefone');
+    if (RX_CPF.test(h)) setar(i, 'cpf');
+    else if (RX_TEL.test(h)) setar(i, 'telefone');
     else if (RX_VALOR.test(h)) setar(i, 'valor');
     else if (RX_NOME.test(h)) setar(i, 'nome');
   }
@@ -73,11 +74,17 @@ function detectar(rows: any[][], temCabecalho: boolean): PapelColuna[] {
     const digitos = amostras.map((s) => soDigitos(s));
     const telLike = digitos.filter((d) => d.length >= 10 && d.length <= 13).length / amostras.length;
     const temLetras = amostras.filter((s) => /[a-zA-ZÀ-ÿ]{3,}/.test(s)).length / amostras.length;
+    const cpfLike =
+      amostras.filter((s) => {
+        const d = soDigitos(s);
+        return !/[a-zA-ZÀ-ÿ]/.test(s) && (d.length === 11 || d.length === 14);
+      }).length / amostras.length;
     const valorLike =
       amostras.filter((s) => parseValorPlanilha(s) > 0 && !/^\d{10,}$/.test(soDigitos(s))).length /
       amostras.length;
 
-    if (!usado.has('telefone') && telLike > 0.6 && temLetras < 0.3) setar(i, 'telefone');
+    if (!usado.has('cpf') && cpfLike > 0.6) setar(i, 'cpf');
+    else if (!usado.has('telefone') && telLike > 0.6 && temLetras < 0.3) setar(i, 'telefone');
     else if (!usado.has('nome') && temLetras > 0.6) setar(i, 'nome');
     else if (!usado.has('valor') && valorLike > 0.6) setar(i, 'valor');
   }
