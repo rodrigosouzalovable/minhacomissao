@@ -548,8 +548,10 @@ Deno.serve(async (req) => {
     const pausaLiberavel = pausaPorQualidade || motivoPausaLower === '';
 
     if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste) {
-      // Restrição do pool permanece bloqueada; estado pausado por qualidade pode ser liberado.
-      const bloqueiaEstado = inst.estado_pool === 'restrita' ||
+      // A chave global libera estados causados por qualidade; bloqueios reais da Meta permanecem.
+      const bloqueioReal = pausaPorStatus ||
+        (inst.estado_pool === 'restrita' && !pausaPorQualidade && motivoPausaLower !== '');
+      const bloqueiaEstado = bloqueioReal ||
         !(ignoraQualidade && pausaLiberavel);
       if (bloqueiaEstado) {
         return new Response(JSON.stringify({

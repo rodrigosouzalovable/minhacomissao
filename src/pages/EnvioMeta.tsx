@@ -1428,13 +1428,13 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona apenas instâncias conectadas com qualidade GREEN ou sem qualidade conhecida. Yellow/Red devem ser escolhidas manualmente."
+              title="Seleciona instâncias conectadas e elegíveis pela Meta, independentemente da qualidade."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
                  const boasInstancias = instanciasVisiveis.filter((i) => {
                    const status = (i.saude_status || "").toUpperCase();
-                   const qual = (i.saude_quality || "").toUpperCase();
-                   return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED" && !bmSemSaldo(i.meta_bm_id);
+                   const nomeStatus = (i.meta_name_status || "").toUpperCase();
+                   return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
                  });
                 const boaIds = boasInstancias.map((i) => i.id);
                 const todasMarcadas = boaIds.length > 0 && boaIds.every((id) => instanciaIds.includes(id));
@@ -1448,8 +1448,8 @@ export default function EnvioMeta() {
               {instanciasVisiveis.length > 0 && instanciasVisiveis
                 .filter((i) => {
                   const status = (i.saude_status || "").toUpperCase();
-                  const qual = (i.saude_quality || "").toUpperCase();
-                  return status === "CONNECTED" && qual !== "YELLOW" && qual !== "RED" && !bmSemSaldo(i.meta_bm_id);
+                  const nomeStatus = (i.meta_name_status || "").toUpperCase();
+                  return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
                 })
                 .every((i) => instanciaIds.includes(i.id))
                 ? "Limpar seleção"
