@@ -255,6 +255,10 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     const idxSaldo = mapping.findIndex((r) => r === "saldo");
     const idxCredor = mapping.findIndex((r) => r === "credor");
 
+    if (requireCpf && idxCpf < 0) {
+      toast.error("Selecione a coluna de CPF / CNPJ — ela é obrigatória para esta importação.");
+      return;
+    }
     if (requireCredor && idxCredor < 0) {
       toast.error("Selecione a coluna Credor para direcionar UME e Novo Mundo aos templates corretos.");
       return;
