@@ -76,6 +76,14 @@ function columnLooksLikeDocument(rows: any[][], col: number, skipHeader: boolean
 }
 
 
+function normalizeDocument(value: unknown): string {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  // Excel pode remover zeros à esquerda: recompõe CPF (11) ou CNPJ (14).
+  if (digits.length >= 5 && digits.length <= 11) return digits.padStart(11, "0");
+  if (digits.length >= 12 && digits.length <= 14) return digits.padStart(14, "0");
+  return "";
+}
+
 function normalizeTelKey(t: string): string {
   const d = String(t || "").replace(/\D+/g, "");
   return d.length >= 8 ? d.slice(-8) : d;
