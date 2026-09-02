@@ -13,7 +13,12 @@ const corsHeaders = {
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
 async function fetchJson(url: string, token: string) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  // Timeout por chamada: sem isso uma resposta lenta da Meta derruba toda a
+  // verificação por 504 na edge function.
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(12_000),
+  });
   const data = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, data };
 }
@@ -39,7 +44,9 @@ Deno.serve(async (req) => {
     const instancias = filtrarInstancias(instanciasRaw as any[], permitidas);
 
     const results: any[] = [];
-    for (const inst of instancias || []) {
+    // Processa as instâncias em paralelo com concorrência limitada (evita 504).
+    const CONCORRENCIA = 4;
+    const verificar = async (inst: any) => {
       const r: any = {
         instancia_id: inst.id,
         nome: inst.nome,
@@ -492,7 +499,18 @@ Deno.serve(async (req) => {
         r.error = e instanceof Error ? e.message : String(e);
       }
       results.push(r);
-    }
+    };
+
+    const fila = [...(instancias || [])];
+    await Promise.all(
+      Array.from({ length: Math.min(CONCORRENCIA, fila.length) }, async () => {
+        while (fila.length) {
+          const inst = fila.shift();
+          if (!inst) break;
+          await verificar(inst);
+        }
+      }),
+    );
 
 
     return new Response(JSON.stringify({ results }), {

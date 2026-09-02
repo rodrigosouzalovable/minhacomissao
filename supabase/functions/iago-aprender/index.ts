@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     const desde = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     const { data: acordos } = await supabase
       .from('acordos')
-      .select('cpf, nome, criado_em')
+      .select('cliente_cpf, cliente_nome, criado_em')
       .gte('criado_em', desde)
       .order('criado_em', { ascending: false })
       .limit(60);
@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     if (!(acordos || []).length) return json({ success: true, skipped: 'sem acordos recentes' });
 
     // Telefones desses CPFs
-    const cpfs = [...new Set(((acordos || []) as any[]).map((a) => soDigitos(a.cpf)).filter(Boolean))].slice(0, 40);
+    const cpfs = [...new Set(((acordos || []) as any[]).map((a) => soDigitos(a.cliente_cpf)).filter(Boolean))].slice(0, 40);
     const sufixos = new Set<string>();
     for (const cpf of cpfs) {
       const { data: devs } = await supabase
