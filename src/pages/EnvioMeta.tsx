@@ -1722,7 +1722,7 @@ export default function EnvioMeta() {
               <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
               <CardDescription>
                 Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>.
-                Ao importar uma planilha Excel, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Atraso, Saldo). O CPF/CNPJ vem obrigatório por padrão.
+                Ao importar uma planilha Excel, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Credor, Atraso, Saldo). O CPF/CNPJ e o Credor vêm obrigatórios por padrão.
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -1738,6 +1738,21 @@ export default function EnvioMeta() {
                 <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
                 {cpfObrigatorio ? "CPF obrigatório" : "CPF opcional"}
               </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant={credorObrigatorio ? "default" : "outline"}
+                onClick={() => setCredorObrigatorio((v) => !v)}
+                title={credorObrigatorio
+                  ? "Credor obrigatório: a importação exige uma coluna marcada como Credor (UME ou Novo Mundo)"
+                  : "Credor opcional: a importação aceita planilha sem coluna de Credor"}
+              >
+                <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                {credorObrigatorio ? "Credor obrigatório" : "Credor opcional"}
+              </Button>
+
+
 
 
               <input
