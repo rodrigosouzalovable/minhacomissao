@@ -387,8 +387,9 @@ export function PoolMetaPanel() {
              <div className="flex items-center gap-2">
                <ShieldCheck className={`h-4 w-4 ${cfg?.liberar_qualidade_global ? "text-destructive" : "text-muted-foreground"}`} />
                <div>
-                 <p className="text-sm font-semibold">Liberar números YELLOW e RED para envio</p>
-                 <p className="text-xs text-muted-foreground">Ignora quarentena, pausa por qualidade e modo recuperação para todos os usuários (inclusive parceiros).</p>
+                <p className="text-sm font-semibold">Liberar números YELLOW e RED (só aquecimento)</p>
+                <p className="text-xs text-muted-foreground">Vale apenas para aquecimento e recuperação de qualidade. Campanhas e disparos em massa continuam exigindo qualidade GREEN confirmada na Meta.</p>
+
                </div>
              </div>
              <Switch checked={cfg?.liberar_qualidade_global === true} disabled={savingTurbo} onCheckedChange={salvarLiberarQualidade} />
