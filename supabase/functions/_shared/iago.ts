@@ -1071,10 +1071,15 @@ export function detectarEscolha(texto: string): string {
 export function respostaPagamentoHoje(texto: string): 'sim' | 'nao' | 'indefinido' {
   const t = norm(texto).replace(/\s+/g, ' ').trim();
   if (!t) return 'indefinido';
-  if (/\b(nao|nao da|nao consigo|nao tenho|impossivel|so depois|somente depois|infelizmente nao)\b/.test(t)) return 'nao';
+  // Negação tem prioridade: "hoje não porque...", "não hoje", "hoje não dá"
+  if (/(hoje\s*nao|nao\s*hoje|hoje\s*(nao\s*)?(da|consigo|posso|tenho|vai dar)\b)/.test(t)) return 'nao';
+  if (/\b(nao|nao da|nao consigo|nao tenho|impossivel|so depois|somente depois|infelizmente nao|nem hoje)\b/.test(t)) return 'nao';
+  // Cliente propôs outro dia = não é hoje
+  if (/(consegue\s*(por|colocar|deixar|passar)|da\s*(pra|para)\s*(por|deixar|passar)|deixar\s*(pra|para)|\bdia\s*\d{1,2}\b|dia\s*util|quinto\s*dia|semana que vem|mes que vem)/.test(t)) return 'nao';
   if (/\b(sim|consigo|hoje|claro|pode ser|vou pagar|posso|ok|beleza|isso)\b/.test(t)) return 'sim';
   return 'indefinido';
 }
+
 
 const CAIXA_PADRAO_ID_CREDOR = '00000000-0000-0000-0000-000000000000';
 
