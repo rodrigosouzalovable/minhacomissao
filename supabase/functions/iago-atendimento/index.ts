@@ -722,6 +722,12 @@ Deno.serve(async (req) => {
     const escalouPorDuvida = modoAquecimento ? false : !!resultado?.escalar;
 
     let motivo = String(resultado?.motivo || '');
+    // Identidade negada durante a negociação: não encerra, chama o humano.
+    if (naoEhTitular && !modoAquecimento) {
+      escalar = true;
+      if (!motivo) motivo = 'cliente questionou a identidade durante a negociação';
+    }
+
     let etapaNova = escalar ? 'aguardando_humano' : (proposta ? 'proposta' : 'conversando');
     let dataAcordada: string | null = ctxAnterior.data_pagamento || null;
     let reperguntouData = !!ctxAnterior.reperguntou_data;
