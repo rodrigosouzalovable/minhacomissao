@@ -1,0 +1,2 @@
+REVOKE ALL ON FUNCTION public.meta_aquecimento_flag_admin_only() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.meta_aquecimento_flag_admin_only_insert() FROM PUBLIC, anon, authenticated;
