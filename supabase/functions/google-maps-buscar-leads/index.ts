@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
     const { data: busca, error: buscaErr } = await supabase
       .from("google_maps_buscas")
       .insert({
-        user_id: user.id,
+        user_id: userId,
         categoria,
         localizacao,
         raio_metros: body.raio_metros ?? null,
@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
         const { data: antigos, error: antErr } = await supabase
           .from("google_maps_leads")
           .select("place_id, nome, telefone")
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .range(from, from + pageSizeDb - 1);
         if (antErr) throw antErr;
         for (const l of antigos ?? []) {
@@ -390,7 +390,7 @@ Deno.serve(async (req) => {
     // Insere leads (todos, mesmo sem telefone — deixa filtro pro frontend)
     const rows = trimmed.map((p) => ({
       busca_id: busca.id,
-      user_id: user.id,
+      user_id: userId,
       place_id: p.id ?? null,
       nome: p.displayName?.text ?? "Sem nome",
       telefone: p.nationalPhoneNumber ?? null,
