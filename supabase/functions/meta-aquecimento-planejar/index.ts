@@ -60,6 +60,7 @@ Deno.serve(async (req) => {
       .select('id, nome, display_phone, saude_quality, saude_tier, tier_diario, dias_green_consecutivos, estado_pool, recuperacao_ativa, quarentena_ate, pausa_automatica_ate, ativo, provider, phone_number_id, access_token, data_ativacao_api')
       .eq('ativo', true)
       .eq('provider', 'meta')
+      .eq('aquecimento_meta_ativo', true)
       .limit(200);
 
     const elegiveis = (insts || []).filter((i: any) => {
@@ -72,6 +73,7 @@ Deno.serve(async (req) => {
       return q === 'GREEN' || q === 'UNKNOWN';
     }).slice(0, LIMITE_INSTANCIAS);
 
+    if ((insts || []).length === 0) return json({ ok: true, skipped: 'nenhuma_selecionada', dia });
     if (elegiveis.length === 0) return json({ ok: true, skipped: 'nenhuma_elegivel', dia });
 
     const desde = new Date(Date.now() - 7 * 86400000).toISOString();

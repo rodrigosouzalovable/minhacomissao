@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
       .from('meta_whatsapp_instances')
       .select('id, nome, display_phone, phone_number_id, access_token, waba_id, saude_quality, estado_pool, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
       .eq('ativo', true)
-      .eq('provider', 'meta');
+      .eq('provider', 'meta')
+      .eq('aquecimento_meta_ativo', true);
 
     const elegiveis = (insts || []).filter((i: any) => {
       if (i.recuperacao_ativa === true) return false; // cuidado por meta-recuperacao-tick
@@ -81,6 +82,7 @@ Deno.serve(async (req) => {
       return true;
     });
 
+    if ((insts || []).length === 0) return json({ ok: true, skipped: 'nenhuma_selecionada' });
     if (elegiveis.length === 0) return json({ ok: true, skipped: 'nenhuma_elegivel' });
 
     const destinos = await destinosAquecimento(supabase);
