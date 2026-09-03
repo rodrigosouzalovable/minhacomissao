@@ -287,8 +287,13 @@ async function processarItem(job: any): Promise<ItemResult> {
   const varsPend = ((pend as any).vars && typeof (pend as any).vars === 'object') ? (pend as any).vars : {};
   const exclItem: string[] = Array.isArray(varsPend._inst_excluidas) ? varsPend._inst_excluidas : [];
 
+  // ===== Saída automática por queda de qualidade (YELLOW/RED) durante o job =====
+  // Vale mesmo com a chave global "Liberar YELLOW/RED": um número que piora
+  // durante a campanha sai do rodízio imediatamente.
+  const bloqueadasQualidade = await removerInstanciasComQuedaQualidade(job, bloqueadasRun);
+
   const instanciaIdsDisponiveis: string[] = (job.instancia_ids || [])
-    .filter((id: string) => !bloqueadasRun.includes(id) && !exclItem.includes(id));
+    .filter((id: string) => !bloqueadasQualidade.includes(id) && !exclItem.includes(id));
   if (instanciaIdsDisponiveis.length === 0) {
     // Se sobrou instância no job mas nenhuma serve para este contato, marca só o item como erro
     const restaNoJob = (job.instancia_ids || []).filter((id: string) => !bloqueadasRun.includes(id));
