@@ -130,12 +130,13 @@ Deno.serve(async (req) => {
     // ===== Aquecimento de tier (novas BMs) =====
     linhas.push("");
     linhas.push("*🔥 Aquecimento de tier (novas BMs)*");
-    const { data: instAq } = await supabase
+    const { data: instAqRaw } = await supabase
       .from("meta_whatsapp_instances")
       .select("id, nome, display_phone, saude_quality, saude_tier, tier_diario, estado_pool, pausa_automatica_ate")
       .eq("provider", "meta")
       .eq("ativo", true)
       .eq("aquecimento_meta_ativo", true);
+    const instAq = (instAqRaw || []).filter((i: any) => !idsParceiros.has(i.id));
 
     if (!instAq || instAq.length === 0) {
       linhas.push("_Motor parado — nenhum número selecionado._");
