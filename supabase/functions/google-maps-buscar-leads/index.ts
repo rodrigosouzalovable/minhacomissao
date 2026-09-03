@@ -129,33 +129,58 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autenticado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const userClient = createClient(
-      supabaseUrl,
-      anonKey,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Não autenticado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const apikeyHeader = req.headers.get("apikey");
+    const token = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
+    // Modo interno: chamado pelas automações (cron) com a chave de serviço.
+    const interno = !!serviceRoleKey && (token === serviceRoleKey || apikeyHeader === serviceRoleKey);
+
+    let userId: string | null = null;
+
+    if (interno) {
+      const { data: adminRole } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin")
+        .limit(1)
+        .maybeSingle();
+      userId = adminRole?.user_id ?? null;
+      if (!userId) {
+        return new Response(JSON.stringify({ error: "Nenhum admin cadastrado para a busca automática" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "Não autenticado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const userClient = createClient(
+        supabaseUrl,
+        anonKey,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: { user } } = await userClient.auth.getUser();
+      if (!user) {
+        return new Response(JSON.stringify({ error: "Não autenticado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // check admin
+      const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: "Apenas admin" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = user.id;
     }
 
-    // check admin
-    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
-    if (!isAdmin) {
-      return new Response(JSON.stringify({ error: "Apenas admin" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     const body = (await req.json()) as Body;
     const categoria = (body.categoria || "").trim();
