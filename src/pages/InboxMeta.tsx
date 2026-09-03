@@ -366,11 +366,21 @@ export default function InboxMeta() {
   }, [user]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
+  // Janela mínima de reconsulta: eventos em rajada (Realtime/foco) não refazem
+  // a leitura completa de etiquetas/qualificações quando a lista não mudou.
+  const etiqCacheRef = useRef<{ key: string; ts: number }>({ key: '', ts: 0 });
+  const qualifCacheRef = useRef<{ key: string; ts: number }>({ key: '', ts: 0 });
+  const JANELA_RECONSULTA = 30_000;
   // Busca vínculos de etiqueta SOMENTE dos contatos exibidos na tela.
   // Antes fazia varredura completa da tabela em cada carregamento/foco.
-  const fetchContatoEtiquetas = useCallback(async (contatoIds?: string[]) => {
+  const fetchContatoEtiquetas = useCallback(async (contatoIds?: string[], forcar = false) => {
     const ids = (contatoIds ?? []).filter(Boolean);
     if (ids.length === 0) return;
+    const key = ids.join(',');
+    const agora = Date.now();
+    if (!forcar && etiqCacheRef.current.key === key && agora - etiqCacheRef.current.ts < JANELA_RECONSULTA) return;
+    etiqCacheRef.current = { key, ts: agora };
+
     const CHUNK = 200;
     const all: Array<{ contato_id: string; etiqueta_id: string; origem: string | null }> = [];
     for (let i = 0; i < ids.length; i += CHUNK) {
@@ -379,7 +389,7 @@ export default function InboxMeta() {
         .from('meta_whatsapp_contato_etiquetas')
         .select('contato_id, etiqueta_id, origem')
         .in('contato_id', slice);
-      if (error) return; // preserva state anterior em caso de erro
+      if (error) { etiqCacheRef.current = { key: '', ts: 0 }; return; } // preserva state anterior em caso de erro
       all.push(...((data as any[]) ?? []));
     }
     const map: Record<string, string[]> = {};
@@ -528,9 +538,14 @@ export default function InboxMeta() {
 
   useEffect(() => { fetchQualificacoes(); }, [fetchQualificacoes]);
 
-  const fetchQualifContatos = useCallback(async (ids: string[]) => {
-    if (!ids.length) { setQualifPorContato({}); return; }
+  const fetchQualifContatos = useCallback(async (ids: string[], forcar = false) => {
+    if (!ids.length) { setQualifPorContato({}); qualifCacheRef.current = { key: '', ts: 0 }; return; }
+    const key = ids.join(',');
+    const agora = Date.now();
+    if (!forcar && qualifCacheRef.current.key === key && agora - qualifCacheRef.current.ts < JANELA_RECONSULTA) return;
+    qualifCacheRef.current = { key, ts: agora };
     const map: Record<string, string[]> = {};
+
     for (let i = 0; i < ids.length; i += 300) {
       const { data } = await (supabase as any).from('meta_contato_qualificacao')
         .select('contato_id, qualificacao_id').in('contato_id', ids.slice(i, i + 300));
