@@ -4,6 +4,7 @@ import { useBmCotas } from "@/hooks/useBmCotas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -52,6 +53,7 @@ type Instancia = {
   saude_name_status?: string | null;
   saude_checked_at?: string | null;
   messaging_limit_manual?: string | null;
+  aquecimento_meta_ativo?: boolean | null;
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
   meta_bm_id?: string | null;
@@ -262,6 +264,7 @@ export default function ConfigurarMeta() {
     meta_bm_id: "__none__",
     access_token: "",
     messaging_limit_manual: "__auto__",
+    aquecimento_meta_ativo: false,
   });
   const [salvandoEdit, setSalvandoEdit] = useState(false);
   const [form, setForm] = useState({
@@ -271,6 +274,7 @@ export default function ConfigurarMeta() {
     meta_bm_id: "__none__",
     access_token: "",
     messaging_limit_manual: "__auto__",
+    aquecimento_meta_ativo: false,
   });
 
   const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
@@ -425,6 +429,7 @@ export default function ConfigurarMeta() {
     meta_bm_id: "__none__",
     access_token: "",
     messaging_limit_manual: "__auto__",
+    aquecimento_meta_ativo: false,
   };
 
   const atualizarDuplicado = async () => {
@@ -477,7 +482,7 @@ export default function ConfigurarMeta() {
         waba_id: form.waba_id.trim(),
         access_token: form.access_token.trim(),
         ...camposBmTier(form),
-
+        aquecimento_meta_ativo: isAdmin ? form.aquecimento_meta_ativo : false,
         webhook_verify_token: gerarToken(),
       })
       .select("id")
@@ -526,7 +531,7 @@ export default function ConfigurarMeta() {
       meta_bm_id: inst.meta_bm_id || "__none__",
       access_token: "",
       messaging_limit_manual: inst.messaging_limit_manual || "__auto__",
-
+      aquecimento_meta_ativo: !!inst.aquecimento_meta_ativo,
     });
   };
 
@@ -553,6 +558,7 @@ export default function ConfigurarMeta() {
       phone_number_id: editForm.phone_number_id.trim(),
       waba_id: editForm.waba_id.trim(),
       ...camposBmTier(editForm),
+      ...(isAdmin ? { aquecimento_meta_ativo: editForm.aquecimento_meta_ativo } : {}),
 
     };
     if (editForm.access_token.trim()) patch.access_token = editForm.access_token.trim();
@@ -1703,6 +1709,21 @@ export default function ConfigurarMeta() {
               <p className="text-xs text-muted-foreground mt-1">Meta começa em 250 e escala para 1k → 10k → 100k</p>
             </div>
 
+            {isAdmin && (
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <Label>Número de nova BM — entrar no aquecimento de tier</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Quando ligado, este número entra no motor de aquecimento (UAZAPI + leads) para subir de 2k → 10k → 100k. Desligado, o motor ignora o número.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.aquecimento_meta_ativo}
+                  onCheckedChange={(v) => setForm({ ...form, aquecimento_meta_ativo: v })}
+                />
+              </div>
+            )}
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
@@ -1767,6 +1788,21 @@ export default function ConfigurarMeta() {
                 </SelectContent>
               </Select>
             </div>
+
+            {isAdmin && (
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <Label>Número de nova BM — entrar no aquecimento de tier</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Somente números marcados aqui são aquecidos pelo motor automático.
+                  </p>
+                </div>
+                <Switch
+                  checked={editForm.aquecimento_meta_ativo}
+                  onCheckedChange={(v) => setEditForm({ ...editForm, aquecimento_meta_ativo: v })}
+                />
+              </div>
+            )}
 
           </div>
           <DialogFooter>
