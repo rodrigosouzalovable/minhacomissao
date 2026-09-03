@@ -42,6 +42,7 @@ export async function destinosAquecimento(supabase: any): Promise<DestinoAquecim
 export interface TemplateAquecimento {
   name: string;
   language: string;
+  categoria?: string;
   params: { tipo: "posicional" | "nomeado"; chaves: string[] };
 }
 
@@ -109,7 +110,12 @@ export async function escolherTemplateAprovado(
     candidatos.sort((a: any, b: any) => a.peso - b.peso)[0];
 
   return escolhido
-    ? { name: escolhido.name, language: escolhido.language, params: escolhido.params }
+    ? {
+        name: escolhido.name,
+        language: escolhido.language,
+        categoria: escolhido.categoria,
+        params: escolhido.params,
+      }
     : null;
 }
 
