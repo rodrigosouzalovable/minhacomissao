@@ -248,6 +248,78 @@ async function notificarConclusao(jobId: string, statusFinal: 'concluido' | 'err
 }
 
 
+// Última verificação de saúde disparada para cada job (evita chamar a Meta
+// a cada envio — no máximo 1 rodada de checagem a cada 5 min por job).
+const ultimaChecagemSaude = new Map<string, number>();
+const INTERVALO_CHECAGEM_SAUDE_MS = 5 * 60_000;
+
+// Tira do rodízio, no meio da campanha, qualquer número cuja qualidade tenha
+// caído para YELLOW ou RED. Persiste em instancias_bloqueadas_run e avisa o admin.
+async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: string[]): Promise<string[]> {
+  const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+  const candidatas = todas.filter((id) => !bloqueadasRun.includes(id));
+  if (candidatas.length === 0) return [...bloqueadasRun];
+
+  try {
+    // Atualiza a saúde das instâncias do job, no máximo a cada 5 min.
+    const agora = Date.now();
+    const ultima = ultimaChecagemSaude.get(job.id) || 0;
+    if (agora - ultima > INTERVALO_CHECAGEM_SAUDE_MS) {
+      ultimaChecagemSaude.set(job.id, agora);
+      for (const id of candidatas) {
+        await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/check-meta-instance-health`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ instancia_id: id }),
+        }).catch(() => null);
+      }
+    }
+
+    const { data: insts } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id, nome, display_phone, saude_quality')
+      .in('id', candidatas);
+
+    const ruins = (insts || []).filter((i: any) => {
+      const q = String(i.saude_quality || '').toUpperCase();
+      return q === 'YELLOW' || q === 'RED';
+    });
+    if (ruins.length === 0) return [...bloqueadasRun];
+
+    const novasBloqueadas = Array.from(new Set([...bloqueadasRun, ...ruins.map((i: any) => i.id)]));
+    await supabase.from('envio_meta_job')
+      .update({ instancias_bloqueadas_run: novasBloqueadas })
+      .eq('id', job.id);
+    job.instancias_bloqueadas_run = novasBloqueadas;
+
+    try {
+      const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+      for (const i of ruins as any[]) {
+        const q = String(i.saude_quality || '').toUpperCase();
+        const label = i.nome || i.display_phone || 'instância';
+        const fone = i.display_phone && i.nome ? ` (${i.display_phone})` : '';
+        await notificarAdmin(supabase, {
+          tipo: 'envio_meta_qualidade_saiu',
+          mensagem: `⚠️ *Número retirado da campanha*\n\n📱 ${label}${fone}\n📉 Qualidade caiu para *${q}*\n📄 Template: ${job.template_nome || '—'}\n\nO envio continua nas demais instâncias.`,
+          chaveIdempotencia: `envio_meta_qualidade_${job.id}_${i.id}`,
+          umaVezPorChave: true,
+        });
+      }
+    } catch (e) {
+      console.error('[tick] aviso de queda de qualidade falhou:', String(e).slice(0, 200));
+    }
+
+    return novasBloqueadas;
+  } catch (e) {
+    console.error('[tick] removerInstanciasComQuedaQualidade falhou:', String(e).slice(0, 300));
+    return [...bloqueadasRun];
+  }
+}
+
+
 async function processarItem(job: any): Promise<ItemResult> {
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
   if (!(await jobEstaRodando(job.id))) return { advanced: false, stop: true };
