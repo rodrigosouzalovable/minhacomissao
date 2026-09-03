@@ -197,6 +197,16 @@ export function ehPedidoBloqueioContato(texto: string): boolean {
 }
 
 
+/**
+ * Sinais de que a mensagem é sobre negociação/data de pagamento — nesse caso frases
+ * como "não é o quinto dia útil" NÃO podem ser lidas como negação de identidade.
+ */
+export function ehContextoNegociacao(texto: string): boolean {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!t.trim()) return false;
+  return /(dia\s*util|quinto\s*dia|consegue\s*(por|colocar|deixar|passar)|da\s*(pra|para)\s*(por|deixar|passar)|pagamento|pagar|paga\s*(dia|na|no)|parcel\w*|boleto|pix|desconto|valor|vencimento|salario|beneficio|aposentad\w*|adiantar|prorrog\w*|acordo|entrada|a\s*vista|avista|\b\d{1,2}\s*x\b|\bdia\s*\d{1,2}\b|\b\d{1,2}\s*\/\s*\d{1,2}\b|segunda|terca|quarta|quinta|sexta|sabado|domingo|amanha|semana que vem|mes que vem)/.test(t);
+}
+
 /** Cliente avisou que não é a pessoa procurada / número errado. */
 export function ehNumeroErrado(texto: string): boolean {
   const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -208,8 +218,25 @@ export function ehNumeroErrado(texto: string): boolean {
   if (/\bnao\s*(e|eh|é)?\s*(essa|esta|ess[ae]|est[ae])?\s*pessoa\b/.test(t)) return true;
   if (/\bnao\s*conhe\w*\s*(essa|esse|est[ae])?\s*pessoa\b/.test(t)) return true;
 
+  // Mensagem de negociação/data nunca é negação de identidade
+  // (ex.: "hoje não porque não é o quinto dia útil").
+  if (ehContextoNegociacao(t)) return false;
+
   // Pronomes/artigos clássicos: "nao sou o Sebastiao", "nao sou eu", "nao sou essa pessoa"
-  if (/\bnao\s*(sou|e|eh)\s+(o|a|ele|ela|essa|esse|est[ae]|eu|ninguem)\b/.test(t)) return true;
+  if (/\bnao\s*sou\s+(o|a|ele|ela|essa|esse|est[ae]|eu|ninguem)\b/.test(t)) return true;
+  // "nao e/eh ele/ela/eu/essa..." — só quando o que vem depois é pessoa
+  if (/\bnao\s*(e|eh)\s+(ele|ela|eu|essa\s*pessoa|esse\s*(ai|rapaz|senhor)|o\s*titular)\b/.test(t)) return true;
+  // "nao e o/a <nome>" — só quando o que vem depois não é palavra de contexto comum
+  const mArt = t.match(/\bnao\s*(?:e|eh)\s+(?:o|a)\s+([a-z]{3,})/);
+  if (mArt) {
+    const contexto = new Set([
+      'dia', 'quinto', 'quarto', 'terceiro', 'segundo', 'primeiro', 'valor', 'caso', 'momento', 'melhor',
+      'certo', 'mesmo', 'meu', 'minha', 'unico', 'total', 'boleto', 'pix', 'pagamento', 'vencimento',
+      'salario', 'beneficio', 'acordo', 'desconto', 'problema', 'jeito', 'ideal', 'necessario', 'que',
+      'data', 'prazo', 'mes', 'ano', 'semana', 'hora', 'horario', 'parcela',
+    ]);
+    if (!contexto.has(mArt[1])) return true;
+  }
   // "nao sou <nome>" — nome próprio direto, sem artigo
   const m = t.match(/\bnao\s*(?:sou|eh)\s+([a-z]{3,})/);
   if (m) {
@@ -220,6 +247,7 @@ export function ehNumeroErrado(texto: string): boolean {
   return false;
 
 }
+
 
 /**
  * Nunca mais falar com esse telefone em campanhas/lembretes.
@@ -954,16 +982,28 @@ export function classificarDataPagamento(texto: string): DataPagamento {
   if (/(mes que vem|proximo mes|mes seguinte|outro mes|mes vem|virada do mes|inicio do mes que vem)/.test(t)) {
     return { classe: 'fora_do_mes', dataIso: null, label: 'mês que vem' };
   }
-  if (/\bhoje\b|\bagora\b|\bja\b(?! nao)/.test(t)) return classificar(new Date(hoje));
-  if (/\bamanha\b/.test(t)) {
+
+  // Dia explícito do mês tem prioridade sobre "hoje"/dia da semana
+  // ("hoje não, consegue por para terça feira dia 08?").
+  const diaExplicito = t.match(/\bdia\s*(\d{1,2})\b/) || t.match(/\bno\s*dia\s*(\d{1,2})\b/);
+  const dataNumerica = t.match(/\b(\d{1,2})\s*[\/\-.]\s*(\d{1,2})(?:\s*[\/\-.]\s*(\d{2,4}))?\b/);
+  const temMesNome = MESES.some((m) => new RegExp(`\\b${m}\\b`).test(t));
+
+  // "hoje não" / "não hoje" / "hoje não dá" não é pagamento hoje
+  const negaHoje = /(hoje\s*(nao|n\b|nao da|nao consigo|nao posso|nao tenho)|nao\s*(da|consigo|posso|tenho|vai dar)?\s*hoje|nao\s*e\s*hoje)/.test(t);
+  if (!diaExplicito && !dataNumerica && !temMesNome && !negaHoje) {
+    if (/\bhoje\b|\bagora\b|\bja\b(?! nao)/.test(t)) return classificar(new Date(hoje));
+  }
+  if (/\bamanha\b/.test(t) && !diaExplicito && !dataNumerica) {
     const d = new Date(hoje); d.setDate(d.getDate() + 1); return classificar(d);
   }
-  if (/(depois de amanha)/.test(t)) {
+  if (/(depois de amanha)/.test(t) && !diaExplicito && !dataNumerica) {
     const d = new Date(hoje); d.setDate(d.getDate() + 2); return classificar(d);
   }
 
   // Dia da semana: "segunda", "segunda-feira", "seg", "sexta que vem", "sábado"
-  const diaSemana = detectarDiaSemana(t);
+  // (só quando o cliente não deu o número do dia — nesse caso o número manda)
+  const diaSemana = !diaExplicito && !dataNumerica && !temMesNome ? detectarDiaSemana(t) : null;
   if (diaSemana !== null) {
     const { idx, proxima } = diaSemana;
     const d = new Date(hoje);
@@ -973,6 +1013,7 @@ export function classificarDataPagamento(texto: string): DataPagamento {
     d.setDate(d.getDate() + delta);
     return classificar(d);
   }
+
 
   if (/(semana que vem|proxima semana)/.test(t)) {
     const d = new Date(hoje); d.setDate(d.getDate() + 7); return classificar(d);
@@ -1030,10 +1071,15 @@ export function detectarEscolha(texto: string): string {
 export function respostaPagamentoHoje(texto: string): 'sim' | 'nao' | 'indefinido' {
   const t = norm(texto).replace(/\s+/g, ' ').trim();
   if (!t) return 'indefinido';
-  if (/\b(nao|nao da|nao consigo|nao tenho|impossivel|so depois|somente depois|infelizmente nao)\b/.test(t)) return 'nao';
+  // Negação tem prioridade: "hoje não porque...", "não hoje", "hoje não dá"
+  if (/(hoje\s*nao|nao\s*hoje|hoje\s*(nao\s*)?(da|consigo|posso|tenho|vai dar)\b)/.test(t)) return 'nao';
+  if (/\b(nao|nao da|nao consigo|nao tenho|impossivel|so depois|somente depois|infelizmente nao|nem hoje)\b/.test(t)) return 'nao';
+  // Cliente propôs outro dia = não é hoje
+  if (/(consegue\s*(por|colocar|deixar|passar)|da\s*(pra|para)\s*(por|deixar|passar)|deixar\s*(pra|para)|\bdia\s*\d{1,2}\b|dia\s*util|quinto\s*dia|semana que vem|mes que vem)/.test(t)) return 'nao';
   if (/\b(sim|consigo|hoje|claro|pode ser|vou pagar|posso|ok|beleza|isso)\b/.test(t)) return 'sim';
   return 'indefinido';
 }
+
 
 const CAIXA_PADRAO_ID_CREDOR = '00000000-0000-0000-0000-000000000000';
 

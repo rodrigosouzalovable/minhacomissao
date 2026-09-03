@@ -4,7 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
-  ehOptOut, ehNumeroErrado, ehFalecido, MSG_FALECIDO, suprimirDestinatario, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente, temAtendenteHumanoNoTelefone,
+  ehOptOut, ehNumeroErrado, ehContextoNegociacao, ehFalecido, MSG_FALECIDO, suprimirDestinatario, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente, temAtendenteHumanoNoTelefone,
   avisarEmergencia as avisarEmergenciaBase, etiquetarAguardandoHumano as etiquetarAguardandoHumanoBase, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
@@ -401,9 +401,15 @@ Deno.serve(async (req) => {
       return json({ success: true, etapa: 'numero_errado', origem });
     };
 
-    if (ehNumeroErrado(textoAtual)) {
+    // Em etapa de negociação (escolha/data já em curso ou proposta enviada), identidade negada
+    // NÃO encerra a conversa: segue o fluxo normal e, no limite, escala para o humano.
+    const emNegociacao = ['escolha_feita', 'aguardando_data', 'proposta'].includes(String(estado.etapa || '')) ||
+      !!(estado.contexto as any)?.proposta_enviada || !!(estado.contexto as any)?.opcao_escolhida;
+
+    if (!emNegociacao && ehNumeroErrado(textoAtual)) {
       return await encerrarNumeroErrado('texto');
     }
+
 
 
     // ===== Cliente/familiar informou falecimento => condolências e encerra (sem follow-up) =====
@@ -686,9 +692,12 @@ Deno.serve(async (req) => {
     });
 
     // ===== A IA entendeu que não é o titular (mesmo com erro de escrita) => encerra =====
-    if (resultado?.nao_e_titular === true || String(resultado?.nao_e_titular || '').toLowerCase() === 'sim') {
+    // Durante negociação (escolha/data), nunca encerra: escala para o humano.
+    const naoEhTitular = resultado?.nao_e_titular === true || String(resultado?.nao_e_titular || '').toLowerCase() === 'sim';
+    if (naoEhTitular && !emNegociacao && !ehContextoNegociacao(textoAtual)) {
       return await encerrarNumeroErrado('ia');
     }
+
 
 
 
@@ -713,6 +722,12 @@ Deno.serve(async (req) => {
     const escalouPorDuvida = modoAquecimento ? false : !!resultado?.escalar;
 
     let motivo = String(resultado?.motivo || '');
+    // Identidade negada durante a negociação: não encerra, chama o humano.
+    if (naoEhTitular && !modoAquecimento) {
+      escalar = true;
+      if (!motivo) motivo = 'cliente questionou a identidade durante a negociação';
+    }
+
     let etapaNova = escalar ? 'aguardando_humano' : (proposta ? 'proposta' : 'conversando');
     let dataAcordada: string | null = ctxAnterior.data_pagamento || null;
     let reperguntouData = !!ctxAnterior.reperguntou_data;
@@ -1132,10 +1147,14 @@ async function gerarResposta(args: {
     'Responda SOMENTE com JSON válido no formato:',
     '{"mensagens":["texto 1","texto 2"],"escalar":false,"motivo":"","escolha":"","pagamento_hoje":"","data_pagamento":"","qualificacao":"","qualificacao_motivo":"","nao_e_titular":false}',
     'nao_e_titular = true SOMENTE quando o cliente disser que não é a pessoa procurada, que é número/pessoa errada, engano, que não conhece o titular ou que ele não mora mais ali — inclusive com erro de digitação (ex.: "pessoo errada", "num erado"). Nesses casos deixe "mensagens" vazio: o sistema envia o encerramento padrão e não fala mais com esse número.',
+    'ATENÇÃO: justificativa do cliente sobre a DATA ou a condição de pagamento NUNCA é negação de identidade. Frases como "hoje não porque não é o quinto dia útil", "não é o dia do meu salário", "não é o meu vencimento" são negociação: nao_e_titular = false.',
+    'NUNCA agradeça e encerre a conversa quando o cliente propõe uma data, uma condição ou um pedido de prazo. Nesse caso confirme a data e escalar=true (um colega humano continua).',
     'escolha = forma de pagamento escolhida pelo cliente ("à vista" ou "12x"), vazio se ele ainda não escolheu.',
-    'pagamento_hoje = "sim", "nao" ou "" conforme a resposta dele sobre pagar hoje.',
+    'pagamento_hoje = "sim", "nao" ou "" conforme a resposta dele sobre pagar hoje. "hoje não porque..." = "nao".',
     'data_pagamento = a data que o cliente informou, JÁ RESOLVIDA no formato YYYY-MM-DD usando a lista de datas acima (ex.: "segunda" ou "segunda que vem" => a data da próxima segunda-feira). Use "mes_que_vem" quando ele falar de outro mês sem dia, e vazio se não informou nada.',
-    'Se o cliente informar a data na mesma frase da negativa ("não, consigo segunda"), considere a data informada e NÃO repita a pergunta.',
+    'Se o cliente citar o dia da semana E o número do dia ("terça feira dia 08"), o NÚMERO do dia é o que vale.',
+    'Se o cliente informar a data na mesma frase da negativa ("não, consigo segunda", "hoje não, consegue por para terça dia 08?"), considere a data informada e NÃO repita a pergunta.',
+
 
     'mensagens = de 1 a 2 mensagens curtas a enviar agora (vazio só se escalar=true e nada deva ser dito).',
     'Quando escalar=true, envie uma mensagem curta avisando que um colega vai continuar o atendimento e preencha "motivo" em português.',
