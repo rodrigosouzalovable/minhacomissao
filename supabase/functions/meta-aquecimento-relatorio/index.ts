@@ -29,11 +29,18 @@ Deno.serve(async (req) => {
       .eq("id", 1)
       .maybeSingle();
 
-    // Instâncias
-    const { data: insts } = await supabase
+    // Instâncias — somente números oficiais (provider meta) e que NÃO são de parceiros
+    const { data: parceirosRows } = await supabase
+      .from("meta_instance_parceiros")
+      .select("instancia_id");
+    const idsParceiros = new Set<string>((parceirosRows || []).map((p: any) => p.instancia_id));
+
+    const { data: instsRaw } = await supabase
       .from("meta_whatsapp_instances")
       .select("id, nome, display_phone, saude_quality, saude_status, saude_ban_info, estado_pool, pausa_automatica_ate, data_ativacao_api, ativo")
-      .eq("ativo", true);
+      .eq("ativo", true)
+      .eq("provider", "meta");
+    const insts = (instsRaw || []).filter((i: any) => !idsParceiros.has(i.id));
 
     // Pares (últimas 24h)
     const desde24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
