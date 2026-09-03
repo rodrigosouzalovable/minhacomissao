@@ -401,9 +401,15 @@ Deno.serve(async (req) => {
       return json({ success: true, etapa: 'numero_errado', origem });
     };
 
-    if (ehNumeroErrado(textoAtual)) {
+    // Em etapa de negociação (escolha/data já em curso ou proposta enviada), identidade negada
+    // NÃO encerra a conversa: segue o fluxo normal e, no limite, escala para o humano.
+    const emNegociacao = ['escolha_feita', 'aguardando_data', 'proposta'].includes(String(estado.etapa || '')) ||
+      !!(estado.contexto as any)?.proposta_enviada || !!(estado.contexto as any)?.opcao_escolhida;
+
+    if (!emNegociacao && ehNumeroErrado(textoAtual)) {
       return await encerrarNumeroErrado('texto');
     }
+
 
 
     // ===== Cliente/familiar informou falecimento => condolências e encerra (sem follow-up) =====
