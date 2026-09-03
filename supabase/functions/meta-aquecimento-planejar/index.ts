@@ -235,12 +235,43 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
       };
     });
 
+    // Trilhas anteriores (para detectar quem está entrando no aquecimento agora)
+    const { data: anteriores } = await supabase
+      .from('meta_aquecimento_trilha')
+      .select('instancia_id')
+      .lt('dia', dia)
+      .in('instancia_id', linhas.map((l) => l.instancia_id));
+    const jaAquecidos = new Set(((anteriores as any[]) ?? []).map((a) => a.instancia_id));
+
     const { error } = await supabase
       .from('meta_aquecimento_trilha')
       .upsert(linhas, { onConflict: 'instancia_id,dia' });
     if (error) throw error;
 
-    return json({ ok: true, dia, planejadas: linhas.length, ia: iaErro ? `fallback: ${iaErro}` : 'ok', linhas });
+    // Aviso de início do aquecimento (uma vez por número)
+    const novos = linhas.filter((l) => !jaAquecidos.has(l.instancia_id));
+    for (const l of novos) {
+      const r = resumo.find((x) => x.id === l.instancia_id);
+      const msg = [
+        '🔥 *Aquecimento iniciado*',
+        `${r?.nome ?? l.instancia_id}`,
+        `Tier atual: ${l.tier_atual.toLocaleString('pt-BR')}/dia → alvo: ${l.tier_alvo.toLocaleString('pt-BR')}/dia`,
+        `Meta de hoje: ${l.alvo_unicos_dia} destinatários únicos (${l.mix_uazapi_pct}% UAZAPI / ${l.mix_leads_pct}% leads)`,
+      ].join('\n');
+      try {
+        await notificarNumeros(supabase, {
+          tipo: 'aquecimento_tier_inicio',
+          mensagem: msg,
+          destinatarios: DESTINATARIOS_AVISO,
+          chaveIdempotencia: `aq-tier-inicio-${l.instancia_id}`,
+        });
+      } catch (e) {
+        console.log('[planejar] falha ao avisar início', String(e).slice(0, 200));
+      }
+    }
+
+    return json({ ok: true, dia, planejadas: linhas.length, avisos_inicio: novos.length, ia: iaErro ? `fallback: ${iaErro}` : 'ok', linhas });
+
   } catch (e) {
     console.error('[meta-aquecimento-planejar]', e);
     return json({ ok: false, error: e instanceof Error ? e.message : 'erro' }, 500);
