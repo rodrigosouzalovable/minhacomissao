@@ -982,16 +982,28 @@ export function classificarDataPagamento(texto: string): DataPagamento {
   if (/(mes que vem|proximo mes|mes seguinte|outro mes|mes vem|virada do mes|inicio do mes que vem)/.test(t)) {
     return { classe: 'fora_do_mes', dataIso: null, label: 'mês que vem' };
   }
-  if (/\bhoje\b|\bagora\b|\bja\b(?! nao)/.test(t)) return classificar(new Date(hoje));
-  if (/\bamanha\b/.test(t)) {
+
+  // Dia explícito do mês tem prioridade sobre "hoje"/dia da semana
+  // ("hoje não, consegue por para terça feira dia 08?").
+  const diaExplicito = t.match(/\bdia\s*(\d{1,2})\b/) || t.match(/\bno\s*dia\s*(\d{1,2})\b/);
+  const dataNumerica = t.match(/\b(\d{1,2})\s*[\/\-.]\s*(\d{1,2})(?:\s*[\/\-.]\s*(\d{2,4}))?\b/);
+  const temMesNome = MESES.some((m) => new RegExp(`\\b${m}\\b`).test(t));
+
+  // "hoje não" / "não hoje" / "hoje não dá" não é pagamento hoje
+  const negaHoje = /(hoje\s*(nao|n\b|nao da|nao consigo|nao posso|nao tenho)|nao\s*(da|consigo|posso|tenho|vai dar)?\s*hoje|nao\s*e\s*hoje)/.test(t);
+  if (!diaExplicito && !dataNumerica && !temMesNome && !negaHoje) {
+    if (/\bhoje\b|\bagora\b|\bja\b(?! nao)/.test(t)) return classificar(new Date(hoje));
+  }
+  if (/\bamanha\b/.test(t) && !diaExplicito && !dataNumerica) {
     const d = new Date(hoje); d.setDate(d.getDate() + 1); return classificar(d);
   }
-  if (/(depois de amanha)/.test(t)) {
+  if (/(depois de amanha)/.test(t) && !diaExplicito && !dataNumerica) {
     const d = new Date(hoje); d.setDate(d.getDate() + 2); return classificar(d);
   }
 
   // Dia da semana: "segunda", "segunda-feira", "seg", "sexta que vem", "sábado"
-  const diaSemana = detectarDiaSemana(t);
+  // (só quando o cliente não deu o número do dia — nesse caso o número manda)
+  const diaSemana = !diaExplicito && !dataNumerica && !temMesNome ? detectarDiaSemana(t) : null;
   if (diaSemana !== null) {
     const { idx, proxima } = diaSemana;
     const d = new Date(hoje);
@@ -1001,6 +1013,7 @@ export function classificarDataPagamento(texto: string): DataPagamento {
     d.setDate(d.getDate() + delta);
     return classificar(d);
   }
+
 
   if (/(semana que vem|proxima semana)/.test(t)) {
     const d = new Date(hoje); d.setDate(d.getDate() + 7); return classificar(d);
