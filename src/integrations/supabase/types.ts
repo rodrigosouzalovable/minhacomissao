@@ -546,6 +546,45 @@ export type Database = {
           },
         ]
       }
+      aquecimento_nicho_score: {
+        Row: {
+          atualizado_em: string
+          bloqueado: boolean
+          cidade: string
+          envios: number
+          id: string
+          nicho: string
+          reclamacoes: number
+          respostas: number
+          respostas_rapidas: number
+          score: number
+        }
+        Insert: {
+          atualizado_em?: string
+          bloqueado?: boolean
+          cidade?: string
+          envios?: number
+          id?: string
+          nicho: string
+          reclamacoes?: number
+          respostas?: number
+          respostas_rapidas?: number
+          score?: number
+        }
+        Update: {
+          atualizado_em?: string
+          bloqueado?: boolean
+          cidade?: string
+          envios?: number
+          id?: string
+          nicho?: string
+          reclamacoes?: number
+          respostas?: number
+          respostas_rapidas?: number
+          score?: number
+        }
+        Relationships: []
+      }
       aquecimento_notificacoes: {
         Row: {
           criado_em: string
@@ -2553,11 +2592,13 @@ export type Database = {
           longitude: number | null
           nome: string
           place_id: string | null
+          resultado_aquecimento: string | null
           site: string | null
           telefone: string | null
           telefone_internacional: string | null
           tem_whatsapp: boolean | null
           total_avaliacoes: number | null
+          usado_aquecimento_em: string | null
           user_id: string
           whatsapp_verificado_em: string | null
         }
@@ -2573,11 +2614,13 @@ export type Database = {
           longitude?: number | null
           nome: string
           place_id?: string | null
+          resultado_aquecimento?: string | null
           site?: string | null
           telefone?: string | null
           telefone_internacional?: string | null
           tem_whatsapp?: boolean | null
           total_avaliacoes?: number | null
+          usado_aquecimento_em?: string | null
           user_id: string
           whatsapp_verificado_em?: string | null
         }
@@ -2593,11 +2636,13 @@ export type Database = {
           longitude?: number | null
           nome?: string
           place_id?: string | null
+          resultado_aquecimento?: string | null
           site?: string | null
           telefone?: string | null
           telefone_internacional?: string | null
           tem_whatsapp?: boolean | null
           total_avaliacoes?: number | null
+          usado_aquecimento_em?: string | null
           user_id?: string
           whatsapp_verificado_em?: string | null
         }
@@ -3244,6 +3289,107 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_aquecimento_destino_log: {
+        Row: {
+          cidade: string | null
+          custo_estimado: number
+          destino_instancia_id: string | null
+          destino_telefone: string
+          dia: string
+          entregue_em: string | null
+          enviado_em: string
+          erro: string | null
+          fonte: string
+          id: string
+          instancia_id: string | null
+          lead_id: string | null
+          lido_em: string | null
+          nicho: string | null
+          respondeu_em: string | null
+          segundos_para_resposta: number | null
+          status: string
+          template: string | null
+          wamid: string | null
+        }
+        Insert: {
+          cidade?: string | null
+          custo_estimado?: number
+          destino_instancia_id?: string | null
+          destino_telefone: string
+          dia: string
+          entregue_em?: string | null
+          enviado_em?: string
+          erro?: string | null
+          fonte: string
+          id?: string
+          instancia_id?: string | null
+          lead_id?: string | null
+          lido_em?: string | null
+          nicho?: string | null
+          respondeu_em?: string | null
+          segundos_para_resposta?: number | null
+          status?: string
+          template?: string | null
+          wamid?: string | null
+        }
+        Update: {
+          cidade?: string | null
+          custo_estimado?: number
+          destino_instancia_id?: string | null
+          destino_telefone?: string
+          dia?: string
+          entregue_em?: string | null
+          enviado_em?: string
+          erro?: string | null
+          fonte?: string
+          id?: string
+          instancia_id?: string | null
+          lead_id?: string | null
+          lido_em?: string | null
+          nicho?: string | null
+          respondeu_em?: string | null
+          segundos_para_resposta?: number | null
+          status?: string
+          template?: string | null
+          wamid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_aquecimento_destino_log_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_aquecimento_orcamento: {
+        Row: {
+          atualizado_em: string
+          custo_marketing: number
+          custo_utility: number
+          dia: string
+          gasto_reais: number
+          teto_reais: number
+        }
+        Insert: {
+          atualizado_em?: string
+          custo_marketing?: number
+          custo_utility?: number
+          dia: string
+          gasto_reais?: number
+          teto_reais?: number
+        }
+        Update: {
+          atualizado_em?: string
+          custo_marketing?: number
+          custo_utility?: number
+          dia?: string
+          gasto_reais?: number
+          teto_reais?: number
+        }
+        Relationships: []
+      }
       meta_aquecimento_pares: {
         Row: {
           criado_em: string
@@ -3289,6 +3435,62 @@ export type Database = {
           {
             foreignKeyName: "meta_aquecimento_pares_receptor_id_fkey"
             columns: ["receptor_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_aquecimento_trilha: {
+        Row: {
+          alvo_unicos_dia: number
+          atualizado_em: string
+          criado_em: string
+          decisao_ia: Json | null
+          dia: string
+          id: string
+          instancia_id: string
+          mix_leads_pct: number
+          mix_uazapi_pct: number
+          status: string
+          tier_alvo: number | null
+          tier_atual: number | null
+          unicos_7d: number
+        }
+        Insert: {
+          alvo_unicos_dia?: number
+          atualizado_em?: string
+          criado_em?: string
+          decisao_ia?: Json | null
+          dia: string
+          id?: string
+          instancia_id: string
+          mix_leads_pct?: number
+          mix_uazapi_pct?: number
+          status?: string
+          tier_alvo?: number | null
+          tier_atual?: number | null
+          unicos_7d?: number
+        }
+        Update: {
+          alvo_unicos_dia?: number
+          atualizado_em?: string
+          criado_em?: string
+          decisao_ia?: Json | null
+          dia?: string
+          id?: string
+          instancia_id?: string
+          mix_leads_pct?: number
+          mix_uazapi_pct?: number
+          status?: string
+          tier_alvo?: number | null
+          tier_atual?: number | null
+          unicos_7d?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_aquecimento_trilha_instancia_id_fkey"
+            columns: ["instancia_id"]
             isOneToOne: false
             referencedRelation: "meta_whatsapp_instances"
             referencedColumns: ["id"]
@@ -4905,6 +5107,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      meta_template_ideias: {
+        Row: {
+          atualizado_em: string
+          bm_id: string | null
+          botoes: Json
+          categoria: string
+          corpo: string
+          criado_em: string
+          criado_por: string | null
+          id: string
+          idioma: string
+          justificativa: string | null
+          nome_sugerido: string
+          status: string
+        }
+        Insert: {
+          atualizado_em?: string
+          bm_id?: string | null
+          botoes?: Json
+          categoria?: string
+          corpo: string
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          idioma?: string
+          justificativa?: string | null
+          nome_sugerido: string
+          status?: string
+        }
+        Update: {
+          atualizado_em?: string
+          bm_id?: string | null
+          botoes?: Json
+          categoria?: string
+          corpo?: string
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          idioma?: string
+          justificativa?: string | null
+          nome_sugerido?: string
+          status?: string
+        }
+        Relationships: []
       }
       meta_templates_instancia: {
         Row: {

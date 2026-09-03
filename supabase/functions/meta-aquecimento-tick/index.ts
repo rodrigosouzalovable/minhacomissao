@@ -1,8 +1,9 @@
-// Aquecimento preventivo dos números Meta saudáveis (cron a cada 10 min).
-// Cada número GREEN em campanha recebe um mínimo diário de conversas com os
-// números UAZAPI da pasta AQUECIMENTO (atendidos pelo IAGO), gerando entrada
-// real para não chegar em YELLOW.
-// A recuperação de números YELLOW/RED é feita por meta-recuperacao-tick.
+// Aquecimento dos números Meta saudáveis (cron a cada 10 min).
+// Cada número segue a trilha planejada por meta-aquecimento-planejar: um alvo
+// diário de destinatários ÚNICOS, distribuído entre os números UAZAPI da pasta
+// AQUECIMENTO (respondidos pelo IAGO) e leads reais do Google Maps de nichos
+// que respondem bem. Tudo limitado pelo orçamento diário em reais.
+// A recuperação de números YELLOW/RED continua em meta-recuperacao-tick.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   dentroJanelaAquecimento,
@@ -13,6 +14,13 @@ import {
   hojeBrt,
   sorteio,
 } from '../_shared/meta-aquecimento-alvo.ts';
+import {
+  carregarOrcamento,
+  custoDoTemplate,
+  leadsParaAquecimento,
+  marcarLeadUsado,
+  registrarGasto,
+} from '../_shared/meta-aquecimento-inteligente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,10 +48,18 @@ Deno.serve(async (req) => {
 
     const hIni = Number(String(cfg?.horario_inicio || '09:00').split(':')[0]) || 9;
     const hFim = Number(String(cfg?.horario_fim || '19:00').split(':')[0]) || 19;
-    const janela = dentroJanelaAquecimento(Math.max(9, hIni), Math.min(19, hFim));
+    const janela = dentroJanelaAquecimento(Math.max(8, hIni), Math.min(19, hFim));
     if (!janela.ok && !forcar) return json({ ok: true, skipped: janela.motivo });
 
-    const metaDia = Math.max(1, Number(cfg?.preventivo_msgs_dia ?? 3));
+    const dia = hojeBrt();
+
+    // ===== Orçamento do dia (circuit breaker de custo) =====
+    const orc = await carregarOrcamento(supabase, dia);
+    if (Number(orc.gasto_reais) >= Number(orc.teto_reais)) {
+      return json({ ok: true, skipped: 'orcamento_esgotado', gasto: orc.gasto_reais, teto: orc.teto_reais });
+    }
+
+    const metaDiaPadrao = Math.max(1, Number(cfg?.preventivo_msgs_dia ?? 3));
     const intMin = Math.max(60, Number(cfg?.recuperacao_intervalo_min_seg ?? 1200));
     const intMax = Math.max(intMin, Number(cfg?.recuperacao_intervalo_max_seg ?? 2400));
     const maxPorDestino = Math.max(1, Number(cfg?.recuperacao_max_por_destino_dia ?? 2));
@@ -68,66 +84,160 @@ Deno.serve(async (req) => {
     if (elegiveis.length === 0) return json({ ok: true, skipped: 'nenhuma_elegivel' });
 
     const destinos = await destinosAquecimento(supabase);
-    if (destinos.length === 0) return json({ ok: false, error: 'nenhum número UAZAPI na pasta AQUECIMENTO' });
 
-    const dia = hojeBrt();
+    // Trilha planejada do dia
+    const { data: trilhas } = await supabase
+      .from('meta_aquecimento_trilha')
+      .select('instancia_id, alvo_unicos_dia, mix_uazapi_pct, status')
+      .eq('dia', dia);
+    const trilhaMap = new Map<string, any>();
+    (trilhas || []).forEach((t: any) => trilhaMap.set(t.instancia_id, t));
+
+    // Log do dia (destinos já usados)
     const { data: logsHoje } = await supabase
-      .from('meta_recuperacao_log')
-      .select('instancia_id, destino_instancia_id, enviado_em, status')
+      .from('meta_aquecimento_destino_log')
+      .select('instancia_id, destino_instancia_id, destino_telefone, fonte, status, enviado_em')
       .eq('dia', dia)
-      .limit(5000);
-    const usoDestino = new Map<string, number>();
+      .limit(10000);
+
+    const usoDestinoUazapi = new Map<string, number>();
     (logsHoje || []).forEach((l: any) => {
-      if (l.status !== 'enviado' || !l.destino_instancia_id) return;
-      usoDestino.set(l.destino_instancia_id, (usoDestino.get(l.destino_instancia_id) || 0) + 1);
+      if (l.status === 'falha' || l.fonte !== 'uazapi' || !l.destino_instancia_id) return;
+      usoDestinoUazapi.set(l.destino_instancia_id, (usoDestinoUazapi.get(l.destino_instancia_id) || 0) + 1);
     });
+
+    let leadsDisponiveis = await leadsParaAquecimento(supabase, 60);
 
     const resultados: any[] = [];
     let processadas = 0;
+    let gastoRun = 0;
 
     for (const inst of elegiveis as any[]) {
       if (processadas >= MAX_POR_RUN) break;
+      if (Number(orc.gasto_reais) + gastoRun >= Number(orc.teto_reais)) {
+        resultados.push({ instancia: inst.nome, skipped: 'orcamento_esgotado' });
+        break;
+      }
       if (!forcar && inst.recuperacao_proximo_envio_em &&
           new Date(inst.recuperacao_proximo_envio_em) > new Date()) continue;
 
+      const trilha = trilhaMap.get(inst.id);
+      if (trilha && trilha.status !== 'ativa') continue;
+      const alvoDia = Math.max(1, Number(trilha?.alvo_unicos_dia ?? metaDiaPadrao));
+      const mixUazapi = Math.max(0, Math.min(100, Number(trilha?.mix_uazapi_pct ?? 100)));
+
       const meus = (logsHoje || []).filter(
-        (l: any) => l.instancia_id === inst.id && l.status === 'enviado',
+        (l: any) => l.instancia_id === inst.id && l.status !== 'falha',
       );
-      if (meus.length >= metaDia) continue;
+      if (meus.length >= alvoDia) continue;
 
       const ultimo = meus
         .sort((a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime())[0];
-      const destinosOk = destinos.filter((d) =>
-        (usoDestino.get(d.id) || 0) < maxPorDestino && d.id !== ultimo?.destino_instancia_id
+
+      // ===== Escolha da fonte respeitando o mix planejado =====
+      const feitosUazapi = meus.filter((l: any) => l.fonte === 'uazapi').length;
+      const pctUazapiAtual = meus.length > 0 ? (feitosUazapi / meus.length) * 100 : 0;
+      const querUazapi = meus.length === 0 ? mixUazapi > 0 : pctUazapiAtual < mixUazapi;
+
+      const destinosUazapiOk = destinos.filter((d) =>
+        (usoDestinoUazapi.get(d.id) || 0) < maxPorDestino && d.id !== ultimo?.destino_instancia_id
       );
-      if (destinosOk.length === 0) continue;
-      const destino = destinosOk[Math.floor(Math.random() * destinosOk.length)];
+
+      let fonte: 'uazapi' | 'lead' | null = null;
+      if (querUazapi && destinosUazapiOk.length > 0) fonte = 'uazapi';
+      else if (mixUazapi < 100 && leadsDisponiveis.length > 0) fonte = 'lead';
+      else if (destinosUazapiOk.length > 0) fonte = 'uazapi';
+      else if (leadsDisponiveis.length > 0) fonte = 'lead';
+
+      if (!fonte) {
+        resultados.push({ instancia: inst.nome, skipped: 'sem_destino_disponivel' });
+        continue;
+      }
 
       const tpl = await escolherTemplateAprovado(inst, cfg?.aquecimento_template_utility);
       if (!tpl) {
         resultados.push({ instancia: inst.nome, erro: 'sem_template_aprovado' });
         continue;
       }
+      const custo = custoDoTemplate(orc, tpl.categoria);
+      if (Number(orc.gasto_reais) + gastoRun + custo > Number(orc.teto_reais)) {
+        resultados.push({ instancia: inst.nome, skipped: 'orcamento_esgotado' });
+        break;
+      }
 
-      const envio = await enviarTemplateAquecimento(inst, destino.telefone, tpl, destino.nome);
+      let telefone = '';
+      let nomeDestino: string | null = null;
+      let destinoInstanciaId: string | null = null;
+      let leadId: string | null = null;
+      let nicho: string | null = null;
+      let cidade: string | null = null;
 
-      await supabase.from('meta_recuperacao_log').insert({
+      if (fonte === 'uazapi') {
+        const d = destinosUazapiOk[Math.floor(Math.random() * destinosUazapiOk.length)];
+        telefone = d.telefone;
+        nomeDestino = d.nome;
+        destinoInstanciaId = d.id;
+      } else {
+        const lead = leadsDisponiveis.shift()!;
+        telefone = lead.telefone;
+        nomeDestino = lead.nome;
+        leadId = lead.id;
+        nicho = lead.nicho;
+        cidade = lead.cidade;
+      }
+
+      const envio = await enviarTemplateAquecimento(inst, telefone, tpl, nomeDestino);
+
+      await supabase.from('meta_aquecimento_destino_log').insert({
+        dia,
         instancia_id: inst.id,
-        destino_instancia_id: destino.id,
-        destino_telefone: destino.telefone,
-        tipo: `preventivo:${tpl.name}`,
+        fonte,
+        destino_telefone: telefone,
+        destino_instancia_id: destinoInstanciaId,
+        lead_id: leadId,
+        nicho,
+        cidade,
+        template: tpl.name,
+        custo_estimado: envio.ok ? custo : 0,
+        wamid: envio.wamid || null,
         status: envio.ok ? 'enviado' : 'falha',
         erro: envio.ok ? null : envio.erro,
-        wamid: envio.wamid || null,
-        dia,
       });
+
+      // Compatibilidade com o painel de recuperação/preventivo já existente.
+      if (fonte === 'uazapi') {
+        await supabase.from('meta_recuperacao_log').insert({
+          instancia_id: inst.id,
+          destino_instancia_id: destinoInstanciaId,
+          destino_telefone: telefone,
+          tipo: `preventivo:${tpl.name}`,
+          status: envio.ok ? 'enviado' : 'falha',
+          erro: envio.ok ? null : envio.erro,
+          wamid: envio.wamid || null,
+          dia,
+        });
+      }
+
+      if (leadId) {
+        await marcarLeadUsado(supabase, leadId, envio.ok ? 'enviado' : `falha: ${String(envio.erro || '').slice(0, 120)}`);
+      }
+
+      if (envio.ok) {
+        gastoRun += custo;
+        (logsHoje as any[]).push({
+          instancia_id: inst.id, fonte, destino_instancia_id: destinoInstanciaId,
+          destino_telefone: telefone, status: 'enviado', enviado_em: new Date().toISOString(),
+        });
+        if (destinoInstanciaId) {
+          usoDestinoUazapi.set(destinoInstanciaId, (usoDestinoUazapi.get(destinoInstanciaId) || 0) + 1);
+        }
+      }
 
       await supabase.from('meta_whatsapp_instances').update({
         recuperacao_ultimo_envio_em: new Date().toISOString(),
         recuperacao_proximo_envio_em: new Date(Date.now() + sorteio(intMin, intMax) * 1000).toISOString(),
       }).eq('id', inst.id);
 
-      if (envio.ok) usoDestino.set(destino.id, (usoDestino.get(destino.id) || 0) + 1);
       if (!envio.ok && erroFatalMeta(envio.codigo, envio.erro)) {
         console.log('[aquecimento] erro fatal, parando ciclo:', envio.erro);
         resultados.push({ instancia: inst.nome, ok: false, erro: envio.erro, parado: true });
@@ -137,14 +247,19 @@ Deno.serve(async (req) => {
       processadas++;
       resultados.push({
         instancia: inst.nome || inst.display_phone,
-        destino: destino.nome || destino.telefone,
+        fonte,
+        destino: nomeDestino || telefone,
+        nicho,
         template: tpl.name,
+        custo: envio.ok ? custo : 0,
         ok: envio.ok,
         erro: envio.erro || null,
       });
     }
 
-    return json({ ok: true, total: resultados.length, resultados });
+    if (gastoRun > 0) await registrarGasto(supabase, dia, gastoRun);
+
+    return json({ ok: true, total: resultados.length, gasto_run: gastoRun, resultados });
   } catch (e) {
     return json({ ok: false, error: e instanceof Error ? e.message : 'erro' }, 500);
   }
