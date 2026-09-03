@@ -245,7 +245,10 @@ Deno.serve(async (req) => {
           new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }),
         ).toISOString().slice(0, 10);
 
-        if (caiu && !liberadaManual) {
+        // A saída do pool de campanha + quarentena por queda de qualidade vale
+        // mesmo com a chave global "Liberar YELLOW/RED" ligada (ela só libera
+        // seleção/envio manual). Liberação individual do número continua isentando.
+        if (caiu && inst.qualidade_liberada_manual !== true) {
           const dias = Math.max(1, Number(cfg?.quarentena_dias ?? 7));
           const quarentenaAtual = inst.quarentena_ate ? new Date(inst.quarentena_ate).getTime() : 0;
           const novaQuarentena = Date.now() + dias * 86400000;
