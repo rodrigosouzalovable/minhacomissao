@@ -768,6 +768,15 @@ export default function EnvioMeta() {
     setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
+  // "Selecionar todas" só marca números sem nenhum problema: conectados,
+  // nome aprovado, BM com saldo e qualidade GREEN (YELLOW/RED/UNKNOWN fora).
+  const instanciaSemProblema = (i: any) => {
+    const status = (i.saude_status || "").toUpperCase();
+    const nomeStatus = (i.meta_name_status || "").toUpperCase();
+    const qual = (i.saude_quality || "").toUpperCase();
+    return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id) && qual === "GREEN";
+  };
+
   const toggleInstancia = (id: string) => {
     setInstanciaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
@@ -1428,14 +1437,10 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona instâncias conectadas e elegíveis pela Meta, independentemente da qualidade."
+              title="Seleciona apenas instâncias sem problema: conectadas, nome aprovado, BM com saldo e qualidade GREEN. YELLOW/RED/sem leitura ficam de fora (marque manualmente se quiser)."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
-                 const boasInstancias = instanciasVisiveis.filter((i) => {
-                   const status = (i.saude_status || "").toUpperCase();
-                   const nomeStatus = (i.meta_name_status || "").toUpperCase();
-                   return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
-                 });
+                const boasInstancias = instanciasVisiveis.filter(instanciaSemProblema);
                 const boaIds = boasInstancias.map((i) => i.id);
                 const todasMarcadas = boaIds.length > 0 && boaIds.every((id) => instanciaIds.includes(id));
                 if (todasMarcadas) {
@@ -1446,14 +1451,10 @@ export default function EnvioMeta() {
               }}
             >
               {instanciasVisiveis.length > 0 && instanciasVisiveis
-                .filter((i) => {
-                  const status = (i.saude_status || "").toUpperCase();
-                  const nomeStatus = (i.meta_name_status || "").toUpperCase();
-                  return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
-                })
+                .filter(instanciaSemProblema)
                 .every((i) => instanciaIds.includes(i.id))
                 ? "Limpar seleção"
-                : "Selecionar todas"}
+                : "Selecionar todas (GREEN)"}
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
               {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
