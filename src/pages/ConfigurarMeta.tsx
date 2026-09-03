@@ -316,6 +316,50 @@ export default function ConfigurarMeta() {
     setLoading(false);
   };
 
+  // Progresso do aquecimento de tier (somente admin, sem polling)
+  const [aqProgresso, setAqProgresso] = useState<Record<string, { feitos: number; alvo: number }>>({});
+  const idsAquecendo = useMemo(
+    () => instancias.filter((i) => i.aquecimento_meta_ativo).map((i) => i.id),
+    [instancias],
+  );
+  useEffect(() => {
+    if (!isAdmin || idsAquecendo.length === 0) {
+      setAqProgresso({});
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const dia = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const [tr, lg] = await Promise.all([
+        supabase
+          .from("meta_aquecimento_trilha")
+          .select("instancia_id, alvo_unicos_dia")
+          .eq("dia", dia)
+          .in("instancia_id", idsAquecendo),
+        supabase
+          .from("meta_aquecimento_destino_log")
+          .select("instancia_id, status")
+          .eq("dia", dia)
+          .in("instancia_id", idsAquecendo),
+      ]);
+      if (cancelado) return;
+      const mapa: Record<string, { feitos: number; alvo: number }> = {};
+      for (const t of (tr.data as any[]) ?? []) {
+        mapa[t.instancia_id] = { feitos: 0, alvo: Number(t.alvo_unicos_dia ?? 0) };
+      }
+      for (const l of (lg.data as any[]) ?? []) {
+        if (l.status === "falha") continue;
+        mapa[l.instancia_id] ??= { feitos: 0, alvo: 0 };
+        mapa[l.instancia_id].feitos++;
+      }
+      setAqProgresso(mapa);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [isAdmin, idsAquecendo.join(",")]);
+
+
 
   const carregarToken = async () => {
     if (parceiroMeta) {
