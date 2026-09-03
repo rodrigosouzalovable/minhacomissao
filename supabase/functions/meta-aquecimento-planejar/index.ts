@@ -5,6 +5,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { hojeBrt } from '../_shared/meta-aquecimento-alvo.ts';
 import { carregarOrcamento, proximoTier, tierAtual } from '../_shared/meta-aquecimento-inteligente.ts';
+import { notificarNumeros } from '../_shared/notificar-numeros.ts';
+
+const DESTINATARIOS_AVISO = ['62991672674', '62994300880'];
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
