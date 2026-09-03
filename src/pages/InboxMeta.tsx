@@ -366,11 +366,21 @@ export default function InboxMeta() {
   }, [user]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
+  // Janela mínima de reconsulta: eventos em rajada (Realtime/foco) não refazem
+  // a leitura completa de etiquetas/qualificações quando a lista não mudou.
+  const etiqCacheRef = useRef<{ key: string; ts: number }>({ key: '', ts: 0 });
+  const qualifCacheRef = useRef<{ key: string; ts: number }>({ key: '', ts: 0 });
+  const JANELA_RECONSULTA = 30_000;
   // Busca vínculos de etiqueta SOMENTE dos contatos exibidos na tela.
   // Antes fazia varredura completa da tabela em cada carregamento/foco.
-  const fetchContatoEtiquetas = useCallback(async (contatoIds?: string[]) => {
+  const fetchContatoEtiquetas = useCallback(async (contatoIds?: string[], forcar = false) => {
     const ids = (contatoIds ?? []).filter(Boolean);
     if (ids.length === 0) return;
+    const key = ids.join(',');
+    const agora = Date.now();
+    if (!forcar && etiqCacheRef.current.key === key && agora - etiqCacheRef.current.ts < JANELA_RECONSULTA) return;
+    etiqCacheRef.current = { key, ts: agora };
+
     const CHUNK = 200;
     const all: Array<{ contato_id: string; etiqueta_id: string; origem: string | null }> = [];
     for (let i = 0; i < ids.length; i += CHUNK) {
