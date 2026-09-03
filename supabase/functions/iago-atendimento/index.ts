@@ -692,9 +692,12 @@ Deno.serve(async (req) => {
     });
 
     // ===== A IA entendeu que não é o titular (mesmo com erro de escrita) => encerra =====
-    if (resultado?.nao_e_titular === true || String(resultado?.nao_e_titular || '').toLowerCase() === 'sim') {
+    // Durante negociação (escolha/data), nunca encerra: escala para o humano.
+    const naoEhTitular = resultado?.nao_e_titular === true || String(resultado?.nao_e_titular || '').toLowerCase() === 'sim';
+    if (naoEhTitular && !emNegociacao && !ehContextoNegociacao(textoAtual)) {
       return await encerrarNumeroErrado('ia');
     }
+
 
 
 
