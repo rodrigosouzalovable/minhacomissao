@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AquecimentoMetaTab } from "@/components/meta/AquecimentoMetaTab";
+import { IdeiasTemplatesTab } from "@/components/meta/IdeiasTemplatesTab";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -1058,10 +1060,27 @@ export default function ConfigurarMeta() {
         <TabsList>
           <TabsTrigger value="instancias">Instâncias ({instanciasFiltradas.length})</TabsTrigger>
           <TabsTrigger value="templates">Templates HSM ({templates.length})</TabsTrigger>
+          {isAdmin && (
+            <>
+              <TabsTrigger value="aquecimento">Aquecimento Meta</TabsTrigger>
+              <TabsTrigger value="ideias">Ideias de Templates</TabsTrigger>
+            </>
+          )}
           {isAdmin && !parceiroMeta && (
             <TabsTrigger value="parceiros">Parceiros</TabsTrigger>
           )}
         </TabsList>
+
+        {isAdmin && (
+          <>
+            <TabsContent value="aquecimento">
+              <AquecimentoMetaTab />
+            </TabsContent>
+            <TabsContent value="ideias">
+              <IdeiasTemplatesTab />
+            </TabsContent>
+          </>
+        )}
 
         <TabsContent value="instancias">
 
