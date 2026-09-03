@@ -389,7 +389,7 @@ export default function InboxMeta() {
         .from('meta_whatsapp_contato_etiquetas')
         .select('contato_id, etiqueta_id, origem')
         .in('contato_id', slice);
-      if (error) return; // preserva state anterior em caso de erro
+      if (error) { etiqCacheRef.current = { key: '', ts: 0 }; return; } // preserva state anterior em caso de erro
       all.push(...((data as any[]) ?? []));
     }
     const map: Record<string, string[]> = {};
