@@ -1457,6 +1457,22 @@ serve(async (req) => {
             .update(updateLog)
             .eq('wa_message_id', waId);
 
+          // Aprendizado do aquecimento: entrega/leitura/falha por wamid
+          try {
+            const patchAq: any = {};
+            if (status === 'delivered') patchAq.entregue_em = new Date().toISOString();
+            if (status === 'read') patchAq.lido_em = new Date().toISOString();
+            if (status === 'failed') {
+              patchAq.status = 'falha';
+              patchAq.erro = (errTitle ? String(errTitle) : 'falha') + (errCode ? ` (#${errCode})` : '');
+            }
+            if (Object.keys(patchAq).length > 0) {
+              await supabase.from('meta_aquecimento_destino_log').update(patchAq).eq('wamid', waId);
+            }
+          } catch (_e) { /* aprendizado não bloqueia o webhook */ }
+
+
+
 
           // Detecta bloqueio/restrição/banimento da instância
           if (status === 'failed') {
