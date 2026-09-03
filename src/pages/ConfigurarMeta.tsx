@@ -1329,6 +1329,20 @@ export default function ConfigurarMeta() {
                               </Badge>
                             );
                           })()}
+                          {isAdmin && inst.aquecimento_meta_ativo && (() => {
+                            const p = aqProgresso[inst.id];
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-orange-500/60 text-orange-600 bg-orange-50 cursor-help"
+                                title="Este número está no motor automático de aquecimento para subir o tier"
+                              >
+                                🔥 Aquecimento de tier
+                                {p && p.alvo > 0 ? ` ${p.feitos}/${p.alvo}` : ""}
+                              </Badge>
+                            );
+                          })()}
+
                           <MetaHealthStatusRow inst={inst} />
                           {(() => {
                             const s = inst.webhook_saude_status;
