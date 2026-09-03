@@ -197,6 +197,16 @@ export function ehPedidoBloqueioContato(texto: string): boolean {
 }
 
 
+/**
+ * Sinais de que a mensagem é sobre negociação/data de pagamento — nesse caso frases
+ * como "não é o quinto dia útil" NÃO podem ser lidas como negação de identidade.
+ */
+export function ehContextoNegociacao(texto: string): boolean {
+  const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!t.trim()) return false;
+  return /(dia\s*util|quinto\s*dia|consegue\s*(por|colocar|deixar|passar)|da\s*(pra|para)\s*(por|deixar|passar)|pagamento|pagar|paga\s*(dia|na|no)|parcel\w*|boleto|pix|desconto|valor|vencimento|salario|beneficio|aposentad\w*|adiantar|prorrog\w*|acordo|entrada|a\s*vista|avista|\b\d{1,2}\s*x\b|\bdia\s*\d{1,2}\b|\b\d{1,2}\s*\/\s*\d{1,2}\b|segunda|terca|quarta|quinta|sexta|sabado|domingo|amanha|semana que vem|mes que vem)/.test(t);
+}
+
 /** Cliente avisou que não é a pessoa procurada / número errado. */
 export function ehNumeroErrado(texto: string): boolean {
   const t = String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -208,8 +218,25 @@ export function ehNumeroErrado(texto: string): boolean {
   if (/\bnao\s*(e|eh|é)?\s*(essa|esta|ess[ae]|est[ae])?\s*pessoa\b/.test(t)) return true;
   if (/\bnao\s*conhe\w*\s*(essa|esse|est[ae])?\s*pessoa\b/.test(t)) return true;
 
+  // Mensagem de negociação/data nunca é negação de identidade
+  // (ex.: "hoje não porque não é o quinto dia útil").
+  if (ehContextoNegociacao(t)) return false;
+
   // Pronomes/artigos clássicos: "nao sou o Sebastiao", "nao sou eu", "nao sou essa pessoa"
-  if (/\bnao\s*(sou|e|eh)\s+(o|a|ele|ela|essa|esse|est[ae]|eu|ninguem)\b/.test(t)) return true;
+  if (/\bnao\s*sou\s+(o|a|ele|ela|essa|esse|est[ae]|eu|ninguem)\b/.test(t)) return true;
+  // "nao e/eh ele/ela/eu/essa..." — só quando o que vem depois é pessoa
+  if (/\bnao\s*(e|eh)\s+(ele|ela|eu|essa\s*pessoa|esse\s*(ai|rapaz|senhor)|o\s*titular)\b/.test(t)) return true;
+  // "nao e o/a <nome>" — só quando o que vem depois não é palavra de contexto comum
+  const mArt = t.match(/\bnao\s*(?:e|eh)\s+(?:o|a)\s+([a-z]{3,})/);
+  if (mArt) {
+    const contexto = new Set([
+      'dia', 'quinto', 'quarto', 'terceiro', 'segundo', 'primeiro', 'valor', 'caso', 'momento', 'melhor',
+      'certo', 'mesmo', 'meu', 'minha', 'unico', 'total', 'boleto', 'pix', 'pagamento', 'vencimento',
+      'salario', 'beneficio', 'acordo', 'desconto', 'problema', 'jeito', 'ideal', 'necessario', 'que',
+      'data', 'prazo', 'mes', 'ano', 'semana', 'hora', 'horario', 'parcela',
+    ]);
+    if (!contexto.has(mArt[1])) return true;
+  }
   // "nao sou <nome>" — nome próprio direto, sem artigo
   const m = t.match(/\bnao\s*(?:sou|eh)\s+([a-z]{3,})/);
   if (m) {
@@ -220,6 +247,7 @@ export function ehNumeroErrado(texto: string): boolean {
   return false;
 
 }
+
 
 /**
  * Nunca mais falar com esse telefone em campanhas/lembretes.
