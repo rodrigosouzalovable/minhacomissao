@@ -538,9 +538,14 @@ export default function InboxMeta() {
 
   useEffect(() => { fetchQualificacoes(); }, [fetchQualificacoes]);
 
-  const fetchQualifContatos = useCallback(async (ids: string[]) => {
-    if (!ids.length) { setQualifPorContato({}); return; }
+  const fetchQualifContatos = useCallback(async (ids: string[], forcar = false) => {
+    if (!ids.length) { setQualifPorContato({}); qualifCacheRef.current = { key: '', ts: 0 }; return; }
+    const key = ids.join(',');
+    const agora = Date.now();
+    if (!forcar && qualifCacheRef.current.key === key && agora - qualifCacheRef.current.ts < JANELA_RECONSULTA) return;
+    qualifCacheRef.current = { key, ts: agora };
     const map: Record<string, string[]> = {};
+
     for (let i = 0; i < ids.length; i += 300) {
       const { data } = await (supabase as any).from('meta_contato_qualificacao')
         .select('contato_id, qualificacao_id').in('contato_id', ids.slice(i, i + 300));
