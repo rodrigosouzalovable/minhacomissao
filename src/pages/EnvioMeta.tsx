@@ -768,6 +768,15 @@ export default function EnvioMeta() {
     setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
+  // "Selecionar todas" só marca números sem nenhum problema: conectados,
+  // nome aprovado, BM com saldo e qualidade GREEN (YELLOW/RED/UNKNOWN fora).
+  const instanciaSemProblema = (i: any) => {
+    const status = (i.saude_status || "").toUpperCase();
+    const nomeStatus = (i.meta_name_status || "").toUpperCase();
+    const qual = (i.saude_quality || "").toUpperCase();
+    return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id) && qual === "GREEN";
+  };
+
   const toggleInstancia = (id: string) => {
     setInstanciaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
