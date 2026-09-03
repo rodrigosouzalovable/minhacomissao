@@ -594,7 +594,34 @@ serve(async (req) => {
           // Métrica diária (inbound orgânico melhora ratio anti-ban)
           if (!isEcho && !msgError) {
             supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'inbound', _inc: 1 }).then(() => {}, () => {});
+
+            // Aprendizado do aquecimento: marca resposta do destino (uma vez)
+            try {
+              const sufixoResp = (outroLado || '').replace(/\D/g, '').slice(-8);
+              if (sufixoResp.length === 8) {
+                const { data: aqLog } = await supabase
+                  .from('meta_aquecimento_destino_log')
+                  .select('id, enviado_em')
+                  .eq('instancia_id', inst.id)
+                  .like('destino_telefone', `%${sufixoResp}`)
+                  .is('respondeu_em', null)
+                  .order('enviado_em', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (aqLog?.id) {
+                  const agora = new Date();
+                  const segs = aqLog.enviado_em
+                    ? Math.max(0, Math.round((agora.getTime() - new Date(aqLog.enviado_em).getTime()) / 1000))
+                    : null;
+                  await supabase.from('meta_aquecimento_destino_log').update({
+                    respondeu_em: agora.toISOString(),
+                    segundos_para_resposta: segs,
+                  }).eq('id', aqLog.id);
+                }
+              }
+            } catch (_e) { /* aprendizado não bloqueia o webhook */ }
           }
+
 
           if (msgError) {
             const duplicate = String(msgError.message || '').toLowerCase().includes('duplicate') || msgError.code === '23505';
