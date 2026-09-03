@@ -296,7 +296,7 @@ async function processarItem(job: any): Promise<ItemResult> {
     .filter((id: string) => !bloqueadasQualidade.includes(id) && !exclItem.includes(id));
   if (instanciaIdsDisponiveis.length === 0) {
     // Se sobrou instância no job mas nenhuma serve para este contato, marca só o item como erro
-    const restaNoJob = (job.instancia_ids || []).filter((id: string) => !bloqueadasRun.includes(id));
+    const restaNoJob = (job.instancia_ids || []).filter((id: string) => !bloqueadasQualidade.includes(id));
     if (restaNoJob.length > 0) {
       await supabase.from('envio_meta_job_item').update({
         status: 'erro',
@@ -305,7 +305,7 @@ async function processarItem(job: any): Promise<ItemResult> {
       }).eq('id', pend.id);
       return { advanced: true, waitMs: 1_000 };
     }
-    await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas foram ignoradas por falhas consecutivas');
+    await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas saíram do envio (falhas consecutivas ou qualidade YELLOW/RED)');
     return { advanced: false, stop: true };
   }
 
