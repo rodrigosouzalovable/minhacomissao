@@ -120,8 +120,93 @@ Deno.serve(async (req) => {
       linhas.push("_Nenhuma troca registrada nas últimas 24h._");
     }
 
+    // ===== Aquecimento de tier (novas BMs) =====
+    linhas.push("");
+    linhas.push("*🔥 Aquecimento de tier (novas BMs)*");
+    const { data: instAq } = await supabase
+      .from("meta_whatsapp_instances")
+      .select("id, nome, display_phone, saude_quality, saude_tier, tier_diario, estado_pool, pausa_automatica_ate")
+      .eq("provider", "meta")
+      .eq("ativo", true)
+      .eq("aquecimento_meta_ativo", true);
+
+    if (!instAq || instAq.length === 0) {
+      linhas.push("_Motor parado — nenhum número selecionado._");
+    } else {
+      const idsAq = instAq.map((i: any) => i.id);
+      const desde7d = new Date(Date.now() - 7 * 86400000).toISOString();
+      const [{ data: trilhas }, { data: logsAqDia }, { data: logsAq7d }, { data: orcAq }] = await Promise.all([
+        supabase
+          .from("meta_aquecimento_trilha")
+          .select("instancia_id, tier_atual, tier_alvo, alvo_unicos_dia, unicos_7d, status, mix_uazapi_pct, mix_leads_pct")
+          .eq("dia", hojeStr)
+          .in("instancia_id", idsAq),
+        supabase
+          .from("meta_aquecimento_destino_log")
+          .select("instancia_id, status, respondeu_em, entregue_em, lido_em, destino_telefone")
+          .eq("dia", hojeStr)
+          .in("instancia_id", idsAq),
+        supabase
+          .from("meta_aquecimento_destino_log")
+          .select("instancia_id, destino_telefone, status")
+          .gte("enviado_em", desde7d)
+          .in("instancia_id", idsAq),
+        supabase.from("meta_aquecimento_orcamento").select("*").eq("dia", hojeStr).maybeSingle(),
+      ]);
+
+      const trilhaMap = new Map<string, any>();
+      (trilhas || []).forEach((t: any) => trilhaMap.set(t.instancia_id, t));
+
+      const unicos7d = new Map<string, Set<string>>();
+      for (const l of (logsAq7d || []) as any[]) {
+        if (l.status === "falha") continue;
+        const s = unicos7d.get(l.instancia_id) || new Set<string>();
+        s.add(String(l.destino_telefone || "").replace(/\D/g, "").slice(-8));
+        unicos7d.set(l.instancia_id, s);
+      }
+
+      for (const inst of instAq as any[]) {
+        const nome = inst.nome || inst.display_phone || inst.id.slice(0, 8);
+        const t = trilhaMap.get(inst.id);
+        const meus = ((logsAqDia || []) as any[]).filter((l) => l.instancia_id === inst.id);
+        const feitos = meus.filter((l) => l.status !== "falha").length;
+        const entregues = meus.filter((l) => l.entregue_em).length;
+        const lidas = meus.filter((l) => l.lido_em).length;
+        const resp = meus.filter((l) => l.respondeu_em).length;
+        const falhas = meus.filter((l) => l.status === "falha").length;
+        const q = String(inst.saude_quality || "?").toUpperCase();
+        const qIcon = q === "GREEN" ? "🟢" : q === "YELLOW" ? "🟡" : q === "RED" ? "🔴" : "⚪";
+
+        linhas.push(`${qIcon} *${nome}* — ${feitos}/${t?.alvo_unicos_dia ?? "?"} hoje · únicos 7d: ${unicos7d.get(inst.id)?.size ?? 0}`);
+        linhas.push(`   entregues ${entregues} · lidas ${lidas} · respostas ${resp} · falhas ${falhas}`);
+        if (t) {
+          linhas.push(`   tier ${Number(t.tier_atual).toLocaleString("pt-BR")} → ${Number(t.tier_alvo).toLocaleString("pt-BR")} · mix ${t.mix_uazapi_pct}% UAZAPI / ${t.mix_leads_pct}% leads`);
+          const tierHoje = Number(inst.tier_diario || 0);
+          if (tierHoje && tierHoje > Number(t.tier_atual)) {
+            linhas.push(`   ⬆️ *tier subiu para ${tierHoje.toLocaleString("pt-BR")}/dia hoje*`);
+          }
+          if (t.status && t.status !== "ativa") {
+            linhas.push(`   ⏸ trilha ${t.status}`);
+          }
+        } else {
+          linhas.push("   _sem trilha planejada hoje_");
+        }
+        if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
+          linhas.push("   ⛔ número pausado automaticamente (erro da Meta)");
+        }
+        if (q === "YELLOW" || q === "RED") {
+          linhas.push(`   ⚠️ qualidade caiu para ${q} — aquecimento reduzido`);
+        }
+      }
+
+      const gasto = Number(orcAq?.gasto_reais ?? 0);
+      const teto = Number(orcAq?.teto_reais ?? 50);
+      linhas.push(`   💰 Gasto do dia: R$ ${gasto.toFixed(2)} / R$ ${teto.toFixed(2)}${gasto >= teto ? " ⛔ teto atingido" : ""}`);
+    }
+
     const mensagem = linhas.join("\n");
     const chave = `aquecimento-meta-${hojeStr}-${nowBrt.getHours() < 15 ? "12h" : "18h"}`;
+
 
     const result = await notificarNumeros(supabase, {
       tipo: "aquecimento_meta_relatorio",
