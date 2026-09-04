@@ -105,6 +105,8 @@ export async function tratarContaBloqueada(
   } catch (e) {
     console.log("[conta-bloqueada] notificarAdmin falhou:", String(e).slice(0, 200));
   }
+
+  return true;
 }
 
 /**
