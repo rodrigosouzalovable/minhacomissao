@@ -411,10 +411,10 @@ Deno.serve(async (req) => {
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       if (ehContaBloqueada(erro, data?.error?.code)) {
-        await tratarContaBloqueada(supabase as any, inst, erro);
+        const restringiu = await tratarContaBloqueada(supabase as any, inst, erro);
         return new Response(JSON.stringify({
-          success: false, instance_restricted: true, conta_bloqueada: true,
-          error: MSG_CONTA_BLOQUEADA, detalhe: erro, instancia_id,
+          success: false, instance_restricted: restringiu, conta_bloqueada: restringiu,
+          error: restringiu ? MSG_CONTA_BLOQUEADA : erro, detalhe: erro, instancia_id,
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ success: false, error: erro }), {
