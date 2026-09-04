@@ -120,9 +120,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const hora = new Date().toLocaleTimeString('pt-BR', {
-      timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
-    });
+    const hora = horaAgora;
 
     const mensagem =
       `📈 *Aquecimento de qualidade — ${hora}*\n\n` +
@@ -136,7 +134,9 @@ Deno.serve(async (req) => {
       mensagem,
       chaveIdempotencia: `meta_aquec_resumo_${dia}_${hora.replace(':', '')}`,
       umaVezPorChave: true,
+      destinatarios: ['5562991672674', '5562994300880'],
     });
+
 
     return json({ ok: true, instancias: insts.length, totalEnv, totalResp });
   } catch (e) {
