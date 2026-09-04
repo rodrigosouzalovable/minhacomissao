@@ -4092,6 +4092,9 @@ export type Database = {
           duracao_pausa_yellow_horas: number
           escada_retorno: Json
           freio_ativo: boolean
+          guardiao_ativo: boolean
+          guardiao_janela_horas: number
+          guardiao_min_saidas: number
           guardrail_block_rate_max_pct: number
           guardrail_ratio_inbound: boolean
           guardrail_ratio_min_pct: number
@@ -4111,6 +4114,9 @@ export type Database = {
           recuperacao_msgs_dia_piora: number
           recuperacao_msgs_max_dia: number
           recuperacao_msgs_min_dia: number
+          resp_pct_atencao: number
+          resp_pct_corte: number
+          resp_pct_forte: number
           resposta_min_pct: number
           sem_teto_global: boolean
           supressao_ativa: boolean
@@ -4137,6 +4143,9 @@ export type Database = {
           duracao_pausa_yellow_horas?: number
           escada_retorno?: Json
           freio_ativo?: boolean
+          guardiao_ativo?: boolean
+          guardiao_janela_horas?: number
+          guardiao_min_saidas?: number
           guardrail_block_rate_max_pct?: number
           guardrail_ratio_inbound?: boolean
           guardrail_ratio_min_pct?: number
@@ -4156,6 +4165,9 @@ export type Database = {
           recuperacao_msgs_dia_piora?: number
           recuperacao_msgs_max_dia?: number
           recuperacao_msgs_min_dia?: number
+          resp_pct_atencao?: number
+          resp_pct_corte?: number
+          resp_pct_forte?: number
           resposta_min_pct?: number
           sem_teto_global?: boolean
           supressao_ativa?: boolean
@@ -4182,6 +4194,9 @@ export type Database = {
           duracao_pausa_yellow_horas?: number
           escada_retorno?: Json
           freio_ativo?: boolean
+          guardiao_ativo?: boolean
+          guardiao_janela_horas?: number
+          guardiao_min_saidas?: number
           guardrail_block_rate_max_pct?: number
           guardrail_ratio_inbound?: boolean
           guardrail_ratio_min_pct?: number
@@ -4201,6 +4216,9 @@ export type Database = {
           recuperacao_msgs_dia_piora?: number
           recuperacao_msgs_max_dia?: number
           recuperacao_msgs_min_dia?: number
+          resp_pct_atencao?: number
+          resp_pct_corte?: number
+          resp_pct_forte?: number
           resposta_min_pct?: number
           sem_teto_global?: boolean
           supressao_ativa?: boolean
@@ -4668,6 +4686,10 @@ export type Database = {
           atualizado_em: string
           dia: string
           enviados: number
+          guardiao_atualizado_em: string | null
+          guardiao_faixa: string | null
+          guardiao_fator: number | null
+          guardiao_resposta_pct: number | null
           instancia_id: string
           liberado_manual: boolean
           motivo_reducao: string | null
@@ -4680,6 +4702,10 @@ export type Database = {
           atualizado_em?: string
           dia?: string
           enviados?: number
+          guardiao_atualizado_em?: string | null
+          guardiao_faixa?: string | null
+          guardiao_fator?: number | null
+          guardiao_resposta_pct?: number | null
           instancia_id: string
           liberado_manual?: boolean
           motivo_reducao?: string | null
@@ -4692,6 +4718,10 @@ export type Database = {
           atualizado_em?: string
           dia?: string
           enviados?: number
+          guardiao_atualizado_em?: string | null
+          guardiao_faixa?: string | null
+          guardiao_fator?: number | null
+          guardiao_resposta_pct?: number | null
           instancia_id?: string
           liberado_manual?: boolean
           motivo_reducao?: string | null
