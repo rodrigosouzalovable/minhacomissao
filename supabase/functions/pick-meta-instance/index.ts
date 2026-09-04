@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
       // Só bloqueios REAIS de usuário (mo.bloqueadas) reprovam a instância —
       // falhas técnicas (template, mídia, rede) apenas reduzem o teto de uso.
       const mo = metricaMap.get(inst.id);
-      let tetoQualidade = 1.0;
+      let tetoQualidade = 1.0 * fatorGuardiao;
       let reprovadaGuardrail: string | null = null;
       if (mo && mo.enviadas > volumeMinGuardrail) {
         const blockRate = (mo.bloqueadas || 0) / Math.max(1, mo.enviadas) * 100;
