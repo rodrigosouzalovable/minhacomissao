@@ -46,12 +46,21 @@ export function ehMotivoBloqueioMeta(motivo?: string | null): boolean {
 }
 
 
-/** Restringe a instância no pool e avisa o admin (idempotente por dia). */
+/** Restringe a instância no pool e avisa o admin (idempotente por dia).
+ *  Antes de restringir, confirma na Graph API se a conta realmente está travada:
+ *  se a Meta responder que está tudo liberado, a instância continua no pool
+ *  (foi falha pontual daquele envio). Retorna true se restringiu. */
 export async function tratarContaBloqueada(
   supabase: SupabaseClient,
   inst: any,
   msgOriginal: string,
-): Promise<void> {
+): Promise<boolean> {
+  const confirmado = await metaConfirmaBloqueio(inst);
+  if (confirmado === false) {
+    console.log("[conta-bloqueada] Meta diz que está liberado — instância mantida no pool:", inst?.id);
+    return false;
+  }
+
   let jaRestrita = false;
   try {
     const { data: antes } = await supabase
@@ -63,7 +72,9 @@ export async function tratarContaBloqueada(
       (!!(antes as any)?.pausa_automatica_ate &&
         new Date((antes as any).pausa_automatica_ate).getTime() > Date.now());
 
-    const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    // Pausa curta: a liberação real depende da revalidação na Meta
+    // (check-meta-instance-health), que roda de hora em hora.
+    const ate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     await supabase.from("meta_whatsapp_instances").update({
       estado_pool: "restrita",
       pausa_automatica_ate: ate,
@@ -73,7 +84,8 @@ export async function tratarContaBloqueada(
     console.log("[conta-bloqueada] update falhou:", String(e).slice(0, 200));
   }
 
-  if (jaRestrita) return;
+  if (jaRestrita) return true;
+
 
   try {
     const { notificarAdmin } = await import("./notificar-admin.ts");
