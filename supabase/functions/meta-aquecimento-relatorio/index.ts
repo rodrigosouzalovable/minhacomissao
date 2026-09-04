@@ -212,6 +212,33 @@ Deno.serve(async (req) => {
       linhas.push(`   💰 Gasto do dia: R$ ${gasto.toFixed(2)} / R$ ${teto.toFixed(2)}${gasto >= teto ? " ⛔ teto atingido" : ""}`);
     }
 
+    // ===== Guardião de engajamento (taxa de resposta) =====
+    try {
+      const { data: freios } = await supabase
+        .from("meta_instance_freio_diario")
+        .select("instancia_id, guardiao_faixa, guardiao_fator, guardiao_resposta_pct, motivo_reducao")
+        .eq("dia", hojeStr);
+      const freados = (freios || []).filter(
+        (f: any) => f.guardiao_faixa && f.guardiao_faixa !== "ok" && !idsParceiros.has(f.instancia_id),
+      );
+      linhas.push("");
+      linhas.push("*🛡️ Guardião de engajamento (hoje)*");
+      if (freados.length === 0) {
+        linhas.push("_Nenhum número freado — taxa de resposta dentro do esperado._");
+      } else {
+        for (const f of freados as any[]) {
+          const nome = nomeMap.get(f.instancia_id) || f.instancia_id.slice(0, 8);
+          const acao = f.guardiao_faixa === "corte"
+            ? "fora da campanha hoje, só aquecimento"
+            : `ritmo em ${Math.round(Number(f.guardiao_fator || 0) * 100)}% + aquecimento`;
+          linhas.push(`⚠️ *${nome}* — resposta ${Number(f.guardiao_resposta_pct || 0).toFixed(1)}%`);
+          linhas.push(`   ➜ ${acao}`);
+        }
+      }
+    } catch (_e) {
+      // relatório não falha por causa deste bloco
+    }
+
     const mensagem = linhas.join("\n");
     const chave = `aquecimento-meta-${hojeStr}-${nowBrt.getHours() < 15 ? "12h" : "18h"}`;
 

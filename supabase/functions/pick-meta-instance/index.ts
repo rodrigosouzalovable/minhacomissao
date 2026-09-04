@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
     ).toISOString().slice(0, 10);
     const { data: freioRows } = await supabase
       .from('meta_instance_freio_diario')
-      .select('instancia_id, teto_efetivo, motivo_reducao')
+      .select('instancia_id, teto_efetivo, motivo_reducao, guardiao_faixa, guardiao_fator, guardiao_resposta_pct')
       .in('instancia_id', instancia_ids)
       .eq('dia', hojeBrt);
     const freioMap = new Map<string, any>();
@@ -276,14 +276,43 @@ Deno.serve(async (req) => {
         }
       }
 
-
+      // ===== Guardião de engajamento (taxa de resposta na janela curta) =====
+      // Vale inclusive no modo "sem teto": resposta muito baixa reduz o ritmo
+      // do número e, na faixa de corte, tira o número da campanha no dia.
+      const freioG = freioMap.get(inst.id);
+      const fatorGuardiao = freioG?.guardiao_fator == null ? 1 : Number(freioG.guardiao_fator);
+      if (fatorGuardiao <= 0) {
+        descartados.push(
+          `${rotulo}: fora da campanha hoje — ${freioG?.motivo_reducao || 'taxa de resposta muito baixa'}`,
+        );
+        continue;
+      }
+      if (fatorGuardiao < 1) {
+        const cotaMetaG = Number(inst.tier_diario || 0);
+        if (cotaMetaG > 0) {
+          const tetoG = Math.max(1, Math.floor(cotaMetaG * fatorGuardiao));
+          const enviadosDiaG = await enviadosHojeBrt(supabase, inst.id);
+          if (enviadosDiaG >= tetoG) {
+            descartados.push(
+              `${rotulo}: ritmo reduzido pelo guardião (${enviadosDiaG}/${tetoG}) — ${freioG?.motivo_reducao || 'resposta baixa'}`,
+            );
+            continue;
+          }
+        }
+        const naHoraG = await enviadosUltimaHora(supabase, inst.id);
+        const limiteHoraG = Math.max(1, Math.floor(cotaMaxHora * fatorGuardiao));
+        if (naHoraG >= limiteHoraG) {
+          descartados.push(`${rotulo}: ritmo por hora reduzido pelo guardião (${naHoraG}/${limiteHoraG})`);
+          continue;
+        }
+      }
 
 
       // Guardrails baseados em métricas de ontem.
       // Só bloqueios REAIS de usuário (mo.bloqueadas) reprovam a instância —
       // falhas técnicas (template, mídia, rede) apenas reduzem o teto de uso.
       const mo = metricaMap.get(inst.id);
-      let tetoQualidade = 1.0;
+      let tetoQualidade = 1.0 * fatorGuardiao;
       let reprovadaGuardrail: string | null = null;
       if (mo && mo.enviadas > volumeMinGuardrail) {
         const blockRate = (mo.bloqueadas || 0) / Math.max(1, mo.enviadas) * 100;
