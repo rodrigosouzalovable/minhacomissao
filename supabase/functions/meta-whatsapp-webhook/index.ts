@@ -1503,12 +1503,38 @@ serve(async (req) => {
 
           // Detecta bloqueio/restrição/banimento da instância
           if (status === 'failed') {
-            const isRestricted = isMetaInstanceRestrictedError(errCode, errText);
+            let isRestricted = isMetaInstanceRestrictedError(errCode, errText);
+
+            // Bloqueio de conta/pagamento: confirma na hora com a Meta antes de tirar
+            // a instância do pool. Se a Meta disser que está liberada, foi falha
+            // pontual daquele contato e o número continua enviando.
+            if (isRestricted) {
+              const familiaBloqueio = [131031, 131042, 131049, 131050, 368, 130429]
+                .includes(Number(errCode || 0));
+              if (familiaBloqueio) {
+                try {
+                  const { metaConfirmaBloqueio } = await import('../_shared/meta-conta-bloqueada.ts');
+                  const confirmado = await metaConfirmaBloqueio(inst);
+                  if (confirmado === false) {
+                    console.log('[MetaWebhook] bloqueio nao confirmado pela Meta — instancia mantida:', inst.id);
+                    isRestricted = false;
+                  }
+                } catch (e) {
+                  console.log('[MetaWebhook] confirmacao de bloqueio falhou:', String(e).slice(0, 200));
+                }
+              }
+            }
 
             if (isRestricted) {
               supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'bloqueadas', _inc: 1 }).then(() => {}, () => {});
               const motivo = errTitle || `Restrição Meta (#${errCode})`;
-              const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+              // Bloqueio de conta/pagamento: pausa curta (1h) — a liberação real
+              // depende da revalidação horária na Meta (check-meta-instance-health).
+              const familiaBloqueioPausa = [131031, 131042, 131049, 131050, 368, 130429]
+                .includes(Number(errCode || 0));
+              const ate = new Date(
+                Date.now() + (familiaBloqueioPausa ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000),
+              ).toISOString();
 
               // Só avisa na TRANSIÇÃO normal -> restrita. Se já está restrita/pausada,
               // não repete a notificação enquanto a restrição durar.
