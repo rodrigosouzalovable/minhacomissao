@@ -34,9 +34,44 @@ Deno.serve(async (req) => {
       .eq('aquecimento_qualidade_permitido', true)
       .eq('recuperacao_ativa', true);
 
+    const DESTINOS_RELATORIO = ['5562991672674', '5562994300880'];
+
+    const horaAgora = new Date().toLocaleTimeString('pt-BR', {
+      timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
+    });
+
     if (!insts?.length) {
-      return json({ ok: true, skipped: 'nenhuma_em_recuperacao' });
+      // Nunca ficar em silêncio: se ninguém está em reaquecimento, avisar —
+      // e listar os números fora do verde que deveriam estar sendo tratados.
+      const { data: fora } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('nome, display_phone, saude_quality')
+        .eq('ativo', true)
+        .eq('provider', 'meta')
+        .in('saude_quality', ['YELLOW', 'RED']);
+
+      const lista = (fora || []).map((i: any) =>
+        `• *${i.nome || i.display_phone}* · ${String(i.saude_quality).toUpperCase()}`
+      );
+
+      const msg = lista.length
+        ? `⚠️ *Aquecimento de qualidade — ${horaAgora}*\n\n` +
+          `Nenhum número está em reaquecimento agora, mas ${lista.length} número(s) estão fora do verde:\n` +
+          `${lista.join('\n')}\n\n` +
+          `A varredura automática religa o reaquecimento na próxima checagem de saúde (de hora em hora).`
+        : `✅ *Aquecimento de qualidade — ${horaAgora}*\n\n` +
+          `Nenhum número em reaquecimento e nenhum número em YELLOW/RED. Todos os seus números da API oficial estão saudáveis.`;
+
+      await notificarAdmin(supabase, {
+        tipo: 'meta_aquecimento_resumo',
+        mensagem: msg,
+        chaveIdempotencia: `meta_aquec_resumo_${dia}_${horaAgora.replace(':', '')}`,
+        umaVezPorChave: true,
+        destinatarios: DESTINOS_RELATORIO,
+      });
+      return json({ ok: true, sem_recuperacao: true, fora: lista.length });
     }
+
 
     const { data: logs } = await supabase
       .from('meta_recuperacao_log')
