@@ -273,6 +273,30 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ===== Reconciliação: YELLOW/RED que ficou fora do reaquecimento =====
+        // O gatilho acima depende do instante exato da queda. Números que já
+        // estavam em YELLOW/RED, que tiveram falha de leitura na hora da queda
+        // ou que saíram do reaquecimento por recusa da Meta ficariam parados
+        // para sempre. Aqui todo número próprio fora do verde volta ao
+        // reaquecimento na checagem seguinte.
+        let entrouPorVarredura = false;
+        if (
+          !caiu && (qual === 'YELLOW' || qual === 'RED') &&
+          inst.recuperacao_ativa !== true &&
+          inst.qualidade_liberada_manual !== true &&
+          inst.aquecimento_qualidade_permitido !== false &&
+          recupAuto
+        ) {
+          entrouPorVarredura = true;
+          updatePayload.recuperacao_ativa = true;
+          updatePayload.recuperacao_desde = inst.recuperacao_desde || new Date().toISOString();
+          updatePayload.recuperacao_msgs_meta_dia = Math.floor(
+            msgsMin + Math.random() * (msgsMax - msgsMin + 1),
+          );
+          updatePayload.recuperacao_proximo_envio_em = new Date().toISOString();
+        }
+
+
         const { linhaPrevisao } = await import('../_shared/meta-recuperacao-aviso.ts');
 
         // ===== Volta para GREEN: conta os dias e encerra a recuperação =====
