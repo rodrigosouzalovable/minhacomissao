@@ -273,6 +273,30 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ===== Reconciliação: YELLOW/RED que ficou fora do reaquecimento =====
+        // O gatilho acima depende do instante exato da queda. Números que já
+        // estavam em YELLOW/RED, que tiveram falha de leitura na hora da queda
+        // ou que saíram do reaquecimento por recusa da Meta ficariam parados
+        // para sempre. Aqui todo número próprio fora do verde volta ao
+        // reaquecimento na checagem seguinte.
+        let entrouPorVarredura = false;
+        if (
+          !caiu && (qual === 'YELLOW' || qual === 'RED') &&
+          inst.recuperacao_ativa !== true &&
+          inst.qualidade_liberada_manual !== true &&
+          inst.aquecimento_qualidade_permitido !== false &&
+          recupAuto
+        ) {
+          entrouPorVarredura = true;
+          updatePayload.recuperacao_ativa = true;
+          updatePayload.recuperacao_desde = inst.recuperacao_desde || new Date().toISOString();
+          updatePayload.recuperacao_msgs_meta_dia = Math.floor(
+            msgsMin + Math.random() * (msgsMax - msgsMin + 1),
+          );
+          updatePayload.recuperacao_proximo_envio_em = new Date().toISOString();
+        }
+
+
         const { linhaPrevisao } = await import('../_shared/meta-recuperacao-aviso.ts');
 
         // ===== Volta para GREEN: conta os dias e encerra a recuperação =====
@@ -376,6 +400,32 @@ Deno.serve(async (req) => {
 
 
         await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
+
+        if (entrouPorVarredura) {
+          r.reaquecimento_religado = true;
+          try {
+            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            const hojeIdem = new Date().toISOString().slice(0, 10);
+            await notificarAdmin(supabase, {
+              tipo: 'meta_aquecimento_religado',
+              mensagem:
+                `🔥 *Reaquecimento religado automaticamente*\n\n` +
+                `Número: *${inst.nome || inst.display_phone}*\n` +
+                `${await linhaBmInstancia(supabase, inst)}\n` +
+                `Qualidade atual: ${qual}\n` +
+                `Estava fora do reaquecimento e voltou pela varredura automática. ` +
+                `Meta de hoje: ${updatePayload.recuperacao_msgs_meta_dia} mensagens para os números UAZAPI da caixa AQUECIMENTO (09h–19h, 20–40 min entre envios).\n` +
+                `${linhaPrevisao(qual, 0, diasGreenAlta)}`,
+              chaveIdempotencia: `meta_aquec_religado_${inst.id}_${hojeIdem}`,
+              umaVezPorChave: true,
+              destinatarios: ['5562991672674', '5562994300880'],
+            });
+          } catch (e) {
+            console.log('[health] aviso de religamento falhou:', String(e).slice(0, 200));
+          }
+        }
+
+
 
         if (r.liberada || r.liberada_parcial) {
           try {
