@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
     ).toISOString().slice(0, 10);
     const { data: freioRows } = await supabase
       .from('meta_instance_freio_diario')
-      .select('instancia_id, teto_efetivo, motivo_reducao')
+      .select('instancia_id, teto_efetivo, motivo_reducao, guardiao_faixa, guardiao_fator, guardiao_resposta_pct')
       .in('instancia_id', instancia_ids)
       .eq('dia', hojeBrt);
     const freioMap = new Map<string, any>();
