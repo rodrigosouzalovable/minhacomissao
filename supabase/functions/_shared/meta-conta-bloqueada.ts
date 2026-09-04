@@ -46,12 +46,21 @@ export function ehMotivoBloqueioMeta(motivo?: string | null): boolean {
 }
 
 
-/** Restringe a instância no pool e avisa o admin (idempotente por dia). */
+/** Restringe a instância no pool e avisa o admin (idempotente por dia).
+ *  Antes de restringir, confirma na Graph API se a conta realmente está travada:
+ *  se a Meta responder que está tudo liberado, a instância continua no pool
+ *  (foi falha pontual daquele envio). Retorna true se restringiu. */
 export async function tratarContaBloqueada(
   supabase: SupabaseClient,
   inst: any,
   msgOriginal: string,
-): Promise<void> {
+): Promise<boolean> {
+  const confirmado = await metaConfirmaBloqueio(inst);
+  if (confirmado === false) {
+    console.log("[conta-bloqueada] Meta diz que está liberado — instância mantida no pool:", inst?.id);
+    return false;
+  }
+
   let jaRestrita = false;
   try {
     const { data: antes } = await supabase
@@ -63,7 +72,9 @@ export async function tratarContaBloqueada(
       (!!(antes as any)?.pausa_automatica_ate &&
         new Date((antes as any).pausa_automatica_ate).getTime() > Date.now());
 
-    const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    // Pausa curta: a liberação real depende da revalidação na Meta
+    // (check-meta-instance-health), que roda de hora em hora.
+    const ate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     await supabase.from("meta_whatsapp_instances").update({
       estado_pool: "restrita",
       pausa_automatica_ate: ate,
@@ -73,7 +84,8 @@ export async function tratarContaBloqueada(
     console.log("[conta-bloqueada] update falhou:", String(e).slice(0, 200));
   }
 
-  if (jaRestrita) return;
+  if (jaRestrita) return true;
+
 
   try {
     const { notificarAdmin } = await import("./notificar-admin.ts");
@@ -92,5 +104,37 @@ export async function tratarContaBloqueada(
     });
   } catch (e) {
     console.log("[conta-bloqueada] notificarAdmin falhou:", String(e).slice(0, 200));
+  }
+
+  return true;
+}
+
+/**
+ * Confirma na hora, na Graph API, se a conta/número está REALMENTE sem poder enviar.
+ * Retorna:
+ *  - true  → a Meta confirma bloqueio/limitação (pode restringir a instância)
+ *  - false → a Meta diz que está tudo liberado (foi falha pontual do envio)
+ *  - null  → não foi possível confirmar (trata como bloqueio, comportamento antigo)
+ */
+export async function metaConfirmaBloqueio(inst: any): Promise<boolean | null> {
+  try {
+    if (!inst?.phone_number_id || !inst?.access_token) return null;
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${inst.phone_number_id}?fields=health_status,status`,
+      { headers: { Authorization: `Bearer ${inst.access_token}` }, signal: AbortSignal.timeout(10_000) },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.error) return null;
+    const hs = data?.health_status;
+    if (!hs) return null;
+    const ruim = (v: unknown) =>
+      ["BLOCKED", "LIMITED", "RESTRICTED"].includes(String(v || "").toUpperCase());
+    if (ruim(hs.can_send_message)) return true;
+    const ents = Array.isArray(hs.entities) ? hs.entities : [];
+    if (ents.some((e: any) => ruim(e?.can_send_message))) return true;
+    if (String(data?.status || "").toUpperCase() === "BANNED") return true;
+    return false;
+  } catch {
+    return null;
   }
 }

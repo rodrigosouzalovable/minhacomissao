@@ -41,3 +41,4 @@
 - [Liberar YELLOW/RED global](mem://features/whatsapp/meta-liberar-qualidade-global) — Chave liberar_qualidade_global libera quarentena/pausa por qualidade para todos; só bloqueio real da Meta persiste
 - [Campanha Só GREEN](mem://features/whatsapp/campanha-somente-green-confirmado) — Campanha Meta exige GREEN confirmado e leitura <6h; liberar_qualidade_global vale só para aquecimento
 - [Relatório próprio + saída YELLOW/RED](mem://features/whatsapp/relatorio-e-qualidade-campanha) — Relatório 12h/18h só provider=meta sem parceiros; YELLOW/RED sai da campanha em andamento; "Selecionar todas" só GREEN
+- [Bloqueio Meta confirmado](mem://features/whatsapp/meta-bloqueio-confirmado-antes-de-restringir) — Confirma health_status na Graph antes de tirar número do pool; pausa de 1h em vez de 24h

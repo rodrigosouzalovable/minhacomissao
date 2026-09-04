@@ -830,12 +830,30 @@ Deno.serve(async (req) => {
         'permission', 'does not exist', 'cannot be loaded',
         'two-step', 'pin locked', 'access token',
       ];
-      const isRestricted =
+      let isRestricted =
         restrictedCodes.some((c) => msg.includes(`#${c}`)) ||
         restrictedKeywords.some((k) => lower.includes(k));
 
+      // Bloqueio de conta/pagamento: confirma agora na Meta. Se a conta estiver
+      // liberada, foi falha pontual e a instancia continua no pool.
+      const familiaBloqueio = [131031, 131042, 131049, 131050, 368, 130429]
+        .some((c) => msg.includes(`#${c}`));
+      if (isRestricted && familiaBloqueio) {
+        try {
+          const { metaConfirmaBloqueio } = await import('../_shared/meta-conta-bloqueada.ts');
+          const confirmado = await metaConfirmaBloqueio(inst);
+          if (confirmado === false) {
+            console.log('[send-whatsapp-meta] bloqueio nao confirmado pela Meta:', inst.id);
+            isRestricted = false;
+          }
+        } catch (_) { /* na duvida, mantem o comportamento antigo */ }
+      }
+
       if (isRestricted) {
-        const ate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        // Pausa curta para bloqueio de conta (revalidacao horaria libera sozinho).
+        const ate = new Date(
+          Date.now() + (familiaBloqueio ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000),
+        ).toISOString();
 
         // Só avisa na TRANSIÇÃO normal -> restrita (evita repetir o aviso).
         const { data: estadoAntes } = await supabase
