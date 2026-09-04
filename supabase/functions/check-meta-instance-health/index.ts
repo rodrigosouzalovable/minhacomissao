@@ -401,6 +401,32 @@ Deno.serve(async (req) => {
 
         await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
 
+        if (entrouPorVarredura) {
+          r.reaquecimento_religado = true;
+          try {
+            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            const hojeIdem = new Date().toISOString().slice(0, 10);
+            await notificarAdmin(supabase, {
+              tipo: 'meta_aquecimento_religado',
+              mensagem:
+                `🔥 *Reaquecimento religado automaticamente*\n\n` +
+                `Número: *${inst.nome || inst.display_phone}*\n` +
+                `${await linhaBmInstancia(supabase, inst)}\n` +
+                `Qualidade atual: ${qual}\n` +
+                `Estava fora do reaquecimento e voltou pela varredura automática. ` +
+                `Meta de hoje: ${updatePayload.recuperacao_msgs_meta_dia} mensagens para os números UAZAPI da caixa AQUECIMENTO (09h–19h, 20–40 min entre envios).\n` +
+                `${linhaPrevisao(qual, 0, diasGreenAlta)}`,
+              chaveIdempotencia: `meta_aquec_religado_${inst.id}_${hojeIdem}`,
+              umaVezPorChave: true,
+              destinatarios: ['5562991672674', '5562994300880'],
+            });
+          } catch (e) {
+            console.log('[health] aviso de religamento falhou:', String(e).slice(0, 200));
+          }
+        }
+
+
+
         if (r.liberada || r.liberada_parcial) {
           try {
             const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
