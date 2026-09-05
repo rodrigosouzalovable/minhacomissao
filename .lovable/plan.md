@@ -1,34 +1,25 @@
-# Gerar acordo na UME direto do Inbox Meta Oficial
+# Botão "Gerar acordo UME" na conversa — reimplementar
 
-Sim, é possível. O caminho que você descreveu (login, Tomadores, CPF, Acordos, Novo Acordo, preencher, Simular, Efetivar) pode ser feito pelo sistema, com uma condição: como a UME só entra por "Login via Google", quem faz o login é uma pessoa, uma única vez, numa janela de navegador do robô. Depois disso a sessão fica salva e o sistema usa ela sozinho nos próximos acordos.
+O botão realmente não está lá: no cabeçalho da conversa existem hoje só qualificação, modelo, calculadora UME, sugestões, ligação, relógio, dispensar e retorno. A tela do acordo, a função de servidor e as tabelas que foram descritas antes não estão no projeto — o trabalho foi desfeito. Então é refazer, agora completo.
 
-## Como vai funcionar no dia a dia
+## O que você vai ver
 
-1. Uma vez por operador: na aba de configuração da UME, clicar em "Abrir janela de login". O navegador do robô abre a tela da UME, a pessoa clica em "Login via Google" e entra com o login dela. Pronto — a sessão fica guardada com o nome do operador.
-2. Na conversa do cliente no Inbox Meta Oficial, um botão novo: **"Gerar acordo UME"**.
-3. Abre um painel já preenchido com o que o sistema sabe da conversa:
-   - CPF do cliente (o mesmo que a calculadora UME já usa);
-   - Total da dívida, lido na hora do próprio backoffice da UME;
-   - Nº de parcelas e valor da parcela negociados (você confere/ajusta);
-   - **Desconto** calculado automaticamente: total da dívida menos (parcela × nº de parcelas) — no exemplo da cliente, 5.813,31 − 1.108,80 = 4.704,51, já enviado no formato com ponto (4704.51);
-   - **Entrada** = valor da primeira parcela (110.88);
-   - **Data entrada** = vencimento da 1ª parcela (20/09/2026);
-   - **Vcto parcela** = data da entrada + 30 dias (20/10/2026), calculado sozinho;
-   - **Tx de juros** = 0, fixo.
-4. Você clica em **Simular**. O robô faz o caminho completo no site (Tomadores → CPF → Acordos → Novo Acordo → preenche → Simular) e traz o resultado da simulação de volta para a tela, com um print da tela para conferência.
-5. Se estiver certo, você clica em **Efetivar** e o sistema conclui, inclusive o "OK" da tela "Você tem certeza?". Nada é efetivado sem esse seu clique.
-6. Tudo fica registrado: quem gerou, CPF, valores, resultado e horário.
-
-## O que você precisa providenciar
-
-O robô precisa de um computador ou servidor sempre ligado para manter o navegador e a sessão do Google (é a mesma ideia do robô do CobMais, mas separado, só da UME, como você pediu). Eu entrego o programa do robô pronto e as instruções de instalação; o endereço dele é colado numa tela de configuração dentro do sistema.
-
-Nesta primeira etapa paramos no "Efetivar" concluído. A emissão/coleta do boleto fica para a etapa seguinte.
+1. No topo da conversa, ao lado do ícone da calculadora UME, um novo ícone de acordo (aperto de mão). Só aparece quando o cliente é da UME, do mesmo jeito que a calculadora.
+2. Clicando, abre a tela "Gerar acordo UME" já com:
+   - CPF do cliente preenchido;
+   - Total da dívida lido na UME;
+   - Valor da parcela, nº de parcelas e vencimento da 1ª parcela (você confere/ajusta);
+   - Desconto calculado sozinho: total da dívida − (parcela × parcelas), no formato com ponto;
+   - Entrada = valor da 1ª parcela; Data da entrada = vencimento da 1ª parcela; Vcto parcela = entrada + 30 dias; Taxa de juros = 0.
+3. Botão **Simular** → o robô percorre o site (Tomadores → CPF → Acordos → Novo Acordo → preenche → Simular) e devolve o resultado com print da tela.
+4. Botão **Efetivar** (só depois da simulação) → conclui, inclusive o "OK" do "Você tem certeza?".
+5. Botão **Robô** (só admin) para colar endereço/token do robô e abrir a janela de login da UME uma vez por operador.
+6. Cada acordo gerado fica registrado: quem fez, CPF, valores, resultado e horário.
 
 ## Detalhes técnicos
 
-- **Robô UME (novo, fora do Lovable):** serviço Node + Playwright com contexto persistente por operador (`userDataDir` separado), expondo `POST /ume/login-window`, `/ume/sessao-status`, `/ume/simular`, `/ume/efetivar`, `/ume/screenshot`, protegido por token compartilhado. Seletores da UME centralizados num único mapa para ajuste rápido; se a tela mudar, retorna erro identificado ("layout do backoffice UME mudou") e avisa pelo `notificar-admin` já existente, sem chutar valores.
-- **Edge function `ume-backoffice-acordo`:** exige usuário autenticado, valida entrada com Zod (CPF, parcelas 1–24, valores, datas), calcula desconto/vcto parcela no servidor, repassa ao robô e grava o resultado. Ações: `sessao_status`, `abrir_login`, `simular`, `efetivar`.
-- **Migração:** `ume_backoffice_config` (server_url, token, ativo) e `ume_acordo_jobs` (user_id, cpf, telefone, conversa_id, payload jsonb, simulacao jsonb, status, screenshot_url, criado_em). `CREATE TABLE` + `GRANT` (`authenticated` select/insert; `service_role` all) + RLS: cada usuário vê os próprios jobs, admin vê todos; config só admin.
-- **Frontend:** novo `src/components/inbox/meta/GerarAcordoUmeDialog.tsx` (mesmo padrão do `ConsultaUmeDialog.tsx`), botão no cabeçalho da conversa em `src/pages/InboxMeta.tsx`, e tela de configuração do robô/sessão para o admin.
-- Sem cron e sem polling contínuo: tudo por demanda, disparado pelo clique. Impacto de custo em Cloud desprezível.
+- **Migração:** `ume_backoffice_config` (server_url, token, ativo) e `ume_acordo_jobs` (user_id, cpf, telefone, conversa_id, payload jsonb, simulacao jsonb, status, screenshot_url, timestamps). `CREATE TABLE` + `GRANT` (authenticated select/insert nos jobs; service_role all; config só service_role + leitura admin) + RLS: usuário vê os próprios jobs, admin vê todos; config apenas admin via `has_role`.
+- **Edge function `ume-backoffice-acordo`:** exige usuário autenticado, valida com Zod (CPF 11 dígitos, parcelas 1–24, valores > 0, datas), calcula desconto e vcto no servidor, chama o robô com token e grava o job. Ações: `sessao_status`, `abrir_login`, `divida`, `simular`, `efetivar`.
+- **Robô UME (fora do Lovable):** Node + Playwright com `userDataDir` por operador; rotas `POST /ume/login-window`, `/ume/sessao-status`, `/ume/divida`, `/ume/simular`, `/ume/efetivar`; seletores num único mapa; se a tela mudar, devolve `layout_ume_mudou` e avisa por `notificar-admin`. Entrego o arquivo do robô + instruções.
+- **Frontend:** novo `src/components/inbox/meta/GerarAcordoUmeDialog.tsx` (padrão do `ConsultaUmeDialog.tsx`), ícone `Handshake` no cabeçalho de `src/pages/InboxMeta.tsx` logo após o botão da calculadora, e seção de configuração do robô dentro do próprio diálogo para admin.
+- Sem cron, sem polling, sem Realtime novo: tudo por clique. Custo de backend desprezível.
