@@ -2749,6 +2749,14 @@ export default function InboxMeta() {
         folderNome={acessoFolder?.nome ?? 'Padrão'}
         onChanged={fetchFolders}
       />
+      <GerarAcordoUmeDialog
+        open={gerarAcordoUmeOpen}
+        onOpenChange={setGerarAcordoUmeOpen}
+        cpfInicial={cpfDoContato ?? null}
+        telefone={contatoAtivo?.telefone ?? null}
+        conversaId={contatoAtivo?.id ?? null}
+      />
+
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
       <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} credor={contatoAtivo?.credor ?? null} />
       <ConsultaUmeDialog
