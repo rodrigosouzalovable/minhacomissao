@@ -2334,6 +2334,17 @@ export default function InboxMeta() {
                   >
                     <Calculator className="h-3.5 w-3.5" />
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setGerarAcordoUmeOpen(true)}
+                    title="Gerar acordo na UME"
+                    aria-label="Gerar acordo UME"
+                  >
+                    <Handshake className="h-3.5 w-3.5" />
+                  </Button>
+
                   {(() => {
                     const ultimaEntrada = [...mensagens].reverse().find((m) => m.direcao === 'entrada');
                     if (!ultimaEntrada) return null;
