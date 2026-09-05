@@ -7493,6 +7493,87 @@ export type Database = {
         }
         Relationships: []
       }
+      ume_acordo_jobs: {
+        Row: {
+          conversa_id: string | null
+          cpf: string
+          created_at: string
+          erro: string | null
+          id: string
+          operador_slug: string | null
+          payload: Json
+          resultado: Json | null
+          screenshot_url: string | null
+          simulacao: Json | null
+          status: string
+          telefone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conversa_id?: string | null
+          cpf: string
+          created_at?: string
+          erro?: string | null
+          id?: string
+          operador_slug?: string | null
+          payload?: Json
+          resultado?: Json | null
+          screenshot_url?: string | null
+          simulacao?: Json | null
+          status?: string
+          telefone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conversa_id?: string | null
+          cpf?: string
+          created_at?: string
+          erro?: string | null
+          id?: string
+          operador_slug?: string | null
+          payload?: Json
+          resultado?: Json | null
+          screenshot_url?: string | null
+          simulacao?: Json | null
+          status?: string
+          telefone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ume_backoffice_config: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          criado_por: string | null
+          id: string
+          server_url: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          server_url?: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          server_url?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ume_consultas_cache: {
         Row: {
           atualizado_em: string
