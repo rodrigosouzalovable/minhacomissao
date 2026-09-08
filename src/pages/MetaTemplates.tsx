@@ -703,19 +703,34 @@ export default function MetaTemplates() {
                 })()}
 
                 <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={buscaInst}
+                      onChange={(e) => setBuscaInst(e.target.value)}
+                      placeholder="Buscar por nome ou número"
+                      className="pl-8"
+                    />
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <Checkbox
-                      checked={selInst.size === instAtivas.length && instAtivas.length > 0}
+                      checked={instFiltradas.length > 0 && instFiltradas.every((i) => selInst.has(i.id))}
                       onCheckedChange={(v) => {
-                        if (v) setSelInst(new Set(instAtivas.map((i) => i.id)));
-                        else setSelInst(new Set());
+                        const s = new Set(selInst);
+                        if (v) instFiltradas.forEach((i) => s.add(i.id));
+                        else instFiltradas.forEach((i) => s.delete(i.id));
+                        setSelInst(s);
                       }}
                     />
-                    <Label>Todas as {instAtivas.length} instâncias ativas</Label>
+                    <Label>Todas as {instFiltradas.length} instâncias ativas</Label>
                   </div>
 
                   <div className="max-h-96 overflow-y-auto rounded-md border">
-                    {instAtivas.map((inst) => {
+                    {instFiltradas.length === 0 && (
+                      <p className="p-3 text-sm text-muted-foreground">Nenhuma instância encontrada.</p>
+                    )}
+                    {instFiltradas.map((inst) => {
                       const t = templInst.find((x) => x.instancia_id === inst.id && x.template_mestre_id === selMestre);
                       const status = t?.status;
                       return (
