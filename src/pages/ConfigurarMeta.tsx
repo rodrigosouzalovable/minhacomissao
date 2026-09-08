@@ -1391,6 +1391,35 @@ export default function ConfigurarMeta() {
                             );
                           })()}
 
+                          {isAdmin && inst.templates_auto_copiar && (() => {
+                            const p = tplProgresso[inst.id];
+                            const st = inst.templates_auto_status || "";
+                            const pausado = st.startsWith("PAUSADO");
+                            const concluido = st === "CONCLUIDO";
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] cursor-help ${
+                                  pausado
+                                    ? "border-red-500/60 text-red-600 bg-red-50"
+                                    : concluido
+                                      ? "border-green-500/60 text-green-700 bg-green-50"
+                                      : "border-blue-500/60 text-blue-600 bg-blue-50"
+                                }`}
+                                title={
+                                  pausado
+                                    ? "Cópia de templates pausada (reprovações seguidas ou limite da Meta). Corrija e reative."
+                                    : "Cópia gradual dos templates já aprovados nos seus outros números"
+                                }
+                              >
+                                📋 Templates{p ? ` ${p.feitos}/${p.total}` : ""}
+                                {pausado ? " · pausado" : concluido ? " · concluído" : ""}
+                              </Badge>
+                            );
+                          })()}
+
+
+
                           <MetaHealthStatusRow inst={inst} />
                           {(() => {
                             const s = inst.webhook_saude_status;
