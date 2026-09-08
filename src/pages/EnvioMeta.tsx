@@ -332,6 +332,24 @@ export default function EnvioMeta() {
     });
   };
 
+  // Confirmação de risco: números com qualidade YELLOW/RED/sem leitura marcados à mão.
+  const [riscoDlg, setRiscoDlg] = useState<{
+    open: boolean;
+    numeros: { id: string; nome: string; qualidade: string }[];
+    ciente: boolean;
+    resolver: ((ok: boolean) => void) | null;
+  }>({ open: false, numeros: [], ciente: false, resolver: null });
+
+  const pedirConfirmacaoRisco = async (
+    arriscadas: { id: string; nome: string; qualidade: string }[],
+  ): Promise<boolean> => {
+    if (arriscadas.length === 0) return true;
+    return await new Promise<boolean>((resolve) => {
+      setRiscoDlg({ open: true, numeros: arriscadas, ciente: false, resolver: resolve });
+    });
+  };
+
+
   const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][] }>({ open: false, rows: [] });
   const [varsByTel, setVarsByTel] = useState<Record<string, Record<string, string>>>({});
   const [credor, setCredor] = useState<string>("__none__");
