@@ -1154,7 +1154,116 @@ export default function MetaTemplates() {
             )}
           </TabsContent>
         </Tabs>
+
+        {/* ===== Janela de um template mestre ===== */}
+        <Dialog open={!!mestreDialog} onOpenChange={(o) => !o && setMestreDialog(null)}>
+          <DialogContent className="max-w-lg">
+            {(() => {
+              const m = mestres.find((x) => x.id === mestreDialog);
+              if (!m) return null;
+              const usos = templInst.filter((t) => t.template_mestre_id === m.id).length;
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="break-all">{m.nome}</DialogTitle>
+                    <DialogDescription>
+                      {m.categoria} · {m.idioma} · aplicado em {usos} número(s)
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <TemplateWhatsAppPreview
+                      imageUrlOverride={m.cabecalho_media_url || undefined}
+                      sampleValues={(m.exemplo?.body_text?.[0] as string[]) || []}
+                      template={{
+                        nome_template: m.nome,
+                        body_text: m.corpo,
+                        variaveis: { _components: componentesDoMestre(m) },
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-md border p-3">
+                    <Checkbox
+                      checked={!!m.injetar_em_novos}
+                      onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
+                    />
+                    <div className="text-sm">
+                      <p className="font-medium">Injetar em números novos</p>
+                      <p className="text-xs text-muted-foreground">
+                        Aplicado sozinho em cada número novo, um por vez com 15–25 min de intervalo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => { setSelMestre(m.id); setMestreDialog(null); }}
+                    >
+                      <Send className="w-4 h-4 mr-2" /> Usar no envio em lote
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={async () => { await deletarMestre(m.id); setMestreDialog(null); }}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" /> Excluir template
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* ===== Seleção dos modelos aplicados em números novos ===== */}
+        <Dialog open={selecaoAutoAberta} onOpenChange={setSelecaoAutoAberta}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Modelos para números novos</DialogTitle>
+              <DialogDescription>
+                Os marcados são aplicados automaticamente em cada número novo, todos no mesmo dia,
+                um por vez com 15–25 min de intervalo, das 09h às 18h e nunca no domingo.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={buscaMestre}
+                onChange={(e) => setBuscaMestre(e.target.value)}
+                placeholder="Buscar template"
+                className="pl-8"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(true)}>Marcar todos</Button>
+              <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(false)}>Limpar</Button>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto rounded-md border divide-y">
+              {mestresFiltrados.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50">
+                  <Checkbox
+                    checked={!!m.injetar_em_novos}
+                    onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
+                  />
+                  <span className="flex-1">{m.nome}</span>
+                  <span className="text-xs text-muted-foreground">{m.categoria}</span>
+                </label>
+              ))}
+              {mestresFiltrados.length === 0 && (
+                <p className="p-3 text-sm text-muted-foreground">Nenhum template encontrado.</p>
+              )}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              {qtdMarcados} marcado(s). Sem nenhum marcado, o sistema escolhe sozinho os modelos mais aprovados.
+            </p>
+          </DialogContent>
+        </Dialog>
       </div>
+
     </AppLayout>
   );
 }
