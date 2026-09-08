@@ -915,8 +915,9 @@ export default function MetaTemplates() {
                     {instFiltradas.map((inst) => {
                       const t = templInst.find((x) => x.instancia_id === inst.id && x.template_mestre_id === selMestre);
                       const status = t?.status;
+                      const jaPossui = jaPossuemSet.has(inst.id);
                       return (
-                        <div key={inst.id} className="flex items-center gap-3 border-b last:border-0 p-2 hover:bg-muted/40">
+                        <div key={inst.id} className={`flex items-center gap-3 border-b last:border-0 p-2 hover:bg-muted/40 ${jaPossui ? "opacity-60" : ""}`}>
                           <Checkbox
                             checked={selInst.has(inst.id)}
                             onCheckedChange={(v) => {
