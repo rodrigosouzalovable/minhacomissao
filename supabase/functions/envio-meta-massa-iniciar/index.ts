@@ -208,6 +208,7 @@ Deno.serve(async (req) => {
     let clientesEnvio = clientes;
     let suprimidos = 0;
     let bloqueadosBlacklist = 0;
+    const listaBlacklist: Array<{ telefone: string; nome: string; credor: string }> = [];
     const { data: cfgPool } = await supabase
       .from('meta_envio_pool_config').select('supressao_ativa, blacklist_ativa').eq('id', 1).maybeSingle();
     const supressaoAtiva = cfgPool?.supressao_ativa !== false;
@@ -237,7 +238,15 @@ Deno.serve(async (req) => {
       if (bloqueados.size > 0 || blacklist.size > 0) {
         clientesEnvio = clientes.filter((c) => {
           const s = sufixo(c.telefone);
-          if (blacklist.has(s)) { bloqueadosBlacklist++; return false; }
+          if (blacklist.has(s)) {
+            bloqueadosBlacklist++;
+            if (listaBlacklist.length < 5000) listaBlacklist.push({
+              telefone: String((c as any).telefone || ''),
+              nome: String((c as any).nome || (c as any).contato_nome || ''),
+              credor: String((c as any).credor || ''),
+            });
+            return false;
+          }
           if (bloqueados.has(s)) { suprimidos++; return false; }
           return true;
         });
@@ -347,6 +356,7 @@ Deno.serve(async (req) => {
         credor: credorCampanha,
         permitir_qualidade_baixa: permitirQualidadeBaixa,
         instancias_risco_aceito: instanciasRiscoAceito,
+        bloqueados_blacklist: listaBlacklist,
 
       })
 
