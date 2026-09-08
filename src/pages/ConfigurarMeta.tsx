@@ -536,6 +536,8 @@ export default function ConfigurarMeta() {
         access_token: form.access_token.trim(),
         ...camposBmTier(form),
         aquecimento_meta_ativo: isAdmin ? form.aquecimento_meta_ativo : false,
+        templates_auto_copiar: isAdmin ? form.templates_auto_copiar : false,
+
         webhook_verify_token: gerarToken(),
       })
       .select("id")
@@ -614,6 +616,8 @@ export default function ConfigurarMeta() {
       waba_id: editForm.waba_id.trim(),
       ...camposBmTier(editForm),
       ...(isAdmin ? { aquecimento_meta_ativo: editForm.aquecimento_meta_ativo } : {}),
+      ...(isAdmin ? { templates_auto_copiar: editForm.templates_auto_copiar } : {}),
+
 
     };
     if (editForm.access_token.trim()) patch.access_token = editForm.access_token.trim();
