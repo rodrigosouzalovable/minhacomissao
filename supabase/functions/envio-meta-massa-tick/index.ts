@@ -470,7 +470,9 @@ async function processarItem(job: any): Promise<ItemResult> {
 
 
   // Remove instâncias auto-bloqueadas por falhas consecutivas neste job
-  const bloqueadasRun: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
+  const bloqueadasBrutas: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
+  // Recoloca no rodízio quem saiu por bloqueio TEMPORÁRIO da Meta e já está liberado
+  const bloqueadasRun: string[] = await reabilitarInstanciasRecuperadas(job, bloqueadasBrutas);
   // Instâncias que já falharam para ESTE contato (não repetir o mesmo número no mesmo chip)
   const varsPend = ((pend as any).vars && typeof (pend as any).vars === 'object') ? (pend as any).vars : {};
   const exclItem: string[] = Array.isArray(varsPend._inst_excluidas) ? varsPend._inst_excluidas : [];
