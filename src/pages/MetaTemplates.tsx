@@ -121,6 +121,7 @@ export default function MetaTemplates() {
   const [mestres, setMestres] = useState<Mestre[]>([]);
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [templInst, setTemplInst] = useState<TemplateInst[]>([]);
+  const [templMeta, setTemplMeta] = useState<Array<{ instancia_id: string; nome_template: string; status: string | null }>>([]);
   const [loading, setLoading] = useState(true);
 
   // form criar
@@ -154,7 +155,7 @@ export default function MetaTemplates() {
 
   const carregar = async () => {
     setLoading(true);
-    const [m, i, ti, par] = await Promise.all([
+    const [m, i, ti, par, tm] = await Promise.all([
       supabase.from("meta_templates_mestre").select("*").order("criado_em", { ascending: false }),
       supabase
         .from("meta_whatsapp_instances")
@@ -163,7 +164,9 @@ export default function MetaTemplates() {
         .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
+      supabase.from("meta_whatsapp_templates").select("instancia_id, nome_template, status"),
     ]);
+    setTemplMeta(((tm.data as any) || []) as any);
     setMestres((m.data as any) || []);
     const idsParceiro = new Set(((par.data as any) || []).map((r: any) => r.instancia_id as string));
     const lista = ((i.data as any) || []) as Instancia[];
@@ -473,6 +476,31 @@ export default function MetaTemplates() {
       return nomeOk || foneOk;
     });
   }, [instAtivas, buscaInst]);
+
+  // Instâncias que JÁ possuem o template selecionado (aprovado ou em análise).
+  // Rejeitado/falha não conta — esses podem ser reenviados.
+  const jaPossuemSet = useMemo(() => {
+    const s = new Set<string>();
+    if (!selMestre) return s;
+    const mestre = mestres.find((x) => x.id === selMestre);
+    const okStatus = (st?: string | null) => {
+      const v = String(st || "").toUpperCase();
+      return v === "APPROVED" || v === "PENDING" || v === "ENVIADO" || v === "IN_APPEAL";
+    };
+    templInst.forEach((t) => {
+      if (t.template_mestre_id === selMestre && okStatus(t.status)) s.add(t.instancia_id);
+    });
+    if (mestre?.nome) {
+      const alvo = String(mestre.nome).trim().toLowerCase();
+      templMeta.forEach((t) => {
+        if (String(t.nome_template || "").trim().toLowerCase() === alvo && okStatus(t.status)) {
+          s.add(t.instancia_id);
+        }
+      });
+    }
+    return s;
+  }, [selMestre, mestres, templInst, templMeta]);
+
 
   return (
     <AppLayout>
@@ -851,19 +879,31 @@ export default function MetaTemplates() {
                   </div>
 
                   {(() => {
-                    const greens = instFiltradas.filter((i) => qualidadeDa(i) === "GREEN");
+                    const liberadas = instFiltradas.filter((i) => {
+                      const q = qualidadeDa(i);
+                      const qualidadeOk = q === "GREEN" || q === "UNKNOWN" || q === "SEM LEITURA";
+                      return qualidadeOk && !jaPossuemSet.has(i.id);
+                    });
+                    const jaTem = instFiltradas.filter((i) => jaPossuemSet.has(i.id)).length;
                     return (
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={greens.length > 0 && greens.every((i) => selInst.has(i.id))}
-                          onCheckedChange={(v) => {
-                            const s = new Set(selInst);
-                            if (v) greens.forEach((i) => s.add(i.id));
-                            else greens.forEach((i) => s.delete(i.id));
-                            setSelInst(s);
-                          }}
-                        />
-                        <Label>Todas as {greens.length} instâncias GREEN</Label>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={liberadas.length > 0 && liberadas.every((i) => selInst.has(i.id))}
+                            onCheckedChange={(v) => {
+                              const s = new Set(selInst);
+                              if (v) liberadas.forEach((i) => s.add(i.id));
+                              else liberadas.forEach((i) => s.delete(i.id));
+                              setSelInst(s);
+                            }}
+                          />
+                          <Label>Todas as {liberadas.length} instâncias liberadas (GREEN + qualidade desconhecida)</Label>
+                        </div>
+                        {selMestre && jaTem > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {jaTem} número(s) já possuem este template e ficam fora da seleção em massa.
+                          </p>
+                        )}
                       </div>
                     );
                   })()}
@@ -875,8 +915,9 @@ export default function MetaTemplates() {
                     {instFiltradas.map((inst) => {
                       const t = templInst.find((x) => x.instancia_id === inst.id && x.template_mestre_id === selMestre);
                       const status = t?.status;
+                      const jaPossui = jaPossuemSet.has(inst.id);
                       return (
-                        <div key={inst.id} className="flex items-center gap-3 border-b last:border-0 p-2 hover:bg-muted/40">
+                        <div key={inst.id} className={`flex items-center gap-3 border-b last:border-0 p-2 hover:bg-muted/40 ${jaPossui ? "opacity-60" : ""}`}>
                           <Checkbox
                             checked={selInst.has(inst.id)}
                             onCheckedChange={(v) => {
@@ -889,6 +930,11 @@ export default function MetaTemplates() {
                             <div className="text-sm font-medium">{inst.nome}</div>
                             <div className="text-xs text-muted-foreground">{inst.display_phone || "-"}</div>
                           </div>
+                          {jaPossui && (
+                            <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">
+                              Já possui
+                            </Badge>
+                          )}
                           {(() => {
                             const q = qualidadeDa(inst);
                             return (
