@@ -366,6 +366,39 @@ export default function ConfigurarMeta() {
     };
   }, [isAdmin, idsAquecendo.join(",")]);
 
+  // Progresso da cópia gradual de templates (somente admin, sem polling)
+  const [tplProgresso, setTplProgresso] = useState<Record<string, { feitos: number; total: number }>>({});
+  const idsCopiando = useMemo(
+    () => instancias.filter((i) => i.templates_auto_copiar).map((i) => i.id),
+    [instancias],
+  );
+  useEffect(() => {
+    if (!isAdmin || idsCopiando.length === 0) {
+      setTplProgresso({});
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const { data } = await supabase
+        .from("meta_templates_onboarding_fila")
+        .select("instancia_id, status")
+        .in("instancia_id", idsCopiando);
+      if (cancelado) return;
+      const mapa: Record<string, { feitos: number; total: number }> = {};
+      for (const r of (data as any[]) ?? []) {
+        mapa[r.instancia_id] ??= { feitos: 0, total: 0 };
+        mapa[r.instancia_id].total++;
+        if (r.status !== "PENDENTE") mapa[r.instancia_id].feitos++;
+      }
+      setTplProgresso(mapa);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [isAdmin, idsCopiando.join(",")]);
+
+
+
 
 
   const carregarToken = async () => {
