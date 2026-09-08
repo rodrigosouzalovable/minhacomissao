@@ -359,7 +359,12 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
       (job.falhas_por_instancia_run && typeof job.falhas_por_instancia_run === 'object')
         ? { ...job.falhas_por_instancia_run } : {};
 
-    const candidatas = bloqueadasRun.filter((id) => motivoTemporario(String(falhas[`mot:${id}`] || '')));
+    // Sem motivo gravado (campanhas antigas) também entra na reavaliação:
+    // a liberação só acontece se a Meta confirmar GREEN e disponível.
+    const candidatas = bloqueadasRun.filter((id) => {
+      const m = String(falhas[`mot:${id}`] || '').trim();
+      return !m || motivoTemporario(m);
+    });
     if (candidatas.length === 0) return bloqueadasRun;
 
     for (const id of candidatas) {
