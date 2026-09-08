@@ -61,9 +61,11 @@ function InstanciaRow({
       <div className="flex items-center gap-2">
         <Badge className={qualidadeClass(instancia.qualidade)}>{qualidadeLabel(instancia.qualidade)}</Badge>
         {instancia.ignorada && instancia.motivo_ignorada && (
-          <span className="max-w-[170px] text-right text-xs text-muted-foreground">{instancia.motivo_ignorada}</span>
+          <span className="max-w-[220px] text-right text-xs text-muted-foreground">
+            Saiu por: {instancia.motivo_ignorada}
+          </span>
         )}
-        {instancia.ignorada && instancia.motivo_ignorada === "falhas consecutivas" && isAdmin && (
+        {instancia.ignorada && (instancia.reativavel ?? instancia.motivo_ignorada === "falhas consecutivas") && isAdmin && (
           <Button size="sm" variant="outline" disabled={reativando} onClick={onReativar}>
             {reativando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="mr-1.5 h-3.5 w-3.5" />}
             Voltar
