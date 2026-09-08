@@ -262,6 +262,9 @@ export async function suprimirDestinatario(
     origem_user_id?: string | null;
     contato_nome?: string | null;
     credor?: string | null;
+    caixa_id?: string | null;
+    caixa_nome?: string | null;
+    origem_texto?: string | null;
   },
 ): Promise<void> {
   try {
@@ -279,6 +282,9 @@ export async function suprimirDestinatario(
     if (origem?.origem_user_id) row.origem_user_id = origem.origem_user_id;
     if (origem?.contato_nome) row.contato_nome = String(origem.contato_nome).slice(0, 160);
     if (origem?.credor) row.credor = String(origem.credor).slice(0, 80);
+    if (origem?.caixa_id) row.caixa_id = origem.caixa_id;
+    if (origem?.caixa_nome) row.caixa_nome = String(origem.caixa_nome).slice(0, 120);
+    if (origem?.origem_texto) row.origem_texto = String(origem.origem_texto).slice(0, 300);
     await supabase.from('meta_destinatario_supressao').upsert(row, { onConflict: 'telefone_sufixo' });
   } catch (e) {
     console.log('[IAGO] falha ao suprimir destinatário:', String(e).slice(0, 160));
