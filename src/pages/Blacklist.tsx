@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Ban, Download, Search, Trash2, MessageSquare } from 'lucide-react';
+import { Ban, Download, Search, RotateCcw, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserRole } from '@/hooks/useUserRole';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -26,6 +26,9 @@ interface BlacklistRow {
   instancia_id: string | null;
   contato_nome: string | null;
   credor: string | null;
+  caixa_id: string | null;
+  caixa_nome: string | null;
+  origem_texto: string | null;
 }
 
 function formatarTelefone(tel: string | null, sufixo: string) {
@@ -46,6 +49,8 @@ export default function Blacklist() {
   const queryClient = useQueryClient();
   const [busca, setBusca] = useState('');
   const [instanciaFiltro, setInstanciaFiltro] = useState('todas');
+  const [caixaFiltro, setCaixaFiltro] = useState('todas');
+  const [reativando, setReativando] = useState<string | null>(null);
   const [de, setDe] = useState('');
   const [ate, setAte] = useState('');
 
@@ -55,6 +60,19 @@ export default function Blacklist() {
       const { data, error } = await supabase
         .from('meta_whatsapp_instances')
         .select('id, nome, display_phone')
+        .order('nome');
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: caixas } = useQuery({
+    queryKey: ['blacklist-caixas'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_inbox_folders')
+        .select('id, nome')
         .order('nome');
       if (error) throw error;
       return data ?? [];
@@ -75,7 +93,7 @@ export default function Blacklist() {
     queryFn: async () => {
       let q = supabase
         .from('meta_destinatario_supressao')
-        .select('telefone_sufixo, telefone, motivo, criado_em, instancia_id, contato_nome, credor')
+        .select('telefone_sufixo, telefone, motivo, criado_em, instancia_id, contato_nome, credor, caixa_id, caixa_nome, origem_texto')
         .like('motivo', 'blacklist%')
         .order('criado_em', { ascending: false })
         .limit(1000);
@@ -91,25 +109,31 @@ export default function Blacklist() {
 
   const filtradas = useMemo(() => {
     const termo = busca.replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!termo) return linhas ?? [];
     const digitos = termo.replace(/\D/g, '');
     return (linhas ?? []).filter((l) => {
+      if (caixaFiltro === 'sem') { if (l.caixa_id) return false; }
+      else if (caixaFiltro !== 'todas' && l.caixa_id !== caixaFiltro) return false;
+      if (!termo) return true;
       const nome = (l.contato_nome || '').toLowerCase();
       const tel = (l.telefone || l.telefone_sufixo || '');
       return nome.includes(termo) || (digitos.length >= 3 && tel.includes(digitos));
     });
-  }, [linhas, busca]);
+  }, [linhas, busca, caixaFiltro]);
 
-  async function remover(sufixo: string) {
+  async function reativar(l: BlacklistRow) {
+    const tel = formatarTelefone(l.telefone, l.telefone_sufixo);
+    if (!confirm(`Reativar ${tel}?\n\nEle sai da blacklist e volta a receber campanhas e lembretes.`)) return;
+    setReativando(l.telefone_sufixo);
     const { error } = await supabase
       .from('meta_destinatario_supressao')
       .delete()
-      .eq('telefone_sufixo', sufixo);
+      .eq('telefone_sufixo', l.telefone_sufixo);
+    setReativando(null);
     if (error) {
-      toast.error('Não foi possível remover da blacklist');
+      toast.error('Não foi possível reativar este número');
       return;
     }
-    toast.success('Número removido da blacklist');
+    toast.success(`${tel} reativado — já pode receber mensagens novamente`);
     queryClient.invalidateQueries({ queryKey: ['blacklist'] });
   }
 
@@ -124,6 +148,8 @@ export default function Blacklist() {
         nome: l.contato_nome || '',
         instancia: l.instancia_id ? (nomeInstancia.get(l.instancia_id) || l.instancia_id) : '',
         credor: l.credor || '',
+        caixa: l.caixa_nome || '',
+        origem: l.origem_texto || '',
         motivo: l.motivo || '',
         data: new Date(l.criado_em).toLocaleString('pt-BR'),
       })),
@@ -132,6 +158,8 @@ export default function Blacklist() {
         { chave: 'nome', titulo: 'Nome' },
         { chave: 'instancia', titulo: 'Instância de origem' },
         { chave: 'credor', titulo: 'Credor' },
+        { chave: 'caixa', titulo: 'Caixa de mensagens' },
+        { chave: 'origem', titulo: 'O que o cliente clicou/enviou' },
         { chave: 'motivo', titulo: 'Motivo' },
         { chave: 'data', titulo: 'Data do bloqueio' },
       ],
@@ -165,7 +193,7 @@ export default function Blacklist() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Filtros</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-4">
+          <CardContent className="grid gap-3 md:grid-cols-5">
             <div className="relative">
               <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
               <Input
@@ -186,6 +214,16 @@ export default function Blacklist() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={caixaFiltro} onValueChange={setCaixaFiltro}>
+              <SelectTrigger><SelectValue placeholder="Caixa de mensagens" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as caixas</SelectItem>
+                <SelectItem value="sem">Sem caixa registrada</SelectItem>
+                {(caixas ?? []).map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input type="date" value={de} onChange={(e) => setDe(e.target.value)} />
             <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
           </CardContent>
@@ -199,6 +237,7 @@ export default function Blacklist() {
                   <TableHead>Telefone</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Instância de origem</TableHead>
+                  <TableHead>Caixa de mensagens</TableHead>
                   <TableHead>Credor</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -207,14 +246,14 @@ export default function Blacklist() {
               <TableBody>
                 {isLoading && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Carregando...
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading && filtradas.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Nenhum número na blacklist.
                     </TableCell>
                   </TableRow>
@@ -230,6 +269,13 @@ export default function Blacklist() {
                         ? (nomeInstancia.get(l.instancia_id) || '—')
                         : <span className="text-muted-foreground">—</span>}
                     </TableCell>
+                    <TableCell className="text-sm">
+                      {l.caixa_nome
+                        ? (
+                          <span title={l.origem_texto || undefined}>{l.caixa_nome}</span>
+                        )
+                        : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
                     <TableCell>{l.credor || <span className="text-muted-foreground">—</span>}</TableCell>
                     <TableCell className="text-sm">
                       {new Date(l.criado_em).toLocaleString('pt-BR')}
@@ -241,16 +287,17 @@ export default function Blacklist() {
                             <MessageSquare className="h-4 w-4" />
                           </Link>
                         </Button>
-                        {isAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Remover da blacklist"
-                            onClick={() => remover(l.telefone_sufixo)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          title="Sai da blacklist e volta a receber mensagens"
+                          disabled={reativando === l.telefone_sufixo}
+                          onClick={() => reativar(l)}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                          {reativando === l.telefone_sufixo ? 'Reativando...' : 'Reativar'}
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
