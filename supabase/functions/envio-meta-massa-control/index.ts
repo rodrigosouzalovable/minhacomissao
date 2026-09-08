@@ -249,7 +249,13 @@ Deno.serve(async (req) => {
           ignorada,
           motivo_ignorada: bloqTpl.includes(id)
             ? 'template pausado pela Meta'
-            : bloqRun.includes(id) ? 'falhas consecutivas' : null,
+            : bloqRun.includes(id)
+              ? (String((falhas as any)[`mot:${id}`] || '').trim() ||
+                (['YELLOW', 'RED'].includes(String(i.saude_quality || '').toUpperCase())
+                  ? `qualidade ${String(i.saude_quality).toUpperCase()}`
+                  : 'falhas consecutivas'))
+              : null,
+          reativavel: bloqRun.includes(id),
           em_uso: (job.atual_instancia || '') === nome,
         };
       }).sort((a, b) => Number(a.ignorada) - Number(b.ignorada) || b.enviados - a.enviados);
