@@ -19,6 +19,7 @@ import BusinessManagersManager from "@/components/meta/BusinessManagersManager";
 
 type Categoria = "UTILITY" | "MARKETING" | "AUTHENTICATION";
 type BotaoTipo = "QUICK_REPLY" | "URL" | "PHONE_NUMBER";
+type FormatoVar = "NUMERADA" | "NOMEADA";
 
 interface Botao {
   type: BotaoTipo;
@@ -124,6 +125,7 @@ export default function MetaTemplates() {
   const [botoes, setBotoes] = useState<Botao[]>([]);
   const [exemploBody, setExemploBody] = useState<string[]>([]);
   const [exemploNomeado, setExemploNomeado] = useState<Record<string, string>>({});
+  const [formatoVar, setFormatoVar] = useState<FormatoVar>("NUMERADA");
   const [salvando, setSalvando] = useState(false);
   // mídia do cabeçalho
   const [mediaPath, setMediaPath] = useState<string | null>(null);
@@ -175,6 +177,59 @@ export default function MetaTemplates() {
   const riscosDeContexto = useMemo(() => riscosDeConteudo(corpo, categoria), [corpo, categoria]);
   const nVarsCorpo = varsCorpo.numeradas;
   const varsNomeadas = varsCorpo.nomeadas;
+  const formatoErrado =
+    formatoVar === "NUMERADA" ? varsNomeadas.length > 0 : nVarsCorpo > 0;
+
+  // Insere variável no corpo já no formato escolhido
+  const inserirVariavel = (nomeSugerido?: string) => {
+    const token =
+      formatoVar === "NUMERADA"
+        ? `{{${nVarsCorpo + 1}}}`
+        : `{{${nomeSugerido || `var${varsNomeadas.length + 1}`}}}`;
+    const el = document.getElementById("corpo-template") as HTMLTextAreaElement | null;
+    if (el && typeof el.selectionStart === "number") {
+      const start = el.selectionStart;
+      const end = el.selectionEnd ?? start;
+      setCorpo(corpo.slice(0, start) + token + corpo.slice(end));
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(start + token.length, start + token.length);
+      });
+    } else {
+      setCorpo(corpo + token);
+    }
+  };
+
+  // Converte as variáveis do corpo para o formato selecionado, preservando exemplos
+  const converterFormato = () => {
+    const ordem: string[] = [];
+    const novoCorpo = String(corpo).replace(
+      /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*|\d+)\s*\}\}/g,
+      (_m, k: string) => {
+        if (formatoVar === "NUMERADA") {
+          if (/^\d+$/.test(k)) return `{{${k}}}`;
+          if (!ordem.includes(k)) ordem.push(k);
+          return `{{${ordem.indexOf(k) + 1}}}`;
+        }
+        if (!/^\d+$/.test(k)) return `{{${k}}}`;
+        const nomeVar = `var${k}`;
+        if (!ordem.includes(nomeVar)) ordem.push(nomeVar);
+        return `{{${nomeVar}}}`;
+      },
+    );
+    if (formatoVar === "NUMERADA") {
+      setExemploBody(ordem.map((k) => exemploNomeado[k] || ""));
+    } else {
+      const next: Record<string, string> = {};
+      ordem.forEach((nomeVar) => {
+        const idx = Number(nomeVar.replace("var", "")) - 1;
+        next[nomeVar] = exemploBody[idx] || "";
+      });
+      setExemploNomeado(next);
+    }
+    setCorpo(novoCorpo);
+    toast.success("Variáveis convertidas");
+  };
 
   useEffect(() => {
     setExemploBody((prev) => {
@@ -222,19 +277,27 @@ export default function MetaTemplates() {
       return;
     }
     if (!corpo.trim()) { toast.error("Corpo é obrigatório"); return; }
-    if (nVarsCorpo > 0 && exemploBody.some((v) => !v.trim())) {
+    if (formatoErrado) {
+      toast.error(
+        formatoVar === "NUMERADA"
+          ? "O corpo tem variáveis por nome, mas o tipo selecionado é Número. Use \"Converter para o formato selecionado\"."
+          : "O corpo tem variáveis numeradas, mas o tipo selecionado é Nome. Use \"Converter para o formato selecionado\".",
+      );
+      return;
+    }
+    if (formatoVar === "NUMERADA" && nVarsCorpo > 0 && exemploBody.some((v) => !v.trim())) {
       toast.error("Preencha os exemplos das variáveis para a Meta aprovar");
       return;
     }
-    if (varsNomeadas.some((k) => !String(exemploNomeado[k] || "").trim())) {
+    if (formatoVar === "NOMEADA" && varsNomeadas.some((k) => !String(exemploNomeado[k] || "").trim())) {
       toast.error("Preencha os exemplos das variáveis nomeadas — sem eles a Meta rejeita por INVALID_FORMAT");
       return;
     }
 
     setSalvando(true);
     const exemplo: any = {};
-    if (nVarsCorpo > 0) exemplo.body_text = [exemploBody];
-    if (varsNomeadas.length > 0) {
+    if (formatoVar === "NUMERADA" && nVarsCorpo > 0) exemplo.body_text = [exemploBody];
+    if (formatoVar === "NOMEADA" && varsNomeadas.length > 0) {
       exemplo.body_text_named_params = varsNomeadas.map((k) => ({
         param_name: k,
         example: exemploNomeado[k],
@@ -505,17 +568,68 @@ export default function MetaTemplates() {
                     </div>
                   )}
 
+                  <div className="space-y-2 rounded-md border p-3">
+                    <Label>Tipo de variável *</Label>
+                    <Select value={formatoVar} onValueChange={(v) => setFormatoVar(v as FormatoVar)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NUMERADA">Número — {"{{1}}"}, {"{{2}}"} (recomendado)</SelectItem>
+                        <SelectItem value="NOMEADA">Nome — {"{{nome}}"}, {"{{valor}}"}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {formatoVar === "NOMEADA" ? (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                        Muitas contas da Meta não aceitam variáveis por nome e rejeitam o modelo com
+                        "os parâmetros de variável devem ser números inteiros". Se não tiver certeza, use Número.
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">
+                        Formato aceito por todas as contas da Meta.
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <Label>Corpo *</Label>
-                    <Textarea rows={5} value={corpo} onChange={(e) => setCorpo(e.target.value)}
-                      placeholder="Olá {{1}}, seu boleto de R$ {{2}} vence em {{3}}." />
+                    <Textarea id="corpo-template" rows={5} value={corpo} onChange={(e) => setCorpo(e.target.value)}
+                      placeholder={formatoVar === "NUMERADA"
+                        ? "Olá {{1}}, seu boleto de R$ {{2}} vence em {{3}}."
+                        : "Olá {{nome}}, seu boleto de R$ {{valor}} vence em {{data}}."} />
                     <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
-                      <span>Use {"{{1}}"}, {"{{2}}"}... para variáveis. {nVarsCorpo} variável(is) detectada(s).</span>
+                      <span>
+                        {formatoVar === "NUMERADA"
+                          ? `Use {{1}}, {{2}}... ${nVarsCorpo} variável(is) detectada(s).`
+                          : `Use {{nome}}, {{valor}}... ${varsNomeadas.length} variável(is) detectada(s).`}
+                      </span>
                       <span>{corpo.length}/1024</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <Button size="sm" variant="outline" type="button" onClick={() => inserirVariavel()}>
+                        <Plus className="w-3 h-3 mr-1" /> Inserir variável
+                      </Button>
+                      {formatoVar === "NOMEADA" && ["nome", "valor", "data"].map((k) => (
+                        <Button key={k} size="sm" variant="ghost" type="button" onClick={() => inserirVariavel(k)}>
+                          {`{{${k}}}`}
+                        </Button>
+                      ))}
                     </div>
                   </div>
 
-                  {nVarsCorpo > 0 && (
+                  {formatoErrado && (
+                    <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
+                      <Label className="text-destructive">Formato de variável incorreto</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {formatoVar === "NUMERADA"
+                          ? "O corpo usa variáveis por nome, mas o tipo selecionado é Número. A Meta rejeita esse modelo."
+                          : "O corpo usa variáveis numeradas, mas o tipo selecionado é Nome."}
+                      </p>
+                      <Button size="sm" variant="outline" type="button" onClick={converterFormato}>
+                        <RefreshCw className="w-3 h-3 mr-1" /> Converter para o formato selecionado
+                      </Button>
+                    </div>
+                  )}
+
+                  {formatoVar === "NUMERADA" && nVarsCorpo > 0 && (
                     <div className="space-y-2 rounded-md border p-3 bg-muted/30">
                       <Label>Exemplos para aprovação Meta *</Label>
                       {exemploBody.map((v, idx) => (
@@ -529,7 +643,7 @@ export default function MetaTemplates() {
                     </div>
                   )}
 
-                  {varsNomeadas.length > 0 && (
+                  {formatoVar === "NOMEADA" && varsNomeadas.length > 0 && (
                     <div className="space-y-2 rounded-md border p-3 bg-muted/30">
                       <Label>Exemplos das variáveis nomeadas *</Label>
                       <p className="text-xs text-muted-foreground">
