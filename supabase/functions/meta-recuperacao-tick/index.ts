@@ -35,7 +35,14 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // Carona: avança a fila de cópia gradual de templates dos números novos
+  // (sem cron próprio). Não bloqueia esta execução.
   try {
+    supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} });
+  } catch (_) { /* segue */ }
+
+  try {
+
     const body = await req.json().catch(() => ({}));
     const forcar = body?.forcar === true; // teste manual ignora janela
     const instanciaId: string | undefined = body?.instancia_id;

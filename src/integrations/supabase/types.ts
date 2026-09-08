@@ -5347,6 +5347,99 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_templates_onboarding_config: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          hora_fim: number
+          hora_inicio: number
+          id: number
+          intervalo_max_seg: number
+          intervalo_min_seg: number
+          max_rejeicoes_seguidas: number
+          qtd_dia_1: number
+          qtd_dia_2: number
+          qtd_dia_3: number
+          qtd_dia_padrao: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          hora_fim?: number
+          hora_inicio?: number
+          id?: number
+          intervalo_max_seg?: number
+          intervalo_min_seg?: number
+          max_rejeicoes_seguidas?: number
+          qtd_dia_1?: number
+          qtd_dia_2?: number
+          qtd_dia_3?: number
+          qtd_dia_padrao?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          hora_fim?: number
+          hora_inicio?: number
+          id?: number
+          intervalo_max_seg?: number
+          intervalo_min_seg?: number
+          max_rejeicoes_seguidas?: number
+          qtd_dia_1?: number
+          qtd_dia_2?: number
+          qtd_dia_3?: number
+          qtd_dia_padrao?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meta_templates_onboarding_fila: {
+        Row: {
+          agendado_para: string
+          criado_em: string
+          enviado_em: string | null
+          finalizado_em: string | null
+          id: string
+          instancia_id: string
+          motivo: string | null
+          prioridade: number
+          status: string
+          template_mestre_id: string
+          tentativas: number
+          updated_at: string
+        }
+        Insert: {
+          agendado_para?: string
+          criado_em?: string
+          enviado_em?: string | null
+          finalizado_em?: string | null
+          id?: string
+          instancia_id: string
+          motivo?: string | null
+          prioridade?: number
+          status?: string
+          template_mestre_id: string
+          tentativas?: number
+          updated_at?: string
+        }
+        Update: {
+          agendado_para?: string
+          criado_em?: string
+          enviado_em?: string | null
+          finalizado_em?: string | null
+          id?: string
+          instancia_id?: string
+          motivo?: string | null
+          prioridade?: number
+          status?: string
+          template_mestre_id?: string
+          tentativas?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meta_webhook_tokens: {
         Row: {
           atualizado_em: string
@@ -5680,6 +5773,11 @@ export type Database = {
           saude_throughput: Json | null
           saude_tier: string | null
           score_saude_cache: number | null
+          templates_auto_copiar: boolean
+          templates_auto_iniciado_em: string | null
+          templates_auto_pausado_ate: string | null
+          templates_auto_rejeicoes_seguidas: number
+          templates_auto_status: string | null
           tenant_id: string
           teto_escada: number | null
           throughput_level: string | null
@@ -5752,6 +5850,11 @@ export type Database = {
           saude_throughput?: Json | null
           saude_tier?: string | null
           score_saude_cache?: number | null
+          templates_auto_copiar?: boolean
+          templates_auto_iniciado_em?: string | null
+          templates_auto_pausado_ate?: string | null
+          templates_auto_rejeicoes_seguidas?: number
+          templates_auto_status?: string | null
           tenant_id?: string
           teto_escada?: number | null
           throughput_level?: string | null
@@ -5824,6 +5927,11 @@ export type Database = {
           saude_throughput?: Json | null
           saude_tier?: string | null
           score_saude_cache?: number | null
+          templates_auto_copiar?: boolean
+          templates_auto_iniciado_em?: string | null
+          templates_auto_pausado_ate?: string | null
+          templates_auto_rejeicoes_seguidas?: number
+          templates_auto_status?: string | null
           tenant_id?: string
           teto_escada?: number | null
           throughput_level?: string | null

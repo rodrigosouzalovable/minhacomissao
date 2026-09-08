@@ -54,6 +54,10 @@ type Instancia = {
   saude_checked_at?: string | null;
   messaging_limit_manual?: string | null;
   aquecimento_meta_ativo?: boolean | null;
+  templates_auto_copiar?: boolean | null;
+  templates_auto_status?: string | null;
+  templates_auto_pausado_ate?: string | null;
+
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
   meta_bm_id?: string | null;
@@ -265,6 +269,7 @@ export default function ConfigurarMeta() {
     access_token: "",
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
+    templates_auto_copiar: false,
   });
   const [salvandoEdit, setSalvandoEdit] = useState(false);
   const [form, setForm] = useState({
@@ -275,7 +280,9 @@ export default function ConfigurarMeta() {
     access_token: "",
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
+    templates_auto_copiar: false,
   });
+
 
   const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
 
@@ -358,6 +365,39 @@ export default function ConfigurarMeta() {
       cancelado = true;
     };
   }, [isAdmin, idsAquecendo.join(",")]);
+
+  // Progresso da cópia gradual de templates (somente admin, sem polling)
+  const [tplProgresso, setTplProgresso] = useState<Record<string, { feitos: number; total: number }>>({});
+  const idsCopiando = useMemo(
+    () => instancias.filter((i) => i.templates_auto_copiar).map((i) => i.id),
+    [instancias],
+  );
+  useEffect(() => {
+    if (!isAdmin || idsCopiando.length === 0) {
+      setTplProgresso({});
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const { data } = await supabase
+        .from("meta_templates_onboarding_fila")
+        .select("instancia_id, status")
+        .in("instancia_id", idsCopiando);
+      if (cancelado) return;
+      const mapa: Record<string, { feitos: number; total: number }> = {};
+      for (const r of (data as any[]) ?? []) {
+        mapa[r.instancia_id] ??= { feitos: 0, total: 0 };
+        mapa[r.instancia_id].total++;
+        if (r.status !== "PENDENTE") mapa[r.instancia_id].feitos++;
+      }
+      setTplProgresso(mapa);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [isAdmin, idsCopiando.join(",")]);
+
+
 
 
 
@@ -474,6 +514,8 @@ export default function ConfigurarMeta() {
     access_token: "",
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
+    templates_auto_copiar: false,
+
   };
 
   const atualizarDuplicado = async () => {
@@ -527,6 +569,8 @@ export default function ConfigurarMeta() {
         access_token: form.access_token.trim(),
         ...camposBmTier(form),
         aquecimento_meta_ativo: isAdmin ? form.aquecimento_meta_ativo : false,
+        templates_auto_copiar: isAdmin ? form.templates_auto_copiar : false,
+
         webhook_verify_token: gerarToken(),
       })
       .select("id")
@@ -564,7 +608,36 @@ export default function ConfigurarMeta() {
         toast.error("Falha ao inscrever webhook: " + (e?.message || e), { id: toastId });
       }
     }
+
+    if (novaInst?.id && isAdmin && form.templates_auto_copiar) {
+      await iniciarCopiaTemplates(novaInst.id);
+    }
   };
+
+  // Monta a fila de cópia gradual dos templates já aprovados em outros números
+  const iniciarCopiaTemplates = async (instanciaId: string) => {
+    const toastId = toast.loading("Montando a fila de templates aprovados...");
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-templates-onboarding-enfileirar", {
+        body: { instancia_id: instanciaId },
+      });
+      if (error) throw new Error(error.message);
+      if ((data as any)?.success === false) throw new Error((data as any)?.error || "falha");
+      const total = Number((data as any)?.enfileirados || 0);
+      if (total === 0) {
+        toast.message("Nenhum modelo aprovado disponível para copiar agora.", { id: toastId });
+      } else {
+        toast.success(
+          `${total} modelos na fila. O envio é gradual (3 no 1º dia, 5 no 2º, 8 no 3º, 10/dia depois) e você recebe aviso no WhatsApp.`,
+          { id: toastId, duration: 9000 },
+        );
+      }
+      carregar();
+    } catch (e: any) {
+      toast.error("Não foi possível montar a fila: " + (e?.message || e), { id: toastId });
+    }
+  };
+
 
   const abrirEdicao = (inst: Instancia) => {
     setEditInst(inst);
@@ -576,6 +649,8 @@ export default function ConfigurarMeta() {
       access_token: "",
       messaging_limit_manual: inst.messaging_limit_manual || "__auto__",
       aquecimento_meta_ativo: !!inst.aquecimento_meta_ativo,
+      templates_auto_copiar: !!inst.templates_auto_copiar,
+
     });
   };
 
@@ -603,6 +678,8 @@ export default function ConfigurarMeta() {
       waba_id: editForm.waba_id.trim(),
       ...camposBmTier(editForm),
       ...(isAdmin ? { aquecimento_meta_ativo: editForm.aquecimento_meta_ativo } : {}),
+      ...(isAdmin ? { templates_auto_copiar: editForm.templates_auto_copiar } : {}),
+
 
     };
     if (editForm.access_token.trim()) patch.access_token = editForm.access_token.trim();
@@ -614,9 +691,13 @@ export default function ConfigurarMeta() {
     if (error) { toast.error("Erro: " + humanizarErroDuplicado(error.message)); return; }
 
     toast.success("Instância atualizada");
+    const ligouCopia = isAdmin && editForm.templates_auto_copiar && !editInst.templates_auto_copiar;
+    const idEditado = editInst.id;
     setEditInst(null);
     carregar();
+    if (ligouCopia) await iniciarCopiaTemplates(idEditado);
   };
+
 
 
   const humanizarErroSubscribe = (msg: string): string => {
@@ -1343,6 +1424,35 @@ export default function ConfigurarMeta() {
                             );
                           })()}
 
+                          {isAdmin && inst.templates_auto_copiar && (() => {
+                            const p = tplProgresso[inst.id];
+                            const st = inst.templates_auto_status || "";
+                            const pausado = st.startsWith("PAUSADO");
+                            const concluido = st === "CONCLUIDO";
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] cursor-help ${
+                                  pausado
+                                    ? "border-red-500/60 text-red-600 bg-red-50"
+                                    : concluido
+                                      ? "border-green-500/60 text-green-700 bg-green-50"
+                                      : "border-blue-500/60 text-blue-600 bg-blue-50"
+                                }`}
+                                title={
+                                  pausado
+                                    ? "Cópia de templates pausada (reprovações seguidas ou limite da Meta). Corrija e reative."
+                                    : "Cópia gradual dos templates já aprovados nos seus outros números"
+                                }
+                              >
+                                📋 Templates{p ? ` ${p.feitos}/${p.total}` : ""}
+                                {pausado ? " · pausado" : concluido ? " · concluído" : ""}
+                              </Badge>
+                            );
+                          })()}
+
+
+
                           <MetaHealthStatusRow inst={inst} />
                           {(() => {
                             const s = inst.webhook_saude_status;
@@ -1782,6 +1892,22 @@ export default function ConfigurarMeta() {
               </div>
             )}
 
+            {isAdmin && (
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <Label>Copiar templates aprovados automaticamente</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 09h às 18h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.templates_auto_copiar}
+                  onCheckedChange={(v) => setForm({ ...form, templates_auto_copiar: v })}
+                />
+              </div>
+            )}
+
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
@@ -1861,6 +1987,22 @@ export default function ConfigurarMeta() {
                 />
               </div>
             )}
+
+            {isAdmin && (
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <Label>Copiar templates aprovados automaticamente</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 09h às 18h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
+                  </p>
+                </div>
+                <Switch
+                  checked={editForm.templates_auto_copiar}
+                  onCheckedChange={(v) => setEditForm({ ...editForm, templates_auto_copiar: v })}
+                />
+              </div>
+            )}
+
 
           </div>
           <DialogFooter>

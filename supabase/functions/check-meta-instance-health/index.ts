@@ -418,7 +418,7 @@ Deno.serve(async (req) => {
                 `${linhaPrevisao(qual, 0, diasGreenAlta)}`,
               chaveIdempotencia: `meta_aquec_religado_${inst.id}_${hojeIdem}`,
               umaVezPorChave: true,
-              destinatarios: ['5562991672674', '5562994300880'],
+              destinatarios: ['5562991672674'],
             });
           } catch (e) {
             console.log('[health] aviso de religamento falhou:', String(e).slice(0, 200));

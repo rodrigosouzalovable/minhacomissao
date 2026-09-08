@@ -8,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DESTINATARIOS = ["62991672674", "62994300880"];
+const DESTINATARIOS = ["62991672674"];
 
 const HORAS = [
   "8h-9h", "9h-10h", "10h-11h", "11h-12h", "12h-13h", "13h-14h",

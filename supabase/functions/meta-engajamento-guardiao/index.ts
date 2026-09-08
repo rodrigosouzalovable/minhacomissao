@@ -13,7 +13,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DESTINOS = ["5562991672674", "5562994300880"];
+const DESTINOS = ["5562991672674"];
 
 type Faixa = "ok" | "atencao" | "forte" | "corte";
 
