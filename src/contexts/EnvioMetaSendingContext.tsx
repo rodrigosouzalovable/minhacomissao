@@ -121,7 +121,10 @@ export type IniciarParams = {
   credor?: string | null;
   /** ISO UTC: quando preenchido, a campanha fica registrada e só começa nesse momento. */
   agendarPara?: string | null;
+  /** true quando o usuário confirmou o aviso de risco de números YELLOW/RED. */
+  riscoQualidadeConfirmado?: boolean;
   onAfterEnvio?: () => void;
+
 };
 
 export type CampanhaJob = {
