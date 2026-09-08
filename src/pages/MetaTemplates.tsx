@@ -464,6 +464,51 @@ export default function MetaTemplates() {
     carregar();
   };
 
+  // Marca/desmarca o modelo para injeção automática em números novos
+  const alternarInjecao = async (id: string, valor: boolean) => {
+    const { error } = await supabase
+      .from("meta_templates_mestre")
+      .update({ injetar_em_novos: valor })
+      .eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    setMestres((prev) => prev.map((m) => (m.id === id ? { ...m, injetar_em_novos: valor } : m)));
+    toast.success(valor ? "Marcado para números novos" : "Removido dos números novos");
+  };
+
+  const marcarTodosInjecao = async (valor: boolean) => {
+    const ids = mestres.map((m) => m.id);
+    if (ids.length === 0) return;
+    const { error } = await supabase
+      .from("meta_templates_mestre")
+      .update({ injetar_em_novos: valor })
+      .in("id", ids);
+    if (error) { toast.error(error.message); return; }
+    setMestres((prev) => prev.map((m) => ({ ...m, injetar_em_novos: valor })));
+    toast.success(valor ? "Todos marcados" : "Marcação limpa");
+  };
+
+  // Monta os componentes de prévia de um modelo mestre
+  const componentesDoMestre = (m: Mestre) => {
+    const comps: any[] = [];
+    if (m.cabecalho_tipo) {
+      comps.push({ type: "HEADER", format: m.cabecalho_tipo, text: m.cabecalho_texto || undefined });
+    }
+    comps.push({ type: "BODY", text: m.corpo });
+    if (m.rodape) comps.push({ type: "FOOTER", text: m.rodape });
+    if (Array.isArray(m.botoes) && m.botoes.length > 0) comps.push({ type: "BUTTONS", buttons: m.botoes });
+    return comps;
+  };
+
+  const mestresFiltrados = useMemo(() => {
+    const t = buscaMestre.trim().toLowerCase();
+    if (!t) return mestres;
+    return mestres.filter((m) => m.nome.toLowerCase().includes(t));
+  }, [mestres, buscaMestre]);
+
+  const qtdMarcados = mestres.filter((m) => m.injetar_em_novos).length;
+
+
+
   const contagemPorMestre = (mestreId: string): Record<string, number> => {
     const filhas = templInst.filter((t) => t.template_mestre_id === mestreId);
     const c: Record<string, number> = { total: filhas.length };
