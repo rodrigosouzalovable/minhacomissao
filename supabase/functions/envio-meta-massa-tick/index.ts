@@ -274,8 +274,8 @@ function passouIntervalo(ts: string | null | undefined): boolean {
 
 // Tira do rodízio, no meio da campanha, qualquer número cuja qualidade tenha
 // caído para YELLOW ou RED. Persiste em instancias_bloqueadas_run e avisa o admin.
-// Campanhas iniciadas manualmente com números de qualidade baixa (flag
-// permitir_qualidade_baixa) mantêm esses números até o fim.
+// Vale SEMPRE, inclusive em campanhas iniciadas manualmente com números de
+// qualidade baixa: a escolha manual libera apenas o início do disparo.
 async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: string[]): Promise<string[]> {
   const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
   const candidatas = todas.filter((id) => !bloqueadasRun.includes(id));
@@ -283,9 +283,7 @@ async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: strin
 
   try {
     // Atualiza a saúde das instâncias do job, no máximo a cada 5 min, sem bloquear.
-    let checouAgora = false;
     if (passouIntervalo(job.saude_checada_em)) {
-      checouAgora = true;
       job.saude_checada_em = new Date().toISOString();
       await supabase.from('envio_meta_job')
         .update({ saude_checada_em: job.saude_checada_em })
@@ -293,33 +291,7 @@ async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: strin
       dispararChecagemSaude(candidatas);
     }
 
-    // Campanha manual com qualidade baixa liberada: apenas avisa, sem retirar.
-    if (job.permitir_qualidade_baixa === true) {
-      if (!checouAgora) return [...bloqueadasRun];
 
-      try {
-        const { data: baixas } = await supabase
-          .from('meta_whatsapp_instances')
-          .select('id, nome, display_phone, saude_quality')
-          .in('id', candidatas)
-          .in('saude_quality', ['YELLOW', 'RED']);
-        if (baixas?.length) {
-          const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
-          for (const i of baixas as any[]) {
-            const label = i.nome || i.display_phone || 'instância';
-            await notificarAdmin(supabase, {
-              tipo: 'envio_meta_qualidade_mantida',
-              mensagem: `⚠️ *Qualidade baixa, mas seguindo no envio*\n\n📱 ${label}\n📉 Qualidade: *${String(i.saude_quality).toUpperCase()}*\n📄 Campanha: ${job.nome_campanha || job.template_nome || '—'}\n\nEste número foi selecionado manualmente, então continua enviando com ritmo reduzido.`,
-              chaveIdempotencia: `envio_meta_qualidade_mantida_${job.id}_${i.id}`,
-              umaVezPorChave: true,
-            });
-          }
-        }
-      } catch (e) {
-        console.error('[tick] aviso de qualidade mantida falhou:', String(e).slice(0, 200));
-      }
-      return [...bloqueadasRun];
-    }
 
 
     const { data: insts } = await supabase
