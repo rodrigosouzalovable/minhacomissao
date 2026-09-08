@@ -397,7 +397,7 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
     const liberadas = (insts || []).filter((i: any) => {
       if (i.ativo === false) return false;
       const q = String(i.saude_quality || '').toUpperCase();
-      if (q !== 'GREEN' && job.permitir_qualidade_baixa !== true) return false;
+      if (q !== 'GREEN') return false;
 
       const st = String(i.saude_status || '').toUpperCase();
       if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x))) return false;
