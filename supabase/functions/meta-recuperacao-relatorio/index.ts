@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
       .eq('aquecimento_qualidade_permitido', true)
       .eq('recuperacao_ativa', true);
 
-    const DESTINOS_RELATORIO = ['5562991672674', '5562994300880'];
+    const DESTINOS_RELATORIO = ['5562991672674'];
 
     const horaAgora = new Date().toLocaleTimeString('pt-BR', {
       timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
       mensagem,
       chaveIdempotencia: `meta_aquec_resumo_${dia}_${hora.replace(':', '')}`,
       umaVezPorChave: true,
-      destinatarios: ['5562991672674', '5562994300880'],
+      destinatarios: ['5562991672674'],
     });
 
 
