@@ -142,18 +142,40 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Campanha iniciada manualmente com números de qualidade baixa marcados de
-    // propósito: eles permanecem no rodízio até o fim (não saem por YELLOW/RED).
-    let permitirQualidadeBaixa = false;
+    // Números que JÁ estão com qualidade baixa e foram marcados de propósito:
+    // só entram se o usuário confirmou o aviso de risco na tela. Eles podem
+    // disparar, mas se a qualidade cair mais durante a campanha o tick os retira
+    // igual a qualquer outro número.
+    let instanciasRiscoAceito: string[] = [];
     try {
       const { data: qRows } = await supabase
         .from('meta_whatsapp_instances')
-        .select('id, saude_quality')
+        .select('id, nome, display_phone, saude_quality')
         .in('id', instanciaIdsFiltradas);
-      permitirQualidadeBaixa = !agendarParaMs && (qRows || []).some(
+      const arriscadas = (qRows || []).filter(
         (r: any) => String(r.saude_quality || '').toUpperCase() !== 'GREEN',
       );
+      if (arriscadas.length > 0) {
+        if (body?.riscoQualidadeConfirmado !== true) {
+          const rotulos = arriscadas
+            .map((r: any) => `${r.nome || r.display_phone || r.id} (${String(r.saude_quality || 'sem leitura').toUpperCase()})`)
+            .join(', ');
+          console.error('[iniciar] recusado 400: risco de qualidade não confirmado', rotulos);
+          return new Response(JSON.stringify({
+            success: false,
+            error: `Confirmação de risco necessária: ${arriscadas.length} número(s) com qualidade baixa selecionados — ${rotulos}.`,
+            risco_qualidade: arriscadas.map((r: any) => ({
+              id: r.id,
+              nome: r.nome || r.display_phone || r.id,
+              qualidade: String(r.saude_quality || '').toUpperCase() || null,
+            })),
+          }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        instanciasRiscoAceito = arriscadas.map((r: any) => r.id);
+      }
     } catch (_) { /* não bloqueia início */ }
+    const permitirQualidadeBaixa = instanciasRiscoAceito.length > 0;
+
 
 
 
