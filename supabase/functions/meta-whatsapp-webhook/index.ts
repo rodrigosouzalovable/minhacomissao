@@ -1597,17 +1597,22 @@ serve(async (req) => {
                       ? [...job.instancias_bloqueadas_run] : [];
 
                     // Conta falhas de ENTREGA por instância dentro deste job (chave dlv:)
-                    const falhasMap: Record<string, number> =
+                    const falhasMap: Record<string, any> =
                       (job.falhas_por_instancia_run && typeof job.falhas_por_instancia_run === 'object')
                         ? { ...job.falhas_por_instancia_run } : {};
                     const chaveDlv = `dlv:${inst.id}`;
                     falhasMap[chaveDlv] = Number(falhasMap[chaveDlv] || 0) + 1;
 
                     const MAX_FALHAS_ENTREGA = 3;
-                    const estourouEntrega = falhasMap[chaveDlv] >= MAX_FALHAS_ENTREGA;
+                    const estourouEntrega = Number(falhasMap[chaveDlv]) >= MAX_FALHAS_ENTREGA;
 
                     if ((isRestricted || estourouEntrega) && !bloqueadas.includes(inst.id)) {
                       bloqueadas.push(inst.id);
+                      // Guarda o MOTIVO REAL da saída (chave mot:) para o tick poder
+                      // recolocar a instância quando o motivo for temporário
+                      // (ex.: conta travada na Meta que depois foi liberada).
+                      falhasMap[`mot:${inst.id}`] =
+                        `${errTitle || 'falha de entrega'}${errCode ? ` (#${errCode})` : ''}`;
                       try {
                         const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
                         await notificarAdmin(supabase, {

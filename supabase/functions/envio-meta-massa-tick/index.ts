@@ -320,6 +320,127 @@ async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: strin
 }
 
 
+// Motivos de saída TEMPORÁRIOS: conta/BM travada, pendência de pagamento,
+// limite momentâneo, rate limit. Nesses casos a instância pode voltar ao
+// rodízio assim que a Meta confirmar que está liberada e GREEN.
+function motivoTemporario(motivo: string): boolean {
+  const s = String(motivo || '').toLowerCase();
+  if (!s) return false;
+  return (
+    s.includes('business account') ||
+    s.includes('locked') ||
+    s.includes('#131031') ||
+    s.includes('#131042') ||
+    s.includes('#131049') ||
+    s.includes('#130429') ||
+    s.includes('#368') ||
+    s.includes('payment') ||
+    s.includes('billing') ||
+    s.includes('pagamento') ||
+    s.includes('rate limit') ||
+    s.includes('throughput') ||
+    s.includes('temporar')
+  );
+}
+
+const ultimaReabilitacao = new Map<string, number>();
+
+// Recoloca no rodízio as instâncias que saíram por motivo temporário e que a
+// Meta agora confirma disponíveis e GREEN. Retorna a lista de bloqueadas
+// atualizada. YELLOW/RED e bloqueios reais continuam fora.
+async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]): Promise<string[]> {
+  if (bloqueadasRun.length === 0) return bloqueadasRun;
+  const agora = Date.now();
+  if (agora - (ultimaReabilitacao.get(job.id) || 0) < INTERVALO_CHECAGEM_SAUDE_MS) return bloqueadasRun;
+  ultimaReabilitacao.set(job.id, agora);
+
+  try {
+    const falhas: Record<string, any> =
+      (job.falhas_por_instancia_run && typeof job.falhas_por_instancia_run === 'object')
+        ? { ...job.falhas_por_instancia_run } : {};
+
+    // Sem motivo gravado (campanhas antigas) também entra na reavaliação:
+    // a liberação só acontece se a Meta confirmar GREEN e disponível.
+    const candidatas = bloqueadasRun.filter((id) => {
+      const m = String(falhas[`mot:${id}`] || '').trim();
+      return !m || motivoTemporario(m);
+    });
+    if (candidatas.length === 0) return bloqueadasRun;
+
+    for (const id of candidatas) {
+      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/check-meta-instance-health`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ instancia_id: id }),
+      }).catch(() => null);
+    }
+
+    const { data: insts } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id, nome, display_phone, saude_quality, saude_status, pausa_automatica_ate, estado_pool, ativo')
+      .in('id', candidatas);
+
+    const liberadas = (insts || []).filter((i: any) => {
+      if (i.ativo === false) return false;
+      const q = String(i.saude_quality || '').toUpperCase();
+      if (q !== 'GREEN') return false;
+      const st = String(i.saude_status || '').toUpperCase();
+      if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x))) return false;
+      if (String(i.estado_pool || '') === 'restrita') return false;
+      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now()) return false;
+      return true;
+    });
+    if (liberadas.length === 0) return bloqueadasRun;
+
+    const voltar = liberadas.map((i: any) => i.id);
+    const novasBloqueadas = bloqueadasRun.filter((id) => !voltar.includes(id));
+    for (const id of voltar) {
+      delete falhas[`dlv:${id}`];
+      delete falhas[id];
+      delete falhas[`mot:${id}`];
+    }
+
+    await supabase.from('envio_meta_job').update({
+      instancias_bloqueadas_run: novasBloqueadas,
+      falhas_por_instancia_run: falhas,
+    }).eq('id', job.id);
+    job.instancias_bloqueadas_run = novasBloqueadas;
+    job.falhas_por_instancia_run = falhas;
+
+    try {
+      const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+      for (const i of liberadas as any[]) {
+        const label = i.nome || i.display_phone || 'instância';
+        const fone = i.display_phone && i.nome ? ` (${i.display_phone})` : '';
+        await notificarAdmin(supabase, {
+          tipo: 'envio_meta_instancia_recolocada',
+          mensagem:
+            `✅ *Número recolocado na campanha*\n\n📱 ${label}${fone}\n` +
+            `↩️ Havia saído por: ${String(falhas[`mot:${i.id}`] || 'bloqueio temporário da Meta')}\n` +
+            `🟢 A Meta confirmou que está liberado e com qualidade GREEN\n` +
+            `📄 Campanha: ${job.nome_campanha || job.template_nome || '—'}\n\nO envio volta a usar este número.`,
+          chaveIdempotencia: `envio_meta_recolocada_${job.id}_${i.id}_${new Date().toISOString().slice(0, 13)}`,
+          umaVezPorChave: true,
+        });
+      }
+    } catch (e) {
+      console.error('[tick] aviso de recolocação falhou:', String(e).slice(0, 200));
+    }
+
+    console.log('[tick] instâncias recolocadas no rodízio:', voltar.join(','));
+    return novasBloqueadas;
+  } catch (e) {
+    console.error('[tick] reabilitarInstanciasRecuperadas falhou:', String(e).slice(0, 300));
+    return bloqueadasRun;
+  }
+}
+
+
+
+
 async function processarItem(job: any): Promise<ItemResult> {
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
   if (!(await jobEstaRodando(job.id))) return { advanced: false, stop: true };
@@ -354,7 +475,9 @@ async function processarItem(job: any): Promise<ItemResult> {
 
 
   // Remove instâncias auto-bloqueadas por falhas consecutivas neste job
-  const bloqueadasRun: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
+  const bloqueadasBrutas: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
+  // Recoloca no rodízio quem saiu por bloqueio TEMPORÁRIO da Meta e já está liberado
+  const bloqueadasRun: string[] = await reabilitarInstanciasRecuperadas(job, bloqueadasBrutas);
   // Instâncias que já falharam para ESTE contato (não repetir o mesmo número no mesmo chip)
   const varsPend = ((pend as any).vars && typeof (pend as any).vars === 'object') ? (pend as any).vars : {};
   const exclItem: string[] = Array.isArray(varsPend._inst_excluidas) ? varsPend._inst_excluidas : [];
