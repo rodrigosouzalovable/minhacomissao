@@ -500,6 +500,12 @@ export default function MetaTemplates() {
                       <Input value={nome} onChange={(e) => setNome(e.target.value.toLowerCase())}
                         placeholder="boleto_vencimento_novo_mundo" />
                       <p className="text-xs text-muted-foreground mt-1">apenas a-z, 0-9 e _</p>
+                      {nomeDuplicado && (
+                        <p className="text-xs mt-1 font-medium text-amber-600 dark:text-amber-400">
+                          Já existe um modelo com esse nome ({nomeDuplicado.categoria}) na aba "Aplicar em lote".
+                          A Meta rejeita nomes duplicados na mesma conta.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label>Categoria</Label>
@@ -725,7 +731,7 @@ export default function MetaTemplates() {
                     ))}
                   </div>
 
-                  <Button onClick={salvarMestre} disabled={salvando}>
+                  <Button onClick={salvarMestre} disabled={salvando || !!nomeDuplicado}>
                     {salvando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                     Salvar template mestre
                   </Button>
