@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
         `Número: *${inst.nome || inst.display_phone || instanciaId}*\n` +
         (bm ? `${bm}\n` : "") +
         `Modelos na fila: *${rows.length}*\n\n` +
-        `Envio gradual: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez com 15–25 min de intervalo, das 09h às 18h e nunca no domingo.`,
+        `Envio gradual: 1 por vez com 15–25 min de intervalo, das 09h às 18h e nunca no domingo.`,
     });
 
     return json({ success: true, enfileirados: rows.length });
