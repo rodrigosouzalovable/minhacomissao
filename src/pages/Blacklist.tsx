@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Ban, Download, Search, RotateCcw, MessageSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useUserRole } from '@/hooks/useUserRole';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -45,7 +44,6 @@ function formatarTelefone(tel: string | null, sufixo: string) {
 }
 
 export default function Blacklist() {
-  const { isAdmin } = useUserRole();
   const queryClient = useQueryClient();
   const [busca, setBusca] = useState('');
   const [instanciaFiltro, setInstanciaFiltro] = useState('todas');
