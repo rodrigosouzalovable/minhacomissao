@@ -872,8 +872,14 @@ export default function MetaTemplates() {
             <Card>
               <CardHeader><CardTitle>Aplicar template em várias instâncias</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <Label>Template mestre</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label>Template mestre</Label>
+                    <Button size="sm" variant="outline" onClick={() => setSelecaoAutoAberta(true)}>
+                      <Zap className="w-4 h-4 mr-2" />
+                      Modelos para números novos ({qtdMarcados})
+                    </Button>
+                  </div>
                   <Select value={selMestre} onValueChange={setSelMestre}>
                     <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent>
@@ -882,7 +888,42 @@ export default function MetaTemplates() {
                       ))}
                     </SelectContent>
                   </Select>
+
+                  {/* Lista de todos os modelos: abre cada um em janela para ver/excluir */}
+                  <div className="max-h-64 overflow-y-auto rounded-md border divide-y">
+                    {mestres.length === 0 && (
+                      <p className="p-3 text-sm text-muted-foreground">Nenhum template criado ainda.</p>
+                    )}
+                    {mestres.map((m) => {
+                      const usos = templInst.filter((t) => t.template_mestre_id === m.id).length;
+                      return (
+                        <div
+                          key={m.id}
+                          className={`flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 ${selMestre === m.id ? "bg-muted/60" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            className="flex-1 text-left"
+                            onClick={() => setMestreDialog(m.id)}
+                          >
+                            <span className="font-medium">{m.nome}</span>
+                            <span className="text-xs text-muted-foreground"> · {m.categoria}</span>
+                          </button>
+                          <Badge variant="outline" className="text-xs">{usos} nº</Badge>
+                          {m.injetar_em_novos && (
+                            <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400 text-xs">
+                              <Zap className="w-3 h-3 mr-1" /> nº novos
+                            </Badge>
+                          )}
+                          <Button size="icon" variant="ghost" onClick={() => setMestreDialog(m.id)} title="Ver template">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+
 
                 {selMestre && (() => {
                   const m = mestres.find((x) => x.id === selMestre);
