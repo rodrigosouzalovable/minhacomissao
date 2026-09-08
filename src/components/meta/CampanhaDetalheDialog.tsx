@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock, Ban } from "lucide-react";
 import CampanhaInstanciasPanel from "@/components/meta/CampanhaInstanciasPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -134,12 +134,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const [openErros, setOpenErros] = useState<boolean>(true);
   const [openFalhas, setOpenFalhas] = useState<boolean>(true);
   const [abrirInstancias, setAbrirInstancias] = useState(false);
+  const [openBlacklist, setOpenBlacklist] = useState(false);
   useEffect(() => {
     if (open && jobId) {
       setOpenEnviados(false);
       setOpenErros(true);
       setOpenFalhas(true);
       setAbrirInstancias(false);
+      setOpenBlacklist(false);
     }
   }, [open, jobId]);
 
@@ -377,6 +379,22 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     } finally {
       setExportando(null);
     }
+  };
+  const bloqueadosBlacklist = Array.isArray((job as any).bloqueados_blacklist)
+    ? ((job as any).bloqueados_blacklist as Array<{ telefone: string; nome?: string; credor?: string }>)
+    : [];
+  const baixarBlacklist = async () => {
+    if (bloqueadosBlacklist.length === 0) { toast.error("Nada para exportar"); return; }
+    await exportarParaExcel(
+      bloqueadosBlacklist.map((b) => ({ telefone: b.telefone, nome: b.nome || "", credor: b.credor || "" })),
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "nome", titulo: "Nome" },
+        { chave: "credor", titulo: "Credor" },
+      ],
+      `blacklist_${sanitize(nome)}_${stamp()}`,
+    );
+    toast.success(`${bloqueadosBlacklist.length} números exportados`);
   };
   const rotuloBaixar = (tipo: string) =>
     exportando === tipo ? `Baixando... ${exportProgresso}` : "Baixar Excel";
