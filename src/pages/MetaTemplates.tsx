@@ -136,18 +136,27 @@ export default function MetaTemplates() {
   const [selMestre, setSelMestre] = useState<string>("");
   const [selInst, setSelInst] = useState<Set<string>>(new Set());
   const [loteMediaUrl, setLoteMediaUrl] = useState<string | null>(null);
+  const [buscaInst, setBuscaInst] = useState("");
 
   const [enviando, setEnviando] = useState(false);
+  const { parceiroMeta } = useUserPermissions();
 
   const carregar = async () => {
     setLoading(true);
-    const [m, i, ti] = await Promise.all([
+    const [m, i, ti, par] = await Promise.all([
       supabase.from("meta_templates_mestre").select("*").order("criado_em", { ascending: false }),
-      supabase.from("meta_whatsapp_instances").select("id, nome, display_phone, ativo, waba_id").order("nome"),
+      supabase
+        .from("meta_whatsapp_instances")
+        .select("id, nome, display_phone, ativo, waba_id")
+        .eq("provider", "meta")
+        .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
+      supabase.from("meta_instance_parceiros").select("instancia_id"),
     ]);
     setMestres((m.data as any) || []);
-    setInstancias((i.data as any) || []);
+    const idsParceiro = new Set(((par.data as any) || []).map((r: any) => r.instancia_id as string));
+    const lista = ((i.data as any) || []) as Instancia[];
+    setInstancias(parceiroMeta ? lista : lista.filter((x) => !idsParceiro.has(x.id)));
     setTemplInst((ti.data as any) || []);
     setLoading(false);
   };
