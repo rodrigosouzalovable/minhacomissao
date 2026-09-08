@@ -10128,6 +10128,7 @@ export type Database = {
         Returns: boolean
       }
       phone_suffix8: { Args: { tel: string }; Returns: string }
+      pode_google_maps_leads: { Args: { _user_id: string }; Returns: boolean }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
       pode_ver_cliente_parceiro: {
         Args: { _cliente_id: string; _uid: string }
