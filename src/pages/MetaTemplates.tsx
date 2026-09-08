@@ -850,18 +850,23 @@ export default function MetaTemplates() {
                     />
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={instFiltradas.length > 0 && instFiltradas.every((i) => selInst.has(i.id))}
-                      onCheckedChange={(v) => {
-                        const s = new Set(selInst);
-                        if (v) instFiltradas.forEach((i) => s.add(i.id));
-                        else instFiltradas.forEach((i) => s.delete(i.id));
-                        setSelInst(s);
-                      }}
-                    />
-                    <Label>Todas as {instFiltradas.length} instâncias ativas</Label>
-                  </div>
+                  {(() => {
+                    const greens = instFiltradas.filter((i) => qualidadeDa(i) === "GREEN");
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={greens.length > 0 && greens.every((i) => selInst.has(i.id))}
+                          onCheckedChange={(v) => {
+                            const s = new Set(selInst);
+                            if (v) greens.forEach((i) => s.add(i.id));
+                            else greens.forEach((i) => s.delete(i.id));
+                            setSelInst(s);
+                          }}
+                        />
+                        <Label>Todas as {greens.length} instâncias GREEN</Label>
+                      </div>
+                    );
+                  })()}
 
                   <div className="max-h-96 overflow-y-auto rounded-md border">
                     {instFiltradas.length === 0 && (
