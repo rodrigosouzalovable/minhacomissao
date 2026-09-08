@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock, Ban } from "lucide-react";
 import CampanhaInstanciasPanel from "@/components/meta/CampanhaInstanciasPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -134,12 +134,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const [openErros, setOpenErros] = useState<boolean>(true);
   const [openFalhas, setOpenFalhas] = useState<boolean>(true);
   const [abrirInstancias, setAbrirInstancias] = useState(false);
+  const [openBlacklist, setOpenBlacklist] = useState(false);
   useEffect(() => {
     if (open && jobId) {
       setOpenEnviados(false);
       setOpenErros(true);
       setOpenFalhas(true);
       setAbrirInstancias(false);
+      setOpenBlacklist(false);
     }
   }, [open, jobId]);
 
@@ -378,6 +380,22 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       setExportando(null);
     }
   };
+  const bloqueadosBlacklist = Array.isArray((job as any).bloqueados_blacklist)
+    ? ((job as any).bloqueados_blacklist as Array<{ telefone: string; nome?: string; credor?: string }>)
+    : [];
+  const baixarBlacklist = async () => {
+    if (bloqueadosBlacklist.length === 0) { toast.error("Nada para exportar"); return; }
+    await exportarParaExcel(
+      bloqueadosBlacklist.map((b) => ({ telefone: b.telefone, nome: b.nome || "", credor: b.credor || "" })),
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "nome", titulo: "Nome" },
+        { chave: "credor", titulo: "Credor" },
+      ],
+      `blacklist_${sanitize(nome)}_${stamp()}`,
+    );
+    toast.success(`${bloqueadosBlacklist.length} números exportados`);
+  };
   const rotuloBaixar = (tipo: string) =>
     exportando === tipo ? `Baixando... ${exportProgresso}` : "Baixar Excel";
 
@@ -550,6 +568,59 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 )}
               </div>
             )}
+
+            {/* Bloqueados pela blacklist — números que não recebem por terem pedido bloqueio */}
+            <div className="text-xs rounded border bg-muted/30 px-2 py-1.5 space-y-1">
+              <button
+                type="button"
+                className="flex items-center gap-2 font-medium"
+                onClick={() => setOpenBlacklist((v) => !v)}
+              >
+                <Ban className="h-3.5 w-3.5 text-destructive" />
+                Bloqueados pela blacklist ({bloqueadosBlacklist.length})
+                <span className="text-muted-foreground font-normal">{openBlacklist ? "▲" : "▼"}</span>
+              </button>
+              {openBlacklist && (
+                bloqueadosBlacklist.length === 0 ? (
+                  <div className="text-[11px] text-muted-foreground">
+                    Nenhum número desta campanha estava na blacklist. (Campanhas antigas podem não ter esse registro.)
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-[11px] text-muted-foreground">
+                      Estes números foram retirados da campanha porque pediram bloqueio — nada será enviado para eles.
+                    </div>
+                    <div className="max-h-40 overflow-auto space-y-0.5 text-[11px]">
+                      {bloqueadosBlacklist.map((b, i) => (
+                        <div key={`${b.telefone}-${i}`} className="flex gap-2">
+                          <code>{b.telefone}</code>
+                          {b.nome && <span className="text-muted-foreground truncate">{b.nome}</span>}
+                          {b.credor && <span className="text-muted-foreground">• {b.credor}</span>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-1.5 pt-0.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[11px]"
+                        onClick={() => copiar(bloqueadosBlacklist.map((b) => b.telefone), "Blacklist")}
+                      >
+                        <Copy className="h-3 w-3 mr-1" /> Copiar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[11px]"
+                        onClick={baixarBlacklist}
+                      >
+                        <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                      </Button>
+                    </div>
+                  </>
+                )
+              )}
+            </div>
             {(() => {
               const motivo = String((job as any).status_motivo || resultado?.statusMotivo || '');
               const isBALock = /business account|#131031|locked/i.test(motivo);

@@ -2080,6 +2080,7 @@ export type Database = {
         Row: {
           atual_instancia: string | null
           atual_telefone: string | null
+          bloqueados_blacklist: Json
           concluido_em: string | null
           created_at: string
           credor: string | null
@@ -2119,6 +2120,7 @@ export type Database = {
         Insert: {
           atual_instancia?: string | null
           atual_telefone?: string | null
+          bloqueados_blacklist?: Json
           concluido_em?: string | null
           created_at?: string
           credor?: string | null
@@ -2158,6 +2160,7 @@ export type Database = {
         Update: {
           atual_instancia?: string | null
           atual_telefone?: string | null
+          bloqueados_blacklist?: Json
           concluido_em?: string | null
           created_at?: string
           credor?: string | null
@@ -4035,12 +4038,15 @@ export type Database = {
       meta_destinatario_supressao: {
         Row: {
           atualizado_em: string
+          caixa_id: string | null
+          caixa_nome: string | null
           contato_nome: string | null
           credor: string | null
           criado_em: string
           falhas: number
           instancia_id: string | null
           motivo: string
+          origem_texto: string | null
           origem_user_id: string | null
           telefone: string
           telefone_sufixo: string
@@ -4048,12 +4054,15 @@ export type Database = {
         }
         Insert: {
           atualizado_em?: string
+          caixa_id?: string | null
+          caixa_nome?: string | null
           contato_nome?: string | null
           credor?: string | null
           criado_em?: string
           falhas?: number
           instancia_id?: string | null
           motivo: string
+          origem_texto?: string | null
           origem_user_id?: string | null
           telefone: string
           telefone_sufixo: string
@@ -4061,12 +4070,15 @@ export type Database = {
         }
         Update: {
           atualizado_em?: string
+          caixa_id?: string | null
+          caixa_nome?: string | null
           contato_nome?: string | null
           credor?: string | null
           criado_em?: string
           falhas?: number
           instancia_id?: string | null
           motivo?: string
+          origem_texto?: string | null
           origem_user_id?: string | null
           telefone?: string
           telefone_sufixo?: string

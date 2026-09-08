@@ -144,6 +144,7 @@ export type CampanhaJob = {
   status_motivo: string | null;
   restantes: number;
   instancias_bloqueadas_run: string[];
+  bloqueados_blacklist: Array<{ telefone: string; nome?: string; credor?: string }>;
   min_seg: number | null;
   max_seg: number | null;
   modo_rajada: boolean;
@@ -266,6 +267,7 @@ function toCampanhaJob(j: any): CampanhaJob {
     status_motivo: j.status_motivo ?? null,
     restantes: Math.max(0, total - enviados - erros),
     instancias_bloqueadas_run: Array.isArray(j.instancias_bloqueadas_run) ? j.instancias_bloqueadas_run : [],
+    bloqueados_blacklist: Array.isArray(j.bloqueados_blacklist) ? j.bloqueados_blacklist : [],
     min_seg: j.min_seg ?? null,
     max_seg: j.max_seg ?? null,
     modo_rajada: j.modo_rajada === true,

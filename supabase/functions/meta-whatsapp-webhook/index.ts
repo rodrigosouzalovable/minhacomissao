@@ -1339,10 +1339,19 @@ serve(async (req) => {
                 if (contatoIdFinal) {
                   const { data: ctBl } = await supabase
                     .from('meta_whatsapp_contatos')
-                    .select('nome, credor')
+                    .select('nome, credor, folder_id')
                     .eq('id', contatoIdFinal)
                     .maybeSingle();
                   dadosContato = ctBl;
+                }
+                let caixaNomeBl: string | null = null;
+                if (dadosContato?.folder_id) {
+                  const { data: fBl } = await supabase
+                    .from('meta_inbox_folders')
+                    .select('nome')
+                    .eq('id', dadosContato.folder_id)
+                    .maybeSingle();
+                  caixaNomeBl = (fBl as any)?.nome ?? null;
                 }
                 await suprimirDestinatario(
                   supabase,
@@ -1353,6 +1362,9 @@ serve(async (req) => {
                     origem_user_id: inst.user_id,
                     contato_nome: dadosContato?.nome ?? null,
                     credor: dadosContato?.credor ?? null,
+                    caixa_id: dadosContato?.folder_id ?? null,
+                    caixa_nome: caixaNomeBl,
+                    origem_texto: String(texto || '').slice(0, 300),
                   },
                 );
                 console.log('[MetaWebhook] contato adicionado à blacklist', { telefone: outroLado });
