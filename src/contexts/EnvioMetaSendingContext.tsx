@@ -827,6 +827,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           folderId: p.folderId ?? null,
           agendarPara: p.agendarPara ?? null,
           credor: p.credor ?? null,
+          riscoQualidadeConfirmado: p.riscoQualidadeConfirmado === true,
+
         },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
