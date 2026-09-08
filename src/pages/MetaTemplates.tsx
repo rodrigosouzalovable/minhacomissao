@@ -121,6 +121,7 @@ export default function MetaTemplates() {
   const [mestres, setMestres] = useState<Mestre[]>([]);
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [templInst, setTemplInst] = useState<TemplateInst[]>([]);
+  const [templMeta, setTemplMeta] = useState<Array<{ instancia_id: string; nome_template: string; status: string | null }>>([]);
   const [loading, setLoading] = useState(true);
 
   // form criar
@@ -154,7 +155,7 @@ export default function MetaTemplates() {
 
   const carregar = async () => {
     setLoading(true);
-    const [m, i, ti, par] = await Promise.all([
+    const [m, i, ti, par, tm] = await Promise.all([
       supabase.from("meta_templates_mestre").select("*").order("criado_em", { ascending: false }),
       supabase
         .from("meta_whatsapp_instances")
@@ -163,7 +164,9 @@ export default function MetaTemplates() {
         .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
+      supabase.from("meta_whatsapp_templates").select("instancia_id, nome_template, status"),
     ]);
+    setTemplMeta(((tm.data as any) || []) as any);
     setMestres((m.data as any) || []);
     const idsParceiro = new Set(((par.data as any) || []).map((r: any) => r.instancia_id as string));
     const lista = ((i.data as any) || []) as Instancia[];
