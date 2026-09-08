@@ -152,6 +152,10 @@ export default function MetaTemplates() {
   const [selInst, setSelInst] = useState<Set<string>>(new Set());
   const [loteMediaUrl, setLoteMediaUrl] = useState<string | null>(null);
   const [buscaInst, setBuscaInst] = useState("");
+  const [mestreDialog, setMestreDialog] = useState<string | null>(null);
+  const [selecaoAutoAberta, setSelecaoAutoAberta] = useState(false);
+  const [buscaMestre, setBuscaMestre] = useState("");
+
 
   const [enviando, setEnviando] = useState(false);
   const { parceiroMeta } = useUserPermissions();
