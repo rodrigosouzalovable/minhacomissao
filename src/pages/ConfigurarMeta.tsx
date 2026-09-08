@@ -575,7 +575,36 @@ export default function ConfigurarMeta() {
         toast.error("Falha ao inscrever webhook: " + (e?.message || e), { id: toastId });
       }
     }
+
+    if (novaInst?.id && isAdmin && form.templates_auto_copiar) {
+      await iniciarCopiaTemplates(novaInst.id);
+    }
   };
+
+  // Monta a fila de cópia gradual dos templates já aprovados em outros números
+  const iniciarCopiaTemplates = async (instanciaId: string) => {
+    const toastId = toast.loading("Montando a fila de templates aprovados...");
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-templates-onboarding-enfileirar", {
+        body: { instancia_id: instanciaId },
+      });
+      if (error) throw new Error(error.message);
+      if ((data as any)?.success === false) throw new Error((data as any)?.error || "falha");
+      const total = Number((data as any)?.enfileirados || 0);
+      if (total === 0) {
+        toast.message("Nenhum modelo aprovado disponível para copiar agora.", { id: toastId });
+      } else {
+        toast.success(
+          `${total} modelos na fila. O envio é gradual (3 no 1º dia, 5 no 2º, 8 no 3º, 10/dia depois) e você recebe aviso no WhatsApp.`,
+          { id: toastId, duration: 9000 },
+        );
+      }
+      carregar();
+    } catch (e: any) {
+      toast.error("Não foi possível montar a fila: " + (e?.message || e), { id: toastId });
+    }
+  };
+
 
   const abrirEdicao = (inst: Instancia) => {
     setEditInst(inst);
