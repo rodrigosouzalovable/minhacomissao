@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DESTINATARIOS = ["62991672674", "62994300880"];
+const DESTINATARIOS = ["62991672674"];
 const DATA_INICIO_EVENTO = "15/07/2026";
 
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
