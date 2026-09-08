@@ -889,6 +889,14 @@ export default function MetaTemplates() {
                             <div className="text-sm font-medium">{inst.nome}</div>
                             <div className="text-xs text-muted-foreground">{inst.display_phone || "-"}</div>
                           </div>
+                          {(() => {
+                            const q = qualidadeDa(inst);
+                            return (
+                              <Badge className={QUALIDADE_CORES[q] || "bg-muted text-muted-foreground"}>
+                                {q === "SEM LEITURA" ? "Sem leitura" : q}
+                              </Badge>
+                            );
+                          })()}
                           {status && (
                             <div className="flex flex-col items-end gap-1 max-w-[260px]">
                               <Badge className={STATUS_COLORS[status] || ""}>{status}</Badge>
