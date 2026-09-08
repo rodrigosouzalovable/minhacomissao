@@ -1622,6 +1622,12 @@ export default function EnvioMeta() {
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
                           <SaudeBadgeStatus status={i.saude_status} />
                           <SaudeBadgeQuality quality={i.saude_quality} />
+                          {(i.saude_quality || "").toUpperCase() !== "GREEN" && instanciaIds.includes(i.id) && (
+                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" /> RISCO — precisa confirmar
+                            </Badge>
+                          )}
+
                           {i.saude_tier && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{i.saude_tier}</Badge>}
                           {String(i.meta_name_status || "").toUpperCase() === "REJECTED" && (
                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
