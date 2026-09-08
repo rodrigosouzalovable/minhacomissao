@@ -930,6 +930,11 @@ export default function MetaTemplates() {
                             <div className="text-sm font-medium">{inst.nome}</div>
                             <div className="text-xs text-muted-foreground">{inst.display_phone || "-"}</div>
                           </div>
+                          {jaPossui && (
+                            <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">
+                              Já possui
+                            </Badge>
+                          )}
                           {(() => {
                             const q = qualidadeDa(inst);
                             return (
