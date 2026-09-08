@@ -248,35 +248,79 @@ async function notificarConclusao(jobId: string, statusFinal: 'concluido' | 'err
 }
 
 
-// Última verificação de saúde disparada para cada job (evita chamar a Meta
-// a cada envio — no máximo 1 rodada de checagem a cada 5 min por job).
-const ultimaChecagemSaude = new Map<string, number>();
+// Intervalo mínimo entre rodadas de checagem de saúde por job (persistido no
+// próprio job para não repetir a cada nova execução da função).
 const INTERVALO_CHECAGEM_SAUDE_MS = 5 * 60_000;
+
+// Dispara a releitura de saúde na Meta SEM esperar resposta: o envio nunca fica
+// parado esperando a Meta. A decisão usa a última leitura já gravada no banco.
+function dispararChecagemSaude(ids: string[]) {
+  for (const id of ids) {
+    fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/check-meta-instance-health`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+      },
+      body: JSON.stringify({ instancia_id: id }),
+    }).catch(() => null);
+  }
+}
+
+function passouIntervalo(ts: string | null | undefined): boolean {
+  const t = ts ? new Date(ts).getTime() : 0;
+  return Date.now() - t > INTERVALO_CHECAGEM_SAUDE_MS;
+}
 
 // Tira do rodízio, no meio da campanha, qualquer número cuja qualidade tenha
 // caído para YELLOW ou RED. Persiste em instancias_bloqueadas_run e avisa o admin.
+// Campanhas iniciadas manualmente com números de qualidade baixa (flag
+// permitir_qualidade_baixa) mantêm esses números até o fim.
 async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: string[]): Promise<string[]> {
   const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
   const candidatas = todas.filter((id) => !bloqueadasRun.includes(id));
   if (candidatas.length === 0) return [...bloqueadasRun];
 
   try {
-    // Atualiza a saúde das instâncias do job, no máximo a cada 5 min.
-    const agora = Date.now();
-    const ultima = ultimaChecagemSaude.get(job.id) || 0;
-    if (agora - ultima > INTERVALO_CHECAGEM_SAUDE_MS) {
-      ultimaChecagemSaude.set(job.id, agora);
-      for (const id of candidatas) {
-        await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/check-meta-instance-health`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          },
-          body: JSON.stringify({ instancia_id: id }),
-        }).catch(() => null);
-      }
+    // Atualiza a saúde das instâncias do job, no máximo a cada 5 min, sem bloquear.
+    let checouAgora = false;
+    if (passouIntervalo(job.saude_checada_em)) {
+      checouAgora = true;
+      job.saude_checada_em = new Date().toISOString();
+      await supabase.from('envio_meta_job')
+        .update({ saude_checada_em: job.saude_checada_em })
+        .eq('id', job.id);
+      dispararChecagemSaude(candidatas);
     }
+
+    // Campanha manual com qualidade baixa liberada: apenas avisa, sem retirar.
+    if (job.permitir_qualidade_baixa === true) {
+      if (!checouAgora) return [...bloqueadasRun];
+
+      try {
+        const { data: baixas } = await supabase
+          .from('meta_whatsapp_instances')
+          .select('id, nome, display_phone, saude_quality')
+          .in('id', candidatas)
+          .in('saude_quality', ['YELLOW', 'RED']);
+        if (baixas?.length) {
+          const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+          for (const i of baixas as any[]) {
+            const label = i.nome || i.display_phone || 'instância';
+            await notificarAdmin(supabase, {
+              tipo: 'envio_meta_qualidade_mantida',
+              mensagem: `⚠️ *Qualidade baixa, mas seguindo no envio*\n\n📱 ${label}\n📉 Qualidade: *${String(i.saude_quality).toUpperCase()}*\n📄 Campanha: ${job.nome_campanha || job.template_nome || '—'}\n\nEste número foi selecionado manualmente, então continua enviando com ritmo reduzido.`,
+              chaveIdempotencia: `envio_meta_qualidade_mantida_${job.id}_${i.id}`,
+              umaVezPorChave: true,
+            });
+          }
+        }
+      } catch (e) {
+        console.error('[tick] aviso de qualidade mantida falhou:', String(e).slice(0, 200));
+      }
+      return [...bloqueadasRun];
+    }
+
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
@@ -288,6 +332,7 @@ async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: strin
       return q === 'YELLOW' || q === 'RED';
     });
     if (ruins.length === 0) return [...bloqueadasRun];
+
 
     const novasBloqueadas = Array.from(new Set([...bloqueadasRun, ...ruins.map((i: any) => i.id)]));
     await supabase.from('envio_meta_job')
@@ -343,16 +388,17 @@ function motivoTemporario(motivo: string): boolean {
   );
 }
 
-const ultimaReabilitacao = new Map<string, number>();
-
 // Recoloca no rodízio as instâncias que saíram por motivo temporário e que a
 // Meta agora confirma disponíveis e GREEN. Retorna a lista de bloqueadas
-// atualizada. YELLOW/RED e bloqueios reais continuam fora.
+// atualizada. YELLOW/RED e bloqueios reais continuam fora (salvo campanha
+// iniciada manualmente com qualidade baixa liberada).
 async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]): Promise<string[]> {
   if (bloqueadasRun.length === 0) return bloqueadasRun;
-  const agora = Date.now();
-  if (agora - (ultimaReabilitacao.get(job.id) || 0) < INTERVALO_CHECAGEM_SAUDE_MS) return bloqueadasRun;
-  ultimaReabilitacao.set(job.id, agora);
+  if (!passouIntervalo(job.reabilitacao_checada_em)) return bloqueadasRun;
+  job.reabilitacao_checada_em = new Date().toISOString();
+  await supabase.from('envio_meta_job')
+    .update({ reabilitacao_checada_em: job.reabilitacao_checada_em })
+    .eq('id', job.id);
 
   try {
     const falhas: Record<string, any> =
@@ -367,16 +413,9 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
     });
     if (candidatas.length === 0) return bloqueadasRun;
 
-    for (const id of candidatas) {
-      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/check-meta-instance-health`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({ instancia_id: id }),
-      }).catch(() => null);
-    }
+    // Releitura na Meta em paralelo, sem esperar: usa o estado já persistido.
+    dispararChecagemSaude(candidatas);
+
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
@@ -386,7 +425,8 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
     const liberadas = (insts || []).filter((i: any) => {
       if (i.ativo === false) return false;
       const q = String(i.saude_quality || '').toUpperCase();
-      if (q !== 'GREEN') return false;
+      if (q !== 'GREEN' && job.permitir_qualidade_baixa !== true) return false;
+
       const st = String(i.saude_status || '').toUpperCase();
       if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x))) return false;
       if (String(i.estado_pool || '') === 'restrita') return false;
@@ -515,7 +555,7 @@ async function processarItem(job: any): Promise<ItemResult> {
       user_id: job.user_id,
       excluir_id: job.ultima_instancia_id || null,
       excluir_ids: exclItem,
-      ignorar_pausa_qualidade: job.modo_rajada === true,
+      ignorar_pausa_qualidade: job.modo_rajada === true || job.permitir_qualidade_baixa === true,
       contexto: 'campanha',
     }),
 

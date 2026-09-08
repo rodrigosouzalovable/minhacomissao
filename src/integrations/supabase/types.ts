@@ -2097,7 +2097,10 @@ export type Database = {
           modo_rajada: boolean
           msgs_por_segundo: number
           nome_campanha: string | null
+          permitir_qualidade_baixa: boolean
           proximo_em: string | null
+          reabilitacao_checada_em: string | null
+          saude_checada_em: string | null
           status: string
           status_motivo: string | null
           template_id: string | null
@@ -2132,7 +2135,10 @@ export type Database = {
           modo_rajada?: boolean
           msgs_por_segundo?: number
           nome_campanha?: string | null
+          permitir_qualidade_baixa?: boolean
           proximo_em?: string | null
+          reabilitacao_checada_em?: string | null
+          saude_checada_em?: string | null
           status?: string
           status_motivo?: string | null
           template_id?: string | null
@@ -2167,7 +2173,10 @@ export type Database = {
           modo_rajada?: boolean
           msgs_por_segundo?: number
           nome_campanha?: string | null
+          permitir_qualidade_baixa?: boolean
           proximo_em?: string | null
+          reabilitacao_checada_em?: string | null
+          saude_checada_em?: string | null
           status?: string
           status_motivo?: string | null
           template_id?: string | null

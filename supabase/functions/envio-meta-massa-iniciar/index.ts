@@ -142,6 +142,20 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Campanha iniciada manualmente com números de qualidade baixa marcados de
+    // propósito: eles permanecem no rodízio até o fim (não saem por YELLOW/RED).
+    let permitirQualidadeBaixa = false;
+    try {
+      const { data: qRows } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, saude_quality')
+        .in('id', instanciaIdsFiltradas);
+      permitirQualidadeBaixa = !agendarParaMs && (qRows || []).some(
+        (r: any) => String(r.saude_quality || '').toUpperCase() !== 'GREEN',
+      );
+    } catch (_) { /* não bloqueia início */ }
+
+
 
     // Remove instâncias em quarentena por queda de qualidade
     // (ignorado quando a chave "Liberar YELLOW/RED" está ligada).
@@ -309,7 +323,9 @@ Deno.serve(async (req) => {
         msgs_por_segundo: msgsPorSegundo,
         folder_id: folderId,
         credor: credorCampanha,
+        permitir_qualidade_baixa: permitirQualidadeBaixa,
       })
+
 
       .select('id')
       .single();

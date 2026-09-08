@@ -3,7 +3,7 @@
 // Fórmula: quality × tier × idade × (1 - uso_hoje/cota_efetiva)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
-import { enviadosHojeBrt, enviadosUltimaHora, tetoBase } from '../_shared/meta-freio.ts';
+import { enviadosHojeBrtLote, tetoBase } from '../_shared/meta-freio.ts';
 
 
 const corsHeaders = {
@@ -144,6 +144,12 @@ Deno.serve(async (req) => {
     // Cotas por BM (janela móvel de 24h)
     const cotasBm = await carregarCotasBm(supabase);
 
+    // Contagem de envios do dia/última hora de TODAS as candidatas em uma só
+    // consulta (antes eram 2 consultas por instância, em fila — atrasava o envio).
+    const usoMap = await enviadosHojeBrtLote(supabase, (insts || []).map((i: any) => i.id));
+    const usoDia = (id: string) => usoMap.get(id) || 0;
+    const usoHora = (id: string) => usoMap.get(`hora:${id}`) || 0;
+
 
     // Contagem hoje (fallback: enviados_hoje da própria row)
     const candidates: any[] = [];
@@ -250,7 +256,7 @@ Deno.serve(async (req) => {
       if (freioAtivo && !semTeto) {
         const freio = freioMap.get(inst.id);
         const tetoDia = freio ? Number(freio.teto_efetivo) : tetoBase(inst, cfg, fase);
-        const enviadosDia = await enviadosHojeBrt(supabase, inst.id);
+        const enviadosDia = usoDia(inst.id);
         if (tetoDia <= 0) {
           descartados.push(`${rotulo}: freio de qualidade — ${freio?.motivo_reducao || 'sem cota hoje'}`);
           continue;
@@ -259,7 +265,7 @@ Deno.serve(async (req) => {
           descartados.push(`${rotulo}: teto diário atingido (${enviadosDia}/${tetoDia})`);
           continue;
         }
-        const naHora = await enviadosUltimaHora(supabase, inst.id);
+        const naHora = usoHora(inst.id);
         if (naHora >= cotaMaxHora) {
           descartados.push(`${rotulo}: teto por hora atingido (${naHora}/${cotaMaxHora})`);
           continue;
@@ -268,7 +274,7 @@ Deno.serve(async (req) => {
         // Única trava restante: a cota real da Meta do número.
         const cotaMeta = Number(inst.tier_diario || 0);
         if (cotaMeta > 0) {
-          const enviadosDia = await enviadosHojeBrt(supabase, inst.id);
+          const enviadosDia = usoDia(inst.id);
           if (enviadosDia >= cotaMeta) {
             descartados.push(`${rotulo}: cota da Meta atingida (${enviadosDia}/${cotaMeta})`);
             continue;
@@ -291,7 +297,7 @@ Deno.serve(async (req) => {
         const cotaMetaG = Number(inst.tier_diario || 0);
         if (cotaMetaG > 0) {
           const tetoG = Math.max(1, Math.floor(cotaMetaG * fatorGuardiao));
-          const enviadosDiaG = await enviadosHojeBrt(supabase, inst.id);
+          const enviadosDiaG = usoDia(inst.id);
           if (enviadosDiaG >= tetoG) {
             descartados.push(
               `${rotulo}: ritmo reduzido pelo guardião (${enviadosDiaG}/${tetoG}) — ${freioG?.motivo_reducao || 'resposta baixa'}`,
@@ -299,7 +305,7 @@ Deno.serve(async (req) => {
             continue;
           }
         }
-        const naHoraG = await enviadosUltimaHora(supabase, inst.id);
+        const naHoraG = usoHora(inst.id);
         const limiteHoraG = Math.max(1, Math.floor(cotaMaxHora * fatorGuardiao));
         if (naHoraG >= limiteHoraG) {
           descartados.push(`${rotulo}: ritmo por hora reduzido pelo guardião (${naHoraG}/${limiteHoraG})`);
