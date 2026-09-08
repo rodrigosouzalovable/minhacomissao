@@ -157,3 +157,9 @@ verify_jwt = false
 
 [functions.ume-lote-tick]
 verify_jwt = false
+
+[functions.meta-templates-onboarding-enfileirar]
+verify_jwt = false
+
+[functions.meta-templates-onboarding-tick]
+verify_jwt = false
