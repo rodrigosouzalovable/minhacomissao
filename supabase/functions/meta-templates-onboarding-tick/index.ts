@@ -194,22 +194,28 @@ Deno.serve(async (req) => {
       if (inst.templates_auto_status === "PAUSADO_REJEICOES") continue;
       if (inst.templates_auto_pausado_ate && new Date(inst.templates_auto_pausado_ate) > new Date()) continue;
 
-      // Dose diária conforme o dia de aquecimento do número
-      const iniciado = inst.templates_auto_iniciado_em ? new Date(inst.templates_auto_iniciado_em) : new Date();
-      const diasCorridos = Math.floor((Date.now() - iniciado.getTime()) / 86400000);
-      const dose =
-        diasCorridos <= 0 ? Number(cfg.qtd_dia_1 || 3)
-        : diasCorridos === 1 ? Number(cfg.qtd_dia_2 || 5)
-        : diasCorridos === 2 ? Number(cfg.qtd_dia_3 || 8)
-        : Number(cfg.qtd_dia_padrao || 10);
+      // Dose diária conforme o dia de aquecimento do número.
+      // Quando sem_limite_diario = true, todos os modelos marcados podem entrar no
+      // mesmo dia — a proteção fica no intervalo de 15–25 min entre um e outro.
+      const semLimiteDiario = (cfg as any).sem_limite_diario !== false;
+      if (!semLimiteDiario) {
+        const iniciado = inst.templates_auto_iniciado_em ? new Date(inst.templates_auto_iniciado_em) : new Date();
+        const diasCorridos = Math.floor((Date.now() - iniciado.getTime()) / 86400000);
+        const dose =
+          diasCorridos <= 0 ? Number(cfg.qtd_dia_1 || 3)
+          : diasCorridos === 1 ? Number(cfg.qtd_dia_2 || 5)
+          : diasCorridos === 2 ? Number(cfg.qtd_dia_3 || 8)
+          : Number(cfg.qtd_dia_padrao || 10);
 
-      const inicioDia = new Date(`${dia}T00:00:00-03:00`).toISOString();
-      const { count: enviadosHoje } = await supabase
-        .from("meta_templates_onboarding_fila")
-        .select("id", { count: "exact", head: true })
-        .eq("instancia_id", inst.id)
-        .gte("enviado_em", inicioDia);
-      if ((enviadosHoje || 0) >= dose) continue;
+        const inicioDia = new Date(`${dia}T00:00:00-03:00`).toISOString();
+        const { count: enviadosHoje } = await supabase
+          .from("meta_templates_onboarding_fila")
+          .select("id", { count: "exact", head: true })
+          .eq("instancia_id", inst.id)
+          .gte("enviado_em", inicioDia);
+        if ((enviadosHoje || 0) >= dose) continue;
+      }
+
 
       const { data: proximo } = await supabase
         .from("meta_templates_onboarding_fila")
