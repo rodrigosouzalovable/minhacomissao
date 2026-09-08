@@ -303,9 +303,11 @@ async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: strin
       .in('id', candidatas);
 
     const ruins = (insts || []).filter((i: any) => {
+      if (riscoAceito.includes(i.id)) return false;
       const q = String(i.saude_quality || '').toUpperCase();
       return q === 'YELLOW' || q === 'RED';
     });
+
     if (ruins.length === 0) return [...bloqueadasRun];
 
 
