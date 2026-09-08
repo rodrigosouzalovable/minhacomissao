@@ -362,8 +362,8 @@ function motivoTemporario(motivo: string): boolean {
 
 // Recoloca no rodízio as instâncias que saíram por motivo temporário e que a
 // Meta agora confirma disponíveis e GREEN. Retorna a lista de bloqueadas
-// atualizada. YELLOW/RED e bloqueios reais continuam fora (salvo campanha
-// iniciada manualmente com qualidade baixa liberada).
+// atualizada. YELLOW/RED e bloqueios reais continuam sempre fora.
+
 async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]): Promise<string[]> {
   if (bloqueadasRun.length === 0) return bloqueadasRun;
   if (!passouIntervalo(job.reabilitacao_checada_em)) return bloqueadasRun;
