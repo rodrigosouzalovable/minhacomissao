@@ -44,6 +44,8 @@ interface Mestre {
   cabecalho_media_url?: string | null;
   cabecalho_media_mime?: string | null;
   criado_em: string;
+  injetar_em_novos?: boolean;
+
 
 }
 
