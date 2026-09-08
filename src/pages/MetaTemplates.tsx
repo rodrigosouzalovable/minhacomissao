@@ -12,7 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { humanizarErroTemplate } from "@/lib/humanizarErroTemplate";
-import { Loader2, Plus, Send, Trash2, RefreshCw, X } from "lucide-react";
+import { Loader2, Plus, Send, Trash2, RefreshCw, X, Search } from "lucide-react";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import BusinessManagersManager from "@/components/meta/BusinessManagersManager";
 
@@ -135,23 +136,32 @@ export default function MetaTemplates() {
   const [selMestre, setSelMestre] = useState<string>("");
   const [selInst, setSelInst] = useState<Set<string>>(new Set());
   const [loteMediaUrl, setLoteMediaUrl] = useState<string | null>(null);
+  const [buscaInst, setBuscaInst] = useState("");
 
   const [enviando, setEnviando] = useState(false);
+  const { parceiroMeta } = useUserPermissions();
 
   const carregar = async () => {
     setLoading(true);
-    const [m, i, ti] = await Promise.all([
+    const [m, i, ti, par] = await Promise.all([
       supabase.from("meta_templates_mestre").select("*").order("criado_em", { ascending: false }),
-      supabase.from("meta_whatsapp_instances").select("id, nome, display_phone, ativo, waba_id").order("nome"),
+      supabase
+        .from("meta_whatsapp_instances")
+        .select("id, nome, display_phone, ativo, waba_id")
+        .eq("provider", "meta")
+        .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
+      supabase.from("meta_instance_parceiros").select("instancia_id"),
     ]);
     setMestres((m.data as any) || []);
-    setInstancias((i.data as any) || []);
+    const idsParceiro = new Set(((par.data as any) || []).map((r: any) => r.instancia_id as string));
+    const lista = ((i.data as any) || []) as Instancia[];
+    setInstancias(parceiroMeta ? lista : lista.filter((x) => !idsParceiro.has(x.id)));
     setTemplInst((ti.data as any) || []);
     setLoading(false);
   };
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => { carregar(); }, [parceiroMeta]);
 
   useEffect(() => {
     const ch = supabase.channel("meta-templates-inst")
@@ -372,6 +382,17 @@ export default function MetaTemplates() {
   };
 
   const instAtivas = instancias.filter((i) => i.ativo);
+  const instFiltradas = useMemo(() => {
+    const termo = buscaInst.trim().toLowerCase();
+    if (!termo) return instAtivas;
+    const digitos = termo.replace(/\D/g, "");
+    return instAtivas.filter((i) => {
+      const nomeOk = (i.nome || "").toLowerCase().includes(termo);
+      const fone = String(i.display_phone || "").replace(/\D/g, "");
+      const foneOk = digitos.length >= 3 && fone.includes(digitos);
+      return nomeOk || foneOk;
+    });
+  }, [instAtivas, buscaInst]);
 
   return (
     <AppLayout>
@@ -682,19 +703,34 @@ export default function MetaTemplates() {
                 })()}
 
                 <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={buscaInst}
+                      onChange={(e) => setBuscaInst(e.target.value)}
+                      placeholder="Buscar por nome ou número"
+                      className="pl-8"
+                    />
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <Checkbox
-                      checked={selInst.size === instAtivas.length && instAtivas.length > 0}
+                      checked={instFiltradas.length > 0 && instFiltradas.every((i) => selInst.has(i.id))}
                       onCheckedChange={(v) => {
-                        if (v) setSelInst(new Set(instAtivas.map((i) => i.id)));
-                        else setSelInst(new Set());
+                        const s = new Set(selInst);
+                        if (v) instFiltradas.forEach((i) => s.add(i.id));
+                        else instFiltradas.forEach((i) => s.delete(i.id));
+                        setSelInst(s);
                       }}
                     />
-                    <Label>Todas as {instAtivas.length} instâncias ativas</Label>
+                    <Label>Todas as {instFiltradas.length} instâncias ativas</Label>
                   </div>
 
                   <div className="max-h-96 overflow-y-auto rounded-md border">
-                    {instAtivas.map((inst) => {
+                    {instFiltradas.length === 0 && (
+                      <p className="p-3 text-sm text-muted-foreground">Nenhuma instância encontrada.</p>
+                    )}
+                    {instFiltradas.map((inst) => {
                       const t = templInst.find((x) => x.instancia_id === inst.id && x.template_mestre_id === selMestre);
                       const status = t?.status;
                       return (
