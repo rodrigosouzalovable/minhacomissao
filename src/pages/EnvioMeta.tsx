@@ -2301,6 +2301,70 @@ export default function EnvioMeta() {
     </Dialog>
 
     <AlertDialog
+      open={riscoDlg.open}
+      onOpenChange={(o) => {
+        if (!o && riscoDlg.resolver) {
+          riscoDlg.resolver(false);
+          setRiscoDlg((p) => ({ ...p, open: false, resolver: null }));
+        }
+      }}
+    >
+      <AlertDialogContent className="max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            ⚠️ Números com qualidade baixa na seleção
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 pt-2">
+              <div className="text-sm">
+                Você marcou {riscoDlg.numeros.length} número(s) que não estão com qualidade GREEN.
+                Enviar por eles aumenta o risco de queda de qualidade, bloqueio ou banimento pela Meta.
+              </div>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1 max-h-48 overflow-auto">
+                {riscoDlg.numeros.map((n) => (
+                  <div key={n.id} className="flex justify-between gap-2">
+                    <span className="truncate">{n.nome}</span>
+                    <strong className={n.qualidade === "RED" ? "text-red-600" : "text-amber-600"}>{n.qualidade}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Se a qualidade cair ainda mais durante a campanha, o número sai do envio automaticamente.
+              </div>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={riscoDlg.ciente}
+                  onCheckedChange={(v) => setRiscoDlg((p) => ({ ...p, ciente: v === true }))}
+                />
+                <span>Estou ciente do risco e quero enviar por esses números.</span>
+              </label>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel
+            onClick={() => {
+              riscoDlg.resolver?.(false);
+              setRiscoDlg((p) => ({ ...p, open: false, resolver: null }));
+            }}
+          >
+            Cancelar
+          </AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!riscoDlg.ciente}
+            onClick={() => {
+              riscoDlg.resolver?.(true);
+              setRiscoDlg((p) => ({ ...p, open: false, resolver: null }));
+            }}
+          >
+            Confirmar e continuar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+
+    <AlertDialog
       open={custoDlg.open}
       onOpenChange={(o) => {
         if (!o && custoDlg.resolver) {
