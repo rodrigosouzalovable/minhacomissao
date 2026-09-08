@@ -271,9 +271,17 @@ export default function MetaTemplates() {
 
   const validarSlug = (v: string) => /^[a-z0-9_]+$/.test(v);
 
+  const nomeDuplicado = nome.trim()
+    ? mestres.find((m) => (m.nome || "").toLowerCase() === nome.trim().toLowerCase()) || null
+    : null;
+
   const salvarMestre = async () => {
     if (!validarSlug(nome)) {
       toast.error("Nome deve conter apenas letras minúsculas, números e sublinhado (ex: boleto_vencimento)");
+      return;
+    }
+    if (nomeDuplicado) {
+      toast.error(`Já existe um modelo com o nome "${nomeDuplicado.nome}" — escolha outro nome`);
       return;
     }
     if (!corpo.trim()) { toast.error("Corpo é obrigatório"); return; }
