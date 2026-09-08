@@ -481,6 +481,8 @@ export default function ConfigurarMeta() {
     access_token: "",
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
+    templates_auto_copiar: false,
+
   };
 
   const atualizarDuplicado = async () => {
@@ -583,6 +585,8 @@ export default function ConfigurarMeta() {
       access_token: "",
       messaging_limit_manual: inst.messaging_limit_manual || "__auto__",
       aquecimento_meta_ativo: !!inst.aquecimento_meta_ativo,
+      templates_auto_copiar: !!inst.templates_auto_copiar,
+
     });
   };
 
