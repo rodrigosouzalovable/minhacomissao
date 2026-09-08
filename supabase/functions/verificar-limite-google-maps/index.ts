@@ -47,9 +47,9 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    const { data: isAdmin } = await supabase.rpc("pode_google_maps_leads", { _user_id: user.id });
     if (!isAdmin) {
-      return new Response(JSON.stringify({ error: "Apenas admin" }), {
+      return new Response(JSON.stringify({ error: "Sem permissão para o Google Maps Leads" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

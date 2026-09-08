@@ -290,7 +290,7 @@ const App = () => (
             <Route path="/admin/meta-templates" element={<PermissionRoute><MetaTemplates /></PermissionRoute>} />
             <Route path="/admin/cotacoes" element={<AdminRoute><Cotacoes /></AdminRoute>} />
             <Route path="/admin/lembrete-meta" element={<AdminRoute><LembreteMeta /></AdminRoute>} />
-            <Route path="/admin/google-maps-leads" element={<AdminRoute><GoogleMapsLeads /></AdminRoute>} />
+            <Route path="/admin/google-maps-leads" element={<PermissionRoute><GoogleMapsLeads /></PermissionRoute>} />
             <Route path="/admin/ponto" element={<AdminRoute><PontoAdmin /></AdminRoute>} />
              <Route path="/admin/blacklist" element={<ProtectedRoute><Blacklist /></ProtectedRoute>} />
               <Route path="/admin/dominios" element={<AdminRoute><AdminDominios /></AdminRoute>} />
