@@ -1094,6 +1094,8 @@ export default function EnvioMeta() {
       msgsPorSegundo: modoRajada ? Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1)) : undefined,
       agendarPara: agendarParaISO,
       credor: credorPadrao,
+      riscoQualidadeConfirmado: arriscadas.length > 0,
+
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
