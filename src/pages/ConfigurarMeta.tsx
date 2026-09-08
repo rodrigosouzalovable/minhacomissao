@@ -54,6 +54,10 @@ type Instancia = {
   saude_checked_at?: string | null;
   messaging_limit_manual?: string | null;
   aquecimento_meta_ativo?: boolean | null;
+  templates_auto_copiar?: boolean | null;
+  templates_auto_status?: string | null;
+  templates_auto_pausado_ate?: string | null;
+
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
   meta_bm_id?: string | null;
@@ -265,6 +269,7 @@ export default function ConfigurarMeta() {
     access_token: "",
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
+    templates_auto_copiar: false,
   });
   const [salvandoEdit, setSalvandoEdit] = useState(false);
   const [form, setForm] = useState({
@@ -275,7 +280,9 @@ export default function ConfigurarMeta() {
     access_token: "",
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
+    templates_auto_copiar: false,
   });
+
 
   const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
 
