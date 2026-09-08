@@ -426,6 +426,33 @@ export type Database = {
         }
         Relationships: []
       }
+      apify_uso_mensal: {
+        Row: {
+          alerta_percentual: number
+          created_at: string
+          limite: number
+          mes_referencia: string
+          total_chamadas: number
+          updated_at: string
+        }
+        Insert: {
+          alerta_percentual?: number
+          created_at?: string
+          limite?: number
+          mes_referencia: string
+          total_chamadas?: number
+          updated_at?: string
+        }
+        Update: {
+          alerta_percentual?: number
+          created_at?: string
+          limite?: number
+          mes_referencia?: string
+          total_chamadas?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       aquecimento_autosave_config: {
         Row: {
           ancora_probability: number
@@ -2603,6 +2630,11 @@ export type Database = {
           endereco: string | null
           enviado_whatsapp: boolean
           id: string
+          instagram_atualizado_em: string | null
+          instagram_seguidores: number | null
+          instagram_site: string | null
+          instagram_url: string | null
+          instagram_username: string | null
           latitude: number | null
           longitude: number | null
           nome: string
@@ -2625,6 +2657,11 @@ export type Database = {
           endereco?: string | null
           enviado_whatsapp?: boolean
           id?: string
+          instagram_atualizado_em?: string | null
+          instagram_seguidores?: number | null
+          instagram_site?: string | null
+          instagram_url?: string | null
+          instagram_username?: string | null
           latitude?: number | null
           longitude?: number | null
           nome: string
@@ -2647,6 +2684,11 @@ export type Database = {
           endereco?: string | null
           enviado_whatsapp?: boolean
           id?: string
+          instagram_atualizado_em?: string | null
+          instagram_seguidores?: number | null
+          instagram_site?: string | null
+          instagram_url?: string | null
+          instagram_username?: string | null
           latitude?: number | null
           longitude?: number | null
           nome?: string
@@ -3087,6 +3129,39 @@ export type Database = {
           importado_por?: string
           nome_arquivo?: string
           total_registros?: number
+        }
+        Relationships: []
+      }
+      instagram_perfil_cache: {
+        Row: {
+          atualizado_em: string
+          biografia: string | null
+          created_at: string
+          erro: string | null
+          nome_completo: string | null
+          seguidores: number | null
+          site: string | null
+          username: string
+        }
+        Insert: {
+          atualizado_em?: string
+          biografia?: string | null
+          created_at?: string
+          erro?: string | null
+          nome_completo?: string | null
+          seguidores?: number | null
+          site?: string | null
+          username: string
+        }
+        Update: {
+          atualizado_em?: string
+          biografia?: string | null
+          created_at?: string
+          erro?: string | null
+          nome_completo?: string | null
+          seguidores?: number | null
+          site?: string | null
+          username?: string
         }
         Relationships: []
       }
@@ -9681,6 +9756,20 @@ export type Database = {
           ultima_paga_data: string
           ultima_paga_numero: number
           ultima_pendente_data: string
+        }[]
+      }
+      apify_incrementar_uso: { Args: { _qtd?: number }; Returns: number }
+      apify_status_uso: {
+        Args: never
+        Returns: {
+          alerta_percentual: number
+          data_reset: string
+          limite: number
+          mes_referencia: string
+          nivel: string
+          percentual_consumido: number
+          pode_buscar: boolean
+          total_chamadas: number
         }[]
       }
       atendente_por_telefone_consulta: {
