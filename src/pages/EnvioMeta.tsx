@@ -1470,7 +1470,7 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona apenas instâncias sem problema: conectadas, nome aprovado, BM com saldo e qualidade GREEN. YELLOW/RED/sem leitura ficam de fora — se você marcar à mão, elas permanecem na campanha até o fim, com ritmo reduzido."
+              title="Seleciona apenas instâncias sem problema: conectadas, nome aprovado, BM com saldo e qualidade GREEN. YELLOW/RED/sem leitura ficam de fora — se você marcar à mão, será preciso confirmar o aviso de risco antes de iniciar."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
                 const boasInstancias = instanciasVisiveis.filter(instanciaSemProblema);
