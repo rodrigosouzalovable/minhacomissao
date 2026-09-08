@@ -52,7 +52,16 @@ interface Instancia {
   display_phone: string | null;
   ativo: boolean;
   waba_id: string | null;
+  saude_quality: string | null;
 }
+
+const QUALIDADE_CORES: Record<string, string> = {
+  GREEN: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+  YELLOW: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+  RED: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
+};
+
+const qualidadeDa = (i: Instancia): string => (i.saude_quality || "").toUpperCase() || "SEM LEITURA";
 
 interface TemplateInst {
   id: string;
@@ -149,7 +158,7 @@ export default function MetaTemplates() {
       supabase.from("meta_templates_mestre").select("*").order("criado_em", { ascending: false }),
       supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, ativo, waba_id")
+        .select("id, nome, display_phone, ativo, waba_id, saude_quality")
         .eq("provider", "meta")
         .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
@@ -841,18 +850,23 @@ export default function MetaTemplates() {
                     />
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={instFiltradas.length > 0 && instFiltradas.every((i) => selInst.has(i.id))}
-                      onCheckedChange={(v) => {
-                        const s = new Set(selInst);
-                        if (v) instFiltradas.forEach((i) => s.add(i.id));
-                        else instFiltradas.forEach((i) => s.delete(i.id));
-                        setSelInst(s);
-                      }}
-                    />
-                    <Label>Todas as {instFiltradas.length} instâncias ativas</Label>
-                  </div>
+                  {(() => {
+                    const greens = instFiltradas.filter((i) => qualidadeDa(i) === "GREEN");
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={greens.length > 0 && greens.every((i) => selInst.has(i.id))}
+                          onCheckedChange={(v) => {
+                            const s = new Set(selInst);
+                            if (v) greens.forEach((i) => s.add(i.id));
+                            else greens.forEach((i) => s.delete(i.id));
+                            setSelInst(s);
+                          }}
+                        />
+                        <Label>Todas as {greens.length} instâncias GREEN</Label>
+                      </div>
+                    );
+                  })()}
 
                   <div className="max-h-96 overflow-y-auto rounded-md border">
                     {instFiltradas.length === 0 && (
@@ -875,6 +889,14 @@ export default function MetaTemplates() {
                             <div className="text-sm font-medium">{inst.nome}</div>
                             <div className="text-xs text-muted-foreground">{inst.display_phone || "-"}</div>
                           </div>
+                          {(() => {
+                            const q = qualidadeDa(inst);
+                            return (
+                              <Badge className={QUALIDADE_CORES[q] || "bg-muted text-muted-foreground"}>
+                                {q === "SEM LEITURA" ? "Sem leitura" : q}
+                              </Badge>
+                            );
+                          })()}
                           {status && (
                             <div className="flex flex-col items-end gap-1 max-w-[260px]">
                               <Badge className={STATUS_COLORS[status] || ""}>{status}</Badge>
