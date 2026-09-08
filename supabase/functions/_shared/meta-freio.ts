@@ -142,3 +142,33 @@ export function suffix8(t: string): string {
   const d = String(t || "").replace(/\D+/g, "");
   return d.length >= 8 ? d.slice(-8) : d;
 }
+
+/** Envios (saída) do dia BRT para VÁRIAS instâncias em uma só consulta. */
+export async function enviadosHojeBrtLote(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<Map<string, number>> {
+  const mapa = new Map<string, number>();
+  if (!ids.length) return mapa;
+  const nowBrt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const offsetMs = Date.now() - nowBrt.getTime();
+  const inicioBrt = new Date(nowBrt);
+  inicioBrt.setHours(0, 0, 0, 0);
+  const desde = new Date(inicioBrt.getTime() + offsetMs).toISOString();
+  const { data } = await supabase
+    .from("meta_whatsapp_mensagens")
+    .select("instancia_id, criado_em")
+    .in("instancia_id", ids)
+    .eq("direcao", "saida")
+    .gte("criado_em", desde)
+    .limit(50000);
+  const umaHoraAtras = Date.now() - 3600 * 1000;
+  for (const r of (data || []) as any[]) {
+    mapa.set(r.instancia_id, (mapa.get(r.instancia_id) || 0) + 1);
+    if (new Date(r.criado_em).getTime() >= umaHoraAtras) {
+      const k = `hora:${r.instancia_id}`;
+      mapa.set(k, (mapa.get(k) || 0) + 1);
+    }
+  }
+  return mapa;
+}
