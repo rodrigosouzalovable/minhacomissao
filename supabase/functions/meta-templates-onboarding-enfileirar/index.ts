@@ -71,9 +71,25 @@ Deno.serve(async (req) => {
       contagem.set(r.template_mestre_id, (contagem.get(r.template_mestre_id) || 0) + 1);
     }
 
-    const candidatos = Array.from(contagem.entries())
-      .filter(([id]) => !jaNoNumero.has(id))
-      .sort((a, b) => b[1] - a[1]);
+    // Se o admin marcou modelos específicos ("injetar em números novos"),
+    // a fila usa exatamente esses — na ordem da lista. Sem marcação, mantém
+    // a escolha automática pelos mais aprovados em outros números.
+    const { data: marcados } = await supabase
+      .from("meta_templates_mestre")
+      .select("id")
+      .eq("injetar_em_novos", true)
+      .order("criado_em", { ascending: true });
+
+    const listaMarcados = ((marcados as any[]) || []).map((r) => r.id as string);
+
+    const candidatos: [string, number][] = listaMarcados.length > 0
+      ? listaMarcados
+          .filter((id) => !jaNoNumero.has(id))
+          .map((id, idx) => [id, listaMarcados.length - idx] as [string, number])
+      : Array.from(contagem.entries())
+          .filter(([id]) => !jaNoNumero.has(id))
+          .sort((a, b) => b[1] - a[1]);
+
 
     if (candidatos.length === 0) {
       await supabase
@@ -117,7 +133,7 @@ Deno.serve(async (req) => {
         `Número: *${inst.nome || inst.display_phone || instanciaId}*\n` +
         (bm ? `${bm}\n` : "") +
         `Modelos na fila: *${rows.length}*\n\n` +
-        `Envio gradual: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez com 15–25 min de intervalo, das 09h às 18h e nunca no domingo.`,
+        `Envio gradual: 1 por vez com 15–25 min de intervalo, das 09h às 18h e nunca no domingo.`,
     });
 
     return json({ success: true, enfileirados: rows.length });

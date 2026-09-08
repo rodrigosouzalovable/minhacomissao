@@ -12,7 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { humanizarErroTemplate } from "@/lib/humanizarErroTemplate";
-import { Loader2, Plus, Send, Trash2, RefreshCw, X, Search } from "lucide-react";
+import { Loader2, Plus, Send, Trash2, RefreshCw, X, Search, Eye, Zap } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import BusinessManagersManager from "@/components/meta/BusinessManagersManager";
@@ -43,6 +44,8 @@ interface Mestre {
   cabecalho_media_url?: string | null;
   cabecalho_media_mime?: string | null;
   criado_em: string;
+  injetar_em_novos?: boolean;
+
 
 }
 
@@ -149,6 +152,10 @@ export default function MetaTemplates() {
   const [selInst, setSelInst] = useState<Set<string>>(new Set());
   const [loteMediaUrl, setLoteMediaUrl] = useState<string | null>(null);
   const [buscaInst, setBuscaInst] = useState("");
+  const [mestreDialog, setMestreDialog] = useState<string | null>(null);
+  const [selecaoAutoAberta, setSelecaoAutoAberta] = useState(false);
+  const [buscaMestre, setBuscaMestre] = useState("");
+
 
   const [enviando, setEnviando] = useState(false);
   const { parceiroMeta } = useUserPermissions();
@@ -456,6 +463,51 @@ export default function MetaTemplates() {
     toast.success("Excluído");
     carregar();
   };
+
+  // Marca/desmarca o modelo para injeção automática em números novos
+  const alternarInjecao = async (id: string, valor: boolean) => {
+    const { error } = await supabase
+      .from("meta_templates_mestre")
+      .update({ injetar_em_novos: valor })
+      .eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    setMestres((prev) => prev.map((m) => (m.id === id ? { ...m, injetar_em_novos: valor } : m)));
+    toast.success(valor ? "Marcado para números novos" : "Removido dos números novos");
+  };
+
+  const marcarTodosInjecao = async (valor: boolean) => {
+    const ids = mestres.map((m) => m.id);
+    if (ids.length === 0) return;
+    const { error } = await supabase
+      .from("meta_templates_mestre")
+      .update({ injetar_em_novos: valor })
+      .in("id", ids);
+    if (error) { toast.error(error.message); return; }
+    setMestres((prev) => prev.map((m) => ({ ...m, injetar_em_novos: valor })));
+    toast.success(valor ? "Todos marcados" : "Marcação limpa");
+  };
+
+  // Monta os componentes de prévia de um modelo mestre
+  const componentesDoMestre = (m: Mestre) => {
+    const comps: any[] = [];
+    if (m.cabecalho_tipo) {
+      comps.push({ type: "HEADER", format: m.cabecalho_tipo, text: m.cabecalho_texto || undefined });
+    }
+    comps.push({ type: "BODY", text: m.corpo });
+    if (m.rodape) comps.push({ type: "FOOTER", text: m.rodape });
+    if (Array.isArray(m.botoes) && m.botoes.length > 0) comps.push({ type: "BUTTONS", buttons: m.botoes });
+    return comps;
+  };
+
+  const mestresFiltrados = useMemo(() => {
+    const t = buscaMestre.trim().toLowerCase();
+    if (!t) return mestres;
+    return mestres.filter((m) => m.nome.toLowerCase().includes(t));
+  }, [mestres, buscaMestre]);
+
+  const qtdMarcados = mestres.filter((m) => m.injetar_em_novos).length;
+
+
 
   const contagemPorMestre = (mestreId: string): Record<string, number> => {
     const filhas = templInst.filter((t) => t.template_mestre_id === mestreId);
@@ -820,8 +872,14 @@ export default function MetaTemplates() {
             <Card>
               <CardHeader><CardTitle>Aplicar template em várias instâncias</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <Label>Template mestre</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label>Template mestre</Label>
+                    <Button size="sm" variant="outline" onClick={() => setSelecaoAutoAberta(true)}>
+                      <Zap className="w-4 h-4 mr-2" />
+                      Modelos para números novos ({qtdMarcados})
+                    </Button>
+                  </div>
                   <Select value={selMestre} onValueChange={setSelMestre}>
                     <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent>
@@ -830,7 +888,42 @@ export default function MetaTemplates() {
                       ))}
                     </SelectContent>
                   </Select>
+
+                  {/* Lista de todos os modelos: abre cada um em janela para ver/excluir */}
+                  <div className="max-h-64 overflow-y-auto rounded-md border divide-y">
+                    {mestres.length === 0 && (
+                      <p className="p-3 text-sm text-muted-foreground">Nenhum template criado ainda.</p>
+                    )}
+                    {mestres.map((m) => {
+                      const usos = templInst.filter((t) => t.template_mestre_id === m.id).length;
+                      return (
+                        <div
+                          key={m.id}
+                          className={`flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 ${selMestre === m.id ? "bg-muted/60" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            className="flex-1 text-left"
+                            onClick={() => setMestreDialog(m.id)}
+                          >
+                            <span className="font-medium">{m.nome}</span>
+                            <span className="text-xs text-muted-foreground"> · {m.categoria}</span>
+                          </button>
+                          <Badge variant="outline" className="text-xs">{usos} nº</Badge>
+                          {m.injetar_em_novos && (
+                            <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400 text-xs">
+                              <Zap className="w-3 h-3 mr-1" /> nº novos
+                            </Badge>
+                          )}
+                          <Button size="icon" variant="ghost" onClick={() => setMestreDialog(m.id)} title="Ver template">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+
 
                 {selMestre && (() => {
                   const m = mestres.find((x) => x.id === selMestre);
@@ -1061,7 +1154,116 @@ export default function MetaTemplates() {
             )}
           </TabsContent>
         </Tabs>
+
+        {/* ===== Janela de um template mestre ===== */}
+        <Dialog open={!!mestreDialog} onOpenChange={(o) => !o && setMestreDialog(null)}>
+          <DialogContent className="max-w-lg">
+            {(() => {
+              const m = mestres.find((x) => x.id === mestreDialog);
+              if (!m) return null;
+              const usos = templInst.filter((t) => t.template_mestre_id === m.id).length;
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="break-all">{m.nome}</DialogTitle>
+                    <DialogDescription>
+                      {m.categoria} · {m.idioma} · aplicado em {usos} número(s)
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <TemplateWhatsAppPreview
+                      imageUrlOverride={m.cabecalho_media_url || undefined}
+                      sampleValues={(m.exemplo?.body_text?.[0] as string[]) || []}
+                      template={{
+                        nome_template: m.nome,
+                        body_text: m.corpo,
+                        variaveis: { _components: componentesDoMestre(m) },
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-md border p-3">
+                    <Checkbox
+                      checked={!!m.injetar_em_novos}
+                      onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
+                    />
+                    <div className="text-sm">
+                      <p className="font-medium">Injetar em números novos</p>
+                      <p className="text-xs text-muted-foreground">
+                        Aplicado sozinho em cada número novo, um por vez com 15–25 min de intervalo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => { setSelMestre(m.id); setMestreDialog(null); }}
+                    >
+                      <Send className="w-4 h-4 mr-2" /> Usar no envio em lote
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={async () => { await deletarMestre(m.id); setMestreDialog(null); }}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" /> Excluir template
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* ===== Seleção dos modelos aplicados em números novos ===== */}
+        <Dialog open={selecaoAutoAberta} onOpenChange={setSelecaoAutoAberta}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Modelos para números novos</DialogTitle>
+              <DialogDescription>
+                Os marcados são aplicados automaticamente em cada número novo, todos no mesmo dia,
+                um por vez com 15–25 min de intervalo, das 09h às 18h e nunca no domingo.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={buscaMestre}
+                onChange={(e) => setBuscaMestre(e.target.value)}
+                placeholder="Buscar template"
+                className="pl-8"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(true)}>Marcar todos</Button>
+              <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(false)}>Limpar</Button>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto rounded-md border divide-y">
+              {mestresFiltrados.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50">
+                  <Checkbox
+                    checked={!!m.injetar_em_novos}
+                    onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
+                  />
+                  <span className="flex-1">{m.nome}</span>
+                  <span className="text-xs text-muted-foreground">{m.categoria}</span>
+                </label>
+              ))}
+              {mestresFiltrados.length === 0 && (
+                <p className="p-3 text-sm text-muted-foreground">Nenhum template encontrado.</p>
+              )}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              {qtdMarcados} marcado(s). Sem nenhum marcado, o sistema escolhe sozinho os modelos mais aprovados.
+            </p>
+          </DialogContent>
+        </Dialog>
       </div>
+
     </AppLayout>
   );
 }

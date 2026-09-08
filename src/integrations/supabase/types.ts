@@ -5329,6 +5329,7 @@ export type Database = {
           exemplo: Json
           id: string
           idioma: string
+          injetar_em_novos: boolean
           nome: string
           rodape: string | null
           tenant_id: string
@@ -5347,6 +5348,7 @@ export type Database = {
           exemplo?: Json
           id?: string
           idioma?: string
+          injetar_em_novos?: boolean
           nome: string
           rodape?: string | null
           tenant_id?: string
@@ -5365,6 +5367,7 @@ export type Database = {
           exemplo?: Json
           id?: string
           idioma?: string
+          injetar_em_novos?: boolean
           nome?: string
           rodape?: string | null
           tenant_id?: string
@@ -5385,6 +5388,7 @@ export type Database = {
           qtd_dia_2: number
           qtd_dia_3: number
           qtd_dia_padrao: number
+          sem_limite_diario: boolean
           updated_at: string
         }
         Insert: {
@@ -5400,6 +5404,7 @@ export type Database = {
           qtd_dia_2?: number
           qtd_dia_3?: number
           qtd_dia_padrao?: number
+          sem_limite_diario?: boolean
           updated_at?: string
         }
         Update: {
@@ -5415,6 +5420,7 @@ export type Database = {
           qtd_dia_2?: number
           qtd_dia_3?: number
           qtd_dia_padrao?: number
+          sem_limite_diario?: boolean
           updated_at?: string
         }
         Relationships: []
