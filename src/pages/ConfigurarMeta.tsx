@@ -1830,6 +1830,22 @@ export default function ConfigurarMeta() {
               </div>
             )}
 
+            {isAdmin && (
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <Label>Copiar templates aprovados automaticamente</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 09h às 18h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.templates_auto_copiar}
+                  onCheckedChange={(v) => setForm({ ...form, templates_auto_copiar: v })}
+                />
+              </div>
+            )}
+
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
@@ -1909,6 +1925,22 @@ export default function ConfigurarMeta() {
                 />
               </div>
             )}
+
+            {isAdmin && (
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <Label>Copiar templates aprovados automaticamente</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 09h às 18h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
+                  </p>
+                </div>
+                <Switch
+                  checked={editForm.templates_auto_copiar}
+                  onCheckedChange={(v) => setEditForm({ ...editForm, templates_auto_copiar: v })}
+                />
+              </div>
+            )}
+
 
           </div>
           <DialogFooter>
