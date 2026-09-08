@@ -161,7 +161,7 @@ export default function MetaTemplates() {
     setLoading(false);
   };
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => { carregar(); }, [parceiroMeta]);
 
   useEffect(() => {
     const ch = supabase.channel("meta-templates-inst")
