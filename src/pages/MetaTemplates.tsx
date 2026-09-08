@@ -382,6 +382,17 @@ export default function MetaTemplates() {
   };
 
   const instAtivas = instancias.filter((i) => i.ativo);
+  const instFiltradas = useMemo(() => {
+    const termo = buscaInst.trim().toLowerCase();
+    if (!termo) return instAtivas;
+    const digitos = termo.replace(/\D/g, "");
+    return instAtivas.filter((i) => {
+      const nomeOk = (i.nome || "").toLowerCase().includes(termo);
+      const fone = String(i.display_phone || "").replace(/\D/g, "");
+      const foneOk = digitos.length >= 3 && fone.includes(digitos);
+      return nomeOk || foneOk;
+    });
+  }, [instAtivas, buscaInst]);
 
   return (
     <AppLayout>
