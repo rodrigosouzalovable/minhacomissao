@@ -879,19 +879,31 @@ export default function MetaTemplates() {
                   </div>
 
                   {(() => {
-                    const greens = instFiltradas.filter((i) => qualidadeDa(i) === "GREEN");
+                    const liberadas = instFiltradas.filter((i) => {
+                      const q = qualidadeDa(i);
+                      const qualidadeOk = q === "GREEN" || q === "UNKNOWN" || q === "SEM LEITURA";
+                      return qualidadeOk && !jaPossuemSet.has(i.id);
+                    });
+                    const jaTem = instFiltradas.filter((i) => jaPossuemSet.has(i.id)).length;
                     return (
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={greens.length > 0 && greens.every((i) => selInst.has(i.id))}
-                          onCheckedChange={(v) => {
-                            const s = new Set(selInst);
-                            if (v) greens.forEach((i) => s.add(i.id));
-                            else greens.forEach((i) => s.delete(i.id));
-                            setSelInst(s);
-                          }}
-                        />
-                        <Label>Todas as {greens.length} instâncias GREEN</Label>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={liberadas.length > 0 && liberadas.every((i) => selInst.has(i.id))}
+                            onCheckedChange={(v) => {
+                              const s = new Set(selInst);
+                              if (v) liberadas.forEach((i) => s.add(i.id));
+                              else liberadas.forEach((i) => s.delete(i.id));
+                              setSelInst(s);
+                            }}
+                          />
+                          <Label>Todas as {liberadas.length} instâncias liberadas (GREEN + qualidade desconhecida)</Label>
+                        </div>
+                        {selMestre && jaTem > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {jaTem} número(s) já possuem este template e ficam fora da seleção em massa.
+                          </p>
+                        )}
                       </div>
                     );
                   })()}
