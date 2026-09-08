@@ -477,6 +477,31 @@ export default function MetaTemplates() {
     });
   }, [instAtivas, buscaInst]);
 
+  // Instâncias que JÁ possuem o template selecionado (aprovado ou em análise).
+  // Rejeitado/falha não conta — esses podem ser reenviados.
+  const jaPossuemSet = useMemo(() => {
+    const s = new Set<string>();
+    if (!selMestre) return s;
+    const mestre = mestres.find((x) => x.id === selMestre);
+    const okStatus = (st?: string | null) => {
+      const v = String(st || "").toUpperCase();
+      return v === "APPROVED" || v === "PENDING" || v === "ENVIADO" || v === "IN_APPEAL";
+    };
+    templInst.forEach((t) => {
+      if (t.template_mestre_id === selMestre && okStatus(t.status)) s.add(t.instancia_id);
+    });
+    if (mestre?.nome) {
+      const alvo = String(mestre.nome).trim().toLowerCase();
+      templMeta.forEach((t) => {
+        if (String(t.nome_template || "").trim().toLowerCase() === alvo && okStatus(t.status)) {
+          s.add(t.instancia_id);
+        }
+      });
+    }
+    return s;
+  }, [selMestre, mestres, templInst, templMeta]);
+
+
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto space-y-4">
