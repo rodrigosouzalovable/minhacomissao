@@ -274,18 +274,19 @@ function passouIntervalo(ts: string | null | undefined): boolean {
 
 // Tira do rodízio, no meio da campanha, qualquer número cuja qualidade tenha
 // caído para YELLOW ou RED. Persiste em instancias_bloqueadas_run e avisa o admin.
-// Campanhas iniciadas manualmente com números de qualidade baixa (flag
-// permitir_qualidade_baixa) mantêm esses números até o fim.
+// Números que JÁ estavam com qualidade baixa quando o usuário confirmou o aviso
+// de risco (instancias_risco_aceito) não são retirados por esse motivo — a
+// escolha foi consciente. Todos os demais saem sempre.
 async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: string[]): Promise<string[]> {
   const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+  const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
   const candidatas = todas.filter((id) => !bloqueadasRun.includes(id));
   if (candidatas.length === 0) return [...bloqueadasRun];
 
+
   try {
     // Atualiza a saúde das instâncias do job, no máximo a cada 5 min, sem bloquear.
-    let checouAgora = false;
     if (passouIntervalo(job.saude_checada_em)) {
-      checouAgora = true;
       job.saude_checada_em = new Date().toISOString();
       await supabase.from('envio_meta_job')
         .update({ saude_checada_em: job.saude_checada_em })
@@ -293,33 +294,7 @@ async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: strin
       dispararChecagemSaude(candidatas);
     }
 
-    // Campanha manual com qualidade baixa liberada: apenas avisa, sem retirar.
-    if (job.permitir_qualidade_baixa === true) {
-      if (!checouAgora) return [...bloqueadasRun];
 
-      try {
-        const { data: baixas } = await supabase
-          .from('meta_whatsapp_instances')
-          .select('id, nome, display_phone, saude_quality')
-          .in('id', candidatas)
-          .in('saude_quality', ['YELLOW', 'RED']);
-        if (baixas?.length) {
-          const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
-          for (const i of baixas as any[]) {
-            const label = i.nome || i.display_phone || 'instância';
-            await notificarAdmin(supabase, {
-              tipo: 'envio_meta_qualidade_mantida',
-              mensagem: `⚠️ *Qualidade baixa, mas seguindo no envio*\n\n📱 ${label}\n📉 Qualidade: *${String(i.saude_quality).toUpperCase()}*\n📄 Campanha: ${job.nome_campanha || job.template_nome || '—'}\n\nEste número foi selecionado manualmente, então continua enviando com ritmo reduzido.`,
-              chaveIdempotencia: `envio_meta_qualidade_mantida_${job.id}_${i.id}`,
-              umaVezPorChave: true,
-            });
-          }
-        }
-      } catch (e) {
-        console.error('[tick] aviso de qualidade mantida falhou:', String(e).slice(0, 200));
-      }
-      return [...bloqueadasRun];
-    }
 
 
     const { data: insts } = await supabase
@@ -328,9 +303,11 @@ async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: strin
       .in('id', candidatas);
 
     const ruins = (insts || []).filter((i: any) => {
+      if (riscoAceito.includes(i.id)) return false;
       const q = String(i.saude_quality || '').toUpperCase();
       return q === 'YELLOW' || q === 'RED';
     });
+
     if (ruins.length === 0) return [...bloqueadasRun];
 
 
@@ -390,8 +367,8 @@ function motivoTemporario(motivo: string): boolean {
 
 // Recoloca no rodízio as instâncias que saíram por motivo temporário e que a
 // Meta agora confirma disponíveis e GREEN. Retorna a lista de bloqueadas
-// atualizada. YELLOW/RED e bloqueios reais continuam fora (salvo campanha
-// iniciada manualmente com qualidade baixa liberada).
+// atualizada. YELLOW/RED e bloqueios reais continuam sempre fora.
+
 async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]): Promise<string[]> {
   if (bloqueadasRun.length === 0) return bloqueadasRun;
   if (!passouIntervalo(job.reabilitacao_checada_em)) return bloqueadasRun;
@@ -422,10 +399,13 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
       .select('id, nome, display_phone, saude_quality, saude_status, pausa_automatica_ate, estado_pool, ativo')
       .in('id', candidatas);
 
+    const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
     const liberadas = (insts || []).filter((i: any) => {
       if (i.ativo === false) return false;
       const q = String(i.saude_quality || '').toUpperCase();
-      if (q !== 'GREEN' && job.permitir_qualidade_baixa !== true) return false;
+      // Números aceitos com risco desde o início podem voltar sem estar GREEN.
+      if (q !== 'GREEN' && !riscoAceito.includes(i.id)) return false;
+
 
       const st = String(i.saude_status || '').toUpperCase();
       if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x))) return false;

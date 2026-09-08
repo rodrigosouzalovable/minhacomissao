@@ -332,6 +332,24 @@ export default function EnvioMeta() {
     });
   };
 
+  // Confirmação de risco: números com qualidade YELLOW/RED/sem leitura marcados à mão.
+  const [riscoDlg, setRiscoDlg] = useState<{
+    open: boolean;
+    numeros: { id: string; nome: string; qualidade: string }[];
+    ciente: boolean;
+    resolver: ((ok: boolean) => void) | null;
+  }>({ open: false, numeros: [], ciente: false, resolver: null });
+
+  const pedirConfirmacaoRisco = async (
+    arriscadas: { id: string; nome: string; qualidade: string }[],
+  ): Promise<boolean> => {
+    if (arriscadas.length === 0) return true;
+    return await new Promise<boolean>((resolve) => {
+      setRiscoDlg({ open: true, numeros: arriscadas, ciente: false, resolver: resolve });
+    });
+  };
+
+
   const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][] }>({ open: false, rows: [] });
   const [varsByTel, setVarsByTel] = useState<Record<string, Record<string, string>>>({});
   const [credor, setCredor] = useState<string>("__none__");
@@ -1021,7 +1039,20 @@ export default function EnvioMeta() {
       };
     });
 
+    // ⚠️ Confirmação de risco — números com qualidade baixa marcados à mão
+    const arriscadas = instanciasComCota
+      .map((id) => instancias.find((i) => i.id === id))
+      .filter((i): i is Instancia => !!i && (i.saude_quality || "").toUpperCase() !== "GREEN")
+      .map((i) => ({
+        id: i.id,
+        nome: i.nome || i.display_phone || i.id,
+        qualidade: (i.saude_quality || "").toUpperCase() || "SEM LEITURA",
+      }));
+    const okRisco = await pedirConfirmacaoRisco(arriscadas);
+    if (!okRisco) { toast.error("Envio cancelado"); return; }
+
     // ✅ Confirmação de custo — mostra R$ estimado e exige digitação do valor
+
     const okCusto = await pedirConfirmacaoCusto(
       clientesFinal.map((c) => c.telefone),
       instanciasComCota,
@@ -1063,6 +1094,8 @@ export default function EnvioMeta() {
       msgsPorSegundo: modoRajada ? Math.max(1, Math.min(60, Number(msgsPorSegundo) || 1)) : undefined,
       agendarPara: agendarParaISO,
       credor: credorPadrao,
+      riscoQualidadeConfirmado: arriscadas.length > 0,
+
       onAfterEnvio: () => {
         carregar();
         custoRef.current?.refetch();
@@ -1437,7 +1470,7 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona apenas instâncias sem problema: conectadas, nome aprovado, BM com saldo e qualidade GREEN. YELLOW/RED/sem leitura ficam de fora — se você marcar à mão, elas permanecem na campanha até o fim, com ritmo reduzido."
+              title="Seleciona apenas instâncias sem problema: conectadas, nome aprovado, BM com saldo e qualidade GREEN. YELLOW/RED/sem leitura ficam de fora — se você marcar à mão, será preciso confirmar o aviso de risco antes de iniciar."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
                 const boasInstancias = instanciasVisiveis.filter(instanciaSemProblema);
@@ -1589,6 +1622,12 @@ export default function EnvioMeta() {
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
                           <SaudeBadgeStatus status={i.saude_status} />
                           <SaudeBadgeQuality quality={i.saude_quality} />
+                          {(i.saude_quality || "").toUpperCase() !== "GREEN" && instanciaIds.includes(i.id) && (
+                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" /> RISCO — precisa confirmar
+                            </Badge>
+                          )}
+
                           {i.saude_tier && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{i.saude_tier}</Badge>}
                           {String(i.meta_name_status || "").toUpperCase() === "REJECTED" && (
                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
@@ -2260,6 +2299,70 @@ export default function EnvioMeta() {
         )}
       </DialogContent>
     </Dialog>
+
+    <AlertDialog
+      open={riscoDlg.open}
+      onOpenChange={(o) => {
+        if (!o && riscoDlg.resolver) {
+          riscoDlg.resolver(false);
+          setRiscoDlg((p) => ({ ...p, open: false, resolver: null }));
+        }
+      }}
+    >
+      <AlertDialogContent className="max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            ⚠️ Números com qualidade baixa na seleção
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 pt-2">
+              <div className="text-sm">
+                Você marcou {riscoDlg.numeros.length} número(s) que não estão com qualidade GREEN.
+                Enviar por eles aumenta o risco de queda de qualidade, bloqueio ou banimento pela Meta.
+              </div>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1 max-h-48 overflow-auto">
+                {riscoDlg.numeros.map((n) => (
+                  <div key={n.id} className="flex justify-between gap-2">
+                    <span className="truncate">{n.nome}</span>
+                    <strong className={n.qualidade === "RED" ? "text-red-600" : "text-amber-600"}>{n.qualidade}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Se a qualidade cair ainda mais durante a campanha, o número sai do envio automaticamente.
+              </div>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={riscoDlg.ciente}
+                  onCheckedChange={(v) => setRiscoDlg((p) => ({ ...p, ciente: v === true }))}
+                />
+                <span>Estou ciente do risco e quero enviar por esses números.</span>
+              </label>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel
+            onClick={() => {
+              riscoDlg.resolver?.(false);
+              setRiscoDlg((p) => ({ ...p, open: false, resolver: null }));
+            }}
+          >
+            Cancelar
+          </AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!riscoDlg.ciente}
+            onClick={() => {
+              riscoDlg.resolver?.(true);
+              setRiscoDlg((p) => ({ ...p, open: false, resolver: null }));
+            }}
+          >
+            Confirmar e continuar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
 
     <AlertDialog
       open={custoDlg.open}

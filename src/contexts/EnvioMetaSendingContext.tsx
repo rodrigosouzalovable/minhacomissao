@@ -121,7 +121,10 @@ export type IniciarParams = {
   credor?: string | null;
   /** ISO UTC: quando preenchido, a campanha fica registrada e só começa nesse momento. */
   agendarPara?: string | null;
+  /** true quando o usuário confirmou o aviso de risco de números YELLOW/RED. */
+  riscoQualidadeConfirmado?: boolean;
   onAfterEnvio?: () => void;
+
 };
 
 export type CampanhaJob = {
@@ -824,6 +827,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           folderId: p.folderId ?? null,
           agendarPara: p.agendarPara ?? null,
           credor: p.credor ?? null,
+          riscoQualidadeConfirmado: p.riscoQualidadeConfirmado === true,
+
         },
         headers: { Authorization: `Bearer ${accessToken}` },
       });

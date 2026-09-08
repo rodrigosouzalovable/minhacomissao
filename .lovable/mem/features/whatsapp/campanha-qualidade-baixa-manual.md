@@ -1,23 +1,9 @@
 ---
-name: Campanha manual mantém YELLOW/RED e ritmo real do delay
-description: Campanha iniciada manualmente com números não-GREEN grava permitir_qualidade_baixa e mantém YELLOW/RED até o fim; checagens de saúde nunca bloqueiam o envio
+name: Campanha com qualidade baixa
+description: YELLOW/RED sai da campanha ao cair durante o envio; só entra no início com confirmação explícita de risco
 type: feature
 ---
-
-- `envio_meta_job.permitir_qualidade_baixa` é gravado como `true` por
-  `envio-meta-massa-iniciar` quando a campanha é iniciada **manualmente** (sem
-  agendamento) e alguma instância selecionada não está GREEN. Nesses jobs,
-  YELLOW/RED **não** saem do rodízio (`removerInstanciasComQuedaQualidade` só
-  avisa, uma vez por job+instância, tipo `envio_meta_qualidade_mantida`) e a
-  reabilitação também aceita não-GREEN. Campanhas agendadas seguem a regra
-  antiga (queda para YELLOW/RED tira o número).
-- Bloqueios reais da Meta continuam valendo: banido, restrito, conta bloqueada
-  (#131031), pendência de pagamento, nome REJECTED e cota real do número.
-- "Selecionar todas (GREEN)" no Envio Meta continua marcando só instâncias sem
-  problema; YELLOW/RED/sem leitura só entram marcadas manualmente.
-- Performance do ritmo: `check-meta-instance-health` nunca é aguardado dentro do
-  envio (fire-and-forget em paralelo), o intervalo de 5 min é persistido em
-  `envio_meta_job.saude_checada_em` / `reabilitacao_checada_em` (não em memória),
-  e `pick-meta-instance` conta envios do dia/hora de todas as candidatas em uma
-  única consulta (`enviadosHojeBrtLote`). Antes disso o envio parava 2–4 min a
-  cada 5 min.
+- Durante qualquer campanha, instância que cair para YELLOW/RED sai do rodízio imediatamente e o admin é avisado. Reentrada exige GREEN.
+- Antes de iniciar, o usuário (inclusive parceiro Meta) pode marcar à mão números YELLOW/RED/sem leitura, mas precisa confirmar um diálogo de risco com checkbox. Os IDs aceitos ficam em `envio_meta_job.instancias_risco_aceito` e podem enviar mesmo não-GREEN.
+- "Selecionar todas" seleciona apenas instâncias GREEN, conectadas, com nome aprovado e BM com saldo.
+- Aviso "Qualidade baixa, mas seguindo no envio" foi removido.

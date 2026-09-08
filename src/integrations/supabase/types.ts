@@ -2092,6 +2092,7 @@ export type Database = {
           instancia_ids: string[]
           instancias_bloqueadas: Json
           instancias_bloqueadas_run: Json
+          instancias_risco_aceito: string[]
           max_seg: number
           min_seg: number
           modo_rajada: boolean
@@ -2130,6 +2131,7 @@ export type Database = {
           instancia_ids?: string[]
           instancias_bloqueadas?: Json
           instancias_bloqueadas_run?: Json
+          instancias_risco_aceito?: string[]
           max_seg?: number
           min_seg?: number
           modo_rajada?: boolean
@@ -2168,6 +2170,7 @@ export type Database = {
           instancia_ids?: string[]
           instancias_bloqueadas?: Json
           instancias_bloqueadas_run?: Json
+          instancias_risco_aceito?: string[]
           max_seg?: number
           min_seg?: number
           modo_rajada?: boolean
