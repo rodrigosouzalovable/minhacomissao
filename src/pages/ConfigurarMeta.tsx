@@ -658,9 +658,13 @@ export default function ConfigurarMeta() {
     if (error) { toast.error("Erro: " + humanizarErroDuplicado(error.message)); return; }
 
     toast.success("Instância atualizada");
+    const ligouCopia = isAdmin && editForm.templates_auto_copiar && !editInst.templates_auto_copiar;
+    const idEditado = editInst.id;
     setEditInst(null);
     carregar();
+    if (ligouCopia) await iniciarCopiaTemplates(idEditado);
   };
+
 
 
   const humanizarErroSubscribe = (msg: string): string => {
