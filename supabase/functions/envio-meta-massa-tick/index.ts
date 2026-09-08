@@ -399,10 +399,13 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
       .select('id, nome, display_phone, saude_quality, saude_status, pausa_automatica_ate, estado_pool, ativo')
       .in('id', candidatas);
 
+    const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
     const liberadas = (insts || []).filter((i: any) => {
       if (i.ativo === false) return false;
       const q = String(i.saude_quality || '').toUpperCase();
-      if (q !== 'GREEN') return false;
+      // Números aceitos com risco desde o início podem voltar sem estar GREEN.
+      if (q !== 'GREEN' && !riscoAceito.includes(i.id)) return false;
+
 
       const st = String(i.saude_status || '').toUpperCase();
       if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x))) return false;
