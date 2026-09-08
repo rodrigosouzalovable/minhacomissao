@@ -67,6 +67,7 @@ export type InstanciaStatusJob = {
   falhas_consecutivas: number;
   ignorada: boolean;
   motivo_ignorada: string | null;
+  reativavel?: boolean;
   em_uso: boolean;
 };
 
