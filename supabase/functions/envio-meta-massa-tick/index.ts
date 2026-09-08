@@ -274,12 +274,15 @@ function passouIntervalo(ts: string | null | undefined): boolean {
 
 // Tira do rodízio, no meio da campanha, qualquer número cuja qualidade tenha
 // caído para YELLOW ou RED. Persiste em instancias_bloqueadas_run e avisa o admin.
-// Vale SEMPRE, inclusive em campanhas iniciadas manualmente com números de
-// qualidade baixa: a escolha manual libera apenas o início do disparo.
+// Números que JÁ estavam com qualidade baixa quando o usuário confirmou o aviso
+// de risco (instancias_risco_aceito) não são retirados por esse motivo — a
+// escolha foi consciente. Todos os demais saem sempre.
 async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: string[]): Promise<string[]> {
   const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+  const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
   const candidatas = todas.filter((id) => !bloqueadasRun.includes(id));
   if (candidatas.length === 0) return [...bloqueadasRun];
+
 
   try {
     // Atualiza a saúde das instâncias do job, no máximo a cada 5 min, sem bloquear.
