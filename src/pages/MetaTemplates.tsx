@@ -52,7 +52,16 @@ interface Instancia {
   display_phone: string | null;
   ativo: boolean;
   waba_id: string | null;
+  saude_quality: string | null;
 }
+
+const QUALIDADE_CORES: Record<string, string> = {
+  GREEN: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+  YELLOW: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+  RED: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
+};
+
+const qualidadeDa = (i: Instancia): string => (i.saude_quality || "").toUpperCase() || "SEM LEITURA";
 
 interface TemplateInst {
   id: string;
@@ -149,7 +158,7 @@ export default function MetaTemplates() {
       supabase.from("meta_templates_mestre").select("*").order("criado_em", { ascending: false }),
       supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, ativo, waba_id")
+        .select("id, nome, display_phone, ativo, waba_id, saude_quality")
         .eq("provider", "meta")
         .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
