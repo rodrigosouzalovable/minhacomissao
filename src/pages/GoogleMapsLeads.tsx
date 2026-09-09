@@ -366,6 +366,8 @@ export default function GoogleMapsLeads() {
         "Situação do site": rotuloSite[classificarSite(l.site)],
         Nota: l.avaliacao ?? "",
         Avaliações: l.total_avaliacoes ?? "",
+        Instagram: l.instagram_username ? `@${l.instagram_username}` : "",
+        "Seguidores Instagram": l.instagram_seguidores ?? "",
         Potencial: pontuarLead(l),
         Mensagem: mensagemProspeccao(l),
       })),
