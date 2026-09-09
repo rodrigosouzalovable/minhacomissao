@@ -163,3 +163,6 @@ verify_jwt = false
 
 [functions.meta-templates-onboarding-tick]
 verify_jwt = false
+
+[functions.google-maps-leads-abastecer]
+verify_jwt = false

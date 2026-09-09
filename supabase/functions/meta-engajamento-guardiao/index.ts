@@ -19,6 +19,10 @@ type Faixa = "ok" | "atencao" | "forte" | "corte";
 
 const FATOR: Record<Faixa, number> = { ok: 1, atencao: 0.6, forte: 0.3, corte: 0 };
 const ALVO_AQUEC: Record<Faixa, number> = { ok: 0, atencao: 3, forte: 6, corte: 10 };
+// % dos destinos do resgate que sai para contatos do Google Maps (empresas que
+// respondem sozinhas). O resto continua com os números da UAZAPI.
+const MIX_LEADS: Record<Faixa, number> = { ok: 0, atencao: 30, forte: 60, corte: 100 };
+
 
 function nowBrt(): Date {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
@@ -80,6 +84,8 @@ Deno.serve(async (req) => {
     const desde = new Date(Date.now() - janelaH * 3600 * 1000).toISOString();
     const resultados: any[] = [];
     const avisos: string[] = [];
+    const voltaram: string[] = [];
+
 
     for (const inst of alvos as any[]) {
       const nome = inst.nome || inst.display_phone || inst.id.slice(0, 8);
@@ -134,17 +140,26 @@ Deno.serve(async (req) => {
           recuperacao_proximo_envio_em: new Date().toISOString(),
         }).eq("id", inst.id);
 
+        // Mix de destinos: quanto pior a faixa, mais contatos do Google Maps
+        // (empresas com atendimento automático) entram no resgate.
+        const mixLeads = MIX_LEADS[faixa];
+        const mixUazapi = 100 - mixLeads;
+
         const { data: trilha } = await supabase
           .from("meta_aquecimento_trilha")
           .select("id, alvo_unicos_dia")
           .eq("instancia_id", inst.id).eq("dia", dia).maybeSingle();
 
         if (trilha) {
-          if (Number(trilha.alvo_unicos_dia || 0) < alvoDia) {
-            await supabase.from("meta_aquecimento_trilha")
-              .update({ alvo_unicos_dia: alvoDia, mix_uazapi_pct: 100, mix_leads_pct: 0, status: "ativa" })
-              .eq("id", trilha.id);
-          }
+          await supabase.from("meta_aquecimento_trilha")
+            .update({
+              alvo_unicos_dia: Math.max(Number(trilha.alvo_unicos_dia || 0), alvoDia),
+              mix_uazapi_pct: mixUazapi,
+              mix_leads_pct: mixLeads,
+              status: "ativa",
+              motivo: "resgate_campanha",
+            })
+            .eq("id", trilha.id);
         } else {
           await supabase.from("meta_aquecimento_trilha").insert({
             instancia_id: inst.id,
@@ -153,22 +168,39 @@ Deno.serve(async (req) => {
             tier_alvo: Number(inst.tier_diario || 0),
             alvo_unicos_dia: alvoDia,
             unicos_7d: 0,
-            mix_uazapi_pct: 100,
-            mix_leads_pct: 0,
+            mix_uazapi_pct: mixUazapi,
+            mix_leads_pct: mixLeads,
             status: "ativa",
-            decisao_ia: { origem: "guardiao_engajamento", resposta_pct: Number(respostaPct.toFixed(2)) },
+            motivo: "resgate_campanha",
+            decisao_ia: { origem: "guardiao_engajamento", resposta_pct: Number(respostaPct.toFixed(2)), mix_leads_pct: mixLeads },
           });
         }
 
+
         const rotuloFaixa = faixa === "atencao"
-          ? "ritmo reduzido a 60% + aquecimento"
+          ? `ritmo reduzido a 60% + resgate (${mixLeads}% Google Maps)`
           : faixa === "forte"
-          ? "ritmo reduzido a 30% + aquecimento forte"
-          : "fora da campanha hoje, só aquecimento";
+          ? `ritmo reduzido a 30% + resgate forte (${mixLeads}% Google Maps)`
+          : "fora da campanha hoje, só resgate com contatos do Google Maps";
         avisos.push(
           `• *${nome}* — resposta ${respostaPct.toFixed(1)}% (${e} de ${s} em ${janelaH}h)\n   ➜ ${rotuloFaixa}`,
         );
+      } else {
+        // Voltou ao patamar saudável: encerra o resgate do dia e avisa.
+        const { data: emResgate } = await supabase
+          .from("meta_aquecimento_trilha")
+          .select("id")
+          .eq("instancia_id", inst.id).eq("dia", dia)
+          .eq("motivo", "resgate_campanha").eq("status", "ativa")
+          .maybeSingle();
+        if (emResgate) {
+          await supabase.from("meta_aquecimento_trilha")
+            .update({ status: "concluida", mix_leads_pct: 0, mix_uazapi_pct: 100 })
+            .eq("id", emResgate.id);
+          voltaram.push(`• *${nome}* — resposta ${respostaPct.toFixed(1)}%, de volta ao volume normal`);
+        }
       }
+
 
       resultados.push({
         instancia: nome,
@@ -180,22 +212,32 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Dispara uma rodada de aquecimento imediata quando houve alguém freado
+    // Dispara uma rodada de resgate imediata quando houve alguém freado
     if (avisos.length > 0) {
       try {
         await supabase.functions.invoke("meta-aquecimento-tick", { body: { forcar: true } });
       } catch (err) {
         console.log("[guardiao] tick falhou:", String(err).slice(0, 200));
       }
+    }
 
+    if (avisos.length > 0 || voltaram.length > 0) {
       try {
         const { notificarAdmin } = await import("../_shared/notificar-admin.ts");
+        const partes: string[] = [];
+        if (avisos.length > 0) {
+          partes.push(
+            `⚠️ *Em resgate de engajamento*\n${avisos.join("\n")}\n\n` +
+            `Motivo: poucas respostas nas últimas ${janelaH}h. O sistema já começou a conversar com contatos do Google Maps (empresas com atendimento automático) e com os números da UAZAPI para levantar a taxa de resposta.`,
+          );
+        }
+        if (voltaram.length > 0) {
+          partes.push(`✅ *Saíram do resgate*\n${voltaram.join("\n")}`);
+        }
         await notificarAdmin(supabase, {
           tipo: "meta_guardiao_engajamento",
-          mensagem:
-            `🛡️ *Guardião de engajamento*\n\n${avisos.join("\n")}\n\n` +
-            `Motivo: poucas respostas nas últimas ${janelaH}h. O aquecimento com os números da UAZAPI já foi acionado e o ritmo volta ao normal sozinho quando a taxa de resposta subir.`,
-          chaveIdempotencia: `meta_guardiao_${dia}_${avisos.length}`,
+          mensagem: `🛡️ *Guardião de engajamento*\n\n${partes.join("\n\n")}`,
+          chaveIdempotencia: `meta_guardiao_${dia}_${avisos.length}_${voltaram.length}`,
           umaVezPorChave: true,
           destinatarios: DESTINOS,
         });
@@ -203,6 +245,7 @@ Deno.serve(async (req) => {
         console.log("[guardiao] notificarAdmin falhou:", String(err).slice(0, 200));
       }
     }
+
 
     return new Response(JSON.stringify({ ok: true, dia, janela_horas: janelaH, total: resultados.length, freados: avisos.length, resultados }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

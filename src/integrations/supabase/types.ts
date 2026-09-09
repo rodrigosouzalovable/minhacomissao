@@ -3554,6 +3554,8 @@ export type Database = {
           instancia_id: string
           mix_leads_pct: number
           mix_uazapi_pct: number
+          motivo: string | null
+          origem_campanha_id: string | null
           status: string
           tier_alvo: number | null
           tier_atual: number | null
@@ -3569,6 +3571,8 @@ export type Database = {
           instancia_id: string
           mix_leads_pct?: number
           mix_uazapi_pct?: number
+          motivo?: string | null
+          origem_campanha_id?: string | null
           status?: string
           tier_alvo?: number | null
           tier_atual?: number | null
@@ -3584,6 +3588,8 @@ export type Database = {
           instancia_id?: string
           mix_leads_pct?: number
           mix_uazapi_pct?: number
+          motivo?: string | null
+          origem_campanha_id?: string | null
           status?: string
           tier_alvo?: number | null
           tier_atual?: number | null

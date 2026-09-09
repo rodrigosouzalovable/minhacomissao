@@ -65,7 +65,10 @@ export interface LeadAquecimento {
   telefone: string;
   nicho: string | null;
   cidade: string | null;
+  respondedor?: boolean;
+  nunca_usado?: boolean;
 }
+
 
 function cidadeDoEndereco(endereco?: string | null): string {
   const partes = String(endereco || "").split(",").map((p) => p.trim()).filter(Boolean);
@@ -73,7 +76,11 @@ function cidadeDoEndereco(endereco?: string | null): string {
   return (partes[partes.length - 2] || "").replace(/\s*-\s*[A-Z]{2}$/i, "").trim();
 }
 
-/** Leads com WhatsApp confirmado, nunca usados no aquecimento, ordenados pelo score do nicho. */
+/**
+ * Leads com WhatsApp confirmado, ordenados pelo score do nicho.
+ * Entram os nunca usados e também os já usados há mais de 15 dias (carência),
+ * com prioridade para quem já respondeu alguma vez.
+ */
 export async function leadsParaAquecimento(
   supabase: any,
   limite = 40,
@@ -91,12 +98,14 @@ export async function leadsParaAquecimento(
     if (Number(s.score) > anterior) scoreMap.set(chave, Number(s.score));
   }
 
+  const carencia = new Date(Date.now() - 15 * 86400000).toISOString();
   const { data: leads } = await supabase
     .from("google_maps_leads")
-    .select("id, nome, telefone, telefone_internacional, categoria, endereco")
+    .select("id, nome, telefone, telefone_internacional, categoria, endereco, usado_aquecimento_em, resultado_aquecimento")
     .eq("tem_whatsapp", true)
-    .is("usado_aquecimento_em", null)
+    .or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`)
     .limit(600);
+
 
   const candidatos = (leads || [])
     .map((l: any) => {
@@ -107,6 +116,8 @@ export async function leadsParaAquecimento(
         telefone: tel.startsWith("55") ? tel : `55${tel}`,
         nicho: (l.categoria as string | null) || null,
         cidade: cidadeDoEndereco(l.endereco),
+        respondedor: String(l.resultado_aquecimento || "").toLowerCase().includes("respondeu"),
+        nunca_usado: !l.usado_aquecimento_em,
       } as LeadAquecimento;
     })
     .filter((l: LeadAquecimento) => l.telefone.length >= 12 && l.telefone.length <= 13)
@@ -122,13 +133,16 @@ export async function leadsParaAquecimento(
     .in("telefone_sufixo", sufixos.slice(0, 500));
   const suprimidos = new Set((sup || []).map((s: any) => String(s.telefone_sufixo)));
 
+  const peso = (l: LeadAquecimento) =>
+    (scoreMap.get(String(l.nicho || "").toLowerCase()) ?? 0) +
+    (l.respondedor ? 100 : 0) +
+    (l.nunca_usado ? 10 : 0);
+
   return candidatos
     .filter((l: LeadAquecimento) => !suprimidos.has(l.telefone.slice(-8)))
-    .sort((a: LeadAquecimento, b: LeadAquecimento) =>
-      (scoreMap.get(String(b.nicho || "").toLowerCase()) ?? 0) -
-      (scoreMap.get(String(a.nicho || "").toLowerCase()) ?? 0)
-    )
+    .sort((a: LeadAquecimento, b: LeadAquecimento) => peso(b) - peso(a))
     .slice(0, limite);
+
 }
 
 export async function marcarLeadUsado(

@@ -89,7 +89,28 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
+    // ===== Base de "quem responde": marca os leads que já responderam =====
+    const { data: logsLeads } = await supabase
+      .from('meta_aquecimento_destino_log')
+      .select('lead_id, respondeu_em, segundos_para_resposta')
+      .eq('fonte', 'lead')
+      .not('lead_id', 'is', null)
+      .not('respondeu_em', 'is', null)
+      .gte('enviado_em', desde)
+      .limit(5000);
+
+    const respondedores = Array.from(
+      new Set(((logsLeads as any[]) || []).map((l) => String(l.lead_id))),
+    );
+    for (let i = 0; i < respondedores.length; i += 200) {
+      await supabase
+        .from('google_maps_leads')
+        .update({ resultado_aquecimento: 'respondeu' })
+        .in('id', respondedores.slice(i, i + 200));
+    }
+
     // ===== Reposição de estoque =====
+
     const { count: estoque } = await supabase
       .from('google_maps_leads')
       .select('id', { count: 'exact', head: true })
