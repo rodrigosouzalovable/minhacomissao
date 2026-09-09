@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
       estoque_antes: estoque ?? 0,
       estoque_depois: estoqueFinal ?? 0,
       busca_id: buscaId,
-      verificacao,
+      nicho_usado: alvo.nicho,
     });
   } catch (e) {
     console.error("[google-maps-leads-abastecer]", e);
