@@ -123,6 +123,8 @@ export type IniciarParams = {
   agendarPara?: string | null;
   /** true quando o usuário confirmou o aviso de risco de números YELLOW/RED. */
   riscoQualidadeConfirmado?: boolean;
+  validarNoEnvio?: boolean;
+
   onAfterEnvio?: () => void;
 
 };
