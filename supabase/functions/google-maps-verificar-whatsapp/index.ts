@@ -26,24 +26,27 @@ Deno.serve(async (req) => {
     const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader) return json({ error: "unauthorized" }, 401);
-
-    // Chamadas internas (cron / outras functions) usam a service role
-    const isService = authHeader.includes(SERVICE_ROLE);
-    if (!isService) {
-      const userClient = createClient(SUPABASE_URL, ANON, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: userData } = await userClient.auth.getUser();
-      if (!userData?.user) return json({ error: "unauthorized" }, 401);
-    }
-
     const body = await req.json().catch(() => ({}));
     const buscaId = String(body?.busca_id ?? "");
     const revalidar = body?.revalidar === true;
     // Modo varredura: sem busca_id, limpa a fila de pendentes de toda a base
     const varredura = !buscaId;
     const limite = Math.min(Math.max(Number(body?.limite ?? 300), 1), 600);
+
+    // Chamadas internas (cron / outras functions) usam a service role
+    const isService = authHeader.includes(SERVICE_ROLE);
+    if (!isService) {
+      if (!authHeader) {
+        // Varredura pelo cron: trabalho limitado e sem parâmetros sensíveis
+        if (!varredura) return json({ error: "unauthorized" }, 401);
+      } else {
+        const userClient = createClient(SUPABASE_URL, ANON, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: userData } = await userClient.auth.getUser();
+        if (!userData?.user && !varredura) return json({ error: "unauthorized" }, 401);
+      }
+    }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
