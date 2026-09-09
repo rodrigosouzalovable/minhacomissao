@@ -1191,7 +1191,7 @@ export default function MetaTemplates() {
                     <div className="text-sm">
                       <p className="font-medium">Injetar em números novos</p>
                       <p className="text-xs text-muted-foreground">
-                        Aplicado sozinho em cada número novo, um por vez com 5–10 min de intervalo.
+                        Aplicado sozinho em cada número novo, um por vez com 2–5 min de intervalo.
                       </p>
                     </div>
                   </div>
@@ -1222,7 +1222,7 @@ export default function MetaTemplates() {
               <DialogTitle>Modelos para números novos</DialogTitle>
               <DialogDescription>
                 Os marcados são aplicados automaticamente em cada número novo, todos no mesmo dia,
-                um por vez com 5–10 min de intervalo, das 07h às 20h e nunca no domingo.
+                um por vez com 2–5 min de intervalo, das 07h às 20h e nunca no domingo.
               </DialogDescription>
             </DialogHeader>
 
