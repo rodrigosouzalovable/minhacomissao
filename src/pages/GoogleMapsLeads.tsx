@@ -23,6 +23,7 @@ import { LeadsMapa, linkGoogleMaps, type LeadMapa } from "@/components/googlemap
 import { AnalisarNichoCard } from "@/components/googlemaps/AnalisarNichoCard";
 import { PromptSiteLeadDialog } from "@/components/googlemaps/PromptSiteLeadDialog";
 import { NICHOS, NICHOS_DESTAQUE, TODOS_NICHOS, dicaDoNicho } from "@/components/googlemaps/nichos";
+import { BaseLeadsCard } from "@/components/googlemaps/BaseLeadsCard";
 
 type SiteTipo = "sem_site" | "rede_social" | "com_site";
 
@@ -978,6 +979,8 @@ export default function GoogleMapsLeads() {
           </CardContent>
         </Card>
       </div>
+
+      <BaseLeadsCard />
     </div>
       <PromptSiteLeadDialog
         lead={leadPrompt}

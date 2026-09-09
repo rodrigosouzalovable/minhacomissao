@@ -166,3 +166,6 @@ verify_jwt = false
 
 [functions.google-maps-leads-abastecer]
 verify_jwt = false
+
+[functions.google-maps-leads-relatorio-diario]
+verify_jwt = false
