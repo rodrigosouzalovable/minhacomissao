@@ -90,10 +90,11 @@ Deno.serve(async (req) => {
     // Trilha planejada do dia
     const { data: trilhas } = await supabase
       .from('meta_aquecimento_trilha')
-      .select('instancia_id, alvo_unicos_dia, mix_uazapi_pct, status')
+      .select('instancia_id, alvo_unicos_dia, mix_uazapi_pct, mix_leads_pct, status, motivo')
       .eq('dia', dia);
     const trilhaMap = new Map<string, any>();
     (trilhas || []).forEach((t: any) => trilhaMap.set(t.instancia_id, t));
+
 
     // Log do dia (destinos já usados)
     const { data: logsHoje } = await supabase
