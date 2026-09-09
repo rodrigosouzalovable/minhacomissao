@@ -4,6 +4,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CopyButton } from '@/components/CopyButton';
 import { cn } from '@/lib/utils';
+import { getEmpresaLabel } from '@/lib/empresaLabels';
+
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -280,9 +282,23 @@ function AcordoCard({
                         Aguardando envio do boleto
                       </>}
                   </Badge>}
+                {acordo.empresa && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "font-semibold",
+                      acordo.empresa === 'ume_novo_mundo'
+                        ? "border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-950/30"
+                        : "border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950/30"
+                    )}
+                  >
+                    {getEmpresaLabel(acordo.empresa)}
+                  </Badge>
+                )}
                 <Badge variant={getStatusVariant(acordo.status)}>
                   {getStatusLabel(acordo.status)}
                 </Badge>
+
                 {canEdit && isNegociado && !isVencido && onToggleBoletoEnviado && (
                   <TooltipProvider delayDuration={150}>
                   <Tooltip>
@@ -502,6 +518,8 @@ export default function Acordos() {
   const [dataVencidaPorAcordo, setDataVencidaPorAcordo] = useState<Map<string, string>>(new Map());
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>(initial.selectedUserId ?? 'todos');
+  const [credorFilter, setCredorFilter] = useState<string>(initial.credorFilter ?? 'todos');
+
   const [rankingAberto, setRankingAberto] = useState(false);
   const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(parseDate(initial.filtroDataVencimento));
   const [filtroDataCriacao, setFiltroDataCriacao] = useState<{ from?: Date; to?: Date } | undefined>(() => {
@@ -525,9 +543,11 @@ export default function Acordos() {
         filtroDataVencimento: filtroDataVencimento ? filtroDataVencimento.toISOString() : null,
         filtroDataCriacaoFrom: filtroDataCriacao?.from ? filtroDataCriacao.from.toISOString() : null,
         filtroDataCriacaoTo: filtroDataCriacao?.to ? filtroDataCriacao.to.toISOString() : null,
+        credorFilter,
       }));
     } catch {}
-  }, [search, statusFilter, abaAtiva, selectedUserId, filtroDataVencimento, filtroDataCriacao]);
+  }, [search, statusFilter, abaAtiva, selectedUserId, filtroDataVencimento, filtroDataCriacao, credorFilter]);
+
 
   // Restaurar scrollY após carregar lista
   useEffect(() => {
@@ -998,7 +1018,9 @@ export default function Acordos() {
       matchesStatus = acordo.status === statusFilter;
     }
     const matchesOperador = selectedUserId === 'todos' || acordo.user_id === selectedUserId;
-    return matchesSearch && matchesStatus && matchesOperador && matchesDateFilter(acordo.id) && matchesCriacaoFilter(acordo);
+    const matchesCredor = credorFilter === 'todos' || acordo.empresa === credorFilter;
+    return matchesSearch && matchesStatus && matchesOperador && matchesCredor && matchesDateFilter(acordo.id) && matchesCriacaoFilter(acordo);
+
   });
 
   // Acordos Pagos: têm pelo menos 1 parcela paga
@@ -1269,7 +1291,19 @@ export default function Acordos() {
             </div>
 
 
+            <Select value={credorFilter} onValueChange={setCredorFilter}>
+              <SelectTrigger className="w-full sm:w-[170px]">
+                <SelectValue placeholder="Credor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os credores</SelectItem>
+                <SelectItem value="ume_novo_mundo">NOVO MUNDO</SelectItem>
+                <SelectItem value="mundo_da_moda">UME</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={statusFilter} onValueChange={setStatusFilter}>
+
               <SelectTrigger className="w-full sm:w-[170px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
