@@ -175,6 +175,9 @@ Deno.serve(async (req) => {
       }
     } catch (_) { /* não bloqueia início */ }
     const permitirQualidadeBaixa = instanciasRiscoAceito.length > 0;
+    // Validação de WhatsApp durante o disparo (ligada por padrão).
+    const validarNoEnvio = (body as any)?.validar_no_envio !== false;
+
 
 
 
@@ -355,6 +358,8 @@ Deno.serve(async (req) => {
         folder_id: folderId,
         credor: credorCampanha,
         permitir_qualidade_baixa: permitirQualidadeBaixa,
+        validar_no_envio: validarNoEnvio,
+
         instancias_risco_aceito: instanciasRiscoAceito,
         bloqueados_blacklist: listaBlacklist,
 

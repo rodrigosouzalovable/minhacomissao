@@ -2130,6 +2130,7 @@ export type Database = {
           proximo_em: string | null
           reabilitacao_checada_em: string | null
           saude_checada_em: string | null
+          sem_whatsapp: number
           status: string
           status_motivo: string | null
           template_id: string | null
@@ -2141,6 +2142,7 @@ export type Database = {
           ultima_instancia_id: string | null
           updated_at: string
           user_id: string
+          validar_no_envio: boolean
           worker_lock_token: string | null
           worker_locked_until: string | null
         }
@@ -2170,6 +2172,7 @@ export type Database = {
           proximo_em?: string | null
           reabilitacao_checada_em?: string | null
           saude_checada_em?: string | null
+          sem_whatsapp?: number
           status?: string
           status_motivo?: string | null
           template_id?: string | null
@@ -2181,6 +2184,7 @@ export type Database = {
           ultima_instancia_id?: string | null
           updated_at?: string
           user_id: string
+          validar_no_envio?: boolean
           worker_lock_token?: string | null
           worker_locked_until?: string | null
         }
@@ -2210,6 +2214,7 @@ export type Database = {
           proximo_em?: string | null
           reabilitacao_checada_em?: string | null
           saude_checada_em?: string | null
+          sem_whatsapp?: number
           status?: string
           status_motivo?: string | null
           template_id?: string | null
@@ -2221,6 +2226,7 @@ export type Database = {
           ultima_instancia_id?: string | null
           updated_at?: string
           user_id?: string
+          validar_no_envio?: boolean
           worker_lock_token?: string | null
           worker_locked_until?: string | null
         }
@@ -2259,6 +2265,7 @@ export type Database = {
           variante_idx: number
           vars: Json
           wa_message_id: string | null
+          wa_validado: string | null
         }
         Insert: {
           atraso?: string | null
@@ -2284,6 +2291,7 @@ export type Database = {
           variante_idx?: number
           vars?: Json
           wa_message_id?: string | null
+          wa_validado?: string | null
         }
         Update: {
           atraso?: string | null
@@ -2309,6 +2317,7 @@ export type Database = {
           variante_idx?: number
           vars?: Json
           wa_message_id?: string | null
+          wa_validado?: string | null
         }
         Relationships: [
           {

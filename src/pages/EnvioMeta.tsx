@@ -251,7 +251,8 @@ export default function EnvioMeta() {
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [uazConectadasIds, setUazConectadasIds] = useState<string[] | null>(null);
   const [checandoUazConexao, setChecandoUazConexao] = useState<boolean>(false);
-  const [validadorId, setValidadorId] = useState<string>("");
+  // Validação de WhatsApp durante o disparo, usando todas as UAZAPI conectadas.
+  const [validarNoEnvio, setValidarNoEnvio] = useState<boolean>(true);
 
   // Checa conexão real das instâncias UAZAPI (cache de 5 min), em lotes de 5.
   const checarConexoesUaz = async (force = false) => {
@@ -270,14 +271,11 @@ export default function EnvioMeta() {
         for (const id of res) if (id) conectadas.push(id);
       }
       setUazConectadasIds(conectadas);
-      if (validadorId && !conectadas.includes(validadorId)) {
-        setValidadorId("");
-        toast.warning("O número escolhido para validação está desconectado — validação desativada.");
-      }
     } finally {
       setChecandoUazConexao(false);
     }
   };
+
 
   const uazDisponiveis = useMemo(
     () => (uazConectadasIds === null ? [] : uazInstancias.filter((u) => uazConectadasIds.includes(u.id))),
@@ -370,11 +368,8 @@ export default function EnvioMeta() {
     }
   };
 
+  // Validação opcional antes do disparo: usa TODAS as instâncias UAZAPI conectadas.
   const validarAgora = async () => {
-    if (!validadorId) return toast.error("Selecione uma instância UAZAPI para validar");
-    const validador = uazInstancias.find((x) => x.id === validadorId);
-    if (!validador) return toast.error("Instância validadora inválida");
-
     // 1) Deduplica antes de tudo
     const { texto, duplicados } = dedupRecipientsRaw(recipientsRaw, isentosDedup);
     if (duplicados > 0) {
@@ -386,10 +381,14 @@ export default function EnvioMeta() {
     if (numeros.length === 0) return toast.error("Adicione destinatários primeiro");
     setValidando(true);
     try {
-      const { data, error } = await supabase.functions.invoke("check-whatsapp-numbers", {
-        body: { numbers: numeros, server_url: validador.server_url, instance_token: validador.instance_token },
+      const { data, error } = await supabase.functions.invoke("uazapi-validar-numeros", {
+        body: { numbers: numeros },
       });
       if (error) throw error;
+      if (data?.sem_validadores) {
+        toast.error(data?.error || "Nenhum número UAZAPI conectado para validar");
+        return;
+      }
       const preview = {
         valid: (data?.valid || []).map((n: string) => String(n)),
         invalid: (data?.invalid || []).map((n: string) => String(n)),
@@ -404,6 +403,7 @@ export default function EnvioMeta() {
       setValidando(false);
     }
   };
+
 
   const removerSemWhatsApp = () => {
     if (!validacaoPreview) return;
@@ -939,53 +939,8 @@ export default function EnvioMeta() {
     let semWa: string[] = [];
     let erroVal: string[] = [];
 
-    // Validação opcional via UAZAPI
-    if (validadorId) {
-      const validador = uazInstancias.find((x) => x.id === validadorId);
-      if (!validador) return toast.error("Instância validadora inválida");
-
-      setValidando(true);
-      try {
-        const numeros = recipientsDedup.map((r) => r.telefone);
-        const { data: vData, error: vErr } = await supabase.functions.invoke("check-whatsapp-numbers", {
-          body: {
-            numbers: numeros,
-            server_url: validador.server_url,
-            instance_token: validador.instance_token,
-          },
-        });
-        if (vErr) throw vErr;
-        const validKeys = new Set<string>((vData?.valid || []).map((n: string) => normalizeTelKey(String(n))));
-        semWa = (vData?.invalid || []).map((n: string) => String(n));
-        erroVal = (vData?.errors || []).map((n: string) => String(n));
-        const totalValid = vData?.total_valid ?? validKeys.size;
-        const totalInvalid = vData?.total_invalid ?? semWa.length;
-        const totalErr = vData?.total_errors ?? erroVal.length;
-
-        if (totalValid === 0) {
-          toast.error("Nenhum número com WhatsApp encontrado");
-          setValidando(false);
-          return;
-        }
-
-        const ok = confirm(
-          `Validação concluída:\n\n` +
-          `✅ ${totalValid} com WhatsApp\n` +
-          `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
-          `⚠️ ${totalErr} erros de validação (descartados)\n` +
-          (dedup.duplicados > 0 ? `🔁 ${dedup.duplicados} duplicado(s) removido(s)\n` : "") +
-          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciasComCota.length} instância(s), com delay ${lo}-${hi}s?`
-        );
-        if (!ok) { setValidando(false); return; }
-
-        clientesFinal = recipientsDedup.filter((r) => validKeys.has(normalizeTelKey(r.telefone)));
-      } catch (e: any) {
-        toast.error("Erro na validação: " + (e?.message || e));
-        setValidando(false);
-        return;
-      }
-      setValidando(false);
-    } else {
+    // A validação de WhatsApp acontece durante o disparo (não trava a campanha).
+    {
       const avisoCota = !temIlimitada && bmsEnvolvidas.size > 0 && recipientsDedup.length > saldoTotalBm
         ? `⚠️ Saldo das BMs em 24h: ${saldoTotalBm} mensagens. A lista tem ${recipientsDedup.length} contatos — o excedente será bloqueado até a cota renovar.\n\n`
         : "";
@@ -1001,11 +956,11 @@ export default function EnvioMeta() {
         : `Disparar ${tplLinha}`;
       if (!confirm(
         `${bloco}${acaoLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
+        (validarNoEnvio ? `\n\n🔎 A checagem de WhatsApp será feita durante o envio pelos números UAZAPI conectados.` : "") +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
-
-    
     }
+
 
     // Gate universal para modo rajada — vale para todos os caminhos acima
     if (modoRajada) {
@@ -1095,6 +1050,8 @@ export default function EnvioMeta() {
       agendarPara: agendarParaISO,
       credor: credorPadrao,
       riscoQualidadeConfirmado: arriscadas.length > 0,
+      validarNoEnvio,
+
 
       onAfterEnvio: () => {
         carregar();
@@ -2043,57 +2000,46 @@ export default function EnvioMeta() {
           </div>
 
           <div className="max-w-md space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <Label>Validar WhatsApp antes do disparo (opcional)</Label>
+            <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label>Validar WhatsApp durante o disparo</Label>
+                <p className="text-xs text-muted-foreground">
+                  O sistema checa cada contato com todos os números UAZAPI conectados enquanto envia. Quem não tem
+                  WhatsApp não recebe e fica marcado na campanha. Se a UAZAPI estiver fora, o envio continua normalmente.
+                </p>
+              </div>
+              <Switch checked={validarNoEnvio} onCheckedChange={setValidarNoEnvio} />
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {uazConectadasIds === null
+                  ? "Números UAZAPI para validação: verificar"
+                  : `${uazDisponiveis.length} número(s) UAZAPI conectado(s) para validar`}
+              </span>
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-7 px-2 text-xs"
+                className="h-6 px-2"
                 onClick={() => checarConexoesUaz(true)}
                 disabled={checandoUazConexao}
               >
                 {checandoUazConexao ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               </Button>
             </div>
-            <Select
-              value={validadorId || "__none__"}
-              onValueChange={(v) => setValidadorId(v === "__none__" ? "" : v)}
-              onOpenChange={(o) => { if (o && uazConectadasIds === null && !checandoUazConexao) checarConexoesUaz(); }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sem validação (envia para todos)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Sem validação (envia para todos)</SelectItem>
-                {checandoUazConexao && (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Verificando números conectados...</div>
-                )}
-                {!checandoUazConexao && uazConectadasIds !== null && uazDisponiveis.length === 0 && (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum número UAZAPI conectado no momento</div>
-                )}
-                {!checandoUazConexao && uazDisponiveis.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.nome} {u.telefone ? `• ${u.telefone}` : ""}
-                  </SelectItem>
-                ))}
 
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Usa uma instância UAZAPI conectada para checar quem tem WhatsApp. Números sem WhatsApp e erros de validação são descartados antes do envio Meta.
-            </p>
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <Button
                 type="button"
                 size="sm"
                 variant="secondary"
                 onClick={validarAgora}
-                disabled={validando || !validadorId || recipients.length === 0}
+                disabled={validando || recipients.length === 0}
               >
                 {validando ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />}
-                Validar agora
+                Validar agora (opcional)
               </Button>
+
               {validacaoPreview && validacaoPreview.invalid.length > 0 && (
                 <Button type="button" size="sm" variant="outline" onClick={removerSemWhatsApp}>
                   <Trash2 className="h-3.5 w-3.5 mr-1.5" />
@@ -2205,29 +2151,8 @@ export default function EnvioMeta() {
             </p>
           </div>
 
-          <div className="max-w-md space-y-1.5">
-            <Label>Credor desta campanha</Label>
-            <Select value={credor} onValueChange={setCredor}>
-              <SelectTrigger>
-                <SelectValue placeholder="Não informar" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Não informar</SelectItem>
-                {CREDOR_MARCAS_LISTA.map((m) => (
-                  <SelectItem key={m.slug} value={m.slug}>
-                    {m.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              O credor aparece no cabeçalho de cada conversa no Inbox Meta Oficial. Se a planilha tiver uma coluna
-              mapeada como <strong>Credor</strong>, o valor da linha tem prioridade sobre esta seleção.
-              {Object.keys(credorByTel).length > 0 && (
-                <> {" "}• {Object.keys(credorByTel).length} linha(s) com credor vindo da planilha.</>
-              )}
-            </p>
-          </div>
+
+
 
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={enviar} disabled={validando || enviandoTeste} size="lg">

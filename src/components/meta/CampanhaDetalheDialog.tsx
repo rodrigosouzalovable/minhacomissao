@@ -93,7 +93,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       if (!j) return;
       // Não refetch em jobs finalizados.
       if (j.status !== 'rodando' && j.status !== 'pausado') return;
-      const backend = (j.enviados || 0) + (j.erros || 0);
+      const backend = (j.enviados || 0) + (j.erros || 0) + ((j as any).sem_whatsapp || 0);
       const det = getDetalhesJob(jobId);
       const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0);
       // Só recarrega a 1ª página enquanto a lista ainda não estourou o limite de 200.
@@ -163,7 +163,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const ativa = job.status === "rodando" || job.status === "pausado";
   const pausado = job.status === "pausado";
-  const totalProcessado = job.enviados + job.erros;
+  const semWhatsApp = Number((job as any).sem_whatsapp || 0);
+  const totalProcessado = job.enviados + job.erros + semWhatsApp;
+
   const percent = Math.round((totalProcessado / Math.max(job.total, 1)) * 100);
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
@@ -431,12 +433,15 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           <div className="rounded-md border bg-card p-3 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="font-medium">
-                {job.enviados + job.erros}/{job.total} processados ({percent}%)
+                {totalProcessado}/{job.total} processados ({percent}%)
               </span>
               <span className="text-muted-foreground text-xs">
-                ✅ {job.enviados} • ❌ {job.erros} • ⏳ {Math.max(0, job.total - totalProcessado)}
+                ✅ {job.enviados} • ❌ {job.erros}
+                {semWhatsApp > 0 && <> • 🚫 {semWhatsApp} sem WhatsApp</>}
+                {" "}• ⏳ {Math.max(0, job.total - totalProcessado)}
               </span>
             </div>
+
             <Progress value={percent} className="h-4 shrink-0" />
             <div className="text-xs text-muted-foreground h-4 overflow-hidden whitespace-nowrap truncate">
               {progresso?.atualTelefone ? (

@@ -123,6 +123,8 @@ export type IniciarParams = {
   agendarPara?: string | null;
   /** true quando o usuário confirmou o aviso de risco de números YELLOW/RED. */
   riscoQualidadeConfirmado?: boolean;
+  validarNoEnvio?: boolean;
+
   onAfterEnvio?: () => void;
 
 };
@@ -669,7 +671,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           const jobId = row?.id;
           if (jobId && itensByJobRef.current.has(jobId)) {
             const cached = itensByJobRef.current.get(jobId) || [];
-            const backend = (row?.enviados || 0) + (row?.erros || 0);
+            const backend = (row?.enviados || 0) + (row?.erros || 0) + ((row as any)?.sem_whatsapp || 0);
             if (backend !== cached.length) scheduleCarregarItens(jobId, 15000);
           }
         }
@@ -830,6 +832,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           agendarPara: p.agendarPara ?? null,
           credor: p.credor ?? null,
           riscoQualidadeConfirmado: p.riscoQualidadeConfirmado === true,
+          validar_no_envio: p.validarNoEnvio !== false,
+
 
         },
         headers: { Authorization: `Bearer ${accessToken}` },
