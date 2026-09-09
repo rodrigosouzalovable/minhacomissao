@@ -19,6 +19,7 @@ import {
   custoDoTemplate,
   leadsParaAquecimento,
   marcarLeadUsado,
+  registrarConversaLead,
   registrarGasto,
 } from '../_shared/meta-aquecimento-inteligente.ts';
 
