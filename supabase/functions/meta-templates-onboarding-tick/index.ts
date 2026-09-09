@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
     // ===== 2) Conclusão: números sem nada pendente =====
     const { data: instsAtivas } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, meta_verified_name, phone_number_id, waba_id, access_token, ativo, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider")
+      .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, ativo, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider")
       .eq("templates_auto_copiar", true);
 
     const elegiveis = ((instsAtivas as any[]) || []).filter(
@@ -213,6 +213,7 @@ Deno.serve(async (req) => {
         mensagem:
           `✅ *Cópia de templates concluída*\n\n` +
           `Número: *${rotuloInstancia(inst)}*\n` +
+          `${await linhaBmInstancia(supabase, inst)}\n` +
           `Aprovados: *${aprovados}*\nReprovados: *${reprovados}*\nFalhas de envio: *${falhas}*\n` +
           `Total processado: *${lista.length}*`,
       });
