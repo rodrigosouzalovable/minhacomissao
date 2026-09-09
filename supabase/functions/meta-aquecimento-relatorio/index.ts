@@ -239,6 +239,51 @@ Deno.serve(async (req) => {
       // relatório não falha por causa deste bloco
     }
 
+    // ===== Resgate de engajamento com contatos do Google Maps =====
+    try {
+      const { data: resgates } = await supabase
+        .from("meta_aquecimento_trilha")
+        .select("instancia_id, status, mix_leads_pct, alvo_unicos_dia")
+        .eq("dia", hojeStr)
+        .eq("motivo", "resgate_campanha");
+
+      linhas.push("");
+      linhas.push("*🚑 Resgate de engajamento (Google Maps)*");
+
+      const lista = ((resgates as any[]) || []).filter((r) => !idsParceiros.has(r.instancia_id));
+      if (lista.length === 0) {
+        linhas.push("_Nenhum número precisou de resgate hoje._");
+      } else {
+        const { data: logsLead } = await supabase
+          .from("meta_aquecimento_destino_log")
+          .select("instancia_id, status, respondeu_em")
+          .eq("dia", hojeStr)
+          .eq("fonte", "lead")
+          .in("instancia_id", lista.map((r) => r.instancia_id));
+
+        for (const r of lista) {
+          const nome = nomeMap.get(r.instancia_id) || String(r.instancia_id).slice(0, 8);
+          const meus = ((logsLead as any[]) || []).filter((l) => l.instancia_id === r.instancia_id);
+          const enviadas = meus.filter((l) => l.status !== "falha").length;
+          const respostas = meus.filter((l) => l.respondeu_em).length;
+          const situacao = r.status === "ativa" ? "em resgate" : "voltou ao normal";
+          linhas.push(`• *${nome}* — ${situacao} · ${r.mix_leads_pct ?? 0}% Google Maps`);
+          linhas.push(`   mensagens ${enviadas} · respostas ${respostas} de contatos do Maps`);
+        }
+      }
+
+      const carencia = new Date(Date.now() - 15 * 86400000).toISOString();
+      const { count: estoque } = await supabase
+        .from("google_maps_leads")
+        .select("id", { count: "exact", head: true })
+        .eq("tem_whatsapp", true)
+        .or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`);
+      linhas.push(`   📇 Contatos disponíveis na lista: ${estoque ?? 0}`);
+    } catch (_e) {
+      // relatório não falha por causa deste bloco
+    }
+
+
     const mensagem = linhas.join("\n");
     const chave = `aquecimento-meta-${hojeStr}-${nowBrt.getHours() < 15 ? "12h" : "18h"}`;
 
