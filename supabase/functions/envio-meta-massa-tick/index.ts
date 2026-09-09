@@ -460,8 +460,77 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
 
 
 
+// ===== Validação de WhatsApp durante o envio =====
+// Valida um lote de pendentes com TODAS as instâncias UAZAPI conectadas.
+// Sem WhatsApp -> item marcado como 'sem_whatsapp' (não é enviado, não é erro).
+// Erro de validação / nenhuma UAZAPI conectada -> segue o envio normalmente.
+const VAL_LOTE = 30;
+const so8 = (t: string) => String(t || '').replace(/\D/g, '').slice(-8);
+
+async function validarLotePendentes(job: any): Promise<void> {
+  try {
+    const { data: itens } = await supabase
+      .from('envio_meta_job_item')
+      .select('id, telefone')
+      .eq('job_id', job.id)
+      .eq('status', 'pendente')
+      .is('wa_validado', null)
+      .order('ordem', { ascending: true })
+      .limit(VAL_LOTE);
+    if (!itens || itens.length === 0) return;
+
+    const resp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/uazapi-validar-numeros`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+      },
+      body: JSON.stringify({ numbers: itens.map((i: any) => i.telefone) }),
+    });
+    const data = await resp.json().catch(() => null);
+
+    if (!data || data.sem_validadores) {
+      console.log('[tick val] sem UAZAPI conectada — envio segue sem validação');
+      const ids = itens.map((i: any) => i.id);
+      await supabase.from('envio_meta_job_item').update({ wa_validado: 'erro' }).in('id', ids);
+      return;
+    }
+
+    const invalidos = new Set((data.invalid || []).map((t: string) => so8(t)));
+    const validos = new Set((data.valid || []).map((t: string) => so8(t)));
+
+    const idsSem: string[] = [];
+    const idsOk: string[] = [];
+    const idsErro: string[] = [];
+    for (const it of itens as any[]) {
+      const k = so8(it.telefone);
+      if (invalidos.has(k)) idsSem.push(it.id);
+      else if (validos.has(k)) idsOk.push(it.id);
+      else idsErro.push(it.id);
+    }
+
+    if (idsOk.length) await supabase.from('envio_meta_job_item').update({ wa_validado: 'sim' }).in('id', idsOk);
+    if (idsErro.length) await supabase.from('envio_meta_job_item').update({ wa_validado: 'erro' }).in('id', idsErro);
+    if (idsSem.length) {
+      await supabase.from('envio_meta_job_item').update({
+        wa_validado: 'nao',
+        status: 'sem_whatsapp',
+        erro: 'Número sem WhatsApp (validado na UAZAPI durante o envio)',
+        processado_em: new Date().toISOString(),
+      }).in('id', idsSem);
+      const { data: cur } = await supabase.from('envio_meta_job').select('sem_whatsapp').eq('id', job.id).maybeSingle();
+      await supabase.from('envio_meta_job')
+        .update({ sem_whatsapp: (cur?.sem_whatsapp || 0) + idsSem.length })
+        .eq('id', job.id);
+    }
+    console.log(`[tick val] job=${job.id} ok=${idsOk.length} sem=${idsSem.length} erro=${idsErro.length}`);
+  } catch (e) {
+    console.error('[tick val] falhou (envio segue):', String(e).slice(0, 300));
+  }
+}
 
 async function processarItem(job: any): Promise<ItemResult> {
+
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
   if (!(await jobEstaRodando(job.id))) return { advanced: false, stop: true };
 
