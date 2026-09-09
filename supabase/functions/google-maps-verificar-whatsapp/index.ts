@@ -26,28 +26,38 @@ Deno.serve(async (req) => {
     const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader) return json({ error: "unauthorized" }, 401);
-
-    const userClient = createClient(SUPABASE_URL, ANON, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData } = await userClient.auth.getUser();
-    if (!userData?.user) return json({ error: "unauthorized" }, 401);
-
     const body = await req.json().catch(() => ({}));
     const buscaId = String(body?.busca_id ?? "");
     const revalidar = body?.revalidar === true;
-    if (!buscaId) return json({ error: "busca_id é obrigatório" }, 400);
+    // Modo varredura: sem busca_id, limpa a fila de pendentes de toda a base
+    const varredura = !buscaId;
+    const limite = Math.min(Math.max(Number(body?.limite ?? 300), 1), 600);
+
+    // Chamadas internas (cron / outras functions) usam a service role
+    const isService = authHeader.includes(SERVICE_ROLE);
+    if (!isService) {
+      if (!authHeader) {
+        // Varredura pelo cron: trabalho limitado e sem parâmetros sensíveis
+        if (!varredura) return json({ error: "unauthorized" }, 401);
+      } else {
+        const userClient = createClient(SUPABASE_URL, ANON, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: userData } = await userClient.auth.getUser();
+        if (!userData?.user && !varredura) return json({ error: "unauthorized" }, 401);
+      }
+    }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-    // Leads da busca com telefone e ainda não verificados (ou todos, se revalidar)
+    // Leads com telefone e ainda não verificados (ou todos da busca, se revalidar)
     let q = admin
       .from("google_maps_leads")
       .select("id, telefone, telefone_internacional, tem_whatsapp")
-      .eq("busca_id", buscaId)
       .not("telefone", "is", null);
-    if (!revalidar) q = q.is("tem_whatsapp", null);
+    if (buscaId) q = q.eq("busca_id", buscaId);
+    if (!revalidar || varredura) q = q.is("tem_whatsapp", null);
+    if (varredura) q = q.order("created_at", { ascending: false }).limit(limite);
     const { data: leads, error: leadsErr } = await q;
     if (leadsErr) return json({ error: leadsErr.message }, 500);
 
@@ -67,7 +77,7 @@ Deno.serve(async (req) => {
     if (instErr) console.error("erro ao listar instâncias:", instErr.message);
 
     const candidatas = instancias ?? [];
-    let validador: Record<string, unknown> | null = null;
+    const conectadas: Record<string, any>[] = [];
     const motivos: string[] = [];
 
     for (const inst of candidatas) {
@@ -84,28 +94,29 @@ Deno.serve(async (req) => {
         const txt = await r.text();
         console.log(`status ${inst.nome}: HTTP ${r.status} ${txt.slice(0, 200)}`);
         let conectado = false;
+        let estado = "";
         try {
           const d = JSON.parse(txt) as Record<string, any>;
-          const st = String(d?.instance?.status ?? d?.status ?? "").toLowerCase();
+          estado = String(d?.instance?.status ?? d?.status ?? "").toLowerCase();
           conectado =
             d?.status?.connected === true ||
             d?.connected === true ||
-            st.includes("connect") ||
-            st === "open";
+            estado === "connected" ||
+            estado === "open";
         } catch {
           conectado = false;
         }
         if (conectado) {
-          validador = inst;
-          break;
+          conectadas.push(inst);
+          continue;
         }
-        motivos.push(`${inst.nome}: desconectada`);
+        motivos.push(`${inst.nome}: ${estado || "desconectada"}`);
       } catch (e) {
         motivos.push(`${inst.nome}: ${e instanceof Error ? e.message : "falha"}`);
       }
     }
 
-    if (!validador) {
+    if (!conectadas.length) {
       return json(
         {
           error: "sem_instancia",
@@ -117,9 +128,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`instância validadora: ${validador.nome}`);
-    const cleanUrl = String(validador.server_url).replace(/\/+$/, "");
-    const token = String(validador.instance_token);
+    console.log(`instâncias validadoras conectadas: ${conectadas.map((i) => i.nome).join(", ")}`);
+    let idxInst = 0;
+
 
 
     const comWhats: string[] = [];
@@ -141,7 +152,10 @@ Deno.serve(async (req) => {
     const batches: Item[][] = [];
     for (let i = 0; i < items.length; i += BATCH) batches.push(items.slice(i, i + BATCH));
 
-    const runBatch = async (batch: Item[]) => {
+    const tentarLote = async (batch: Item[], tentativa: number): Promise<"ok" | "trocar" | "falha"> => {
+      const inst = conectadas[idxInst % conectadas.length];
+      const cleanUrl = String(inst.server_url).replace(/\/+$/, "");
+      const token = String(inst.instance_token);
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), TIMEOUT);
       try {
@@ -156,14 +170,12 @@ Deno.serve(async (req) => {
         try {
           data = JSON.parse(text);
         } catch {
-          console.error(`resposta não-JSON: ${text.slice(0, 200)}`);
-          erros += batch.length;
-          return;
+          console.error(`${inst.nome}: resposta não-JSON: ${text.slice(0, 200)}`);
+          return "trocar";
         }
         if (!resp.ok) {
-          console.error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
-          erros += batch.length;
-          return;
+          console.error(`${inst.nome}: HTTP ${resp.status}: ${text.slice(0, 200)}`);
+          return "trocar";
         }
         const d = data as Record<string, unknown>;
         const arr = Array.isArray(data)
@@ -174,9 +186,8 @@ Deno.serve(async (req) => {
           ? (d.result as Record<string, unknown>[])
           : null;
         if (!arr) {
-          console.error(`formato desconhecido: ${text.slice(0, 300)}`);
-          erros += batch.length;
-          return;
+          console.error(`${inst.nome}: formato desconhecido: ${text.slice(0, 300)}`);
+          return "trocar";
         }
         arr.forEach((item, idx) => {
           const lead = batch[idx];
@@ -188,12 +199,23 @@ Deno.serve(async (req) => {
             item.onWhatsapp === true;
           (has ? comWhats : semWhats).push(lead.id);
         });
+        return "ok";
       } catch (e) {
-        console.error(`erro no lote: ${e instanceof Error ? e.message : String(e)}`);
-        erros += batch.length;
+        console.error(`${inst.nome}: erro no lote: ${e instanceof Error ? e.message : String(e)}`);
+        return tentativa + 1 < conectadas.length ? "trocar" : "falha";
       } finally {
         clearTimeout(t);
       }
+    };
+
+    const runBatch = async (batch: Item[]) => {
+      for (let tentativa = 0; tentativa < conectadas.length; tentativa++) {
+        const r = await tentarLote(batch, tentativa);
+        if (r === "ok") return;
+        // instância recusou/caiu: passa para a próxima conectada
+        idxInst++;
+      }
+      erros += batch.length;
     };
 
     for (let i = 0; i < batches.length; i += CONCURRENCY) {

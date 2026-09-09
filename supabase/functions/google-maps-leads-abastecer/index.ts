@@ -92,8 +92,18 @@ Deno.serve(async (req) => {
       return json({ ok: false, alvo, error: String(erroBusca.message || erroBusca) }, 200);
     }
 
-    // A própria busca já dispara a verificação de WhatsApp pelas instâncias UAZAPI.
+    // Verifica quem tem WhatsApp nos números recém-captados (usa as instâncias UAZAPI conectadas)
     const buscaId = (busca as any)?.busca_id || null;
+    let verificacao: unknown = null;
+    if (buscaId) {
+      const { data: vData, error: vErr } = await supabase.functions.invoke(
+        "google-maps-verificar-whatsapp",
+        { body: { busca_id: buscaId } },
+      );
+      verificacao = vErr ? { erro: String(vErr.message || vErr) } : vData;
+    }
+
+
 
 
     const { count: estoqueFinal } = await supabase
@@ -109,6 +119,7 @@ Deno.serve(async (req) => {
       estoque_depois: estoqueFinal ?? 0,
       busca_id: buscaId,
       nicho_usado: alvo.nicho,
+      verificacao_whatsapp: verificacao,
     });
   } catch (e) {
     console.error("[google-maps-leads-abastecer]", e);

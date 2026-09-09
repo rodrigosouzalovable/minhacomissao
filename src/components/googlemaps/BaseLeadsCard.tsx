@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Database, Download, Loader2, Search } from "lucide-react";
+import { Database, Download, Loader2, Search, ShieldCheck } from "lucide-react";
 
 const PAGE_SIZE = 50;
 
@@ -45,6 +45,13 @@ function aplicarFiltros(
   return q;
 }
 
+function rotuloWhatsapp(l: LeadBase) {
+  if (!l.telefone) return "Sem telefone";
+  if (l.tem_whatsapp === true) return "Sim";
+  if (l.tem_whatsapp === false) return "Não";
+  return "Aguardando verificação";
+}
+
 export function BaseLeadsCard() {
   const [busca, setBusca] = useState("");
   const [nicho, setNicho] = useState("");
@@ -53,6 +60,8 @@ export function BaseLeadsCard() {
   const [soResponderam, setSoResponderam] = useState(false);
   const [pagina, setPagina] = useState(0);
   const [baixando, setBaixando] = useState(false);
+  const [verificando, setVerificando] = useState(false);
+  const qc = useQueryClient();
 
   const filtros = useMemo(
     () => ({ busca, nicho, soWhats, soUsados, soResponderam }),
@@ -83,6 +92,32 @@ export function BaseLeadsCard() {
     setPagina(0);
   }
 
+  async function verificarPendentes() {
+    setVerificando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-maps-verificar-whatsapp", {
+        body: { limite: 300 },
+      });
+      if (error) throw error;
+      if ((data as any)?.error === "sem_instancia") {
+        toast.warning((data as any).message ?? "Nenhum número WhatsApp conectado para verificar");
+        return;
+      }
+      const d = data as any;
+      if (!d?.verificados) {
+        toast.message("Nenhum telefone pendente de verificação");
+      } else {
+        toast.success(`Verificados ${d.verificados}: ✅ ${d.com_whatsapp} com WhatsApp • ❌ ${d.sem_whatsapp} sem`);
+      }
+      qc.invalidateQueries({ queryKey: ["gm-base-leads"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao verificar");
+    } finally {
+      setVerificando(false);
+    }
+  }
+
+
   async function baixarExcel() {
     setBaixando(true);
     try {
@@ -108,7 +143,7 @@ export function BaseLeadsCard() {
       const rows = linhas.map((l) => ({
         Empresa: l.nome ?? "",
         Telefone: l.telefone ?? "",
-        "Tem WhatsApp": l.tem_whatsapp === true ? "Sim" : l.tem_whatsapp === false ? "Não" : "Não verificado",
+        "Tem WhatsApp": rotuloWhatsapp(l),
         Nicho: l.categoria ?? "",
         Endereço: l.endereco ?? "",
         Site: l.site ?? "",
@@ -142,10 +177,20 @@ export function BaseLeadsCard() {
             <Database className="h-4 w-4 text-primary" />
             Base de leads captados {total > 0 && <Badge variant="secondary">{total}</Badge>}
           </CardTitle>
-          <Button size="sm" onClick={baixarExcel} disabled={baixando}>
-            {baixando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-            Baixar Excel
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={verificarPendentes} disabled={verificando}>
+              {verificando ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4 mr-2" />
+              )}
+              Verificar pendentes
+            </Button>
+            <Button size="sm" onClick={baixarExcel} disabled={baixando}>
+              {baixando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+              Baixar Excel
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
@@ -199,13 +244,17 @@ export function BaseLeadsCard() {
                 <TableRow key={l.id}>
                   <TableCell className="font-medium max-w-[220px] truncate">{l.nome}</TableCell>
                   <TableCell className="whitespace-nowrap">{l.telefone ?? "—"}</TableCell>
-                  <TableCell>
-                    {l.tem_whatsapp === true ? (
+                  <TableCell className="whitespace-nowrap">
+                    {!l.telefone ? (
+                      <span className="text-xs text-muted-foreground">Sem telefone</span>
+                    ) : l.tem_whatsapp === true ? (
                       <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Sim</Badge>
                     ) : l.tem_whatsapp === false ? (
                       <Badge variant="secondary">Não</Badge>
                     ) : (
-                      <Badge variant="outline">—</Badge>
+                      <Badge variant="outline" className="text-amber-600 border-amber-500">
+                        Aguardando verificação
+                      </Badge>
                     )}
                   </TableCell>
                   <TableCell className="max-w-[140px] truncate">{l.categoria ?? "—"}</TableCell>

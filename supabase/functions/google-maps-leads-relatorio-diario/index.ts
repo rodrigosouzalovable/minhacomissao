@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
       usados,
       responderam,
       estoque,
+      pendentesWa,
     ] = await Promise.all([
       count(L()),
       count(L().not("telefone", "is", null)),
@@ -52,6 +53,7 @@ Deno.serve(async (req) => {
       count(
         L().eq("tem_whatsapp", true).or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`),
       ),
+      count(L().not("telefone", "is", null).is("tem_whatsapp", null)),
     ]);
 
     // Captação de hoje por nicho
@@ -128,6 +130,10 @@ Deno.serve(async (req) => {
     }
     if (estoque < 80) diagnostico.push(`lista curta: só ${estoque} contatos disponíveis (o reabastecimento deve entrar)`);
     if (buscas.length === 0) diagnostico.push("nenhuma nova busca de empresas foi feita hoje");
+    if (pendentesWa > 0)
+      diagnostico.push(
+        `${pendentesWa} telefone(s) ainda sem verificação de WhatsApp (se continuar assim, confira se há número UAZAPI conectado)`,
+      );
 
     // ===== Mensagem =====
     const l: string[] = [];
@@ -146,6 +152,7 @@ Deno.serve(async (req) => {
     l.push(`• ${totalBase} empresas · ${totalTel} com telefone · ${totalWa} com WhatsApp`);
     l.push(`• ${usados} já usadas no aquecimento · ${responderam} responderam`);
     l.push(`• ${estoque} contatos prontos para usar agora`);
+    l.push(`• ${pendentesWa} telefone(s) aguardando verificação de WhatsApp`);
 
     l.push("");
     l.push("*🔥 Aquecimento com esses contatos (hoje)*");
