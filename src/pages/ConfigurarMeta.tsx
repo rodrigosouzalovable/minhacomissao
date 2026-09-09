@@ -1349,9 +1349,16 @@ export default function ConfigurarMeta() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              {isAdmin && (
+                <Button variant="outline" onClick={verificarTemplatesTodas} disabled={auditando}>
+                  {auditando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                  Verificar templates de todas as instâncias
+                </Button>
+              )}
               <Button onClick={() => setDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" /> Nova instância
               </Button>
+
             </div>
           </div>
 
