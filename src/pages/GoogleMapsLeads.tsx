@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Clipboard, Globe, KeyRound, Loader2, Download, Map, MapPin, MessageCircle, Phone, Search, Shuffle, Sparkles, Table2, Trash2, Wand2 } from "lucide-react";
+import { AlertTriangle, Clipboard, Globe, Instagram, KeyRound, Loader2, Download, Map, MapPin, MessageCircle, Phone, Search, Shuffle, Sparkles, Table2, Trash2, Wand2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -91,6 +91,11 @@ interface Lead {
   latitude: number | null;
   longitude: number | null;
   place_id: string | null;
+  instagram_url: string | null;
+  instagram_username: string | null;
+  instagram_seguidores: number | null;
+  instagram_site: string | null;
+  instagram_atualizado_em: string | null;
 }
 
 
@@ -136,6 +141,8 @@ export default function GoogleMapsLeads() {
   const [localizacao, setLocalizacao] = useState("");
   const [maxResultados, setMaxResultados] = useState(60);
   const [somenteNovos, setSomenteNovos] = useState(true);
+  const [buscarInstagram, setBuscarInstagram] = useState(false);
+  const [enriquecendoIg, setEnriquecendoIg] = useState(false);
 
   const [buscando, setBuscando] = useState(false);
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
@@ -255,7 +262,13 @@ export default function GoogleMapsLeads() {
     setErroBusca(null);
     try {
       const { data, error } = await supabase.functions.invoke("google-maps-buscar-leads", {
-        body: { categoria, localizacao, max_resultados: maxResultados, somente_novos: somenteNovos },
+        body: {
+          categoria,
+          localizacao,
+          max_resultados: maxResultados,
+          somente_novos: somenteNovos,
+          enriquecer_instagram: buscarInstagram,
+        },
       });
       if (error) {
         const payload = await getFunctionErrorPayload(error);
@@ -330,6 +343,9 @@ export default function GoogleMapsLeads() {
         Categoria: l.categoria ?? "",
         Nota: l.avaliacao ?? "",
         Avaliações: l.total_avaliacoes ?? "",
+        Instagram: l.instagram_username ? `@${l.instagram_username}` : "",
+        "Seguidores Instagram": l.instagram_seguidores ?? "",
+        "Site do Instagram": l.instagram_site ?? "",
         Potencial: pontuarLead(l),
       })),
       "leads",
@@ -350,6 +366,8 @@ export default function GoogleMapsLeads() {
         "Situação do site": rotuloSite[classificarSite(l.site)],
         Nota: l.avaliacao ?? "",
         Avaliações: l.total_avaliacoes ?? "",
+        Instagram: l.instagram_username ? `@${l.instagram_username}` : "",
+        "Seguidores Instagram": l.instagram_seguidores ?? "",
         Potencial: pontuarLead(l),
         Mensagem: mensagemProspeccao(l),
       })),
@@ -401,6 +419,35 @@ export default function GoogleMapsLeads() {
     siteTipo: classificarSite(l.site),
   }));
 
+
+  async function enriquecerInstagram(buscaId: string) {
+    setEnriquecendoIg(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-maps-instagram-enriquecer", {
+        body: { busca_id: buscaId },
+      });
+      if (error) {
+        const payload = await getFunctionErrorPayload(error);
+        toast.error("Falha ao buscar Instagram: " + getFunctionErrorMessage(payload));
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["gm-leads", buscaId] });
+      if (data?.apify_nao_configurada) {
+        toast.warning("Conecte o Apify para conseguir os seguidores do Instagram. Os perfis encontrados foram salvos sem seguidores.");
+        return;
+      }
+      if (data?.limite_apify_atingido) {
+        toast.warning("Limite mensal de consultas de Instagram atingido. Alguns perfis ficaram sem seguidores.");
+      }
+      toast.success(
+        `Instagram: ${data?.com_instagram ?? 0} perfis encontrados em ${data?.processados ?? 0} empresas`,
+      );
+    } catch (e) {
+      toast.error("Falha ao buscar Instagram: " + (e instanceof Error ? e.message : "erro"));
+    } finally {
+      setEnriquecendoIg(false);
+    }
+  }
 
   function copiarTelefones() {
     const tels = leadsFiltrados.map((l) => l.telefone_internacional ?? l.telefone).filter(Boolean);
@@ -583,6 +630,13 @@ export default function GoogleMapsLeads() {
                 <span className="block text-muted-foreground">Ignora empresas já trazidas em buscas anteriores</span>
               </Label>
             </div>
+            <div className="mt-3 flex items-start gap-2">
+              <Switch id="buscar-instagram" checked={buscarInstagram} onCheckedChange={setBuscarInstagram} />
+              <Label htmlFor="buscar-instagram" className="text-xs font-normal leading-tight">
+                Buscar dados do Instagram
+                <span className="block text-muted-foreground">Procura o perfil no site da empresa e traz seguidores e o site do perfil</span>
+              </Label>
+            </div>
           </div>
 
           <div className="md:col-span-4 flex items-center justify-between gap-4">
@@ -723,6 +777,15 @@ export default function GoogleMapsLeads() {
                   {verificandoWhats ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-2" />}
                   Verificar WhatsApp
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => buscaSel && enriquecerInstagram(buscaSel)}
+                  disabled={!buscaSel || enriquecendoIg}
+                >
+                  {enriquecendoIg ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Instagram className="h-4 w-4 mr-2" />}
+                  Buscar Instagram
+                </Button>
                 <Button size="sm" variant="outline" onClick={copiarTelefones} disabled={!leadsFiltrados.length}>
                   <Phone className="h-4 w-4 mr-2" /> Copiar telefones
                 </Button>
@@ -769,6 +832,8 @@ export default function GoogleMapsLeads() {
                       <TableHead>Nome</TableHead>
                       <TableHead>Telefone</TableHead>
                       <TableHead>Site</TableHead>
+                      <TableHead>Instagram</TableHead>
+                      <TableHead className="text-right">Seguidores</TableHead>
                       <TableHead>WhatsApp</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead className="text-right">⭐</TableHead>
@@ -792,6 +857,36 @@ export default function GoogleMapsLeads() {
                           ) : (
                             <Badge variant="secondary">Sem site</Badge>
                           )}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {l.instagram_username ? (
+                            <a
+                              href={l.instagram_url ?? `https://www.instagram.com/${l.instagram_username}/`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex max-w-36 items-center gap-1 truncate text-primary hover:underline"
+                            >
+                              <Instagram className="h-3 w-3 shrink-0" /> @{l.instagram_username}
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          {l.instagram_site && (
+                            <a
+                              href={l.instagram_site}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block max-w-36 truncate text-[10px] text-muted-foreground hover:underline"
+                              title={l.instagram_site}
+                            >
+                              {l.instagram_site}
+                            </a>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-xs">
+                          {typeof l.instagram_seguidores === "number"
+                            ? l.instagram_seguidores.toLocaleString("pt-BR")
+                            : "—"}
                         </TableCell>
                         <TableCell className="text-xs">
                           {!l.telefone ? <span className="text-muted-foreground">—</span> : l.tem_whatsapp === true ? (
@@ -831,7 +926,7 @@ export default function GoogleMapsLeads() {
 
                     {!leadsFiltrados.length && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                        <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-6">
                           Nenhum lead {somenteComTel ? "com telefone" : ""}{somenteSemSite ? " sem site" : ""} nesta busca.
                         </TableCell>
                       </TableRow>
