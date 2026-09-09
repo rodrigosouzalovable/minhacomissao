@@ -141,6 +141,8 @@ export default function GoogleMapsLeads() {
   const [localizacao, setLocalizacao] = useState("");
   const [maxResultados, setMaxResultados] = useState(60);
   const [somenteNovos, setSomenteNovos] = useState(true);
+  const [buscarInstagram, setBuscarInstagram] = useState(false);
+  const [enriquecendoIg, setEnriquecendoIg] = useState(false);
 
   const [buscando, setBuscando] = useState(false);
   const [buscaSel, setBuscaSel] = useState<string | null>(null);
