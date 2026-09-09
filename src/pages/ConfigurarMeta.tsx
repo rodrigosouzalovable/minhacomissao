@@ -20,6 +20,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLab
 import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
+import InstanciaTemplatesDialog from "@/components/meta/InstanciaTemplatesDialog";
+
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
 import { DollarSign, FileText, CreditCard, Upload, Phone, ShieldCheck } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
