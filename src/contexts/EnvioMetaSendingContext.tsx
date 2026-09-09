@@ -832,6 +832,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           agendarPara: p.agendarPara ?? null,
           credor: p.credor ?? null,
           riscoQualidadeConfirmado: p.riscoQualidadeConfirmado === true,
+          validar_no_envio: p.validarNoEnvio !== false,
+
 
         },
         headers: { Authorization: `Bearer ${accessToken}` },
