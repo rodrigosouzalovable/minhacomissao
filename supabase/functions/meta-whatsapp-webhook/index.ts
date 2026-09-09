@@ -702,13 +702,17 @@ serve(async (req) => {
           // A etiqueta só pode ser de um atendente RESPONSÁVEL pela caixa de mensagens
           // (folder) em que a conversa está. Caixa Padrão => meta_inbox_default_members.
           let _folderIdContato: string | null = null;
+          // Conversa de lead do Google Maps usada no aquecimento: fica na caixa
+          // AQUECIMENTO, sem etiqueta de atendente e sem atendimento automático.
+          let _leadAquecimento = false;
           if (!isEcho && contatoIdFinal) {
             const { data: _cFolder } = await supabase
               .from('meta_whatsapp_contatos')
-              .select('folder_id')
+              .select('folder_id, origem_aquecimento')
               .eq('id', contatoIdFinal)
               .maybeSingle();
             _folderIdContato = (_cFolder as any)?.folder_id ?? null;
+            _leadAquecimento = String((_cFolder as any)?.origem_aquecimento || '') === 'lead_google_maps';
 
             // Regra: todo atendimento fica na caixa Padrão. Conversas marcadas na
             // caixa "IA" (legado) são devolvidas para a Padrão ao receber mensagem.
@@ -728,7 +732,7 @@ serve(async (req) => {
             }
           }
 
-          if (!isEcho && contatoIdFinal) {
+          if (!isEcho && contatoIdFinal && !_leadAquecimento) {
             try {
               // Todas as etiquetas "Atendente:%" — independente de quem criou a etiqueta.
               // (Etiquetas criadas por outro login, como a do IAGO, também entram no rodízio.)
@@ -1378,7 +1382,7 @@ serve(async (req) => {
           }
 
           // ===== Atendimento automático com IA (caixa "IA" + atendente IAGO) =====
-          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao && !imagemSemLeitura && !pediuBloqueio) {
+          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao && !imagemSemLeitura && !pediuBloqueio && !_leadAquecimento) {
 
 
             const iaTask = (async () => {

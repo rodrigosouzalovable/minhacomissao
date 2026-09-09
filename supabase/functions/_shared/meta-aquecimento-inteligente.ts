@@ -145,6 +145,81 @@ export async function leadsParaAquecimento(
 
 }
 
+/** Caixa de mensagens AQUECIMENTO (Inbox Meta). */
+export const FOLDER_AQUECIMENTO_ID = "4f7a52c0-9c86-4b80-8867-4ade7a6df441";
+/** Marca que identifica conversas de leads do Google Maps usados no aquecimento. */
+export const ORIGEM_LEAD_AQUECIMENTO = "lead_google_maps";
+
+/**
+ * Registra a conversa do lead do Google Maps na caixa AQUECIMENTO, para que o
+ * envio apareça no Inbox e possa ser acompanhado separadamente.
+ * Essas conversas ficam fora do atendimento automático (IAGO) e do rodízio.
+ */
+export async function registrarConversaLead(
+  supabase: any,
+  inst: { id: string; user_id?: string | null },
+  telefone: string,
+  nome: string | null,
+  templateNome: string,
+  wamid?: string | null,
+) {
+  try {
+    const agora = new Date().toISOString();
+    const preview = `[Aquecimento] template ${templateNome}`;
+
+    const { data: existente } = await supabase
+      .from("meta_whatsapp_contatos")
+      .select("id")
+      .eq("instancia_id", inst.id)
+      .eq("telefone", telefone)
+      .maybeSingle();
+
+    let contatoId: string | null = (existente as any)?.id ?? null;
+    if (contatoId) {
+      await supabase.from("meta_whatsapp_contatos").update({
+        ultima_mensagem: preview,
+        ultima_mensagem_em: agora,
+        atualizado_em: agora,
+        arquivado: false,
+        folder_id: FOLDER_AQUECIMENTO_ID,
+        origem_aquecimento: ORIGEM_LEAD_AQUECIMENTO,
+        ...(nome ? { nome } : {}),
+      }).eq("id", contatoId);
+    } else {
+      const { data: novo } = await supabase.from("meta_whatsapp_contatos").insert({
+        user_id: inst.user_id,
+        instancia_id: inst.id,
+        telefone,
+        telefone_visivel: true,
+        nome: nome || null,
+        ultima_mensagem: preview,
+        ultima_mensagem_em: agora,
+        folder_id: FOLDER_AQUECIMENTO_ID,
+        origem_aquecimento: ORIGEM_LEAD_AQUECIMENTO,
+      }).select("id").maybeSingle();
+      contatoId = (novo as any)?.id ?? null;
+    }
+
+    await supabase.from("meta_whatsapp_mensagens").insert({
+      user_id: inst.user_id,
+      instancia_id: inst.id,
+      telefone,
+      direcao: "saida",
+      conteudo: preview,
+      tipo_conteudo: "texto",
+      timestamp_msg: agora,
+      status_envio: "enviada",
+      wa_message_id: wamid || null,
+      template_nome: templateNome,
+    });
+
+    return contatoId;
+  } catch (e) {
+    console.log("[aquecimento] falha ao registrar conversa do lead:", String(e).slice(0, 200));
+    return null;
+  }
+}
+
 export async function marcarLeadUsado(
   supabase: any,
   leadId: string,

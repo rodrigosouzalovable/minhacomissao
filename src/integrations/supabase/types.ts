@@ -5665,6 +5665,7 @@ export type Database = {
           instancia_id: string
           nao_lido: number
           nome: string | null
+          origem_aquecimento: string | null
           sla_dispensado_em: string | null
           telefone: string | null
           telefone_visivel: boolean
@@ -5691,6 +5692,7 @@ export type Database = {
           instancia_id: string
           nao_lido?: number
           nome?: string | null
+          origem_aquecimento?: string | null
           sla_dispensado_em?: string | null
           telefone?: string | null
           telefone_visivel?: boolean
@@ -5717,6 +5719,7 @@ export type Database = {
           instancia_id?: string
           nao_lido?: number
           nome?: string | null
+          origem_aquecimento?: string | null
           sla_dispensado_em?: string | null
           telefone?: string | null
           telefone_visivel?: boolean
