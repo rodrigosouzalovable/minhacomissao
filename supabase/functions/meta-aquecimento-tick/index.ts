@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, display_phone, phone_number_id, access_token, waba_id, saude_quality, estado_pool, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
+      .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, saude_quality, estado_pool, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
       .eq('ativo', true)
       .eq('provider', 'meta')
       .eq('aquecimento_meta_ativo', true);
@@ -248,6 +248,11 @@ Deno.serve(async (req) => {
 
       if (leadId) {
         await marcarLeadUsado(supabase, leadId, envio.ok ? 'enviado' : `falha: ${String(envio.erro || '').slice(0, 120)}`);
+      }
+
+      // Conversa do lead fica na caixa AQUECIMENTO, para acompanhamento separado.
+      if (fonte === 'lead' && envio.ok) {
+        await registrarConversaLead(supabase, inst, telefone, nomeDestino, tpl.name, envio.wamid);
       }
 
       if (envio.ok) {
