@@ -73,7 +73,11 @@ function cidadeDoEndereco(endereco?: string | null): string {
   return (partes[partes.length - 2] || "").replace(/\s*-\s*[A-Z]{2}$/i, "").trim();
 }
 
-/** Leads com WhatsApp confirmado, nunca usados no aquecimento, ordenados pelo score do nicho. */
+/**
+ * Leads com WhatsApp confirmado, ordenados pelo score do nicho.
+ * Entram os nunca usados e também os já usados há mais de 15 dias (carência),
+ * com prioridade para quem já respondeu alguma vez.
+ */
 export async function leadsParaAquecimento(
   supabase: any,
   limite = 40,
@@ -91,12 +95,14 @@ export async function leadsParaAquecimento(
     if (Number(s.score) > anterior) scoreMap.set(chave, Number(s.score));
   }
 
+  const carencia = new Date(Date.now() - 15 * 86400000).toISOString();
   const { data: leads } = await supabase
     .from("google_maps_leads")
-    .select("id, nome, telefone, telefone_internacional, categoria, endereco")
+    .select("id, nome, telefone, telefone_internacional, categoria, endereco, usado_aquecimento_em, resultado_aquecimento")
     .eq("tem_whatsapp", true)
-    .is("usado_aquecimento_em", null)
+    .or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`)
     .limit(600);
+
 
   const candidatos = (leads || [])
     .map((l: any) => {
