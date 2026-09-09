@@ -702,13 +702,17 @@ serve(async (req) => {
           // A etiqueta só pode ser de um atendente RESPONSÁVEL pela caixa de mensagens
           // (folder) em que a conversa está. Caixa Padrão => meta_inbox_default_members.
           let _folderIdContato: string | null = null;
+          // Conversa de lead do Google Maps usada no aquecimento: fica na caixa
+          // AQUECIMENTO, sem etiqueta de atendente e sem atendimento automático.
+          let _leadAquecimento = false;
           if (!isEcho && contatoIdFinal) {
             const { data: _cFolder } = await supabase
               .from('meta_whatsapp_contatos')
-              .select('folder_id')
+              .select('folder_id, origem_aquecimento')
               .eq('id', contatoIdFinal)
               .maybeSingle();
             _folderIdContato = (_cFolder as any)?.folder_id ?? null;
+            _leadAquecimento = String((_cFolder as any)?.origem_aquecimento || '') === 'lead_google_maps';
 
             // Regra: todo atendimento fica na caixa Padrão. Conversas marcadas na
             // caixa "IA" (legado) são devolvidas para a Padrão ao receber mensagem.
