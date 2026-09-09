@@ -543,9 +543,11 @@ export default function Acordos() {
         filtroDataVencimento: filtroDataVencimento ? filtroDataVencimento.toISOString() : null,
         filtroDataCriacaoFrom: filtroDataCriacao?.from ? filtroDataCriacao.from.toISOString() : null,
         filtroDataCriacaoTo: filtroDataCriacao?.to ? filtroDataCriacao.to.toISOString() : null,
+        credorFilter,
       }));
     } catch {}
-  }, [search, statusFilter, abaAtiva, selectedUserId, filtroDataVencimento, filtroDataCriacao]);
+  }, [search, statusFilter, abaAtiva, selectedUserId, filtroDataVencimento, filtroDataCriacao, credorFilter]);
+
 
   // Restaurar scrollY após carregar lista
   useEffect(() => {
