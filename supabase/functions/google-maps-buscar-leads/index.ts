@@ -424,6 +424,19 @@ Deno.serve(async (req) => {
       })
       .eq("id", busca.id);
 
+    // Enriquecimento de Instagram em segundo plano (não trava a resposta da busca)
+    if (body.enriquecer_instagram && rows.length > 0) {
+      void fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/google-maps-instagram-enriquecer`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ busca_id: busca.id }),
+      }).catch((e) => console.error("falha ao disparar enriquecimento de Instagram:", e));
+    }
+
     return new Response(
       JSON.stringify({
         busca_id: busca.id,
