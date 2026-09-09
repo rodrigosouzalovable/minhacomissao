@@ -41,10 +41,14 @@ Deno.serve(async (req) => {
     // ===== Modelos marcados para injeção =====
     const { data: marcados } = await supabase
       .from("meta_templates_mestre")
-      .select("id, nome")
+      .select("id, nome, idioma")
       .eq("injetar_em_novos", true)
       .order("criado_em", { ascending: true });
-    const lista = ((marcados as any[]) || []).map((r) => ({ id: r.id as string, nome: r.nome as string }));
+    const lista = ((marcados as any[]) || []).map((r) => ({
+      id: r.id as string,
+      nome: r.nome as string,
+      idioma: String(r.idioma || "pt_BR"),
+    }));
     if (lista.length === 0) {
       return json({ success: true, modelos: 0, erro_amigavel: "nenhum_modelo_marcado", instancias: [] });
     }
