@@ -337,6 +337,24 @@ Deno.serve(async (req) => {
         erroEnvio = String(e);
       }
 
+      if (erroEnvio && ehJaExiste(erroEnvio)) {
+        // O modelo já está nesse número: encerra como concluído e segue a fila.
+        await supabase
+          .from("meta_templates_onboarding_fila")
+          .update({
+            status: "APPROVED",
+            motivo: "já existente no número",
+            finalizado_em: new Date().toISOString(),
+          })
+          .eq("id", proximo.id);
+        await supabase
+          .from("meta_whatsapp_instances")
+          .update({ templates_auto_rejeicoes_seguidas: 0 })
+          .eq("id", inst.id);
+        processados.push({ instancia_id: inst.id, ok: true, ja_existia: true });
+        continue;
+      }
+
       if (erroEnvio) {
         const temporario = ehErroTemporario(erroEnvio) && !erroDeLimiteMeta(erroEnvio);
         if (temporario) {
