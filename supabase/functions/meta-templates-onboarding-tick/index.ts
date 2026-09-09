@@ -9,7 +9,8 @@
 //  - erro de limite/bloqueio da Meta → pausa 24h nesse número
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
-import { rotuloInstancia } from "../_shared/rotulo-instancia.ts";
+import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
+import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +19,7 @@ const corsHeaders = {
 
 const DESTINO_AVISO = ["5562991672674"];
 const MAX_INSTANCIAS_POR_RUN = 10;
+const MAX_TENTATIVAS = 3;
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), {
@@ -75,14 +77,10 @@ Deno.serve(async (req) => {
       if (!["APPROVED", "REJECTED", "FALHA_ENVIO"].includes(st)) continue;
 
       const motivo = ti.motivo_rejeicao || ti.erro || null;
-      await supabase
-        .from("meta_templates_onboarding_fila")
-        .update({ status: st, motivo, finalizado_em: new Date().toISOString() })
-        .eq("id", item.id);
 
       const { data: inst } = await supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, meta_verified_name, phone_number_id, templates_auto_rejeicoes_seguidas")
+        .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, templates_auto_rejeicoes_seguidas")
         .eq("id", item.instancia_id)
         .maybeSingle();
       const { data: mestre } = await supabase
@@ -90,8 +88,13 @@ Deno.serve(async (req) => {
         .select("nome")
         .eq("id", item.template_mestre_id)
         .maybeSingle();
+      const linhaBm = await linhaBmInstancia(supabase, inst || { id: item.instancia_id });
 
       if (st === "APPROVED") {
+        await supabase
+          .from("meta_templates_onboarding_fila")
+          .update({ status: st, motivo, finalizado_em: new Date().toISOString() })
+          .eq("id", item.id);
         await supabase
           .from("meta_whatsapp_instances")
           .update({ templates_auto_rejeicoes_seguidas: 0 })
@@ -99,7 +102,45 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Reprovado ou falha no envio
+      // Falha temporária da Meta: não é reprovação — volta para a fila e tenta de novo.
+      const tentativas = Number(item.tentativas || 1);
+      if (st === "FALHA_ENVIO" && ehErroTemporario(motivo) && tentativas < MAX_TENTATIVAS) {
+        const esperaSeg = sorteio(300, 600) * tentativas;
+        await supabase
+          .from("meta_templates_onboarding_fila")
+          .update({
+            status: "PENDENTE",
+            motivo,
+            tentativas: tentativas + 1,
+            agendado_para: new Date(Date.now() + esperaSeg * 1000).toISOString(),
+            finalizado_em: null,
+          })
+          .eq("id", item.id);
+
+        await notificarAdmin(supabase, {
+          tipo: "templates_onboarding_falha_temporaria",
+          destinatarios: DESTINO_AVISO,
+          chaveIdempotencia: `${item.id}:${tentativas}`,
+          umaVezPorChave: true,
+          mensagem:
+            `⏳ *Falha temporária da Meta*\n\n` +
+            `Número: *${rotuloInstancia(inst)}*\n` +
+            `${linhaBm}\n` +
+            `Modelo: *${mestre?.nome || item.template_mestre_id}*\n` +
+            `Motivo: ${humanizarErroTemplate(motivo)}\n` +
+            `Detalhe técnico: ${String(motivo || "").slice(0, 300)}\n\n` +
+            `O template *não foi reprovado*. Vou tentar de novo automaticamente (tentativa ${tentativas + 1} de ${MAX_TENTATIVAS}). A fila deste número continua.`,
+        });
+        avisos.push({ tipo: "falha_temporaria", instancia_id: item.instancia_id, tentativa: tentativas + 1 });
+        continue;
+      }
+
+      // Reprovação real da Meta ou falha definitiva de cadastro
+      await supabase
+        .from("meta_templates_onboarding_fila")
+        .update({ status: st, motivo, finalizado_em: new Date().toISOString() })
+        .eq("id", item.id);
+
       const seguidas = Number(inst?.templates_auto_rejeicoes_seguidas || 0) + 1;
       const limite = Number(cfg.max_rejeicoes_seguidas || 2);
       const pausar = seguidas >= limite;
@@ -119,8 +160,10 @@ Deno.serve(async (req) => {
         mensagem:
           `⚠️ *Template reprovado*\n\n` +
           `Número: *${rotuloInstancia(inst)}*\n` +
+          `${linhaBm}\n` +
           `Modelo: *${mestre?.nome || item.template_mestre_id}*\n` +
-          `Motivo: ${String(motivo || "sem motivo informado pela Meta").slice(0, 500)}\n\n` +
+          `Motivo: ${humanizarErroTemplate(motivo)}\n` +
+          `Detalhe técnico: ${String(motivo || "sem motivo informado pela Meta").slice(0, 300)}\n\n` +
           (pausar
             ? `⛔ Fila deste número *pausada* após ${seguidas} reprovações seguidas. Corrija manualmente e reative no card.`
             : `A fila continua. Entre e ajuste este modelo se quiser reenviar.`),
@@ -131,7 +174,7 @@ Deno.serve(async (req) => {
     // ===== 2) Conclusão: números sem nada pendente =====
     const { data: instsAtivas } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, meta_verified_name, phone_number_id, waba_id, access_token, ativo, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider")
+      .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, ativo, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider")
       .eq("templates_auto_copiar", true);
 
     const elegiveis = ((instsAtivas as any[]) || []).filter(
@@ -170,6 +213,7 @@ Deno.serve(async (req) => {
         mensagem:
           `✅ *Cópia de templates concluída*\n\n` +
           `Número: *${rotuloInstancia(inst)}*\n` +
+          `${await linhaBmInstancia(supabase, inst)}\n` +
           `Aprovados: *${aprovados}*\nReprovados: *${reprovados}*\nFalhas de envio: *${falhas}*\n` +
           `Total processado: *${lista.length}*`,
       });
@@ -279,6 +323,24 @@ Deno.serve(async (req) => {
       }
 
       if (erroEnvio) {
+        const temporario = ehErroTemporario(erroEnvio) && !erroDeLimiteMeta(erroEnvio);
+        if (temporario) {
+          // Volta para a fila: não conta como reprovação.
+          const esperaSeg = sorteio(300, 600);
+          await supabase
+            .from("meta_templates_onboarding_fila")
+            .update({
+              status: "PENDENTE",
+              motivo: erroEnvio.slice(0, 1000),
+              tentativas: 2,
+              agendado_para: new Date(Date.now() + esperaSeg * 1000).toISOString(),
+              finalizado_em: null,
+            })
+            .eq("id", proximo.id);
+          processados.push({ instancia_id: inst.id, ok: false, temporario: true, reenfileirado_em_seg: esperaSeg });
+          continue;
+        }
+
         await supabase
           .from("meta_templates_onboarding_fila")
           .update({ status: "FALHA_ENVIO", motivo: erroEnvio.slice(0, 1000), finalizado_em: new Date().toISOString() })
@@ -300,6 +362,7 @@ Deno.serve(async (req) => {
             mensagem:
               `⛔ *Cópia de templates pausada 24h*\n\n` +
               `Número: *${rotuloInstancia(inst)}*\n` +
+              `${await linhaBmInstancia(supabase, inst)}\n` +
               `A Meta respondeu com limite/bloqueio: ${erroEnvio.slice(0, 400)}`,
           });
         }
