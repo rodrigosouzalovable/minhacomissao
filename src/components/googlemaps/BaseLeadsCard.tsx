@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Database, Download, Loader2, Search } from "lucide-react";
+import { Database, Download, Loader2, Search, ShieldCheck } from "lucide-react";
 
 const PAGE_SIZE = 50;
 
@@ -90,6 +90,32 @@ export function BaseLeadsCard() {
     fn();
     setPagina(0);
   }
+
+  async function verificarPendentes() {
+    setVerificando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-maps-verificar-whatsapp", {
+        body: { limite: 300 },
+      });
+      if (error) throw error;
+      if ((data as any)?.error === "sem_instancia") {
+        toast.warning((data as any).message ?? "Nenhum número WhatsApp conectado para verificar");
+        return;
+      }
+      const d = data as any;
+      if (!d?.verificados) {
+        toast.message("Nenhum telefone pendente de verificação");
+      } else {
+        toast.success(`Verificados ${d.verificados}: ✅ ${d.com_whatsapp} com WhatsApp • ❌ ${d.sem_whatsapp} sem`);
+      }
+      qc.invalidateQueries({ queryKey: ["gm-base-leads"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao verificar");
+    } finally {
+      setVerificando(false);
+    }
+  }
+
 
   async function baixarExcel() {
     setBaixando(true);
