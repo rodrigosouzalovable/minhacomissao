@@ -19,6 +19,7 @@ const corsHeaders = {
 
 const DESTINO_AVISO = ["5562991672674"];
 const MAX_INSTANCIAS_POR_RUN = 10;
+const MAX_TENTATIVAS = 3;
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), {
