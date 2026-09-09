@@ -963,18 +963,21 @@ Deno.serve(async (req) => {
       }
 
       try {
+        const t0 = Date.now();
         const result = await processarItem(claimed);
+        let gastoMs = Date.now() - t0;
         if (result.advanced) processadosTotal++;
 
-        // Delay curto (ex.: 10–15s) é menor que a granularidade do agendador
-        // (10s), o que arredondava o ritmo real para ~20s. Neste caso a própria
-        // execução aguarda o delay exato e envia o próximo item, respeitando ao
-        // milissegundo o intervalo configurado pelo usuário.
+        // Delay curto (ex.: 3–6s) é menor que a granularidade do agendador
+        // (10s) e menor que o tempo gasto em cada envio. Aqui a própria execução
+        // aguarda o delay exato DESCONTANDO o tempo já gasto no processamento,
+        // de modo que o intervalo real entre mensagens seja o configurado.
         if (result.advanced) {
           const inicioLoop = Date.now();
           let delayMs = result.delayMs;
           while (delayMs > 0 && delayMs <= DELAY_CURTO_MS && Date.now() - inicioLoop + delayMs < ORCAMENTO_MS) {
-            await sleep(delayMs);
+            const espera = Math.max(0, delayMs - gastoMs);
+            if (espera > 0) await sleep(espera);
 
             // Renova a trava para que outro tick não roube a campanha no meio do laço.
             const { data: renovado } = await supabase
@@ -987,7 +990,12 @@ Deno.serve(async (req) => {
               .maybeSingle();
             if (!renovado) break; // pausado, cancelado, concluído ou trava perdida
 
-            const proximo = await processarItem({ ...renovado, worker_lock_token: claimed.worker_lock_token });
+            const tItem = Date.now();
+            const proximo = await processarItem(
+              { ...renovado, worker_lock_token: claimed.worker_lock_token },
+              { ignorarProximoEm: true },
+            );
+            gastoMs = Date.now() - tItem;
             if (!proximo.advanced) break;
             processadosTotal++;
             delayMs = proximo.delayMs;
