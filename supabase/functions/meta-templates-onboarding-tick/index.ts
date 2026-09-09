@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       const linhaBm = await linhaBmInstancia(supabase, inst || { id: item.instancia_id });
 
-      if (st === "APPROVED") {
+      if (st === "APPROVED" || ehJaExiste(motivo)) {
         await supabase
           .from("meta_templates_onboarding_fila")
           .update({ status: st, motivo, finalizado_em: new Date().toISOString() })
