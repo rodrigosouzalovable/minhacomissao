@@ -280,9 +280,23 @@ function AcordoCard({
                         Aguardando envio do boleto
                       </>}
                   </Badge>}
+                {acordo.empresa && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "font-semibold",
+                      acordo.empresa === 'ume_novo_mundo'
+                        ? "border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-950/30"
+                        : "border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950/30"
+                    )}
+                  >
+                    {getEmpresaLabel(acordo.empresa)}
+                  </Badge>
+                )}
                 <Badge variant={getStatusVariant(acordo.status)}>
                   {getStatusLabel(acordo.status)}
                 </Badge>
+
                 {canEdit && isNegociado && !isVencido && onToggleBoletoEnviado && (
                   <TooltipProvider delayDuration={150}>
                   <Tooltip>
