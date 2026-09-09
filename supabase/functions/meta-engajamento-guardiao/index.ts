@@ -210,22 +210,32 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Dispara uma rodada de aquecimento imediata quando houve alguém freado
+    // Dispara uma rodada de resgate imediata quando houve alguém freado
     if (avisos.length > 0) {
       try {
         await supabase.functions.invoke("meta-aquecimento-tick", { body: { forcar: true } });
       } catch (err) {
         console.log("[guardiao] tick falhou:", String(err).slice(0, 200));
       }
+    }
 
+    if (avisos.length > 0 || voltaram.length > 0) {
       try {
         const { notificarAdmin } = await import("../_shared/notificar-admin.ts");
+        const partes: string[] = [];
+        if (avisos.length > 0) {
+          partes.push(
+            `⚠️ *Em resgate de engajamento*\n${avisos.join("\n")}\n\n` +
+            `Motivo: poucas respostas nas últimas ${janelaH}h. O sistema já começou a conversar com contatos do Google Maps (empresas com atendimento automático) e com os números da UAZAPI para levantar a taxa de resposta.`,
+          );
+        }
+        if (voltaram.length > 0) {
+          partes.push(`✅ *Saíram do resgate*\n${voltaram.join("\n")}`);
+        }
         await notificarAdmin(supabase, {
           tipo: "meta_guardiao_engajamento",
-          mensagem:
-            `🛡️ *Guardião de engajamento*\n\n${avisos.join("\n")}\n\n` +
-            `Motivo: poucas respostas nas últimas ${janelaH}h. O aquecimento com os números da UAZAPI já foi acionado e o ritmo volta ao normal sozinho quando a taxa de resposta subir.`,
-          chaveIdempotencia: `meta_guardiao_${dia}_${avisos.length}`,
+          mensagem: `🛡️ *Guardião de engajamento*\n\n${partes.join("\n\n")}`,
+          chaveIdempotencia: `meta_guardiao_${dia}_${avisos.length}_${voltaram.length}`,
           umaVezPorChave: true,
           destinatarios: DESTINOS,
         });
@@ -233,6 +243,7 @@ Deno.serve(async (req) => {
         console.log("[guardiao] notificarAdmin falhou:", String(err).slice(0, 200));
       }
     }
+
 
     return new Response(JSON.stringify({ ok: true, dia, janela_horas: janelaH, total: resultados.length, freados: avisos.length, resultados }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
