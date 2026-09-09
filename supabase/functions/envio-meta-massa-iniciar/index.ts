@@ -358,6 +358,8 @@ Deno.serve(async (req) => {
         folder_id: folderId,
         credor: credorCampanha,
         permitir_qualidade_baixa: permitirQualidadeBaixa,
+        validar_no_envio: validarNoEnvio,
+
         instancias_risco_aceito: instanciasRiscoAceito,
         bloqueados_blacklist: listaBlacklist,
 
