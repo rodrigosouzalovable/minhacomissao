@@ -113,6 +113,8 @@ export async function leadsParaAquecimento(
         telefone: tel.startsWith("55") ? tel : `55${tel}`,
         nicho: (l.categoria as string | null) || null,
         cidade: cidadeDoEndereco(l.endereco),
+        respondedor: String(l.resultado_aquecimento || "").toLowerCase().includes("respondeu"),
+        nunca_usado: !l.usado_aquecimento_em,
       } as LeadAquecimento;
     })
     .filter((l: LeadAquecimento) => l.telefone.length >= 12 && l.telefone.length <= 13)
@@ -128,13 +130,16 @@ export async function leadsParaAquecimento(
     .in("telefone_sufixo", sufixos.slice(0, 500));
   const suprimidos = new Set((sup || []).map((s: any) => String(s.telefone_sufixo)));
 
+  const peso = (l: LeadAquecimento) =>
+    (scoreMap.get(String(l.nicho || "").toLowerCase()) ?? 0) +
+    (l.respondedor ? 100 : 0) +
+    (l.nunca_usado ? 10 : 0);
+
   return candidatos
     .filter((l: LeadAquecimento) => !suprimidos.has(l.telefone.slice(-8)))
-    .sort((a: LeadAquecimento, b: LeadAquecimento) =>
-      (scoreMap.get(String(b.nicho || "").toLowerCase()) ?? 0) -
-      (scoreMap.get(String(a.nicho || "").toLowerCase()) ?? 0)
-    )
+    .sort((a: LeadAquecimento, b: LeadAquecimento) => peso(b) - peso(a))
     .slice(0, limite);
+
 }
 
 export async function marcarLeadUsado(
