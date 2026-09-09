@@ -202,7 +202,7 @@ export default function NovoAcordo() {
     toast({
       title: 'Dados extraídos!',
       description: credorDetectadoLabel
-        ? `Credor detectado: ${credorDetectadoLabel}. Revise os dados antes de salvar.`
+        ? `A IA sugeriu o credor ${credorDetectadoLabel}, mas a seleção é manual. Revise os dados antes de salvar.`
         : 'Revise as informações na aba "Preencher Manualmente" antes de salvar.',
     });
   };
