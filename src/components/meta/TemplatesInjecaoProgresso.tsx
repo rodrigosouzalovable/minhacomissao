@@ -72,6 +72,9 @@ function rotuloPrevisao(d: Date | null): string {
 
 export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
   const [resumo, setResumo] = useState<Resumo | null>(null);
+  const [atualizando, setAtualizando] = useState(false);
+
+
 
   const carregar = useCallback(async () => {
     if (instanciaIds.length === 0) {
