@@ -1222,7 +1222,7 @@ export default function MetaTemplates() {
               <DialogTitle>Modelos para números novos</DialogTitle>
               <DialogDescription>
                 Os marcados são aplicados automaticamente em cada número novo, todos no mesmo dia,
-                um por vez com 15–25 min de intervalo, das 09h às 18h e nunca no domingo.
+                um por vez com 15–25 min de intervalo, das 07h às 20h e nunca no domingo.
               </DialogDescription>
             </DialogHeader>
 

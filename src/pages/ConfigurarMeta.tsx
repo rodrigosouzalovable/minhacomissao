@@ -448,7 +448,7 @@ export default function ConfigurarMeta() {
     if (error) return toast.error("Erro ao iniciar: " + error.message);
     if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
     toast.success(
-      `${data.enfileirados} modelo(s) na fila de ${data.instancias_afetadas} número(s). O envio é gradual: 1 por vez, 15–25 min, das 09h às 18h.`,
+      `${data.enfileirados} modelo(s) na fila de ${data.instancias_afetadas} número(s). O envio é gradual: 1 por vez, 15–25 min, das 07h às 20h.`,
     );
     setAuditoria(null);
     carregar();
@@ -1931,7 +1931,7 @@ export default function ConfigurarMeta() {
                 <div>
                   <Label>Copiar templates aprovados automaticamente</Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 09h às 18h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
+                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 07h às 20h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
                   </p>
                 </div>
                 <Switch
@@ -2027,7 +2027,7 @@ export default function ConfigurarMeta() {
                 <div>
                   <Label>Copiar templates aprovados automaticamente</Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 09h às 18h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
+                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 07h às 20h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
                   </p>
                 </div>
                 <Switch
@@ -2250,7 +2250,7 @@ export default function ConfigurarMeta() {
               )}
 
               <p className="text-xs text-muted-foreground">
-                A injeção é gradual: 1 modelo por vez, com intervalo de 15 a 25 minutos, das 09h às 18h e nunca no domingo.
+                A injeção é gradual: 1 modelo por vez, com intervalo de 15 a 25 minutos, das 07h às 20h e nunca no domingo.
                 A fila continua no dia seguinte se não terminar.
               </p>
             </div>
