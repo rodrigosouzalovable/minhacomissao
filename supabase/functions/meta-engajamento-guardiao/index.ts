@@ -176,14 +176,29 @@ Deno.serve(async (req) => {
 
 
         const rotuloFaixa = faixa === "atencao"
-          ? "ritmo reduzido a 60% + aquecimento"
+          ? `ritmo reduzido a 60% + resgate (${mixLeads}% Google Maps)`
           : faixa === "forte"
-          ? "ritmo reduzido a 30% + aquecimento forte"
-          : "fora da campanha hoje, só aquecimento";
+          ? `ritmo reduzido a 30% + resgate forte (${mixLeads}% Google Maps)`
+          : "fora da campanha hoje, só resgate com contatos do Google Maps";
         avisos.push(
           `• *${nome}* — resposta ${respostaPct.toFixed(1)}% (${e} de ${s} em ${janelaH}h)\n   ➜ ${rotuloFaixa}`,
         );
+      } else {
+        // Voltou ao patamar saudável: encerra o resgate do dia e avisa.
+        const { data: emResgate } = await supabase
+          .from("meta_aquecimento_trilha")
+          .select("id")
+          .eq("instancia_id", inst.id).eq("dia", dia)
+          .eq("motivo", "resgate_campanha").eq("status", "ativa")
+          .maybeSingle();
+        if (emResgate) {
+          await supabase.from("meta_aquecimento_trilha")
+            .update({ status: "concluida", mix_leads_pct: 0, mix_uazapi_pct: 100 })
+            .eq("id", emResgate.id);
+          voltaram.push(`• *${nome}* — resposta ${respostaPct.toFixed(1)}%, de volta ao volume normal`);
+        }
       }
+
 
       resultados.push({
         instancia: nome,
