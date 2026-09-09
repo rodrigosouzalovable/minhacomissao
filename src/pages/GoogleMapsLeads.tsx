@@ -832,6 +832,8 @@ export default function GoogleMapsLeads() {
                       <TableHead>Nome</TableHead>
                       <TableHead>Telefone</TableHead>
                       <TableHead>Site</TableHead>
+                      <TableHead>Instagram</TableHead>
+                      <TableHead className="text-right">Seguidores</TableHead>
                       <TableHead>WhatsApp</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead className="text-right">⭐</TableHead>
