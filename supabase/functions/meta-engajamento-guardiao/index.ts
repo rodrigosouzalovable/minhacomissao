@@ -19,6 +19,10 @@ type Faixa = "ok" | "atencao" | "forte" | "corte";
 
 const FATOR: Record<Faixa, number> = { ok: 1, atencao: 0.6, forte: 0.3, corte: 0 };
 const ALVO_AQUEC: Record<Faixa, number> = { ok: 0, atencao: 3, forte: 6, corte: 10 };
+// % dos destinos do resgate que sai para contatos do Google Maps (empresas que
+// respondem sozinhas). O resto continua com os números da UAZAPI.
+const MIX_LEADS: Record<Faixa, number> = { ok: 0, atencao: 30, forte: 60, corte: 100 };
+
 
 function nowBrt(): Date {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
