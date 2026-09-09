@@ -476,8 +476,18 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
 // Valida um lote de pendentes com TODAS as instâncias UAZAPI conectadas.
 // Sem WhatsApp -> item marcado como 'sem_whatsapp' (não é enviado, não é erro).
 // Erro de validação / nenhuma UAZAPI conectada -> segue o envio normalmente.
-const VAL_LOTE = 30;
+const VAL_LOTE = 100;
 const so8 = (t: string) => String(t || '').replace(/\D/g, '').slice(-8);
+
+// Guarda de concorrência: uma validação por job de cada vez (a validação roda em
+// segundo plano, sem travar a fila de envio).
+const validandoJobs = new Set<string>();
+
+function validarEmSegundoPlano(job: any) {
+  if (validandoJobs.has(job.id)) return;
+  validandoJobs.add(job.id);
+  validarLotePendentes(job).finally(() => validandoJobs.delete(job.id));
+}
 
 async function validarLotePendentes(job: any): Promise<void> {
   try {
