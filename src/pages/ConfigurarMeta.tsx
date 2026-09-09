@@ -1572,9 +1572,18 @@ export default function ConfigurarMeta() {
                             )}
                           </Button>
 
-                          <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
-                            {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="outline" disabled={sincronizando === inst.id}>
+                                {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem onSelect={() => sincronizar(inst)}>Aplicar templates</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => setInstTemplatesVer(inst)}>Visualizar templates</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
                           <Button
                             size="sm"
                             variant="outline"
