@@ -285,6 +285,8 @@ export default function ConfigurarMeta() {
 
 
   const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
+  const [instTemplatesVer, setInstTemplatesVer] = useState<Instancia | null>(null);
+
 
 
   const templatesPorInstancia = useMemo(() => {
