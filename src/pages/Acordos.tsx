@@ -518,6 +518,8 @@ export default function Acordos() {
   const [dataVencidaPorAcordo, setDataVencidaPorAcordo] = useState<Map<string, string>>(new Map());
   const [enviandoWhatsApp, setEnviandoWhatsApp] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>(initial.selectedUserId ?? 'todos');
+  const [credorFilter, setCredorFilter] = useState<string>(initial.credorFilter ?? 'todos');
+
   const [rankingAberto, setRankingAberto] = useState(false);
   const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(parseDate(initial.filtroDataVencimento));
   const [filtroDataCriacao, setFiltroDataCriacao] = useState<{ from?: Date; to?: Date } | undefined>(() => {
