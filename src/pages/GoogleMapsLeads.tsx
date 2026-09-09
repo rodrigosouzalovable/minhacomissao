@@ -262,7 +262,13 @@ export default function GoogleMapsLeads() {
     setErroBusca(null);
     try {
       const { data, error } = await supabase.functions.invoke("google-maps-buscar-leads", {
-        body: { categoria, localizacao, max_resultados: maxResultados, somente_novos: somenteNovos },
+        body: {
+          categoria,
+          localizacao,
+          max_resultados: maxResultados,
+          somente_novos: somenteNovos,
+          enriquecer_instagram: buscarInstagram,
+        },
       });
       if (error) {
         const payload = await getFunctionErrorPayload(error);
