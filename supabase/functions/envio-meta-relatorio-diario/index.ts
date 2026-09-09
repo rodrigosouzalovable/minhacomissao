@@ -138,6 +138,53 @@ Deno.serve(async (req) => {
       linhas.push(`🥉 Pior: ${pior.nome} (${pct(pior.taxa)})`);
     }
 
+    // ===== Comparativo por modelo de mensagem (30 dias, só campanhas do admin) =====
+    try {
+      const inicio30d = new Date(new Date(inicioDia).getTime() - 30 * 86400000).toISOString();
+      const { data: jobs30 } = await supabase
+        .from("envio_meta_job")
+        .select("id, template_nome")
+        .gte("created_at", inicio30d)
+        .in("user_id", donoIds);
+      const tplPorJob = new Map<string, string>();
+      (jobs30 || []).forEach((j: any) => tplPorJob.set(j.id, j.template_nome || "(sem modelo)"));
+      if (tplPorJob.size > 0) {
+        const { data: res30 } = await supabase
+          .from("envio_meta_job_resultado")
+          .select("job_id, enviados, contatos_responderam, acordos_fechados, acordos_valor")
+          .in("job_id", Array.from(tplPorJob.keys()));
+        const agg = new Map<string, { env: number; resp: number; ac: number; val: number }>();
+        (res30 || []).forEach((r: any) => {
+          const tpl = tplPorJob.get(r.job_id) || "(sem modelo)";
+          const a = agg.get(tpl) || { env: 0, resp: 0, ac: 0, val: 0 };
+          a.env += Number(r.enviados || 0);
+          a.resp += Number(r.contatos_responderam || 0);
+          a.ac += Number(r.acordos_fechados || 0);
+          a.val += Number(r.acordos_valor || 0);
+          agg.set(tpl, a);
+        });
+        const lista = Array.from(agg.entries())
+          .filter(([, a]) => a.env >= 20)
+          .map(([tpl, a]) => ({ tpl, ...a, taxa: a.env > 0 ? (a.resp / a.env) * 100 : 0 }))
+          .sort((x, y) => y.taxa - x.taxa);
+        if (lista.length > 0) {
+          linhas.push("");
+          linhas.push("*🧩 Desempenho por modelo (30 dias)*");
+          for (const l of lista) {
+            linhas.push(`• \`${l.tpl}\` — ${l.env} enviadas · resposta ${pct(l.taxa)}`);
+            linhas.push(`   acordos ${l.ac} · ${brl(l.val)}`);
+          }
+        }
+      }
+    } catch (_e) {
+      // o relatório não falha por causa deste bloco
+    }
+
+    linhas.push("");
+    linhas.push("_Os acordos continuam sendo contados por até 15 dias após o envio, conforme os atendentes lançam._");
+
+
+
     const result = await notificarNumeros(supabase, {
       tipo: "campanhas_resultado_diario",
       mensagem: linhas.join("\n"),
