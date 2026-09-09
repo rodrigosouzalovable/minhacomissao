@@ -2047,7 +2047,16 @@ export default function ConfigurarMeta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <InstanciaTemplatesDialog
+        instancia={instTemplatesVer}
+        open={!!instTemplatesVer}
+        onOpenChange={(o) => !o && setInstTemplatesVer(null)}
+        onSincronizar={async () => {
+          if (instTemplatesVer) await sincronizar(instTemplatesVer);
+        }}
+      />
       <TemplatePreviewDialog
+
         template={previewTpl}
         open={!!previewTpl}
         onOpenChange={(o) => !o && setPreviewTpl(null)}
