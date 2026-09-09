@@ -96,8 +96,22 @@ interface Lead {
   instagram_seguidores: number | null;
   instagram_site: string | null;
   instagram_atualizado_em: string | null;
+  instagram_status: string | null;
 }
 
+
+function textoStatusInstagram(l: Lead): string {
+  if (l.instagram_username) {
+    const st = l.instagram_status ?? "";
+    if (st === "perfil_restrito") return "perfil restrito";
+    if (st === "perfil_nao_encontrado") return "@ não encontrado";
+    if (st.startsWith("erro:")) return "não consultado";
+    if (!l.instagram_atualizado_em) return "buscando...";
+    return "—";
+  }
+  if (!l.instagram_atualizado_em) return l.site ? "buscando..." : "—";
+  return "—";
+}
 
 interface Busca {
   id: string;
@@ -204,6 +218,12 @@ export default function GoogleMapsLeads() {
       if (error) throw error;
       return data as Lead[];
     },
+    // Recarrega enquanto o Instagram ainda está sendo buscado em segundo plano
+    refetchInterval: (query) => {
+      const atuais = (query.state.data as Lead[] | undefined) ?? [];
+      const pendentes = atuais.filter((l) => !!l.site && !l.instagram_atualizado_em);
+      return pendentes.length > 0 ? 10_000 : false;
+    },
   });
 
   const leadsBase = (leads ?? []).filter((l) => (somenteComTel ? !!l.telefone : true));
@@ -218,6 +238,10 @@ export default function GoogleMapsLeads() {
   const totSemSite = leadsBase.filter((l) => classificarSite(l.site) === "sem_site").length;
   const totRedeSocial = leadsBase.filter((l) => classificarSite(l.site) === "rede_social").length;
   const totComSite = leadsBase.filter((l) => classificarSite(l.site) === "com_site").length;
+  const igCandidatos = leadsBase.filter((l) => !!l.site);
+  const igVerificados = igCandidatos.filter((l) => !!l.instagram_atualizado_em).length;
+  const igPendentes = igCandidatos.length - igVerificados;
+  const igEncontrados = leadsBase.filter((l) => !!l.instagram_username).length;
   const leadsProspeccao = leadsBase.filter(
     (l) => classificarSite(l.site) !== "com_site" && l.tem_whatsapp === true,
   );
@@ -439,9 +463,13 @@ export default function GoogleMapsLeads() {
       if (data?.limite_apify_atingido) {
         toast.warning("Limite mensal de consultas de Instagram atingido. Alguns perfis ficaram sem seguidores.");
       }
-      toast.success(
-        `Instagram: ${data?.com_instagram ?? 0} perfis encontrados em ${data?.processados ?? 0} empresas`,
-      );
+      const partes = [
+        `${data?.com_instagram ?? 0} perfis encontrados em ${data?.processados ?? 0} empresas`,
+        `${data?.com_seguidores ?? 0} com seguidores`,
+      ];
+      if (data?.sem_seguidores) partes.push(`${data.sem_seguidores} sem seguidores (privado/inexistente)`);
+      if (data?.sem_site) partes.push(`${data.sem_site} sem site`);
+      toast.success(`Instagram: ${partes.join(" • ")}`);
     } catch (e) {
       toast.error("Falha ao buscar Instagram: " + (e instanceof Error ? e.message : "erro"));
     } finally {
@@ -806,6 +834,16 @@ export default function GoogleMapsLeads() {
                 <Badge variant="secondary">{totSemWhats} sem WhatsApp</Badge>
                 {totNaoVerif > 0 && <Badge variant="outline" className="border-amber-500 text-amber-600">{totNaoVerif} não verificado(s)</Badge>}
                 {leadsProspeccao.length > 0 && <Badge variant="outline" className="border-primary text-primary">{leadsProspeccao.length} oportunidades</Badge>}
+                {igPendentes > 0 ? (
+                  <Badge variant="outline" className="border-pink-500 text-pink-600">
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    Instagram: {igVerificados} de {igCandidatos.length} verificados...
+                  </Badge>
+                ) : igCandidatos.length > 0 && (
+                  <Badge variant="outline" className="border-pink-500 text-pink-600">
+                    <Instagram className="mr-1 h-3 w-3" /> {igEncontrados} com Instagram
+                  </Badge>
+                )}
               </div>
             )}
           </CardHeader>
@@ -884,9 +922,11 @@ export default function GoogleMapsLeads() {
                           )}
                         </TableCell>
                         <TableCell className="text-right text-xs">
-                          {typeof l.instagram_seguidores === "number"
-                            ? l.instagram_seguidores.toLocaleString("pt-BR")
-                            : "—"}
+                          {typeof l.instagram_seguidores === "number" ? (
+                            l.instagram_seguidores.toLocaleString("pt-BR")
+                          ) : (
+                            <span className="text-muted-foreground">{textoStatusInstagram(l)}</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-xs">
                           {!l.telefone ? <span className="text-muted-foreground">—</span> : l.tem_whatsapp === true ? (

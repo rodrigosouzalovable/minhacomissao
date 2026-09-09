@@ -1,0 +1,1 @@
+ALTER TABLE public.google_maps_leads ADD COLUMN IF NOT EXISTS instagram_status TEXT;

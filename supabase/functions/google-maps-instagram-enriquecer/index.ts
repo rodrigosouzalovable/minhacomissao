@@ -319,10 +319,28 @@ Deno.serve(async (req) => {
     // 4) Gravar nos leads
     const agora = new Date().toISOString();
     let comInstagram = 0;
+    let comSeguidores = 0;
+    let semSeguidores = 0;
+    const semSite = (leads ?? []).filter((l) => !l.site && !l.instagram_url).length;
     for (const lead of candidatos) {
       const achado = achados.get(lead.id) ?? null;
       const perfil = achado ? perfis.get(achado.username) ?? null : null;
       if (achado) comInstagram++;
+
+      let status: string | null = null;
+      if (!achado) {
+        status = lead.site ? "sem_instagram_no_site" : "sem_site";
+      } else if (typeof perfil?.seguidores === "number") {
+        comSeguidores++;
+      } else {
+        semSeguidores++;
+        const erro = (perfil?.erro ?? "").toLowerCase();
+        if (!perfil) status = "seguidores_pendentes";
+        else if (erro.includes("restrict") || erro.includes("private")) status = "perfil_restrito";
+        else if (erro.includes("not_found") || erro.includes("nao_encontrado")) status = "perfil_nao_encontrado";
+        else status = erro ? `erro:${erro.slice(0, 60)}` : "sem_seguidores";
+      }
+
       await supabase
         .from("google_maps_leads")
         .update({
@@ -330,6 +348,7 @@ Deno.serve(async (req) => {
           instagram_username: achado?.username ?? null,
           instagram_seguidores: perfil?.seguidores ?? null,
           instagram_site: perfil?.site ?? null,
+          instagram_status: status,
           instagram_atualizado_em: agora,
         })
         .eq("id", lead.id);
@@ -339,6 +358,9 @@ Deno.serve(async (req) => {
       JSON.stringify({
         processados: candidatos.length,
         com_instagram: comInstagram,
+        com_seguidores: comSeguidores,
+        sem_seguidores: semSeguidores,
+        sem_site: semSite,
         chamadas_apify: chamadas,
         perfis_do_cache: Math.max(0, perfis.size - chamadas),
         limite_apify_atingido: bloqueadoPorLimite,
