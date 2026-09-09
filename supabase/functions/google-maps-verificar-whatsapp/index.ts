@@ -28,26 +28,33 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader) return json({ error: "unauthorized" }, 401);
 
-    const userClient = createClient(SUPABASE_URL, ANON, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData } = await userClient.auth.getUser();
-    if (!userData?.user) return json({ error: "unauthorized" }, 401);
+    // Chamadas internas (cron / outras functions) usam a service role
+    const isService = authHeader.includes(SERVICE_ROLE);
+    if (!isService) {
+      const userClient = createClient(SUPABASE_URL, ANON, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: userData } = await userClient.auth.getUser();
+      if (!userData?.user) return json({ error: "unauthorized" }, 401);
+    }
 
     const body = await req.json().catch(() => ({}));
     const buscaId = String(body?.busca_id ?? "");
     const revalidar = body?.revalidar === true;
-    if (!buscaId) return json({ error: "busca_id é obrigatório" }, 400);
+    // Modo varredura: sem busca_id, limpa a fila de pendentes de toda a base
+    const varredura = !buscaId;
+    const limite = Math.min(Math.max(Number(body?.limite ?? 300), 1), 600);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-    // Leads da busca com telefone e ainda não verificados (ou todos, se revalidar)
+    // Leads com telefone e ainda não verificados (ou todos da busca, se revalidar)
     let q = admin
       .from("google_maps_leads")
       .select("id, telefone, telefone_internacional, tem_whatsapp")
-      .eq("busca_id", buscaId)
       .not("telefone", "is", null);
-    if (!revalidar) q = q.is("tem_whatsapp", null);
+    if (buscaId) q = q.eq("busca_id", buscaId);
+    if (!revalidar || varredura) q = q.is("tem_whatsapp", null);
+    if (varredura) q = q.order("created_at", { ascending: false }).limit(limite);
     const { data: leads, error: leadsErr } = await q;
     if (leadsErr) return json({ error: leadsErr.message }, 500);
 
