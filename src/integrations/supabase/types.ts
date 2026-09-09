@@ -2329,6 +2329,62 @@ export type Database = {
           },
         ]
       }
+      envio_meta_job_resultado: {
+        Row: {
+          acordos_fechados: number
+          acordos_valor: number
+          calculado_em: string
+          contatos_responderam: number
+          conversas_abertas: number
+          created_at: string
+          enviados: number
+          falhas: number
+          job_id: string
+          respostas: number
+          taxa_acordo: number
+          taxa_resposta: number
+          updated_at: string
+        }
+        Insert: {
+          acordos_fechados?: number
+          acordos_valor?: number
+          calculado_em?: string
+          contatos_responderam?: number
+          conversas_abertas?: number
+          created_at?: string
+          enviados?: number
+          falhas?: number
+          job_id: string
+          respostas?: number
+          taxa_acordo?: number
+          taxa_resposta?: number
+          updated_at?: string
+        }
+        Update: {
+          acordos_fechados?: number
+          acordos_valor?: number
+          calculado_em?: string
+          contatos_responderam?: number
+          conversas_abertas?: number
+          created_at?: string
+          enviados?: number
+          falhas?: number
+          job_id?: string
+          respostas?: number
+          taxa_acordo?: number
+          taxa_resposta?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "envio_meta_job_resultado_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "envio_meta_job"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estrategia_cliente: {
         Row: {
           acordo_quebrado: boolean
@@ -9955,6 +10011,30 @@ export type Database = {
       envio_meta_job_delivery_resumo: {
         Args: { _job_id: string }
         Returns: Json
+      }
+      envio_meta_job_resultado_calcular: {
+        Args: { _job_id: string }
+        Returns: {
+          acordos_fechados: number
+          acordos_valor: number
+          calculado_em: string
+          contatos_responderam: number
+          conversas_abertas: number
+          created_at: string
+          enviados: number
+          falhas: number
+          job_id: string
+          respostas: number
+          taxa_acordo: number
+          taxa_resposta: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "envio_meta_job_resultado"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       envio_meta_job_resumo: { Args: { _job_id: string }; Returns: Json }
       estrategia_liberar_reservas: {

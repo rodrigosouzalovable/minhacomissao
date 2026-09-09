@@ -46,3 +46,4 @@
 - [Campanha qualidade baixa manual](mem://features/whatsapp/campanha-qualidade-baixa-manual) — Campanha manual mantém YELLOW/RED até o fim; checagem de saúde não trava mais o ritmo do delay
 - [Templates falha temporária](mem://features/whatsapp/templates-falha-temporaria-vs-reprovacao) — Erro code 2/HTTP 500 da Meta reenfileira e não pausa; avisos mostram a BM
 - [Leads Google Maps na caixa AQUECIMENTO](mem://features/whatsapp/aquecimento-leads-caixa-aquecimento) — Envios/respostas de leads do Google Maps ficam na caixa AQUECIMENTO, sem IAGO, etiqueta ou rodízio
+- [Resultado das Campanhas](mem://features/whatsapp/campanha-resultado-e-relatorio-diario) — Respostas/taxa de retorno/acordos por campanha (admin-only) + relatório WhatsApp 19h30
