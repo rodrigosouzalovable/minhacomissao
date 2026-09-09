@@ -61,6 +61,7 @@ export function BaseLeadsCard() {
   const [pagina, setPagina] = useState(0);
   const [baixando, setBaixando] = useState(false);
   const [verificando, setVerificando] = useState(false);
+  const qc = useQueryClient();
 
   const filtros = useMemo(
     () => ({ busca, nicho, soWhats, soUsados, soResponderam }),
