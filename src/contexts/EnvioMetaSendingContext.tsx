@@ -671,7 +671,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           const jobId = row?.id;
           if (jobId && itensByJobRef.current.has(jobId)) {
             const cached = itensByJobRef.current.get(jobId) || [];
-            const backend = (row?.enviados || 0) + (row?.erros || 0);
+            const backend = (row?.enviados || 0) + (row?.erros || 0) + ((row as any)?.sem_whatsapp || 0);
             if (backend !== cached.length) scheduleCarregarItens(jobId, 15000);
           }
         }
