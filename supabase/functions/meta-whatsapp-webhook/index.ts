@@ -732,7 +732,7 @@ serve(async (req) => {
             }
           }
 
-          if (!isEcho && contatoIdFinal) {
+          if (!isEcho && contatoIdFinal && !_leadAquecimento) {
             try {
               // Todas as etiquetas "Atendente:%" — independente de quem criou a etiqueta.
               // (Etiquetas criadas por outro login, como a do IAGO, também entram no rodízio.)
