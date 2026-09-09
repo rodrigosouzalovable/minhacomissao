@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     if (instErr) console.error("erro ao listar instâncias:", instErr.message);
 
     const candidatas = instancias ?? [];
-    let validador: Record<string, unknown> | null = null;
+    const conectadas: Record<string, any>[] = [];
     const motivos: string[] = [];
 
     for (const inst of candidatas) {
@@ -94,28 +94,29 @@ Deno.serve(async (req) => {
         const txt = await r.text();
         console.log(`status ${inst.nome}: HTTP ${r.status} ${txt.slice(0, 200)}`);
         let conectado = false;
+        let estado = "";
         try {
           const d = JSON.parse(txt) as Record<string, any>;
-          const st = String(d?.instance?.status ?? d?.status ?? "").toLowerCase();
+          estado = String(d?.instance?.status ?? d?.status ?? "").toLowerCase();
           conectado =
             d?.status?.connected === true ||
             d?.connected === true ||
-            st.includes("connect") ||
-            st === "open";
+            estado === "connected" ||
+            estado === "open";
         } catch {
           conectado = false;
         }
         if (conectado) {
-          validador = inst;
-          break;
+          conectadas.push(inst);
+          continue;
         }
-        motivos.push(`${inst.nome}: desconectada`);
+        motivos.push(`${inst.nome}: ${estado || "desconectada"}`);
       } catch (e) {
         motivos.push(`${inst.nome}: ${e instanceof Error ? e.message : "falha"}`);
       }
     }
 
-    if (!validador) {
+    if (!conectadas.length) {
       return json(
         {
           error: "sem_instancia",
@@ -127,9 +128,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`instância validadora: ${validador.nome}`);
-    const cleanUrl = String(validador.server_url).replace(/\/+$/, "");
-    const token = String(validador.instance_token);
+    console.log(`instâncias validadoras conectadas: ${conectadas.map((i) => i.nome).join(", ")}`);
+    let idxInst = 0;
+
 
 
     const comWhats: string[] = [];
