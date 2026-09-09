@@ -35,7 +35,7 @@ function delayUsuarioMs(job: any): number {
 // pois o arredondamento distorce o ritmo pedido pelo usuário.
 const DELAY_CURTO_MS = 25_000;
 // Orçamento máximo de uma execução em laço (evita função longa demais).
-const ORCAMENTO_MS = 120_000;
+const ORCAMENTO_MS = 240_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -277,11 +277,23 @@ function passouIntervalo(ts: string | null | undefined): boolean {
 // Números que JÁ estavam com qualidade baixa quando o usuário confirmou o aviso
 // de risco (instancias_risco_aceito) não são retirados por esse motivo — a
 // escolha foi consciente. Todos os demais saem sempre.
+// Cache em memória da última avaliação de qualidade por job (TTL curto). Evita
+// uma consulta ao banco por mensagem quando o delay configurado é de poucos
+// segundos — a saída de YELLOW/RED continua acontecendo, só não a cada item.
+const CACHE_QUALIDADE_MS = 120_000;
+const cacheQualidade = new Map<string, number>();
+
 async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: string[]): Promise<string[]> {
   const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
   const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
   const candidatas = todas.filter((id) => !bloqueadasRun.includes(id));
   if (candidatas.length === 0) return [...bloqueadasRun];
+
+  const ultima = cacheQualidade.get(job.id) || 0;
+  if (Date.now() - ultima < CACHE_QUALIDADE_MS) return [...bloqueadasRun];
+  cacheQualidade.set(job.id, Date.now());
+
+
 
 
   try {
@@ -464,8 +476,18 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
 // Valida um lote de pendentes com TODAS as instâncias UAZAPI conectadas.
 // Sem WhatsApp -> item marcado como 'sem_whatsapp' (não é enviado, não é erro).
 // Erro de validação / nenhuma UAZAPI conectada -> segue o envio normalmente.
-const VAL_LOTE = 30;
+const VAL_LOTE = 100;
 const so8 = (t: string) => String(t || '').replace(/\D/g, '').slice(-8);
+
+// Guarda de concorrência: uma validação por job de cada vez (a validação roda em
+// segundo plano, sem travar a fila de envio).
+const validandoJobs = new Set<string>();
+
+function validarEmSegundoPlano(job: any) {
+  if (validandoJobs.has(job.id)) return;
+  validandoJobs.add(job.id);
+  validarLotePendentes(job).finally(() => validandoJobs.delete(job.id));
+}
 
 async function validarLotePendentes(job: any): Promise<void> {
   try {
@@ -529,13 +551,18 @@ async function validarLotePendentes(job: any): Promise<void> {
   }
 }
 
-async function processarItem(job: any): Promise<ItemResult> {
+async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}): Promise<ItemResult> {
 
+  // O status do job já vem do claim/renovação da trava — não repetir a consulta.
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
-  if (!(await jobEstaRodando(job.id))) return { advanced: false, stop: true };
 
-  const proxMs = job.proximo_em ? new Date(job.proximo_em).getTime() - Date.now() : 0;
-  if (proxMs > 0) return { advanced: false, waitMs: proxMs };
+  // No laço interno quem controla o relógio é a própria execução (já dormiu o
+  // delay exato), então o proximo_em gravado no banco não deve barrar o envio.
+  if (!opts.ignorarProximoEm) {
+    const proxMs = job.proximo_em ? new Date(job.proximo_em).getTime() - Date.now() : 0;
+    if (proxMs > 0) return { advanced: false, waitMs: proxMs };
+  }
+
 
   const buscarPendente = async () => await supabase
     .from('envio_meta_job_item')
@@ -549,12 +576,13 @@ async function processarItem(job: any): Promise<ItemResult> {
   let { data: pend, error: pendErr } = await buscarPendente();
   if (pendErr) { console.error('[tick pendErr]', pendErr); return { advanced: false, waitMs: delayUsuarioMs(job) }; }
 
-  // Validação de WhatsApp durante o envio (não bloqueia a campanha).
+  // Validação de WhatsApp durante o envio: roda em SEGUNDO PLANO para não
+  // atrasar o ritmo configurado. Quem for marcado como sem WhatsApp sai da fila
+  // de pendentes e não recebe mensagem.
   if (pend && job.validar_no_envio !== false && !(pend as any).wa_validado) {
-    await validarLotePendentes(job);
-    const re = await buscarPendente();
-    if (!re.error) pend = re.data as any;
+    validarEmSegundoPlano(job);
   }
+
 
 
   if (!pend) {
@@ -935,18 +963,21 @@ Deno.serve(async (req) => {
       }
 
       try {
+        const t0 = Date.now();
         const result = await processarItem(claimed);
+        let gastoMs = Date.now() - t0;
         if (result.advanced) processadosTotal++;
 
-        // Delay curto (ex.: 10–15s) é menor que a granularidade do agendador
-        // (10s), o que arredondava o ritmo real para ~20s. Neste caso a própria
-        // execução aguarda o delay exato e envia o próximo item, respeitando ao
-        // milissegundo o intervalo configurado pelo usuário.
+        // Delay curto (ex.: 3–6s) é menor que a granularidade do agendador
+        // (10s) e menor que o tempo gasto em cada envio. Aqui a própria execução
+        // aguarda o delay exato DESCONTANDO o tempo já gasto no processamento,
+        // de modo que o intervalo real entre mensagens seja o configurado.
         if (result.advanced) {
           const inicioLoop = Date.now();
           let delayMs = result.delayMs;
           while (delayMs > 0 && delayMs <= DELAY_CURTO_MS && Date.now() - inicioLoop + delayMs < ORCAMENTO_MS) {
-            await sleep(delayMs);
+            const espera = Math.max(0, delayMs - gastoMs);
+            if (espera > 0) await sleep(espera);
 
             // Renova a trava para que outro tick não roube a campanha no meio do laço.
             const { data: renovado } = await supabase
@@ -959,7 +990,12 @@ Deno.serve(async (req) => {
               .maybeSingle();
             if (!renovado) break; // pausado, cancelado, concluído ou trava perdida
 
-            const proximo = await processarItem({ ...renovado, worker_lock_token: claimed.worker_lock_token });
+            const tItem = Date.now();
+            const proximo = await processarItem(
+              { ...renovado, worker_lock_token: claimed.worker_lock_token },
+              { ignorarProximoEm: true },
+            );
+            gastoMs = Date.now() - tItem;
             if (!proximo.advanced) break;
             processadosTotal++;
             delayMs = proximo.delayMs;
