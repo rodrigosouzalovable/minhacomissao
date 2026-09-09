@@ -2010,6 +2010,24 @@ export default function EnvioMeta() {
               </div>
               <Switch checked={validarNoEnvio} onCheckedChange={setValidarNoEnvio} />
             </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {uazConectadasIds === null
+                  ? "Números UAZAPI para validação: verificar"
+                  : `${uazDisponiveis.length} número(s) UAZAPI conectado(s) para validar`}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2"
+                onClick={() => checarConexoesUaz(true)}
+                disabled={checandoUazConexao}
+              >
+                {checandoUazConexao ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <Button
                 type="button"
