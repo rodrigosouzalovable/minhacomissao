@@ -31,6 +31,17 @@ const agoraBrt = () => new Date(Date.now() - 3 * 60 * 60 * 1000);
 const diaBrt = () => agoraBrt().toISOString().slice(0, 10);
 const sorteio = (min: number, max: number) => Math.floor(min + Math.random() * (max - min + 1));
 
+// "Já existe conteúdo nesse idioma" = o modelo já está no número.
+// Não é reprovação: fecha o item como já existente.
+const ehJaExiste = (texto: string) => {
+  const t = String(texto || "").toLowerCase();
+  return (
+    t.includes("já existe conteúdo") || t.includes("ja existe conteudo") ||
+    t.includes("already exists") || t.includes("existing template") ||
+    (t.includes("content in") && t.includes("already"))
+  );
+};
+
 const erroDeLimiteMeta = (texto: string) => {
   const t = String(texto || "").toLowerCase();
   return (
