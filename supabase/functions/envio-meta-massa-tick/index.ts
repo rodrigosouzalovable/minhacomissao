@@ -576,12 +576,13 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   let { data: pend, error: pendErr } = await buscarPendente();
   if (pendErr) { console.error('[tick pendErr]', pendErr); return { advanced: false, waitMs: delayUsuarioMs(job) }; }
 
-  // Validação de WhatsApp durante o envio (não bloqueia a campanha).
+  // Validação de WhatsApp durante o envio: roda em SEGUNDO PLANO para não
+  // atrasar o ritmo configurado. Quem for marcado como sem WhatsApp sai da fila
+  // de pendentes e não recebe mensagem.
   if (pend && job.validar_no_envio !== false && !(pend as any).wa_validado) {
-    await validarLotePendentes(job);
-    const re = await buscarPendente();
-    if (!re.error) pend = re.data as any;
+    validarEmSegundoPlano(job);
   }
+
 
 
   if (!pend) {
