@@ -1291,7 +1291,19 @@ export default function Acordos() {
             </div>
 
 
+            <Select value={credorFilter} onValueChange={setCredorFilter}>
+              <SelectTrigger className="w-full sm:w-[170px]">
+                <SelectValue placeholder="Credor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os credores</SelectItem>
+                <SelectItem value="ume_novo_mundo">NOVO MUNDO</SelectItem>
+                <SelectItem value="mundo_da_moda">UME</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={statusFilter} onValueChange={setStatusFilter}>
+
               <SelectTrigger className="w-full sm:w-[170px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
