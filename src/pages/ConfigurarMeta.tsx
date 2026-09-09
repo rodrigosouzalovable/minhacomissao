@@ -397,7 +397,58 @@ export default function ConfigurarMeta() {
     };
   }, [isAdmin, idsCopiando.join(",")]);
 
+  // ===== Auditoria de templates em todas as instâncias (somente admin) =====
+  type AuditoriaLinha = {
+    id: string;
+    nome: string;
+    telefone: string | null;
+    total_modelos: number;
+    possui: number;
+    faltando: number;
+    ja_na_fila: number;
+    a_enfileirar: number;
+    faltando_nomes: string[];
+  };
+  type Auditoria = {
+    modelos: number;
+    verificadas: number;
+    completas: number;
+    ignoradas: { id: string; nome: string; motivo: string }[];
+    instancias: AuditoriaLinha[];
+    total_a_enfileirar: number;
+  };
+  const [auditando, setAuditando] = useState(false);
+  const [injetando, setInjetando] = useState(false);
+  const [auditoria, setAuditoria] = useState<Auditoria | null>(null);
 
+  const verificarTemplatesTodas = async () => {
+    setAuditando(true);
+    const { data, error } = await supabase.functions.invoke("meta-templates-auditar-instancias", {
+      body: { dry_run: true },
+    });
+    setAuditando(false);
+    if (error) return toast.error("Erro na verificação: " + error.message);
+    if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
+    if (data.erro_amigavel === "nenhum_modelo_marcado") {
+      return toast.error('Nenhum modelo está marcado como "Injetar em números novos" na aba Templates Meta.');
+    }
+    setAuditoria(data as Auditoria);
+  };
+
+  const iniciarInjecaoFaltantes = async () => {
+    setInjetando(true);
+    const { data, error } = await supabase.functions.invoke("meta-templates-auditar-instancias", {
+      body: { dry_run: false },
+    });
+    setInjetando(false);
+    if (error) return toast.error("Erro ao iniciar: " + error.message);
+    if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
+    toast.success(
+      `${data.enfileirados} modelo(s) na fila de ${data.instancias_afetadas} número(s). O envio é gradual: 1 por vez, 15–25 min, das 09h às 18h.`,
+    );
+    setAuditoria(null);
+    carregar();
+  };
 
 
 
