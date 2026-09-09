@@ -148,6 +148,29 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
           <Badge variant="outline" className="text-[10px]">
             {resumo.concluidos} de {resumo.total} modelos
           </Badge>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 px-2 text-[11px]"
+            disabled={atualizando}
+            onClick={async () => {
+              setAtualizando(true);
+              try {
+                await supabase.functions.invoke("meta-templates-onboarding-tick", {
+                  body: { forcar: true },
+                });
+              } catch {
+                /* segue mesmo se o disparo falhar */
+              }
+              await carregar();
+              setAtualizando(false);
+              toast.success("Informações de injeção atualizadas");
+            }}
+          >
+            <RefreshCw className={`h-3 w-3 ${atualizando ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
+
           <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" /> Previsão de término: {previsao}
           </span>
