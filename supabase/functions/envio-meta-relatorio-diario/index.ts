@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
 
 
     const linhas: string[] = [];
-    linhas.push("📈 *Resultado das campanhas de hoje*");
+    linhas.push("📈 *Resultado das minhas campanhas de hoje*");
     linhas.push(`_${nowBrt.toLocaleDateString("pt-BR")}_`);
     linhas.push("");
 
@@ -108,9 +108,11 @@ Deno.serve(async (req) => {
 
       const icon = taxa >= 15 ? "🟢" : taxa >= 8 ? "🟡" : "🔴";
       linhas.push(`${icon} *${nome}*`);
+      if (j.template_nome) linhas.push(`   Modelo: \`${j.template_nome}\``);
       linhas.push(`   Enviadas ${enviados} • conversas ${conv} • respostas ${resp}`);
       linhas.push(`   Taxa de resposta: *${pct(taxa)}*`);
       linhas.push(`   Acordos: ${acordos} (${pct(Number(r?.taxa_acordo ?? 0))}) • ${brl(valor)}`);
+
       if (taxa < 8 && enviados >= 20) {
         linhas.push("   ⚠️ abaixo de 8% — vale revisar template/base");
       }
