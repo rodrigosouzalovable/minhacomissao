@@ -939,53 +939,8 @@ export default function EnvioMeta() {
     let semWa: string[] = [];
     let erroVal: string[] = [];
 
-    // Validação opcional via UAZAPI
-    if (validadorId) {
-      const validador = uazInstancias.find((x) => x.id === validadorId);
-      if (!validador) return toast.error("Instância validadora inválida");
-
-      setValidando(true);
-      try {
-        const numeros = recipientsDedup.map((r) => r.telefone);
-        const { data: vData, error: vErr } = await supabase.functions.invoke("check-whatsapp-numbers", {
-          body: {
-            numbers: numeros,
-            server_url: validador.server_url,
-            instance_token: validador.instance_token,
-          },
-        });
-        if (vErr) throw vErr;
-        const validKeys = new Set<string>((vData?.valid || []).map((n: string) => normalizeTelKey(String(n))));
-        semWa = (vData?.invalid || []).map((n: string) => String(n));
-        erroVal = (vData?.errors || []).map((n: string) => String(n));
-        const totalValid = vData?.total_valid ?? validKeys.size;
-        const totalInvalid = vData?.total_invalid ?? semWa.length;
-        const totalErr = vData?.total_errors ?? erroVal.length;
-
-        if (totalValid === 0) {
-          toast.error("Nenhum número com WhatsApp encontrado");
-          setValidando(false);
-          return;
-        }
-
-        const ok = confirm(
-          `Validação concluída:\n\n` +
-          `✅ ${totalValid} com WhatsApp\n` +
-          `❌ ${totalInvalid} sem WhatsApp (descartados)\n` +
-          `⚠️ ${totalErr} erros de validação (descartados)\n` +
-          (dedup.duplicados > 0 ? `🔁 ${dedup.duplicados} duplicado(s) removido(s)\n` : "") +
-          `\nDisparar template "${template.nome_template}" para ${totalValid} contatos em ${instanciasComCota.length} instância(s), com delay ${lo}-${hi}s?`
-        );
-        if (!ok) { setValidando(false); return; }
-
-        clientesFinal = recipientsDedup.filter((r) => validKeys.has(normalizeTelKey(r.telefone)));
-      } catch (e: any) {
-        toast.error("Erro na validação: " + (e?.message || e));
-        setValidando(false);
-        return;
-      }
-      setValidando(false);
-    } else {
+    // A validação de WhatsApp acontece durante o disparo (não trava a campanha).
+    {
       const avisoCota = !temIlimitada && bmsEnvolvidas.size > 0 && recipientsDedup.length > saldoTotalBm
         ? `⚠️ Saldo das BMs em 24h: ${saldoTotalBm} mensagens. A lista tem ${recipientsDedup.length} contatos — o excedente será bloqueado até a cota renovar.\n\n`
         : "";
@@ -1001,11 +956,11 @@ export default function EnvioMeta() {
         : `Disparar ${tplLinha}`;
       if (!confirm(
         `${bloco}${acaoLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
+        (validarNoEnvio ? `\n\n🔎 A checagem de WhatsApp será feita durante o envio pelos números UAZAPI conectados.` : "") +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
-
-    
     }
+
 
     // Gate universal para modo rajada — vale para todos os caminhos acima
     if (modoRajada) {
