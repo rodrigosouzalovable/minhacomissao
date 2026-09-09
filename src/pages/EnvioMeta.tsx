@@ -2205,29 +2205,8 @@ export default function EnvioMeta() {
             </p>
           </div>
 
-          <div className="max-w-md space-y-1.5">
-            <Label>Credor desta campanha</Label>
-            <Select value={credor} onValueChange={setCredor}>
-              <SelectTrigger>
-                <SelectValue placeholder="Não informar" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Não informar</SelectItem>
-                {CREDOR_MARCAS_LISTA.map((m) => (
-                  <SelectItem key={m.slug} value={m.slug}>
-                    {m.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              O credor aparece no cabeçalho de cada conversa no Inbox Meta Oficial. Se a planilha tiver uma coluna
-              mapeada como <strong>Credor</strong>, o valor da linha tem prioridade sobre esta seleção.
-              {Object.keys(credorByTel).length > 0 && (
-                <> {" "}• {Object.keys(credorByTel).length} linha(s) com credor vindo da planilha.</>
-              )}
-            </p>
-          </div>
+
+
 
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={enviar} disabled={validando || enviandoTeste} size="lg">
