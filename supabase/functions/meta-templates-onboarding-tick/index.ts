@@ -322,6 +322,24 @@ Deno.serve(async (req) => {
       }
 
       if (erroEnvio) {
+        const temporario = ehErroTemporario(erroEnvio) && !erroDeLimiteMeta(erroEnvio);
+        if (temporario) {
+          // Volta para a fila: não conta como reprovação.
+          const esperaSeg = sorteio(300, 600);
+          await supabase
+            .from("meta_templates_onboarding_fila")
+            .update({
+              status: "PENDENTE",
+              motivo: erroEnvio.slice(0, 1000),
+              tentativas: 2,
+              agendado_para: new Date(Date.now() + esperaSeg * 1000).toISOString(),
+              finalizado_em: null,
+            })
+            .eq("id", proximo.id);
+          processados.push({ instancia_id: inst.id, ok: false, temporario: true, reenfileirado_em_seg: esperaSeg });
+          continue;
+        }
+
         await supabase
           .from("meta_templates_onboarding_fila")
           .update({ status: "FALHA_ENVIO", motivo: erroEnvio.slice(0, 1000), finalizado_em: new Date().toISOString() })
@@ -343,6 +361,7 @@ Deno.serve(async (req) => {
             mensagem:
               `⛔ *Cópia de templates pausada 24h*\n\n` +
               `Número: *${rotuloInstancia(inst)}*\n` +
+              `${await linhaBmInstancia(supabase, inst)}\n` +
               `A Meta respondeu com limite/bloqueio: ${erroEnvio.slice(0, 400)}`,
           });
         }
