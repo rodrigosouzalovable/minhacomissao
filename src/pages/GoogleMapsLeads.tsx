@@ -859,6 +859,36 @@ export default function GoogleMapsLeads() {
                           )}
                         </TableCell>
                         <TableCell className="text-xs">
+                          {l.instagram_username ? (
+                            <a
+                              href={l.instagram_url ?? `https://www.instagram.com/${l.instagram_username}/`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex max-w-36 items-center gap-1 truncate text-primary hover:underline"
+                            >
+                              <Instagram className="h-3 w-3 shrink-0" /> @{l.instagram_username}
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          {l.instagram_site && (
+                            <a
+                              href={l.instagram_site}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block max-w-36 truncate text-[10px] text-muted-foreground hover:underline"
+                              title={l.instagram_site}
+                            >
+                              {l.instagram_site}
+                            </a>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-xs">
+                          {typeof l.instagram_seguidores === "number"
+                            ? l.instagram_seguidores.toLocaleString("pt-BR")
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-xs">
                           {!l.telefone ? <span className="text-muted-foreground">—</span> : l.tem_whatsapp === true ? (
                             <Badge className="bg-emerald-600 text-white hover:bg-emerald-600"><MessageCircle className="h-3 w-3 mr-1" /> Sim</Badge>
                           ) : l.tem_whatsapp === false ? <Badge variant="secondary">Não</Badge> : (
