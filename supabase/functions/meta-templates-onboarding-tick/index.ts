@@ -104,7 +104,11 @@ Deno.serve(async (req) => {
       if (st === "APPROVED" || ehJaExiste(motivo)) {
         await supabase
           .from("meta_templates_onboarding_fila")
-          .update({ status: st, motivo, finalizado_em: new Date().toISOString() })
+          .update({
+            status: "APPROVED",
+            motivo: st === "APPROVED" ? motivo : "já existente no número",
+            finalizado_em: new Date().toISOString(),
+          })
           .eq("id", item.id);
         await supabase
           .from("meta_whatsapp_instances")
