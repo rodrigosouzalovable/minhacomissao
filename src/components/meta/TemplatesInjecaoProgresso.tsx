@@ -3,7 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Clock, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Clock, FileText, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+
 
 type Props = { instanciaIds: string[] };
 
@@ -69,6 +72,9 @@ function rotuloPrevisao(d: Date | null): string {
 
 export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
   const [resumo, setResumo] = useState<Resumo | null>(null);
+  const [atualizando, setAtualizando] = useState(false);
+
+
 
   const carregar = useCallback(async () => {
     if (instanciaIds.length === 0) {
@@ -142,6 +148,29 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
           <Badge variant="outline" className="text-[10px]">
             {resumo.concluidos} de {resumo.total} modelos
           </Badge>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 px-2 text-[11px]"
+            disabled={atualizando}
+            onClick={async () => {
+              setAtualizando(true);
+              try {
+                await supabase.functions.invoke("meta-templates-onboarding-tick", {
+                  body: { forcar: true },
+                });
+              } catch {
+                /* segue mesmo se o disparo falhar */
+              }
+              await carregar();
+              setAtualizando(false);
+              toast.success("Informações de injeção atualizadas");
+            }}
+          >
+            <RefreshCw className={`h-3 w-3 ${atualizando ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
+
           <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" /> Previsão de término: {previsao}
           </span>
