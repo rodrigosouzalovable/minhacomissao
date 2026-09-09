@@ -139,7 +139,8 @@ export default function CampanhaResultadoCard({ jobId, nome, template }: { jobId
             {new Date(dados.calculado_em).toLocaleString("pt-BR")}
           </div>
           <div className="text-[11px] text-muted-foreground">
-            Resposta = cliente respondeu em até 72h após receber. Acordo = mesmo CPF com acordo lançado em até 15 dias.
+            Resposta = cliente respondeu em até 72h após receber. Acordo = mesmo telefone (ou CPF, quando houver) com acordo
+            lançado em até 15 dias — o valor continua subindo nesses 15 dias conforme os atendentes lançam.
           </div>
         </>
       )}
