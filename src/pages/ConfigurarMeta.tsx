@@ -1858,7 +1858,7 @@ export default function ConfigurarMeta() {
       </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nova instância Meta WhatsApp</DialogTitle>
           </DialogHeader>
@@ -1954,7 +1954,7 @@ export default function ConfigurarMeta() {
         </DialogContent>
       </Dialog>
       <Dialog open={!!editInst} onOpenChange={(o) => !o && setEditInst(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar instância{editInst ? ` — ${editInst.nome}` : ""}</DialogTitle>
           </DialogHeader>
