@@ -9,7 +9,8 @@
 //  - erro de limite/bloqueio da Meta → pausa 24h nesse número
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
-import { rotuloInstancia } from "../_shared/rotulo-instancia.ts";
+import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
+import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
