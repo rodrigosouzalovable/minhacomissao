@@ -65,7 +65,10 @@ export interface LeadAquecimento {
   telefone: string;
   nicho: string | null;
   cidade: string | null;
+  respondedor?: boolean;
+  nunca_usado?: boolean;
 }
+
 
 function cidadeDoEndereco(endereco?: string | null): string {
   const partes = String(endereco || "").split(",").map((p) => p.trim()).filter(Boolean);
