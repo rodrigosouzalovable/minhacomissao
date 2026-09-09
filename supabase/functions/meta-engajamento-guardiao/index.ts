@@ -134,17 +134,26 @@ Deno.serve(async (req) => {
           recuperacao_proximo_envio_em: new Date().toISOString(),
         }).eq("id", inst.id);
 
+        // Mix de destinos: quanto pior a faixa, mais contatos do Google Maps
+        // (empresas com atendimento automático) entram no resgate.
+        const mixLeads = MIX_LEADS[faixa];
+        const mixUazapi = 100 - mixLeads;
+
         const { data: trilha } = await supabase
           .from("meta_aquecimento_trilha")
           .select("id, alvo_unicos_dia")
           .eq("instancia_id", inst.id).eq("dia", dia).maybeSingle();
 
         if (trilha) {
-          if (Number(trilha.alvo_unicos_dia || 0) < alvoDia) {
-            await supabase.from("meta_aquecimento_trilha")
-              .update({ alvo_unicos_dia: alvoDia, mix_uazapi_pct: 100, mix_leads_pct: 0, status: "ativa" })
-              .eq("id", trilha.id);
-          }
+          await supabase.from("meta_aquecimento_trilha")
+            .update({
+              alvo_unicos_dia: Math.max(Number(trilha.alvo_unicos_dia || 0), alvoDia),
+              mix_uazapi_pct: mixUazapi,
+              mix_leads_pct: mixLeads,
+              status: "ativa",
+              motivo: "resgate_campanha",
+            })
+            .eq("id", trilha.id);
         } else {
           await supabase.from("meta_aquecimento_trilha").insert({
             instancia_id: inst.id,
@@ -153,12 +162,14 @@ Deno.serve(async (req) => {
             tier_alvo: Number(inst.tier_diario || 0),
             alvo_unicos_dia: alvoDia,
             unicos_7d: 0,
-            mix_uazapi_pct: 100,
-            mix_leads_pct: 0,
+            mix_uazapi_pct: mixUazapi,
+            mix_leads_pct: mixLeads,
             status: "ativa",
-            decisao_ia: { origem: "guardiao_engajamento", resposta_pct: Number(respostaPct.toFixed(2)) },
+            motivo: "resgate_campanha",
+            decisao_ia: { origem: "guardiao_engajamento", resposta_pct: Number(respostaPct.toFixed(2)), mix_leads_pct: mixLeads },
           });
         }
+
 
         const rotuloFaixa = faixa === "atencao"
           ? "ritmo reduzido a 60% + aquecimento"
