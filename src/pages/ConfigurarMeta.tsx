@@ -2254,7 +2254,7 @@ export default function ConfigurarMeta() {
               )}
 
               <p className="text-xs text-muted-foreground">
-                A injeção é gradual: 1 modelo por vez, com intervalo de 5 a 10 minutos, das 07h às 20h e nunca no domingo.
+                A injeção é gradual: 1 modelo por vez, com intervalo de 2 a 5 minutos, das 07h às 20h e nunca no domingo.
                 A fila continua no dia seguinte se não terminar.
               </p>
             </div>

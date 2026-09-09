@@ -4,7 +4,7 @@
 // Regras anti-ban:
 //  - 07h às 20h BRT, nunca domingo
 //  - dose diária: 3 no 1º dia, 5 no 2º, 8 no 3º, 10/dia depois
-//  - 1 modelo por vez por número, intervalo aleatório de 5 a 10 min
+//  - 1 modelo por vez por número, intervalo aleatório de 2 a 5 min
 //  - 2 reprovações seguidas → pausa a fila do número e avisa
 //  - erro de limite/bloqueio da Meta → pausa 24h nesse número
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
       // Falha temporária da Meta: não é reprovação — volta para a fila e tenta de novo.
       const tentativas = Number(item.tentativas || 1);
       if (st === "FALHA_ENVIO" && ehErroTemporario(motivo) && tentativas < MAX_TENTATIVAS) {
-        const esperaSeg = sorteio(300, 600) * tentativas;
+        const esperaSeg = sorteio(120, 300) * tentativas;
         await supabase
           .from("meta_templates_onboarding_fila")
           .update({
@@ -240,7 +240,7 @@ Deno.serve(async (req) => {
 
       // Dose diária conforme o dia de aquecimento do número.
       // Quando sem_limite_diario = true, todos os modelos marcados podem entrar no
-      // mesmo dia — a proteção fica no intervalo de 5–10 min entre um e outro.
+      // mesmo dia — a proteção fica no intervalo de 2–5 min entre um e outro.
       const semLimiteDiario = (cfg as any).sem_limite_diario !== false;
       if (!semLimiteDiario) {
         const iniciado = inst.templates_auto_iniciado_em ? new Date(inst.templates_auto_iniciado_em) : new Date();
@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
         const temporario = ehErroTemporario(erroEnvio) && !erroDeLimiteMeta(erroEnvio);
         if (temporario) {
           // Volta para a fila: não conta como reprovação.
-          const esperaSeg = sorteio(300, 600);
+          const esperaSeg = sorteio(120, 300);
           await supabase
             .from("meta_templates_onboarding_fila")
             .update({
@@ -371,7 +371,7 @@ Deno.serve(async (req) => {
       }
 
       // Próximo item deste número só depois do intervalo aleatório
-      const espera = sorteio(Number(cfg.intervalo_min_seg || 300), Number(cfg.intervalo_max_seg || 600));
+      const espera = sorteio(Number(cfg.intervalo_min_seg || 120), Number(cfg.intervalo_max_seg || 300));
       const quando = new Date(Date.now() + espera * 1000).toISOString();
       const { data: restantes } = await supabase
         .from("meta_templates_onboarding_fila")

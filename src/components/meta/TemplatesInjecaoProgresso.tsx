@@ -18,7 +18,7 @@ type Resumo = {
 
 const HORA_INICIO = 7;
 const HORA_FIM = 20;
-const MINUTOS_MEDIOS = 7.5;
+const MINUTOS_MEDIOS = 3.5;
 
 // Avança "minutos" apenas dentro da janela 07h–20h BRT, pulando domingo.
 function previsaoTermino(minutos: number): Date | null {
@@ -155,7 +155,7 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
           <span>Números com pendência: {resumo.numerosComPendencia}</span>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          1 modelo por vez em cada número, com intervalo de 5 a 10 minutos, das 07h às 20h e nunca no domingo.
+          1 modelo por vez em cada número, com intervalo de 2 a 5 minutos, das 07h às 20h e nunca no domingo.
         </p>
       </CardContent>
     </Card>
