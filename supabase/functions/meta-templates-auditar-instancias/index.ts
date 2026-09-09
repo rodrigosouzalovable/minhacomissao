@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
           `Modelos na fila: *${enfileirados}*\n` +
           (ignoradas.length ? `Ignorados (qualidade/bloqueio): *${ignoradas.length}*\n` : "") +
           `\n${linhas}${comPendencia.length > 15 ? "\n…" : ""}\n\n` +
-          `Envio gradual: 1 por vez com 15–25 min de intervalo, das 07h às 20h e nunca no domingo.`,
+          `Envio gradual: 1 por vez com 5–10 min de intervalo, das 07h às 20h e nunca no domingo.`,
       });
     }
 

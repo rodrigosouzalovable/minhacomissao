@@ -4,7 +4,7 @@
 // Regras anti-ban:
 //  - 07h às 20h BRT, nunca domingo
 //  - dose diária: 3 no 1º dia, 5 no 2º, 8 no 3º, 10/dia depois
-//  - 1 modelo por vez por número, intervalo aleatório de 15 a 25 min
+//  - 1 modelo por vez por número, intervalo aleatório de 5 a 10 min
 //  - 2 reprovações seguidas → pausa a fila do número e avisa
 //  - erro de limite/bloqueio da Meta → pausa 24h nesse número
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -17,7 +17,7 @@ const corsHeaders = {
 };
 
 const DESTINO_AVISO = ["5562991672674"];
-const MAX_INSTANCIAS_POR_RUN = 3;
+const MAX_INSTANCIAS_POR_RUN = 10;
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), {
@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
 
       // Dose diária conforme o dia de aquecimento do número.
       // Quando sem_limite_diario = true, todos os modelos marcados podem entrar no
-      // mesmo dia — a proteção fica no intervalo de 15–25 min entre um e outro.
+      // mesmo dia — a proteção fica no intervalo de 5–10 min entre um e outro.
       const semLimiteDiario = (cfg as any).sem_limite_diario !== false;
       if (!semLimiteDiario) {
         const iniciado = inst.templates_auto_iniciado_em ? new Date(inst.templates_auto_iniciado_em) : new Date();
@@ -308,7 +308,7 @@ Deno.serve(async (req) => {
       }
 
       // Próximo item deste número só depois do intervalo aleatório
-      const espera = sorteio(Number(cfg.intervalo_min_seg || 900), Number(cfg.intervalo_max_seg || 1500));
+      const espera = sorteio(Number(cfg.intervalo_min_seg || 300), Number(cfg.intervalo_max_seg || 600));
       const quando = new Date(Date.now() + espera * 1000).toISOString();
       const { data: restantes } = await supabase
         .from("meta_templates_onboarding_fila")
