@@ -94,6 +94,7 @@ export default function CampanhaResultadoCard({ jobId, nome, template }: { jobId
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="text-sm font-medium flex items-center gap-2">
           <MessageSquare className="h-4 w-4" /> Resultado da campanha
+          {template && <Badge variant="outline" className="font-mono text-[10px]">{template}</Badge>}
           {dados && <Badge className={`${corTaxa} text-white`}>{taxa.toFixed(1).replace(".", ",")}% de resposta</Badge>}
         </div>
         <div className="flex items-center gap-2">
