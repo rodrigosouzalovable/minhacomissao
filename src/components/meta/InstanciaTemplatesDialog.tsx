@@ -60,12 +60,17 @@ export default function InstanciaTemplatesDialog({ instancia, open, onOpenChange
         .order("nome_template"),
       supabase
         .from("meta_templates_mestre")
-        .select("nome_template, idioma")
+        .select("nome, idioma")
         .eq("injetar_em_novos", true),
     ]);
     if (t.error) toast.error("Erro ao carregar templates: " + t.error.message);
     setRows(((t.data as any[]) || []) as Row[]);
-    setMarcados(((m.data as any[]) || []) as any);
+    setMarcados(
+      (((m.data as any[]) || []) as any[]).map((r) => ({
+        nome_template: r.nome as string,
+        idioma: (r.idioma as string) || "pt_BR",
+      }))
+    );
     setSel(null);
     setLoading(false);
   };
