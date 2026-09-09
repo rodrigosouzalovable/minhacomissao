@@ -149,10 +149,20 @@ export function BaseLeadsCard() {
             <Database className="h-4 w-4 text-primary" />
             Base de leads captados {total > 0 && <Badge variant="secondary">{total}</Badge>}
           </CardTitle>
-          <Button size="sm" onClick={baixarExcel} disabled={baixando}>
-            {baixando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-            Baixar Excel
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={verificarPendentes} disabled={verificando}>
+              {verificando ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4 mr-2" />
+              )}
+              Verificar pendentes
+            </Button>
+            <Button size="sm" onClick={baixarExcel} disabled={baixando}>
+              {baixando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+              Baixar Excel
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
@@ -206,13 +216,17 @@ export function BaseLeadsCard() {
                 <TableRow key={l.id}>
                   <TableCell className="font-medium max-w-[220px] truncate">{l.nome}</TableCell>
                   <TableCell className="whitespace-nowrap">{l.telefone ?? "—"}</TableCell>
-                  <TableCell>
-                    {l.tem_whatsapp === true ? (
+                  <TableCell className="whitespace-nowrap">
+                    {!l.telefone ? (
+                      <span className="text-xs text-muted-foreground">Sem telefone</span>
+                    ) : l.tem_whatsapp === true ? (
                       <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Sim</Badge>
                     ) : l.tem_whatsapp === false ? (
                       <Badge variant="secondary">Não</Badge>
                     ) : (
-                      <Badge variant="outline">—</Badge>
+                      <Badge variant="outline" className="text-amber-600 border-amber-500">
+                        Aguardando verificação
+                      </Badge>
                     )}
                   </TableCell>
                   <TableCell className="max-w-[140px] truncate">{l.categoria ?? "—"}</TableCell>
