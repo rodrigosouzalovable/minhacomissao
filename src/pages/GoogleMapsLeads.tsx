@@ -777,6 +777,15 @@ export default function GoogleMapsLeads() {
                   {verificandoWhats ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-2" />}
                   Verificar WhatsApp
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => buscaSel && enriquecerInstagram(buscaSel)}
+                  disabled={!buscaSel || enriquecendoIg}
+                >
+                  {enriquecendoIg ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Instagram className="h-4 w-4 mr-2" />}
+                  Buscar Instagram
+                </Button>
                 <Button size="sm" variant="outline" onClick={copiarTelefones} disabled={!leadsFiltrados.length}>
                   <Phone className="h-4 w-4 mr-2" /> Copiar telefones
                 </Button>
