@@ -163,7 +163,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
   const ativa = job.status === "rodando" || job.status === "pausado";
   const pausado = job.status === "pausado";
-  const totalProcessado = job.enviados + job.erros;
+  const semWhatsApp = Number((job as any).sem_whatsapp || 0);
+  const totalProcessado = job.enviados + job.erros + semWhatsApp;
+
   const percent = Math.round((totalProcessado / Math.max(job.total, 1)) * 100);
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
