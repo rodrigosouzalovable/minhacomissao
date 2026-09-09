@@ -76,14 +76,10 @@ Deno.serve(async (req) => {
       if (!["APPROVED", "REJECTED", "FALHA_ENVIO"].includes(st)) continue;
 
       const motivo = ti.motivo_rejeicao || ti.erro || null;
-      await supabase
-        .from("meta_templates_onboarding_fila")
-        .update({ status: st, motivo, finalizado_em: new Date().toISOString() })
-        .eq("id", item.id);
 
       const { data: inst } = await supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, meta_verified_name, phone_number_id, templates_auto_rejeicoes_seguidas")
+        .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, templates_auto_rejeicoes_seguidas")
         .eq("id", item.instancia_id)
         .maybeSingle();
       const { data: mestre } = await supabase
@@ -91,8 +87,13 @@ Deno.serve(async (req) => {
         .select("nome")
         .eq("id", item.template_mestre_id)
         .maybeSingle();
+      const linhaBm = await linhaBmInstancia(supabase, inst || { id: item.instancia_id });
 
       if (st === "APPROVED") {
+        await supabase
+          .from("meta_templates_onboarding_fila")
+          .update({ status: st, motivo, finalizado_em: new Date().toISOString() })
+          .eq("id", item.id);
         await supabase
           .from("meta_whatsapp_instances")
           .update({ templates_auto_rejeicoes_seguidas: 0 })
@@ -100,7 +101,45 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Reprovado ou falha no envio
+      // Falha temporária da Meta: não é reprovação — volta para a fila e tenta de novo.
+      const tentativas = Number(item.tentativas || 1);
+      if (st === "FALHA_ENVIO" && ehErroTemporario(motivo) && tentativas < MAX_TENTATIVAS) {
+        const esperaSeg = sorteio(300, 600) * tentativas;
+        await supabase
+          .from("meta_templates_onboarding_fila")
+          .update({
+            status: "PENDENTE",
+            motivo,
+            tentativas: tentativas + 1,
+            agendado_para: new Date(Date.now() + esperaSeg * 1000).toISOString(),
+            finalizado_em: null,
+          })
+          .eq("id", item.id);
+
+        await notificarAdmin(supabase, {
+          tipo: "templates_onboarding_falha_temporaria",
+          destinatarios: DESTINO_AVISO,
+          chaveIdempotencia: `${item.id}:${tentativas}`,
+          umaVezPorChave: true,
+          mensagem:
+            `⏳ *Falha temporária da Meta*\n\n` +
+            `Número: *${rotuloInstancia(inst)}*\n` +
+            `${linhaBm}\n` +
+            `Modelo: *${mestre?.nome || item.template_mestre_id}*\n` +
+            `Motivo: ${humanizarErroTemplate(motivo)}\n` +
+            `Detalhe técnico: ${String(motivo || "").slice(0, 300)}\n\n` +
+            `O template *não foi reprovado*. Vou tentar de novo automaticamente (tentativa ${tentativas + 1} de ${MAX_TENTATIVAS}). A fila deste número continua.`,
+        });
+        avisos.push({ tipo: "falha_temporaria", instancia_id: item.instancia_id, tentativa: tentativas + 1 });
+        continue;
+      }
+
+      // Reprovação real da Meta ou falha definitiva de cadastro
+      await supabase
+        .from("meta_templates_onboarding_fila")
+        .update({ status: st, motivo, finalizado_em: new Date().toISOString() })
+        .eq("id", item.id);
+
       const seguidas = Number(inst?.templates_auto_rejeicoes_seguidas || 0) + 1;
       const limite = Number(cfg.max_rejeicoes_seguidas || 2);
       const pausar = seguidas >= limite;
@@ -120,8 +159,10 @@ Deno.serve(async (req) => {
         mensagem:
           `⚠️ *Template reprovado*\n\n` +
           `Número: *${rotuloInstancia(inst)}*\n` +
+          `${linhaBm}\n` +
           `Modelo: *${mestre?.nome || item.template_mestre_id}*\n` +
-          `Motivo: ${String(motivo || "sem motivo informado pela Meta").slice(0, 500)}\n\n` +
+          `Motivo: ${humanizarErroTemplate(motivo)}\n` +
+          `Detalhe técnico: ${String(motivo || "sem motivo informado pela Meta").slice(0, 300)}\n\n` +
           (pausar
             ? `⛔ Fila deste número *pausada* após ${seguidas} reprovações seguidas. Corrija manualmente e reative no card.`
             : `A fila continua. Entre e ajuste este modelo se quiser reenviar.`),
