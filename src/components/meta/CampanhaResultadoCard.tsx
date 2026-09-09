@@ -21,7 +21,7 @@ type Resultado = {
 const brl = (v: number) =>
   Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export default function CampanhaResultadoCard({ jobId, nome }: { jobId: string; nome: string }) {
+export default function CampanhaResultadoCard({ jobId, nome, template }: { jobId: string; nome: string; template?: string | null }) {
   const [dados, setDados] = useState<Resultado | null>(null);
   const [carregando, setCarregando] = useState(false);
 
