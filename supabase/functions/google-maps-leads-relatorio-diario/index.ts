@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
       usados,
       responderam,
       estoque,
+      pendentesWa,
     ] = await Promise.all([
       count(L()),
       count(L().not("telefone", "is", null)),
@@ -52,6 +53,7 @@ Deno.serve(async (req) => {
       count(
         L().eq("tem_whatsapp", true).or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`),
       ),
+      count(L().not("telefone", "is", null).is("tem_whatsapp", null)),
     ]);
 
     // Captação de hoje por nicho
