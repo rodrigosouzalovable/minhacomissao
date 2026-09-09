@@ -152,7 +152,10 @@ Deno.serve(async (req) => {
     const batches: Item[][] = [];
     for (let i = 0; i < items.length; i += BATCH) batches.push(items.slice(i, i + BATCH));
 
-    const runBatch = async (batch: Item[]) => {
+    const tentarLote = async (batch: Item[], tentativa: number): Promise<"ok" | "trocar" | "falha"> => {
+      const inst = conectadas[idxInst % conectadas.length];
+      const cleanUrl = String(inst.server_url).replace(/\/+$/, "");
+      const token = String(inst.instance_token);
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), TIMEOUT);
       try {
@@ -167,14 +170,12 @@ Deno.serve(async (req) => {
         try {
           data = JSON.parse(text);
         } catch {
-          console.error(`resposta não-JSON: ${text.slice(0, 200)}`);
-          erros += batch.length;
-          return;
+          console.error(`${inst.nome}: resposta não-JSON: ${text.slice(0, 200)}`);
+          return "trocar";
         }
         if (!resp.ok) {
-          console.error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
-          erros += batch.length;
-          return;
+          console.error(`${inst.nome}: HTTP ${resp.status}: ${text.slice(0, 200)}`);
+          return "trocar";
         }
         const d = data as Record<string, unknown>;
         const arr = Array.isArray(data)
