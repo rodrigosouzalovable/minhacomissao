@@ -415,6 +415,35 @@ export default function GoogleMapsLeads() {
   }));
 
 
+  async function enriquecerInstagram(buscaId: string) {
+    setEnriquecendoIg(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-maps-instagram-enriquecer", {
+        body: { busca_id: buscaId },
+      });
+      if (error) {
+        const payload = await getFunctionErrorPayload(error);
+        toast.error("Falha ao buscar Instagram: " + getFunctionErrorMessage(payload));
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["gm-leads", buscaId] });
+      if (data?.apify_nao_configurada) {
+        toast.warning("Conecte o Apify para conseguir os seguidores do Instagram. Os perfis encontrados foram salvos sem seguidores.");
+        return;
+      }
+      if (data?.limite_apify_atingido) {
+        toast.warning("Limite mensal de consultas de Instagram atingido. Alguns perfis ficaram sem seguidores.");
+      }
+      toast.success(
+        `Instagram: ${data?.com_instagram ?? 0} perfis encontrados em ${data?.processados ?? 0} empresas`,
+      );
+    } catch (e) {
+      toast.error("Falha ao buscar Instagram: " + (e instanceof Error ? e.message : "erro"));
+    } finally {
+      setEnriquecendoIg(false);
+    }
+  }
+
   function copiarTelefones() {
     const tels = leadsFiltrados.map((l) => l.telefone_internacional ?? l.telefone).filter(Boolean);
     if (!tels.length) {
