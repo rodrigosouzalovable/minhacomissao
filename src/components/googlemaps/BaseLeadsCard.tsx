@@ -45,6 +45,13 @@ function aplicarFiltros(
   return q;
 }
 
+function rotuloWhatsapp(l: LeadBase) {
+  if (!l.telefone) return "Sem telefone";
+  if (l.tem_whatsapp === true) return "Sim";
+  if (l.tem_whatsapp === false) return "Não";
+  return "Aguardando verificação";
+}
+
 export function BaseLeadsCard() {
   const [busca, setBusca] = useState("");
   const [nicho, setNicho] = useState("");
@@ -108,7 +115,7 @@ export function BaseLeadsCard() {
       const rows = linhas.map((l) => ({
         Empresa: l.nome ?? "",
         Telefone: l.telefone ?? "",
-        "Tem WhatsApp": l.tem_whatsapp === true ? "Sim" : l.tem_whatsapp === false ? "Não" : "Não verificado",
+        "Tem WhatsApp": rotuloWhatsapp(l),
         Nicho: l.categoria ?? "",
         Endereço: l.endereco ?? "",
         Site: l.site ?? "",
