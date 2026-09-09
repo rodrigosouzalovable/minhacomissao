@@ -41,10 +41,14 @@ Deno.serve(async (req) => {
     // ===== Modelos marcados para injeção =====
     const { data: marcados } = await supabase
       .from("meta_templates_mestre")
-      .select("id, nome")
+      .select("id, nome, idioma")
       .eq("injetar_em_novos", true)
       .order("criado_em", { ascending: true });
-    const lista = ((marcados as any[]) || []).map((r) => ({ id: r.id as string, nome: r.nome as string }));
+    const lista = ((marcados as any[]) || []).map((r) => ({
+      id: r.id as string,
+      nome: r.nome as string,
+      idioma: String(r.idioma || "pt_BR"),
+    }));
     if (lista.length === 0) {
       return json({ success: true, modelos: 0, erro_amigavel: "nenhum_modelo_marcado", instancias: [] });
     }
@@ -106,6 +110,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Templates REAIS existentes na Meta (nome|idioma) — cobre números conectados
+    // antes da injeção automática existir.
+    const jaTemNome = new Map<string, Set<string>>();
+    if (idsElegiveis.length > 0) {
+      const { data: reais } = await supabase
+        .from("meta_whatsapp_templates")
+        .select("instancia_id, nome_template, idioma, status")
+        .in("instancia_id", idsElegiveis);
+      for (const r of ((reais as any[]) || [])) {
+        const st = String(r.status || "").toLowerCase();
+        if (!["approved", "pending", "in_appeal", "pending_deletion"].includes(st)) continue;
+        if (!jaTemNome.has(r.instancia_id)) jaTemNome.set(r.instancia_id, new Set());
+        jaTemNome.get(r.instancia_id)!.add(`${r.nome_template}|${String(r.idioma || "pt_BR")}`);
+      }
+    }
+
     // Itens já na fila (não repetir contagem de pendentes)
     const naFila = new Map<string, Set<string>>();
     if (idsElegiveis.length > 0) {
@@ -121,8 +141,11 @@ Deno.serve(async (req) => {
 
     const relatorio = elegiveis.map((i) => {
       const tem = jaTem.get(i.id) || new Set<string>();
+      const temNome = jaTemNome.get(i.id) || new Set<string>();
       const fila = naFila.get(i.id) || new Set<string>();
-      const faltando = lista.filter((m) => !tem.has(m.id));
+      const faltando = lista.filter(
+        (m) => !tem.has(m.id) && !temNome.has(`${m.nome}|${m.idioma}`),
+      );
       const novos = faltando.filter((m) => !fila.has(m.id));
       return {
         id: i.id,

@@ -60,12 +60,17 @@ export default function InstanciaTemplatesDialog({ instancia, open, onOpenChange
         .order("nome_template"),
       supabase
         .from("meta_templates_mestre")
-        .select("nome_template, idioma")
+        .select("nome, idioma")
         .eq("injetar_em_novos", true),
     ]);
     if (t.error) toast.error("Erro ao carregar templates: " + t.error.message);
     setRows(((t.data as any[]) || []) as Row[]);
-    setMarcados(((m.data as any[]) || []) as any);
+    setMarcados(
+      (((m.data as any[]) || []) as any[]).map((r) => ({
+        nome_template: r.nome as string,
+        idioma: (r.idioma as string) || "pt_BR",
+      }))
+    );
     setSel(null);
     setLoading(false);
   };
@@ -75,12 +80,14 @@ export default function InstanciaTemplatesDialog({ instancia, open, onOpenChange
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, instancia?.id]);
 
-  const chaves = useMemo(() => new Set(rows.map((r) => `${r.nome_template}|${r.idioma}`)), [rows]);
-  const nomesExistentes = useMemo(() => new Set(rows.map((r) => r.nome_template)), [rows]);
+  const chaves = useMemo(
+    () => new Set(rows.map((r) => `${r.nome_template}|${r.idioma || "pt_BR"}`)),
+    [rows]
+  );
   const marcadosSet = useMemo(() => new Set(marcados.map((m) => m.nome_template)), [marcados]);
   const faltando = useMemo(
-    () => marcados.filter((m) => !nomesExistentes.has(m.nome_template)),
-    [marcados, nomesExistentes]
+    () => marcados.filter((m) => !chaves.has(`${m.nome_template}|${m.idioma || "pt_BR"}`)),
+    [marcados, chaves]
   );
 
   const aprovados = rows.filter((r) => String(r.status).toLowerCase() === "approved").length;

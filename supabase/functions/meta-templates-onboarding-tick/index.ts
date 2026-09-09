@@ -229,6 +229,37 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!proximo) continue;
 
+      // Última checagem: se o modelo já existe nesse número na Meta, não reenvia.
+      const { data: mestreItem } = await supabase
+        .from("meta_templates_mestre")
+        .select("nome, idioma")
+        .eq("id", proximo.template_mestre_id)
+        .maybeSingle();
+      if (mestreItem?.nome) {
+        const { data: existeReal } = await supabase
+          .from("meta_whatsapp_templates")
+          .select("id, status")
+          .eq("instancia_id", inst.id)
+          .eq("nome_template", mestreItem.nome)
+          .eq("idioma", String((mestreItem as any).idioma || "pt_BR"))
+          .limit(1)
+          .maybeSingle();
+        const stReal = String((existeReal as any)?.status || "").toLowerCase();
+        if (existeReal && ["approved", "pending", "in_appeal", "pending_deletion"].includes(stReal)) {
+          await supabase
+            .from("meta_templates_onboarding_fila")
+            .update({
+              status: "APPROVED",
+              motivo: "já existente no número",
+              enviado_em: new Date().toISOString(),
+              finalizado_em: new Date().toISOString(),
+            })
+            .eq("id", proximo.id);
+          processados.push({ instancia_id: inst.id, ok: true, ja_existia: mestreItem.nome });
+          continue;
+        }
+      }
+
       // Marca antes de submeter (evita duplicidade se o tick rodar de novo)
       await supabase
         .from("meta_templates_onboarding_fila")
