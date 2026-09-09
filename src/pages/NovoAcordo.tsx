@@ -175,11 +175,11 @@ export default function NovoAcordo() {
       }
     }
 
-    // Aplica credor detectado pela IA (NM-AP / NM-I)
+    // IA apenas SUGERE o credor (NM-AP / NM-I); a seleção final é sempre manual
     let credorDetectadoLabel = '';
     if (data.empresa === 'mundo_da_moda' || data.empresa === 'ume_novo_mundo') {
-      setEmpresa(data.empresa);
       credorDetectadoLabel = getEmpresaLabel(data.empresa);
+      setEmpresaSugerida(credorDetectadoLabel);
     }
 
     setForm({
