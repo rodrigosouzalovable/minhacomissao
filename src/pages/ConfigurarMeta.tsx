@@ -21,6 +21,7 @@ import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
 import InstanciaTemplatesDialog from "@/components/meta/InstanciaTemplatesDialog";
+import TemplatesInjecaoProgresso from "@/components/meta/TemplatesInjecaoProgresso";
 
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
 import { DollarSign, FileText, CreditCard, Upload, Phone, ShieldCheck } from "lucide-react";
@@ -448,7 +449,7 @@ export default function ConfigurarMeta() {
     if (error) return toast.error("Erro ao iniciar: " + error.message);
     if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
     toast.success(
-      `${data.enfileirados} modelo(s) na fila de ${data.instancias_afetadas} número(s). O envio é gradual: 1 por vez, 15–25 min, das 07h às 20h.`,
+      `${data.enfileirados} modelo(s) na fila de ${data.instancias_afetadas} número(s). O envio é gradual: 1 por vez, 5–10 min, das 07h às 20h.`,
     );
     setAuditoria(null);
     carregar();
@@ -1380,6 +1381,9 @@ export default function ConfigurarMeta() {
             </div>
           </div>
 
+          {isAdmin && idsCopiando.length > 0 && (
+            <TemplatesInjecaoProgresso instanciaIds={idsCopiando} />
+          )}
 
           {loading ? (
             <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
@@ -2250,7 +2254,7 @@ export default function ConfigurarMeta() {
               )}
 
               <p className="text-xs text-muted-foreground">
-                A injeção é gradual: 1 modelo por vez, com intervalo de 15 a 25 minutos, das 07h às 20h e nunca no domingo.
+                A injeção é gradual: 1 modelo por vez, com intervalo de 5 a 10 minutos, das 07h às 20h e nunca no domingo.
                 A fila continua no dia seguinte se não terminar.
               </p>
             </div>
