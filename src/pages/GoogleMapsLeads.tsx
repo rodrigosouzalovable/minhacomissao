@@ -100,6 +100,19 @@ interface Lead {
 }
 
 
+function textoStatusInstagram(l: Lead): string {
+  if (l.instagram_username) {
+    const st = l.instagram_status ?? "";
+    if (st === "perfil_restrito") return "perfil restrito";
+    if (st === "perfil_nao_encontrado") return "@ não encontrado";
+    if (st.startsWith("erro:")) return "não consultado";
+    if (!l.instagram_atualizado_em) return "buscando...";
+    return "—";
+  }
+  if (!l.instagram_atualizado_em) return l.site ? "buscando..." : "—";
+  return "—";
+}
+
 interface Busca {
   id: string;
   categoria: string;
@@ -450,9 +463,13 @@ export default function GoogleMapsLeads() {
       if (data?.limite_apify_atingido) {
         toast.warning("Limite mensal de consultas de Instagram atingido. Alguns perfis ficaram sem seguidores.");
       }
-      toast.success(
-        `Instagram: ${data?.com_instagram ?? 0} perfis encontrados em ${data?.processados ?? 0} empresas`,
-      );
+      const partes = [
+        `${data?.com_instagram ?? 0} perfis encontrados em ${data?.processados ?? 0} empresas`,
+        `${data?.com_seguidores ?? 0} com seguidores`,
+      ];
+      if (data?.sem_seguidores) partes.push(`${data.sem_seguidores} sem seguidores (privado/inexistente)`);
+      if (data?.sem_site) partes.push(`${data.sem_site} sem site`);
+      toast.success(`Instagram: ${partes.join(" • ")}`);
     } catch (e) {
       toast.error("Falha ao buscar Instagram: " + (e instanceof Error ? e.message : "erro"));
     } finally {
