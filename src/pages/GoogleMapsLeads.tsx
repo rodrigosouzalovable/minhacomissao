@@ -630,6 +630,13 @@ export default function GoogleMapsLeads() {
                 <span className="block text-muted-foreground">Ignora empresas já trazidas em buscas anteriores</span>
               </Label>
             </div>
+            <div className="mt-3 flex items-start gap-2">
+              <Switch id="buscar-instagram" checked={buscarInstagram} onCheckedChange={setBuscarInstagram} />
+              <Label htmlFor="buscar-instagram" className="text-xs font-normal leading-tight">
+                Buscar dados do Instagram
+                <span className="block text-muted-foreground">Procura o perfil no site da empresa e traz seguidores e o site do perfil</span>
+              </Label>
+            </div>
           </div>
 
           <div className="md:col-span-4 flex items-center justify-between gap-4">
