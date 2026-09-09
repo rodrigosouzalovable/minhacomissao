@@ -2633,6 +2633,7 @@ export type Database = {
           instagram_atualizado_em: string | null
           instagram_seguidores: number | null
           instagram_site: string | null
+          instagram_status: string | null
           instagram_url: string | null
           instagram_username: string | null
           latitude: number | null
@@ -2660,6 +2661,7 @@ export type Database = {
           instagram_atualizado_em?: string | null
           instagram_seguidores?: number | null
           instagram_site?: string | null
+          instagram_status?: string | null
           instagram_url?: string | null
           instagram_username?: string | null
           latitude?: number | null
@@ -2687,6 +2689,7 @@ export type Database = {
           instagram_atualizado_em?: string | null
           instagram_seguidores?: number | null
           instagram_site?: string | null
+          instagram_status?: string | null
           instagram_url?: string | null
           instagram_username?: string | null
           latitude?: number | null
