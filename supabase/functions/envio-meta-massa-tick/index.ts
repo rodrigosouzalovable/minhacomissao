@@ -468,15 +468,25 @@ async function processarItem(job: any): Promise<ItemResult> {
   const proxMs = job.proximo_em ? new Date(job.proximo_em).getTime() - Date.now() : 0;
   if (proxMs > 0) return { advanced: false, waitMs: proxMs };
 
-  const { data: pend, error: pendErr } = await supabase
+  const buscarPendente = async () => await supabase
     .from('envio_meta_job_item')
-    .select('id, ordem, telefone, nome, cpf, atraso, saldo, vars, tentativas, variante_idx, credor')
+    .select('id, ordem, telefone, nome, cpf, atraso, saldo, vars, tentativas, variante_idx, credor, wa_validado')
     .eq('job_id', job.id)
     .eq('status', 'pendente')
     .order('ordem', { ascending: true })
     .limit(1)
     .maybeSingle();
+
+  let { data: pend, error: pendErr } = await buscarPendente();
   if (pendErr) { console.error('[tick pendErr]', pendErr); return { advanced: false, waitMs: delayUsuarioMs(job) }; }
+
+  // Validação de WhatsApp durante o envio (não bloqueia a campanha).
+  if (pend && job.validar_no_envio !== false && !(pend as any).wa_validado) {
+    await validarLotePendentes(job);
+    const re = await buscarPendente();
+    if (!re.error) pend = re.data as any;
+  }
+
 
   if (!pend) {
     const { data: transitioned } = await supabase.from('envio_meta_job').update({
