@@ -10,6 +10,7 @@ interface Body {
   max_resultados?: number; // padrão 60 (3 páginas x 20)
   somente_novos?: boolean; // ignora empresas já trazidas em buscas anteriores
   max_variacoes?: number; // variações extras de consulta quando faltam leads novos
+  enriquecer_instagram?: boolean; // busca Instagram/seguidores dos leads encontrados
 }
 
 function normalizarChave(v: string | null | undefined) {
