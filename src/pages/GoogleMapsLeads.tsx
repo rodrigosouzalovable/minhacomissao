@@ -91,6 +91,11 @@ interface Lead {
   latitude: number | null;
   longitude: number | null;
   place_id: string | null;
+  instagram_url: string | null;
+  instagram_username: string | null;
+  instagram_seguidores: number | null;
+  instagram_site: string | null;
+  instagram_atualizado_em: string | null;
 }
 
 
