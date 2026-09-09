@@ -32,11 +32,20 @@ Deno.serve(async (req) => {
     const hoje = nowBrt.toISOString().slice(0, 10);
     const inicioDia = new Date(`${hoje}T00:00:00-03:00`).toISOString();
 
-    // Campanhas iniciadas hoje
+    // Dono do relatório: o admin. Campanhas de outros usuários (parceiros Meta) ficam fora.
+    const { data: admins } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+    const donoIds = (admins || []).map((a: any) => a.user_id);
+    if (donoIds.length === 0) return json({ ok: true, skipped: "sem_admin" });
+
+    // Campanhas iniciadas hoje pelo admin
     const { data: jobs } = await supabase
       .from("envio_meta_job")
-      .select("id, nome_campanha, template_nome, total, enviados, erros, status, iniciado_em, created_at")
+      .select("id, nome_campanha, template_nome, total, enviados, erros, status, iniciado_em, created_at, user_id")
       .gte("created_at", inicioDia)
+      .in("user_id", donoIds)
       .order("created_at", { ascending: true });
 
     if (!jobs || jobs.length === 0) {
@@ -55,13 +64,14 @@ Deno.serve(async (req) => {
     const resMap = new Map<string, any>();
     (resultados || []).forEach((r: any) => resMap.set(r.job_id, r));
 
-    // Média dos últimos 7 dias (excluindo hoje)
+    // Média dos últimos 7 dias (excluindo hoje) — só campanhas do admin
     const inicio7d = new Date(new Date(inicioDia).getTime() - 7 * 86400000).toISOString();
     const { data: jobs7d } = await supabase
       .from("envio_meta_job")
       .select("id")
       .gte("created_at", inicio7d)
-      .lt("created_at", inicioDia);
+      .lt("created_at", inicioDia)
+      .in("user_id", donoIds);
     let media7d = 0;
     if (jobs7d && jobs7d.length > 0) {
       const { data: res7d } = await supabase
@@ -72,6 +82,7 @@ Deno.serve(async (req) => {
       const resp = (res7d || []).reduce((s: number, r: any) => s + Number(r.contatos_responderam || 0), 0);
       if (env > 0) media7d = (resp / env) * 100;
     }
+
 
     const linhas: string[] = [];
     linhas.push("📈 *Resultado das campanhas de hoje*");
