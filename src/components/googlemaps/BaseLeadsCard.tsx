@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -60,6 +60,7 @@ export function BaseLeadsCard() {
   const [soResponderam, setSoResponderam] = useState(false);
   const [pagina, setPagina] = useState(0);
   const [baixando, setBaixando] = useState(false);
+  const [verificando, setVerificando] = useState(false);
 
   const filtros = useMemo(
     () => ({ busca, nicho, soWhats, soUsados, soResponderam }),
