@@ -31,6 +31,17 @@ const agoraBrt = () => new Date(Date.now() - 3 * 60 * 60 * 1000);
 const diaBrt = () => agoraBrt().toISOString().slice(0, 10);
 const sorteio = (min: number, max: number) => Math.floor(min + Math.random() * (max - min + 1));
 
+// "Já existe conteúdo nesse idioma" = o modelo já está no número.
+// Não é reprovação: fecha o item como já existente.
+const ehJaExiste = (texto: string) => {
+  const t = String(texto || "").toLowerCase();
+  return (
+    t.includes("já existe conteúdo") || t.includes("ja existe conteudo") ||
+    t.includes("already exists") || t.includes("existing template") ||
+    (t.includes("content in") && t.includes("already"))
+  );
+};
+
 const erroDeLimiteMeta = (texto: string) => {
   const t = String(texto || "").toLowerCase();
   return (
@@ -90,10 +101,14 @@ Deno.serve(async (req) => {
         .maybeSingle();
       const linhaBm = await linhaBmInstancia(supabase, inst || { id: item.instancia_id });
 
-      if (st === "APPROVED") {
+      if (st === "APPROVED" || ehJaExiste(motivo)) {
         await supabase
           .from("meta_templates_onboarding_fila")
-          .update({ status: st, motivo, finalizado_em: new Date().toISOString() })
+          .update({
+            status: "APPROVED",
+            motivo: st === "APPROVED" ? motivo : "já existente no número",
+            finalizado_em: new Date().toISOString(),
+          })
           .eq("id", item.id);
         await supabase
           .from("meta_whatsapp_instances")
@@ -320,6 +335,24 @@ Deno.serve(async (req) => {
         else if ((res as any)?.success === false) erroEnvio = String((res as any)?.error || "falha");
       } catch (e) {
         erroEnvio = String(e);
+      }
+
+      if (erroEnvio && ehJaExiste(erroEnvio)) {
+        // O modelo já está nesse número: encerra como concluído e segue a fila.
+        await supabase
+          .from("meta_templates_onboarding_fila")
+          .update({
+            status: "APPROVED",
+            motivo: "já existente no número",
+            finalizado_em: new Date().toISOString(),
+          })
+          .eq("id", proximo.id);
+        await supabase
+          .from("meta_whatsapp_instances")
+          .update({ templates_auto_rejeicoes_seguidas: 0 })
+          .eq("id", inst.id);
+        processados.push({ instancia_id: inst.id, ok: true, ja_existia: true });
+        continue;
       }
 
       if (erroEnvio) {
