@@ -105,6 +105,7 @@ export default function NovoAcordo() {
     });
   };
   const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda' | null>(null);
+  const [empresaSugerida, setEmpresaSugerida] = useState<string>('');
   const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
   const [instanciasMinimizado, setInstanciasMinimizado] = useState<boolean>(() => localStorage.getItem('novoAcordo:instanciasMinimizado') === '1');
   const [instancias, setInstancias] = useState<Array<{ id: string; nome: string | null; telefone: string | null; ativo: boolean }>>([]);
@@ -175,11 +176,11 @@ export default function NovoAcordo() {
       }
     }
 
-    // Aplica credor detectado pela IA (NM-AP / NM-I)
+    // IA apenas SUGERE o credor (NM-AP / NM-I); a seleção final é sempre manual
     let credorDetectadoLabel = '';
     if (data.empresa === 'mundo_da_moda' || data.empresa === 'ume_novo_mundo') {
-      setEmpresa(data.empresa);
       credorDetectadoLabel = getEmpresaLabel(data.empresa);
+      setEmpresaSugerida(credorDetectadoLabel);
     }
 
     setForm({
@@ -201,7 +202,7 @@ export default function NovoAcordo() {
     toast({
       title: 'Dados extraídos!',
       description: credorDetectadoLabel
-        ? `Credor detectado: ${credorDetectadoLabel}. Revise os dados antes de salvar.`
+        ? `A IA sugeriu o credor ${credorDetectadoLabel}, mas a seleção é manual. Revise os dados antes de salvar.`
         : 'Revise as informações na aba "Preencher Manualmente" antes de salvar.',
     });
   };
@@ -683,6 +684,11 @@ export default function NovoAcordo() {
                     UME
                   </Button>
                 </div>
+                {!empresa && empresaSugerida && (
+                  <p className="text-sm font-medium text-amber-600 dark:text-amber-500">
+                    A IA sugeriu: {empresaSugerida}. Confira e selecione o credor manualmente.
+                  </p>
+                )}
                 {!empresa && (
                   <p className="text-sm text-muted-foreground">
                     Selecione a empresa/credor do contrato para calcular a comissão.
