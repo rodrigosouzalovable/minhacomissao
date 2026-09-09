@@ -979,6 +979,8 @@ export default function GoogleMapsLeads() {
           </CardContent>
         </Card>
       </div>
+
+      <BaseLeadsCard />
     </div>
       <PromptSiteLeadDialog
         lead={leadPrompt}
