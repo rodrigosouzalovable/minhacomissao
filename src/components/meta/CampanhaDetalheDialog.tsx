@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock, Ban } from "lucide-react";
 import CampanhaInstanciasPanel from "@/components/meta/CampanhaInstanciasPanel";
+import CampanhaResultadoCard from "@/components/meta/CampanhaResultadoCard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useEnvioMetaSending, type InstanciaLivre } from "@/contexts/EnvioMetaSendingContext";
@@ -429,6 +430,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1 flex flex-col gap-3"
           style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}
         >
+          {isAdmin && <CampanhaResultadoCard jobId={job.id} nome={nome} />}
+
           {/* Progresso */}
           <div className="rounded-md border bg-card p-3 space-y-2">
             <div className="flex justify-between text-sm">
