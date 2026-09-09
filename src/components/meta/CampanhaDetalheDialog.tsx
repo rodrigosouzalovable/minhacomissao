@@ -431,12 +431,15 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           <div className="rounded-md border bg-card p-3 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="font-medium">
-                {job.enviados + job.erros}/{job.total} processados ({percent}%)
+                {totalProcessado}/{job.total} processados ({percent}%)
               </span>
               <span className="text-muted-foreground text-xs">
-                ✅ {job.enviados} • ❌ {job.erros} • ⏳ {Math.max(0, job.total - totalProcessado)}
+                ✅ {job.enviados} • ❌ {job.erros}
+                {semWhatsApp > 0 && <> • 🚫 {semWhatsApp} sem WhatsApp</>}
+                {" "}• ⏳ {Math.max(0, job.total - totalProcessado)}
               </span>
             </div>
+
             <Progress value={percent} className="h-4 shrink-0" />
             <div className="text-xs text-muted-foreground h-4 overflow-hidden whitespace-nowrap truncate">
               {progresso?.atualTelefone ? (
