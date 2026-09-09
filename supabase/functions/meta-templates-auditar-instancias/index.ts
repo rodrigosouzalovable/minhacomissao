@@ -141,8 +141,11 @@ Deno.serve(async (req) => {
 
     const relatorio = elegiveis.map((i) => {
       const tem = jaTem.get(i.id) || new Set<string>();
+      const temNome = jaTemNome.get(i.id) || new Set<string>();
       const fila = naFila.get(i.id) || new Set<string>();
-      const faltando = lista.filter((m) => !tem.has(m.id));
+      const faltando = lista.filter(
+        (m) => !tem.has(m.id) && !temNome.has(`${m.nome}|${m.idioma}`),
+      );
       const novos = faltando.filter((m) => !fila.has(m.id));
       return {
         id: i.id,
