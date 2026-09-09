@@ -186,9 +186,8 @@ Deno.serve(async (req) => {
           ? (d.result as Record<string, unknown>[])
           : null;
         if (!arr) {
-          console.error(`formato desconhecido: ${text.slice(0, 300)}`);
-          erros += batch.length;
-          return;
+          console.error(`${inst.nome}: formato desconhecido: ${text.slice(0, 300)}`);
+          return "trocar";
         }
         arr.forEach((item, idx) => {
           const lead = batch[idx];
@@ -200,12 +199,23 @@ Deno.serve(async (req) => {
             item.onWhatsapp === true;
           (has ? comWhats : semWhats).push(lead.id);
         });
+        return "ok";
       } catch (e) {
-        console.error(`erro no lote: ${e instanceof Error ? e.message : String(e)}`);
-        erros += batch.length;
+        console.error(`${inst.nome}: erro no lote: ${e instanceof Error ? e.message : String(e)}`);
+        return tentativa + 1 < conectadas.length ? "trocar" : "falha";
       } finally {
         clearTimeout(t);
       }
+    };
+
+    const runBatch = async (batch: Item[]) => {
+      for (let tentativa = 0; tentativa < conectadas.length; tentativa++) {
+        const r = await tentarLote(batch, tentativa);
+        if (r === "ok") return;
+        // instância recusou/caiu: passa para a próxima conectada
+        idxInst++;
+      }
+      erros += batch.length;
     };
 
     for (let i = 0; i < batches.length; i += CONCURRENCY) {
