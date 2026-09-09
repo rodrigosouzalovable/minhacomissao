@@ -370,11 +370,8 @@ export default function EnvioMeta() {
     }
   };
 
+  // Validação opcional antes do disparo: usa TODAS as instâncias UAZAPI conectadas.
   const validarAgora = async () => {
-    if (!validadorId) return toast.error("Selecione uma instância UAZAPI para validar");
-    const validador = uazInstancias.find((x) => x.id === validadorId);
-    if (!validador) return toast.error("Instância validadora inválida");
-
     // 1) Deduplica antes de tudo
     const { texto, duplicados } = dedupRecipientsRaw(recipientsRaw, isentosDedup);
     if (duplicados > 0) {
@@ -386,10 +383,14 @@ export default function EnvioMeta() {
     if (numeros.length === 0) return toast.error("Adicione destinatários primeiro");
     setValidando(true);
     try {
-      const { data, error } = await supabase.functions.invoke("check-whatsapp-numbers", {
-        body: { numbers: numeros, server_url: validador.server_url, instance_token: validador.instance_token },
+      const { data, error } = await supabase.functions.invoke("uazapi-validar-numeros", {
+        body: { numbers: numeros },
       });
       if (error) throw error;
+      if (data?.sem_validadores) {
+        toast.error(data?.error || "Nenhum número UAZAPI conectado para validar");
+        return;
+      }
       const preview = {
         valid: (data?.valid || []).map((n: string) => String(n)),
         invalid: (data?.invalid || []).map((n: string) => String(n)),
@@ -404,6 +405,7 @@ export default function EnvioMeta() {
       setValidando(false);
     }
   };
+
 
   const removerSemWhatsApp = () => {
     if (!validacaoPreview) return;
