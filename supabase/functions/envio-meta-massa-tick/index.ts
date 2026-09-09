@@ -35,7 +35,7 @@ function delayUsuarioMs(job: any): number {
 // pois o arredondamento distorce o ritmo pedido pelo usuário.
 const DELAY_CURTO_MS = 25_000;
 // Orçamento máximo de uma execução em laço (evita função longa demais).
-const ORCAMENTO_MS = 120_000;
+const ORCAMENTO_MS = 240_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -277,11 +277,23 @@ function passouIntervalo(ts: string | null | undefined): boolean {
 // Números que JÁ estavam com qualidade baixa quando o usuário confirmou o aviso
 // de risco (instancias_risco_aceito) não são retirados por esse motivo — a
 // escolha foi consciente. Todos os demais saem sempre.
+// Cache em memória da última avaliação de qualidade por job (TTL curto). Evita
+// uma consulta ao banco por mensagem quando o delay configurado é de poucos
+// segundos — a saída de YELLOW/RED continua acontecendo, só não a cada item.
+const CACHE_QUALIDADE_MS = 120_000;
+const cacheQualidade = new Map<string, number>();
+
 async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: string[]): Promise<string[]> {
   const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
   const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
   const candidatas = todas.filter((id) => !bloqueadasRun.includes(id));
   if (candidatas.length === 0) return [...bloqueadasRun];
+
+  const ultima = cacheQualidade.get(job.id) || 0;
+  if (Date.now() - ultima < CACHE_QUALIDADE_MS) return [...bloqueadasRun];
+  cacheQualidade.set(job.id, Date.now());
+
+
 
 
   try {
