@@ -1095,6 +1095,8 @@ export default function EnvioMeta() {
       agendarPara: agendarParaISO,
       credor: credorPadrao,
       riscoQualidadeConfirmado: arriscadas.length > 0,
+      validarNoEnvio,
+
 
       onAfterEnvio: () => {
         carregar();
