@@ -1,0 +1,2 @@
+ALTER TABLE public.meta_whatsapp_contatos ADD COLUMN IF NOT EXISTS origem_aquecimento text;
+CREATE INDEX IF NOT EXISTS idx_meta_contatos_origem_aquecimento ON public.meta_whatsapp_contatos (origem_aquecimento) WHERE origem_aquecimento IS NOT NULL;
