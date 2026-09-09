@@ -32,11 +32,20 @@ Deno.serve(async (req) => {
     const hoje = nowBrt.toISOString().slice(0, 10);
     const inicioDia = new Date(`${hoje}T00:00:00-03:00`).toISOString();
 
-    // Campanhas iniciadas hoje
+    // Dono do relatório: o admin. Campanhas de outros usuários (parceiros Meta) ficam fora.
+    const { data: admins } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+    const donoIds = (admins || []).map((a: any) => a.user_id);
+    if (donoIds.length === 0) return json({ ok: true, skipped: "sem_admin" });
+
+    // Campanhas iniciadas hoje pelo admin
     const { data: jobs } = await supabase
       .from("envio_meta_job")
-      .select("id, nome_campanha, template_nome, total, enviados, erros, status, iniciado_em, created_at")
+      .select("id, nome_campanha, template_nome, total, enviados, erros, status, iniciado_em, created_at, user_id")
       .gte("created_at", inicioDia)
+      .in("user_id", donoIds)
       .order("created_at", { ascending: true });
 
     if (!jobs || jobs.length === 0) {
@@ -55,13 +64,14 @@ Deno.serve(async (req) => {
     const resMap = new Map<string, any>();
     (resultados || []).forEach((r: any) => resMap.set(r.job_id, r));
 
-    // Média dos últimos 7 dias (excluindo hoje)
+    // Média dos últimos 7 dias (excluindo hoje) — só campanhas do admin
     const inicio7d = new Date(new Date(inicioDia).getTime() - 7 * 86400000).toISOString();
     const { data: jobs7d } = await supabase
       .from("envio_meta_job")
       .select("id")
       .gte("created_at", inicio7d)
-      .lt("created_at", inicioDia);
+      .lt("created_at", inicioDia)
+      .in("user_id", donoIds);
     let media7d = 0;
     if (jobs7d && jobs7d.length > 0) {
       const { data: res7d } = await supabase
@@ -73,8 +83,9 @@ Deno.serve(async (req) => {
       if (env > 0) media7d = (resp / env) * 100;
     }
 
+
     const linhas: string[] = [];
-    linhas.push("📈 *Resultado das campanhas de hoje*");
+    linhas.push("📈 *Resultado das minhas campanhas de hoje*");
     linhas.push(`_${nowBrt.toLocaleDateString("pt-BR")}_`);
     linhas.push("");
 
@@ -97,9 +108,11 @@ Deno.serve(async (req) => {
 
       const icon = taxa >= 15 ? "🟢" : taxa >= 8 ? "🟡" : "🔴";
       linhas.push(`${icon} *${nome}*`);
+      if (j.template_nome) linhas.push(`   Modelo: \`${j.template_nome}\``);
       linhas.push(`   Enviadas ${enviados} • conversas ${conv} • respostas ${resp}`);
       linhas.push(`   Taxa de resposta: *${pct(taxa)}*`);
       linhas.push(`   Acordos: ${acordos} (${pct(Number(r?.taxa_acordo ?? 0))}) • ${brl(valor)}`);
+
       if (taxa < 8 && enviados >= 20) {
         linhas.push("   ⚠️ abaixo de 8% — vale revisar template/base");
       }
@@ -124,6 +137,53 @@ Deno.serve(async (req) => {
       const pior = ranking[ranking.length - 1];
       linhas.push(`🥉 Pior: ${pior.nome} (${pct(pior.taxa)})`);
     }
+
+    // ===== Comparativo por modelo de mensagem (30 dias, só campanhas do admin) =====
+    try {
+      const inicio30d = new Date(new Date(inicioDia).getTime() - 30 * 86400000).toISOString();
+      const { data: jobs30 } = await supabase
+        .from("envio_meta_job")
+        .select("id, template_nome")
+        .gte("created_at", inicio30d)
+        .in("user_id", donoIds);
+      const tplPorJob = new Map<string, string>();
+      (jobs30 || []).forEach((j: any) => tplPorJob.set(j.id, j.template_nome || "(sem modelo)"));
+      if (tplPorJob.size > 0) {
+        const { data: res30 } = await supabase
+          .from("envio_meta_job_resultado")
+          .select("job_id, enviados, contatos_responderam, acordos_fechados, acordos_valor")
+          .in("job_id", Array.from(tplPorJob.keys()));
+        const agg = new Map<string, { env: number; resp: number; ac: number; val: number }>();
+        (res30 || []).forEach((r: any) => {
+          const tpl = tplPorJob.get(r.job_id) || "(sem modelo)";
+          const a = agg.get(tpl) || { env: 0, resp: 0, ac: 0, val: 0 };
+          a.env += Number(r.enviados || 0);
+          a.resp += Number(r.contatos_responderam || 0);
+          a.ac += Number(r.acordos_fechados || 0);
+          a.val += Number(r.acordos_valor || 0);
+          agg.set(tpl, a);
+        });
+        const lista = Array.from(agg.entries())
+          .filter(([, a]) => a.env >= 20)
+          .map(([tpl, a]) => ({ tpl, ...a, taxa: a.env > 0 ? (a.resp / a.env) * 100 : 0 }))
+          .sort((x, y) => y.taxa - x.taxa);
+        if (lista.length > 0) {
+          linhas.push("");
+          linhas.push("*🧩 Desempenho por modelo (30 dias)*");
+          for (const l of lista) {
+            linhas.push(`• \`${l.tpl}\` — ${l.env} enviadas · resposta ${pct(l.taxa)}`);
+            linhas.push(`   acordos ${l.ac} · ${brl(l.val)}`);
+          }
+        }
+      }
+    } catch (_e) {
+      // o relatório não falha por causa deste bloco
+    }
+
+    linhas.push("");
+    linhas.push("_Os acordos continuam sendo contados por até 15 dias após o envio, conforme os atendentes lançam._");
+
+
 
     const result = await notificarNumeros(supabase, {
       tipo: "campanhas_resultado_diario",

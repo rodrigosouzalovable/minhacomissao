@@ -430,7 +430,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1 flex flex-col gap-3"
           style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}
         >
-          {isAdmin && <CampanhaResultadoCard jobId={job.id} nome={nome} />}
+          {isAdmin && <CampanhaResultadoCard jobId={job.id} nome={nome} template={job.template_nome} />}
 
           {/* Progresso */}
           <div className="rounded-md border bg-card p-3 space-y-2">

@@ -21,7 +21,7 @@ type Resultado = {
 const brl = (v: number) =>
   Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export default function CampanhaResultadoCard({ jobId, nome }: { jobId: string; nome: string }) {
+export default function CampanhaResultadoCard({ jobId, nome, template }: { jobId: string; nome: string; template?: string | null }) {
   const [dados, setDados] = useState<Resultado | null>(null);
   const [carregando, setCarregando] = useState(false);
 
@@ -94,6 +94,7 @@ export default function CampanhaResultadoCard({ jobId, nome }: { jobId: string; 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="text-sm font-medium flex items-center gap-2">
           <MessageSquare className="h-4 w-4" /> Resultado da campanha
+          {template && <Badge variant="outline" className="font-mono text-[10px]">{template}</Badge>}
           {dados && <Badge className={`${corTaxa} text-white`}>{taxa.toFixed(1).replace(".", ",")}% de resposta</Badge>}
         </div>
         <div className="flex items-center gap-2">
@@ -138,7 +139,8 @@ export default function CampanhaResultadoCard({ jobId, nome }: { jobId: string; 
             {new Date(dados.calculado_em).toLocaleString("pt-BR")}
           </div>
           <div className="text-[11px] text-muted-foreground">
-            Resposta = cliente respondeu em até 72h após receber. Acordo = mesmo CPF com acordo lançado em até 15 dias.
+            Resposta = cliente respondeu em até 72h após receber. Acordo = mesmo telefone (ou CPF, quando houver) com acordo
+            lançado em até 15 dias — o valor continua subindo nesses 15 dias conforme os atendentes lançam.
           </div>
         </>
       )}
