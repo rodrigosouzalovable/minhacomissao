@@ -2185,7 +2185,105 @@ export default function ConfigurarMeta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Relatório da verificação de templates */}
+      <Dialog open={!!auditoria} onOpenChange={(o) => { if (!o) setAuditoria(null); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Verificação de templates</DialogTitle>
+          </DialogHeader>
+          {auditoria && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Modelos marcados</p>
+                  <p className="text-lg font-semibold">{auditoria.modelos}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Números verificados</p>
+                  <p className="text-lg font-semibold">{auditoria.verificadas}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Já completos</p>
+                  <p className="text-lg font-semibold">{auditoria.completas}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Modelos a injetar</p>
+                  <p className="text-lg font-semibold">{auditoria.total_a_enfileirar}</p>
+                </div>
+              </div>
+
+              {auditoria.instancias.filter((i) => i.faltando > 0).length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Número</TableHead>
+                      <TableHead>Possui</TableHead>
+                      <TableHead>Faltando</TableHead>
+                      <TableHead>Entra na fila agora</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {auditoria.instancias
+                      .filter((i) => i.faltando > 0)
+                      .map((i) => (
+                        <TableRow key={i.id}>
+                          <TableCell>
+                            <p className="font-medium">{i.nome}</p>
+                            {i.telefone && <p className="text-xs text-muted-foreground">{i.telefone}</p>}
+                          </TableCell>
+                          <TableCell>{i.possui}/{i.total_modelos}</TableCell>
+                          <TableCell>
+                            <span title={i.faltando_nomes.join(", ")}>{i.faltando}</span>
+                          </TableCell>
+                          <TableCell>
+                            {i.a_enfileirar > 0
+                              ? i.a_enfileirar
+                              : <span className="text-xs text-muted-foreground">já na fila</span>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Todos os números verificados já possuem os modelos marcados.
+                </p>
+              )}
+
+              {auditoria.ignoradas.length > 0 && (
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm font-medium mb-1">
+                    Números ignorados ({auditoria.ignoradas.length})
+                  </p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5">
+                    {auditoria.ignoradas.map((i) => (
+                      <li key={i.id}>• {i.nome} — {i.motivo}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                A injeção é gradual: 1 modelo por vez, com intervalo de 15 a 25 minutos, das 09h às 18h e nunca no domingo.
+                A fila continua no dia seguinte se não terminar.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAuditoria(null)}>Fechar</Button>
+            <Button
+              onClick={iniciarInjecaoFaltantes}
+              disabled={injetando || !auditoria || auditoria.total_a_enfileirar === 0}
+            >
+              {injetando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Iniciar injeção dos faltantes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
 
     </AppLayout>
 
