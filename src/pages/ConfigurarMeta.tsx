@@ -397,7 +397,58 @@ export default function ConfigurarMeta() {
     };
   }, [isAdmin, idsCopiando.join(",")]);
 
+  // ===== Auditoria de templates em todas as instâncias (somente admin) =====
+  type AuditoriaLinha = {
+    id: string;
+    nome: string;
+    telefone: string | null;
+    total_modelos: number;
+    possui: number;
+    faltando: number;
+    ja_na_fila: number;
+    a_enfileirar: number;
+    faltando_nomes: string[];
+  };
+  type Auditoria = {
+    modelos: number;
+    verificadas: number;
+    completas: number;
+    ignoradas: { id: string; nome: string; motivo: string }[];
+    instancias: AuditoriaLinha[];
+    total_a_enfileirar: number;
+  };
+  const [auditando, setAuditando] = useState(false);
+  const [injetando, setInjetando] = useState(false);
+  const [auditoria, setAuditoria] = useState<Auditoria | null>(null);
 
+  const verificarTemplatesTodas = async () => {
+    setAuditando(true);
+    const { data, error } = await supabase.functions.invoke("meta-templates-auditar-instancias", {
+      body: { dry_run: true },
+    });
+    setAuditando(false);
+    if (error) return toast.error("Erro na verificação: " + error.message);
+    if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
+    if (data.erro_amigavel === "nenhum_modelo_marcado") {
+      return toast.error('Nenhum modelo está marcado como "Injetar em números novos" na aba Templates Meta.');
+    }
+    setAuditoria(data as Auditoria);
+  };
+
+  const iniciarInjecaoFaltantes = async () => {
+    setInjetando(true);
+    const { data, error } = await supabase.functions.invoke("meta-templates-auditar-instancias", {
+      body: { dry_run: false },
+    });
+    setInjetando(false);
+    if (error) return toast.error("Erro ao iniciar: " + error.message);
+    if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
+    toast.success(
+      `${data.enfileirados} modelo(s) na fila de ${data.instancias_afetadas} número(s). O envio é gradual: 1 por vez, 15–25 min, das 09h às 18h.`,
+    );
+    setAuditoria(null);
+    carregar();
+  };
 
 
 
@@ -1349,9 +1400,16 @@ export default function ConfigurarMeta() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              {isAdmin && (
+                <Button variant="outline" onClick={verificarTemplatesTodas} disabled={auditando}>
+                  {auditando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                  Verificar templates de todas as instâncias
+                </Button>
+              )}
               <Button onClick={() => setDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" /> Nova instância
               </Button>
+
             </div>
           </div>
 
@@ -2127,7 +2185,105 @@ export default function ConfigurarMeta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Relatório da verificação de templates */}
+      <Dialog open={!!auditoria} onOpenChange={(o) => { if (!o) setAuditoria(null); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Verificação de templates</DialogTitle>
+          </DialogHeader>
+          {auditoria && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Modelos marcados</p>
+                  <p className="text-lg font-semibold">{auditoria.modelos}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Números verificados</p>
+                  <p className="text-lg font-semibold">{auditoria.verificadas}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Já completos</p>
+                  <p className="text-lg font-semibold">{auditoria.completas}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Modelos a injetar</p>
+                  <p className="text-lg font-semibold">{auditoria.total_a_enfileirar}</p>
+                </div>
+              </div>
+
+              {auditoria.instancias.filter((i) => i.faltando > 0).length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Número</TableHead>
+                      <TableHead>Possui</TableHead>
+                      <TableHead>Faltando</TableHead>
+                      <TableHead>Entra na fila agora</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {auditoria.instancias
+                      .filter((i) => i.faltando > 0)
+                      .map((i) => (
+                        <TableRow key={i.id}>
+                          <TableCell>
+                            <p className="font-medium">{i.nome}</p>
+                            {i.telefone && <p className="text-xs text-muted-foreground">{i.telefone}</p>}
+                          </TableCell>
+                          <TableCell>{i.possui}/{i.total_modelos}</TableCell>
+                          <TableCell>
+                            <span title={i.faltando_nomes.join(", ")}>{i.faltando}</span>
+                          </TableCell>
+                          <TableCell>
+                            {i.a_enfileirar > 0
+                              ? i.a_enfileirar
+                              : <span className="text-xs text-muted-foreground">já na fila</span>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Todos os números verificados já possuem os modelos marcados.
+                </p>
+              )}
+
+              {auditoria.ignoradas.length > 0 && (
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm font-medium mb-1">
+                    Números ignorados ({auditoria.ignoradas.length})
+                  </p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5">
+                    {auditoria.ignoradas.map((i) => (
+                      <li key={i.id}>• {i.nome} — {i.motivo}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                A injeção é gradual: 1 modelo por vez, com intervalo de 15 a 25 minutos, das 09h às 18h e nunca no domingo.
+                A fila continua no dia seguinte se não terminar.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAuditoria(null)}>Fechar</Button>
+            <Button
+              onClick={iniciarInjecaoFaltantes}
+              disabled={injetando || !auditoria || auditoria.total_a_enfileirar === 0}
+            >
+              {injetando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Iniciar injeção dos faltantes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
 
     </AppLayout>
 
