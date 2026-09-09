@@ -321,12 +321,11 @@ Deno.serve(async (req) => {
     let comInstagram = 0;
     let comSeguidores = 0;
     let semSeguidores = 0;
-    let semSite = 0;
+    const semSite = (leads ?? []).filter((l) => !l.site && !l.instagram_url).length;
     for (const lead of candidatos) {
       const achado = achados.get(lead.id) ?? null;
       const perfil = achado ? perfis.get(achado.username) ?? null : null;
       if (achado) comInstagram++;
-      if (!lead.site && !achado) semSite++;
 
       let status: string | null = null;
       if (!achado) {
