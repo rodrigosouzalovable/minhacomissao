@@ -551,13 +551,18 @@ async function validarLotePendentes(job: any): Promise<void> {
   }
 }
 
-async function processarItem(job: any): Promise<ItemResult> {
+async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}): Promise<ItemResult> {
 
+  // O status do job já vem do claim/renovação da trava — não repetir a consulta.
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
-  if (!(await jobEstaRodando(job.id))) return { advanced: false, stop: true };
 
-  const proxMs = job.proximo_em ? new Date(job.proximo_em).getTime() - Date.now() : 0;
-  if (proxMs > 0) return { advanced: false, waitMs: proxMs };
+  // No laço interno quem controla o relógio é a própria execução (já dormiu o
+  // delay exato), então o proximo_em gravado no banco não deve barrar o envio.
+  if (!opts.ignorarProximoEm) {
+    const proxMs = job.proximo_em ? new Date(job.proximo_em).getTime() - Date.now() : 0;
+    if (proxMs > 0) return { advanced: false, waitMs: proxMs };
+  }
+
 
   const buscarPendente = async () => await supabase
     .from('envio_meta_job_item')
