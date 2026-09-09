@@ -84,6 +84,8 @@ Deno.serve(async (req) => {
     const desde = new Date(Date.now() - janelaH * 3600 * 1000).toISOString();
     const resultados: any[] = [];
     const avisos: string[] = [];
+    const voltaram: string[] = [];
+
 
     for (const inst of alvos as any[]) {
       const nome = inst.nome || inst.display_phone || inst.id.slice(0, 8);
