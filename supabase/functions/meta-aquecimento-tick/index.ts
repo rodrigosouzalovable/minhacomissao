@@ -126,7 +126,14 @@ Deno.serve(async (req) => {
     let processadas = 0;
     let gastoRun = 0;
 
-    for (const inst of elegiveis as any[]) {
+    // Números em resgate de campanha (resposta baixa) vão na frente da fila.
+    const ordenadas = (elegiveis as any[]).slice().sort((a, b) => {
+      const ra = trilhaMap.get(a.id)?.motivo === 'resgate_campanha' ? 1 : 0;
+      const rb = trilhaMap.get(b.id)?.motivo === 'resgate_campanha' ? 1 : 0;
+      return rb - ra;
+    });
+
+    for (const inst of ordenadas) {
       if (processadas >= MAX_POR_RUN) break;
       if (Number(orc.gasto_reais) + gastoRun >= Number(orc.teto_reais)) {
         resultados.push({ instancia: inst.nome, skipped: 'orcamento_esgotado' });
@@ -138,7 +145,13 @@ Deno.serve(async (req) => {
       const trilha = trilhaMap.get(inst.id);
       if (trilha && trilha.status !== 'ativa') continue;
       const alvoDia = Math.max(1, Number(trilha?.alvo_unicos_dia ?? metaDiaPadrao));
-      const mixUazapi = Math.max(0, Math.min(100, Number(trilha?.mix_uazapi_pct ?? 100)));
+      const mixLeads = trilha?.mix_leads_pct != null
+        ? Math.max(0, Math.min(100, Number(trilha.mix_leads_pct)))
+        : null;
+      const mixUazapi = mixLeads != null
+        ? 100 - mixLeads
+        : Math.max(0, Math.min(100, Number(trilha?.mix_uazapi_pct ?? 100)));
+
 
       const meus = (logsHoje || []).filter(
         (l: any) => l.instancia_id === inst.id && l.status !== 'falha',
