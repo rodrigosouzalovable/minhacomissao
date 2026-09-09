@@ -251,7 +251,8 @@ export default function EnvioMeta() {
   const [uazInstancias, setUazInstancias] = useState<UazInstancia[]>([]);
   const [uazConectadasIds, setUazConectadasIds] = useState<string[] | null>(null);
   const [checandoUazConexao, setChecandoUazConexao] = useState<boolean>(false);
-  const [validadorId, setValidadorId] = useState<string>("");
+  // Validação de WhatsApp durante o disparo, usando todas as UAZAPI conectadas.
+  const [validarNoEnvio, setValidarNoEnvio] = useState<boolean>(true);
 
   // Checa conexão real das instâncias UAZAPI (cache de 5 min), em lotes de 5.
   const checarConexoesUaz = async (force = false) => {
@@ -270,14 +271,11 @@ export default function EnvioMeta() {
         for (const id of res) if (id) conectadas.push(id);
       }
       setUazConectadasIds(conectadas);
-      if (validadorId && !conectadas.includes(validadorId)) {
-        setValidadorId("");
-        toast.warning("O número escolhido para validação está desconectado — validação desativada.");
-      }
     } finally {
       setChecandoUazConexao(false);
     }
   };
+
 
   const uazDisponiveis = useMemo(
     () => (uazConectadasIds === null ? [] : uazInstancias.filter((u) => uazConectadasIds.includes(u.id))),
