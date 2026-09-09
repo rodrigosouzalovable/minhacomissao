@@ -2,7 +2,7 @@
 // Roda de carona no tick de 10 minutos já existente (sem cron novo).
 //
 // Regras anti-ban:
-//  - 09h às 18h BRT, nunca domingo
+//  - 07h às 20h BRT, nunca domingo
 //  - dose diária: 3 no 1º dia, 5 no 2º, 8 no 3º, 10/dia depois
 //  - 1 modelo por vez por número, intervalo aleatório de 15 a 25 min
 //  - 2 reprovações seguidas → pausa a fila do número e avisa
@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
     const brt = agoraBrt();
     const hora = brt.getUTCHours();
     const domingo = brt.getUTCDay() === 0;
-    if (domingo || hora < Number(cfg.hora_inicio || 9) || hora >= Number(cfg.hora_fim || 18)) {
+    if (domingo || hora < Number(cfg.hora_inicio || 7) || hora >= Number(cfg.hora_fim || 20)) {
       return json({ ok: true, skipped: "fora_da_janela", avisos });
     }
 
