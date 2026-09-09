@@ -81,10 +81,15 @@ Deno.serve(async (req) => {
     // ===== Contato / caixa =====
     const { data: contato } = await supabase
       .from('meta_whatsapp_contatos')
-      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id, credor')
+      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id, credor, origem_aquecimento')
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
+
+    // Leads do Google Maps usados no aquecimento não são atendidos pelo IAGO.
+    if (String((contato as any).origem_aquecimento || '') === 'lead_google_maps') {
+      return json({ success: false, skipped: 'lead de aquecimento (Google Maps)' });
+    }
 
     modoAquecimento = String((contato as any).folder_id || '') === FOLDER_AQUECIMENTO_INBOX;
 
