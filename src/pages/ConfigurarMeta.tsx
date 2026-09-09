@@ -20,6 +20,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLab
 import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplatePreviewDialog from "@/components/meta/TemplatePreviewDialog";
+import InstanciaTemplatesDialog from "@/components/meta/InstanciaTemplatesDialog";
+
 import MetaGuardrailCard from "@/components/meta/MetaGuardrailCard";
 import { DollarSign, FileText, CreditCard, Upload, Phone, ShieldCheck } from "lucide-react";
 import { useMetaInstancePagamentos } from "@/hooks/useMetaInstancePagamentos";
@@ -285,6 +287,8 @@ export default function ConfigurarMeta() {
 
 
   const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
+  const [instTemplatesVer, setInstTemplatesVer] = useState<Instancia | null>(null);
+
 
 
   const templatesPorInstancia = useMemo(() => {
@@ -966,33 +970,8 @@ export default function ConfigurarMeta() {
     }
   };
 
-  const ativarChamadasTodas = async () => {
-    if (!confirm("Ativar chamadas de voz (Calling API) em todos os números da API oficial Meta?")) return;
-    setChamadasBusy("__all__");
-    try {
-      const { data, error } = await supabase.functions.invoke("meta-call-settings", {
-        body: { todas: true, ativar: true },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.ok) throw new Error(data?.error || "Falha na ativação em massa");
-      const falhas: any[] = data.falhas || [];
-      if (falhas.length) {
-        toast.error(
-          `${data.habilitadas} de ${data.total} números com chamadas ativas. Falhas: ` +
-            falhas.slice(0, 3).map((f) => `${f.nome || f.instancia_id}: ${f.error}`).join(" | ") +
-            (falhas.length > 3 ? ` (+${falhas.length - 3})` : ""),
-          { duration: 12000 },
-        );
-      } else {
-        toast.success(`Chamadas de voz ativadas em ${data.habilitadas} de ${data.total} números.`);
-      }
-      carregar();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível ativar as chamadas");
-    } finally {
-      setChamadasBusy(null);
-    }
-  };
+
+
 
 
 
@@ -1322,20 +1301,8 @@ export default function ConfigurarMeta() {
                 </>
               )}
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={ativarChamadasTodas}
-                disabled={chamadasBusy !== null}
-                title="Liga a Calling API (chamadas de voz) em todos os números ativos da API oficial Meta"
-              >
-                {chamadasBusy === "__all__" ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Phone className="h-4 w-4 mr-2" />
-                )}
-                Ativar chamadas em todos
-              </Button>
+            <div className="flex flex-wrap gap-2 justify-end">
+
               <Button
                 variant="outline"
                 onClick={verificarSaudeWebhooks}
@@ -1572,9 +1539,18 @@ export default function ConfigurarMeta() {
                             )}
                           </Button>
 
-                          <Button size="sm" variant="outline" onClick={() => sincronizar(inst)} disabled={sincronizando === inst.id}>
-                            {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="outline" disabled={sincronizando === inst.id}>
+                                {sincronizando === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCw className="h-3 w-3 mr-1" />Templates</>}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem onSelect={() => sincronizar(inst)}>Aplicar templates</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => setInstTemplatesVer(inst)}>Visualizar templates</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
                           <Button
                             size="sm"
                             variant="outline"
@@ -2071,7 +2047,16 @@ export default function ConfigurarMeta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <InstanciaTemplatesDialog
+        instancia={instTemplatesVer}
+        open={!!instTemplatesVer}
+        onOpenChange={(o) => !o && setInstTemplatesVer(null)}
+        onSincronizar={async () => {
+          if (instTemplatesVer) await sincronizar(instTemplatesVer);
+        }}
+      />
       <TemplatePreviewDialog
+
         template={previewTpl}
         open={!!previewTpl}
         onOpenChange={(o) => !o && setPreviewTpl(null)}
