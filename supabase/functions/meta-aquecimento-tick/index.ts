@@ -111,6 +111,17 @@ Deno.serve(async (req) => {
 
     let leadsDisponiveis = await leadsParaAquecimento(supabase, 60);
 
+    // Estoque baixo de contatos do Google Maps: pede reabastecimento (1x por dia).
+    if (leadsDisponiveis.length < 20) {
+      try {
+        await supabase.functions.invoke('google-maps-leads-abastecer', { body: { dia } });
+        leadsDisponiveis = await leadsParaAquecimento(supabase, 60);
+      } catch (err) {
+        console.log('[aquecimento] abastecer falhou:', String(err).slice(0, 200));
+      }
+    }
+
+
     const resultados: any[] = [];
     let processadas = 0;
     let gastoRun = 0;
