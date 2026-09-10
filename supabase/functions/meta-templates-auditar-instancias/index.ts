@@ -28,15 +28,20 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const dryRun = body?.dry_run !== false;
+    // Modo automático (cron diário): roda sem token de usuário, sempre aplicando.
+    const auto = body?.auto === true;
 
-    // ===== Autorização: somente admin =====
-    const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    if (!token) return json({ success: false, error: "nao_autenticado" }, 401);
-    const { data: userData } = await supabase.auth.getUser(token);
-    const uid = userData?.user?.id;
-    if (!uid) return json({ success: false, error: "nao_autenticado" }, 401);
-    const { data: ehAdmin } = await supabase.rpc("has_role", { _user_id: uid, _role: "admin" });
-    if (ehAdmin !== true) return json({ success: false, error: "somente_admin" }, 403);
+    // ===== Autorização: somente admin (dispensado no modo automático) =====
+    if (!auto) {
+      const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      if (!token) return json({ success: false, error: "nao_autenticado" }, 401);
+      const { data: userData } = await supabase.auth.getUser(token);
+      const uid = userData?.user?.id;
+      if (!uid) return json({ success: false, error: "nao_autenticado" }, 401);
+      const { data: ehAdmin } = await supabase.rpc("has_role", { _user_id: uid, _role: "admin" });
+      if (ehAdmin !== true) return json({ success: false, error: "somente_admin" }, 403);
+    }
+
 
     // ===== Modelos marcados para injeção =====
     const { data: marcados } = await supabase
