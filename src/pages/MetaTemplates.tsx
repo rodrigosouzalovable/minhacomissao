@@ -1258,6 +1258,14 @@ export default function MetaTemplates() {
                                     <span className="ml-2 text-xs text-muted-foreground">BM: {bm.nome}</span>
                                   );
                                 })()}
+                                {inst && (
+                                  <Badge
+                                    className={QUALIDADE_CORES[qualidadeDa(inst)] || "bg-muted text-muted-foreground"}
+                                    title="Qualidade atual da instância na Meta"
+                                  >
+                                    {qualidadeDa(inst)}
+                                  </Badge>
+                                )}
                               </span>
 
                               <Badge className={STATUS_COLORS[f.status] || ""}>{f.status}</Badge>
