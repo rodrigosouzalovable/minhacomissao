@@ -3,6 +3,8 @@
 // Somente administrador. dry_run=true devolve apenas o relatório.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
+import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,15 +30,20 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const dryRun = body?.dry_run !== false;
+    // Modo automático (cron diário): roda sem token de usuário, sempre aplicando.
+    const auto = body?.auto === true;
 
-    // ===== Autorização: somente admin =====
-    const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    if (!token) return json({ success: false, error: "nao_autenticado" }, 401);
-    const { data: userData } = await supabase.auth.getUser(token);
-    const uid = userData?.user?.id;
-    if (!uid) return json({ success: false, error: "nao_autenticado" }, 401);
-    const { data: ehAdmin } = await supabase.rpc("has_role", { _user_id: uid, _role: "admin" });
-    if (ehAdmin !== true) return json({ success: false, error: "somente_admin" }, 403);
+    // ===== Autorização: somente admin (dispensado no modo automático) =====
+    if (!auto) {
+      const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      if (!token) return json({ success: false, error: "nao_autenticado" }, 401);
+      const { data: userData } = await supabase.auth.getUser(token);
+      const uid = userData?.user?.id;
+      if (!uid) return json({ success: false, error: "nao_autenticado" }, 401);
+      const { data: ehAdmin } = await supabase.rpc("has_role", { _user_id: uid, _role: "admin" });
+      if (ehAdmin !== true) return json({ success: false, error: "somente_admin" }, 403);
+    }
+
 
     // ===== Modelos marcados para injeção =====
     const { data: marcados } = await supabase
@@ -61,7 +68,7 @@ Deno.serve(async (req) => {
 
     const { data: instsRaw } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, waba_id, access_token, saude_quality, saude_status, meta_name_status, ativo, provider, templates_auto_pausado_ate")
+      .select("id, nome, display_phone, waba_id, access_token, saude_quality, saude_status, meta_name_status, ativo, provider, templates_auto_pausado_ate, templates_resync_pendente")
       .eq("ativo", true)
       .eq("provider", "meta");
 
@@ -157,9 +164,13 @@ Deno.serve(async (req) => {
         ja_na_fila: faltando.length - novos.length,
         a_enfileirar: novos.length,
         faltando_nomes: faltando.map((m) => m.nome),
+        voltou_ao_verde: i.templates_resync_pendente === true,
         _novos: novos.map((m) => m.id),
       };
     });
+
+    // Números que acabaram de voltar ao verde entram primeiro na fila.
+    relatorio.sort((a, b) => Number(b.voltou_ao_verde) - Number(a.voltou_ao_verde));
 
     const comPendencia = relatorio.filter((r) => r.a_enfileirar > 0);
     const completas = relatorio.filter((r) => r.faltando === 0).length;
@@ -174,7 +185,8 @@ Deno.serve(async (req) => {
       total_a_enfileirar: comPendencia.reduce((s, r) => s + r.a_enfileirar, 0),
     };
 
-    if (dryRun) return json(resposta);
+    if (!auto && dryRun) return json(resposta);
+
 
     // ===== Enfileira os faltantes =====
     let enfileirados = 0;
@@ -201,6 +213,32 @@ Deno.serve(async (req) => {
           templates_auto_iniciado_em: new Date().toISOString(),
         })
         .eq("id", r.id);
+
+      // Voltou ao verde: avisa que a sincronização foi retomada.
+      if (r.voltou_ao_verde) {
+        const inst = elegiveis.find((i) => i.id === r.id);
+        await notificarAdmin(supabase, {
+          tipo: "templates_resync_pos_green",
+          destinatarios: DESTINO_AVISO,
+          chaveIdempotencia: `resync:${r.id}:${new Date().toISOString().slice(0, 10)}`,
+          umaVezPorChave: true,
+          mensagem:
+            `🟢 *Número voltou ao verde — sincronizando templates*\n\n` +
+            `Número: *${r.nome}*\n` +
+            (inst ? `${await linhaBmInstancia(supabase, inst)}\n` : "") +
+            `Modelos que faltavam: *${r.a_enfileirar}*\n\n` +
+            `Envio gradual: 1 por vez com 2–5 min de intervalo, das 07h às 20h e nunca no domingo.`,
+        });
+      }
+    }
+
+    // Todas as elegíveis foram conferidas agora: limpa a marca de re-sincronização.
+    const idsResync = elegiveis.filter((i) => i.templates_resync_pendente === true).map((i) => i.id);
+    if (idsResync.length > 0) {
+      await supabase
+        .from("meta_whatsapp_instances")
+        .update({ templates_resync_pendente: false })
+        .in("id", idsResync);
     }
 
     if (enfileirados > 0) {
@@ -208,6 +246,7 @@ Deno.serve(async (req) => {
         .slice(0, 15)
         .map((r) => `• ${r.nome}: ${r.a_enfileirar} modelo(s)`)
         .join("\n");
+
       await notificarAdmin(supabase, {
         tipo: "templates_auditoria_inicio",
         destinatarios: DESTINO_AVISO,

@@ -17,7 +17,10 @@ type Resumo = {
   emVoo: number;
   problemas: number;
   numerosComPendencia: number;
+  ultimaConferencia: string | null;
+  proximaConferencia: string | null;
 };
+
 
 const HORA_INICIO = 7;
 const HORA_FIM = 20;
@@ -69,6 +72,22 @@ function rotuloPrevisao(d: Date | null): string {
   if (alvo === amanhaDia) return `amanhã ~${fmt(d)}`;
   return `${alvo} ~${fmt(d)}`;
 }
+function rotuloRelativo(iso: string | null): string {
+  if (!iso) return "ainda não conferido";
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  return `há ${Math.round(min / 60)} h`;
+}
+
+function rotuloFuturo(iso: string | null): string {
+  if (!iso) return "—";
+  const min = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+  if (min <= 0) return "a qualquer momento";
+  if (min < 60) return `em ${min} min`;
+  return `em ${Math.round(min / 60)} h`;
+}
+
 
 export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
   const [resumo, setResumo] = useState<Resumo | null>(null);
@@ -109,6 +128,16 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
         concluidos++;
       }
     }
+    // Conferência de aprovação na Meta (última feita / próxima programada)
+    const { data: conf } = await supabase
+      .from("meta_templates_instancia")
+      .select("ultima_verificacao_em, proxima_verificacao_em")
+      .in("instancia_id", instanciaIds)
+      .in("status", ["PENDING", "ENVIADO"]);
+    const confs = (conf as any[]) ?? [];
+    const ultimas = confs.map((c) => c.ultima_verificacao_em).filter(Boolean) as string[];
+    const proximas = confs.map((c) => c.proxima_verificacao_em).filter(Boolean) as string[];
+
     setResumo({
       total: linhas.length,
       concluidos,
@@ -116,7 +145,10 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
       emVoo,
       problemas,
       numerosComPendencia: pendentesPorInst.size,
+      ultimaConferencia: ultimas.length > 0 ? ultimas.sort().slice(-1)[0] : null,
+      proximaConferencia: proximas.length > 0 ? proximas.sort()[0] : null,
     });
+
   }, [instanciaIds.join(",")]);
 
   useEffect(() => {
@@ -156,9 +188,14 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
             onClick={async () => {
               setAtualizando(true);
               try {
-                await supabase.functions.invoke("meta-templates-onboarding-tick", {
-                  body: { forcar: true },
-                });
+                await Promise.all([
+                  supabase.functions.invoke("meta-templates-onboarding-tick", {
+                    body: { forcar: true },
+                  }),
+                  supabase.functions.invoke("meta-verificar-status-templates", {
+                    body: { forcar: true },
+                  }),
+                ]);
               } catch {
                 /* segue mesmo se o disparo falhar */
               }
@@ -182,10 +219,14 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
           <span>Aguardando resposta da Meta: {resumo.emVoo}</span>
           <span>Reprovados/falhas: {resumo.problemas}</span>
           <span>Números com pendência: {resumo.numerosComPendencia}</span>
+          <span>Última conferência: {rotuloRelativo(resumo.ultimaConferencia)}</span>
+          <span>Próxima conferência: {rotuloFuturo(resumo.proximaConferencia)}</span>
         </div>
         <p className="text-[11px] text-muted-foreground">
           1 modelo por vez em cada número, com intervalo de 2 a 5 minutos, das 07h às 20h e nunca no domingo.
+          A aprovação na Meta é conferida a cada 30 minutos e para de ser consultada assim que sai o resultado.
         </p>
+
       </CardContent>
     </Card>
   );

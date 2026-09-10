@@ -5376,9 +5376,12 @@ export type Database = {
           meta_template_id: string | null
           motivo_rejeicao: string | null
           phone_number_id: string | null
+          proxima_verificacao_em: string | null
           status: string
           template_mestre_id: string
           tenant_id: string
+          ultima_verificacao_em: string | null
+          verificacoes: number
           waba_id: string | null
         }
         Insert: {
@@ -5391,9 +5394,12 @@ export type Database = {
           meta_template_id?: string | null
           motivo_rejeicao?: string | null
           phone_number_id?: string | null
+          proxima_verificacao_em?: string | null
           status?: string
           template_mestre_id: string
           tenant_id?: string
+          ultima_verificacao_em?: string | null
+          verificacoes?: number
           waba_id?: string | null
         }
         Update: {
@@ -5406,9 +5412,12 @@ export type Database = {
           meta_template_id?: string | null
           motivo_rejeicao?: string | null
           phone_number_id?: string | null
+          proxima_verificacao_em?: string | null
           status?: string
           template_mestre_id?: string
           tenant_id?: string
+          ultima_verificacao_em?: string | null
+          verificacoes?: number
           waba_id?: string | null
         }
         Relationships: [
@@ -5972,6 +5981,7 @@ export type Database = {
           templates_auto_pausado_ate: string | null
           templates_auto_rejeicoes_seguidas: number
           templates_auto_status: string | null
+          templates_resync_pendente: boolean
           tenant_id: string
           teto_escada: number | null
           throughput_level: string | null
@@ -6049,6 +6059,7 @@ export type Database = {
           templates_auto_pausado_ate?: string | null
           templates_auto_rejeicoes_seguidas?: number
           templates_auto_status?: string | null
+          templates_resync_pendente?: boolean
           tenant_id?: string
           teto_escada?: number | null
           throughput_level?: string | null
@@ -6126,6 +6137,7 @@ export type Database = {
           templates_auto_pausado_ate?: string | null
           templates_auto_rejeicoes_seguidas?: number
           templates_auto_status?: string | null
+          templates_resync_pendente?: boolean
           tenant_id?: string
           teto_escada?: number | null
           throughput_level?: string | null
