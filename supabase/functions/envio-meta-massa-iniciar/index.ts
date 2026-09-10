@@ -152,9 +152,10 @@ Deno.serve(async (req) => {
         .from('meta_whatsapp_instances')
         .select('id, nome, display_phone, saude_quality')
         .in('id', instanciaIdsFiltradas);
-      const arriscadas = (qRows || []).filter(
-        (r: any) => String(r.saude_quality || '').toUpperCase() !== 'GREEN',
-      );
+      const arriscadas = (qRows || []).filter((r: any) => {
+        const q = String(r.saude_quality || '').toUpperCase();
+        return q === 'YELLOW' || q === 'RED';
+      });
       if (arriscadas.length > 0) {
         if (body?.riscoQualidadeConfirmado !== true) {
           const rotulos = arriscadas
