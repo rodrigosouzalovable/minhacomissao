@@ -213,9 +213,23 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     }
     if (restantes === 0) return null;
 
-    // Ritmo real observado (mais fiel quando já há histórico suficiente).
+    // Ritmo real observado — usa só os envios MAIS RECENTES (até 20), para que
+    // um começo lento (tentativas, validação, instâncias caindo) não contamine a
+    // previsão do resto da campanha.
     let segPorMsg = segPorMsgTeorico;
-    if (job.iniciado_em && totalProcessado >= 5) {
+    let ritmoRecente = false;
+    const tsRecentes = (detalhes?.enviados || [])
+      .map((e: any) => (e?.ts ? Number(e.ts) : null))
+      .filter((t): t is number => !!t && Number.isFinite(t))
+      .sort((a, b) => b - a)
+      .slice(0, 20);
+    if (tsRecentes.length >= 5) {
+      const amostraSeg = (tsRecentes[0] - tsRecentes[tsRecentes.length - 1]) / 1000 / (tsRecentes.length - 1);
+      if (amostraSeg > 0) {
+        segPorMsg = amostraSeg;
+        ritmoRecente = true;
+      }
+    } else if (job.iniciado_em && totalProcessado >= 5) {
       const decorrido = (Date.now() - new Date(job.iniciado_em).getTime()) / 1000;
       if (decorrido > 0) segPorMsg = decorrido / totalProcessado;
     }
@@ -233,7 +247,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       ? `~${(1 / segPorMsg).toFixed(1)} msg/s`
       : `~1 msg / ${Math.round(segPorMsg)}s`;
 
-    return { tipo: "previsao" as const, restantes, ritmo, duracao: formatDuracao(segRestantes), termino, config, teorico };
+    return { tipo: "previsao" as const, restantes, ritmo, ritmoRecente, duracao: formatDuracao(segRestantes), termino, config, teorico };
+
   })();
 
 
