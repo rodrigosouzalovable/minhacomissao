@@ -844,7 +844,11 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       erro: erroMsg,
       tentativas: proximasTentativas,
     }).eq('id', pend.id);
+    // Nada foi entregue a este contato: a nova tentativa em outra instância não
+    // precisa gastar o delay cheio do usuário.
+    return { advanced: true, delayMs: 1_000 + Math.floor(Math.random() * 1_000) };
   } else {
+
     await supabase.from('envio_meta_job_item').update({
       status: ok ? 'enviado' : 'erro',
       erro: ok ? null : erroMsg,
