@@ -21,6 +21,8 @@ import {
 } from '../_shared/meta-aquecimento-alvo.ts';
 import {
   carregarOrcamento,
+  proximoTier,
+  tierAtual,
   custoDoTemplate,
   devolverLead,
   leadsParaAquecimento,
@@ -131,6 +133,34 @@ Deno.serve(async (req) => {
       .eq('dia', dia);
     const trilhaMap = new Map<string, any>();
     (trilhas || []).forEach((t: any) => trilhaMap.set(t.instancia_id, t));
+
+    // Número novo (ou template aprovado agora) sem plano do dia: cria a trilha na
+    // hora, para começar a aquecer sem esperar o planejamento da manhã seguinte.
+    const semTrilha = (elegiveis as any[]).filter((i: any) => !trilhaMap.get(i.id));
+    if (semTrilha.length > 0) {
+      const novas = semTrilha.map((i: any) => {
+        const tier = tierAtual(i);
+        const intensivo = tier < 10000;
+        const alvo = intensivo
+          ? Math.max(5, Math.min(450, Math.round(tier * 0.6)))
+          : Math.max(5, metaDiaPadrao);
+        return {
+          instancia_id: i.id,
+          dia,
+          tier_atual: tier,
+          tier_alvo: proximoTier(tier),
+          alvo_unicos_dia: alvo,
+          modo_intensivo: intensivo,
+          mix_uazapi_pct: intensivo ? 25 : 80,
+          mix_leads_pct: intensivo ? 75 : 20,
+          status: 'ativa',
+          decisao_ia: { fonte: 'tick_automatico' },
+          atualizado_em: new Date().toISOString(),
+        };
+      });
+      await supabase.from('meta_aquecimento_trilha').upsert(novas, { onConflict: 'instancia_id,dia' });
+      novas.forEach((t: any) => trilhaMap.set(t.instancia_id, t));
+    }
 
     // Log do dia (destinos já usados)
     const { data: logsHoje } = await supabase
