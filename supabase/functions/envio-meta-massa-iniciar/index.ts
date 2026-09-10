@@ -268,7 +268,7 @@ Deno.serve(async (req) => {
     // Protege contra disparar de novo a mesma lista (planilha antiga que ficou no campo).
     const diasAnti = Math.max(
       0,
-      Math.min(60, Number(body?.diasAntirrepeticao ?? cfgPool?.antirrepeticao_dias ?? 7)),
+      Math.min(60, Number(body?.diasAntirrepeticao ?? cfgPool?.antirrepeticao_dias ?? 1)),
     );
     const listaRepetidos: Array<{ telefone: string; nome: string; ultimo_envio: string; campanha: string }> = [];
     if (diasAnti > 0) {
