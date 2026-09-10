@@ -485,7 +485,8 @@ Deno.serve(async (req) => {
       await supabase.from('envio_meta_job').update({ min_seg: lo, max_seg: hi }).eq('id', jobId);
       // Se o próximo envio estava agendado além do novo máximo, antecipa.
       const limite = Date.now() + hi * 1000;
-      if (job.status === 'rodando' && job.proximo_em && new Date(job.proximo_em).getTime() > limite) {
+      const emEspera = /^AGUARDANDO_COTA|^RATE_LIMIT/.test(String(job.status_motivo || ''));
+      if (!emEspera && job.status === 'rodando' && job.proximo_em && new Date(job.proximo_em).getTime() > limite) {
         await supabase.from('envio_meta_job')
           .update({ proximo_em: new Date(limite).toISOString() })
           .eq('id', jobId)
