@@ -303,6 +303,11 @@ Deno.serve(async (req) => {
         let alertaRecuperado: string | null = null;
         let alertaProgressoGreen: { texto: string; dias: number } | null = null;
         if (qual === 'GREEN') {
+          // Voltou de YELLOW/RED para GREEN: marca para reconferir quais
+          // templates ainda faltam neste número e retomar a sincronização.
+          if (qualAnterior === 'YELLOW' || qualAnterior === 'RED') {
+            updatePayload.templates_resync_pendente = true;
+          }
           const contadoHoje = inst.green_contado_dia === hojeBrtDia;
           const diasGreen = contadoHoje
             ? Number(inst.dias_green_consecutivos || 0)
@@ -311,6 +316,7 @@ Deno.serve(async (req) => {
             updatePayload.dias_green_consecutivos = diasGreen;
             updatePayload.green_contado_dia = hojeBrtDia;
           }
+
           if (inst.recuperacao_ativa === true && diasGreen >= diasGreenAlta) {
             updatePayload.recuperacao_ativa = false;
             updatePayload.recuperacao_msgs_meta_dia = null;
