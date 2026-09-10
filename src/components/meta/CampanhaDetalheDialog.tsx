@@ -143,6 +143,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const [openFalhas, setOpenFalhas] = useState<boolean>(true);
   const [abrirInstancias, setAbrirInstancias] = useState(false);
   const [openBlacklist, setOpenBlacklist] = useState(false);
+  const [openRepetidos, setOpenRepetidos] = useState(false);
   useEffect(() => {
     if (open && jobId) {
       setOpenEnviados(false);
