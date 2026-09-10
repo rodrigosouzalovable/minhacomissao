@@ -112,6 +112,16 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
         concluidos++;
       }
     }
+    // Conferência de aprovação na Meta (última feita / próxima programada)
+    const { data: conf } = await supabase
+      .from("meta_templates_instancia")
+      .select("ultima_verificacao_em, proxima_verificacao_em")
+      .in("instancia_id", instanciaIds)
+      .in("status", ["PENDING", "ENVIADO"]);
+    const confs = (conf as any[]) ?? [];
+    const ultimas = confs.map((c) => c.ultima_verificacao_em).filter(Boolean) as string[];
+    const proximas = confs.map((c) => c.proxima_verificacao_em).filter(Boolean) as string[];
+
     setResumo({
       total: linhas.length,
       concluidos,
@@ -119,7 +129,10 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
       emVoo,
       problemas,
       numerosComPendencia: pendentesPorInst.size,
+      ultimaConferencia: ultimas.length > 0 ? ultimas.sort().slice(-1)[0] : null,
+      proximaConferencia: proximas.length > 0 ? proximas.sort()[0] : null,
     });
+
   }, [instanciaIds.join(",")]);
 
   useEffect(() => {
