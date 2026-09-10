@@ -201,6 +201,22 @@ Deno.serve(async (req) => {
       l.push(`• ${respostas} respostas (${taxa.toFixed(1)}% de resposta)${falhas ? ` · ${falhas} falha(s)` : ""}`);
     }
 
+    l.push("");
+    l.push("*💰 Gasto de hoje com os contatos do Maps*");
+    l.push(`• Mensagens para leads: ${brl(gastoLeads)}`);
+    if (respostas > 0) l.push(`• Custo por resposta: ${brl(custoPorResposta)}`);
+    if (gastoPorInstancia.size > 0) {
+      const ordenado = [...gastoPorInstancia.entries()].sort((a, b) => b[1].brl - a[1].brl).slice(0, 10);
+      for (const [instId, info] of ordenado) {
+        const nome = nomeMap.get(instId) || String(instId).slice(0, 8);
+        l.push(`   – ${nome}: ${brl(info.brl)} (${info.qtd} msg)`);
+      }
+    }
+    l.push(`• Teto do dia: ${brl(teto)} · gasto total ${brl(gastoTotalDia)} · restam ${brl(restante)}`);
+    if (horaTetoAtingido) l.push(`⛔ Teto atingido às ${horaTetoAtingido} — envios retomam amanhã.`);
+    l.push(`• Buscas no Google (separado): ~US$ ${custoDia.toFixed(2)}`);
+
+
     if (listaTrilhas.length > 0) {
       l.push("");
       l.push("*📱 Números em aquecimento*");
