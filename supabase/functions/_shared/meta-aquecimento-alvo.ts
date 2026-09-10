@@ -99,6 +99,9 @@ export async function escolherTemplateAprovado(
           chaves: toks,
         },
         peso: toks.length,
+        body: String(
+          (t.components || []).find((c: any) => String(c?.type).toUpperCase() === "BODY")?.text || "",
+        ),
       };
     });
 
@@ -116,9 +119,80 @@ export async function escolherTemplateAprovado(
         name: escolhido.name,
         language: escolhido.language,
         categoria: escolhido.categoria,
+        body: escolhido.body,
         params: escolhido.params,
       }
     : null;
+}
+
+/**
+ * Escolhe um template aprovado para LEADS do Google Maps: usa apenas templates
+ * marcados como "usar em leads" (meta_templates_mestre.usar_em_leads),
+ * sorteia entre os disponíveis e prefere os mais simples (menos variáveis).
+ * Retorna null quando nenhum template elegível está aprovado no WABA da instância.
+ */
+export async function escolherTemplateLead(
+  supabase: any,
+  inst: any,
+): Promise<TemplateAquecimento | null> {
+  const { data: mestres } = await supabase
+    .from("meta_templates_mestre")
+    .select("nome")
+    .eq("usar_em_leads", true);
+  const permitidos = new Set((mestres || []).map((m: any) => String(m.nome || "")));
+  if (permitidos.size === 0) return null;
+
+  if (!inst?.waba_id || !inst?.access_token) return null;
+  const res = await fetch(
+    `${GRAPH}/${inst.waba_id}/message_templates?status=APPROVED&limit=100&fields=name,language,status,category,components`,
+    { headers: { Authorization: `Bearer ${inst.access_token}` } },
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !Array.isArray(data?.data)) return null;
+
+  const candidatos = data.data
+    .filter((t: any) => permitidos.has(String(t.name)))
+    .filter((t: any) => !temBotaoDinamico(t.components) && !temCabecalhoMidia(t.components))
+    .map((t: any) => {
+      const toks = tokensDoCorpo(t.components);
+      const nomeados = toks.some((k: string) => !/^\d+$/.test(k));
+      return {
+        name: t.name as string,
+        language: (t.language as string) || "pt_BR",
+        categoria: String(t.category || "").toUpperCase(),
+        body: String(
+          (t.components || []).find((c: any) => String(c?.type).toUpperCase() === "BODY")?.text || "",
+        ),
+        params: {
+          tipo: (nomeados ? "nomeado" : "posicional") as "nomeado" | "posicional",
+          chaves: toks,
+        },
+        peso: toks.length,
+      };
+    });
+
+  if (candidatos.length === 0) return null;
+  candidatos.sort((a: any, b: any) => a.peso - b.peso);
+  const menorPeso = candidatos[0].peso;
+  const maisSimples = candidatos.filter((c: any) => c.peso === menorPeso);
+  const escolhido = maisSimples[Math.floor(Math.random() * maisSimples.length)];
+  return {
+    name: escolhido.name,
+    language: escolhido.language,
+    categoria: escolhido.categoria,
+    body: escolhido.body,
+    params: escolhido.params,
+  };
+}
+
+/** Renderiza o corpo do template trocando {{1}} pelo nome do lead e o resto pelo padrão. */
+export function renderTemplateBody(tpl: TemplateAquecimento, nomeDestino?: string | null): string {
+  let texto = String(tpl.body || "").trim();
+  tpl.params.chaves.forEach((chave, idx) => {
+    const valor = idx === 0 ? (nomeDestino || "Parceiro") : VALOR_PADRAO;
+    texto = texto.replace(new RegExp(`\\{\\{\\s*${chave.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\}\\}`, "g"), valor);
+  });
+  return texto || tpl.name;
 }
 
 /** Envia o template de aquecimento pela Graph API. */
