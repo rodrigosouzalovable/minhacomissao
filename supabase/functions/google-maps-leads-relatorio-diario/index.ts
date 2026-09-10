@@ -139,15 +139,19 @@ Deno.serve(async (req) => {
     const listaTrilhas = (trilhas as any[]) || [];
 
     const nomeMap = new Map<string, string>();
-    if (listaTrilhas.length) {
+    const idsInstancias = [
+      ...new Set([...listaTrilhas.map((t) => t.instancia_id), ...gastoPorInstancia.keys()].filter(Boolean)),
+    ];
+    if (idsInstancias.length) {
       const { data: insts } = await supabase
         .from("meta_whatsapp_instances")
         .select("id, nome, display_phone")
-        .in("id", listaTrilhas.map((t) => t.instancia_id));
+        .in("id", idsInstancias);
       for (const i of (insts as any[]) || []) {
         nomeMap.set(i.id, i.nome || i.display_phone || String(i.id).slice(0, 8));
       }
     }
+
 
     // Ranking de nichos
     const { data: scores } = await supabase
