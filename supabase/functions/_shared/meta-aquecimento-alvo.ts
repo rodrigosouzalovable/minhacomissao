@@ -43,6 +43,8 @@ export interface TemplateAquecimento {
   name: string;
   language: string;
   categoria?: string;
+  /** Texto bruto do corpo do template (com {{1}}, {{2}}, ...). */
+  body?: string;
   params: { tipo: "posicional" | "nomeado"; chaves: string[] };
 }
 
