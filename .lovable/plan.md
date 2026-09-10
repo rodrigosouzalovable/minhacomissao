@@ -19,6 +19,14 @@ Hoje, quando você clica em "Aplicar template nessas instâncias", o sistema env
    - Quando todos os modelos de um número são aprovados, chega um aviso no WhatsApp (62991672674) informando o número, a BM e quantos modelos foram aprovados.
    - Na barra de progresso da injeção aparece "última conferência há X min" e "próxima conferência em X min", com o botão Atualizar já existente para conferir na hora.
 
+5. **Todos os números sempre com os mesmos modelos**
+   Uma vez por dia o sistema compara, número por número, os modelos marcados para injeção com os que cada número realmente tem aprovado na Meta, e coloca na fila apenas o que falta — sem repetir o que já existe. Assim as instâncias tendem a ficar idênticas sozinhas, sem você precisar clicar em nada.
+
+6. **Respeita a qualidade do número**
+   - Número com qualidade amarela ou vermelha (ou bloqueado na Meta) fica de fora: nada é injetado nele.
+   - Assim que a qualidade volta ao verde, o próprio sistema reconfere o que está faltando naquele número e retoma a sincronização gradual, avisando no WhatsApp que voltou a sincronizar.
+
+
 ## Detalhes técnicos
 
 - Migração em `meta_templates_instancia`: colunas `ultima_verificacao_em`, `proxima_verificacao_em`, `verificacoes` (int, default 0), com índice parcial em `proxima_verificacao_em` para status ainda em aberto (`PENDING`/`ENVIADO`).
@@ -29,4 +37,12 @@ Hoje, quando você clica em "Aplicar template nessas instâncias", o sistema env
   - dispara o aviso de "todos aprovados" por número usando `notificarAdmin` com chave de idempotência `templates_aprovados:<instancia_id>`.
 - Cron: mantém o job 51 (`*/30 * * * *`) como único gatilho — ele já sai de imediato quando não há itens em aberto, então não é criado nenhum agendamento novo.
 - `meta-templates-onboarding-tick` continua fechando os itens da fila a partir de `meta_templates_instancia`, sem mudança de lógica.
+- Sincronização contínua: `meta-templates-auditar-instancias` ganha modo automático (`auto: true`, sem exigir token de admin quando chamado pelo cron com `service_role`) e passa a rodar 1x/dia via um novo agendamento diário (10h UTC / 07h BRT), reaproveitando a comparação `nome|idioma` e o filtro `motivoIgnorar` que já exclui YELLOW/RED, nome reprovado e bloqueios da Meta.
+- Retomada após voltar ao verde: `meta-health-2h` (já roda a cada 2h e atualiza `saude_quality`) passa a marcar `templates_resync_pendente = true` quando a qualidade sai de YELLOW/RED para GREEN; a auditoria automática prioriza essas instâncias na próxima execução, limpa a marca e notifica `62991672674` ("voltou ao verde, sincronizando N modelo(s)").
+- Migração adicional: coluna `templates_resync_pendente boolean default false` em `meta_whatsapp_instances` (escrita apenas por `service_role`/admin, seguindo as políticas atuais da tabela).
 - Front-end: `TemplatesInjecaoProgresso.tsx` exibe os horários de última/próxima conferência a partir dos novos campos.
+
+## Aviso de custo (Lovable Cloud)
+
+Impacto baixo e controlado: o agendamento de 30 min já existe e passa a encerrar sem chamar a Meta quando não há nada aguardando (hoje ele varre sempre). O único agendamento novo é a auditoria 1x/dia. Nenhum polling extra no navegador e nenhum Realtime novo.
+
