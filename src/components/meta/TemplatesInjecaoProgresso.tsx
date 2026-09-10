@@ -17,7 +17,10 @@ type Resumo = {
   emVoo: number;
   problemas: number;
   numerosComPendencia: number;
+  ultimaConferencia: string | null;
+  proximaConferencia: string | null;
 };
+
 
 const HORA_INICIO = 7;
 const HORA_FIM = 20;
