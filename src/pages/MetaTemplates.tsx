@@ -439,16 +439,26 @@ export default function MetaTemplates() {
   };
 
 
+  const contarFalhas = (mestreId: string) =>
+    templInst.filter(
+      (t) => t.template_mestre_id === mestreId && ["FALHA_ENVIO", "REJECTED"].includes(t.status),
+    ).length;
+
   const reenviarFalhas = async (mestreId: string) => {
+    const n = contarFalhas(mestreId);
+    if (n === 0) { toast.info("Nenhuma falha para reenviar neste modelo."); return; }
+    if (!confirm(`Reenviar este modelo para ${n} número(s) com falha ou reprovação?`)) return;
     setEnviando(true);
     const { data, error } = await supabase.functions.invoke("meta-criar-template-lote", {
       body: { mestre_id: mestreId, apenas_falhas: true },
     });
     setEnviando(false);
     if (error) { toast.error(error.message); return; }
+    if ((data as any)?.elegiveis === 0) { toast.info((data as any)?.mensagem || "Nenhuma falha para reenviar."); return; }
     toast.success(`Reenviado: ${(data as any)?.sucessos ?? 0} ok, ${(data as any)?.falhas ?? 0} falhas`);
     carregar();
   };
+
 
   const verificarStatus = async () => {
     const { error } = await supabase.functions.invoke("meta-verificar-status-templates", { body: {} });
@@ -1132,9 +1142,16 @@ export default function MetaTemplates() {
                       {c.ENVIADO ? <Badge className={STATUS_COLORS.ENVIADO}>ENVIADO {c.ENVIADO}</Badge> : null}
                       {c.REJECTED ? <Badge className={STATUS_COLORS.REJECTED}>REJECTED {c.REJECTED}</Badge> : null}
                       {c.FALHA_ENVIO ? <Badge className={STATUS_COLORS.FALHA_ENVIO}>FALHA {c.FALHA_ENVIO}</Badge> : null}
-                      <Button size="sm" variant="outline" onClick={() => reenviarFalhas(m.id)} disabled={enviando}>
-                        <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => reenviarFalhas(m.id)}
+                        disabled={enviando || contarFalhas(m.id) === 0}
+                        title={contarFalhas(m.id) === 0 ? "Nenhuma falha para reenviar" : undefined}
+                      >
+                        <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas ({contarFalhas(m.id)})
                       </Button>
+
                       {filhas.length === 0 && (
                         <Button
                           size="icon"
@@ -1155,7 +1172,11 @@ export default function MetaTemplates() {
                           const inst = instancias.find((i) => i.id === f.instancia_id);
                           return (
                             <div key={f.id} className="flex items-center gap-3 text-sm border-b py-1">
-                              <span className="flex-1">{inst?.nome || f.instancia_id} <span className="text-xs text-muted-foreground">{inst?.display_phone}</span></span>
+                              <span className="flex-1">
+                                {inst?.nome || "Número não visível nesta tela"}{" "}
+                                <span className="text-xs text-muted-foreground">{inst?.display_phone}</span>
+                              </span>
+
                               <Badge className={STATUS_COLORS[f.status] || ""}>{f.status}</Badge>
                               {(f.erro || f.motivo_rejeicao) && (
                                 <span className="text-xs text-destructive max-w-sm leading-snug" title={f.erro || f.motivo_rejeicao || ""}>
