@@ -240,8 +240,14 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     });
   };
 
-  const fmtCol = (c: number): FormatoValor => formatoPorColuna[c] ?? "raw";
-  const valorCelula = (c: number, raw: unknown) => formatarValorBR(raw, fmtCol(c));
+  const fmtCol = (c: number): FormatoValor | FormatoDocumento => formatoPorColuna[c] ?? "raw";
+  const valorCelula = (c: number, raw: unknown) => {
+    const fmt = fmtCol(c);
+    if (mapping[c] === "cpf" || fmt === "cpf" || fmt === "cnpj") {
+      return formatarDocumentoBR(raw, fmt === "cpf" || fmt === "cnpj" ? fmt : "cpf");
+    }
+    return formatarValorBR(raw, fmt as FormatoValor);
+  };
 
   const preview = firstIsHeader ? rows.slice(1, 6) : rows.slice(0, 5);
 
