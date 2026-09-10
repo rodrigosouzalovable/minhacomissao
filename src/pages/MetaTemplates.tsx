@@ -1142,9 +1142,16 @@ export default function MetaTemplates() {
                       {c.ENVIADO ? <Badge className={STATUS_COLORS.ENVIADO}>ENVIADO {c.ENVIADO}</Badge> : null}
                       {c.REJECTED ? <Badge className={STATUS_COLORS.REJECTED}>REJECTED {c.REJECTED}</Badge> : null}
                       {c.FALHA_ENVIO ? <Badge className={STATUS_COLORS.FALHA_ENVIO}>FALHA {c.FALHA_ENVIO}</Badge> : null}
-                      <Button size="sm" variant="outline" onClick={() => reenviarFalhas(m.id)} disabled={enviando}>
-                        <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => reenviarFalhas(m.id)}
+                        disabled={enviando || contarFalhas(m.id) === 0}
+                        title={contarFalhas(m.id) === 0 ? "Nenhuma falha para reenviar" : undefined}
+                      >
+                        <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas ({contarFalhas(m.id)})
                       </Button>
+
                       {filhas.length === 0 && (
                         <Button
                           size="icon"
