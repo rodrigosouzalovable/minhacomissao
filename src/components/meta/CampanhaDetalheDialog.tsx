@@ -747,6 +747,65 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 )
               )}
             </div>
+
+            {/* Ignorados por envio recente — evita mandar de novo para quem já recebeu */}
+            <div className="text-xs rounded border bg-muted/30 px-2 py-1.5 space-y-1">
+              <button
+                type="button"
+                className="flex items-center gap-2 font-medium"
+                onClick={() => setOpenRepetidos((v) => !v)}
+              >
+                <Ban className="h-3.5 w-3.5 text-amber-600" />
+                Ignorados por envio recente ({ignoradosRepetidos.length})
+                <span className="text-muted-foreground font-normal">{openRepetidos ? "▲" : "▼"}</span>
+              </button>
+              {openRepetidos && (
+                ignoradosRepetidos.length === 0 ? (
+                  <div className="text-[11px] text-muted-foreground">
+                    Nenhum contato desta campanha havia recebido mensagem nos últimos {diasAnti} dia(s). (Campanhas antigas podem não ter esse registro.)
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-[11px] text-muted-foreground">
+                      Estes contatos ficaram fora da campanha porque já receberam mensagem nos últimos {diasAnti} dia(s).
+                    </div>
+                    <div className="max-h-40 overflow-auto space-y-0.5 text-[11px]">
+                      {ignoradosRepetidos.map((b, i) => (
+                        <div key={`${b.telefone}-${i}`} className="flex gap-2">
+                          <code>{b.telefone}</code>
+                          {b.nome && <span className="text-muted-foreground truncate">{b.nome}</span>}
+                          {b.ultimo_envio && (
+                            <span className="text-muted-foreground">
+                              • {new Date(b.ultimo_envio).toLocaleString("pt-BR")}
+                            </span>
+                          )}
+                          {b.campanha && <span className="text-muted-foreground truncate">• {b.campanha}</span>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-1.5 pt-0.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[11px]"
+                        onClick={() => copiar(ignoradosRepetidos.map((b) => b.telefone), "Envio recente")}
+                      >
+                        <Copy className="h-3 w-3 mr-1" /> Copiar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[11px]"
+                        onClick={baixarRepetidos}
+                      >
+                        <Download className="h-3 w-3 mr-1" /> Baixar Excel
+                      </Button>
+                    </div>
+                  </>
+                )
+              )}
+            </div>
+
             {(() => {
               const motivo = String((job as any).status_motivo || resultado?.statusMotivo || '');
               const isBALock = /business account|#131031|locked/i.test(motivo);
