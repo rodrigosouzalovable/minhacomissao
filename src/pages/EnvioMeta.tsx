@@ -833,14 +833,16 @@ export default function EnvioMeta() {
     setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  // "Selecionar todas" marca números sem problema real: conectados, nome
-  // aprovado, BM com saldo e qualidade que NÃO seja YELLOW/RED (UNKNOWN e sem
-  // leitura entram). A instância "Novo Mundo 3144" fica sempre fora da seleção.
+  // "Selecionar todas" marca números sem problema real e já ativos no pool:
+  // conectados, nome aprovado, BM com saldo, qualidade que NÃO seja YELLOW/RED
+  // (UNKNOWN e sem leitura entram) e que já tenham sido ativadas no pool.
+  // A instância "Novo Mundo 3144" fica sempre fora da seleção.
   const instanciaSemProblema = (i: any) => {
     const status = (i.saude_status || "").toUpperCase();
     const nomeStatus = (i.meta_name_status || "").toUpperCase();
     const qual = (i.saude_quality || "").toUpperCase();
     if (qual === "YELLOW" || qual === "RED") return false;
+    if ((i.estado_pool || "aguardando_templates") !== "ativo") return false;
     const ident = `${i.nome || ""} ${i.telefone || ""}`.replace(/\D/g, " ");
     if (ident.includes("3144")) return false; // Novo Mundo 3144 nunca entra no "selecionar todas"
     return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
@@ -1541,7 +1543,7 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona instâncias sem problema: conectadas, nome aprovado, BM com saldo. Ficam de fora apenas YELLOW/RED e a Novo Mundo 3144. Qualidade desconhecida entra normalmente."
+              title="Seleciona instâncias sem problema: conectadas, nome aprovado, BM com saldo e já ativas no pool. Ficam de fora YELLOW/RED, instâncias com botão 'Ativar no pool' e a Novo Mundo 3144. Qualidade desconhecida entra normalmente."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
                 const boasInstancias = instanciasVisiveis.filter(instanciaSemProblema);
