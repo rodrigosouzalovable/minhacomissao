@@ -238,6 +238,18 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       next[idx] = role;
       return next;
     });
+    // Ajusta o formato da coluna conforme o novo papel.
+    setFormatoPorColuna((prev) => {
+      const fmt = prev[idx];
+      if (role === "cpf") {
+        const sample = rows[firstIsHeader ? 1 : 0]?.[idx];
+        return { ...prev, [idx]: detectarTipoDocumento(sample) };
+      }
+      if (fmt === "cpf" || fmt === "cnpj") {
+        return { ...prev, [idx]: "raw" };
+      }
+      return prev;
+    });
   };
 
   const fmtCol = (c: number): FormatoValor | FormatoDocumento => formatoPorColuna[c] ?? "raw";
