@@ -75,11 +75,18 @@ serve(async (req) => {
 
     const { data: instancias } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token")
+      .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, saude_quality")
       .in("id", instIds);
 
     let atualizados = 0;
     let aprovadosTotal = 0;
+    const resumo: Array<{
+      id: string;
+      nome: string;
+      telefone: string;
+      bm: string;
+      qualidade: string;
+    }> = [];
 
     for (const inst of instancias || []) {
       if (!inst.waba_id || !inst.access_token) continue;
@@ -285,13 +292,21 @@ serve(async (req) => {
             });
           }
         }
+
+        resumo.push({
+          id: inst.id,
+          nome: rotuloInstancia(inst),
+          telefone: (inst.display_phone || '').toString(),
+          bm: (await linhaBmInstancia(supabase, inst)).replace(/^BM: \*|\*$/g, ''),
+          qualidade: (inst.saude_quality || 'SEM LEITURA').toString().toUpperCase(),
+        });
       } catch (_e) {
         // segue para próxima instância
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true, atualizados, aprovados: aprovadosTotal, instancias: instIds.length }),
+      JSON.stringify({ success: true, atualizados, aprovados: aprovadosTotal, instancias: instIds.length, resumo }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {

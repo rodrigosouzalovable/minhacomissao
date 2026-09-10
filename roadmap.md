@@ -1,7 +1,12 @@
 # Roadmap
 
-1. [x] Mostrar mensagem real do template na caixa AQUECIMENTO (corpo renderizado com nome do lead)
-2. [x] Coluna `usar_em_leads` em `meta_templates_mestre` + toggle na aba Template Meta
-3. [x] `escolherTemplateLead` (sorteia entre marcados) + pular envio a lead sem template marcado
-4. [x] Cadastrar 12 ideias de templates para leads Google Maps em `meta_template_ideias`
-5. [x] Deploy das funções afetadas + build OK
+## Em aberto
+- [ ] Contas bloqueadas (#131031): avaliar fallback para responder cliente por outro número saudável (template se fora da janela de 24h).
+
+## Concluído
+- [x] Mostrar mensagem real do template na caixa AQUECIMENTO (corpo renderizado com nome do lead)
+- [x] Coluna `usar_em_leads` em `meta_templates_mestre` + toggle na aba Template Meta
+- [x] `escolherTemplateLead` (sorteia entre marcados) + pular envio a lead sem template marcado
+- [x] Cadastrar 12 ideias de templates para leads Google Maps em `meta_template_ideias`
+- [x] Deploy das funções afetadas + build OK
+- [x] Mostrar nome da instância, BM e qualidade atual ao clicar em "Verificar status na Meta"
