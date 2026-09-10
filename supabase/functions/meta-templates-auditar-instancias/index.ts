@@ -162,9 +162,13 @@ Deno.serve(async (req) => {
         ja_na_fila: faltando.length - novos.length,
         a_enfileirar: novos.length,
         faltando_nomes: faltando.map((m) => m.nome),
+        voltou_ao_verde: i.templates_resync_pendente === true,
         _novos: novos.map((m) => m.id),
       };
     });
+
+    // Números que acabaram de voltar ao verde entram primeiro na fila.
+    relatorio.sort((a, b) => Number(b.voltou_ao_verde) - Number(a.voltou_ao_verde));
 
     const comPendencia = relatorio.filter((r) => r.a_enfileirar > 0);
     const completas = relatorio.filter((r) => r.faltando === 0).length;
@@ -179,7 +183,8 @@ Deno.serve(async (req) => {
       total_a_enfileirar: comPendencia.reduce((s, r) => s + r.a_enfileirar, 0),
     };
 
-    if (dryRun) return json(resposta);
+    if (!auto && dryRun) return json(resposta);
+
 
     // ===== Enfileira os faltantes =====
     let enfileirados = 0;
