@@ -354,6 +354,48 @@ export default function EnvioMeta() {
   const [credorByTel, setCredorByTel] = useState<Record<string, CredorSlug>>({});
   const [editVarsOpen, setEditVarsOpen] = useState(false);
 
+  // Antirrepetição — quantos números da lista já receberam mensagem de campanha
+  // nos últimos N dias (padrão do sistema). Só informativo aqui; a remoção real
+  // acontece no servidor ao iniciar a campanha.
+  const contarJaEnviadosRecentes = async (
+    telefones: string[],
+  ): Promise<{ total: number; dias: number }> => {
+    const suf = (t: string) => {
+      const d = String(t || "").replace(/\D/g, "");
+      return d.length >= 8 ? d.slice(-8) : d;
+    };
+    try {
+      const { data: cfg } = await supabase
+        .from("meta_envio_pool_config").select("antirrepeticao_dias").eq("id", 1).maybeSingle();
+      const dias = Math.max(0, Math.min(60, Number((cfg as any)?.antirrepeticao_dias ?? 7)));
+      if (dias === 0) return { total: 0, dias: 0 };
+      const desde = new Date(Date.now() - dias * 86400000).toISOString();
+      const alvo = new Set(telefones.map(suf).filter(Boolean));
+      const recentes = new Set<string>();
+      const PAGE = 1000;
+      for (let from = 0; from < 60000; from += PAGE) {
+        const { data, error } = await supabase
+          .from("envio_meta_job_item")
+          .select("telefone")
+          .eq("status", "enviado")
+          .gte("processado_em", desde)
+          .range(from, from + PAGE - 1);
+        if (error) break;
+        (data || []).forEach((r: any) => {
+          const s = suf(r.telefone);
+          if (s && alvo.has(s)) recentes.add(s);
+        });
+        if (!data || data.length < PAGE) break;
+      }
+      return { total: recentes.size, dias };
+    } catch {
+      return { total: 0, dias: 0 };
+    }
+  };
+
+  // Guarda a lista da última importação para alertar se a nova é praticamente a mesma.
+  const ultimaListaRef = useRef<Set<string>>(new Set());
+
   const importarExcel = async (file: File) => {
     try {
       const buf = await file.arrayBuffer();
@@ -367,6 +409,7 @@ export default function EnvioMeta() {
       toast.error("Erro ao ler planilha: " + (e?.message || e));
     }
   };
+
 
   // Validação opcional antes do disparo: usa TODAS as instâncias UAZAPI conectadas.
   const validarAgora = async () => {
@@ -939,6 +982,9 @@ export default function EnvioMeta() {
     let semWa: string[] = [];
     let erroVal: string[] = [];
 
+    // Antirrepetição: quantos desta lista já receberam mensagem nos últimos dias.
+    const jaRecebidos = await contarJaEnviadosRecentes(recipientsDedup.map((c) => c.telefone));
+
     // A validação de WhatsApp acontece durante o disparo (não trava a campanha).
     {
       const avisoCota = !temIlimitada && bmsEnvolvidas.size > 0 && recipientsDedup.length > saldoTotalBm
@@ -954,8 +1000,17 @@ export default function EnvioMeta() {
       const acaoLinha = agendarParaISO
         ? `Agendar ${tplLinha} para iniciar em ${new Date(agendarParaISO).toLocaleString("pt-BR")}`
         : `Disparar ${tplLinha}`;
+      if (jaRecebidos.total >= recipientsDedup.length && recipientsDedup.length > 0) {
+        return toast.error(
+          `Todos os ${recipientsDedup.length} contatos desta lista já receberam mensagem nos últimos ${jaRecebidos.dias} dia(s). Confira se a planilha importada é a correta — nada foi enviado.`,
+          { duration: 12000 },
+        );
+      }
       if (!confirm(
         `${bloco}${acaoLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
+        (jaRecebidos.total > 0
+          ? `\n\n🔁 ${jaRecebidos.total} contato(s) já receberam mensagem nos últimos ${jaRecebidos.dias} dia(s) e serão IGNORADOS. Serão disparados ${recipientsDedup.length - jaRecebidos.total}.`
+          : "") +
         (validarNoEnvio ? `\n\n🔎 A checagem de WhatsApp será feita durante o envio pelos números UAZAPI conectados.` : "") +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
@@ -2379,6 +2434,49 @@ export default function EnvioMeta() {
             (stats.preservados ? ` • 🟦 ${stats.preservados} linha(s) de números UAZAPI mantidas` : "") +
             (varsCount ? ` • variáveis do template preenchidas em ${varsCount} linha(s)` : "")
           );
+          // Alerta se esta lista é praticamente a mesma da última campanha criada.
+          (async () => {
+            const suf = (t: string) => {
+              const d = String(t || "").replace(/\D/g, "");
+              return d.length >= 8 ? d.slice(-8) : d;
+            };
+            const nova = new Set(
+              linhas.map((l) => suf(splitLinhaEnvio(l.trim())[0] || "")).filter(Boolean),
+            );
+            ultimaListaRef.current = nova;
+            if (nova.size === 0) return;
+            try {
+              const { data: ultimo } = await supabase
+                .from("envio_meta_job")
+                .select("id, nome_campanha, created_at")
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (!ultimo?.id) return;
+              const antiga = new Set<string>();
+              for (let from = 0; from < 20000; from += 1000) {
+                const { data, error } = await supabase
+                  .from("envio_meta_job_item")
+                  .select("telefone")
+                  .eq("job_id", ultimo.id)
+                  .range(from, from + 999);
+                if (error) break;
+                (data || []).forEach((r: any) => { const s = suf(r.telefone); if (s) antiga.add(s); });
+                if (!data || data.length < 1000) break;
+              }
+              if (antiga.size === 0) return;
+              let iguais = 0;
+              nova.forEach((s) => { if (antiga.has(s)) iguais++; });
+              const pct = Math.round((iguais / nova.size) * 100);
+              if (pct >= 80) {
+                toast.error(
+                  `⚠️ Esta lista é ${pct}% igual à campanha "${ultimo.nome_campanha || "anterior"}" de ` +
+                  `${new Date(ultimo.created_at).toLocaleDateString("pt-BR")}. Confirme se importou o arquivo certo antes de disparar.`,
+                  { duration: 20000 },
+                );
+              }
+            } catch { /* alerta apenas */ }
+          })();
         }}
       />
       <EditarVariaveisTemplateDialog

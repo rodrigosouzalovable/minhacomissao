@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
     let bloqueadosBlacklist = 0;
     const listaBlacklist: Array<{ telefone: string; nome: string; credor: string }> = [];
     const { data: cfgPool } = await supabase
-      .from('meta_envio_pool_config').select('supressao_ativa, blacklist_ativa').eq('id', 1).maybeSingle();
+      .from('meta_envio_pool_config').select('supressao_ativa, blacklist_ativa, antirrepeticao_dias').eq('id', 1).maybeSingle();
     const supressaoAtiva = cfgPool?.supressao_ativa !== false;
     const blacklistAtiva = cfgPool?.blacklist_ativa !== false;
     if (supressaoAtiva || blacklistAtiva) {
@@ -261,6 +261,73 @@ Deno.serve(async (req) => {
         }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       console.log('[iniciar] higiene de base — suprimidos:', suprimidos, 'blacklist:', bloqueadosBlacklist);
+    }
+
+    // ===== Antirrepetição: remove quem já recebeu mensagem de campanha nos últimos N dias =====
+    // Protege contra disparar de novo a mesma lista (planilha antiga que ficou no campo).
+    const diasAnti = Math.max(
+      0,
+      Math.min(60, Number(body?.diasAntirrepeticao ?? cfgPool?.antirrepeticao_dias ?? 7)),
+    );
+    const listaRepetidos: Array<{ telefone: string; nome: string; ultimo_envio: string; campanha: string }> = [];
+    if (diasAnti > 0) {
+      const sufixoDe = (t: string) => {
+        const d = String(t || '').replace(/\D+/g, '');
+        return d.length >= 8 ? d.slice(-8) : d;
+      };
+      const desde = new Date(Date.now() - diasAnti * 86400000).toISOString();
+      // Carrega os enviados recentes em páginas (telefone + job) e monta o índice por sufixo.
+      const recentes = new Map<string, { ts: string; job: string }>();
+      const PAGE = 1000;
+      for (let from = 0; from < 200000; from += PAGE) {
+        const { data, error } = await supabase
+          .from('envio_meta_job_item')
+          .select('telefone, processado_em, job_id')
+          .eq('status', 'enviado')
+          .gte('processado_em', desde)
+          .order('processado_em', { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) { console.error('[iniciar] antirrepeticao consulta falhou', error); break; }
+        for (const r of (data || []) as any[]) {
+          const s = sufixoDe(r.telefone);
+          if (s && !recentes.has(s)) recentes.set(s, { ts: r.processado_em, job: r.job_id });
+        }
+        if (!data || data.length < PAGE) break;
+      }
+      if (recentes.size > 0) {
+        const nomeJob = new Map<string, string>();
+        const antes = clientesEnvio.length;
+        clientesEnvio = clientesEnvio.filter((c) => {
+          const hit = recentes.get(sufixoDe(c.telefone));
+          if (!hit) return true;
+          if (listaRepetidos.length < 5000) listaRepetidos.push({
+            telefone: String((c as any).telefone || ''),
+            nome: String((c as any).nome || ''),
+            ultimo_envio: hit.ts,
+            campanha: hit.job,
+          });
+          return false;
+        });
+        const removidos = antes - clientesEnvio.length;
+        console.log('[iniciar] antirrepeticao — removidos:', removidos, 'janela:', diasAnti, 'dias');
+        if (clientesEnvio.length === 0) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: `Todos os ${antes} contatos desta lista já receberam mensagem nos últimos ${diasAnti} dia(s). Confira se a planilha importada é a correta — nada foi enviado.`,
+            ignorados_repetidos: removidos,
+          }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // Preenche nome da campanha de origem para exibição no detalhe.
+        try {
+          const jobIds = Array.from(new Set(listaRepetidos.map((r) => r.campanha))).slice(0, 200);
+          if (jobIds.length > 0) {
+            const { data: jrows } = await supabase
+              .from('envio_meta_job').select('id, nome_campanha').in('id', jobIds);
+            for (const j of (jrows || []) as any[]) nomeJob.set(j.id, j.nome_campanha || '');
+            for (const r of listaRepetidos) r.campanha = nomeJob.get(r.campanha) || r.campanha;
+          }
+        } catch (_) { /* exibição apenas */ }
+      }
     }
 
 
@@ -362,6 +429,8 @@ Deno.serve(async (req) => {
 
         instancias_risco_aceito: instanciasRiscoAceito,
         bloqueados_blacklist: listaBlacklist,
+        dias_antirrepeticao: diasAnti,
+        ignorados_repetidos: listaRepetidos,
 
       })
 
@@ -460,7 +529,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ job_id: job.id }),
     }).catch(() => {});
 
-    return new Response(JSON.stringify({ success: true, job_id: job.id }), {
+    return new Response(JSON.stringify({ success: true, job_id: job.id, ignorados_repetidos: listaRepetidos.length }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {

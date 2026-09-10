@@ -2111,11 +2111,13 @@ export type Database = {
           concluido_em: string | null
           created_at: string
           credor: string | null
+          dias_antirrepeticao: number
           enviados: number
           erros: number
           falhas_por_instancia_run: Json
           folder_id: string | null
           id: string
+          ignorados_repetidos: Json
           iniciado_em: string
           instancia_ids: string[]
           instancias_bloqueadas: Json
@@ -2153,11 +2155,13 @@ export type Database = {
           concluido_em?: string | null
           created_at?: string
           credor?: string | null
+          dias_antirrepeticao?: number
           enviados?: number
           erros?: number
           falhas_por_instancia_run?: Json
           folder_id?: string | null
           id?: string
+          ignorados_repetidos?: Json
           iniciado_em?: string
           instancia_ids?: string[]
           instancias_bloqueadas?: Json
@@ -2195,11 +2199,13 @@ export type Database = {
           concluido_em?: string | null
           created_at?: string
           credor?: string | null
+          dias_antirrepeticao?: number
           enviados?: number
           erros?: number
           falhas_por_instancia_run?: Json
           folder_id?: string | null
           id?: string
+          ignorados_repetidos?: Json
           iniciado_em?: string
           instancia_ids?: string[]
           instancias_bloqueadas?: Json
@@ -4245,6 +4251,7 @@ export type Database = {
       }
       meta_envio_pool_config: {
         Row: {
+          antirrepeticao_dias: number
           aquecimento_ativo: boolean
           aquecimento_max_pares_dia: number
           aquecimento_template_utility: string | null
@@ -4296,6 +4303,7 @@ export type Database = {
           tenant_id: string
         }
         Insert: {
+          antirrepeticao_dias?: number
           aquecimento_ativo?: boolean
           aquecimento_max_pares_dia?: number
           aquecimento_template_utility?: string | null
@@ -4347,6 +4355,7 @@ export type Database = {
           tenant_id?: string
         }
         Update: {
+          antirrepeticao_dias?: number
           aquecimento_ativo?: boolean
           aquecimento_max_pares_dia?: number
           aquecimento_template_utility?: string | null
