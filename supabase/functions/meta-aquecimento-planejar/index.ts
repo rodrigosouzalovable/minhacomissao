@@ -15,6 +15,8 @@ const corsHeaders = {
 };
 
 const LIMITE_INSTANCIAS = 40;
+/** Alvo diário no modo intensivo (≈1.300 destinatários únicos em 3 dias). */
+const ALVO_INTENSIVO_DIA = 450;
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -221,11 +223,19 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
     const linhas = resumo.map((r) => {
       const d = decisoes[r.id];
       const tetoDuro = Math.max(10, Math.round(r.tier_atual * 0.6));
-      const alvo = Math.max(5, Math.min(d?.alvo || r.alvo_base, tetoDuro));
-      const mixU = d ? d.mix_uazapi : (r.taxa_resposta === null ? 80 : 60);
+      // Modo intensivo: número ainda abaixo de 10k/dia corre atrás do volume que
+      // destrava o próximo tier (~1.300 únicos em 3 dias).
+      const intensivo = r.tier_atual < 10000;
+      const alvo = intensivo
+        ? Math.max(5, Math.min(ALVO_INTENSIVO_DIA, tetoDuro))
+        : Math.max(5, Math.min(d?.alvo || r.alvo_base, tetoDuro));
+      const mixIa = d ? d.mix_uazapi : (r.taxa_resposta === null ? 80 : 60);
+      // Volume alto exige destinatários ÚNICOS: no intensivo o peso vai para leads.
+      const mixU = intensivo ? Math.min(mixIa, 25) : mixIa;
       return {
         instancia_id: r.id,
         dia,
+        modo_intensivo: intensivo,
         tier_atual: r.tier_atual,
         tier_alvo: r.tier_alvo,
         alvo_unicos_dia: alvo,
