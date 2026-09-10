@@ -1543,7 +1543,7 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona instâncias sem problema: conectadas, nome aprovado, BM com saldo. Ficam de fora apenas YELLOW/RED e a Novo Mundo 3144. Qualidade desconhecida entra normalmente."
+              title="Seleciona instâncias sem problema: conectadas, nome aprovado, BM com saldo e já ativas no pool. Ficam de fora YELLOW/RED, instâncias com botão 'Ativar no pool' e a Novo Mundo 3144. Qualidade desconhecida entra normalmente."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
                 const boasInstancias = instanciasVisiveis.filter(instanciaSemProblema);
