@@ -291,9 +291,32 @@ Deno.serve(async (req) => {
       // Última checagem: se o modelo já existe nesse número na Meta, não reenvia.
       const { data: mestreItem } = await supabase
         .from("meta_templates_mestre")
-        .select("nome, idioma")
+        .select("nome, idioma, corpo, categoria, reclassificado_marketing")
         .eq("id", proximo.template_mestre_id)
         .maybeSingle();
+
+      // Só sobe utilidade com variável numerada. Qualquer outro caso sai da fila.
+      if (mestreItem) {
+        const nomeadas = String((mestreItem as any).corpo || "").match(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g) || [];
+        const naoUtility = String((mestreItem as any).categoria || "").toUpperCase() !== "UTILITY";
+        const marketing = (mestreItem as any).reclassificado_marketing === true;
+        if (nomeadas.length > 0 || naoUtility || marketing) {
+          await supabase
+            .from("meta_templates_onboarding_fila")
+            .update({
+              status: "CANCELADO",
+              motivo: marketing
+                ? "modelo reclassificado como MARKETING pela Meta"
+                : naoUtility
+                ? "somente modelos de utilidade são injetados"
+                : "modelo usa variável com nome; use {{1}}, {{2}}...",
+              finalizado_em: new Date().toISOString(),
+            })
+            .eq("id", proximo.id);
+          processados.push({ instancia_id: inst.id, ok: false, cancelado: mestreItem.nome });
+          continue;
+        }
+      }
       if (mestreItem?.nome) {
         const { data: existeReal } = await supabase
           .from("meta_whatsapp_templates")
