@@ -9,6 +9,9 @@ const corsHeaders = {
 
 const DESTINATARIOS = ["62991672674"];
 
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+
 const count = async (q: any) => {
   const { count: c } = await q;
   return c ?? 0;
