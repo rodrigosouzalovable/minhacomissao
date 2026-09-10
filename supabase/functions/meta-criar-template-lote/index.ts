@@ -77,6 +77,22 @@ function validarMestre(mestre: any): string[] {
   const { numeradas, nomeadas } = extrairVariaveis(mestre.corpo || "");
   const ex = mestre.exemplo || {};
 
+  // Regra fixa: variável só por número ({{1}}, {{2}}...). A Meta rejeita nomeadas
+  // em quase todas as contas ("os parâmetros devem ser números inteiros").
+  if (nomeadas.length > 0) {
+    erros.push(
+      `Variável com nome não é aceita: ${nomeadas.map((n) => `{{${n}}}`).join(", ")}. Use apenas {{1}}, {{2}}...`,
+    );
+  }
+
+  // Só subimos modelos de utilidade.
+  if (String(mestre.categoria || "").toUpperCase() !== "UTILITY") {
+    erros.push("Somente modelos de UTILIDADE podem ser enviados para a Meta.");
+  }
+  if (mestre.reclassificado_marketing === true) {
+    erros.push("A Meta reclassificou esse modelo como MARKETING; ele não é mais enviado.");
+  }
+
   if (numeradas.length > 0) {
     const vals = (ex.body_text?.[0] as string[]) || [];
     if (vals.length < numeradas.length || vals.some((v: string) => !String(v || "").trim())) {

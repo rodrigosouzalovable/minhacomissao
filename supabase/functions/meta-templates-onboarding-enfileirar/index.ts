@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     const templateIdioma = String(body?.idioma || "").trim();
     let restricaoMestres: string[] | null = null;
     if (templateNome) {
-      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma").eq("nome", templateNome);
+      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma").eq("nome", templateNome).eq("reclassificado_marketing", false);
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
       const { data: mestres } = await q;
       restricaoMestres = ((mestres as any[]) || []).map((r) => r.id as string);
@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
           .from("meta_templates_mestre")
           .select("id")
           .eq("injetar_em_novos", true)
+          .eq("reclassificado_marketing", false)
           .order("criado_em", { ascending: true });
 
         const listaMarcados = ((marcados as any[]) || []).map((r) => r.id as string);
