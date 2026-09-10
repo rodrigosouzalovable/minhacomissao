@@ -20,7 +20,7 @@ export async function carregarOrcamento(supabase: any, dia = hojeBrt()): Promise
     .maybeSingle();
   if (data) return data as Orcamento;
 
-  // Herda o teto configurado no último dia registrado (ou o padrão de R$ 50).
+  // Herda o teto configurado no último dia registrado (ou o padrão de R$ 120).
   const { data: ultimo } = await supabase
     .from("meta_aquecimento_orcamento")
     .select("teto_reais, custo_utility, custo_marketing")
