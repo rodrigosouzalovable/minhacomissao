@@ -211,6 +211,32 @@ Deno.serve(async (req) => {
           templates_auto_iniciado_em: new Date().toISOString(),
         })
         .eq("id", r.id);
+
+      // Voltou ao verde: avisa que a sincronização foi retomada.
+      if (r.voltou_ao_verde) {
+        const inst = elegiveis.find((i) => i.id === r.id);
+        await notificarAdmin(supabase, {
+          tipo: "templates_resync_pos_green",
+          destinatarios: DESTINO_AVISO,
+          chaveIdempotencia: `resync:${r.id}:${new Date().toISOString().slice(0, 10)}`,
+          umaVezPorChave: true,
+          mensagem:
+            `🟢 *Número voltou ao verde — sincronizando templates*\n\n` +
+            `Número: *${r.nome}*\n` +
+            (inst ? `${await linhaBmInstancia(supabase, inst)}\n` : "") +
+            `Modelos que faltavam: *${r.a_enfileirar}*\n\n` +
+            `Envio gradual: 1 por vez com 2–5 min de intervalo, das 07h às 20h e nunca no domingo.`,
+        });
+      }
+    }
+
+    // Todas as elegíveis foram conferidas agora: limpa a marca de re-sincronização.
+    const idsResync = elegiveis.filter((i) => i.templates_resync_pendente === true).map((i) => i.id);
+    if (idsResync.length > 0) {
+      await supabase
+        .from("meta_whatsapp_instances")
+        .update({ templates_resync_pendente: false })
+        .in("id", idsResync);
     }
 
     if (enfileirados > 0) {
@@ -218,6 +244,7 @@ Deno.serve(async (req) => {
         .slice(0, 15)
         .map((r) => `• ${r.nome}: ${r.a_enfileirar} modelo(s)`)
         .join("\n");
+
       await notificarAdmin(supabase, {
         tipo: "templates_auditoria_inicio",
         destinatarios: DESTINO_AVISO,
