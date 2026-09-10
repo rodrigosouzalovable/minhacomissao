@@ -19,6 +19,14 @@ Hoje, quando você clica em "Aplicar template nessas instâncias", o sistema env
    - Quando todos os modelos de um número são aprovados, chega um aviso no WhatsApp (62991672674) informando o número, a BM e quantos modelos foram aprovados.
    - Na barra de progresso da injeção aparece "última conferência há X min" e "próxima conferência em X min", com o botão Atualizar já existente para conferir na hora.
 
+5. **Todos os números sempre com os mesmos modelos**
+   Uma vez por dia o sistema compara, número por número, os modelos marcados para injeção com os que cada número realmente tem aprovado na Meta, e coloca na fila apenas o que falta — sem repetir o que já existe. Assim as instâncias tendem a ficar idênticas sozinhas, sem você precisar clicar em nada.
+
+6. **Respeita a qualidade do número**
+   - Número com qualidade amarela ou vermelha (ou bloqueado na Meta) fica de fora: nada é injetado nele.
+   - Assim que a qualidade volta ao verde, o próprio sistema reconfere o que está faltando naquele número e retoma a sincronização gradual, avisando no WhatsApp que voltou a sincronizar.
+
+
 ## Detalhes técnicos
 
 - Migração em `meta_templates_instancia`: colunas `ultima_verificacao_em`, `proxima_verificacao_em`, `verificacoes` (int, default 0), com índice parcial em `proxima_verificacao_em` para status ainda em aberto (`PENDING`/`ENVIADO`).
