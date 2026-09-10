@@ -371,7 +371,9 @@ Deno.serve(async (req) => {
             bmsPausadas.add(info.bm);
             try {
               await notificarNumeros(supabase, {
-                numeros: DESTINATARIOS_AVISO,
+                tipo: 'aquecimento_bm_bloqueada',
+                destinatarios: DESTINATARIOS_AVISO,
+                chaveIdempotencia: `bm-bloqueada:${info.bm}:${dia}`,
                 mensagem:
                   `🛑 *Aquecimento pausado por bloqueio da Meta*\n\n` +
                   `BM: *${info.bm}*\n` +
