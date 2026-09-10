@@ -212,11 +212,18 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     setMapping(initial);
 
 
-    // Formato inicial: R$ para colunas monetárias (ou cabeçalho de valor), raw nas demais.
-    const fmts: Record<number, FormatoValor> = {};
+    // Formato inicial: R$ para colunas monetárias (ou cabeçalho de valor),
+    // CPF/CNPJ para colunas de documento, raw nas demais.
+    const fmts: Record<number, FormatoValor | FormatoDocumento> = {};
     for (let c = 0; c < nCols; c++) {
+      const role = initial[c];
       const headerValor = firstIsHeader && VALOR_HEADER_RX.test(String(firstRow[c] ?? ""));
-      fmts[c] = colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
+      if (role === "cpf") {
+        const sample = rows[firstIsHeader ? 1 : 0]?.[c];
+        fmts[c] = detectarTipoDocumento(sample);
+      } else {
+        fmts[c] = colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
+      }
     }
     setFormatoPorColuna(fmts);
   }, [open, nCols, firstIsHeader, colunasMonetarias, placeholders]);
