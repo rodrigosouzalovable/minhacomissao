@@ -20,6 +20,40 @@ async function jobEstaRodando(jobId: string) {
   return data?.status === 'rodando';
 }
 
+// Watchdog: item reservado ("processando") que ficou preso há mais de 5 minutos
+// (função caiu no meio, bloqueio da Meta, timeout) volta para a fila. Se já
+// esgotou as tentativas, vira erro para não segurar o ritmo da campanha.
+const PRESO_MS = 5 * 60 * 1000;
+async function destravarItensPresos(jobId: string) {
+  try {
+    const limite = new Date(Date.now() - PRESO_MS).toISOString();
+    const { data: presos } = await supabase
+      .from('envio_meta_job_item')
+      .select('id, tentativas, erro')
+      .eq('job_id', jobId)
+      .eq('status', 'processando')
+      .lt('updated_at', limite)
+      .limit(50);
+    if (!presos?.length) return;
+    const paraErro = presos.filter((p: any) => Number(p.tentativas || 0) >= 3).map((p: any) => p.id);
+    const paraFila = presos.filter((p: any) => Number(p.tentativas || 0) < 3).map((p: any) => p.id);
+    if (paraFila.length) {
+      await supabase.from('envio_meta_job_item')
+        .update({ status: 'pendente', instancia_id: null, instancia_nome: null })
+        .in('id', paraFila);
+    }
+    if (paraErro.length) {
+      await supabase.from('envio_meta_job_item')
+        .update({ status: 'erro', processado_em: new Date().toISOString() })
+        .in('id', paraErro);
+    }
+    console.log(`[tick watchdog] job=${jobId} devolvidos=${paraFila.length} erro=${paraErro.length}`);
+  } catch (e) {
+    console.error('[tick watchdog]', String(e).slice(0, 200));
+  }
+}
+
+
 type ItemResult =
   | { advanced: true; delayMs: number }
   | { advanced: false; waitMs?: number; done?: boolean; stop?: boolean };
