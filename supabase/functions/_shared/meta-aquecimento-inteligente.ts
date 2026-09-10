@@ -87,15 +87,26 @@ export async function leadsParaAquecimento(
 ): Promise<LeadAquecimento[]> {
   const { data: scores } = await supabase
     .from("aquecimento_nicho_score")
-    .select("nicho, cidade, score, bloqueado");
+    .select("nicho, cidade, score, bloqueado, envios, respostas");
 
   const bloqueados = new Set<string>();
   const scoreMap = new Map<string, number>();
+  const enviosNicho = new Map<string, number>();
+  const respostasNicho = new Map<string, number>();
   for (const s of (scores || []) as any[]) {
     const chave = String(s.nicho || "").toLowerCase();
     if (s.bloqueado) bloqueados.add(chave);
     const anterior = scoreMap.get(chave) ?? -1;
     if (Number(s.score) > anterior) scoreMap.set(chave, Number(s.score));
+    enviosNicho.set(chave, (enviosNicho.get(chave) || 0) + Number(s.envios || 0));
+    respostasNicho.set(chave, (respostasNicho.get(chave) || 0) + Number(s.respostas || 0));
+  }
+
+  // Nicho que já recebeu volume relevante e nunca respondeu sai da fila.
+  for (const [chave, envios] of enviosNicho.entries()) {
+    if (envios >= SEM_RESPOSTA_MIN_ENVIOS && (respostasNicho.get(chave) || 0) === 0) {
+      bloqueados.add(chave);
+    }
   }
 
   const carencia = new Date(Date.now() - 15 * 86400000).toISOString();
