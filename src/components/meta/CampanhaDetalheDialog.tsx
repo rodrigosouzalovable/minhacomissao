@@ -260,6 +260,35 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
 
 
+  // Altera o delay (min/max em segundos) com a campanha rodando — vale já na
+  // próxima mensagem, sem pausar nem reiniciar.
+  const salvarRitmo = async () => {
+    const lo = Math.round(Number(delayMin));
+    const hi = Math.round(Number(delayMax));
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo < 1 || hi < 1 || lo > 300 || hi > 300) {
+      toast.error("Informe valores entre 1 e 300 segundos");
+      return;
+    }
+    if (lo > hi) {
+      toast.error("O tempo mínimo não pode ser maior que o máximo");
+      return;
+    }
+    setSalvandoRitmo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
+        body: { job_id: job.id, acao: "ajustar_delay", min_seg: lo, max_seg: hi },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha ao alterar o ritmo");
+      toast.success(`Novo ritmo: ${lo}–${hi}s por mensagem`);
+      setEditandoRitmo(false);
+      await refreshStatus();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao alterar o ritmo");
+    } finally {
+      setSalvandoRitmo(false);
+    }
+  };
 
 
   const reenviarErros = async () => {
