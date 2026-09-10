@@ -471,10 +471,24 @@ export default function MetaTemplates() {
   };
 
 
+  const [statusDialog, setStatusDialog] = useState<{
+    open: boolean;
+    atualizados: number;
+    aprovados: number;
+    instancias: number;
+    resumo: Array<{ id: string; nome: string; telefone: string; bm: string; qualidade: string }>;
+  }>({ open: false, atualizados: 0, aprovados: 0, instancias: 0, resumo: [] });
+
   const verificarStatus = async () => {
-    const { error } = await supabase.functions.invoke("meta-verificar-status-templates", { body: {} });
+    const { data, error } = await supabase.functions.invoke("meta-verificar-status-templates", { body: {} });
     if (error) { toast.error(error.message); return; }
-    toast.success("Verificação iniciada");
+    setStatusDialog({
+      open: true,
+      atualizados: (data as any)?.atualizados ?? 0,
+      aprovados: (data as any)?.aprovados ?? 0,
+      instancias: (data as any)?.instancias ?? 0,
+      resumo: ((data as any)?.resumo || []) as any,
+    });
     setTimeout(carregar, 1500);
   };
 
