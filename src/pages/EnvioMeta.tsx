@@ -939,6 +939,9 @@ export default function EnvioMeta() {
     let semWa: string[] = [];
     let erroVal: string[] = [];
 
+    // Antirrepetição: quantos desta lista já receberam mensagem nos últimos dias.
+    const jaRecebidos = await contarJaEnviadosRecentes(recipientsDedup.map((c) => c.telefone));
+
     // A validação de WhatsApp acontece durante o disparo (não trava a campanha).
     {
       const avisoCota = !temIlimitada && bmsEnvolvidas.size > 0 && recipientsDedup.length > saldoTotalBm
@@ -954,8 +957,17 @@ export default function EnvioMeta() {
       const acaoLinha = agendarParaISO
         ? `Agendar ${tplLinha} para iniciar em ${new Date(agendarParaISO).toLocaleString("pt-BR")}`
         : `Disparar ${tplLinha}`;
+      if (jaRecebidos.total >= recipientsDedup.length && recipientsDedup.length > 0) {
+        return toast.error(
+          `Todos os ${recipientsDedup.length} contatos desta lista já receberam mensagem nos últimos ${jaRecebidos.dias} dia(s). Confira se a planilha importada é a correta — nada foi enviado.`,
+          { duration: 12000 },
+        );
+      }
       if (!confirm(
         `${bloco}${acaoLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
+        (jaRecebidos.total > 0
+          ? `\n\n🔁 ${jaRecebidos.total} contato(s) já receberam mensagem nos últimos ${jaRecebidos.dias} dia(s) e serão IGNORADOS. Serão disparados ${recipientsDedup.length - jaRecebidos.total}.`
+          : "") +
         (validarNoEnvio ? `\n\n🔎 A checagem de WhatsApp será feita durante o envio pelos números UAZAPI conectados.` : "") +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
