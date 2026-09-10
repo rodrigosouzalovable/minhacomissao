@@ -1163,6 +1163,34 @@ export default function MetaTemplates() {
                 <RefreshCw className="w-4 h-4 mr-2" /> Verificar status na Meta
               </Button>
             </div>
+
+            <Dialog open={statusDialog.open} onOpenChange={(v) => setStatusDialog((s) => ({ ...s, open: v }))}>
+              <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Status verificado na Meta</DialogTitle>
+                  <DialogDescription>
+                    {statusDialog.instancias} instância(s) conferida(s). Atualizados: {statusDialog.atualizados} · Aprovados: {statusDialog.aprovados}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2 mt-2">
+                  {statusDialog.resumo.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Nenhuma instância aguardando resposta da Meta no momento.</p>
+                  )}
+                  {statusDialog.resumo.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{r.nome}</div>
+                        <div className="text-xs text-muted-foreground truncate">{r.telefone} · BM: {r.bm || "não vinculada"}</div>
+                      </div>
+                      <Badge className={QUALIDADE_CORES[r.qualidade] || QUALIDADE_CORES["SEM LEITURA"] || "bg-muted text-muted-foreground"}>
+                        {r.qualidade}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </DialogContent>
+            </Dialog>
+
             {loading && <div className="text-center py-6"><Loader2 className="w-6 h-6 animate-spin inline" /></div>}
             {mestres.map((m) => {
               const c = contagemPorMestre(m.id);
