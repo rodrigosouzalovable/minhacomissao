@@ -3616,6 +3616,7 @@ export type Database = {
           instancia_id: string
           mix_leads_pct: number
           mix_uazapi_pct: number
+          modo_intensivo: boolean
           motivo: string | null
           origem_campanha_id: string | null
           status: string
@@ -3633,6 +3634,7 @@ export type Database = {
           instancia_id: string
           mix_leads_pct?: number
           mix_uazapi_pct?: number
+          modo_intensivo?: boolean
           motivo?: string | null
           origem_campanha_id?: string | null
           status?: string
@@ -3650,6 +3652,7 @@ export type Database = {
           instancia_id?: string
           mix_leads_pct?: number
           mix_uazapi_pct?: number
+          modo_intensivo?: boolean
           motivo?: string | null
           origem_campanha_id?: string | null
           status?: string
@@ -5490,6 +5493,7 @@ export type Database = {
           cabecalho_texto: string | null
           cabecalho_tipo: string | null
           categoria: string
+          categoria_meta: string | null
           corpo: string
           criado_em: string
           criado_por: string | null
@@ -5498,6 +5502,7 @@ export type Database = {
           idioma: string
           injetar_em_novos: boolean
           nome: string
+          reclassificado_marketing: boolean
           rodape: string | null
           tenant_id: string
           usar_em_leads: boolean
@@ -5510,6 +5515,7 @@ export type Database = {
           cabecalho_texto?: string | null
           cabecalho_tipo?: string | null
           categoria: string
+          categoria_meta?: string | null
           corpo: string
           criado_em?: string
           criado_por?: string | null
@@ -5518,6 +5524,7 @@ export type Database = {
           idioma?: string
           injetar_em_novos?: boolean
           nome: string
+          reclassificado_marketing?: boolean
           rodape?: string | null
           tenant_id?: string
           usar_em_leads?: boolean
@@ -5530,6 +5537,7 @@ export type Database = {
           cabecalho_texto?: string | null
           cabecalho_tipo?: string | null
           categoria?: string
+          categoria_meta?: string | null
           corpo?: string
           criado_em?: string
           criado_por?: string | null
@@ -5538,6 +5546,7 @@ export type Database = {
           idioma?: string
           injetar_em_novos?: boolean
           nome?: string
+          reclassificado_marketing?: boolean
           rodape?: string | null
           tenant_id?: string
           usar_em_leads?: boolean
