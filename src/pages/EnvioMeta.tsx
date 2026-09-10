@@ -354,6 +354,48 @@ export default function EnvioMeta() {
   const [credorByTel, setCredorByTel] = useState<Record<string, CredorSlug>>({});
   const [editVarsOpen, setEditVarsOpen] = useState(false);
 
+  // Antirrepetição — quantos números da lista já receberam mensagem de campanha
+  // nos últimos N dias (padrão do sistema). Só informativo aqui; a remoção real
+  // acontece no servidor ao iniciar a campanha.
+  const contarJaEnviadosRecentes = async (
+    telefones: string[],
+  ): Promise<{ total: number; dias: number }> => {
+    const suf = (t: string) => {
+      const d = String(t || "").replace(/\D/g, "");
+      return d.length >= 8 ? d.slice(-8) : d;
+    };
+    try {
+      const { data: cfg } = await supabase
+        .from("meta_envio_pool_config").select("antirrepeticao_dias").eq("id", 1).maybeSingle();
+      const dias = Math.max(0, Math.min(60, Number((cfg as any)?.antirrepeticao_dias ?? 7)));
+      if (dias === 0) return { total: 0, dias: 0 };
+      const desde = new Date(Date.now() - dias * 86400000).toISOString();
+      const alvo = new Set(telefones.map(suf).filter(Boolean));
+      const recentes = new Set<string>();
+      const PAGE = 1000;
+      for (let from = 0; from < 60000; from += PAGE) {
+        const { data, error } = await supabase
+          .from("envio_meta_job_item")
+          .select("telefone")
+          .eq("status", "enviado")
+          .gte("processado_em", desde)
+          .range(from, from + PAGE - 1);
+        if (error) break;
+        (data || []).forEach((r: any) => {
+          const s = suf(r.telefone);
+          if (s && alvo.has(s)) recentes.add(s);
+        });
+        if (!data || data.length < PAGE) break;
+      }
+      return { total: recentes.size, dias };
+    } catch {
+      return { total: 0, dias: 0 };
+    }
+  };
+
+  // Guarda a lista da última importação para alertar se a nova é praticamente a mesma.
+  const ultimaListaRef = useRef<Set<string>>(new Set());
+
   const importarExcel = async (file: File) => {
     try {
       const buf = await file.arrayBuffer();
@@ -367,6 +409,7 @@ export default function EnvioMeta() {
       toast.error("Erro ao ler planilha: " + (e?.message || e));
     }
   };
+
 
   // Validação opcional antes do disparo: usa TODAS as instâncias UAZAPI conectadas.
   const validarAgora = async () => {
