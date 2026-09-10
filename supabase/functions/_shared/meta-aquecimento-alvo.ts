@@ -50,6 +50,41 @@ export interface TemplateAquecimento {
 
 const VALOR_PADRAO = "confirmação de cadastro";
 
+/** Palavras genéricas que não servem sozinhas como "nome curto" da empresa. */
+const PREFIXOS_GENERICOS = new Set([
+  "clinica", "clínica", "consultorio", "consultório", "dr", "dr.", "dra", "dra.",
+  "petshop", "pet", "loja", "casa", "auto", "studio", "estudio", "estúdio",
+  "espaco", "espaço", "centro", "instituto", "grupo", "salao", "salão",
+  "restaurante", "bar", "hotel", "posto", "oficina", "laboratorio", "laboratório",
+  "academia", "escola", "colegio", "colégio", "farmacia", "farmácia", "otica", "ótica",
+]);
+
+const SUFIXOS_EMPRESA = /\b(ltda|me|mei|eireli|s\/?a|sa|epp|cnpj|filial|matriz)\b\.?/gi;
+
+/**
+ * Reduz o nome da empresa ao primeiro nome útil.
+ * "NeoPets Veterinária e Petshop" → "NeoPets"
+ * "Clínica Vida Nova" → "Clínica Vida"
+ */
+export function primeiroNomeEmpresa(nome?: string | null): string {
+  const limpo = String(nome || "")
+    .replace(SUFIXOS_EMPRESA, " ")
+    .replace(/[|/–—-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!limpo) return "Parceiro";
+
+  const partes = limpo.split(" ").filter(Boolean);
+  const primeira = partes[0];
+  const generica = PREFIXOS_GENERICOS.has(primeira.toLowerCase().replace(/[.,]/g, ""));
+  const escolhido = generica && partes[1] ? `${primeira} ${partes[1]}` : primeira;
+
+  return escolhido
+    .split(" ")
+    .map((p) => (/[A-Z]/.test(p.slice(1)) ? p : p.charAt(0).toUpperCase() + p.slice(1)))
+    .join(" ");
+}
+
 function tokensDoCorpo(components: any[]): string[] {
   const body = (components || []).find((c: any) => String(c?.type).toUpperCase() === "BODY");
   const texto = String(body?.text || "");
