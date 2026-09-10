@@ -59,6 +59,9 @@ export async function registrarGasto(supabase: any, dia: string, valor: number) 
     .eq("dia", dia);
 }
 
+/** A partir de quantos envios sem nenhuma resposta o nicho sai da fila. */
+export const SEM_RESPOSTA_MIN_ENVIOS = 12;
+
 export interface LeadAquecimento {
   id: string;
   nome: string | null;
