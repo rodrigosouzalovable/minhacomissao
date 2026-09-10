@@ -330,7 +330,11 @@ export default function EnvioMeta() {
     });
   };
 
+  // Aplicação do template nas instâncias que ainda não o possuem.
+  const [injetandoTemplate, setInjetandoTemplate] = useState(false);
+
   // Confirmação de risco: números com qualidade YELLOW/RED/sem leitura marcados à mão.
+
   const [riscoDlg, setRiscoDlg] = useState<{
     open: boolean;
     numeros: { id: string; nome: string; qualidade: string }[];
