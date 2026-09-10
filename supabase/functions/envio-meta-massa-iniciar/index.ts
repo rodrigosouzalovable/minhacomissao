@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
     let bloqueadosBlacklist = 0;
     const listaBlacklist: Array<{ telefone: string; nome: string; credor: string }> = [];
     const { data: cfgPool } = await supabase
-      .from('meta_envio_pool_config').select('supressao_ativa, blacklist_ativa').eq('id', 1).maybeSingle();
+      .from('meta_envio_pool_config').select('supressao_ativa, blacklist_ativa, antirrepeticao_dias').eq('id', 1).maybeSingle();
     const supressaoAtiva = cfgPool?.supressao_ativa !== false;
     const blacklistAtiva = cfgPool?.blacklist_ativa !== false;
     if (supressaoAtiva || blacklistAtiva) {
