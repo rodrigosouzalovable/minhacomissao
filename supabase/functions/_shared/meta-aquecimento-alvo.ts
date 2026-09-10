@@ -122,6 +122,10 @@ export async function escolherTemplateAprovado(
 
   const candidatos = data.data
     .filter((t: any) => !temBotaoDinamico(t.components) && !temCabecalhoMidia(t.components))
+    // Só utilidade: se a Meta reclassificou para MARKETING, o modelo sai do aquecimento.
+    .filter((t: any) => String(t.category || "").toUpperCase() === "UTILITY")
+    // Variável nomeada não é aceita: apenas {{1}}, {{2}}...
+    .filter((t: any) => tokensDoCorpo(t.components).every((k: string) => /^\d+$/.test(k)))
     .map((t: any) => {
       const toks = tokensDoCorpo(t.components);
       const nomeados = toks.some((k) => !/^\d+$/.test(k));
@@ -173,7 +177,8 @@ export async function escolherTemplateLead(
   const { data: mestres } = await supabase
     .from("meta_templates_mestre")
     .select("nome")
-    .eq("usar_em_leads", true);
+    .eq("usar_em_leads", true)
+    .eq("reclassificado_marketing", false);
   const permitidos = new Set((mestres || []).map((m: any) => String(m.nome || "")));
   if (permitidos.size === 0) return null;
 
@@ -188,6 +193,8 @@ export async function escolherTemplateLead(
   const candidatos = data.data
     .filter((t: any) => permitidos.has(String(t.name)))
     .filter((t: any) => !temBotaoDinamico(t.components) && !temCabecalhoMidia(t.components))
+    .filter((t: any) => String(t.category || "").toUpperCase() === "UTILITY")
+    .filter((t: any) => tokensDoCorpo(t.components).every((k: string) => /^\d+$/.test(k)))
     .map((t: any) => {
       const toks = tokensDoCorpo(t.components);
       const nomeados = toks.some((k: string) => !/^\d+$/.test(k));
