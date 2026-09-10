@@ -346,19 +346,22 @@ serve(async (req) => {
 
 
 
-    // pré-marca todas como ENVIADO para feedback imediato na UI
-    const preRows = instancias.map((inst) => ({
-      template_mestre_id: mestre_id,
-      instancia_id: inst.id,
-      waba_id: inst.waba_id,
-      phone_number_id: inst.phone_number_id,
-      status: "ENVIADO",
-      erro: null,
-    }));
-    if (preRows.length > 0) {
-      await supabase.from("meta_templates_instancia")
-        .upsert(preRows, { onConflict: "template_mestre_id,instancia_id" });
+    // pré-marca como ENVIADO só em envio normal (no reenvio de falhas não mexemos no status em massa)
+    if (!apenas_falhas) {
+      const preRows = instancias.map((inst) => ({
+        template_mestre_id: mestre_id,
+        instancia_id: inst.id,
+        waba_id: inst.waba_id,
+        phone_number_id: inst.phone_number_id,
+        status: "ENVIADO",
+        erro: null,
+      }));
+      if (preRows.length > 0) {
+        await supabase.from("meta_templates_instancia")
+          .upsert(preRows, { onConflict: "template_mestre_id,instancia_id" });
+      }
     }
+
 
     // processa em background para evitar timeout de 150s
     const processar = async () => {
