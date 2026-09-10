@@ -371,7 +371,7 @@ export default function EnvioMeta() {
     try {
       const { data: cfg } = await supabase
         .from("meta_envio_pool_config").select("antirrepeticao_dias").eq("id", 1).maybeSingle();
-      const dias = Math.max(0, Math.min(60, Number((cfg as any)?.antirrepeticao_dias ?? 7)));
+      const dias = Math.max(0, Math.min(60, Number((cfg as any)?.antirrepeticao_dias ?? 1)));
       if (dias === 0) return { total: 0, dias: 0 };
       const desde = new Date(Date.now() - dias * 86400000).toISOString();
       const alvo = new Set(telefones.map(suf).filter(Boolean));
