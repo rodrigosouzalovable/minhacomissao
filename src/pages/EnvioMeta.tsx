@@ -1052,11 +1052,11 @@ export default function EnvioMeta() {
     // ⚠️ Confirmação de risco — números com qualidade baixa marcados à mão
     const arriscadas = instanciasComCota
       .map((id) => instancias.find((i) => i.id === id))
-      .filter((i): i is Instancia => !!i && (i.saude_quality || "").toUpperCase() !== "GREEN")
+      .filter((i): i is Instancia => !!i && ["YELLOW", "RED"].includes((i.saude_quality || "").toUpperCase()))
       .map((i) => ({
         id: i.id,
         nome: i.nome || i.display_phone || i.id,
-        qualidade: (i.saude_quality || "").toUpperCase() || "SEM LEITURA",
+        qualidade: (i.saude_quality || "").toUpperCase(),
       }));
     const okRisco = await pedirConfirmacaoRisco(arriscadas);
     if (!okRisco) { toast.error("Envio cancelado"); return; }
