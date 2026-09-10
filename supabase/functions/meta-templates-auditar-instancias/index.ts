@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
 
     const { data: instsRaw } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, waba_id, access_token, saude_quality, saude_status, meta_name_status, ativo, provider, templates_auto_pausado_ate")
+      .select("id, nome, display_phone, waba_id, access_token, saude_quality, saude_status, meta_name_status, ativo, provider, templates_auto_pausado_ate, templates_resync_pendente")
       .eq("ativo", true)
       .eq("provider", "meta");
 
