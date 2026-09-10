@@ -9,6 +9,9 @@ const corsHeaders = {
 
 const DESTINATARIOS = ["62991672674"];
 
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+
 const count = async (q: any) => {
   const { count: c } = await q;
   return c ?? 0;
@@ -82,7 +85,7 @@ Deno.serve(async (req) => {
     // Disparos de hoje para leads do Maps
     const { data: logsLead } = await supabase
       .from("meta_aquecimento_destino_log")
-      .select("instancia_id, status, respondeu_em, entregue_em, lido_em, nicho")
+      .select("instancia_id, status, respondeu_em, entregue_em, lido_em, nicho, custo_estimado, enviado_em")
       .eq("dia", hojeStr)
       .eq("fonte", "lead");
     const logs = (logsLead as any[]) || [];
@@ -93,6 +96,44 @@ Deno.serve(async (req) => {
     const respostas = logs.filter((l) => l.respondeu_em).length;
     const taxa = enviadas > 0 ? (respostas / enviadas) * 100 : 0;
 
+    // ===== Gasto do dia com mensagens para leads do Maps =====
+    const gastoLeads = logs
+      .filter((l) => l.status !== "falha")
+      .reduce((s, l) => s + Number(l.custo_estimado || 0), 0);
+    const gastoPorInstancia = new Map<string, { brl: number; qtd: number }>();
+    for (const lg of logs) {
+      if (lg.status === "falha" || !lg.instancia_id) continue;
+      const cur = gastoPorInstancia.get(lg.instancia_id) || { brl: 0, qtd: 0 };
+      cur.brl += Number(lg.custo_estimado || 0);
+      cur.qtd += 1;
+      gastoPorInstancia.set(lg.instancia_id, cur);
+    }
+    const custoPorResposta = respostas > 0 ? gastoLeads / respostas : 0;
+
+    const { data: orcHoje } = await supabase
+      .from("meta_aquecimento_orcamento")
+      .select("teto_reais, gasto_reais")
+      .eq("dia", hojeStr)
+      .maybeSingle();
+    const teto = Number(orcHoje?.teto_reais ?? 120);
+    const gastoTotalDia = Number(orcHoje?.gasto_reais ?? gastoLeads);
+    const restante = Math.max(0, teto - gastoTotalDia);
+    // Horário do último envio antes de o teto ser atingido (se atingiu)
+    let horaTetoAtingido = "";
+    if (gastoTotalDia >= teto && logs.length) {
+      const ultimo = logs
+        .filter((l) => l.status !== "falha" && l.enviado_em)
+        .sort((a, b) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime())[0];
+      if (ultimo) {
+        horaTetoAtingido = new Date(ultimo.enviado_em).toLocaleTimeString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+    }
+
+
     // Instâncias em aquecimento/resgate hoje
     const { data: trilhas } = await supabase
       .from("meta_aquecimento_trilha")
@@ -101,15 +142,19 @@ Deno.serve(async (req) => {
     const listaTrilhas = (trilhas as any[]) || [];
 
     const nomeMap = new Map<string, string>();
-    if (listaTrilhas.length) {
+    const idsInstancias = [
+      ...new Set([...listaTrilhas.map((t) => t.instancia_id), ...gastoPorInstancia.keys()].filter(Boolean)),
+    ];
+    if (idsInstancias.length) {
       const { data: insts } = await supabase
         .from("meta_whatsapp_instances")
         .select("id, nome, display_phone")
-        .in("id", listaTrilhas.map((t) => t.instancia_id));
+        .in("id", idsInstancias);
       for (const i of (insts as any[]) || []) {
         nomeMap.set(i.id, i.nome || i.display_phone || String(i.id).slice(0, 8));
       }
     }
+
 
     // Ranking de nichos
     const { data: scores } = await supabase
@@ -162,6 +207,22 @@ Deno.serve(async (req) => {
       l.push(`• ${enviadas} mensagens enviadas · ${entregues} entregues · ${lidas} lidas`);
       l.push(`• ${respostas} respostas (${taxa.toFixed(1)}% de resposta)${falhas ? ` · ${falhas} falha(s)` : ""}`);
     }
+
+    l.push("");
+    l.push("*💰 Gasto de hoje com os contatos do Maps*");
+    l.push(`• Mensagens para leads: ${brl(gastoLeads)}`);
+    if (respostas > 0) l.push(`• Custo por resposta: ${brl(custoPorResposta)}`);
+    if (gastoPorInstancia.size > 0) {
+      const ordenado = [...gastoPorInstancia.entries()].sort((a, b) => b[1].brl - a[1].brl).slice(0, 10);
+      for (const [instId, info] of ordenado) {
+        const nome = nomeMap.get(instId) || String(instId).slice(0, 8);
+        l.push(`   – ${nome}: ${brl(info.brl)} (${info.qtd} msg)`);
+      }
+    }
+    l.push(`• Teto do dia: ${brl(teto)} · gasto total ${brl(gastoTotalDia)} · restam ${brl(restante)}`);
+    if (horaTetoAtingido) l.push(`⛔ Teto atingido às ${horaTetoAtingido} — envios retomam amanhã.`);
+    l.push(`• Buscas no Google (separado): ~US$ ${custoDia.toFixed(2)}`);
+
 
     if (listaTrilhas.length > 0) {
       l.push("");
