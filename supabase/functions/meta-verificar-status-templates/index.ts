@@ -292,13 +292,21 @@ serve(async (req) => {
             });
           }
         }
+
+        resumo.push({
+          id: inst.id,
+          nome: rotuloInstancia(inst),
+          telefone: (inst.display_phone || '').toString(),
+          bm: (await linhaBmInstancia(supabase, inst)).replace(/^BM: \*|\*$/g, ''),
+          qualidade: (inst.saude_quality || 'SEM LEITURA').toString().toUpperCase(),
+        });
       } catch (_e) {
         // segue para próxima instância
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true, atualizados, aprovados: aprovadosTotal, instancias: instIds.length }),
+      JSON.stringify({ success: true, atualizados, aprovados: aprovadosTotal, instancias: instIds.length, resumo }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
