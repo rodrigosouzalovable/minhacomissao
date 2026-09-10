@@ -260,3 +260,119 @@ export function proximoTier(atual: number): number {
   if (atual < 100000) return 100000;
   return atual;
 }
+
+/** Devolve o lead para a fila quando a tentativa falhou (não gastou conversa). */
+export async function devolverLead(supabase: any, leadId: string) {
+  await supabase
+    .from("google_maps_leads")
+    .update({ usado_aquecimento_em: null, resultado_aquecimento: null })
+    .eq("id", leadId);
+}
+
+/**
+ * BM bloqueada pela Meta (#131031): tira do aquecimento todos os números dela.
+ * Retorna quantos números foram pausados e o nome da BM.
+ */
+export async function pausarInstanciasDaBm(
+  supabase: any,
+  inst: any,
+  motivo: string,
+  horas = 12,
+): Promise<{ bm: string; pausadas: number }> {
+  const ate = new Date(Date.now() + horas * 3600000).toISOString();
+  let bmNome = "não vinculada";
+  let ids: string[] = [inst.id];
+
+  const bmId = inst?.meta_bm_id || null;
+  if (bmId) {
+    const { data: bm } = await supabase
+      .from("meta_business_managers").select("nome").eq("id", bmId).maybeSingle();
+    bmNome = String(bm?.nome || bmId);
+    const { data: irmas } = await supabase
+      .from("meta_whatsapp_instances").select("id").eq("meta_bm_id", bmId).eq("ativo", true);
+    ids = Array.from(new Set([...(irmas || []).map((r: any) => r.id as string), inst.id]));
+  }
+
+  await supabase
+    .from("meta_whatsapp_instances")
+    .update({ pausa_automatica_ate: ate, pausa_automatica_motivo: motivo })
+    .in("id", ids);
+
+  return { bm: bmNome, pausadas: ids.length };
+}
+
+/**
+ * Recalcula o placar de nichos a partir do log real (usado no ciclo intradiário
+ * e no aprendizado noturno). Retorna as linhas gravadas.
+ */
+export async function recalcularScoreNichos(supabase: any, dias = 30): Promise<any[]> {
+  const desde = new Date(Date.now() - dias * 86400000).toISOString();
+  const { data: logs } = await supabase
+    .from("meta_aquecimento_destino_log")
+    .select("nicho, cidade, status, respondeu_em, segundos_para_resposta, erro")
+    .eq("fonte", "lead")
+    .gte("enviado_em", desde)
+    .limit(20000);
+
+  type Agg = { envios: number; respostas: number; rapidas: number; reclamacoes: number };
+  const agg = new Map<string, Agg>();
+  for (const l of (logs || []) as any[]) {
+    const nicho = String(l.nicho || "").trim();
+    if (!nicho) continue;
+    const cidade = String(l.cidade || "").trim();
+    const k = `${nicho.toLowerCase()}||${cidade.toLowerCase()}`;
+    const a = agg.get(k) || { envios: 0, respostas: 0, rapidas: 0, reclamacoes: 0 };
+    if (l.status !== "falha") a.envios++;
+    if (l.respondeu_em) a.respostas++;
+    if (Number(l.segundos_para_resposta ?? 99999) <= 120) a.rapidas++;
+    const erro = String(l.erro || "").toLowerCase();
+    if (erro.includes("block") || erro.includes("spam") || erro.includes("131026")) a.reclamacoes++;
+    agg.set(k, a);
+  }
+
+  const linhas: any[] = [];
+  for (const [k, a] of agg.entries()) {
+    const [nicho, cidade] = k.split("||");
+    const taxaResp = a.envios > 0 ? a.respostas / a.envios : 0;
+    const taxaRapida = a.envios > 0 ? a.rapidas / a.envios : 0;
+    const taxaRecl = a.envios > 0 ? a.reclamacoes / a.envios : 0;
+    linhas.push({
+      nicho,
+      cidade,
+      envios: a.envios,
+      respostas: a.respostas,
+      respostas_rapidas: a.rapidas,
+      reclamacoes: a.reclamacoes,
+      score: Math.max(0, Math.round((taxaResp * 60 + taxaRapida * 40 - taxaRecl * 200) * 100) / 100),
+      bloqueado: a.reclamacoes > 0 && taxaRecl >= 0.02,
+      atualizado_em: new Date().toISOString(),
+    });
+  }
+
+  if (linhas.length > 0) {
+    await supabase.from("aquecimento_nicho_score").upsert(linhas, { onConflict: "nicho,cidade" });
+  }
+  return linhas;
+}
+
+/**
+ * Taxa de resposta dos leads na última janela (minutos). Serve de gatilho para
+ * corrigir a rota: quando ninguém responde, o motor volta para os destinos
+ * próprios da UAZAPI e para os nichos com melhor histórico.
+ */
+export async function taxaRespostaRecenteLeads(
+  supabase: any,
+  minutos = 30,
+): Promise<{ envios: number; respostas: number; taxa: number }> {
+  const desde = new Date(Date.now() - minutos * 60000).toISOString();
+  const { data } = await supabase
+    .from("meta_aquecimento_destino_log")
+    .select("respondeu_em, status")
+    .eq("fonte", "lead")
+    .neq("status", "falha")
+    .gte("enviado_em", desde)
+    .limit(2000);
+  const envios = (data || []).length;
+  const respostas = (data || []).filter((l: any) => l.respondeu_em).length;
+  return { envios, respostas, taxa: envios > 0 ? respostas / envios : 1 };
+}
