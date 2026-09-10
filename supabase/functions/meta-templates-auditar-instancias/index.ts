@@ -3,6 +3,8 @@
 // Somente administrador. dry_run=true devolve apenas o relatório.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
+import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
