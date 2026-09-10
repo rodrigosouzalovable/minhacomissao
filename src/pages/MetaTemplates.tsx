@@ -439,16 +439,26 @@ export default function MetaTemplates() {
   };
 
 
+  const contarFalhas = (mestreId: string) =>
+    templInst.filter(
+      (t) => t.template_mestre_id === mestreId && ["FALHA_ENVIO", "REJECTED"].includes(t.status),
+    ).length;
+
   const reenviarFalhas = async (mestreId: string) => {
+    const n = contarFalhas(mestreId);
+    if (n === 0) { toast.info("Nenhuma falha para reenviar neste modelo."); return; }
+    if (!confirm(`Reenviar este modelo para ${n} número(s) com falha ou reprovação?`)) return;
     setEnviando(true);
     const { data, error } = await supabase.functions.invoke("meta-criar-template-lote", {
       body: { mestre_id: mestreId, apenas_falhas: true },
     });
     setEnviando(false);
     if (error) { toast.error(error.message); return; }
+    if ((data as any)?.elegiveis === 0) { toast.info((data as any)?.mensagem || "Nenhuma falha para reenviar."); return; }
     toast.success(`Reenviado: ${(data as any)?.sucessos ?? 0} ok, ${(data as any)?.falhas ?? 0} falhas`);
     carregar();
   };
+
 
   const verificarStatus = async () => {
     const { error } = await supabase.functions.invoke("meta-verificar-status-templates", { body: {} });
