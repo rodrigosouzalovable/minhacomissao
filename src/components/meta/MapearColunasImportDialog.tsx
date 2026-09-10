@@ -490,7 +490,21 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
                         )}
                       </SelectContent>
                     </Select>
-                    {(
+                    {mapping[c] === "cpf" ? (
+                      <Select
+                        value={fmtCol(c)}
+                        onValueChange={(v) => setFormatoPorColuna((p) => ({ ...p, [c]: v as FormatoDocumento }))}
+                      >
+                        <SelectTrigger className="h-7 mt-1 text-[10px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cpf">000.000.000-00</SelectItem>
+                          <SelectItem value="cnpj">00.000.000/0000-00</SelectItem>
+                          <SelectItem value="raw">Texto original</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : colunasMonetarias.has(c) ? (
                       <Select
                         value={fmtCol(c)}
                         onValueChange={(v) => setFormatoPorColuna((p) => ({ ...p, [c]: v as FormatoValor }))}
@@ -501,6 +515,19 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
                         <SelectContent>
                           <SelectItem value="brl">R$ 4.607,58</SelectItem>
                           <SelectItem value="numero">4.607,58</SelectItem>
+                          <SelectItem value="raw">Texto original</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Select
+                        value="raw"
+                        onValueChange={() => {}}
+                        disabled
+                      >
+                        <SelectTrigger className="h-7 mt-1 text-[10px]">
+                          <SelectValue>Texto original</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
                           <SelectItem value="raw">Texto original</SelectItem>
                         </SelectContent>
                       </Select>
