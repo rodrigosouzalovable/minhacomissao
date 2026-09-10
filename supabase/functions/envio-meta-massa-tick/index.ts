@@ -886,7 +886,12 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   const lo = Math.max(1, job.min_seg || 30);
   const hi = Math.max(lo, job.max_seg || 90);
   const delaySec = Math.floor(Math.random() * (hi - lo + 1)) + lo;
-  const delayMs = delaySec * 1000;
+  // Nada foi entregue a este contato quando ele volta pra fila: a nova tentativa
+  // em outra instância não precisa gastar o delay cheio configurado.
+  const delayMs = podeReenfileirar
+    ? Math.min(delaySec * 1000, 1_000 + Math.floor(Math.random() * 1_000))
+    : delaySec * 1000;
+
   const proximoEm = new Date(Date.now() + delayMs).toISOString();
 
   // Persiste os contadores/bloqueios de instâncias no job
