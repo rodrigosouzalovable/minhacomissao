@@ -231,9 +231,29 @@ serve(async (req) => {
       }
     }
 
+    // Quando é reenvio de falhas, a lista sai dos registros que realmente falharam
+    let idsFalhas: string[] | null = null;
+    if (apenas_falhas) {
+      const { data: falhasRows } = await supabase
+        .from("meta_templates_instancia")
+        .select("instancia_id, status")
+        .eq("template_mestre_id", mestre_id)
+        .in("status", ["FALHA_ENVIO", "REJECTED"]);
+      idsFalhas = Array.from(new Set(((falhasRows as any[]) || []).map((r) => r.instancia_id)));
+      if (idsFalhas.length === 0) {
+        return new Response(
+          JSON.stringify({ success: true, elegiveis: 0, sucessos: 0, falhas: 0, mensagem: "Nenhuma falha para reenviar." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     let query = supabase.from("meta_whatsapp_instances")
-      .select("id, nome, waba_id, phone_number_id, access_token, ativo, meta_bm_id");
-    if (Array.isArray(instancia_ids) && instancia_ids.length > 0) {
+      .select("id, nome, waba_id, phone_number_id, access_token, ativo, meta_bm_id")
+      .eq("provider", "meta");
+    if (idsFalhas) {
+      query = query.in("id", idsFalhas);
+    } else if (Array.isArray(instancia_ids) && instancia_ids.length > 0) {
       query = query.in("id", instancia_ids);
     } else {
       query = query.eq("ativo", true);
@@ -241,7 +261,18 @@ serve(async (req) => {
     const { data: instanciasRaw, error: ie } = await query;
     if (ie || !instanciasRaw) throw new Error("Falha ao carregar instâncias");
 
-    let instancias = instanciasRaw;
+    // Nunca tocar em números de parceiros
+    const { data: parceirosRows } = await supabase
+      .from("meta_instance_parceiros").select("instancia_id");
+    const idsParceiros = new Set(((parceirosRows as any[]) || []).map((r) => r.instancia_id));
+    let instancias = instanciasRaw.filter((i: any) => !idsParceiros.has(i.id));
+    if (instancias.length === 0) {
+      return new Response(
+        JSON.stringify({ success: true, elegiveis: 0, sucessos: 0, falhas: 0, mensagem: "Nenhuma instância elegível." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
 
     // ===== Modo replicar: só permitido depois de o piloto ser aprovado =====
     if (modo === "replicar") {
