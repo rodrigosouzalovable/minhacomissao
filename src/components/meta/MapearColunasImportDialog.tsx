@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectGroup, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { amostrasParecemValor, formatarValorBR, type FormatoValor } from "@/lib/valorBR";
+import { detectarTipoDocumento, formatarDocumentoBR, type FormatoDocumento } from "@/lib/documentoBR";
 import { normalizarCredor, type CredorSlug } from "@/lib/credorMarcas";
 
 const VALOR_HEADER_RX = /(saldo|valor|d[ií]vida|debito|débito|montante|total|parcela|entrada)/i;
@@ -164,8 +165,8 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
   }, [template?.body_text, template?.variaveis]);
 
   const [mapping, setMapping] = useState<ColRole[]>([]);
-  // Formato de saída por coluna: "brl" (R$ 4.607,58), "numero" (4.607,58) ou "raw".
-  const [formatoPorColuna, setFormatoPorColuna] = useState<Record<number, FormatoValor>>({});
+  // Formato de saída por coluna: valor ("brl"|"numero"|"raw") ou documento ("cpf"|"cnpj"|"raw").
+  const [formatoPorColuna, setFormatoPorColuna] = useState<Record<number, FormatoValor | FormatoDocumento>>({});
 
   // Colunas cujos valores parecem monetários (habilita o seletor de formato).
   const colunasMonetarias = useMemo(() => {
@@ -211,11 +212,18 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     setMapping(initial);
 
 
-    // Formato inicial: R$ para colunas monetárias (ou cabeçalho de valor), raw nas demais.
-    const fmts: Record<number, FormatoValor> = {};
+    // Formato inicial: R$ para colunas monetárias (ou cabeçalho de valor),
+    // CPF/CNPJ para colunas de documento, raw nas demais.
+    const fmts: Record<number, FormatoValor | FormatoDocumento> = {};
     for (let c = 0; c < nCols; c++) {
+      const role = initial[c];
       const headerValor = firstIsHeader && VALOR_HEADER_RX.test(String(firstRow[c] ?? ""));
-      fmts[c] = colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
+      if (role === "cpf") {
+        const sample = rows[firstIsHeader ? 1 : 0]?.[c];
+        fmts[c] = detectarTipoDocumento(sample);
+      } else {
+        fmts[c] = colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
+      }
     }
     setFormatoPorColuna(fmts);
   }, [open, nCols, firstIsHeader, colunasMonetarias, placeholders]);
@@ -230,10 +238,28 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
       next[idx] = role;
       return next;
     });
+    // Ajusta o formato da coluna conforme o novo papel.
+    setFormatoPorColuna((prev) => {
+      const fmt = prev[idx];
+      if (role === "cpf") {
+        const sample = rows[firstIsHeader ? 1 : 0]?.[idx];
+        return { ...prev, [idx]: detectarTipoDocumento(sample) };
+      }
+      if (fmt === "cpf" || fmt === "cnpj") {
+        return { ...prev, [idx]: "raw" };
+      }
+      return prev;
+    });
   };
 
-  const fmtCol = (c: number): FormatoValor => formatoPorColuna[c] ?? "raw";
-  const valorCelula = (c: number, raw: unknown) => formatarValorBR(raw, fmtCol(c));
+  const fmtCol = (c: number): FormatoValor | FormatoDocumento => formatoPorColuna[c] ?? "raw";
+  const valorCelula = (c: number, raw: unknown) => {
+    const fmt = fmtCol(c);
+    if (mapping[c] === "cpf" || fmt === "cpf" || fmt === "cnpj") {
+      return formatarDocumentoBR(raw, fmt === "cpf" || fmt === "cnpj" ? fmt : "cpf");
+    }
+    return formatarValorBR(raw, fmt as FormatoValor);
+  };
 
   const preview = firstIsHeader ? rows.slice(1, 6) : rows.slice(0, 5);
 
@@ -476,7 +502,21 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
                         )}
                       </SelectContent>
                     </Select>
-                    {(
+                    {mapping[c] === "cpf" ? (
+                      <Select
+                        value={fmtCol(c)}
+                        onValueChange={(v) => setFormatoPorColuna((p) => ({ ...p, [c]: v as FormatoDocumento }))}
+                      >
+                        <SelectTrigger className="h-7 mt-1 text-[10px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cpf">000.000.000-00</SelectItem>
+                          <SelectItem value="cnpj">00.000.000/0000-00</SelectItem>
+                          <SelectItem value="raw">Texto original</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : colunasMonetarias.has(c) ? (
                       <Select
                         value={fmtCol(c)}
                         onValueChange={(v) => setFormatoPorColuna((p) => ({ ...p, [c]: v as FormatoValor }))}
@@ -487,6 +527,19 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
                         <SelectContent>
                           <SelectItem value="brl">R$ 4.607,58</SelectItem>
                           <SelectItem value="numero">4.607,58</SelectItem>
+                          <SelectItem value="raw">Texto original</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Select
+                        value="raw"
+                        onValueChange={() => {}}
+                        disabled
+                      >
+                        <SelectTrigger className="h-7 mt-1 text-[10px]">
+                          <SelectValue>Texto original</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
                           <SelectItem value="raw">Texto original</SelectItem>
                         </SelectContent>
                       </Select>
