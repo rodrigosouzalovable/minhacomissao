@@ -13,6 +13,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { exportarParaExcel } from "@/lib/exportExcel";
 import { humanizarErroEnvio } from "@/lib/humanizarErroEnvio";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
+
 
 type Props = { jobId: string | null; open: boolean; onOpenChange: (v: boolean) => void };
 
@@ -115,7 +117,12 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const [buscandoLivres, setBuscandoLivres] = useState(false);
   const [adicionando, setAdicionando] = useState(false);
   const [liberando, setLiberando] = useState(false);
+  const [editandoRitmo, setEditandoRitmo] = useState(false);
+  const [delayMin, setDelayMin] = useState("");
+  const [delayMax, setDelayMax] = useState("");
+  const [salvandoRitmo, setSalvandoRitmo] = useState(false);
   const { role } = useUserRole();
+
   const isAdmin = role === "admin";
 
   const carregarLivres = async () => {
