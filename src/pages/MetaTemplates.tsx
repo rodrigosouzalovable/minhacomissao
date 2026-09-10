@@ -1172,7 +1172,11 @@ export default function MetaTemplates() {
                           const inst = instancias.find((i) => i.id === f.instancia_id);
                           return (
                             <div key={f.id} className="flex items-center gap-3 text-sm border-b py-1">
-                              <span className="flex-1">{inst?.nome || f.instancia_id} <span className="text-xs text-muted-foreground">{inst?.display_phone}</span></span>
+                              <span className="flex-1">
+                                {inst?.nome || "Número não visível nesta tela"}{" "}
+                                <span className="text-xs text-muted-foreground">{inst?.display_phone}</span>
+                              </span>
+
                               <Badge className={STATUS_COLORS[f.status] || ""}>{f.status}</Badge>
                               {(f.erro || f.motivo_rejeicao) && (
                                 <span className="text-xs text-destructive max-w-sm leading-snug" title={f.erro || f.motivo_rejeicao || ""}>
