@@ -165,8 +165,8 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
   }, [template?.body_text, template?.variaveis]);
 
   const [mapping, setMapping] = useState<ColRole[]>([]);
-  // Formato de saída por coluna: "brl" (R$ 4.607,58), "numero" (4.607,58) ou "raw".
-  const [formatoPorColuna, setFormatoPorColuna] = useState<Record<number, FormatoValor>>({});
+  // Formato de saída por coluna: valor ("brl"|"numero"|"raw") ou documento ("cpf"|"cnpj"|"raw").
+  const [formatoPorColuna, setFormatoPorColuna] = useState<Record<number, FormatoValor | FormatoDocumento>>({});
 
   // Colunas cujos valores parecem monetários (habilita o seletor de formato).
   const colunasMonetarias = useMemo(() => {
