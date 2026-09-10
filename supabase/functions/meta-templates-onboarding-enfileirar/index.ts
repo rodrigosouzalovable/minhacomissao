@@ -1,5 +1,7 @@
 // Monta a fila de cópia gradual de templates já aprovados para um número novo.
 // Só administradores podem chamar. Avisa no WhatsApp quando a fila começa.
+// Também aceita instancia_ids[] + template_nome/idioma para injetar UM modelo
+// específico apenas nas instâncias que ainda não o possuem (usado no Envio Meta).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
@@ -27,9 +29,13 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const instanciaId = String(body?.instancia_id || "").trim();
     const interno = body?.interno === true;
-    if (!instanciaId) return json({ success: false, error: "instancia_id obrigatório" }, 400);
+    const listaInstancias: string[] = Array.isArray(body?.instancia_ids)
+      ? body.instancia_ids.map((x: unknown) => String(x || "").trim()).filter(Boolean)
+      : [String(body?.instancia_id || "").trim()].filter(Boolean);
+    if (listaInstancias.length === 0) {
+      return json({ success: false, error: "instancia_id obrigatório" }, 400);
+    }
 
     // Autorização: somente admin (exceto chamadas internas do próprio sistema)
     if (!interno) {
@@ -42,101 +48,151 @@ Deno.serve(async (req) => {
       if (ehAdmin !== true) return json({ success: false, error: "somente_admin" }, 403);
     }
 
-    const { data: inst } = await supabase
-      .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, provider, waba_id, access_token, templates_auto_copiar, meta_bm_id, business_id")
-      .eq("id", instanciaId)
-      .maybeSingle();
-    if (!inst) return json({ success: false, error: "instancia_nao_encontrada" }, 404);
-    if ((inst as any).provider && (inst as any).provider !== "meta") {
-      return json({ success: false, error: "somente_api_oficial" }, 400);
-    }
-    if (!inst.waba_id || !inst.access_token) {
-      return json({ success: false, error: "instancia_sem_credenciais" }, 400);
+    // Modelo específico (opcional): injeta apenas esse template.
+    const templateNome = String(body?.template_nome || "").trim();
+    const templateIdioma = String(body?.idioma || "").trim();
+    let restricaoMestres: string[] | null = null;
+    if (templateNome) {
+      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma").eq("nome", templateNome);
+      if (templateIdioma) q = q.eq("idioma", templateIdioma);
+      const { data: mestres } = await q;
+      restricaoMestres = ((mestres as any[]) || []).map((r) => r.id as string);
+      if (restricaoMestres.length === 0) {
+        return json({ success: false, error: "template_nao_cadastrado_como_mestre" }, 400);
+      }
     }
 
-    // Modelos já aprovados em OUTROS números (os que a Meta claramente aceita)
-    const { data: aprovados } = await supabase
-      .from("meta_templates_instancia")
-      .select("template_mestre_id, instancia_id, status");
+    const resultados: any[] = [];
 
-    const contagem = new Map<string, number>();
-    const jaNoNumero = new Set<string>();
-    for (const r of (aprovados as any[]) || []) {
-      if (r.instancia_id === instanciaId) {
-        jaNoNumero.add(r.template_mestre_id);
+    for (const instanciaId of listaInstancias) {
+      const { data: inst } = await supabase
+        .from("meta_whatsapp_instances")
+        .select("id, nome, display_phone, provider, waba_id, access_token, templates_auto_copiar, meta_bm_id, business_id")
+        .eq("id", instanciaId)
+        .maybeSingle();
+      if (!inst) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_nao_encontrada" });
         continue;
       }
-      if (String(r.status || "").toUpperCase() !== "APPROVED") continue;
-      contagem.set(r.template_mestre_id, (contagem.get(r.template_mestre_id) || 0) + 1);
-    }
+      if ((inst as any).provider && (inst as any).provider !== "meta") {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: "somente_api_oficial" });
+        continue;
+      }
+      if (!inst.waba_id || !inst.access_token) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_sem_credenciais" });
+        continue;
+      }
 
-    // Se o admin marcou modelos específicos ("injetar em números novos"),
-    // a fila usa exatamente esses — na ordem da lista. Sem marcação, mantém
-    // a escolha automática pelos mais aprovados em outros números.
-    const { data: marcados } = await supabase
-      .from("meta_templates_mestre")
-      .select("id")
-      .eq("injetar_em_novos", true)
-      .order("criado_em", { ascending: true });
+      // Modelos já aprovados em OUTROS números (os que a Meta claramente aceita)
+      const { data: aprovados } = await supabase
+        .from("meta_templates_instancia")
+        .select("template_mestre_id, instancia_id, status");
 
-    const listaMarcados = ((marcados as any[]) || []).map((r) => r.id as string);
+      const contagem = new Map<string, number>();
+      const jaNoNumero = new Set<string>();
+      for (const r of (aprovados as any[]) || []) {
+        if (r.instancia_id === instanciaId) {
+          jaNoNumero.add(r.template_mestre_id);
+          continue;
+        }
+        if (String(r.status || "").toUpperCase() !== "APPROVED") continue;
+        contagem.set(r.template_mestre_id, (contagem.get(r.template_mestre_id) || 0) + 1);
+      }
 
-    const candidatos: [string, number][] = listaMarcados.length > 0
-      ? listaMarcados
+      let candidatos: [string, number][];
+      if (restricaoMestres) {
+        candidatos = restricaoMestres
           .filter((id) => !jaNoNumero.has(id))
-          .map((id, idx) => [id, listaMarcados.length - idx] as [string, number])
-      : Array.from(contagem.entries())
-          .filter(([id]) => !jaNoNumero.has(id))
-          .sort((a, b) => b[1] - a[1]);
+          .map((id, idx) => [id, restricaoMestres!.length - idx] as [string, number]);
+      } else {
+        // Se o admin marcou modelos específicos ("injetar em números novos"),
+        // a fila usa exatamente esses — na ordem da lista. Sem marcação, mantém
+        // a escolha automática pelos mais aprovados em outros números.
+        const { data: marcados } = await supabase
+          .from("meta_templates_mestre")
+          .select("id")
+          .eq("injetar_em_novos", true)
+          .order("criado_em", { ascending: true });
 
+        const listaMarcados = ((marcados as any[]) || []).map((r) => r.id as string);
 
-    if (candidatos.length === 0) {
+        candidatos = listaMarcados.length > 0
+          ? listaMarcados
+              .filter((id) => !jaNoNumero.has(id))
+              .map((id, idx) => [id, listaMarcados.length - idx] as [string, number])
+          : Array.from(contagem.entries())
+              .filter(([id]) => !jaNoNumero.has(id))
+              .sort((a, b) => b[1] - a[1]);
+      }
+
+      if (candidatos.length === 0) {
+        if (!restricaoMestres) {
+          await supabase
+            .from("meta_whatsapp_instances")
+            .update({ templates_auto_status: "SEM_MODELOS" })
+            .eq("id", instanciaId);
+        }
+        resultados.push({
+          instancia_id: instanciaId,
+          ok: true,
+          enfileirados: 0,
+          motivo: "nenhum_modelo_pendente",
+        });
+        continue;
+      }
+
+      const rows = candidatos.map(([mestreId, votos]) => ({
+        instancia_id: instanciaId,
+        template_mestre_id: mestreId,
+        status: "PENDENTE",
+        prioridade: votos,
+        agendado_para: new Date().toISOString(),
+      }));
+
+      const { error: errIns } = await supabase
+        .from("meta_templates_onboarding_fila")
+        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true });
+      if (errIns) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: errIns.message });
+        continue;
+      }
+
       await supabase
         .from("meta_whatsapp_instances")
-        .update({ templates_auto_status: "SEM_MODELOS" })
+        .update({
+          templates_auto_copiar: true,
+          templates_auto_status: "EM_ANDAMENTO",
+          templates_auto_pausado_ate: null,
+          templates_auto_rejeicoes_seguidas: 0,
+          templates_auto_iniciado_em: new Date().toISOString(),
+        })
         .eq("id", instanciaId);
-      return json({ success: true, enfileirados: 0, motivo: "nenhum_modelo_aprovado_disponivel" });
+
+      const bm = await linhaBmInstancia(supabase, inst).catch(() => "");
+      await notificarAdmin(supabase, {
+        tipo: "templates_onboarding_inicio",
+        destinatarios: DESTINO_AVISO,
+        chaveIdempotencia: `${instanciaId}:${templateNome || "todos"}:${new Date().toISOString().slice(0, 10)}`,
+        mensagem:
+          `📋 *Cópia de templates iniciada*\n\n` +
+          `Número: *${inst.nome || inst.display_phone || instanciaId}*\n` +
+          (bm ? `${bm}\n` : "") +
+          (templateNome ? `Modelo: *${templateNome}*\n` : "") +
+          `Modelos na fila: *${rows.length}*\n\n` +
+          `Envio gradual: 1 por vez com 2–5 min de intervalo, das 07h às 20h e nunca no domingo.`,
+      });
+
+      resultados.push({ instancia_id: instanciaId, ok: true, enfileirados: rows.length });
     }
 
-    const rows = candidatos.map(([mestreId, votos]) => ({
-      instancia_id: instanciaId,
-      template_mestre_id: mestreId,
-      status: "PENDENTE",
-      prioridade: votos,
-      agendado_para: new Date().toISOString(),
-    }));
-
-    const { error: errIns } = await supabase
-      .from("meta_templates_onboarding_fila")
-      .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true });
-    if (errIns) return json({ success: false, error: errIns.message }, 500);
-
-    await supabase
-      .from("meta_whatsapp_instances")
-      .update({
-        templates_auto_copiar: true,
-        templates_auto_status: "EM_ANDAMENTO",
-        templates_auto_pausado_ate: null,
-        templates_auto_rejeicoes_seguidas: 0,
-        templates_auto_iniciado_em: new Date().toISOString(),
-      })
-      .eq("id", instanciaId);
-
-    const bm = await linhaBmInstancia(supabase, inst).catch(() => "");
-    await notificarAdmin(supabase, {
-      tipo: "templates_onboarding_inicio",
-      destinatarios: DESTINO_AVISO,
-      chaveIdempotencia: `${instanciaId}:${new Date().toISOString().slice(0, 10)}`,
-      mensagem:
-        `📋 *Cópia de templates iniciada*\n\n` +
-        `Número: *${inst.nome || inst.display_phone || instanciaId}*\n` +
-        (bm ? `${bm}\n` : "") +
-        `Modelos na fila: *${rows.length}*\n\n` +
-        `Envio gradual: 1 por vez com 2–5 min de intervalo, das 07h às 20h e nunca no domingo.`,
+    const enfileirados = resultados.reduce((s, r) => s + (r.enfileirados || 0), 0);
+    return json({
+      success: true,
+      enfileirados,
+      instancias: resultados,
+      // compat: chamadas antigas de 1 instância
+      ...(listaInstancias.length === 1 && resultados[0]?.erro ? { error: resultados[0].erro } : {}),
     });
-
-    return json({ success: true, enfileirados: rows.length });
   } catch (e) {
     return json({ success: false, error: String(e) }, 500);
   }

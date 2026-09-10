@@ -330,7 +330,11 @@ export default function EnvioMeta() {
     });
   };
 
+  // Aplicação do template nas instâncias que ainda não o possuem.
+  const [injetandoTemplate, setInjetandoTemplate] = useState(false);
+
   // Confirmação de risco: números com qualidade YELLOW/RED/sem leitura marcados à mão.
+
   const [riscoDlg, setRiscoDlg] = useState<{
     open: boolean;
     numeros: { id: string; nome: string; qualidade: string }[];
@@ -1367,9 +1371,60 @@ export default function EnvioMeta() {
                       ))}
                     </ul>
                     <p className="mt-2 text-xs">
-                      O envio está bloqueado para evitar erros. Remova as instâncias abaixo ou sincronize/aprovar o template nelas.
+                      O envio está bloqueado para evitar erros. Você pode aplicar este template nessas
+                      instâncias, removê-las da seleção ou sincronizar/aprovar o template nelas.
                     </p>
                     <div className="mt-2 flex gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        disabled={injetandoTemplate}
+                        onClick={async () => {
+                          if (!templateGroup) return;
+                          setInjetandoTemplate(true);
+                          try {
+                            const { data, error } = await supabase.functions.invoke(
+                              "meta-templates-onboarding-enfileirar",
+                              {
+                                body: {
+                                  instancia_ids: instanciasIncompatíveis.map((i) => i.id),
+                                  template_nome: templateGroup.nome,
+                                  idioma: templateGroup.idioma,
+                                },
+                              },
+                            );
+                            if (error) throw error;
+                            if ((data as any)?.success === false) {
+                              const err = String((data as any)?.error || "");
+                              if (err === "template_nao_cadastrado_como_mestre") {
+                                toast.error(
+                                  "Este template ainda não está cadastrado como modelo mestre. Cadastre-o na aba Template antes de aplicar.",
+                                );
+                              } else if (err === "somente_admin") {
+                                toast.error("Apenas o administrador pode aplicar templates.");
+                              } else {
+                                toast.error(err || "Não foi possível aplicar o template.");
+                              }
+                              return;
+                            }
+                            const n = Number((data as any)?.enfileirados || 0);
+                            if (n > 0) {
+                              toast.success(
+                                `${n} envio(s) de template na fila. A aplicação é gradual (1 por vez, 2–5 min, 07h–20h).`,
+                              );
+                            } else {
+                              toast.info("Nada a aplicar: o template já está na fila ou já existe nessas instâncias.");
+                            }
+                          } catch (e: any) {
+                            toast.error(e?.message || "Falha ao aplicar o template.");
+                          } finally {
+                            setInjetandoTemplate(false);
+                          }
+                        }}
+                      >
+                        <Send className="h-3 w-3 mr-1" />
+                        {injetandoTemplate ? "Aplicando..." : "Aplicar template nessas instâncias"}
+                      </Button>
+
                       <Button
                         size="sm"
                         variant="outline"
