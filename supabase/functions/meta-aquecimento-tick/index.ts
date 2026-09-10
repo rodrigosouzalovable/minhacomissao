@@ -11,7 +11,9 @@ import {
   enviarTemplateAquecimento,
   erroFatalMeta,
   escolherTemplateAprovado,
+  escolherTemplateLead,
   hojeBrt,
+  renderTemplateBody,
   sorteio,
 } from '../_shared/meta-aquecimento-alvo.ts';
 import {
@@ -182,9 +184,20 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const tpl = await escolherTemplateAprovado(inst, cfg?.aquecimento_template_utility);
+      // Leads do Google Maps usam apenas templates marcados como "usar em leads";
+      // sem template elegível, o envio ao lead é pulado (nunca cai em cobrança).
+      const tpl = fonte === 'lead'
+        ? await escolherTemplateLead(supabase, inst)
+        : await escolherTemplateAprovado(inst, cfg?.aquecimento_template_utility);
       if (!tpl) {
-        resultados.push({ instancia: inst.nome, erro: 'sem_template_aprovado' });
+        if (fonte === 'lead' && leadsDisponiveis.length > 0) {
+          // Recoloca o lead de volta no topo da fila e tenta outra fonte.
+          // Se não houver template marcado, apenas registra o motivo.
+        }
+        resultados.push({
+          instancia: inst.nome,
+          erro: fonte === 'lead' ? 'sem_template_lead' : 'sem_template_aprovado',
+        });
         continue;
       }
       const custo = custoDoTemplate(orc, tpl.categoria);
@@ -250,9 +263,12 @@ Deno.serve(async (req) => {
         await marcarLeadUsado(supabase, leadId, envio.ok ? 'enviado' : `falha: ${String(envio.erro || '').slice(0, 120)}`);
       }
 
-      // Conversa do lead fica na caixa AQUECIMENTO, para acompanhamento separado.
+      // Conversa do lead fica na caixa AQUECIMENTO, com a mensagem real enviada.
       if (fonte === 'lead' && envio.ok) {
-        await registrarConversaLead(supabase, inst, telefone, nomeDestino, tpl.name, envio.wamid);
+        await registrarConversaLead(
+          supabase, inst, telefone, nomeDestino, tpl.name, envio.wamid,
+          renderTemplateBody(tpl, nomeDestino),
+        );
       }
 
       if (envio.ok) {
