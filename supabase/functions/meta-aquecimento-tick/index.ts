@@ -3,6 +3,9 @@
 // diário de destinatários ÚNICOS, distribuído entre os números UAZAPI da pasta
 // AQUECIMENTO (respondidos pelo IAGO) e leads reais do Google Maps de nichos
 // que respondem bem. Tudo limitado pelo orçamento diário em reais.
+//
+// Modo intensivo (números de nova BM): envia em lotes por rodada para alcançar
+// o alvo do dia (ex.: 450 únicos/dia → ~1.300 em 3 dias), sempre em UTILITY.
 // A recuperação de números YELLOW/RED continua em meta-recuperacao-tick.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
@@ -18,19 +21,34 @@ import {
 } from '../_shared/meta-aquecimento-alvo.ts';
 import {
   carregarOrcamento,
+  proximoTier,
+  tierAtual,
   custoDoTemplate,
+  devolverLead,
   leadsParaAquecimento,
   marcarLeadUsado,
+  pausarInstanciasDaBm,
+  recalcularScoreNichos,
   registrarConversaLead,
   registrarGasto,
+  taxaRespostaRecenteLeads,
 } from '../_shared/meta-aquecimento-inteligente.ts';
+import { notificarNumeros } from '../_shared/notificar-numeros.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const MAX_POR_RUN = 5;
+const DESTINATARIOS_AVISO = ['62991672674'];
+/** Teto de envios em uma única rodada (todas as instâncias somadas). */
+const MAX_ENVIOS_POR_RUN = 80;
+/** Teto de envios por instância em uma única rodada. */
+const MAX_POR_INSTANCIA_RUN = 15;
+/** Taxa mínima de resposta dos leads na última meia hora antes de corrigir a rota. */
+const TAXA_MINIMA_LEADS = 0.15;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -69,7 +87,7 @@ Deno.serve(async (req) => {
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, saude_quality, estado_pool, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
+      .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, estado_pool, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
       .eq('ativo', true)
       .eq('provider', 'meta')
       .eq('aquecimento_meta_ativo', true);
@@ -88,23 +106,68 @@ Deno.serve(async (req) => {
     if ((insts || []).length === 0) return json({ ok: true, skipped: 'nenhuma_selecionada' });
     if (elegiveis.length === 0) return json({ ok: true, skipped: 'nenhuma_elegivel' });
 
+    // ===== Aprendizado intradiário: refaz o placar de nichos a cada ~3h =====
+    const { data: scoreRecente } = await supabase
+      .from('aquecimento_nicho_score')
+      .select('atualizado_em')
+      .order('atualizado_em', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const idadeScoreH = scoreRecente?.atualizado_em
+      ? (Date.now() - new Date(scoreRecente.atualizado_em).getTime()) / 3600000
+      : 99;
+    if (idadeScoreH >= 3) {
+      try { await recalcularScoreNichos(supabase); } catch (_) { /* segue */ }
+    }
+
+    // ===== Correção de rota: leads não estão respondendo? =====
+    const recente = await taxaRespostaRecenteLeads(supabase, 30);
+    const corrigirRota = recente.envios >= 10 && recente.taxa < TAXA_MINIMA_LEADS;
+
     const destinos = await destinosAquecimento(supabase);
 
     // Trilha planejada do dia
     const { data: trilhas } = await supabase
       .from('meta_aquecimento_trilha')
-      .select('instancia_id, alvo_unicos_dia, mix_uazapi_pct, mix_leads_pct, status, motivo')
+      .select('instancia_id, alvo_unicos_dia, mix_uazapi_pct, mix_leads_pct, status, motivo, modo_intensivo')
       .eq('dia', dia);
     const trilhaMap = new Map<string, any>();
     (trilhas || []).forEach((t: any) => trilhaMap.set(t.instancia_id, t));
 
+    // Número novo (ou template aprovado agora) sem plano do dia: cria a trilha na
+    // hora, para começar a aquecer sem esperar o planejamento da manhã seguinte.
+    const semTrilha = (elegiveis as any[]).filter((i: any) => !trilhaMap.get(i.id));
+    if (semTrilha.length > 0) {
+      const novas = semTrilha.map((i: any) => {
+        const tier = tierAtual(i);
+        const intensivo = tier < 10000;
+        const alvo = intensivo
+          ? Math.max(5, Math.min(450, Math.round(tier * 0.6)))
+          : Math.max(5, metaDiaPadrao);
+        return {
+          instancia_id: i.id,
+          dia,
+          tier_atual: tier,
+          tier_alvo: proximoTier(tier),
+          alvo_unicos_dia: alvo,
+          modo_intensivo: intensivo,
+          mix_uazapi_pct: intensivo ? 25 : 80,
+          mix_leads_pct: intensivo ? 75 : 20,
+          status: 'ativa',
+          decisao_ia: { fonte: 'tick_automatico' },
+          atualizado_em: new Date().toISOString(),
+        };
+      });
+      await supabase.from('meta_aquecimento_trilha').upsert(novas, { onConflict: 'instancia_id,dia' });
+      novas.forEach((t: any) => trilhaMap.set(t.instancia_id, t));
+    }
 
     // Log do dia (destinos já usados)
     const { data: logsHoje } = await supabase
       .from('meta_aquecimento_destino_log')
       .select('instancia_id, destino_instancia_id, destino_telefone, fonte, status, enviado_em')
       .eq('dia', dia)
-      .limit(10000);
+      .limit(20000);
 
     const usoDestinoUazapi = new Map<string, number>();
     (logsHoje || []).forEach((l: any) => {
@@ -112,21 +175,31 @@ Deno.serve(async (req) => {
       usoDestinoUazapi.set(l.destino_instancia_id, (usoDestinoUazapi.get(l.destino_instancia_id) || 0) + 1);
     });
 
-    let leadsDisponiveis = await leadsParaAquecimento(supabase, 60);
+    // Estoque de leads dimensionado pelo alvo do dia (modo intensivo pede mais).
+    const alvoTotalDia = (elegiveis as any[]).reduce(
+      (s, i) => s + Math.max(1, Number(trilhaMap.get(i.id)?.alvo_unicos_dia ?? metaDiaPadrao)), 0,
+    );
+    const limiteLeads = Math.min(600, Math.max(60, Math.ceil(alvoTotalDia / 2)));
+    let leadsDisponiveis = await leadsParaAquecimento(supabase, limiteLeads);
 
-    // Estoque baixo de contatos do Google Maps: pede reabastecimento (1x por dia).
-    if (leadsDisponiveis.length < 20) {
+    // Estoque baixo de contatos do Google Maps: pede reabastecimento.
+    if (leadsDisponiveis.length < Math.min(40, limiteLeads)) {
       try {
         await supabase.functions.invoke('google-maps-leads-abastecer', { body: { dia } });
-        leadsDisponiveis = await leadsParaAquecimento(supabase, 60);
+        leadsDisponiveis = await leadsParaAquecimento(supabase, limiteLeads);
       } catch (err) {
         console.log('[aquecimento] abastecer falhou:', String(err).slice(0, 200));
       }
     }
 
+    // Rodadas restantes na janela do dia (para dimensionar o lote da rodada).
+    const spNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const horaAtual = spNow.getHours() + spNow.getMinutes() / 60;
+    const rodadasRestantes = Math.max(1, Math.ceil(((Math.min(19, hFim) - horaAtual) * 60) / 10));
 
     const resultados: any[] = [];
-    let processadas = 0;
+    const bmsPausadas = new Set<string>();
+    let enviosRun = 0;
     let gastoRun = 0;
 
     // Números em resgate de campanha (resposta baixa) vão na frente da fila.
@@ -137,178 +210,241 @@ Deno.serve(async (req) => {
     });
 
     for (const inst of ordenadas) {
-      if (processadas >= MAX_POR_RUN) break;
+      if (enviosRun >= MAX_ENVIOS_POR_RUN) break;
       if (Number(orc.gasto_reais) + gastoRun >= Number(orc.teto_reais)) {
         resultados.push({ instancia: inst.nome, skipped: 'orcamento_esgotado' });
         break;
       }
-      if (!forcar && inst.recuperacao_proximo_envio_em &&
-          new Date(inst.recuperacao_proximo_envio_em) > new Date()) continue;
 
       const trilha = trilhaMap.get(inst.id);
       if (trilha && trilha.status !== 'ativa') continue;
+      const intensivo = trilha?.modo_intensivo === true;
+
+      if (!forcar && !intensivo && inst.recuperacao_proximo_envio_em &&
+          new Date(inst.recuperacao_proximo_envio_em) > new Date()) continue;
+
       const alvoDia = Math.max(1, Number(trilha?.alvo_unicos_dia ?? metaDiaPadrao));
-      const mixLeads = trilha?.mix_leads_pct != null
+      const mixLeadsPlan = trilha?.mix_leads_pct != null
         ? Math.max(0, Math.min(100, Number(trilha.mix_leads_pct)))
         : null;
-      const mixUazapi = mixLeads != null
-        ? 100 - mixLeads
+      let mixUazapi = mixLeadsPlan != null
+        ? 100 - mixLeadsPlan
         : Math.max(0, Math.min(100, Number(trilha?.mix_uazapi_pct ?? 100)));
+      // Ninguém respondendo: volta para os destinos que respondem garantido.
+      if (corrigirRota) mixUazapi = Math.max(mixUazapi, 70);
 
-
-      const meus = (logsHoje || []).filter(
+      const feitos = (logsHoje || []).filter(
         (l: any) => l.instancia_id === inst.id && l.status !== 'falha',
       );
-      if (meus.length >= alvoDia) continue;
+      const faltam = alvoDia - feitos.length;
+      if (faltam <= 0) continue;
 
-      const ultimo = meus
-        .sort((a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime())[0];
-
-      // ===== Escolha da fonte respeitando o mix planejado =====
-      const feitosUazapi = meus.filter((l: any) => l.fonte === 'uazapi').length;
-      const pctUazapiAtual = meus.length > 0 ? (feitosUazapi / meus.length) * 100 : 0;
-      const querUazapi = meus.length === 0 ? mixUazapi > 0 : pctUazapiAtual < mixUazapi;
-
-      const destinosUazapiOk = destinos.filter((d) =>
-        (usoDestinoUazapi.get(d.id) || 0) < maxPorDestino && d.id !== ultimo?.destino_instancia_id
+      const loteInstancia = Math.max(
+        1,
+        Math.min(
+          MAX_POR_INSTANCIA_RUN,
+          MAX_ENVIOS_POR_RUN - enviosRun,
+          intensivo ? Math.ceil(faltam / rodadasRestantes) : 1,
+        ),
       );
 
-      let fonte: 'uazapi' | 'lead' | null = null;
-      if (querUazapi && destinosUazapiOk.length > 0) fonte = 'uazapi';
-      else if (mixUazapi < 100 && leadsDisponiveis.length > 0) fonte = 'lead';
-      else if (destinosUazapiOk.length > 0) fonte = 'uazapi';
-      else if (leadsDisponiveis.length > 0) fonte = 'lead';
+      let paradaFatal = false;
 
-      if (!fonte) {
-        resultados.push({ instancia: inst.nome, skipped: 'sem_destino_disponivel' });
-        continue;
-      }
+      for (let n = 0; n < loteInstancia; n++) {
+        if (enviosRun >= MAX_ENVIOS_POR_RUN) break;
+        if (Number(orc.gasto_reais) + gastoRun >= Number(orc.teto_reais)) break;
 
-      // Leads do Google Maps usam apenas templates marcados como "usar em leads";
-      // sem template elegível, o envio ao lead é pulado (nunca cai em cobrança).
-      const tpl = fonte === 'lead'
-        ? await escolherTemplateLead(supabase, inst)
-        : await escolherTemplateAprovado(inst, cfg?.aquecimento_template_utility);
-      if (!tpl) {
-        if (fonte === 'lead' && leadsDisponiveis.length > 0) {
-          // Recoloca o lead de volta no topo da fila e tenta outra fonte.
-          // Se não houver template marcado, apenas registra o motivo.
+        const meus = (logsHoje || []).filter(
+          (l: any) => l.instancia_id === inst.id && l.status !== 'falha',
+        );
+        if (meus.length >= alvoDia) break;
+
+        const ultimo = meus
+          .slice()
+          .sort((a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime())[0];
+
+        // ===== Escolha da fonte respeitando o mix planejado =====
+        const feitosUazapi = meus.filter((l: any) => l.fonte === 'uazapi').length;
+        const pctUazapiAtual = meus.length > 0 ? (feitosUazapi / meus.length) * 100 : 0;
+        const querUazapi = meus.length === 0 ? mixUazapi > 0 : pctUazapiAtual < mixUazapi;
+
+        const destinosUazapiOk = destinos.filter((d) =>
+          (usoDestinoUazapi.get(d.id) || 0) < maxPorDestino && d.id !== ultimo?.destino_instancia_id
+        );
+
+        let fonte: 'uazapi' | 'lead' | null = null;
+        if (querUazapi && destinosUazapiOk.length > 0) fonte = 'uazapi';
+        else if (mixUazapi < 100 && leadsDisponiveis.length > 0) fonte = 'lead';
+        else if (destinosUazapiOk.length > 0) fonte = 'uazapi';
+        else if (leadsDisponiveis.length > 0) fonte = 'lead';
+
+        if (!fonte) {
+          resultados.push({ instancia: inst.nome, skipped: 'sem_destino_disponivel' });
+          break;
         }
-        resultados.push({
-          instancia: inst.nome,
-          erro: fonte === 'lead' ? 'sem_template_lead' : 'sem_template_aprovado',
-        });
-        continue;
-      }
-      const custo = custoDoTemplate(orc, tpl.categoria);
-      if (Number(orc.gasto_reais) + gastoRun + custo > Number(orc.teto_reais)) {
-        resultados.push({ instancia: inst.nome, skipped: 'orcamento_esgotado' });
-        break;
-      }
 
-      let telefone = '';
-      let nomeDestino: string | null = null;
-      let destinoInstanciaId: string | null = null;
-      let leadId: string | null = null;
-      let nicho: string | null = null;
-      let cidade: string | null = null;
+        // Leads do Google Maps usam apenas templates UTILITY marcados como
+        // "usar em leads"; sem template elegível, o envio ao lead é pulado.
+        const tpl = fonte === 'lead'
+          ? await escolherTemplateLead(supabase, inst)
+          : await escolherTemplateAprovado(inst, cfg?.aquecimento_template_utility);
+        if (!tpl) {
+          resultados.push({
+            instancia: inst.nome,
+            erro: fonte === 'lead' ? 'sem_template_lead' : 'sem_template_aprovado',
+          });
+          break;
+        }
 
-      if (fonte === 'uazapi') {
-        const d = destinosUazapiOk[Math.floor(Math.random() * destinosUazapiOk.length)];
-        telefone = d.telefone;
-        nomeDestino = d.nome;
-        destinoInstanciaId = d.id;
-      } else {
-        const lead = leadsDisponiveis.shift()!;
-        telefone = lead.telefone;
-        nomeDestino = lead.nome;
-        leadId = lead.id;
-        nicho = lead.nicho;
-        cidade = lead.cidade;
-      }
+        const custo = custoDoTemplate(orc, tpl.categoria);
+        if (Number(orc.gasto_reais) + gastoRun + custo > Number(orc.teto_reais)) {
+          resultados.push({ instancia: inst.nome, skipped: 'orcamento_esgotado' });
+          break;
+        }
 
-      const envio = await enviarTemplateAquecimento(inst, telefone, tpl, nomeDestino);
+        let telefone = '';
+        let nomeDestino: string | null = null;
+        let destinoInstanciaId: string | null = null;
+        let leadId: string | null = null;
+        let nicho: string | null = null;
+        let cidade: string | null = null;
 
-      await supabase.from('meta_aquecimento_destino_log').insert({
-        dia,
-        instancia_id: inst.id,
-        fonte,
-        destino_telefone: telefone,
-        destino_instancia_id: destinoInstanciaId,
-        lead_id: leadId,
-        nicho,
-        cidade,
-        template: tpl.name,
-        custo_estimado: envio.ok ? custo : 0,
-        wamid: envio.wamid || null,
-        status: envio.ok ? 'enviado' : 'falha',
-        erro: envio.ok ? null : envio.erro,
-      });
+        if (fonte === 'uazapi') {
+          const d = destinosUazapiOk[Math.floor(Math.random() * destinosUazapiOk.length)];
+          telefone = d.telefone;
+          nomeDestino = d.nome;
+          destinoInstanciaId = d.id;
+        } else {
+          const lead = leadsDisponiveis.shift()!;
+          telefone = lead.telefone;
+          nomeDestino = lead.nome;
+          leadId = lead.id;
+          nicho = lead.nicho;
+          cidade = lead.cidade;
+        }
 
-      // Compatibilidade com o painel de recuperação/preventivo já existente.
-      if (fonte === 'uazapi') {
-        await supabase.from('meta_recuperacao_log').insert({
+        const envio = await enviarTemplateAquecimento(inst, telefone, tpl, nomeDestino);
+
+        await supabase.from('meta_aquecimento_destino_log').insert({
+          dia,
           instancia_id: inst.id,
-          destino_instancia_id: destinoInstanciaId,
+          fonte,
           destino_telefone: telefone,
-          tipo: `preventivo:${tpl.name}`,
+          destino_instancia_id: destinoInstanciaId,
+          lead_id: leadId,
+          nicho,
+          cidade,
+          template: tpl.name,
+          custo_estimado: envio.ok ? custo : 0,
+          wamid: envio.wamid || null,
           status: envio.ok ? 'enviado' : 'falha',
           erro: envio.ok ? null : envio.erro,
-          wamid: envio.wamid || null,
-          dia,
         });
-      }
 
-      if (leadId) {
-        await marcarLeadUsado(supabase, leadId, envio.ok ? 'enviado' : `falha: ${String(envio.erro || '').slice(0, 120)}`);
-      }
-
-      // Conversa do lead fica na caixa AQUECIMENTO, com a mensagem real enviada.
-      if (fonte === 'lead' && envio.ok) {
-        await registrarConversaLead(
-          supabase, inst, telefone, nomeDestino, tpl.name, envio.wamid,
-          renderTemplateBody(tpl, nomeDestino),
-        );
-      }
-
-      if (envio.ok) {
-        gastoRun += custo;
-        (logsHoje as any[]).push({
-          instancia_id: inst.id, fonte, destino_instancia_id: destinoInstanciaId,
-          destino_telefone: telefone, status: 'enviado', enviado_em: new Date().toISOString(),
-        });
-        if (destinoInstanciaId) {
-          usoDestinoUazapi.set(destinoInstanciaId, (usoDestinoUazapi.get(destinoInstanciaId) || 0) + 1);
+        // Compatibilidade com o painel de recuperação/preventivo já existente.
+        if (fonte === 'uazapi') {
+          await supabase.from('meta_recuperacao_log').insert({
+            instancia_id: inst.id,
+            destino_instancia_id: destinoInstanciaId,
+            destino_telefone: telefone,
+            tipo: `preventivo:${tpl.name}`,
+            status: envio.ok ? 'enviado' : 'falha',
+            erro: envio.ok ? null : envio.erro,
+            wamid: envio.wamid || null,
+            dia,
+          });
         }
+
+        if (leadId) {
+          // Falha não gasta o lead: ele volta para a fila.
+          if (envio.ok) await marcarLeadUsado(supabase, leadId, 'enviado');
+          else await devolverLead(supabase, leadId);
+        }
+
+        // Conversa do lead fica na caixa AQUECIMENTO, com a mensagem real enviada.
+        if (fonte === 'lead' && envio.ok) {
+          await registrarConversaLead(
+            supabase, inst, telefone, nomeDestino, tpl.name, envio.wamid,
+            renderTemplateBody(tpl, nomeDestino),
+          );
+        }
+
+        if (envio.ok) {
+          enviosRun++;
+          gastoRun += custo;
+          (logsHoje as any[]).push({
+            instancia_id: inst.id, fonte, destino_instancia_id: destinoInstanciaId,
+            destino_telefone: telefone, status: 'enviado', enviado_em: new Date().toISOString(),
+          });
+          if (destinoInstanciaId) {
+            usoDestinoUazapi.set(destinoInstanciaId, (usoDestinoUazapi.get(destinoInstanciaId) || 0) + 1);
+          }
+        }
+
+        resultados.push({
+          instancia: inst.nome || inst.display_phone,
+          fonte,
+          destino: nomeDestino || telefone,
+          nicho,
+          template: tpl.name,
+          custo: envio.ok ? custo : 0,
+          ok: envio.ok,
+          erro: envio.erro || null,
+        });
+
+        if (!envio.ok && erroFatalMeta(envio.codigo, envio.erro)) {
+          // BM bloqueada / pendência: tira todos os números dessa BM do aquecimento.
+          const info = await pausarInstanciasDaBm(
+            supabase, inst, String(envio.erro || 'erro fatal da Meta').slice(0, 200), 12,
+          );
+          if (!bmsPausadas.has(info.bm)) {
+            bmsPausadas.add(info.bm);
+            try {
+              await notificarNumeros(supabase, {
+                tipo: 'aquecimento_bm_bloqueada',
+                destinatarios: DESTINATARIOS_AVISO,
+                chaveIdempotencia: `bm-bloqueada:${info.bm}:${dia}`,
+                mensagem:
+                  `🛑 *Aquecimento pausado por bloqueio da Meta*\n\n` +
+                  `BM: *${info.bm}*\n` +
+                  `Números pausados: *${info.pausadas}*\n` +
+                  `Erro: ${String(envio.erro || '').slice(0, 160)}\n\n` +
+                  `Nenhuma mensagem chega enquanto a BM estiver bloqueada. ` +
+                  `Assim que ela for liberada, o aquecimento volta sozinho.`,
+              });
+            } catch (_) { /* aviso é best-effort */ }
+          }
+          console.log('[aquecimento] erro fatal, pausando BM:', info.bm, envio.erro);
+          paradaFatal = true;
+          break;
+        }
+
+        // Intervalo curto e aleatório entre mensagens do mesmo número.
+        if (n + 1 < loteInstancia) await sleep(sorteio(2, 6) * 1000);
       }
 
+      // Próximo envio: intensivo mantém ritmo alto; o restante segue o intervalo antigo.
+      const proximo = intensivo
+        ? new Date(Date.now() + sorteio(60, 180) * 1000)
+        : new Date(Date.now() + sorteio(intMin, intMax) * 1000);
       await supabase.from('meta_whatsapp_instances').update({
         recuperacao_ultimo_envio_em: new Date().toISOString(),
-        recuperacao_proximo_envio_em: new Date(Date.now() + sorteio(intMin, intMax) * 1000).toISOString(),
+        recuperacao_proximo_envio_em: proximo.toISOString(),
       }).eq('id', inst.id);
 
-      if (!envio.ok && erroFatalMeta(envio.codigo, envio.erro)) {
-        console.log('[aquecimento] erro fatal, parando ciclo:', envio.erro);
-        resultados.push({ instancia: inst.nome, ok: false, erro: envio.erro, parado: true });
-        break;
-      }
-
-      processadas++;
-      resultados.push({
-        instancia: inst.nome || inst.display_phone,
-        fonte,
-        destino: nomeDestino || telefone,
-        nicho,
-        template: tpl.name,
-        custo: envio.ok ? custo : 0,
-        ok: envio.ok,
-        erro: envio.erro || null,
-      });
+      if (paradaFatal) continue;
     }
 
     if (gastoRun > 0) await registrarGasto(supabase, dia, gastoRun);
 
-    return json({ ok: true, total: resultados.length, gasto_run: gastoRun, resultados });
+    return json({
+      ok: true,
+      envios: enviosRun,
+      gasto_run: gastoRun,
+      corrigindo_rota: corrigirRota,
+      taxa_resposta_30min: Math.round(recente.taxa * 100),
+      resultados,
+    });
   } catch (e) {
     return json({ ok: false, error: e instanceof Error ? e.message : 'erro' }, 500);
   }

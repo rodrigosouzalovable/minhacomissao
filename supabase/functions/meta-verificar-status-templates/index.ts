@@ -86,7 +86,7 @@ serve(async (req) => {
 
       try {
         const res = await fetch(
-          `https://graph.facebook.com/v21.0/${inst.waba_id}/message_templates?fields=name,language,status,id,rejected_reason&limit=200`,
+          `https://graph.facebook.com/v21.0/${inst.waba_id}/message_templates?fields=name,language,status,id,rejected_reason,category&limit=200`,
           { headers: { Authorization: `Bearer ${inst.access_token}` } },
         );
         const data = await res.json();
@@ -95,6 +95,55 @@ serve(async (req) => {
         const remotos: any[] = data.data || [];
         const remotoById = new Map(remotos.map((t) => [String(t.id), t]));
         const remotoByName = new Map(remotos.map((t) => [`${t.name}|${t.language}`, t]));
+
+        // ===== Meta reclassificou o modelo para MARKETING? Para de subir. =====
+        const virouMarketing = remotos.filter(
+          (t) => String(t.category || "").toUpperCase() === "MARKETING",
+        );
+        for (const t of virouMarketing) {
+          const { data: mestre } = await supabase
+            .from("meta_templates_mestre")
+            .select("id, nome, reclassificado_marketing")
+            .eq("nome", t.name)
+            .maybeSingle();
+          if (!mestre || mestre.reclassificado_marketing === true) continue;
+
+          await supabase
+            .from("meta_templates_mestre")
+            .update({
+              reclassificado_marketing: true,
+              categoria_meta: "MARKETING",
+              injetar_em_novos: false,
+              usar_em_leads: false,
+            })
+            .eq("id", mestre.id);
+
+          // Cancela o que ainda não foi enviado para a Meta.
+          const { data: cancelados } = await supabase
+            .from("meta_templates_onboarding_fila")
+            .update({
+              status: "CANCELADO",
+              motivo: "modelo reclassificado como MARKETING pela Meta",
+              finalizado_em: new Date().toISOString(),
+            })
+            .eq("template_mestre_id", mestre.id)
+            .in("status", ["PENDENTE", "AGENDADO"])
+            .select("id");
+
+          await notificarAdmin(supabase, {
+            tipo: "template_reclassificado_marketing",
+            destinatarios: DESTINO_AVISO,
+            chaveIdempotencia: `marketing:${mestre.id}`,
+            umaVezPorChave: true,
+            mensagem:
+              `🚫 *Modelo virou MARKETING na Meta*\n\n` +
+              `Modelo: *${mestre.nome}*\n` +
+              `${await linhaBmInstancia(supabase, inst)}\n` +
+              `Ele saiu da injeção em números novos e do aquecimento de leads. ` +
+              `Itens cancelados na fila: *${(cancelados || []).length}*.\n\n` +
+              `Só subimos modelos de utilidade.`,
+          });
+        }
 
         let qLocPend = supabase
           .from("meta_templates_instancia")

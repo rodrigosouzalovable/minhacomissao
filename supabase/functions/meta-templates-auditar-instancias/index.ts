@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
       .from("meta_templates_mestre")
       .select("id, nome, idioma")
       .eq("injetar_em_novos", true)
+      .eq("reclassificado_marketing", false)
       .order("criado_em", { ascending: true });
     const lista = ((marcados as any[]) || []).map((r) => ({
       id: r.id as string,

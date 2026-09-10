@@ -50,6 +50,41 @@ export interface TemplateAquecimento {
 
 const VALOR_PADRAO = "confirmação de cadastro";
 
+/** Palavras genéricas que não servem sozinhas como "nome curto" da empresa. */
+const PREFIXOS_GENERICOS = new Set([
+  "clinica", "clínica", "consultorio", "consultório", "dr", "dr.", "dra", "dra.",
+  "petshop", "pet", "loja", "casa", "auto", "studio", "estudio", "estúdio",
+  "espaco", "espaço", "centro", "instituto", "grupo", "salao", "salão",
+  "restaurante", "bar", "hotel", "posto", "oficina", "laboratorio", "laboratório",
+  "academia", "escola", "colegio", "colégio", "farmacia", "farmácia", "otica", "ótica",
+]);
+
+const SUFIXOS_EMPRESA = /\b(ltda|me|mei|eireli|s\/?a|sa|epp|cnpj|filial|matriz)\b\.?/gi;
+
+/**
+ * Reduz o nome da empresa ao primeiro nome útil.
+ * "NeoPets Veterinária e Petshop" → "NeoPets"
+ * "Clínica Vida Nova" → "Clínica Vida"
+ */
+export function primeiroNomeEmpresa(nome?: string | null): string {
+  const limpo = String(nome || "")
+    .replace(SUFIXOS_EMPRESA, " ")
+    .replace(/[|/–—-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!limpo) return "Parceiro";
+
+  const partes = limpo.split(" ").filter(Boolean);
+  const primeira = partes[0];
+  const generica = PREFIXOS_GENERICOS.has(primeira.toLowerCase().replace(/[.,]/g, ""));
+  const escolhido = generica && partes[1] ? `${primeira} ${partes[1]}` : primeira;
+
+  return escolhido
+    .split(" ")
+    .map((p) => (/[A-Z]/.test(p.slice(1)) ? p : p.charAt(0).toUpperCase() + p.slice(1)))
+    .join(" ");
+}
+
 function tokensDoCorpo(components: any[]): string[] {
   const body = (components || []).find((c: any) => String(c?.type).toUpperCase() === "BODY");
   const texto = String(body?.text || "");
@@ -87,6 +122,10 @@ export async function escolherTemplateAprovado(
 
   const candidatos = data.data
     .filter((t: any) => !temBotaoDinamico(t.components) && !temCabecalhoMidia(t.components))
+    // Só utilidade: se a Meta reclassificou para MARKETING, o modelo sai do aquecimento.
+    .filter((t: any) => String(t.category || "").toUpperCase() === "UTILITY")
+    // Variável nomeada não é aceita: apenas {{1}}, {{2}}...
+    .filter((t: any) => tokensDoCorpo(t.components).every((k: string) => /^\d+$/.test(k)))
     .map((t: any) => {
       const toks = tokensDoCorpo(t.components);
       const nomeados = toks.some((k) => !/^\d+$/.test(k));
@@ -138,7 +177,8 @@ export async function escolherTemplateLead(
   const { data: mestres } = await supabase
     .from("meta_templates_mestre")
     .select("nome")
-    .eq("usar_em_leads", true);
+    .eq("usar_em_leads", true)
+    .eq("reclassificado_marketing", false);
   const permitidos = new Set((mestres || []).map((m: any) => String(m.nome || "")));
   if (permitidos.size === 0) return null;
 
@@ -153,6 +193,8 @@ export async function escolherTemplateLead(
   const candidatos = data.data
     .filter((t: any) => permitidos.has(String(t.name)))
     .filter((t: any) => !temBotaoDinamico(t.components) && !temCabecalhoMidia(t.components))
+    .filter((t: any) => String(t.category || "").toUpperCase() === "UTILITY")
+    .filter((t: any) => tokensDoCorpo(t.components).every((k: string) => /^\d+$/.test(k)))
     .map((t: any) => {
       const toks = tokensDoCorpo(t.components);
       const nomeados = toks.some((k: string) => !/^\d+$/.test(k));
@@ -189,7 +231,7 @@ export async function escolherTemplateLead(
 export function renderTemplateBody(tpl: TemplateAquecimento, nomeDestino?: string | null): string {
   let texto = String(tpl.body || "").trim();
   tpl.params.chaves.forEach((chave, idx) => {
-    const valor = idx === 0 ? (nomeDestino || "Parceiro") : VALOR_PADRAO;
+    const valor = idx === 0 ? primeiroNomeEmpresa(nomeDestino) : VALOR_PADRAO;
     texto = texto.replace(new RegExp(`\\{\\{\\s*${chave.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\}\\}`, "g"), valor);
   });
   return texto || tpl.name;
@@ -204,7 +246,7 @@ export async function enviarTemplateAquecimento(
 ): Promise<{ ok: boolean; wamid?: string; erro?: string; codigo?: number }> {
   const valores = tpl.params.chaves.map((chave, idx) => {
     const primeiro = idx === 0;
-    const valor = primeiro ? (nomeDestino || "Parceiro") : VALOR_PADRAO;
+    const valor = primeiro ? primeiroNomeEmpresa(nomeDestino) : VALOR_PADRAO;
     return tpl.params.tipo === "nomeado"
       ? { type: "text", parameter_name: chave, text: valor }
       : { type: "text", text: valor };

@@ -57,6 +57,14 @@ interface Instancia {
   ativo: boolean;
   waba_id: string | null;
   saude_quality: string | null;
+  meta_bm_id: string | null;
+  business_id: string | null;
+}
+
+interface Bm {
+  id: string;
+  nome: string | null;
+  business_id: string | null;
 }
 
 const QUALIDADE_CORES: Record<string, string> = {
@@ -126,6 +134,7 @@ export default function MetaTemplates() {
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [templInst, setTemplInst] = useState<TemplateInst[]>([]);
   const [templMeta, setTemplMeta] = useState<Array<{ instancia_id: string; nome_template: string; status: string | null }>>([]);
+  const [bms, setBms] = useState<Bm[]>([]);
   const [loading, setLoading] = useState(true);
 
   // form criar
@@ -163,17 +172,19 @@ export default function MetaTemplates() {
 
   const carregar = async () => {
     setLoading(true);
-    const [m, i, ti, par, tm] = await Promise.all([
+    const [m, i, ti, par, tm, bmRows] = await Promise.all([
       supabase.from("meta_templates_mestre").select("*").order("criado_em", { ascending: false }),
       supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, ativo, waba_id, saude_quality")
+        .select("id, nome, display_phone, ativo, waba_id, saude_quality, meta_bm_id, business_id")
         .eq("provider", "meta")
         .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
       supabase.from("meta_whatsapp_templates").select("instancia_id, nome_template, status"),
+      supabase.from("meta_business_managers").select("id, nome, business_id"),
     ]);
+    setBms(((bmRows.data as any) || []) as Bm[]);
     setTemplMeta(((tm.data as any) || []) as any);
     setMestres((m.data as any) || []);
     const idsParceiro = new Set(((par.data as any) || []).map((r: any) => r.instancia_id as string));
@@ -536,6 +547,19 @@ export default function MetaTemplates() {
     const c: Record<string, number> = { total: filhas.length };
     filhas.forEach((f) => { c[f.status] = (c[f.status] || 0) + 1; });
     return c;
+  };
+
+  // BM vinculada ao número — mostrada ao lado da instância para abrir rápido
+  // no Gerenciador de Negócios quando algo falha.
+  const bmDaInstancia = (inst?: Instancia | null) => {
+    if (!inst) return null;
+    const bm =
+      bms.find((b) => b.id === inst.meta_bm_id) ||
+      (inst.business_id ? bms.find((b) => b.business_id === inst.business_id) : undefined);
+    const businessId = bm?.business_id || inst.business_id || null;
+    const nome = bm?.nome || (businessId ? `Business ${businessId}` : null);
+    if (!nome) return null;
+    return { nome, url: businessId ? `https://business.facebook.com/settings?business_id=${businessId}` : null };
   };
 
   const instAtivas = instancias.filter((i) => i.ativo);
@@ -1175,6 +1199,23 @@ export default function MetaTemplates() {
                               <span className="flex-1">
                                 {inst?.nome || "Número não visível nesta tela"}{" "}
                                 <span className="text-xs text-muted-foreground">{inst?.display_phone}</span>
+                                {(() => {
+                                  const bm = bmDaInstancia(inst);
+                                  if (!bm) return null;
+                                  return bm.url ? (
+                                    <a
+                                      href={bm.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="ml-2 text-xs text-primary underline underline-offset-2"
+                                      title="Abrir a conta de negócios vinculada"
+                                    >
+                                      BM: {bm.nome}
+                                    </a>
+                                  ) : (
+                                    <span className="ml-2 text-xs text-muted-foreground">BM: {bm.nome}</span>
+                                  );
+                                })()}
                               </span>
 
                               <Badge className={STATUS_COLORS[f.status] || ""}>{f.status}</Badge>
