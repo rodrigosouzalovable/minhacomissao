@@ -571,12 +571,55 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
                       <span>
-                        Restam <strong>{eta.restantes}</strong> envios • Ritmo: <strong>{eta.ritmo}</strong>
+                        Restam <strong>{eta.restantes}</strong> envios •{" "}
+                        {eta.ritmoRecente ? "Ritmo (últimos envios)" : "Ritmo"}: <strong>{eta.ritmo}</strong>
                       </span>
                     </div>
-                    <div className="text-muted-foreground">
-                      {eta.config} • Teórico: <strong>{eta.teorico}</strong>
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-2">
+                      <span>{eta.config} • Teórico: <strong>{eta.teorico}</strong></span>
+                      {!job.modo_rajada && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => {
+                            setDelayMin(String(job.min_seg ?? 30));
+                            setDelayMax(String(job.max_seg ?? 90));
+                            setEditandoRitmo((v) => !v);
+                          }}
+                        >
+                          {editandoRitmo ? "Fechar" : "Alterar ritmo"}
+                        </Button>
+                      )}
                     </div>
+                    {editandoRitmo && !job.modo_rajada && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <span className="text-muted-foreground">Novo delay (s):</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={300}
+                          value={delayMin}
+                          onChange={(e) => setDelayMin(e.target.value)}
+                          className="h-7 w-16 text-xs"
+                        />
+                        <span className="text-muted-foreground">a</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={300}
+                          value={delayMax}
+                          onChange={(e) => setDelayMax(e.target.value)}
+                          className="h-7 w-16 text-xs"
+                        />
+                        <Button size="sm" className="h-7 text-xs" disabled={salvandoRitmo} onClick={salvarRitmo}>
+                          {salvandoRitmo ? "Salvando..." : "Aplicar agora"}
+                        </Button>
+                        <span className="text-[11px] text-muted-foreground w-full">
+                          Vale a partir da próxima mensagem, sem pausar a campanha.
+                        </span>
+                      </div>
+                    )}
                     <div>
                       Tempo estimado: <strong>~{eta.duracao}</strong> • Previsão de término:{" "}
                       <strong>{eta.termino}</strong>
@@ -587,6 +630,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                         ? "Pausada — a contagem recomeça ao continuar. Estimativa aproximada."
                         : "Estimativa aproximada: varia com falhas, rate limit da Meta e instâncias bloqueadas."}
                     </div>
+
                   </>
                 )}
               </div>
