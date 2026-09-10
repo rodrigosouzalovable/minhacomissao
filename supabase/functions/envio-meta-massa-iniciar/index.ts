@@ -429,6 +429,8 @@ Deno.serve(async (req) => {
 
         instancias_risco_aceito: instanciasRiscoAceito,
         bloqueados_blacklist: listaBlacklist,
+        dias_antirrepeticao: diasAnti,
+        ignorados_repetidos: listaRepetidos,
 
       })
 
