@@ -172,9 +172,14 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
             onClick={async () => {
               setAtualizando(true);
               try {
-                await supabase.functions.invoke("meta-templates-onboarding-tick", {
-                  body: { forcar: true },
-                });
+                await Promise.all([
+                  supabase.functions.invoke("meta-templates-onboarding-tick", {
+                    body: { forcar: true },
+                  }),
+                  supabase.functions.invoke("meta-verificar-status-templates", {
+                    body: { forcar: true },
+                  }),
+                ]);
               } catch {
                 /* segue mesmo se o disparo falhar */
               }
@@ -198,10 +203,14 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
           <span>Aguardando resposta da Meta: {resumo.emVoo}</span>
           <span>Reprovados/falhas: {resumo.problemas}</span>
           <span>Números com pendência: {resumo.numerosComPendencia}</span>
+          <span>Última conferência: {rotuloRelativo(resumo.ultimaConferencia)}</span>
+          <span>Próxima conferência: {rotuloFuturo(resumo.proximaConferencia)}</span>
         </div>
         <p className="text-[11px] text-muted-foreground">
           1 modelo por vez em cada número, com intervalo de 2 a 5 minutos, das 07h às 20h e nunca no domingo.
+          A aprovação na Meta é conferida a cada 30 minutos e para de ser consultada assim que sai o resultado.
         </p>
+
       </CardContent>
     </Card>
   );
