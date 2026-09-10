@@ -13,6 +13,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { exportarParaExcel } from "@/lib/exportExcel";
 import { humanizarErroEnvio } from "@/lib/humanizarErroEnvio";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
+
 
 type Props = { jobId: string | null; open: boolean; onOpenChange: (v: boolean) => void };
 
@@ -115,7 +117,12 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const [buscandoLivres, setBuscandoLivres] = useState(false);
   const [adicionando, setAdicionando] = useState(false);
   const [liberando, setLiberando] = useState(false);
+  const [editandoRitmo, setEditandoRitmo] = useState(false);
+  const [delayMin, setDelayMin] = useState("");
+  const [delayMax, setDelayMax] = useState("");
+  const [salvandoRitmo, setSalvandoRitmo] = useState(false);
   const { role } = useUserRole();
+
   const isAdmin = role === "admin";
 
   const carregarLivres = async () => {
@@ -213,9 +220,23 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     }
     if (restantes === 0) return null;
 
-    // Ritmo real observado (mais fiel quando já há histórico suficiente).
+    // Ritmo real observado — usa só os envios MAIS RECENTES (até 20), para que
+    // um começo lento (tentativas, validação, instâncias caindo) não contamine a
+    // previsão do resto da campanha.
     let segPorMsg = segPorMsgTeorico;
-    if (job.iniciado_em && totalProcessado >= 5) {
+    let ritmoRecente = false;
+    const tsRecentes = (detalhes?.enviados || [])
+      .map((e: any) => (e?.ts ? Number(e.ts) : null))
+      .filter((t): t is number => !!t && Number.isFinite(t))
+      .sort((a, b) => b - a)
+      .slice(0, 20);
+    if (tsRecentes.length >= 5) {
+      const amostraSeg = (tsRecentes[0] - tsRecentes[tsRecentes.length - 1]) / 1000 / (tsRecentes.length - 1);
+      if (amostraSeg > 0) {
+        segPorMsg = amostraSeg;
+        ritmoRecente = true;
+      }
+    } else if (job.iniciado_em && totalProcessado >= 5) {
       const decorrido = (Date.now() - new Date(job.iniciado_em).getTime()) / 1000;
       if (decorrido > 0) segPorMsg = decorrido / totalProcessado;
     }
@@ -233,11 +254,41 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       ? `~${(1 / segPorMsg).toFixed(1)} msg/s`
       : `~1 msg / ${Math.round(segPorMsg)}s`;
 
-    return { tipo: "previsao" as const, restantes, ritmo, duracao: formatDuracao(segRestantes), termino, config, teorico };
+    return { tipo: "previsao" as const, restantes, ritmo, ritmoRecente, duracao: formatDuracao(segRestantes), termino, config, teorico };
+
   })();
 
 
 
+  // Altera o delay (min/max em segundos) com a campanha rodando — vale já na
+  // próxima mensagem, sem pausar nem reiniciar.
+  const salvarRitmo = async () => {
+    const lo = Math.round(Number(delayMin));
+    const hi = Math.round(Number(delayMax));
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo < 1 || hi < 1 || lo > 300 || hi > 300) {
+      toast.error("Informe valores entre 1 e 300 segundos");
+      return;
+    }
+    if (lo > hi) {
+      toast.error("O tempo mínimo não pode ser maior que o máximo");
+      return;
+    }
+    setSalvandoRitmo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("envio-meta-massa-control", {
+        body: { job_id: job.id, acao: "ajustar_delay", min_seg: lo, max_seg: hi },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Falha ao alterar o ritmo");
+      toast.success(`Novo ritmo: ${lo}–${hi}s por mensagem`);
+      setEditandoRitmo(false);
+      await refreshStatus();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao alterar o ritmo");
+    } finally {
+      setSalvandoRitmo(false);
+    }
+  };
 
 
   const reenviarErros = async () => {
@@ -556,12 +607,55 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
                       <span>
-                        Restam <strong>{eta.restantes}</strong> envios • Ritmo: <strong>{eta.ritmo}</strong>
+                        Restam <strong>{eta.restantes}</strong> envios •{" "}
+                        {eta.ritmoRecente ? "Ritmo (últimos envios)" : "Ritmo"}: <strong>{eta.ritmo}</strong>
                       </span>
                     </div>
-                    <div className="text-muted-foreground">
-                      {eta.config} • Teórico: <strong>{eta.teorico}</strong>
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-2">
+                      <span>{eta.config} • Teórico: <strong>{eta.teorico}</strong></span>
+                      {!job.modo_rajada && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px]"
+                          onClick={() => {
+                            setDelayMin(String(job.min_seg ?? 30));
+                            setDelayMax(String(job.max_seg ?? 90));
+                            setEditandoRitmo((v) => !v);
+                          }}
+                        >
+                          {editandoRitmo ? "Fechar" : "Alterar ritmo"}
+                        </Button>
+                      )}
                     </div>
+                    {editandoRitmo && !job.modo_rajada && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <span className="text-muted-foreground">Novo delay (s):</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={300}
+                          value={delayMin}
+                          onChange={(e) => setDelayMin(e.target.value)}
+                          className="h-7 w-16 text-xs"
+                        />
+                        <span className="text-muted-foreground">a</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={300}
+                          value={delayMax}
+                          onChange={(e) => setDelayMax(e.target.value)}
+                          className="h-7 w-16 text-xs"
+                        />
+                        <Button size="sm" className="h-7 text-xs" disabled={salvandoRitmo} onClick={salvarRitmo}>
+                          {salvandoRitmo ? "Salvando..." : "Aplicar agora"}
+                        </Button>
+                        <span className="text-[11px] text-muted-foreground w-full">
+                          Vale a partir da próxima mensagem, sem pausar a campanha.
+                        </span>
+                      </div>
+                    )}
                     <div>
                       Tempo estimado: <strong>~{eta.duracao}</strong> • Previsão de término:{" "}
                       <strong>{eta.termino}</strong>
@@ -572,6 +666,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                         ? "Pausada — a contagem recomeça ao continuar. Estimativa aproximada."
                         : "Estimativa aproximada: varia com falhas, rate limit da Meta e instâncias bloqueadas."}
                     </div>
+
                   </>
                 )}
               </div>
