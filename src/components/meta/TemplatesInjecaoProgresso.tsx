@@ -72,6 +72,22 @@ function rotuloPrevisao(d: Date | null): string {
   if (alvo === amanhaDia) return `amanhã ~${fmt(d)}`;
   return `${alvo} ~${fmt(d)}`;
 }
+function rotuloRelativo(iso: string | null): string {
+  if (!iso) return "ainda não conferido";
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  return `há ${Math.round(min / 60)} h`;
+}
+
+function rotuloFuturo(iso: string | null): string {
+  if (!iso) return "—";
+  const min = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+  if (min <= 0) return "a qualquer momento";
+  if (min < 60) return `em ${min} min`;
+  return `em ${Math.round(min / 60)} h`;
+}
+
 
 export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
   const [resumo, setResumo] = useState<Resumo | null>(null);
