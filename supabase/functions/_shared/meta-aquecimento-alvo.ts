@@ -231,7 +231,7 @@ export async function escolherTemplateLead(
 export function renderTemplateBody(tpl: TemplateAquecimento, nomeDestino?: string | null): string {
   let texto = String(tpl.body || "").trim();
   tpl.params.chaves.forEach((chave, idx) => {
-    const valor = idx === 0 ? (nomeDestino || "Parceiro") : VALOR_PADRAO;
+    const valor = idx === 0 ? primeiroNomeEmpresa(nomeDestino) : VALOR_PADRAO;
     texto = texto.replace(new RegExp(`\\{\\{\\s*${chave.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\}\\}`, "g"), valor);
   });
   return texto || tpl.name;
@@ -246,7 +246,7 @@ export async function enviarTemplateAquecimento(
 ): Promise<{ ok: boolean; wamid?: string; erro?: string; codigo?: number }> {
   const valores = tpl.params.chaves.map((chave, idx) => {
     const primeiro = idx === 0;
-    const valor = primeiro ? (nomeDestino || "Parceiro") : VALOR_PADRAO;
+    const valor = primeiro ? primeiroNomeEmpresa(nomeDestino) : VALOR_PADRAO;
     return tpl.params.tipo === "nomeado"
       ? { type: "text", parameter_name: chave, text: valor }
       : { type: "text", text: valor };
