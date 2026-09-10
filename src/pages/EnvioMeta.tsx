@@ -833,13 +833,17 @@ export default function EnvioMeta() {
     setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  // "Selecionar todas" só marca números sem nenhum problema: conectados,
-  // nome aprovado, BM com saldo e qualidade GREEN (YELLOW/RED/UNKNOWN fora).
+  // "Selecionar todas" marca números sem problema real: conectados, nome
+  // aprovado, BM com saldo e qualidade que NÃO seja YELLOW/RED (UNKNOWN e sem
+  // leitura entram). A instância "Novo Mundo 3144" fica sempre fora da seleção.
   const instanciaSemProblema = (i: any) => {
     const status = (i.saude_status || "").toUpperCase();
     const nomeStatus = (i.meta_name_status || "").toUpperCase();
     const qual = (i.saude_quality || "").toUpperCase();
-    return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id) && qual === "GREEN";
+    if (qual === "YELLOW" || qual === "RED") return false;
+    const ident = `${i.nome || ""} ${i.telefone || ""}`.replace(/\D/g, " ");
+    if (ident.includes("3144")) return false; // Novo Mundo 3144 nunca entra no "selecionar todas"
+    return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
   };
 
   const toggleInstancia = (id: string) => {
@@ -1537,7 +1541,7 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona apenas instâncias sem problema: conectadas, nome aprovado, BM com saldo e qualidade GREEN. YELLOW/RED/sem leitura ficam de fora — se você marcar à mão, será preciso confirmar o aviso de risco antes de iniciar."
+              title="Seleciona instâncias sem problema: conectadas, nome aprovado, BM com saldo. Ficam de fora apenas YELLOW/RED e a Novo Mundo 3144. Qualidade desconhecida entra normalmente."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
                 const boasInstancias = instanciasVisiveis.filter(instanciaSemProblema);
@@ -1554,7 +1558,7 @@ export default function EnvioMeta() {
                 .filter(instanciaSemProblema)
                 .every((i) => instanciaIds.includes(i.id))
                 ? "Limpar seleção"
-                : "Selecionar todas (GREEN)"}
+                : "Selecionar todas"}
             </Button>
             <Button type="button" size="sm" variant="outline" onClick={verificarSaude} disabled={checandoSaude || instancias.length === 0}>
               {checandoSaude ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <HeartPulse className="h-3.5 w-3.5 mr-1.5" />}
