@@ -438,6 +438,28 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const bloqueadosBlacklist = Array.isArray((job as any).bloqueados_blacklist)
     ? ((job as any).bloqueados_blacklist as Array<{ telefone: string; nome?: string; credor?: string }>)
     : [];
+  const ignoradosRepetidos = Array.isArray((job as any).ignorados_repetidos)
+    ? ((job as any).ignorados_repetidos as Array<{ telefone: string; nome?: string; ultimo_envio?: string; campanha?: string }>)
+    : [];
+  const diasAnti = Number((job as any).dias_antirrepeticao ?? 7);
+  const baixarRepetidos = async () => {
+    if (ignoradosRepetidos.length === 0) { toast.error("Nada para exportar"); return; }
+    await exportarParaExcel(
+      ignoradosRepetidos.map((b) => ({
+        telefone: b.telefone,
+        nome: b.nome || "",
+        ultimo_envio: b.ultimo_envio ? new Date(b.ultimo_envio).toLocaleString("pt-BR") : "",
+        campanha: b.campanha || "",
+      })),
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "nome", titulo: "Nome" },
+        { chave: "ultimo_envio", titulo: "Último envio" },
+        { chave: "campanha", titulo: "Campanha anterior" },
+      ],
+      `envio_recente_${sanitize(nome)}_${stamp()}`,
+    );
+  };
   const baixarBlacklist = async () => {
     if (bloqueadosBlacklist.length === 0) { toast.error("Nada para exportar"); return; }
     await exportarParaExcel(
