@@ -467,7 +467,36 @@ Deno.serve(async (req) => {
         limite_seguro: limiteSeguro,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
+    } else if (acao === 'ajustar_delay') {
+      // Altera o intervalo entre mensagens com a campanha em andamento.
+      // O tick relê o job antes de cada envio, então vale já na próxima mensagem.
+      const lo = Math.round(Number(body?.min_seg));
+      const hi = Math.round(Number(body?.max_seg));
+      if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo < 1 || hi < 1 || lo > 300 || hi > 300 || lo > hi) {
+        return new Response(JSON.stringify({ success: false, error: 'informe min_seg e max_seg entre 1 e 300 segundos, com min <= max' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (job.modo_rajada === true) {
+        return new Response(JSON.stringify({ success: false, error: 'campanha em modo rajada não usa delay entre mensagens' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      await supabase.from('envio_meta_job').update({ min_seg: lo, max_seg: hi }).eq('id', jobId);
+      // Se o próximo envio estava agendado além do novo máximo, antecipa.
+      const limite = Date.now() + hi * 1000;
+      if (job.status === 'rodando' && job.proximo_em && new Date(job.proximo_em).getTime() > limite) {
+        await supabase.from('envio_meta_job')
+          .update({ proximo_em: new Date(limite).toISOString() })
+          .eq('id', jobId)
+          .eq('status', 'rodando');
+      }
+      return new Response(JSON.stringify({ success: true, min_seg: lo, max_seg: hi }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
     } else if (acao === 'limpar') {
+
       // Só remove jobs concluídos/cancelados
       if (!['concluido', 'cancelado', 'erro'].includes(job.status)) {
         return new Response(JSON.stringify({ success: false, error: 'só é possível limpar jobs finalizados' }), {
