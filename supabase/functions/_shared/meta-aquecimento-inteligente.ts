@@ -162,10 +162,11 @@ export async function registrarConversaLead(
   nome: string | null,
   templateNome: string,
   wamid?: string | null,
+  textoReal?: string | null,
 ) {
   try {
     const agora = new Date().toISOString();
-    const preview = `[Aquecimento] template ${templateNome}`;
+    const preview = String(textoReal || "").trim() || `[Aquecimento] template ${templateNome}`;
 
     const { data: existente } = await supabase
       .from("meta_whatsapp_contatos")

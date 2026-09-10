@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_templates_mestre ADD COLUMN IF NOT EXISTS usar_em_leads boolean NOT NULL DEFAULT false;

@@ -45,6 +45,7 @@ interface Mestre {
   cabecalho_media_mime?: string | null;
   criado_em: string;
   injetar_em_novos?: boolean;
+  usar_em_leads?: boolean;
 
 
 }
@@ -473,6 +474,17 @@ export default function MetaTemplates() {
     if (error) { toast.error(error.message); return; }
     setMestres((prev) => prev.map((m) => (m.id === id ? { ...m, injetar_em_novos: valor } : m)));
     toast.success(valor ? "Marcado para números novos" : "Removido dos números novos");
+  };
+
+  // Marca/desmarca o modelo para uso no aquecimento de leads do Google Maps
+  const alternarLeads = async (id: string, valor: boolean) => {
+    const { error } = await supabase
+      .from("meta_templates_mestre")
+      .update({ usar_em_leads: valor } as any)
+      .eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    setMestres((prev) => prev.map((m) => (m.id === id ? { ...m, usar_em_leads: valor } : m)));
+    toast.success(valor ? "Marcado para leads do Google Maps" : "Removido dos leads");
   };
 
   const marcarTodosInjecao = async (valor: boolean) => {
@@ -915,6 +927,16 @@ export default function MetaTemplates() {
                               <Zap className="w-3 h-3 mr-1" /> nº novos
                             </Badge>
                           )}
+                          <label
+                            className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
+                            title="Usar este modelo nas mensagens de aquecimento para leads do Google Maps"
+                          >
+                            <Checkbox
+                              checked={!!m.usar_em_leads}
+                              onCheckedChange={(v) => alternarLeads(m.id, v === true)}
+                            />
+                            leads
+                          </label>
                           <Button size="icon" variant="ghost" onClick={() => setMestreDialog(m.id)} title="Ver template">
                             <Eye className="w-4 h-4" />
                           </Button>

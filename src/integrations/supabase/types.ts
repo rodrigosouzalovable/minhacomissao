@@ -5482,6 +5482,7 @@ export type Database = {
           nome: string
           rodape: string | null
           tenant_id: string
+          usar_em_leads: boolean
         }
         Insert: {
           atualizado_em?: string
@@ -5501,6 +5502,7 @@ export type Database = {
           nome: string
           rodape?: string | null
           tenant_id?: string
+          usar_em_leads?: boolean
         }
         Update: {
           atualizado_em?: string
@@ -5520,6 +5522,7 @@ export type Database = {
           nome?: string
           rodape?: string | null
           tenant_id?: string
+          usar_em_leads?: boolean
         }
         Relationships: []
       }
