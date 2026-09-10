@@ -2434,6 +2434,49 @@ export default function EnvioMeta() {
             (stats.preservados ? ` • 🟦 ${stats.preservados} linha(s) de números UAZAPI mantidas` : "") +
             (varsCount ? ` • variáveis do template preenchidas em ${varsCount} linha(s)` : "")
           );
+          // Alerta se esta lista é praticamente a mesma da última campanha criada.
+          (async () => {
+            const suf = (t: string) => {
+              const d = String(t || "").replace(/\D/g, "");
+              return d.length >= 8 ? d.slice(-8) : d;
+            };
+            const nova = new Set(
+              linhas.map((l) => suf(splitLinhaEnvio(l.trim())[0] || "")).filter(Boolean),
+            );
+            ultimaListaRef.current = nova;
+            if (nova.size === 0) return;
+            try {
+              const { data: ultimo } = await supabase
+                .from("envio_meta_job")
+                .select("id, nome_campanha, created_at")
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (!ultimo?.id) return;
+              const antiga = new Set<string>();
+              for (let from = 0; from < 20000; from += 1000) {
+                const { data, error } = await supabase
+                  .from("envio_meta_job_item")
+                  .select("telefone")
+                  .eq("job_id", ultimo.id)
+                  .range(from, from + 999);
+                if (error) break;
+                (data || []).forEach((r: any) => { const s = suf(r.telefone); if (s) antiga.add(s); });
+                if (!data || data.length < 1000) break;
+              }
+              if (antiga.size === 0) return;
+              let iguais = 0;
+              nova.forEach((s) => { if (antiga.has(s)) iguais++; });
+              const pct = Math.round((iguais / nova.size) * 100);
+              if (pct >= 80) {
+                toast.error(
+                  `⚠️ Esta lista é ${pct}% igual à campanha "${ultimo.nome_campanha || "anterior"}" de ` +
+                  `${new Date(ultimo.created_at).toLocaleDateString("pt-BR")}. Confirme se importou o arquivo certo antes de disparar.`,
+                  { duration: 20000 },
+                );
+              }
+            } catch { /* alerta apenas */ }
+          })();
         }}
       />
       <EditarVariaveisTemplateDialog
