@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectGroup, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { amostrasParecemValor, formatarValorBR, type FormatoValor } from "@/lib/valorBR";
+import { detectarTipoDocumento, formatarDocumentoBR, type FormatoDocumento } from "@/lib/documentoBR";
 import { normalizarCredor, type CredorSlug } from "@/lib/credorMarcas";
 
 const VALOR_HEADER_RX = /(saldo|valor|d[ií]vida|debito|débito|montante|total|parcela|entrada)/i;
