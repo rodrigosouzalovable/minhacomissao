@@ -529,7 +529,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ job_id: job.id }),
     }).catch(() => {});
 
-    return new Response(JSON.stringify({ success: true, job_id: job.id }), {
+    return new Response(JSON.stringify({ success: true, job_id: job.id, ignorados_repetidos: listaRepetidos.length }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
