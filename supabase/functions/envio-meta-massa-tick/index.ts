@@ -970,7 +970,9 @@ Deno.serve(async (req) => {
       }
 
       try {
+        await destravarItensPresos(claimed.id);
         const t0 = Date.now();
+
         const result = await processarItem(claimed);
         let gastoMs = Date.now() - t0;
         if (result.advanced) processadosTotal++;
