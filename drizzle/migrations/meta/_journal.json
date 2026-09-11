@@ -15,6 +15,13 @@
       "when": 1789143091763,
       "tag": "0001_isolate_meta_campaigns_by_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789157761540,
+      "tag": "0002_meta_templates_sync_daily_lock",
+      "breakpoints": true
     }
   ]
 }

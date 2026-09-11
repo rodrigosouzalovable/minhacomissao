@@ -5673,6 +5673,45 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_templates_sync_state: {
+        Row: {
+          failures: Json
+          id: boolean
+          last_completed_at: string | null
+          last_started_at: string | null
+          last_success: boolean | null
+          lock_expires_at: string | null
+          processed_instances: number
+          status: string
+          synced_templates: number
+          updated_at: string
+        }
+        Insert: {
+          failures?: Json
+          id?: boolean
+          last_completed_at?: string | null
+          last_started_at?: string | null
+          last_success?: boolean | null
+          lock_expires_at?: string | null
+          processed_instances?: number
+          status?: string
+          synced_templates?: number
+          updated_at?: string
+        }
+        Update: {
+          failures?: Json
+          id?: boolean
+          last_completed_at?: string | null
+          last_started_at?: string | null
+          last_success?: boolean | null
+          lock_expires_at?: string | null
+          processed_instances?: number
+          status?: string
+          synced_templates?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meta_webhook_tokens: {
         Row: {
           atualizado_em: string
@@ -9970,6 +10009,10 @@ export type Database = {
         Args: { p_telefone: string; p_texto: string; p_timestamp: string }
         Returns: undefined
       }
+      claim_meta_templates_sync_diario: {
+        Args: { p_force?: boolean; p_lock_minutes?: number }
+        Returns: boolean
+      }
       comite_carteira_nm_agregar: { Args: never; Returns: Json }
       comite_carteira_nm_intocados: {
         Args: { p_limit?: number }
@@ -10132,6 +10175,15 @@ export type Database = {
       estrategia_resumo: { Args: never; Returns: Json }
       excluir_parcela_pendente: {
         Args: { p_pagamento_id: string }
+        Returns: undefined
+      }
+      finish_meta_templates_sync_diario: {
+        Args: {
+          p_failures?: Json
+          p_processed?: number
+          p_success: boolean
+          p_synced?: number
+        }
         Returns: undefined
       }
       get_acordo_status_flags: {
