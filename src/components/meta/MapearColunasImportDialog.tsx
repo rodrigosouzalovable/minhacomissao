@@ -100,6 +100,8 @@ type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   rows: any[][];
+  /** A primeira linha foi digitada manualmente e sempre contém dados, nunca cabeçalho. */
+  firstRowIsData?: boolean;
   template?: TemplateInfo;
   /** Exige a coluna Credor quando templates são roteados por carteira. */
   requireCredor?: boolean;
@@ -134,14 +136,15 @@ function placeholderContext(bodyText: string, key: string): string {
   return around;
 }
 
-export default function MapearColunasImportDialog({ open, onOpenChange, rows, template, requireCredor = false, requireCpf = true, isentosDedup, onConfirm }: Props) {
+export default function MapearColunasImportDialog({ open, onOpenChange, rows, firstRowIsData = false, template, requireCredor = false, requireCpf = true, isentosDedup, onConfirm }: Props) {
   const nCols = useMemo(() => rows.reduce((m, r) => Math.max(m, (r || []).length), 0), [rows]);
 
   const firstRow = rows[0] || [];
   const firstIsHeader = useMemo(() => {
+    if (firstRowIsData) return false;
     const digitos = String(firstRow[0] ?? "").replace(/\D/g, "");
     return digitos.length < 8;
-  }, [firstRow]);
+  }, [firstRow, firstRowIsData]);
 
   const placeholders = useMemo(() => {
     const fromBody = template?.body_text ? extractPlaceholders(template.body_text) : [];
@@ -439,7 +442,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, te
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Mapear colunas da planilha</DialogTitle>
+          <DialogTitle>{firstRowIsData ? "Definir informações dos destinatários" : "Mapear colunas da planilha"}</DialogTitle>
           <DialogDescription>
             Para cada coluna, escolha se ela representa um campo padrão ou uma variável do template. <strong>Telefone</strong> é obrigatório{requireCpf && <>, <strong>CPF / CNPJ</strong> também é obrigatório</>}{requireCredor && <> e <strong>Credor</strong> (UME ou Novo Mundo) também é obrigatório</>}.
             {firstIsHeader && " A primeira linha foi detectada como cabeçalho e será ignorada."}

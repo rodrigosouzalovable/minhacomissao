@@ -352,7 +352,7 @@ export default function EnvioMeta() {
   };
 
 
-  const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][] }>({ open: false, rows: [] });
+  const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][]; origem: "excel" | "manual" }>({ open: false, rows: [], origem: "excel" });
   const [varsByTel, setVarsByTel] = useState<Record<string, Record<string, string>>>({});
   const [credor, setCredor] = useState<string>("__none__");
   const [credorByTel, setCredorByTel] = useState<Record<string, CredorSlug>>({});
@@ -408,7 +408,7 @@ export default function EnvioMeta() {
       if (!ws) throw new Error("Planilha vazia");
       const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: "" });
       if (!rows || rows.length === 0) { toast.error("Planilha vazia"); return; }
-      setMapDlg({ open: true, rows });
+      setMapDlg({ open: true, rows, origem: "excel" });
     } catch (e: any) {
       toast.error("Erro ao ler planilha: " + (e?.message || e));
     }
@@ -1814,8 +1814,8 @@ export default function EnvioMeta() {
             <div>
               <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
               <CardDescription>
-                Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>.
-                Ao importar uma planilha Excel, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Credor, Atraso, Saldo). O CPF/CNPJ e o Credor vêm obrigatórios por padrão.
+                Uma linha por contato, com as informações separadas por vírgula. Ao pressionar <strong>Enter</strong>, você poderá definir o que representa cada informação.
+                A importação Excel usa o mesmo mapeamento (Telefone, Nome, CPF/CNPJ, Credor, Atraso, Saldo e variáveis do template). O CPF/CNPJ e o Credor vêm obrigatórios por padrão.
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -1927,6 +1927,18 @@ export default function EnvioMeta() {
                   setValidacaoPreview(null);
                   setVarsByTel({});
                   setRecipientsHeaders([]);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                  const linhas = recipientsRaw.split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean);
+                  const ultimaLinha = linhas[linhas.length - 1] || "";
+                  if (!ultimaLinha || !/[,;\t]/.test(ultimaLinha)) return;
+                  e.preventDefault();
+                  setMapDlg({
+                    open: true,
+                    rows: linhas.map((linha) => splitLinhaEnvio(linha)),
+                    origem: "manual",
+                  });
                 }}
                 placeholder={"5562999999999, João Silva, 12345678900, 45, 1250.50\n5562988887777, Maria, 98765432100, 12, 540"}
                 className="font-mono text-xs"
@@ -2472,6 +2484,7 @@ export default function EnvioMeta() {
         open={mapDlg.open}
         onOpenChange={(v) => setMapDlg((p) => ({ ...p, open: v }))}
         rows={mapDlg.rows}
+        firstRowIsData={mapDlg.origem === "manual"}
         requireCredor={credorObrigatorio || templatePorCredor}
         requireCpf={cpfObrigatorio}
         isentosDedup={isentosDedup}
