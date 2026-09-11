@@ -4,6 +4,7 @@
 // apenas os nichos campeões. Uma execução por dia, sem loop.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { hojeBrt } from '../_shared/meta-aquecimento-alvo.ts';
+import { classificarRespostaAutomatica } from '../_shared/resposta-automatica.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,12 +29,14 @@ Deno.serve(async (req) => {
   );
 
   try {
+    const body = await req.json().catch(() => ({}));
+    const classificarHistorico = body?.classificar_historico === true;
     const dia = hojeBrt();
     const desde = new Date(Date.now() - 30 * 86400000).toISOString();
 
     const { data: logs } = await supabase
       .from('meta_aquecimento_destino_log')
-      .select('fonte, nicho, cidade, status, respondeu_em, auto_resposta_confirmada, erro')
+      .select('id, fonte, instancia_id, destino_telefone, lead_id, nicho, cidade, status, enviado_em, respondeu_em, segundos_para_resposta, auto_resposta_confirmada, erro')
       .eq('fonte', 'lead')
       .gte('enviado_em', desde)
       .limit(20000);
@@ -87,6 +90,65 @@ Deno.serve(async (req) => {
         .from('aquecimento_nicho_score')
         .upsert(linhas, { onConflict: 'nicho,cidade' });
       if (error) throw error;
+    }
+
+    // Classificação inicial sob demanda: reaproveita a rotina diária, sem criar
+    // novo cron. Depois disso, as novas respostas são classificadas no webhook.
+    let historicoClassificado = 0;
+    if (classificarHistorico) {
+      const candidatos = ((logs || []) as any[]).filter(
+        (l) => l.fonte === 'lead' && l.respondeu_em && l.auto_resposta_confirmada !== true,
+      );
+      const inicio = candidatos
+        .map((l) => l.enviado_em)
+        .filter(Boolean)
+        .sort()[0];
+      const { data: mensagens } = inicio
+        ? await supabase
+            .from('meta_whatsapp_mensagens')
+            .select('instancia_id, telefone, conteudo, timestamp_msg')
+            .eq('direcao', 'entrada')
+            .gte('timestamp_msg', inicio)
+            .order('timestamp_msg', { ascending: true })
+            .limit(20000)
+        : { data: [] as any[] };
+      const leadIds = Array.from(new Set(candidatos.map((l) => l.lead_id).filter(Boolean)));
+      const { data: leads } = leadIds.length > 0
+        ? await supabase.from('google_maps_leads').select('id, nome').in('id', leadIds)
+        : { data: [] as any[] };
+      const nomes = new Map(((leads || []) as any[]).map((lead) => [String(lead.id), lead.nome]));
+
+      for (const log of candidatos) {
+        const sufixo = String(log.destino_telefone || '').replace(/\D/g, '').slice(-8);
+        const enviadaEm = new Date(log.enviado_em).getTime();
+        const respondeuEm = new Date(log.respondeu_em).getTime();
+        const mensagem = ((mensagens || []) as any[]).find((m) => {
+          const quando = new Date(m.timestamp_msg).getTime();
+          return m.instancia_id === log.instancia_id &&
+            String(m.telefone || '').replace(/\D/g, '').endsWith(sufixo) &&
+            quando >= enviadaEm && quando <= respondeuEm + 60_000;
+        });
+        if (!mensagem?.conteudo) continue;
+        const classificacao = classificarRespostaAutomatica(mensagem.conteudo, log.segundos_para_resposta);
+        if (!classificacao.automatica) continue;
+        const telefoneNormalizado = String(log.destino_telefone || '').replace(/\D/g, '');
+        if (!telefoneNormalizado) continue;
+        const { error } = await supabase.rpc('registrar_meta_aquecimento_auto_resposta', {
+          _log_id: log.id,
+          _telefone_normalizado: telefoneNormalizado,
+          _telefone: log.destino_telefone,
+          _lead_id: log.lead_id,
+          _nome: nomes.get(String(log.lead_id)) || null,
+          _nicho: log.nicho,
+          _cidade: log.cidade,
+          _resposta: mensagem.conteudo,
+          _motivo: classificacao.motivo,
+          _confianca: classificacao.confianca,
+          _instancia_id: log.instancia_id,
+          _detectado_em: log.respondeu_em,
+        });
+        if (!error) historicoClassificado++;
+      }
     }
 
     // ===== Base de "quem responde": marca os leads que já responderam =====
@@ -145,7 +207,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ ok: true, dia, nichos: linhas.length, estoque: estoque ?? 0, buscas });
+    return json({ ok: true, dia, nichos: linhas.length, estoque: estoque ?? 0, buscas, historico_classificado: historicoClassificado });
   } catch (e) {
     console.error('[meta-aquecimento-aprender]', e);
     return json({ ok: false, error: e instanceof Error ? e.message : 'erro' }, 500);
