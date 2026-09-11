@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Criar lista permanente de leads do Google Maps com resposta automática no Aquecimento Meta
 - [x] Adicionar relatório manual de aquecimento no WhatsApp e totais acumulados desde o início
 - [x] Permitir escolha explícita de reenvio recente e corrigir a lista de ignorados no painel da campanha
 - [x] Remover o teto visual de 1.000 Templates HSM e sincronizar todas as páginas da Meta

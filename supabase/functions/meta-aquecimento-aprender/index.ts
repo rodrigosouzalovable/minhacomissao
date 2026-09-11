@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
 
     const { data: logs } = await supabase
       .from('meta_aquecimento_destino_log')
-      .select('fonte, nicho, cidade, status, respondeu_em, segundos_para_resposta, erro')
+      .select('fonte, nicho, cidade, status, respondeu_em, auto_resposta_confirmada, erro')
       .eq('fonte', 'lead')
       .gte('enviado_em', desde)
       .limit(20000);
@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
       const a = agg.get(k) || { envios: 0, respostas: 0, rapidas: 0, reclamacoes: 0 };
       if (l.status !== 'falha') a.envios++;
       if (l.respondeu_em) a.respostas++;
-      if (Number(l.segundos_para_resposta ?? 99999) <= 120) a.rapidas++;
+      if (l.auto_resposta_confirmada === true) a.rapidas++;
       const erro = String(l.erro || '').toLowerCase();
       if (erro.includes('block') || erro.includes('spam') || erro.includes('131026') || erro.includes('132')) {
         a.reclamacoes++;
