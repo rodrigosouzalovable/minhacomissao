@@ -283,10 +283,12 @@ Deno.serve(async (req) => {
       }
 
       // ===== Guardião de engajamento (taxa de resposta na janela curta) =====
-      // Vale inclusive no modo "sem teto": resposta muito baixa reduz o ritmo
-      // do número e, na faixa de corte, tira o número da campanha no dia.
+      // No modo "sem teto", o guardião continua produzindo telemetria e
+      // aquecimento, mas não reduz nem interrompe campanhas.
       const freioG = freioMap.get(inst.id);
-      const fatorGuardiao = freioG?.guardiao_fator == null ? 1 : Number(freioG.guardiao_fator);
+      const fatorGuardiao = semTeto || freioG?.guardiao_fator == null
+        ? 1
+        : Number(freioG.guardiao_fator);
       if (fatorGuardiao <= 0) {
         descartados.push(
           `${rotulo}: fora da campanha hoje — ${freioG?.motivo_reducao || 'taxa de resposta muito baixa'}`,

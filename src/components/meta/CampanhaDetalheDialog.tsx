@@ -49,6 +49,30 @@ function formatDuracao(seg: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}min`;
 }
 
+function classificarEspera(motivo: string) {
+  const cotaReal = /cota (?:da Meta|da BM)|cota real|\d+\/\d+ nas últimas 24h/i.test(motivo);
+  const freioInterno = /guardião|guardiao|resposta|não lidas|freio|qualidade|quarentena|teto reduzido|fora da campanha hoje/i.test(motivo);
+  if (cotaReal) {
+    return {
+      badge: "Aguardando cota",
+      titulo: "Parada: cota real da Meta atingida",
+      descricao: "A campanha continua acompanhando a renovação da cota real da Meta.",
+    };
+  }
+  if (freioInterno) {
+    return {
+      badge: "Aguardando liberação",
+      titulo: "Parada por regra interna de proteção",
+      descricao: "A campanha será retomada quando os números voltarem a ficar disponíveis.",
+    };
+  }
+  return {
+    badge: "Aguardando instâncias",
+    titulo: "Campanha temporariamente aguardando",
+    descricao: "A campanha continua ativa e tentará novamente quando houver uma instância disponível.",
+  };
+}
+
 
 export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Props) {
   const {
@@ -184,6 +208,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const cotaBloqueio = Boolean(progresso?.aguardandoCota)
     || (job.status === "erro" && /teto di[aá]rio|cota|quarentena|qualidade|freio/i.test(motivoBruto));
   const cotaMotivoTexto = progresso?.cotaMotivo || motivoBruto;
+  const esperaInfo = classificarEspera(cotaMotivoTexto);
 
 
   // ===== Previsão de término (estimativa) =====
@@ -487,7 +512,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           <div className="flex items-center gap-2 flex-wrap">
             <DialogTitle className="text-xl">{nome}</DialogTitle>
             {progresso?.aguardandoCota ? (
-              <Badge className="bg-amber-500 text-white">Aguardando cota</Badge>
+              <Badge className="bg-amber-500 text-white">{esperaInfo.badge}</Badge>
             ) : (
               <Badge className={statusColor(job.status)}>{statusLabel(job.status)}</Badge>
             )}
@@ -552,7 +577,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
             {cotaBloqueio && (
               <div className="text-xs rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 space-y-1.5 text-amber-800 dark:text-amber-200">
-                <div className="font-semibold">⏳ Parada: cota real da Meta atingida</div>
+                <div className="font-semibold">⏳ {esperaInfo.titulo}</div>
                 <div className="whitespace-pre-wrap break-words">
                   {(cotaMotivoTexto || "").split(" | ").map((linha, i) => (
                     <div key={i}>• {linha.replace(/^Nenhuma instância disponível\s*—\s*/, "")}</div>
@@ -560,8 +585,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 </div>
                 <div>
                   {job.status === "erro"
-                    ? "Esta campanha ficou parada — use \"Reativar\" para retomar depois que a cota da Meta renovar."
-                    : <>A campanha continua acompanhando a cota real da Meta; o limite interno está desativado.</>}
+                    ? "Esta campanha ficou parada — use \"Reativar\" para tentar novamente após resolver o motivo informado."
+                    : esperaInfo.descricao}
                 </div>
                 {isAdmin && (
                   <div className="pt-1">
