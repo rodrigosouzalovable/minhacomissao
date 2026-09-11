@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Flame, RefreshCw, Play, Brain, DollarSign } from "lucide-react";
+import { Flame, RefreshCw, Play, Brain, DollarSign, Send, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 function hojeBrt() {
@@ -130,6 +130,22 @@ export function AquecimentoMetaTab() {
     onError: (e: any) => toast.error(e?.message ?? "Falha ao salvar"),
   });
 
+  const enviarRelatorio = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("google-maps-leads-relatorio-diario", {
+        body: { manual: true },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Não foi possível enviar o relatório");
+      return data;
+    },
+    onSuccess: (data: any) => {
+      const total = Number(data?.acumulado?.mensagens ?? 0);
+      toast.success(`Relatório enviado para seu WhatsApp${total ? ` · ${total} mensagens no acumulado` : ""}`);
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao enviar relatório"),
+  });
+
   const gasto = Number(orcamento?.gasto_reais ?? 0);
   const teto = Number(orcamento?.teto_reais ?? 50);
   const enviadosHoje = (logs ?? []).filter((l: any) => l.dia === dia && l.status !== "falha").length;
@@ -146,6 +162,19 @@ export function AquecimentoMetaTab() {
         </Button>
         <Button size="sm" variant="outline" onClick={() => rodar.mutate("meta-aquecimento-aprender")} disabled={rodar.isPending}>
           <RefreshCw className="h-4 w-4 mr-1" /> Recalcular nichos
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => enviarRelatorio.mutate()}
+          disabled={enviarRelatorio.isPending}
+        >
+          {enviarRelatorio.isPending ? (
+            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4 mr-1" />
+          )}
+          Enviar relatório no WhatsApp
         </Button>
       </div>
 
