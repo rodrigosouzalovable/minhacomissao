@@ -444,7 +444,17 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       .order("iniciado_em", { ascending: false })
       .limit(30);
     const arr = (data || []).map(toCampanhaJob) as CampanhaJob[];
-    setJobs(arr);
+    // Uma campanha antiga pode ter sido carregada diretamente pelo histórico e
+    // estar aberta no diálogo, embora não pertença às 30 mais recentes. Mantê-la
+    // evita que uma atualização após revalidar instâncias faça o diálogo perder
+    // o job e exibir incorretamente "Campanha não encontrada".
+    setJobs((current) => {
+      const idsCarregados = new Set(arr.map((job) => job.id));
+      const abertasForaDaPagina = current.filter(
+        (job) => openJobsRef.current.has(job.id) && !idsCarregados.has(job.id),
+      );
+      return [...arr, ...abertasForaDaPagina];
+    });
   }, [uid]);
 
   const PAGINA_ITENS = 200;
