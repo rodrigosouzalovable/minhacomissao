@@ -304,12 +304,27 @@ export default function ConfigurarMeta() {
     return map;
   }, [templates]);
 
+  const carregarTodosTemplates = async () => {
+    const tamanhoPagina = 1000;
+    const todos: Template[] = [];
+    for (let inicio = 0; ; inicio += tamanhoPagina) {
+      const { data, error } = await supabase
+        .from("meta_whatsapp_templates")
+        .select("id,instancia_id,nome_template,body_text,categoria,idioma,status,variaveis,sincronizado_em")
+        .order("sincronizado_em", { ascending: false })
+        .range(inicio, inicio + tamanhoPagina - 1);
+      if (error) throw error;
+      const pagina = (data || []) as Template[];
+      todos.push(...pagina);
+      if (pagina.length < tamanhoPagina) return todos;
+    }
+  };
 
   const carregar = async () => {
     setLoading(true);
     const [i, t, b, vp] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").order("criado_em", { ascending: false }),
-      supabase.from("meta_whatsapp_templates").select("*").order("sincronizado_em", { ascending: false }),
+      carregarTodosTemplates(),
       supabase.from("meta_business_managers").select("id,nome,business_id,ativo,padrao").eq("ativo", true).order("padrao", { ascending: false }).order("nome", { ascending: true }),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
     ]);
@@ -323,7 +338,7 @@ export default function ConfigurarMeta() {
       }
       setInstancias(lista);
     }
-    if (t.data) setTemplates(t.data as Template[]);
+    setTemplates(t);
     if (b.data) setBms(b.data as BM[]);
     setLoading(false);
   };

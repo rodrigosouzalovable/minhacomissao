@@ -3,6 +3,8 @@
 ## Em aberto
 
 ## Concluído
+- [x] Remover o teto visual de 1.000 Templates HSM e sincronizar todas as páginas da Meta
+- [x] Agendar sincronização completa de templates às 06h BRT, de segunda a sexta
 - [x] Retirar o corte do Guardião de Engajamento no modo sem teto e retomar a campanha pendente
 - [x] Remover bloqueio coletivo da BM em #131031 e retomar a campanha QUEBRADOS por instância
 - [x] Criar aba Campanhas Meta com histórico individual, filtros, custos e detalhes
