@@ -309,7 +309,17 @@ export function EditPermissionsDialog({
           <div className="space-y-6 py-4 pr-2">
             <div className="space-y-3">
               <Label className="text-sm font-medium">Abas visíveis</Label>
-              {AVAILABLE_TABS.map((tab) => {
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="permission-campanhas"
+                  checked={veCampanhas}
+                  onCheckedChange={(checked) => setVeCampanhas(checked === true)}
+                />
+                <label htmlFor="permission-campanhas" className="text-sm cursor-pointer">
+                  Campanhas
+                </label>
+              </div>
+              {AVAILABLE_TABS.filter((tab) => tab.path !== '/admin/campanhas-meta').map((tab) => {
                 const locked = isSelf && tab.path === '/admin/usuarios';
                 return (
                   <div key={tab.path} className="flex items-center gap-2">
@@ -364,16 +374,6 @@ export function EditPermissionsDialog({
                   </label>
                 </div>
               ))}
-            </div>
-
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <div>
-                <Label className="text-sm font-medium">Ver painel de Campanhas</Label>
-                <p className="text-xs text-muted-foreground">
-                  Libera o botão flutuante "Campanhas" para acompanhar os próprios disparos.
-                </p>
-              </div>
-              <Switch checked={veCampanhas} onCheckedChange={setVeCampanhas} />
             </div>
 
             <div className="flex items-center justify-between rounded-md border p-3">
