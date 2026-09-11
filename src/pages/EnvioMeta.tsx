@@ -292,6 +292,7 @@ export default function EnvioMeta() {
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
   const [instanciasDialogOpen, setInstanciasDialogOpen] = useState<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
+  const custoEstimativaRef = useRef<Awaited<ReturnType<typeof calcularCustoEstimado>> | null>(null);
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -314,6 +315,7 @@ export default function EnvioMeta() {
     categoria: string | null,
   ): Promise<boolean> => {
     const est = await calcularCustoEstimado(telefones, instIds, categoria);
+    custoEstimativaRef.current = est;
     if (est.brl <= 0) return true; // nada a cobrar (tudo grátis / preço zero)
     return await new Promise<boolean>((resolve) => {
       setCustoDlg({
@@ -352,7 +354,7 @@ export default function EnvioMeta() {
   };
 
 
-  const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][]; origem: "excel" | "manual" }>({ open: false, rows: [], origem: "excel" });
+  const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][]; origem: "excel" | "manual" | "clipboard" }>({ open: false, rows: [], origem: "excel" });
   const [varsByTel, setVarsByTel] = useState<Record<string, Record<string, string>>>({});
   const [credor, setCredor] = useState<string>("__none__");
   const [credorByTel, setCredorByTel] = useState<Record<string, CredorSlug>>({});
@@ -1116,6 +1118,7 @@ export default function EnvioMeta() {
       credor: credorPadrao,
       riscoQualidadeConfirmado: arriscadas.length > 0,
       validarNoEnvio,
+      custoEstimativa: custoEstimativaRef.current || undefined,
 
 
       onAfterEnvio: () => {
@@ -1943,10 +1946,13 @@ export default function EnvioMeta() {
                 onPaste={(e) => {
                   const text = e.clipboardData.getData("text");
                   if (!text) return;
-                  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
                   if (lines.length === 0) return;
-                  const rows = lines.map(l => splitLinhaEnvio(l));
-                  const hasMultipleColumns = rows.some(r => r.length > 1);
+                  const isExcel = lines.some((line) => line.includes("\t"));
+                  const rows = lines.map((line) => isExcel
+                    ? line.split("\t").map((cell) => cell.trim())
+                    : splitLinhaEnvio(line));
+                  const hasMultipleColumns = isExcel || rows.some((row) => row.length > 1);
                   if (hasMultipleColumns) {
                     e.preventDefault();
                     const existingLines = recipientsRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -1954,7 +1960,7 @@ export default function EnvioMeta() {
                     setMapDlg({
                       open: true,
                       rows: allRows,
-                      origem: "manual",
+                      origem: existingLines.length > 0 ? "manual" : "clipboard",
                     });
                   }
                 }}

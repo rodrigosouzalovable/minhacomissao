@@ -76,6 +76,7 @@ const Blacklist = lazy(() => retryImport(() => import("./pages/Blacklist")));
 const AdminDominios = lazy(() => retryImport(() => import("./pages/AdminDominios")));
 const CalculadoraUme = lazy(() => retryImport(() => import("./pages/CalculadoraUme")));
 const MeusSites = lazy(() => retryImport(() => import("./pages/MeusSites")));
+const CampanhasMeta = lazy(() => retryImport(() => import("./pages/CampanhasMeta")));
 
 const TenantLayout = lazy(() => retryImport(() => import("./pages/tenant/TenantLayout")));
 
@@ -197,6 +198,16 @@ function PermissionRoute({ children }: { children: React.ReactNode }) {
   return <Navigate to="/dashboard" replace />;
 }
 
+function MetaCampaignRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { parceiroMeta, veCampanhas, isLoading: permLoading } = useUserPermissions();
+  if (loading || roleLoading || permLoading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isAdmin && !parceiroMeta && !veCampanhas) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 function GestorRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { isGestor, isAdmin, loading: roleLoading } = useUserRole();
@@ -285,6 +296,7 @@ const App = () => (
             <Route path="/modelo-mensagem" element={<ProtectedRoute><ModeloMensagem /></ProtectedRoute>} />
             <Route path="/admin/configurar-meta" element={<PermissionRoute><ConfigurarMeta /></PermissionRoute>} />
             <Route path="/admin/envio-meta" element={<PermissionRoute><EnvioMeta /></PermissionRoute>} />
+            <Route path="/admin/campanhas-meta" element={<MetaCampaignRoute><CampanhasMeta /></MetaCampaignRoute>} />
             <Route path="/admin/inbox-meta" element={<PermissionRoute><InboxMeta /></PermissionRoute>} />
             <Route path="/admin/meta-billing" element={<AdminRoute><MetaBilling /></AdminRoute>} />
             <Route path="/admin/meta-templates" element={<PermissionRoute><MetaTemplates /></PermissionRoute>} />

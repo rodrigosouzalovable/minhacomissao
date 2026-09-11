@@ -3,6 +3,8 @@
 ## Em aberto
 
 ## Concluído
+- [x] Criar aba Campanhas Meta com histórico individual, filtros, custos e detalhes
+- [x] Normalizar colagem direta do Excel no campo de destinatários
 - [x] Bloqueio #131031 por BM: retirar todos os números irmãos da campanha e evitar tentativas repetidas
 - [x] Mostrar mensagem real do template na caixa AQUECIMENTO (corpo renderizado com nome do lead)
 - [x] Coluna `usar_em_leads` em `meta_templates_mestre` + toggle na aba Template Meta

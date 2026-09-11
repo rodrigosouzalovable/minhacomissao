@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock, Ban } from "lucide-react";
+import { Pause, Play, Square, RefreshCw, Trash2, RotateCcw, Copy, Download, HelpCircle, Repeat, Clock, Ban, DollarSign } from "lucide-react";
 import CampanhaInstanciasPanel from "@/components/meta/CampanhaInstanciasPanel";
 import CampanhaResultadoCard from "@/components/meta/CampanhaResultadoCard";
 import { supabase } from "@/integrations/supabase/client";
@@ -505,6 +505,20 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}
         >
           {isAdmin && <CampanhaResultadoCard jobId={job.id} nome={nome} template={job.template_nome} />}
+          <div className="rounded-md border bg-card p-3 text-xs">
+            <div className="mb-2 flex items-center gap-2 text-sm font-medium"><DollarSign className="h-4 w-4" /> Custo calculado da campanha</div>
+            {job.custo_brl == null ? (
+              <p className="text-muted-foreground">Estimativa indisponível para esta campanha antiga.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div><span className="text-muted-foreground">Cobradas</span><div className="font-semibold">{Number(job.custo_cobrados || 0).toLocaleString("pt-BR")}</div></div>
+                <div><span className="text-muted-foreground">Grátis em 24h</span><div className="font-semibold">{Number(job.custo_gratis || 0).toLocaleString("pt-BR")}</div></div>
+                <div><span className="text-muted-foreground">Valor em dólar</span><div className="font-semibold">US$ {Number(job.custo_usd || 0).toFixed(2)}</div></div>
+                <div><span className="text-muted-foreground">Valor em reais</span><div className="font-semibold">{Number(job.custo_brl || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div></div>
+                <p className="col-span-2 text-muted-foreground sm:col-span-4">Categoria {job.custo_categoria || "—"} · cotação R$ {Number(job.custo_fx_rate || 0).toFixed(2)}. Valor calculado; a fatura oficial da Meta é consolidada por conta e dia.</p>
+              </div>
+            )}
+          </div>
 
           {/* Progresso */}
           <div className="rounded-md border bg-card p-3 space-y-2">

@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789137606609,
+      "tag": "0000_campaign_history_costs_and_delivery_summary",
+      "breakpoints": true
+    }
+  ]
+}

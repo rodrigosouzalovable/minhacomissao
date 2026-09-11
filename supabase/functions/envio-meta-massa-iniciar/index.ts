@@ -66,6 +66,7 @@ Deno.serve(async (req) => {
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
     const folderId: string | null = typeof body?.folderId === 'string' && body.folderId ? body.folderId : null;
     const credorCampanha: string | null = body?.credor === 'novo_mundo' || body?.credor === 'ume' ? body.credor : null;
+    const custo = body?.custoEstimativa && typeof body.custoEstimativa === 'object' ? body.custoEstimativa : null;
     // Agendamento: ISO UTC no futuro. Job criado como 'rodando', mas só começa em proximo_em.
     let agendarParaMs: number | null = null;
     if (typeof body?.agendarPara === 'string' && body.agendarPara) {
@@ -432,6 +433,14 @@ Deno.serve(async (req) => {
         bloqueados_blacklist: listaBlacklist,
         dias_antirrepeticao: diasAnti,
         ignorados_repetidos: listaRepetidos,
+        custo_total_contatos: custo ? Math.max(0, Number(custo.total) || 0) : null,
+        custo_cobrados: custo ? Math.max(0, Number(custo.cobrados) || 0) : null,
+        custo_gratis: custo ? Math.max(0, Number(custo.gratis) || 0) : null,
+        custo_categoria: custo ? String(custo.categoria || '').slice(0, 30) : null,
+        custo_preco_usd: custo ? Math.max(0, Number(custo.precoUsd) || 0) : null,
+        custo_usd: custo ? Math.max(0, Number(custo.usd) || 0) : null,
+        custo_brl: custo ? Math.max(0, Number(custo.brl) || 0) : null,
+        custo_fx_rate: custo ? Math.max(0, Number(custo.fxRate) || 0) : null,
 
       })
 

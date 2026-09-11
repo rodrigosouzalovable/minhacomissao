@@ -2111,6 +2111,14 @@ export type Database = {
           concluido_em: string | null
           created_at: string
           credor: string | null
+          custo_brl: number | null
+          custo_categoria: string | null
+          custo_cobrados: number | null
+          custo_fx_rate: number | null
+          custo_gratis: number | null
+          custo_preco_usd: number | null
+          custo_total_contatos: number | null
+          custo_usd: number | null
           dias_antirrepeticao: number
           enviados: number
           erros: number
@@ -2155,6 +2163,14 @@ export type Database = {
           concluido_em?: string | null
           created_at?: string
           credor?: string | null
+          custo_brl?: number | null
+          custo_categoria?: string | null
+          custo_cobrados?: number | null
+          custo_fx_rate?: number | null
+          custo_gratis?: number | null
+          custo_preco_usd?: number | null
+          custo_total_contatos?: number | null
+          custo_usd?: number | null
           dias_antirrepeticao?: number
           enviados?: number
           erros?: number
@@ -2199,6 +2215,14 @@ export type Database = {
           concluido_em?: string | null
           created_at?: string
           credor?: string | null
+          custo_brl?: number | null
+          custo_categoria?: string | null
+          custo_cobrados?: number | null
+          custo_fx_rate?: number | null
+          custo_gratis?: number | null
+          custo_preco_usd?: number | null
+          custo_total_contatos?: number | null
+          custo_usd?: number | null
           dias_antirrepeticao?: number
           enviados?: number
           erros?: number
@@ -10070,6 +10094,17 @@ export type Database = {
         }
       }
       envio_meta_job_resumo: { Args: { _job_id: string }; Returns: Json }
+      envio_meta_jobs_delivery_resumo: {
+        Args: { _job_ids: string[] }
+        Returns: {
+          aceito: number
+          aguardando: number
+          entregue: number
+          falhou: number
+          job_id: string
+          lida: number
+        }[]
+      }
       estrategia_liberar_reservas: {
         Args: { p_user_id?: string }
         Returns: number
