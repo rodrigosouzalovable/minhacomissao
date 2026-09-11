@@ -341,17 +341,21 @@ Deno.serve(async (req) => {
       if (liberadas.length > 0) {
         const { data: errosRecuperaveis } = await supabase
           .from('envio_meta_job_item')
-          .select('id, vars')
+          .select('id, vars, erro')
           .eq('job_id', jobId)
           .eq('status', 'erro')
           .in('instancia_id', liberadas)
           .is('wa_message_id', null);
 
-        for (const item of errosRecuperaveis || []) {
+        const errosSeguros = (errosRecuperaveis || []).filter((item: any) =>
+          /business account|#131031|blocked|banned|restricted|bloquead|inst[aâ]ncia indispon[ií]vel|timeout|tempor[aá]ri|network|fetch failed|status=flagged/i
+            .test(String(item.erro || '')),
+        );
+        for (const item of errosSeguros) {
           const vars = item.vars && typeof item.vars === 'object' ? { ...item.vars } : {};
           const excluidas = Array.isArray((vars as any)._inst_excluidas) ? (vars as any)._inst_excluidas : [];
           (vars as any)._inst_excluidas = excluidas.filter((id: unknown) => !liberadasSet.has(String(id)));
-          await supabase.from('envio_meta_job_item').update({
+          const { data: atualizado } = await supabase.from('envio_meta_job_item').update({
             status: 'pendente',
             erro: null,
             tentativas: 0,
@@ -359,8 +363,8 @@ Deno.serve(async (req) => {
             instancia_id: null,
             instancia_nome: null,
             vars,
-          }).eq('id', item.id).eq('status', 'erro').is('wa_message_id', null);
-          reenfileirados++;
+          }).eq('id', item.id).eq('status', 'erro').is('wa_message_id', null).select('id').maybeSingle();
+          if (atualizado) reenfileirados++;
         }
 
         const bloqueadasTemplateAtual: string[] = Array.isArray((jobAtual as any)?.instancias_bloqueadas)
@@ -369,7 +373,7 @@ Deno.serve(async (req) => {
         if (job.modo_rajada && ativas.length > 0) {
           const grupos: Record<string, string[]> = {};
           for (const id of ativas) grupos[id] = [];
-          (errosRecuperaveis || []).forEach((item: any, idx: number) => grupos[ativas[idx % ativas.length]].push(item.id));
+          errosSeguros.forEach((item: any, idx: number) => grupos[ativas[idx % ativas.length]].push(item.id));
           for (const [instanciaId, ids] of Object.entries(grupos)) {
             for (let i = 0; i < ids.length; i += 500) {
               await supabase.from('envio_meta_job_item').update({ instancia_id: instanciaId, instancia_nome: null })
@@ -407,7 +411,9 @@ Deno.serve(async (req) => {
               body: JSON.stringify({ job_id: jobId, instancia_id: instanciaId }),
             }).catch(() => {});
           }
-        } else if (!estavaRodando) {
+        } else {
+          // O tick usa lock no job; uma chamada extra é segura e garante retomada
+          // imediata mesmo se o worker anterior já tiver encerrado.
           dispararWorker({ ...job, status: 'rodando', instancias_bloqueadas_run: bloqRunDepois });
         }
       }
