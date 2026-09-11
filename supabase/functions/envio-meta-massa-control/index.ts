@@ -56,13 +56,11 @@ Deno.serve(async (req) => {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    // Campanhas são estritamente individuais, inclusive para administradores.
     if (job.user_id !== user.id) {
-      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
-      if (!isAdmin) {
-        return new Response(JSON.stringify({ success: false, error: 'sem permissão' }), {
-          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+      return new Response(JSON.stringify({ success: false, error: 'sem permissão' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const devolverProcessandoParaFila = async () => {
