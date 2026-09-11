@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Eye, Search, Send } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, Eye, Search } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import CampanhaDetalheDialog from "@/components/meta/CampanhaDetalheDialog";
 import { Badge } from "@/components/ui/badge";

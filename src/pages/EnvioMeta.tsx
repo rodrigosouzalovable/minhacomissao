@@ -354,7 +354,7 @@ export default function EnvioMeta() {
   };
 
 
-  const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][]; origem: "excel" | "manual" }>({ open: false, rows: [], origem: "excel" });
+  const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][]; origem: "excel" | "manual" | "clipboard" }>({ open: false, rows: [], origem: "excel" });
   const [varsByTel, setVarsByTel] = useState<Record<string, Record<string, string>>>({});
   const [credor, setCredor] = useState<string>("__none__");
   const [credorByTel, setCredorByTel] = useState<Record<string, CredorSlug>>({});
@@ -1946,10 +1946,13 @@ export default function EnvioMeta() {
                 onPaste={(e) => {
                   const text = e.clipboardData.getData("text");
                   if (!text) return;
-                  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
                   if (lines.length === 0) return;
-                  const rows = lines.map(l => splitLinhaEnvio(l));
-                  const hasMultipleColumns = rows.some(r => r.length > 1);
+                  const isExcel = lines.some((line) => line.includes("\t"));
+                  const rows = lines.map((line) => isExcel
+                    ? line.split("\t").map((cell) => cell.trim())
+                    : splitLinhaEnvio(line));
+                  const hasMultipleColumns = isExcel || rows.some((row) => row.length > 1);
                   if (hasMultipleColumns) {
                     e.preventDefault();
                     const existingLines = recipientsRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -1957,7 +1960,7 @@ export default function EnvioMeta() {
                     setMapDlg({
                       open: true,
                       rows: allRows,
-                      origem: "manual",
+                      origem: existingLines.length > 0 ? "manual" : "clipboard",
                     });
                   }
                 }}
