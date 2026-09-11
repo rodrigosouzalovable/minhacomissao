@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Permitir escolha explícita de reenvio recente e corrigir a lista de ignorados no painel da campanha
 
 ## Concluído
+- [x] Permitir escolha explícita de reenvio recente e corrigir a lista de ignorados no painel da campanha
 - [x] Remover o teto visual de 1.000 Templates HSM e sincronizar todas as páginas da Meta
 - [x] Agendar sincronização completa de templates às 06h BRT, de segunda a sexta
 - [x] Retirar o corte do Guardião de Engajamento no modo sem teto e retomar a campanha pendente
