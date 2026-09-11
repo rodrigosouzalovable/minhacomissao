@@ -1814,8 +1814,8 @@ export default function EnvioMeta() {
             <div>
               <CardTitle>3. Destinatários ({recipients.length})</CardTitle>
               <CardDescription>
-                Uma linha por contato. Formato: <code>telefone, nome, cpf, atraso, saldo</code>.
-                Ao importar uma planilha Excel, você poderá <strong>mapear cada coluna</strong> (Telefone, Nome, CPF/CNPJ, Credor, Atraso, Saldo). O CPF/CNPJ e o Credor vêm obrigatórios por padrão.
+                Uma linha por contato, com as informações separadas por vírgula. Ao pressionar <strong>Enter</strong>, você poderá definir o que representa cada informação.
+                A importação Excel usa o mesmo mapeamento (Telefone, Nome, CPF/CNPJ, Credor, Atraso, Saldo e variáveis do template). O CPF/CNPJ e o Credor vêm obrigatórios por padrão.
               </CardDescription>
             </div>
             <div className="flex gap-2">
