@@ -29,6 +29,13 @@
       "when": 1789157804104,
       "tag": "0003_reschedule_meta_templates_sync_weekdays_6am",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789157927794,
+      "tag": "0004_fix_meta_templates_daily_single_flight",
+      "breakpoints": true
     }
   ]
 }
