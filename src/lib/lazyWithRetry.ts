@@ -1,18 +1,59 @@
+const CHUNK_RELOAD_KEY = 'chunk-reload-state';
+
+type ChunkReloadState = {
+  signature: string;
+  attemptedAt: number;
+};
+
+function errorSignature(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const asset = message.match(/https?:\/\/[^\s]+\/assets\/[^\s]+\.js/)?.[0];
+  return asset || message.slice(0, 300);
+}
+
+function readReloadState(): ChunkReloadState | null {
+  try {
+    const value = sessionStorage.getItem(CHUNK_RELOAD_KEY);
+    return value ? JSON.parse(value) as ChunkReloadState : null;
+  } catch {
+    return null;
+  }
+}
+
+function forceFreshReload(signature: string): void {
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, JSON.stringify({
+    signature,
+    attemptedAt: Date.now(),
+  } satisfies ChunkReloadState));
+
+  const url = new URL(window.location.href);
+  url.searchParams.set('__chunk_reload', Date.now().toString());
+  window.location.replace(url.toString());
+}
+
 /**
- * Dynamic import wrapper resilient to transient chunk-load failures
- * (dev-server restart / new deploy invalidating old chunk URLs).
- * Retries once after a short delay, then forces a single full reload.
+ * Dynamic import wrapper resilient to deploys that invalidate old chunk URLs.
+ * A failed chunk gets one cache-busting page reload. The guard is tied to the
+ * failed asset instead of permanently disabling recovery for the whole tab.
  */
 export function retryImport<T>(factory: () => Promise<T>): Promise<T> {
-  return factory().catch(async (err) => {
+  return factory().then((module) => {
+    sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+    return module;
+  }).catch(async (err) => {
     await new Promise((r) => setTimeout(r, 600));
     try {
-      return await factory();
+      const module = await factory();
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      return module;
     } catch (err2) {
-      const KEY = 'chunk-reload-once';
-      if (!sessionStorage.getItem(KEY)) {
-        sessionStorage.setItem(KEY, '1');
-        window.location.reload();
+      const signature = errorSignature(err2 ?? err);
+      const previous = readReloadState();
+      const recentlyRetriedSameAsset = previous?.signature === signature
+        && Date.now() - previous.attemptedAt < 30_000;
+
+      if (!recentlyRetriedSameAsset) {
+        forceFreshReload(signature);
         // Keep the promise pending while the page reloads.
         return await new Promise<T>(() => {});
       }
