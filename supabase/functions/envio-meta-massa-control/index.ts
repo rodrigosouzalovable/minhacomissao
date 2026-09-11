@@ -321,8 +321,15 @@ Deno.serve(async (req) => {
       }).map((inst: any) => String(inst.id));
 
       const liberadasSet = new Set(liberadas);
-      const bloqRunDepois = bloqRunAntes.filter((id: string) => !liberadasSet.has(id));
-      const falhas: Record<string, number | string> = { ...((job as any).falhas_por_instancia_run || {}) };
+      // Releitura antes de salvar: preserva bloqueios registrados pelo worker
+      // enquanto a consulta externa estava em andamento.
+      const { data: jobAtual } = await supabase.from('envio_meta_job')
+        .select('status, instancias_bloqueadas_run, instancias_bloqueadas, falhas_por_instancia_run, erros')
+        .eq('id', jobId).maybeSingle();
+      const bloqRunAtual: string[] = Array.isArray(jobAtual?.instancias_bloqueadas_run)
+        ? jobAtual.instancias_bloqueadas_run : bloqRunAntes;
+      const bloqRunDepois = bloqRunAtual.filter((id: string) => !liberadasSet.has(id));
+      const falhas: Record<string, number | string> = { ...((jobAtual as any)?.falhas_por_instancia_run || {}) };
       for (const id of liberadas) {
         delete falhas[id];
         delete falhas[`mot:${id}`];
@@ -356,17 +363,13 @@ Deno.serve(async (req) => {
           reenfileirados++;
         }
 
-        const ativas = jobInsts.filter((id: string) => !bloqRunDepois.includes(id) && !bloqueadasTemplate.includes(id));
+        const bloqueadasTemplateAtual: string[] = Array.isArray((jobAtual as any)?.instancias_bloqueadas)
+          ? (jobAtual as any).instancias_bloqueadas : bloqueadasTemplate;
+        const ativas = jobInsts.filter((id: string) => !bloqRunDepois.includes(id) && !bloqueadasTemplateAtual.includes(id));
         if (job.modo_rajada && ativas.length > 0) {
-          const { data: pendentes } = await supabase
-            .from('envio_meta_job_item')
-            .select('id')
-            .eq('job_id', jobId)
-            .eq('status', 'pendente')
-            .order('ordem', { ascending: true });
           const grupos: Record<string, string[]> = {};
           for (const id of ativas) grupos[id] = [];
-          (pendentes || []).forEach((item: any, idx: number) => grupos[ativas[idx % ativas.length]].push(item.id));
+          (errosRecuperaveis || []).forEach((item: any, idx: number) => grupos[ativas[idx % ativas.length]].push(item.id));
           for (const [instanciaId, ids] of Object.entries(grupos)) {
             for (let i = 0; i < ids.length; i += 500) {
               await supabase.from('envio_meta_job_item').update({ instancia_id: instanciaId, instancia_nome: null })
@@ -375,19 +378,38 @@ Deno.serve(async (req) => {
           }
         }
 
-        await devolverProcessandoParaFila();
-        await supabase.from('envio_meta_job').update({
+        const estavaRodando = jobAtual?.status === 'rodando';
+        const jobPatch: Record<string, unknown> = {
           instancias_bloqueadas_run: bloqRunDepois,
           falhas_por_instancia_run: falhas,
           status: 'rodando',
-          erros: Math.max(0, Number(job.erros || 0) - reenfileirados),
+          erros: Math.max(0, Number(jobAtual?.erros || job.erros || 0) - reenfileirados),
           concluido_em: null,
           status_motivo: null,
           proximo_em: new Date().toISOString(),
-          worker_lock_token: null,
-          worker_locked_until: null,
-        }).eq('id', jobId);
-        dispararWorker({ ...job, status: 'rodando', instancias_bloqueadas_run: bloqRunDepois });
+        };
+        if (!estavaRodando) {
+          jobPatch.worker_lock_token = null;
+          jobPatch.worker_locked_until = null;
+        }
+        await supabase.from('envio_meta_job').update(jobPatch).eq('id', jobId);
+
+        if (job.modo_rajada) {
+          // Workers já ativos continuam normalmente; disparamos somente os
+          // números recém-liberados para não amplificar a taxa da campanha.
+          for (const instanciaId of liberadas.filter((id: string) => ativas.includes(id))) {
+            fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-burst`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({ job_id: jobId, instancia_id: instanciaId }),
+            }).catch(() => {});
+          }
+        } else if (!estavaRodando) {
+          dispararWorker({ ...job, status: 'rodando', instancias_bloqueadas_run: bloqRunDepois });
+        }
       }
 
       return new Response(JSON.stringify({
