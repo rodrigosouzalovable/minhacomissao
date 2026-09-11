@@ -12,3 +12,5 @@
 - [x] Cadastrar 12 ideias de templates para leads Google Maps em `meta_template_ideias`
 - [x] Deploy das funções afetadas + build OK
 - [x] Mostrar nome da instância, BM e qualidade atual ao clicar em "Verificar status na Meta"
+
+- [x] Revalidar instâncias Meta selecionadas ao iniciar campanha e remover checagem geral de 2h

@@ -99,48 +99,84 @@ Deno.serve(async (req) => {
       .from('meta_envio_pool_config').select('liberar_qualidade_global').eq('id', 1).maybeSingle();
     const liberacaoQualidadeGlobal = cfgQualidade?.liberar_qualidade_global === true;
 
-    // Filtro server-side de qualidade para CAMPANHA: só GREEN com leitura fresca.
-    // Qualidade nula/UNKNOWN, leitura falhada (token inválido) ou leitura com mais
-    // de 6h são recusadas — nunca disparar sem saber a qualidade real do número.
-    let instanciaIdsFiltradas = instanciaIds;
-    if (!liberacaoQualidadeGlobal) {
-      const { data: instancesRows } = await supabase
-        .from('meta_whatsapp_instances')
-        .select('id, nome, saude_quality, saude_checked_at, qualidade_leitura_ok, qualidade_leitura_erro')
-        .in('id', instanciaIds);
-      const motivos: string[] = [];
-      const badIds = new Set<string>();
-      for (const r of instancesRows || []) {
-        const rotulo = (r as any).nome || (r as any).id;
-        const q = String((r as any).saude_quality || '').toUpperCase();
-        const checado = (r as any).saude_checked_at ? new Date((r as any).saude_checked_at).getTime() : 0;
-        const idadeH = checado ? (Date.now() - checado) / 3600000 : 9999;
-        if ((r as any).qualidade_leitura_ok === false || !checado) {
-          badIds.add((r as any).id);
-          motivos.push(`${rotulo}: qualidade não confirmada (falha ao ler na Meta${(r as any).qualidade_leitura_erro ? ` — ${(r as any).qualidade_leitura_erro}` : ''})`);
-          continue;
-        }
-        if (idadeH > 6) {
-          badIds.add((r as any).id);
-          motivos.push(`${rotulo}: qualidade desatualizada (última leitura há ${Math.round(idadeH)}h)`);
+    // Consulta a Meta somente para as instâncias selecionadas e somente quando
+    // a campanha começa. Isso libera bloqueios antigos já resolvidos sem uma
+    // varredura contínua quando o sistema está ocioso.
+    let healthResults: any[] = [];
+    try {
+      const healthResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/check-meta-instance-health`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({ instancia_ids: instanciaIds }),
+        signal: AbortSignal.timeout(55_000),
+      });
+      const healthBody = await healthResp.json().catch(() => ({}));
+      if (!healthResp.ok) throw new Error(healthBody?.error || `HTTP ${healthResp.status}`);
+      healthResults = Array.isArray(healthBody?.results) ? healthBody.results : [];
+    } catch (e) {
+      console.error('[iniciar] revalidação Meta falhou', e);
+    }
+
+    const resultadoHealth = new Map(healthResults.map((r: any) => [r.instancia_id, r]));
+    const { data: instancesRows } = await supabase
+      .from('meta_whatsapp_instances')
+      .select('id, nome, saude_status, saude_quality, qualidade_leitura_ok, qualidade_leitura_erro, estado_pool, pausa_automatica_ate, pausa_automatica_motivo')
+      .in('id', instanciaIds);
+    const motivos: string[] = [];
+    const badIds = new Set<string>();
+    for (const id of instanciaIds) {
+      const r = (instancesRows || []).find((row: any) => row.id === id) as any;
+      const fresh = resultadoHealth.get(id) as any;
+      if (!r) {
+        badIds.add(id);
+        motivos.push(`${id}: instância não encontrada`);
+        continue;
+      }
+      const rotulo = r.nome || r.id;
+      if (!fresh || fresh.error) {
+        badIds.add(id);
+        motivos.push(`${rotulo}: não foi possível confirmar a liberação na Meta${fresh?.error ? ` — ${fresh.error}` : ''}`);
+        continue;
+      }
+      const motivoPausa = String(r.pausa_automatica_motivo || '');
+      const motivoLower = motivoPausa.toLowerCase();
+      const pausaAtiva = !!r.pausa_automatica_ate && new Date(r.pausa_automatica_ate).getTime() > Date.now();
+      const status = String(r.saude_status || fresh.status || '').toUpperCase();
+      if (status && status !== 'CONNECTED') {
+        badIds.add(id);
+        motivos.push(`${rotulo}: status ${status} confirmado pela Meta`);
+        continue;
+      }
+      if (r.estado_pool !== 'ativo' && !motivoLower.startsWith('quality=')) {
+        badIds.add(id);
+        motivos.push(`${rotulo}: fora do pool${motivoPausa ? ` — ${motivoPausa}` : ''}`);
+        continue;
+      }
+      if (pausaAtiva && !motivoLower.startsWith('quality=')) {
+        badIds.add(id);
+        motivos.push(`${rotulo}: bloqueio ainda ativo — ${motivoPausa || 'restrição confirmada'}`);
+        continue;
+      }
+      if (!liberacaoQualidadeGlobal) {
+        const q = String(r.saude_quality || '').toUpperCase();
+        if (r.qualidade_leitura_ok === false) {
+          badIds.add(id);
+          motivos.push(`${rotulo}: qualidade não confirmada na Meta${r.qualidade_leitura_erro ? ` — ${r.qualidade_leitura_erro}` : ''}`);
           continue;
         }
         if (q !== 'GREEN') {
-          badIds.add((r as any).id);
+          badIds.add(id);
           motivos.push(`${rotulo}: qualidade ${q || 'desconhecida'} — campanha exige GREEN`);
         }
       }
-      instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
-      if (instanciaIdsFiltradas.length === 0) {
-        console.error('[iniciar] recusado 400: nenhuma instância GREEN confirmada', motivos);
-        return new Response(JSON.stringify({
-          success: false,
-          error: `Nenhuma instância liberada para campanha — ${motivos.join(' | ')}`,
-          motivos,
-        }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    }
+    let instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
+    if (instanciaIdsFiltradas.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Nenhuma instância liberada após revalidar na Meta — ${motivos.join(' | ')}`,
+        motivos,
+      }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Números que JÁ estão com qualidade baixa e foram marcados de propósito:
@@ -506,7 +542,7 @@ Deno.serve(async (req) => {
     // Agendada: nada é disparado agora. O tick agendado assume quando proximo_em vencer.
     if (agendarParaMs) {
       console.log('[iniciar] job agendado', job.id, 'para', new Date(agendarParaMs).toISOString());
-      return new Response(JSON.stringify({ success: true, job_id: job.id, agendado_para: new Date(agendarParaMs).toISOString() }), {
+      return new Response(JSON.stringify({ success: true, job_id: job.id, agendado_para: new Date(agendarParaMs).toISOString(), instancias_removidas: motivos }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -523,7 +559,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ job_id: job.id, instancia_id: instId }),
         }).catch(() => {});
       }
-      return new Response(JSON.stringify({ success: true, job_id: job.id, modo: 'rajada' }), {
+      return new Response(JSON.stringify({ success: true, job_id: job.id, modo: 'rajada', instancias_removidas: motivos }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -539,7 +575,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ job_id: job.id }),
     }).catch(() => {});
 
-    return new Response(JSON.stringify({ success: true, job_id: job.id, ignorados_repetidos: listaRepetidos.length }), {
+    return new Response(JSON.stringify({ success: true, job_id: job.id, ignorados_repetidos: listaRepetidos.length, instancias_removidas: motivos }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
