@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Criar aba Campanhas Meta com histórico individual, filtros, custos e detalhes
+- [ ] Normalizar colagem direta do Excel no campo de destinatários
 
 ## Concluído
 - [x] Bloqueio #131031 por BM: retirar todos os números irmãos da campanha e evitar tentativas repetidas
