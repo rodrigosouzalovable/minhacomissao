@@ -167,11 +167,18 @@ Deno.serve(async (req) => {
     }
     const principaisFalhas = [...falhasPorMotivo.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
 
-    const { data: buscasAcumuladas } = await supabase
-      .from("google_maps_buscas")
-      .select("custo_estimado_usd");
-    const custoBuscasAcumuladoUsd = ((buscasAcumuladas as any[]) || [])
-      .reduce((s, busca) => s + Number(busca.custo_estimado_usd || 0), 0);
+    let custoBuscasAcumuladoUsd = 0;
+    for (let inicio = 0; ; inicio += 1000) {
+      const { data: paginaBuscas, error: paginaBuscasError } = await supabase
+        .from("google_maps_buscas")
+        .select("custo_estimado_usd")
+        .range(inicio, inicio + 999);
+      if (paginaBuscasError) throw paginaBuscasError;
+      for (const busca of (paginaBuscas as any[]) || []) {
+        custoBuscasAcumuladoUsd += Number(busca.custo_estimado_usd || 0);
+      }
+      if (!paginaBuscas || paginaBuscas.length < 1000) break;
+    }
 
     const { data: orcHoje } = await supabase
       .from("meta_aquecimento_orcamento")
