@@ -36,6 +36,20 @@
       "when": 1789157927794,
       "tag": "0004_fix_meta_templates_daily_single_flight",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789165615201,
+      "tag": "0005_create_meta_aquecimento_auto_respondedores",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789165647971,
+      "tag": "0006_register_meta_aquecimento_auto_resposta",
+      "breakpoints": true
     }
   ]
 }

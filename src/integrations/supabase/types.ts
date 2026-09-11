@@ -3477,8 +3477,63 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_aquecimento_auto_respondedores: {
+        Row: {
+          atualizado_em: string
+          cidade: string | null
+          confianca: number
+          id: string
+          instancia_id: string | null
+          lead_id: string | null
+          motivo_classificacao: string
+          nicho: string | null
+          nome: string | null
+          primeira_deteccao_em: string
+          quantidade_respostas: number
+          telefone: string
+          telefone_normalizado: string
+          ultima_deteccao_em: string
+          ultima_resposta: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          cidade?: string | null
+          confianca?: number
+          id?: string
+          instancia_id?: string | null
+          lead_id?: string | null
+          motivo_classificacao: string
+          nicho?: string | null
+          nome?: string | null
+          primeira_deteccao_em?: string
+          quantidade_respostas?: number
+          telefone: string
+          telefone_normalizado: string
+          ultima_deteccao_em?: string
+          ultima_resposta?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          cidade?: string | null
+          confianca?: number
+          id?: string
+          instancia_id?: string | null
+          lead_id?: string | null
+          motivo_classificacao?: string
+          nicho?: string | null
+          nome?: string | null
+          primeira_deteccao_em?: string
+          quantidade_respostas?: number
+          telefone?: string
+          telefone_normalizado?: string
+          ultima_deteccao_em?: string
+          ultima_resposta?: string | null
+        }
+        Relationships: []
+      }
       meta_aquecimento_destino_log: {
         Row: {
+          auto_resposta_confirmada: boolean
           cidade: string | null
           custo_estimado: number
           destino_instancia_id: string | null
@@ -3500,6 +3555,7 @@ export type Database = {
           wamid: string | null
         }
         Insert: {
+          auto_resposta_confirmada?: boolean
           cidade?: string | null
           custo_estimado?: number
           destino_instancia_id?: string | null
@@ -3521,6 +3577,7 @@ export type Database = {
           wamid?: string | null
         }
         Update: {
+          auto_resposta_confirmada?: boolean
           cidade?: string | null
           custo_estimado?: number
           destino_instancia_id?: string | null
@@ -10477,6 +10534,23 @@ export type Database = {
           total_recebido: number
           user_id: string
         }[]
+      }
+      registrar_meta_aquecimento_auto_resposta: {
+        Args: {
+          _cidade: string
+          _confianca: number
+          _detectado_em?: string
+          _instancia_id: string
+          _lead_id: string
+          _log_id: string
+          _motivo: string
+          _nicho: string
+          _nome: string
+          _resposta: string
+          _telefone: string
+          _telefone_normalizado: string
+        }
+        Returns: undefined
       }
       relatorio_ume_acionamentos: {
         Args: { _data: string }

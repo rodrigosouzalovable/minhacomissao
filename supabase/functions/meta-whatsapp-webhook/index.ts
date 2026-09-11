@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { etiquetarAguardandoHumano, ehPedidoBloqueioContato, suprimirDestinatario } from '../_shared/iago.ts';
 import { resolverAtendenteChamada } from '../_shared/meta-call-atendente.ts';
+import { classificarRespostaAutomatica } from '../_shared/resposta-automatica.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -601,8 +602,9 @@ serve(async (req) => {
               if (sufixoResp.length === 8) {
                 const { data: aqLog } = await supabase
                   .from('meta_aquecimento_destino_log')
-                  .select('id, enviado_em')
+                  .select('id, enviado_em, lead_id, nicho, cidade')
                   .eq('instancia_id', inst.id)
+                  .eq('fonte', 'lead')
                   .like('destino_telefone', `%${sufixoResp}`)
                   .is('respondeu_em', null)
                   .order('enviado_em', { ascending: false })
@@ -617,6 +619,36 @@ serve(async (req) => {
                     respondeu_em: agora.toISOString(),
                     segundos_para_resposta: segs,
                   }).eq('id', aqLog.id);
+
+                  const classificacao = classificarRespostaAutomatica(texto, segs);
+                  if (classificacao.automatica) {
+                    let nomeLead: string | null = nomeContato || null;
+                    if (aqLog.lead_id) {
+                      const { data: lead } = await supabase
+                        .from('google_maps_leads')
+                        .select('nome')
+                        .eq('id', aqLog.lead_id)
+                        .maybeSingle();
+                      nomeLead = String(lead?.nome || nomeLead || '').trim() || null;
+                    }
+                    const telefoneNormalizado = String(outroLado || '').replace(/\D/g, '');
+                    if (telefoneNormalizado) {
+                      await supabase.rpc('registrar_meta_aquecimento_auto_resposta', {
+                        _log_id: aqLog.id,
+                        _telefone_normalizado: telefoneNormalizado,
+                        _telefone: outroLado,
+                        _lead_id: aqLog.lead_id,
+                        _nome: nomeLead,
+                        _nicho: aqLog.nicho,
+                        _cidade: aqLog.cidade,
+                        _resposta: texto,
+                        _motivo: classificacao.motivo,
+                        _confianca: classificacao.confianca,
+                        _instancia_id: inst.id,
+                        _detectado_em: agora.toISOString(),
+                      });
+                    }
+                  }
                 }
               }
             } catch (_e) { /* aprendizado não bloqueia o webhook */ }

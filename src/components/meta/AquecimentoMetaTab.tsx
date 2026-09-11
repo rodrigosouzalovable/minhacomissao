@@ -7,8 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Flame, RefreshCw, Play, Brain, DollarSign, Send, Loader2 } from "lucide-react";
+import { Flame, RefreshCw, Play, Brain, DollarSign, Send, Loader2, Bot, Search, Copy, Download } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { exportarParaExcel } from "@/lib/exportExcel";
+
+const AUTO_RESP_PAGE_SIZE = 10;
+
+function telefoneBr(valor: string) {
+  const d = String(valor || "").replace(/\D/g, "");
+  const nacional = d.startsWith("55") ? d.slice(2) : d;
+  if (nacional.length === 11) return `(${nacional.slice(0, 2)}) ${nacional.slice(2, 7)}-${nacional.slice(7)}`;
+  if (nacional.length === 10) return `(${nacional.slice(0, 2)}) ${nacional.slice(2, 6)}-${nacional.slice(6)}`;
+  return valor;
+}
 
 function hojeBrt() {
   return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -18,6 +29,8 @@ export function AquecimentoMetaTab() {
   const qc = useQueryClient();
   const dia = hojeBrt();
   const [tetoEdit, setTetoEdit] = useState<string>("");
+  const [buscaAuto, setBuscaAuto] = useState("");
+  const [paginaAuto, setPaginaAuto] = useState(0);
 
   const { data: trilhas, isLoading } = useQuery({
     queryKey: ["aq-trilhas", dia],
@@ -83,6 +96,24 @@ export function AquecimentoMetaTab() {
     },
   });
 
+  const { data: autoRespondedores, isLoading: carregandoAuto } = useQuery({
+    queryKey: ["aq-auto-respondedores", paginaAuto, buscaAuto],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const inicio = paginaAuto * AUTO_RESP_PAGE_SIZE;
+      let query = supabase
+        .from("meta_aquecimento_auto_respondedores")
+        .select("*", { count: "exact" })
+        .order("ultima_deteccao_em", { ascending: false })
+        .range(inicio, inicio + AUTO_RESP_PAGE_SIZE - 1);
+      const termo = buscaAuto.trim().replace(/[,%()]/g, "");
+      if (termo) query = query.or(`telefone.ilike.%${termo}%,nome.ilike.%${termo}%,nicho.ilike.%${termo}%,cidade.ilike.%${termo}%`);
+      const { data, error, count } = await query;
+      if (error) throw error;
+      return { itens: data ?? [], total: count ?? 0 };
+    },
+  });
+
   const alternarSelecao = useMutation({
     mutationFn: async ({ id, valor }: { id: string; valor: boolean }) => {
       const { error } = await supabase
@@ -145,6 +176,44 @@ export function AquecimentoMetaTab() {
     },
     onError: (e: any) => toast.error(e?.message ?? "Falha ao enviar relatório"),
   });
+
+  const copiarAutoRespondedores = async () => {
+    const { data, error } = await supabase
+      .from("meta_aquecimento_auto_respondedores")
+      .select("telefone")
+      .order("ultima_deteccao_em", { ascending: false })
+      .limit(5000);
+    if (error) return toast.error("Não foi possível copiar os telefones");
+    await navigator.clipboard.writeText((data ?? []).map((item) => item.telefone).join("\n"));
+    toast.success(`${data?.length ?? 0} telefones copiados`);
+  };
+
+  const exportarAutoRespondedores = async () => {
+    const { data, error } = await supabase
+      .from("meta_aquecimento_auto_respondedores")
+      .select("telefone, nome, nicho, cidade, quantidade_respostas, ultima_resposta, motivo_classificacao, confianca, primeira_deteccao_em, ultima_deteccao_em")
+      .order("ultima_deteccao_em", { ascending: false })
+      .limit(5000);
+    if (error) return toast.error("Não foi possível preparar o Excel");
+    const linhas = (data ?? []).map((item) => ({
+      ...item,
+      telefone: telefoneBr(item.telefone),
+      primeira_deteccao_em: new Date(item.primeira_deteccao_em).toLocaleString("pt-BR"),
+      ultima_deteccao_em: new Date(item.ultima_deteccao_em).toLocaleString("pt-BR"),
+    }));
+    await exportarParaExcel(linhas, [
+      { chave: "telefone", titulo: "WhatsApp" },
+      { chave: "nome", titulo: "Empresa" },
+      { chave: "nicho", titulo: "Nicho" },
+      { chave: "cidade", titulo: "Cidade" },
+      { chave: "quantidade_respostas", titulo: "Respostas automáticas" },
+      { chave: "ultima_resposta", titulo: "Última resposta" },
+      { chave: "motivo_classificacao", titulo: "Motivo da classificação" },
+      { chave: "confianca", titulo: "Confiança (%)" },
+      { chave: "primeira_deteccao_em", titulo: "Primeira detecção" },
+      { chave: "ultima_deteccao_em", titulo: "Última detecção" },
+    ], "contatos-resposta-automatica");
+  };
 
   const gasto = Number(orcamento?.gasto_reais ?? 0);
   const teto = Number(orcamento?.teto_reais ?? 50);
@@ -255,6 +324,79 @@ export function AquecimentoMetaTab() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Bot className="h-4 w-4" /> Contatos com resposta automática
+              <Badge variant="secondary">{autoRespondedores?.total ?? 0}</Badge>
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button size="icon" variant="outline" title="Copiar telefones" onClick={copiarAutoRespondedores} disabled={!autoRespondedores?.total}>
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="outline" title="Baixar Excel" onClick={exportarAutoRespondedores} disabled={!autoRespondedores?.total}>
+                <Download className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Buscar telefone, empresa, nicho ou cidade"
+              value={buscaAuto}
+              onChange={(event) => { setBuscaAuto(event.target.value); setPaginaAuto(0); }}
+            />
+          </div>
+          {carregandoAuto ? (
+            <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : !autoRespondedores?.total ? (
+            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              Nenhum contato com resposta automática confirmado ainda.
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full min-w-[850px] text-sm">
+                  <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="p-2 font-medium">WhatsApp</th>
+                      <th className="p-2 font-medium">Empresa</th>
+                      <th className="p-2 font-medium">Nicho / cidade</th>
+                      <th className="p-2 font-medium">Ocorrências</th>
+                      <th className="p-2 font-medium">Última resposta</th>
+                      <th className="p-2 font-medium">Detectada em</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {(autoRespondedores.itens as any[]).map((item) => (
+                      <tr key={item.id}>
+                        <td className="p-2 font-medium whitespace-nowrap">{telefoneBr(item.telefone)}</td>
+                        <td className="p-2">{item.nome || "—"}</td>
+                        <td className="p-2">{[item.nicho, item.cidade].filter(Boolean).join(" · ") || "—"}</td>
+                        <td className="p-2"><Badge variant="outline">{item.quantidade_respostas}</Badge></td>
+                        <td className="p-2 max-w-[320px] truncate" title={item.ultima_resposta || ""}>{item.ultima_resposta || "—"}</td>
+                        <td className="p-2 whitespace-nowrap">{new Date(item.ultima_deteccao_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>{autoRespondedores.total} contatos confirmados</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" disabled={paginaAuto === 0} onClick={() => setPaginaAuto((p) => Math.max(0, p - 1))}>Anterior</Button>
+                  <Button size="sm" variant="outline" disabled={(paginaAuto + 1) * AUTO_RESP_PAGE_SIZE >= autoRespondedores.total} onClick={() => setPaginaAuto((p) => p + 1)}>Próxima</Button>
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">
