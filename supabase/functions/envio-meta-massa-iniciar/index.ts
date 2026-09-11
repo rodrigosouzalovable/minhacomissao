@@ -307,8 +307,9 @@ Deno.serve(async (req) => {
       0,
       Math.min(60, Number(body?.diasAntirrepeticao ?? cfgPool?.antirrepeticao_dias ?? 1)),
     );
+    const permitirReenvioRecente = body?.permitirReenvioRecente === true;
     const listaRepetidos: Array<{ telefone: string; nome: string; ultimo_envio: string; campanha: string }> = [];
-    if (diasAnti > 0) {
+    if (diasAnti > 0 && !permitirReenvioRecente) {
       const sufixoDe = (t: string) => {
         const d = String(t || '').replace(/\D+/g, '');
         return d.length >= 8 ? d.slice(-8) : d;
@@ -366,6 +367,8 @@ Deno.serve(async (req) => {
           }
         } catch (_) { /* exibição apenas */ }
       }
+    } else if (permitirReenvioRecente) {
+      console.log('[iniciar] antirrepeticao — reenvio recente autorizado explicitamente pelo usuário');
     }
 
 

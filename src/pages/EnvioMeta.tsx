@@ -354,6 +354,23 @@ export default function EnvioMeta() {
     });
   };
 
+  type EscolhaReenvio = "todos" | "ignorar" | "cancelar";
+  const [reenvioDlg, setReenvioDlg] = useState<{
+    open: boolean;
+    total: number;
+    recentes: number;
+    dias: number;
+    resolver: ((escolha: EscolhaReenvio) => void) | null;
+  }>({ open: false, total: 0, recentes: 0, dias: 1, resolver: null });
+
+  const pedirConfirmacaoReenvio = (
+    total: number,
+    recentes: number,
+    dias: number,
+  ): Promise<EscolhaReenvio> => new Promise((resolve) => {
+    setReenvioDlg({ open: true, total, recentes, dias, resolver: resolve });
+  });
+
 
   const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][]; origem: "excel" | "manual" | "clipboard" }>({ open: false, rows: [], origem: "excel" });
   const [varsByTel, setVarsByTel] = useState<Record<string, Record<string, string>>>({});
@@ -995,20 +1012,22 @@ export default function EnvioMeta() {
       const acaoLinha = agendarParaISO
         ? `Agendar ${tplLinha} para iniciar em ${new Date(agendarParaISO).toLocaleString("pt-BR")}`
         : `Disparar ${tplLinha}`;
-      if (jaRecebidos.total >= recipientsDedup.length && recipientsDedup.length > 0) {
-        return toast.error(
-          `Todos os ${recipientsDedup.length} contatos desta lista já receberam mensagem nos últimos ${jaRecebidos.dias} dia(s). Confira se a planilha importada é a correta — nada foi enviado.`,
-          { duration: 12000 },
-        );
-      }
       if (!confirm(
         `${bloco}${acaoLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
-        (jaRecebidos.total > 0
-          ? `\n\n🔁 ${jaRecebidos.total} contato(s) já receberam mensagem nos últimos ${jaRecebidos.dias} dia(s) e serão IGNORADOS. Serão disparados ${recipientsDedup.length - jaRecebidos.total}.`
-          : "") +
         (validarNoEnvio ? `\n\n🔎 A checagem de WhatsApp será feita durante o envio pelos números UAZAPI conectados.` : "") +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
+    }
+
+    let permitirReenvioRecente = false;
+    if (jaRecebidos.total > 0) {
+      const escolhaReenvio = await pedirConfirmacaoReenvio(
+        recipientsDedup.length,
+        jaRecebidos.total,
+        jaRecebidos.dias,
+      );
+      if (escolhaReenvio === "cancelar") return;
+      permitirReenvioRecente = escolhaReenvio === "todos";
     }
 
 
@@ -1101,6 +1120,7 @@ export default function EnvioMeta() {
       agendarPara: agendarParaISO,
       credor: credorPadrao,
       riscoQualidadeConfirmado: arriscadas.length > 0,
+      permitirReenvioRecente,
       validarNoEnvio,
       custoEstimativa: custoEstimativaRef.current || undefined,
 
@@ -2363,6 +2383,63 @@ export default function EnvioMeta() {
         )}
       </DialogContent>
     </Dialog>
+
+    <AlertDialog
+      open={reenvioDlg.open}
+      onOpenChange={(open) => {
+        if (!open && reenvioDlg.resolver) {
+          reenvioDlg.resolver("cancelar");
+          setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+        }
+      }}
+    >
+      <AlertDialogContent className="max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Contatos acionados recentemente</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 pt-2">
+              <p>
+                {reenvioDlg.recentes.toLocaleString("pt-BR")} de {reenvioDlg.total.toLocaleString("pt-BR")} contato(s) já receberam mensagem nos últimos {reenvioDlg.dias} dia(s).
+              </p>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="flex justify-between gap-3"><span>Enviar para todos</span><strong>{reenvioDlg.total.toLocaleString("pt-BR")}</strong></div>
+                <div className="flex justify-between gap-3"><span>Ignorar os recentes</span><strong>{Math.max(0, reenvioDlg.total - reenvioDlg.recentes).toLocaleString("pt-BR")}</strong></div>
+              </div>
+              <p className="text-xs text-muted-foreground">Escolha se deseja reenviar também para esses contatos ou manter a proteção contra repetição.</p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="sm:justify-between sm:space-x-2">
+          <AlertDialogCancel
+            onClick={() => {
+              reenvioDlg.resolver?.("cancelar");
+              setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+            }}
+          >
+            Cancelar
+          </AlertDialogCancel>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => {
+                reenvioDlg.resolver?.("ignorar");
+                setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+              }}
+            >
+              Ignorar recentes
+            </Button>
+            <AlertDialogAction
+              onClick={() => {
+                reenvioDlg.resolver?.("todos");
+                setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+              }}
+            >
+              Enviar para todos
+            </AlertDialogAction>
+          </div>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <AlertDialog
       open={riscoDlg.open}

@@ -460,13 +460,13 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       setExportando(null);
     }
   };
-  const bloqueadosBlacklist = Array.isArray((job as any).bloqueados_blacklist)
-    ? ((job as any).bloqueados_blacklist as Array<{ telefone: string; nome?: string; credor?: string }>)
+  const bloqueadosBlacklist = Array.isArray(job.bloqueados_blacklist)
+    ? job.bloqueados_blacklist
     : [];
-  const ignoradosRepetidos = Array.isArray((job as any).ignorados_repetidos)
-    ? ((job as any).ignorados_repetidos as Array<{ telefone: string; nome?: string; ultimo_envio?: string; campanha?: string }>)
+  const ignoradosRepetidos = Array.isArray(job.ignorados_repetidos)
+    ? job.ignorados_repetidos
     : [];
-  const diasAnti = Number((job as any).dias_antirrepeticao ?? 7);
+  const diasAnti = Number(job.dias_antirrepeticao ?? 1);
   const baixarRepetidos = async () => {
     if (ignoradosRepetidos.length === 0) { toast.error("Nada para exportar"); return; }
     await exportarParaExcel(

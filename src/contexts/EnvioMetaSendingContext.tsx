@@ -129,6 +129,8 @@ export type IniciarParams = {
   agendarPara?: string | null;
   /** true quando o usuário confirmou o aviso de risco de números YELLOW/RED. */
   riscoQualidadeConfirmado?: boolean;
+  /** true somente após confirmação explícita para reenviar a contatos recentes. */
+  permitirReenvioRecente?: boolean;
   validarNoEnvio?: boolean;
   custoEstimativa?: { cobrados: number; gratis: number; total: number; precoUsd: number; usd: number; brl: number; fxRate: number; categoria: string };
 
@@ -154,6 +156,8 @@ export type CampanhaJob = {
   restantes: number;
   instancias_bloqueadas_run: string[];
   bloqueados_blacklist: Array<{ telefone: string; nome?: string; credor?: string }>;
+  dias_antirrepeticao: number;
+  ignorados_repetidos: Array<{ telefone: string; nome?: string; ultimo_envio?: string; campanha?: string }>;
   min_seg: number | null;
   max_seg: number | null;
   modo_rajada: boolean;
@@ -288,6 +292,8 @@ function toCampanhaJob(j: any): CampanhaJob {
     restantes: Math.max(0, total - enviados - erros),
     instancias_bloqueadas_run: Array.isArray(j.instancias_bloqueadas_run) ? j.instancias_bloqueadas_run : [],
     bloqueados_blacklist: Array.isArray(j.bloqueados_blacklist) ? j.bloqueados_blacklist : [],
+    dias_antirrepeticao: Number(j.dias_antirrepeticao ?? 1),
+    ignorados_repetidos: Array.isArray(j.ignorados_repetidos) ? j.ignorados_repetidos : [],
     min_seg: j.min_seg ?? null,
     max_seg: j.max_seg ?? null,
     modo_rajada: j.modo_rajada === true,
@@ -902,6 +908,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           agendarPara: p.agendarPara ?? null,
           credor: p.credor ?? null,
           riscoQualidadeConfirmado: p.riscoQualidadeConfirmado === true,
+          permitirReenvioRecente: p.permitirReenvioRecente === true,
           validar_no_envio: p.validarNoEnvio !== false,
           custoEstimativa: p.custoEstimativa ?? null,
 
