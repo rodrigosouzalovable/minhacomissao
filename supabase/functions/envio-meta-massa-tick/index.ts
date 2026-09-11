@@ -830,7 +830,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       for (const id of idsBloqueadosPorBm) {
         if (!(job.instancia_ids || []).includes(id)) continue;
         if (!bloqueadasRunAtual.includes(id)) bloqueadasRunAtual.push(id);
-        falhasMap[`mot:${id}`] = 'Business Account locked (#131031) — BM bloqueada';
+        falhasMap[`mot:${id}`] = 'Business Account locked (#131031) — número recusado pela Meta';
       }
     }
     if (falhasMap[instId] >= MAX_FALHAS_CONSECUTIVAS && !bloqueadasRunAtual.includes(instId)) {

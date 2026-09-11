@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Remover bloqueio coletivo da BM em #131031 e retomar a campanha QUEBRADOS por instância
 
 ## Concluído
 - [x] Criar aba Campanhas Meta com histórico individual, filtros, custos e detalhes
