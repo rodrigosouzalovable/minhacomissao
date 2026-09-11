@@ -369,6 +369,18 @@ Deno.serve(async (req) => {
             ultimo_followup_em: new Date().toISOString(),
           },
         }).eq('id', est.id);
+
+        // Follow-up é uma saída automática: não deve manter o card como não lido.
+        // Condiciona à mesma última entrada observada antes do envio para não apagar
+        // uma resposta do cliente que tenha chegado durante esta execução.
+        const { error: leituraError } = await supabase
+          .from('meta_whatsapp_contatos')
+          .update({ nao_lido: 0 })
+          .eq('id', (contato as any).id)
+          .eq('ultima_msg_entrada_em', (contato as any).ultima_msg_entrada_em);
+        if (leituraError) {
+          console.error('[IAGO followup] falha ao marcar card como lido', leituraError.message);
+        }
         enviados += 1;
         console.log('[IAGO followup] enviado', { contato_id: est.contato_id, etapa });
       } catch (e: any) {
