@@ -26,6 +26,29 @@ Deno.serve(async (req) => {
   );
 
   try {
+    const body = await req.json().catch(() => ({}));
+    const manual = body?.manual === true;
+
+    if (manual) {
+      const authHeader = req.headers.get("Authorization") ?? "";
+      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+      if (!token) return json({ error: "Usuário não autenticado" }, 401);
+
+      const authClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: userData, error: userError } = await authClient.auth.getUser(token);
+      if (userError || !userData.user) return json({ error: "Sessão inválida" }, 401);
+
+      const { data: isAdmin, error: roleError } = await authClient.rpc("has_role", {
+        _user_id: userData.user.id,
+        _role: "admin",
+      });
+      if (roleError || !isAdmin) return json({ error: "Apenas administradores podem enviar este relatório" }, 403);
+    }
+
     const nowBrt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const hojeStr = nowBrt.toISOString().slice(0, 10);
     const inicioDia = `${hojeStr}T00:00:00-03:00`;
@@ -109,6 +132,46 @@ Deno.serve(async (req) => {
       gastoPorInstancia.set(lg.instancia_id, cur);
     }
     const custoPorResposta = respostas > 0 ? gastoLeads / respostas : 0;
+
+    // Histórico completo, paginado para não parar no limite de 1.000 registros da API.
+    const logsAcumulados: any[] = [];
+    for (let inicio = 0; ; inicio += 1000) {
+      const { data: pagina, error: paginaError } = await supabase
+        .from("meta_aquecimento_destino_log")
+        .select("instancia_id, destino_telefone, status, respondeu_em, entregue_em, lido_em, custo_estimado, enviado_em, erro")
+        .eq("fonte", "lead")
+        .order("enviado_em", { ascending: true })
+        .range(inicio, inicio + 999);
+      if (paginaError) throw paginaError;
+      logsAcumulados.push(...((pagina as any[]) || []));
+      if (!pagina || pagina.length < 1000) break;
+    }
+    const acumuladoEnviado = logsAcumulados.filter((item) => item.status !== "falha");
+    const acumuladoFalhas = logsAcumulados.filter((item) => item.status === "falha");
+    const acumuladoEntregues = acumuladoEnviado.filter((item) => item.entregue_em).length;
+    const acumuladoLidas = acumuladoEnviado.filter((item) => item.lido_em).length;
+    const acumuladoRespostas = acumuladoEnviado.filter((item) => item.respondeu_em).length;
+    const acumuladoGasto = acumuladoEnviado.reduce((s, item) => s + Number(item.custo_estimado || 0), 0);
+    const acumuladoContatos = new Set(acumuladoEnviado.map((item) => item.destino_telefone).filter(Boolean)).size;
+    const acumuladoInstancias = new Set(acumuladoEnviado.map((item) => item.instancia_id).filter(Boolean)).size;
+    const primeiroEnvio = acumuladoEnviado.find((item) => item.enviado_em)?.enviado_em ?? null;
+    const taxaEntregaAcumulada = acumuladoEnviado.length > 0 ? (acumuladoEntregues / acumuladoEnviado.length) * 100 : 0;
+    const taxaLeituraAcumulada = acumuladoEnviado.length > 0 ? (acumuladoLidas / acumuladoEnviado.length) * 100 : 0;
+    const taxaRespostaAcumulada = acumuladoEnviado.length > 0 ? (acumuladoRespostas / acumuladoEnviado.length) * 100 : 0;
+    const custoPorEntregueAcumulado = acumuladoEntregues > 0 ? acumuladoGasto / acumuladoEntregues : 0;
+    const custoPorRespostaAcumulado = acumuladoRespostas > 0 ? acumuladoGasto / acumuladoRespostas : 0;
+    const falhasPorMotivo = new Map<string, number>();
+    for (const item of acumuladoFalhas) {
+      const motivo = String(item.erro || "Motivo não informado");
+      falhasPorMotivo.set(motivo, (falhasPorMotivo.get(motivo) ?? 0) + 1);
+    }
+    const principaisFalhas = [...falhasPorMotivo.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+    const { data: buscasAcumuladas } = await supabase
+      .from("google_maps_buscas")
+      .select("custo_estimado_usd");
+    const custoBuscasAcumuladoUsd = ((buscasAcumuladas as any[]) || [])
+      .reduce((s, busca) => s + Number(busca.custo_estimado_usd || 0), 0);
 
     const { data: orcHoje } = await supabase
       .from("meta_aquecimento_orcamento")
@@ -223,6 +286,22 @@ Deno.serve(async (req) => {
     if (horaTetoAtingido) l.push(`⛔ Teto atingido às ${horaTetoAtingido} — envios retomam amanhã.`);
     l.push(`• Buscas no Google (separado): ~US$ ${custoDia.toFixed(2)}`);
 
+    l.push("");
+    l.push("*📊 Acumulado desde o início*");
+    if (!primeiroEnvio) {
+      l.push("_Ainda não há envios para leads do Google Maps._");
+    } else {
+      const inicioFmt = new Date(primeiroEnvio).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+      l.push(`• Desde ${inicioFmt}: ${acumuladoEnviado.length} mensagens para ${acumuladoContatos} contatos únicos`);
+      l.push(`• ${acumuladoEntregues} entregues (${taxaEntregaAcumulada.toFixed(1)}%) · ${acumuladoLidas} lidas (${taxaLeituraAcumulada.toFixed(1)}%)`);
+      l.push(`• ${acumuladoRespostas} respostas (${taxaRespostaAcumulada.toFixed(1)}%) · ${acumuladoInstancias} números Meta utilizados`);
+      l.push(`• Gasto estimado em mensagens: *${brl(acumuladoGasto)}*`);
+      l.push(`• Média: ${brl(custoPorEntregueAcumulado)} por entrega · ${brl(custoPorRespostaAcumulado)} por resposta`);
+      l.push(`• ${acumuladoFalhas.length} tentativas com falha (não somadas ao gasto)`);
+      for (const [motivo, qtd] of principaisFalhas) l.push(`   – ${motivo}: ${qtd}`);
+      l.push(`• Buscas Google Maps, separadas: ~US$ ${custoBuscasAcumuladoUsd.toFixed(2)}`);
+    }
+
 
     if (listaTrilhas.length > 0) {
       l.push("");
@@ -261,16 +340,34 @@ Deno.serve(async (req) => {
       tipo: "google_maps_leads_relatorio",
       mensagem,
       destinatarios: DESTINATARIOS,
-      chaveIdempotencia: `gm-leads-diario-${hojeStr}`,
+      chaveIdempotencia: manual
+        ? `gm-leads-manual-${hojeStr}-${crypto.randomUUID()}`
+        : `gm-leads-diario-${hojeStr}`,
     });
 
-    return new Response(JSON.stringify({ ok: true, ...result, capHoje, enviadas, respostas, estoque }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return json({
+      ok: true,
+      ...result,
+      capHoje,
+      enviadas,
+      respostas,
+      estoque,
+      acumulado: {
+        mensagens: acumuladoEnviado.length,
+        entregues: acumuladoEntregues,
+        lidas: acumuladoLidas,
+        respostas: acumuladoRespostas,
+        gasto_reais: acumuladoGasto,
+      },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }
 });
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}

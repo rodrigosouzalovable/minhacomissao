@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Adicionar relatório manual de aquecimento no WhatsApp e totais acumulados desde o início
 - [x] Permitir escolha explícita de reenvio recente e corrigir a lista de ignorados no painel da campanha
 - [x] Remover o teto visual de 1.000 Templates HSM e sincronizar todas as páginas da Meta
 - [x] Agendar sincronização completa de templates às 06h BRT, de segunda a sexta
