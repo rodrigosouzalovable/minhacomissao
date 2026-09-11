@@ -292,6 +292,7 @@ export default function EnvioMeta() {
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
   const [instanciasDialogOpen, setInstanciasDialogOpen] = useState<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
+  const custoEstimativaRef = useRef<Awaited<ReturnType<typeof calcularCustoEstimado>> | null>(null);
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -314,6 +315,7 @@ export default function EnvioMeta() {
     categoria: string | null,
   ): Promise<boolean> => {
     const est = await calcularCustoEstimado(telefones, instIds, categoria);
+    custoEstimativaRef.current = est;
     if (est.brl <= 0) return true; // nada a cobrar (tudo grátis / preço zero)
     return await new Promise<boolean>((resolve) => {
       setCustoDlg({
@@ -1116,6 +1118,7 @@ export default function EnvioMeta() {
       credor: credorPadrao,
       riscoQualidadeConfirmado: arriscadas.length > 0,
       validarNoEnvio,
+      custoEstimativa: custoEstimativaRef.current || undefined,
 
 
       onAfterEnvio: () => {

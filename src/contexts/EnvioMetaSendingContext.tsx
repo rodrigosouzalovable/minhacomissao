@@ -124,6 +124,7 @@ export type IniciarParams = {
   /** true quando o usuário confirmou o aviso de risco de números YELLOW/RED. */
   riscoQualidadeConfirmado?: boolean;
   validarNoEnvio?: boolean;
+  custoEstimativa?: { cobrados: number; gratis: number; total: number; precoUsd: number; usd: number; brl: number; fxRate: number; categoria: string };
 
   onAfterEnvio?: () => void;
 
@@ -151,6 +152,15 @@ export type CampanhaJob = {
   max_seg: number | null;
   modo_rajada: boolean;
   msgs_por_segundo: number | null;
+  folder_id?: string | null;
+  custo_total_contatos?: number | null;
+  custo_cobrados?: number | null;
+  custo_gratis?: number | null;
+  custo_categoria?: string | null;
+  custo_preco_usd?: number | null;
+  custo_usd?: number | null;
+  custo_brl?: number | null;
+  custo_fx_rate?: number | null;
 };
 
 type Ctx = {
@@ -169,6 +179,7 @@ type Ctx = {
   reativar: () => void;
   limpar: () => void;
   refreshStatus: () => Promise<void>;
+  ensureJobLoaded: (jobId: string) => Promise<boolean>;
 
   // ===== Multi-job API =====
   jobs: CampanhaJob[];
@@ -274,6 +285,15 @@ function toCampanhaJob(j: any): CampanhaJob {
     max_seg: j.max_seg ?? null,
     modo_rajada: j.modo_rajada === true,
     msgs_por_segundo: j.msgs_por_segundo ?? null,
+    folder_id: j.folder_id ?? null,
+    custo_total_contatos: j.custo_total_contatos ?? null,
+    custo_cobrados: j.custo_cobrados ?? null,
+    custo_gratis: j.custo_gratis ?? null,
+    custo_categoria: j.custo_categoria ?? null,
+    custo_preco_usd: j.custo_preco_usd ?? null,
+    custo_usd: j.custo_usd ?? null,
+    custo_brl: j.custo_brl ?? null,
+    custo_fx_rate: j.custo_fx_rate ?? null,
   };
 }
 
@@ -610,6 +630,15 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   useEffect(() => { carregarJobs(); }, [carregarJobs]);
 
+  const ensureJobLoaded = useCallback(async (jobId: string): Promise<boolean> => {
+    if (!uid) return false;
+    if (jobs.some((job) => job.id === jobId)) return true;
+    const { data, error } = await (supabase as any).from("envio_meta_job").select("*").eq("id", jobId).eq("user_id", uid).maybeSingle();
+    if (error || !data) return false;
+    setJobs((current) => current.some((job) => job.id === jobId) ? current : [...current, toCampanhaJob(data)]);
+    return true;
+  }, [jobs, uid]);
+
   // Detalhes completos de itens/logs são carregados apenas quando o usuário abre a campanha.
 
   // Refs mirrando estado + funções — evita recriar o canal Realtime a cada render
@@ -833,6 +862,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           credor: p.credor ?? null,
           riscoQualidadeConfirmado: p.riscoQualidadeConfirmado === true,
           validar_no_envio: p.validarNoEnvio !== false,
+          custoEstimativa: p.custoEstimativa ?? null,
 
 
         },
@@ -1033,7 +1063,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     <EnvioMetaSendingContext.Provider
       value={{
         enviando, pausado, progresso, detalhes, deliveryResumo, resultado, templateNome, restantes,
-        iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus,
+        iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus, ensureJobLoaded,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
         togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, listarInstanciasStatusJob, reativarInstanciaJob, adicionarInstanciasLivres, liberarTetoHoje, marcarJobAberto, exportarItensJob,

@@ -106,6 +106,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/configurar-meta', label: 'API Oficial Meta', icon: MessageSquare, adminOnly: true },
   { href: '/admin/inbox-meta', label: 'Inbox Meta Oficial', icon: MessageSquare, adminOnly: true },
   { href: '/admin/envio-meta', label: 'Envio Meta', icon: Send, adminOnly: true },
+  { href: '/admin/campanhas-meta', label: 'Campanhas', icon: BarChart3, adminOnly: true },
   { href: '/admin/meta-billing', label: 'Cobranças Meta', icon: CreditCard, adminOnly: true },
   { href: '/admin/meta-templates', label: 'Templates Meta', icon: MessageSquareText, adminOnly: true },
   { href: '/admin/exportar-dados', label: 'Exportar Dados', icon: Download, adminOnly: true },
@@ -152,7 +153,7 @@ function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavIte
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin, isGestor } = useUserRole();
-  const { abasPermitidas, acordosCompartilhados, parceiroMeta } = useUserPermissions();
+  const { abasPermitidas, acordosCompartilhados, parceiroMeta, veCampanhas } = useUserPermissions();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -336,6 +337,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (isAdmin && item.href === '/admin/usuarios') return true;
     // Parceiros Meta sempre veem a Blacklist (só os bloqueios das instâncias deles, via RLS)
     if (parceiroMeta && item.href === '/admin/blacklist') return true;
+    if ((parceiroMeta || veCampanhas) && item.href === '/admin/campanhas-meta') return true;
     if (abasPermitidas) {
       return abasPermitidas.includes(item.href);
     }
