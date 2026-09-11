@@ -579,7 +579,11 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
               const motivo = contaBloqueada
                 ? 'Não entregue — Business Manager bloqueado pela Meta'
                 : `Não entregue${msg.erro ? ` — ${msg.erro}` : ''}`;
-              return <AlertCircle className="h-3 w-3 text-red-400" aria-label={motivo} title={motivo} />;
+              return (
+                <span className="inline-flex" aria-label={motivo} title={motivo}>
+                  <AlertCircle className="h-3 w-3 text-red-400" aria-hidden="true" />
+                </span>
+              );
             }
             if (status === 'enviando') {
               return <Clock3 className="h-3 w-3 text-primary-foreground/70" aria-label="Enviando" />;
