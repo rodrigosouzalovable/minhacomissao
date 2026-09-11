@@ -13,4 +13,4 @@
 - [x] Deploy das funções afetadas + build OK
 - [x] Mostrar nome da instância, BM e qualidade atual ao clicar em "Verificar status na Meta"
 
-- [ ] Revalidar instâncias Meta selecionadas ao iniciar campanha e remover checagem geral de 2h
+- [x] Revalidar instâncias Meta selecionadas ao iniciar campanha e remover checagem geral de 2h
