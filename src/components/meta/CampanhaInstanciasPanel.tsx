@@ -77,7 +77,7 @@ function InstanciaRow({
 }
 
 export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = false }: Props) {
-  const { listarInstanciasStatusJob, reativarInstanciaJob } = useEnvioMetaSending();
+  const { listarInstanciasStatusJob, revalidarInstanciasJob, reativarInstanciaJob } = useEnvioMetaSending();
   const [instancias, setInstancias] = useState<InstanciaStatusJob[] | null>(null);
   const [open, setOpen] = useState(initialOpen);
   const [carregando, setCarregando] = useState(false);
@@ -91,6 +91,17 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = 
       setCarregando(false);
     }
   }, [jobId, listarInstanciasStatusJob]);
+
+  const atualizarERetomar = async () => {
+    if (carregando) return;
+    setCarregando(true);
+    try {
+      await revalidarInstanciasJob(jobId);
+      setInstancias(await listarInstanciasStatusJob(jobId));
+    } finally {
+      setCarregando(false);
+    }
+  };
 
   useEffect(() => {
     setOpen(initialOpen);
@@ -132,7 +143,7 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = 
           {instancias && <span className="text-xs font-normal text-muted-foreground">{ativas.length} ativas · {ignoradas.length} ignoradas</span>}
         </Button>
         {open && (
-          <Button size="sm" variant="ghost" onClick={() => void carregar()} disabled={carregando} aria-label="Atualizar instâncias">
+          <Button size="sm" variant="ghost" onClick={() => void atualizarERetomar()} disabled={carregando} aria-label="Revalidar instâncias e continuar campanha" title="Revalidar na Meta e continuar o disparo">
             <RefreshCw className={carregando ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
           </Button>
         )}

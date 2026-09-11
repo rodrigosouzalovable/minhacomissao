@@ -14,3 +14,4 @@
 - [x] Mostrar nome da instância, BM e qualidade atual ao clicar em "Verificar status na Meta"
 
 - [x] Revalidar instâncias Meta selecionadas ao iniciar campanha e remover checagem geral de 2h
+- [x] Botão Atualizar da campanha revalida instâncias ignoradas e retoma envios seguros
