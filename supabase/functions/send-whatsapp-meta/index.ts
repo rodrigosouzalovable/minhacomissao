@@ -890,7 +890,7 @@ Deno.serve(async (req) => {
                 `🚫 Instância Meta restringida/bloqueada\n\n` +
                 `Instância: *${rotuloInstancia(inst)}*\n` +
                 `Motivo: *${msg}*\n\n` +
-                `Pausa automática por 24h. Verifique o Business Manager da Meta.`,
+                `Somente este número foi pausado. Os demais números da BM continuam sendo validados individualmente.`,
               chaveIdempotencia: chave,
               umaVezPorChave: true,
             });

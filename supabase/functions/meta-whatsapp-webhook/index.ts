@@ -1526,23 +1526,9 @@ serve(async (req) => {
             // pontual daquele contato e o número continua enviando.
             const contaBloqueada = Number(errCode || 0) === 131031 ||
               (errText.includes('business account') && errText.includes('locked'));
-            let idsBloqueadosPorBm: string[] = [inst.id];
-            let nomeBmBloqueada: string | null = null;
-
-            if (isRestricted && contaBloqueada) {
-              try {
-                const { restringirBmBloqueada } = await import('../_shared/meta-bm-bloqueio.ts');
-                const bloqueioBm = await restringirBmBloqueada(
-                  supabase,
-                  inst,
-                  `Business Account locked (#131031)`,
-                );
-                idsBloqueadosPorBm = bloqueioBm.instanciaIds;
-                nomeBmBloqueada = bloqueioBm.bmNome;
-              } catch (e) {
-                console.log('[MetaWebhook] bloqueio da BM falhou:', String(e).slice(0, 200));
-              }
-            }
+            // O bloqueio é individual: um #131031 não retira os demais números
+            // GREEN da mesma BM antes de suas próprias tentativas reais.
+            const idsBloqueadosPorBm: string[] = [inst.id];
 
             if (isRestricted) {
               const familiaBloqueio = [131031, 131042, 131049, 131050, 368, 130429]
@@ -1583,13 +1569,13 @@ serve(async (req) => {
                 (!!(estadoAntes as any)?.pausa_automatica_ate &&
                   new Date((estadoAntes as any).pausa_automatica_ate).getTime() > Date.now());
 
-              if (!contaBloqueada) {
-                await supabase.from('meta_whatsapp_instances').update({
-                  estado_pool: 'restrita',
-                  pausa_automatica_ate: ate,
-                  pausa_automatica_motivo: motivo,
-                }).eq('id', inst.id);
-              }
+              await supabase.from('meta_whatsapp_instances').update({
+                estado_pool: 'restrita',
+                pausa_automatica_ate: ate,
+                pausa_automatica_motivo: contaBloqueada
+                  ? 'Business Account locked (#131031)'
+                  : motivo,
+              }).eq('id', inst.id);
 
               if (!jaRestrita) {
                 try {
@@ -1651,7 +1637,7 @@ serve(async (req) => {
                       for (const id of idsRetirar) {
                         if (!bloqueadas.includes(id)) bloqueadas.push(id);
                         falhasMap[`mot:${id}`] = contaBloqueada
-                          ? `Business Account locked (#131031)${nomeBmBloqueada ? ` — BM ${nomeBmBloqueada}` : ''}`
+                          ? 'Business Account locked (#131031) — número recusado pela Meta'
                           : `${errTitle || 'falha de entrega'}${errCode ? ` (#${errCode})` : ''}`;
                       }
                       // Guarda o MOTIVO REAL da saída (chave mot:) para o tick poder

@@ -393,7 +393,8 @@ Deno.serve(async (req) => {
         });
 
         if (!envio.ok && erroFatalMeta(envio.codigo, envio.erro)) {
-          // BM bloqueada / pendência: tira todos os números dessa BM do aquecimento.
+          // Pausa somente o número que recebeu o erro; os demais seguem sendo
+          // validados individualmente pela própria tentativa de envio.
           const info = await pausarInstanciasDaBm(
             supabase, inst, String(envio.erro || 'erro fatal da Meta').slice(0, 200), 12,
           );
@@ -405,12 +406,12 @@ Deno.serve(async (req) => {
                 destinatarios: DESTINATARIOS_AVISO,
                 chaveIdempotencia: `bm-bloqueada:${info.bm}:${dia}`,
                 mensagem:
-                  `🛑 *Aquecimento pausado por bloqueio da Meta*\n\n` +
+                  `🛑 *Número pausado por bloqueio da Meta*\n\n` +
                   `BM: *${info.bm}*\n` +
-                  `Números pausados: *${info.pausadas}*\n` +
+                  `Número pausado: *${inst.nome || inst.display_phone || inst.id}*\n` +
                   `Erro: ${String(envio.erro || '').slice(0, 160)}\n\n` +
-                  `Nenhuma mensagem chega enquanto a BM estiver bloqueada. ` +
-                  `Assim que ela for liberada, o aquecimento volta sozinho.`,
+                  `Os demais números da BM continuam sendo testados individualmente. ` +
+                  `Este número volta sozinho quando a Meta confirmar a liberação.`,
               });
             } catch (_) { /* aviso é best-effort */ }
           }
