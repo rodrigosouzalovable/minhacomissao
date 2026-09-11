@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Retirar o corte do Guardião de Engajamento no modo sem teto e retomar a campanha pendente
 - [x] Remover bloqueio coletivo da BM em #131031 e retomar a campanha QUEBRADOS por instância
 - [x] Criar aba Campanhas Meta com histórico individual, filtros, custos e detalhes
 - [x] Normalizar colagem direta do Excel no campo de destinatários
