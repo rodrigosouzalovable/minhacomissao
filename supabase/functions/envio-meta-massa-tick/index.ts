@@ -765,6 +765,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   let ok = false;
   let waIdOk: string | null = null;
   let erroMsg: string | null = null;
+  let idsBloqueadosPorBm: string[] = [];
   try {
     const sendResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-whatsapp-meta`, {
       method: 'POST',
@@ -802,6 +803,9 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       waIdOk = sendResp?.waId || null;
     } else {
       erroMsg = sendResp?.error || 'falha';
+      idsBloqueadosPorBm = Array.isArray(sendResp?.bm_blocked_instance_ids)
+        ? sendResp.bm_blocked_instance_ids.filter((id: unknown) => typeof id === 'string')
+        : [];
     }
   } catch (e) {
     erroMsg = e instanceof Error ? e.message : String(e);
@@ -822,6 +826,13 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     if (ok && falhasMap[instId]) delete falhasMap[instId];
   } else {
     falhasMap[instId] = (falhasMap[instId] || 0) + 1;
+    if (idsBloqueadosPorBm.length > 0) {
+      for (const id of idsBloqueadosPorBm) {
+        if (!(job.instancia_ids || []).includes(id)) continue;
+        if (!bloqueadasRunAtual.includes(id)) bloqueadasRunAtual.push(id);
+        falhasMap[`mot:${id}`] = 'Business Account locked (#131031) — BM bloqueada';
+      }
+    }
     if (falhasMap[instId] >= MAX_FALHAS_CONSECUTIVAS && !bloqueadasRunAtual.includes(instId)) {
       bloqueadasRunAtual.push(instId);
       delete falhasMap[instId];
@@ -871,12 +882,22 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
 
 
   if (podeReenfileirar) {
+    const varsAtual = ((pend as any).vars && typeof (pend as any).vars === 'object')
+      ? { ...(pend as any).vars }
+      : {};
+    const exclAtual = Array.isArray(varsAtual._inst_excluidas) ? varsAtual._inst_excluidas : [];
+    varsAtual._inst_excluidas = Array.from(new Set([
+      ...exclAtual,
+      instId,
+      ...idsBloqueadosPorBm,
+    ]));
     await supabase.from('envio_meta_job_item').update({
       status: 'pendente',
       instancia_id: null,
       instancia_nome: null,
       erro: erroMsg,
       tentativas: proximasTentativas,
+      vars: varsAtual,
     }).eq('id', pend.id);
   } else {
 

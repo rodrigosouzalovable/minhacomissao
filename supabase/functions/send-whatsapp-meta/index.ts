@@ -865,11 +865,20 @@ Deno.serve(async (req) => {
           (!!(estadoAntes as any)?.pausa_automatica_ate &&
             new Date((estadoAntes as any).pausa_automatica_ate).getTime() > Date.now());
 
-        await supabase.from('meta_whatsapp_instances').update({
-          estado_pool: 'restrita',
-          pausa_automatica_ate: ate,
-          pausa_automatica_motivo: msg.slice(0, 200),
-        }).eq('id', inst.id);
+        let bm_blocked_instance_ids: string[] = [inst.id];
+        if (familiaBloqueio && /#131031|business account.*locked/i.test(msg)) {
+          try {
+            const { restringirBmBloqueada } = await import('../_shared/meta-bm-bloqueio.ts');
+            const bloqueioBm = await restringirBmBloqueada(supabase, inst, 'Business Account locked (#131031)');
+            bm_blocked_instance_ids = bloqueioBm.instanciaIds;
+          } catch (_) { /* fallback abaixo restringe apenas a instância */ }
+        } else {
+          await supabase.from('meta_whatsapp_instances').update({
+            estado_pool: 'restrita',
+            pausa_automatica_ate: ate,
+            pausa_automatica_motivo: msg.slice(0, 200),
+          }).eq('id', inst.id);
+        }
 
         if (!jaRestrita) {
           try {
@@ -892,6 +901,7 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({
           success: false,
           instance_restricted: true,
+          bm_blocked_instance_ids,
           error: `Instância restringida/banida pela Meta: ${msg}`,
           instancia_id,
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
