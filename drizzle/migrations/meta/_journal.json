@@ -22,6 +22,13 @@
       "when": 1789157761540,
       "tag": "0002_meta_templates_sync_daily_lock",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789157804104,
+      "tag": "0003_reschedule_meta_templates_sync_weekdays_6am",
+      "breakpoints": true
     }
   ]
 }
