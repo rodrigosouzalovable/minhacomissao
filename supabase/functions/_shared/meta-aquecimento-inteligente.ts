@@ -270,8 +270,8 @@ export async function devolverLead(supabase: any, leadId: string) {
 }
 
 /**
- * BM bloqueada pela Meta (#131031): tira do aquecimento todos os números dela.
- * Retorna quantos números foram pausados e o nome da BM.
+ * Erro fatal da Meta: pausa somente o número que recebeu a recusa.
+ * Os demais números da BM continuam elegíveis e são validados individualmente.
  */
 export async function pausarInstanciasDaBm(
   supabase: any,
@@ -281,16 +281,13 @@ export async function pausarInstanciasDaBm(
 ): Promise<{ bm: string; pausadas: number }> {
   const ate = new Date(Date.now() + horas * 3600000).toISOString();
   let bmNome = "não vinculada";
-  let ids: string[] = [inst.id];
+  const ids: string[] = [inst.id];
 
   const bmId = inst?.meta_bm_id || null;
   if (bmId) {
     const { data: bm } = await supabase
       .from("meta_business_managers").select("nome").eq("id", bmId).maybeSingle();
     bmNome = String(bm?.nome || bmId);
-    const { data: irmas } = await supabase
-      .from("meta_whatsapp_instances").select("id").eq("meta_bm_id", bmId).eq("ativo", true);
-    ids = Array.from(new Set([...(irmas || []).map((r: any) => r.id as string), inst.id]));
   }
 
   await supabase

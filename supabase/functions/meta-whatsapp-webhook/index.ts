@@ -1540,7 +1540,7 @@ serve(async (req) => {
                 idsBloqueadosPorBm = bloqueioBm.instanciaIds;
                 nomeBmBloqueada = bloqueioBm.bmNome;
               } catch (e) {
-                console.log('[MetaWebhook] bloqueio da BM falhou:', String(e).slice(0, 200));
+                console.log('[MetaWebhook] bloqueio da instância falhou:', String(e).slice(0, 200));
               }
             }
 
@@ -1651,7 +1651,7 @@ serve(async (req) => {
                       for (const id of idsRetirar) {
                         if (!bloqueadas.includes(id)) bloqueadas.push(id);
                         falhasMap[`mot:${id}`] = contaBloqueada
-                          ? `Business Account locked (#131031)${nomeBmBloqueada ? ` — BM ${nomeBmBloqueada}` : ''}`
+                          ? `Business Account locked (#131031) — número recusado${nomeBmBloqueada ? ` — BM ${nomeBmBloqueada}` : ''}`
                           : `${errTitle || 'falha de entrega'}${errCode ? ` (#${errCode})` : ''}`;
                       }
                       // Guarda o MOTIVO REAL da saída (chave mot:) para o tick poder
