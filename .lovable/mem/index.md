@@ -1,5 +1,6 @@
 - [Etiqueta no Envio](mem://features/whatsapp/etiqueta-atendente-no-envio) — Conversa recebe etiqueta do atendente nomeado já no envio, sem esperar resposta
 - [IAGO Atendente IA](mem://features/whatsapp/iago-atendente-ia) — Atendente de IA na fila do Inbox Meta: caixas por membership, follow-up único 2h (08-19h), opt-out, escalada Aguardando Humano
+- [Follow-up do IAGO mantém card lido](mem://features/whatsapp/iago-followup-card-lido) — Retorno automático limpa não lidas sem apagar resposta simultânea do cliente
 - [IAGO Resiliência](mem://features/whatsapp/iago-resiliencia-execucao) — Falha sempre libera trava e grava em iago_falhas, retry da IA, espaçamento de rajadas, silêncio em divulgação em massa
 - [IAGO Pessoa Errada](mem://features/whatsapp/iago-pessoa-errada-encerra-definitivo) — Nega ser titular: encerra, sem follow-up, telefone em supressão de disparos
 - [IAGO Negociação ≠ Nº Errado](mem://features/whatsapp/iago-negociacao-nao-e-numero-errado) — "hoje não porque não é o quinto dia útil" não encerra: em negociação, identidade negada escala ao humano
