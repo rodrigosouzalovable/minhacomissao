@@ -910,7 +910,12 @@ export default function ConfigurarMeta() {
       });
       if (error) throw error;
       const r = (data as any)?.results?.[0] || {};
-      if (r.error || r.perfil_error || r.foto_error) {
+      if (r.nome_atualizado && r.perfil_sem_permissao) {
+        toast.warning("Nome oficial atualizado. A Meta não autorizou acessar foto e sobre desta conta.", {
+          description: "Reconecte a BM/WABA com a permissão de gerenciamento do WhatsApp Business.",
+          duration: 8000,
+        });
+      } else if (r.error || r.perfil_error || r.foto_error) {
         toast.warning(`Perfil atualizado com aviso: ${r.error || r.perfil_error || r.foto_error}`);
       } else {
         toast.success("Perfil e foto sincronizados");
