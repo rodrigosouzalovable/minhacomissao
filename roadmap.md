@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Remover bloqueio coletivo da BM em #131031 e retomar a campanha QUEBRADOS por instância
 
 ## Concluído
+- [x] Remover bloqueio coletivo da BM em #131031 e retomar a campanha QUEBRADOS por instância
 - [x] Criar aba Campanhas Meta com histórico individual, filtros, custos e detalhes
 - [x] Normalizar colagem direta do Excel no campo de destinatários
 - [x] Bloqueio #131031 por BM: retirar todos os números irmãos da campanha e evitar tentativas repetidas
