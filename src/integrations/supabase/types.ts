@@ -3477,6 +3477,60 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_aquecimento_auto_respondedores: {
+        Row: {
+          atualizado_em: string
+          cidade: string | null
+          confianca: number
+          id: string
+          instancia_id: string | null
+          lead_id: string | null
+          motivo_classificacao: string
+          nicho: string | null
+          nome: string | null
+          primeira_deteccao_em: string
+          quantidade_respostas: number
+          telefone: string
+          telefone_normalizado: string
+          ultima_deteccao_em: string
+          ultima_resposta: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          cidade?: string | null
+          confianca?: number
+          id?: string
+          instancia_id?: string | null
+          lead_id?: string | null
+          motivo_classificacao: string
+          nicho?: string | null
+          nome?: string | null
+          primeira_deteccao_em?: string
+          quantidade_respostas?: number
+          telefone: string
+          telefone_normalizado: string
+          ultima_deteccao_em?: string
+          ultima_resposta?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          cidade?: string | null
+          confianca?: number
+          id?: string
+          instancia_id?: string | null
+          lead_id?: string | null
+          motivo_classificacao?: string
+          nicho?: string | null
+          nome?: string | null
+          primeira_deteccao_em?: string
+          quantidade_respostas?: number
+          telefone?: string
+          telefone_normalizado?: string
+          ultima_deteccao_em?: string
+          ultima_resposta?: string | null
+        }
+        Relationships: []
+      }
       meta_aquecimento_destino_log: {
         Row: {
           cidade: string | null
