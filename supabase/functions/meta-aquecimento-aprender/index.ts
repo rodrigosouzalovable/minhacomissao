@@ -95,6 +95,9 @@ Deno.serve(async (req) => {
     // Classificação inicial sob demanda: reaproveita a rotina diária, sem criar
     // novo cron. Depois disso, as novas respostas são classificadas no webhook.
     let historicoClassificado = 0;
+    let historicoComMensagem = 0;
+    let historicoAutomatico = 0;
+    let historicoErros = 0;
     if (classificarHistorico) {
       const candidatos = ((logs || []) as any[]).filter(
         (l) => l.fonte === 'lead' && l.respondeu_em && l.auto_resposta_confirmada !== true,
@@ -129,8 +132,10 @@ Deno.serve(async (req) => {
             quando >= enviadaEm && quando <= respondeuEm + 60_000;
         });
         if (!mensagem?.conteudo) continue;
+        historicoComMensagem++;
         const classificacao = classificarRespostaAutomatica(mensagem.conteudo, log.segundos_para_resposta);
         if (!classificacao.automatica) continue;
+        historicoAutomatico++;
         const telefoneNormalizado = String(log.destino_telefone || '').replace(/\D/g, '');
         if (!telefoneNormalizado) continue;
         const { error } = await supabase.rpc('registrar_meta_aquecimento_auto_resposta', {
@@ -148,6 +153,10 @@ Deno.serve(async (req) => {
           _detectado_em: log.respondeu_em,
         });
         if (!error) historicoClassificado++;
+        else {
+          historicoErros++;
+          console.error('[meta-aquecimento-aprender] falha ao guardar resposta automática', error.message);
+        }
       }
     }
 
@@ -180,7 +189,7 @@ Deno.serve(async (req) => {
       .is('usado_aquecimento_em', null);
 
     const buscas: any[] = [];
-    if ((estoque ?? 0) < ESTOQUE_MINIMO) {
+    if (!classificarHistorico && (estoque ?? 0) < ESTOQUE_MINIMO) {
       const melhores = linhas
         .filter((l) => !l.bloqueado && l.envios >= 5)
         .sort((a, b) => b.score - a.score)
@@ -207,7 +216,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ ok: true, dia, nichos: linhas.length, estoque: estoque ?? 0, buscas, historico_classificado: historicoClassificado });
+    return json({
+      ok: true,
+      dia,
+      nichos: linhas.length,
+      estoque: estoque ?? 0,
+      buscas,
+      historico_classificado: historicoClassificado,
+      historico_candidatos: classificarHistorico ? ((logs || []) as any[]).filter((l) => l.fonte === 'lead' && l.respondeu_em).length : 0,
+      historico_com_mensagem: historicoComMensagem,
+      historico_automatico: historicoAutomatico,
+      historico_erros: historicoErros,
+    });
   } catch (e) {
     console.error('[meta-aquecimento-aprender]', e);
     return json({ ok: false, error: e instanceof Error ? e.message : 'erro' }, 500);
