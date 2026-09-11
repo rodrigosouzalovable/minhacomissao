@@ -81,7 +81,7 @@ export type RevalidacaoInstanciasJob = {
  * Motivo gravado pelo worker no formato `AGUARDANDO_COTA:<retomaISO>:<detalhe>`.
  * Indica campanha viva, apenas esperando cota diária/qualidade liberar.
  */
-export function parseAguardandoCota(motivo?: string | null): { retomaEm: string; detalhe: string } | null {
+function parseAguardandoCota(motivo?: string | null): { retomaEm: string; detalhe: string } | null {
   const m = /^AGUARDANDO_COTA:([^:]+T[^Z]+Z):?([\s\S]*)$/.exec(String(motivo || ""));
   if (!m) return null;
   return { retomaEm: m[1], detalhe: m[2] || "Todas as instâncias atingiram o teto diário" };
