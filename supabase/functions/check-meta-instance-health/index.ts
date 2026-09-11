@@ -29,6 +29,9 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const instanciaId: string | undefined = body?.instancia_id;
+    const instanciaIds: string[] = Array.isArray(body?.instancia_ids)
+      ? Array.from(new Set(body.instancia_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0))).slice(0, 100)
+      : [];
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -37,6 +40,7 @@ Deno.serve(async (req) => {
 
     let query = supabase.from('meta_whatsapp_instances').select('*').eq('ativo', true);
     if (instanciaId) query = query.eq('id', instanciaId);
+    else if (instanciaIds.length > 0) query = query.in('id', instanciaIds);
     const { data: instanciasRaw, error } = await query;
     if (error) throw error;
 

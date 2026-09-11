@@ -285,6 +285,7 @@ export default function EnvioMeta() {
 
 
   const [validando, setValidando] = useState<boolean>(false);
+  const [iniciandoCampanha, setIniciandoCampanha] = useState<boolean>(false);
   const [enviandoTeste, setEnviandoTeste] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState<string>("");
@@ -969,24 +970,6 @@ export default function EnvioMeta() {
     const recipientsDedup = parseRecipients(dedup.texto, isentosDedup);
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
 
-    // Fallback: se todas as instâncias marcadas estão fora do pool e há 1 destinatário só,
-    // dispara em modo teste automaticamente (bypassa ramp-up / horário / domingo).
-    const todasForaPool = instanciasComCota.every((id) => {
-      const inst = instancias.find((x) => x.id === id);
-      return (inst?.estado_pool || "aguardando_templates") !== "ativo";
-    });
-    if (todasForaPool && recipientsDedup.length === 1) {
-      toast.message("Nenhuma instância ativa no pool — enviando em modo teste");
-      await enviarTeste();
-      return;
-    }
-    if (todasForaPool) {
-      return toast.error(
-        "Nenhuma instância marcada está ativa no pool. Ative-as em Configurar Meta → Pool, ou use 'Enviar teste' para validar com 1 número.",
-      );
-    }
-
-
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
 
@@ -1098,6 +1081,7 @@ export default function EnvioMeta() {
       return out;
     });
 
+    setIniciandoCampanha(true);
     const jobIdCriado = await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
       instanciaIds: instanciasComCota,
@@ -1126,6 +1110,7 @@ export default function EnvioMeta() {
         custoRef.current?.refetch();
       },
     });
+    setIniciandoCampanha(false);
 
     // Só confirma (e limpa o formulário) quando a campanha existe de verdade.
     // Se falhou, o motivo real já foi exibido e os destinatários continuam na tela.
@@ -2307,14 +2292,16 @@ export default function EnvioMeta() {
 
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={validando || enviandoTeste} size="lg">
-              {validando
+            <Button onClick={enviar} disabled={validando || enviandoTeste || iniciandoCampanha} size="lg">
+              {validando || iniciandoCampanha
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : agendamento.ativo
                   ? <CalendarClock className="h-4 w-4 mr-2" />
                   : <Send className="h-4 w-4 mr-2" />}
-              {validando
-                ? "Validando WhatsApp..."
+              {iniciandoCampanha
+                ? "Revalidando instâncias na Meta..."
+                : validando
+                  ? "Validando WhatsApp..."
                 : `${agendamento.ativo ? "Agendar" : "Disparar"} ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
             </Button>
           </div>

@@ -882,6 +882,11 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       }
       if (!data?.success) throw new Error(data?.error || "Falha ao iniciar envio");
 
+      const removidas = Array.isArray(data?.instancias_removidas) ? data.instancias_removidas : [];
+      if (removidas.length > 0) {
+        toast.warning(`${removidas.length} instância(s) retiradas após revalidar na Meta: ${removidas.join(" | ")}`, { duration: 12000 });
+      }
+
       const jobId = data.job_id as string;
       if (!jobId) throw new Error("A campanha não foi criada (sem job_id). Tente novamente.");
       if (p.onAfterEnvio) onAfterRef.current[jobId] = p.onAfterEnvio;
