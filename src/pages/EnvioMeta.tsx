@@ -1940,6 +1940,24 @@ export default function EnvioMeta() {
                     origem: "manual",
                   });
                 }}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData("text");
+                  if (!text) return;
+                  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                  if (lines.length === 0) return;
+                  const rows = lines.map(l => splitLinhaEnvio(l));
+                  const hasMultipleColumns = rows.some(r => r.length > 1);
+                  if (hasMultipleColumns) {
+                    e.preventDefault();
+                    const existingLines = recipientsRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                    const allRows = [...existingLines.map(l => splitLinhaEnvio(l)), ...rows];
+                    setMapDlg({
+                      open: true,
+                      rows: allRows,
+                      origem: "manual",
+                    });
+                  }
+                }}
                 placeholder={"5562999999999, João Silva, 12345678900, 45, 1250.50\n5562988887777, Maria, 98765432100, 12, 540"}
                 className="font-mono text-xs"
               />
