@@ -264,6 +264,139 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
 
+    } else if (acao === 'revalidar_instancias_run') {
+      // Revalida somente as instâncias retiradas automaticamente deste job.
+      // Itens já aceitos pela Meta nunca voltam para a fila.
+      const jobInsts: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+      const bloqRunAntes: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
+      const bloqueadasTemplate: string[] = Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [];
+      const candidatas = bloqRunAntes.filter((id: string) => jobInsts.includes(id) && !bloqueadasTemplate.includes(id));
+
+      if (candidatas.length === 0) {
+        return new Response(JSON.stringify({
+          success: true,
+          liberadas: 0,
+          mantidas_bloqueadas: bloqRunAntes.length,
+          reenfileirados: 0,
+          mensagem: 'Nenhuma instância bloqueada precisa ser revalidada',
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      const healthResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/check-meta-instance-health`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ instancia_ids: candidatas }),
+      });
+      const healthData = await healthResp.json().catch(() => ({}));
+      if (!healthResp.ok) {
+        return new Response(JSON.stringify({ success: false, error: healthData?.error || 'Falha ao consultar a Meta' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const resultados = Array.isArray(healthData?.results) ? healthData.results : [];
+      const resultadoPorId = new Map(resultados.map((r: any) => [String(r.instancia_id), r]));
+      const { data: instanciasAtualizadas } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id, ativo, estado_pool, pausa_automatica_ate, pausa_automatica_motivo, saude_status, saude_quality, saude_ban_info, saude_restricoes')
+        .in('id', candidatas);
+
+      const agora = Date.now();
+      const liberadas = (instanciasAtualizadas || []).filter((inst: any) => {
+        const meta: any = resultadoPorId.get(String(inst.id));
+        const pausaAtiva = !!inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate).getTime() > agora;
+        const banInfo = inst.saude_ban_info;
+        const temBan = !!banInfo && (typeof banInfo !== 'object' || Object.keys(banInfo).length > 0);
+        return !meta?.error &&
+          String(inst.saude_status || meta?.status || '').toUpperCase() === 'CONNECTED' &&
+          String(inst.saude_quality || meta?.quality_rating || '').toUpperCase() === 'GREEN' &&
+          meta?.restrito_meta !== true &&
+          inst.ativo !== false &&
+          inst.estado_pool === 'ativo' &&
+          !pausaAtiva &&
+          !temBan;
+      }).map((inst: any) => String(inst.id));
+
+      const liberadasSet = new Set(liberadas);
+      const bloqRunDepois = bloqRunAntes.filter((id: string) => !liberadasSet.has(id));
+      const falhas: Record<string, number | string> = { ...((job as any).falhas_por_instancia_run || {}) };
+      for (const id of liberadas) {
+        delete falhas[id];
+        delete falhas[`mot:${id}`];
+      }
+
+      // Só recupera falhas sem wamid: se a Meta já aceitou a mensagem, mesmo que
+      // uma confirmação posterior tenha falhado, não há reenvio automático.
+      let reenfileirados = 0;
+      if (liberadas.length > 0) {
+        const { data: errosRecuperaveis } = await supabase
+          .from('envio_meta_job_item')
+          .select('id, vars')
+          .eq('job_id', jobId)
+          .eq('status', 'erro')
+          .in('instancia_id', liberadas)
+          .is('wa_message_id', null);
+
+        for (const item of errosRecuperaveis || []) {
+          const vars = item.vars && typeof item.vars === 'object' ? { ...item.vars } : {};
+          const excluidas = Array.isArray((vars as any)._inst_excluidas) ? (vars as any)._inst_excluidas : [];
+          (vars as any)._inst_excluidas = excluidas.filter((id: unknown) => !liberadasSet.has(String(id)));
+          await supabase.from('envio_meta_job_item').update({
+            status: 'pendente',
+            erro: null,
+            tentativas: 0,
+            processado_em: null,
+            instancia_id: null,
+            instancia_nome: null,
+            vars,
+          }).eq('id', item.id).eq('status', 'erro').is('wa_message_id', null);
+          reenfileirados++;
+        }
+
+        const ativas = jobInsts.filter((id: string) => !bloqRunDepois.includes(id) && !bloqueadasTemplate.includes(id));
+        if (job.modo_rajada && ativas.length > 0) {
+          const { data: pendentes } = await supabase
+            .from('envio_meta_job_item')
+            .select('id')
+            .eq('job_id', jobId)
+            .eq('status', 'pendente')
+            .order('ordem', { ascending: true });
+          const grupos: Record<string, string[]> = {};
+          for (const id of ativas) grupos[id] = [];
+          (pendentes || []).forEach((item: any, idx: number) => grupos[ativas[idx % ativas.length]].push(item.id));
+          for (const [instanciaId, ids] of Object.entries(grupos)) {
+            for (let i = 0; i < ids.length; i += 500) {
+              await supabase.from('envio_meta_job_item').update({ instancia_id: instanciaId, instancia_nome: null })
+                .in('id', ids.slice(i, i + 500)).eq('status', 'pendente');
+            }
+          }
+        }
+
+        await devolverProcessandoParaFila();
+        await supabase.from('envio_meta_job').update({
+          instancias_bloqueadas_run: bloqRunDepois,
+          falhas_por_instancia_run: falhas,
+          status: 'rodando',
+          erros: Math.max(0, Number(job.erros || 0) - reenfileirados),
+          concluido_em: null,
+          status_motivo: null,
+          proximo_em: new Date().toISOString(),
+          worker_lock_token: null,
+          worker_locked_until: null,
+        }).eq('id', jobId);
+        dispararWorker({ ...job, status: 'rodando', instancias_bloqueadas_run: bloqRunDepois });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        liberadas: liberadas.length,
+        mantidas_bloqueadas: candidatas.length - liberadas.length,
+        reenfileirados,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
     } else if (acao === 'desbloquear_instancia_run') {
       const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
       if (!isAdmin) {

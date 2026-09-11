@@ -71,6 +71,12 @@ export type InstanciaStatusJob = {
   em_uso: boolean;
 };
 
+export type RevalidacaoInstanciasJob = {
+  liberadas: number;
+  mantidasBloqueadas: number;
+  reenfileirados: number;
+};
+
 /**
  * Motivo gravado pelo worker no formato `AGUARDANDO_COTA:<retomaISO>:<detalhe>`.
  * Indica campanha viva, apenas esperando cota diária/qualidade liberar.
@@ -199,6 +205,7 @@ type Ctx = {
   refreshCountersJob: (jobId: string) => Promise<void>;
   listarInstanciasLivres: (jobId: string) => Promise<InstanciaLivre[]>;
   listarInstanciasStatusJob: (jobId: string) => Promise<InstanciaStatusJob[]>;
+  revalidarInstanciasJob: (jobId: string) => Promise<RevalidacaoInstanciasJob | null>;
   reativarInstanciaJob: (jobId: string, instanciaId: string) => Promise<boolean>;
   adicionarInstanciasLivres: (jobId: string, ids?: string[]) => Promise<boolean>;
   liberarTetoHoje: (jobId: string, instanciaId?: string, teto?: number) => Promise<boolean>;
@@ -360,6 +367,30 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       return [];
     }
     return (data.instancias || []) as InstanciaStatusJob[];
+  }, [invokeControle]);
+
+  /** Revalida na Meta as instâncias ignoradas, recupera falhas seguras e retoma o job. */
+  const revalidarInstanciasJob = useCallback(async (jobId: string): Promise<RevalidacaoInstanciasJob | null> => {
+    const { data, error } = await invokeControle(jobId, "revalidar_instancias_run");
+    if (error || !data?.success) {
+      toast.error(data?.error || "Não foi possível revalidar as instâncias agora");
+      return null;
+    }
+    const resultado = {
+      liberadas: Number(data.liberadas || 0),
+      mantidasBloqueadas: Number(data.mantidas_bloqueadas || 0),
+      reenfileirados: Number(data.reenfileirados || 0),
+    };
+    if (resultado.liberadas > 0) {
+      toast.success(`${resultado.liberadas} instância(s) liberada(s) · ${resultado.reenfileirados} número(s) de volta à fila`);
+    } else if (resultado.mantidasBloqueadas > 0) {
+      toast.warning(`${resultado.mantidasBloqueadas} instância(s) continuam bloqueada(s) pela Meta`);
+    } else {
+      toast.info(data.mensagem || "As instâncias já estão atualizadas");
+    }
+    await carregarJobs();
+    return resultado;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invokeControle]);
 
   /** Admin: devolve uma instância ignorada para a campanha. */
@@ -1071,7 +1102,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         iniciar, togglePausa, cancelar, reativar, limpar, refreshStatus, ensureJobLoaded,
         jobs, jobsAtivos,
         getProgressoJob, getDetalhesJob, getDeliveryResumoJob, getResultadoJob,
-        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, listarInstanciasStatusJob, reativarInstanciaJob, adicionarInstanciasLivres, liberarTetoHoje, marcarJobAberto, exportarItensJob,
+        togglePausaJob, cancelarJob, reativarJob, limparJob, ensureItensLoaded, recarregarItensJob, carregarMaisItensJob, getPaginacaoJob, refreshCountersJob, listarInstanciasLivres, listarInstanciasStatusJob, revalidarInstanciasJob, reativarInstanciaJob, adicionarInstanciasLivres, liberarTetoHoje, marcarJobAberto, exportarItensJob,
       }}
     >
       {children}
