@@ -20,6 +20,16 @@ async function fetchJson(url: string, token: string) {
   return { ok: res.ok, status: res.status, data };
 }
 
+function metaError(resp: { status: number; data: any }) {
+  const error = resp.data?.error;
+  const message = error?.message || `HTTP ${resp.status}`;
+  return {
+    code: Number(error?.code) || null,
+    message,
+    permission_denied: Number(error?.code) === 10 || /permission/i.test(message),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -46,7 +56,12 @@ Deno.serve(async (req) => {
     const results: any[] = [];
 
     for (const inst of instancias || []) {
-      const r: any = { instancia_id: inst.id, nome: inst.nome };
+      const r: any = {
+        instancia_id: inst.id,
+        nome: inst.nome,
+        nome_atualizado: false,
+        perfil_atualizado: false,
+      };
       try {
         const patch: any = { meta_perfil_sync_em: new Date().toISOString() };
 
@@ -60,8 +75,11 @@ Deno.serve(async (req) => {
           patch.meta_name_status = phoneResp.data?.name_status || null;
           r.verified_name = patch.meta_verified_name;
           r.name_status = patch.meta_name_status;
+          r.nome_atualizado = true;
         } else {
-          r.error = phoneResp.data?.error?.message || `HTTP ${phoneResp.status}`;
+          const erro = metaError(phoneResp);
+          r.error = erro.message;
+          r.nome_error_code = erro.code;
         }
 
         // 2) Perfil do WhatsApp Business (foto + sobre)
@@ -73,6 +91,7 @@ Deno.serve(async (req) => {
           const prof = profResp.data?.data?.[0] || {};
           patch.meta_profile_about = prof?.about || null;
           r.about = patch.meta_profile_about;
+          r.perfil_atualizado = true;
 
           const picUrl: string | undefined = prof?.profile_picture_url;
           if (picUrl) {
@@ -110,7 +129,13 @@ Deno.serve(async (req) => {
             r.foto = false;
           }
         } else {
-          r.perfil_error = profResp.data?.error?.message || `HTTP ${profResp.status}`;
+          const erro = metaError(profResp);
+          r.perfil_error = erro.message;
+          r.perfil_error_code = erro.code;
+          r.perfil_sem_permissao = erro.permission_denied;
+          r.perfil_orientacao = erro.permission_denied
+            ? 'A Meta não autorizou acessar foto e sobre desta conta. Reconecte a BM/WABA com permissão whatsapp_business_management.'
+            : null;
         }
 
         await supabase.from('meta_whatsapp_instances').update(patch).eq('id', inst.id);
