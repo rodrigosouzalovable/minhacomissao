@@ -2385,6 +2385,63 @@ export default function EnvioMeta() {
     </Dialog>
 
     <AlertDialog
+      open={reenvioDlg.open}
+      onOpenChange={(open) => {
+        if (!open && reenvioDlg.resolver) {
+          reenvioDlg.resolver("cancelar");
+          setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+        }
+      }}
+    >
+      <AlertDialogContent className="max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Contatos acionados recentemente</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 pt-2">
+              <p>
+                {reenvioDlg.recentes.toLocaleString("pt-BR")} de {reenvioDlg.total.toLocaleString("pt-BR")} contato(s) já receberam mensagem nos últimos {reenvioDlg.dias} dia(s).
+              </p>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="flex justify-between gap-3"><span>Enviar para todos</span><strong>{reenvioDlg.total.toLocaleString("pt-BR")}</strong></div>
+                <div className="flex justify-between gap-3"><span>Ignorar os recentes</span><strong>{Math.max(0, reenvioDlg.total - reenvioDlg.recentes).toLocaleString("pt-BR")}</strong></div>
+              </div>
+              <p className="text-xs text-muted-foreground">Escolha se deseja reenviar também para esses contatos ou manter a proteção contra repetição.</p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="sm:justify-between sm:space-x-2">
+          <AlertDialogCancel
+            onClick={() => {
+              reenvioDlg.resolver?.("cancelar");
+              setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+            }}
+          >
+            Cancelar
+          </AlertDialogCancel>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => {
+                reenvioDlg.resolver?.("ignorar");
+                setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+              }}
+            >
+              Ignorar recentes
+            </Button>
+            <AlertDialogAction
+              onClick={() => {
+                reenvioDlg.resolver?.("todos");
+                setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+              }}
+            >
+              Enviar para todos
+            </AlertDialogAction>
+          </div>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog
       open={riscoDlg.open}
       onOpenChange={(o) => {
         if (!o && riscoDlg.resolver) {
