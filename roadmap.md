@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Permitir escolha explícita de reenvio recente e corrigir a lista de ignorados no painel da campanha
 
 ## Concluído
 - [x] Remover o teto visual de 1.000 Templates HSM e sincronizar todas as páginas da Meta
