@@ -113,6 +113,15 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = 
 
   const ativas = (instancias || []).filter((i) => !i.ignorada);
   const ignoradas = (instancias || []).filter((i) => i.ignorada);
+  const bloqueiosBm = Array.from(
+    ignoradas
+      .filter((i) => /business account|#131031|bm bloqueada/i.test(String(i.motivo_ignorada || '')))
+      .reduce((map, i) => {
+        const chave = i.bm || 'BM não identificada';
+        map.set(chave, (map.get(chave) || 0) + 1);
+        return map;
+      }, new Map<string, number>()),
+  );
 
   return (
     <div className="rounded-md border bg-card">
@@ -143,6 +152,13 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = 
               {ignoradas.length > 0 && (
                 <div>
                   <div className="flex items-center gap-1.5 border-t bg-muted/40 px-3 py-1.5 text-xs font-semibold text-destructive"><AlertTriangle className="h-3.5 w-3.5" /> Ignoradas automaticamente</div>
+                  {bloqueiosBm.length > 0 && (
+                    <div className="border-b bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                      {bloqueiosBm.map(([bm, quantidade]) => (
+                        <div key={bm}><strong>{bm}:</strong> {quantidade} número(s) retirado(s) por bloqueio da Meta</div>
+                      ))}
+                    </div>
+                  )}
                   {ignoradas.map((instancia) => <InstanciaRow key={instancia.id} instancia={instancia} isAdmin={isAdmin} reativando={reativando === instancia.id} onReativar={() => void reativar(instancia.id)} />)}
                 </div>
               )}

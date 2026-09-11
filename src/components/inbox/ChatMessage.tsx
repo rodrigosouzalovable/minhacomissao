@@ -56,6 +56,7 @@ interface Mensagem {
   quoted_conteudo?: string | null;
   quoted_direcao?: string | null;
   status_envio?: string | null;
+  erro?: string | null;
   template_botoes?: TemplateBotao[] | null;
   contatos_payload?: ContatoCompartilhado[] | null;
   transcricao?: string | null;
@@ -574,7 +575,11 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
           {isSaida && (() => {
             const status = msg.status_envio || (isTemp ? 'enviando' : 'enviada');
             if (status === 'erro') {
-              return <AlertCircle className="h-3 w-3 text-red-400" aria-label="Erro ao enviar" />;
+              const contaBloqueada = /#131031|business account.*locked/i.test(String(msg.erro || ''));
+              const motivo = contaBloqueada
+                ? 'Não entregue — Business Manager bloqueado pela Meta'
+                : `Não entregue${msg.erro ? ` — ${msg.erro}` : ''}`;
+              return <AlertCircle className="h-3 w-3 text-red-400" aria-label={motivo} title={motivo} />;
             }
             if (status === 'enviando') {
               return <Clock3 className="h-3 w-3 text-primary-foreground/70" aria-label="Enviando" />;

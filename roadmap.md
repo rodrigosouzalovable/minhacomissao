@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Contas bloqueadas (#131031): avaliar fallback para responder cliente por outro número saudável (template se fora da janela de 24h).
 
 ## Concluído
+- [x] Bloqueio #131031 por BM: retirar todos os números irmãos da campanha e evitar tentativas repetidas
 - [x] Mostrar mensagem real do template na caixa AQUECIMENTO (corpo renderizado com nome do lead)
 - [x] Coluna `usar_em_leads` em `meta_templates_mestre` + toggle na aba Template Meta
 - [x] `escolherTemplateLead` (sorteia entre marcados) + pular envio a lead sem template marcado
