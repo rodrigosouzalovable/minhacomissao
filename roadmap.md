@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Exibir última sincronização dos Templates HSM e executar segunda–sábado às 06h BRT
 
 ## Concluído
 - [x] Criar lista permanente de leads do Google Maps com resposta automática no Aquecimento Meta

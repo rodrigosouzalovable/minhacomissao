@@ -50,6 +50,13 @@
       "when": 1789165647971,
       "tag": "0006_register_meta_aquecimento_auto_resposta",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789206371435,
+      "tag": "0007_reschedule_meta_templates_sync_monday_saturday",
+      "breakpoints": true
     }
   ]
 }

@@ -19,7 +19,29 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
+    const auto = body?.auto === true;
     const force = body?.force === true;
+
+    if (!auto) {
+      const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      if (!token) return json({ success: false, error: "nao_autenticado" }, 401);
+      const { data: userData } = await supabase.auth.getUser(token);
+      const userId = userData?.user?.id;
+      if (!userId) return json({ success: false, error: "nao_autenticado" }, 401);
+      const { data: admin } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
+      if (admin !== true) return json({ success: false, error: "somente_admin" }, 403);
+    }
+
+    if (body?.status_only === true) {
+      const { data: state, error: stateError } = await supabase
+        .from("meta_templates_sync_state")
+        .select("status,last_started_at,last_completed_at,last_success,processed_instances,synced_templates,failures")
+        .eq("id", true)
+        .maybeSingle();
+      if (stateError) return json({ success: false, error: stateError.message }, 500);
+      return json({ success: true, state });
+    }
+
     const { data: lockAcquired, error: lockError } = await supabase.rpc("claim_meta_templates_sync_diario", {
       p_force: force,
       p_lock_minutes: LOCK_MINUTES,

@@ -96,6 +96,16 @@ type Template = {
   sincronizado_em: string;
 };
 
+type TemplatesSyncState = {
+  status: "idle" | "running" | "completed" | "failed";
+  last_started_at: string | null;
+  last_completed_at: string | null;
+  last_success: boolean | null;
+  processed_instances: number;
+  synced_templates: number;
+  failures: unknown[];
+};
+
 
 
 export default function ConfigurarMeta() {
@@ -109,6 +119,7 @@ export default function ConfigurarMeta() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [testando, setTestando] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState<string | null>(null);
+  const [templatesSyncState, setTemplatesSyncState] = useState<TemplatesSyncState | null>(null);
   const [revalidando, setRevalidando] = useState<string | null>(null);
   const [sincPerfil, setSincPerfil] = useState<string | null>(null);
   const [chamadasBusy, setChamadasBusy] = useState<string | null>(null);
@@ -318,6 +329,14 @@ export default function ConfigurarMeta() {
       todos.push(...pagina);
       if (pagina.length < tamanhoPagina) return todos;
     }
+  };
+
+  const carregarEstadoSyncTemplates = async () => {
+    if (!isAdmin) return;
+    const { data, error } = await supabase.functions.invoke("meta-templates-sync-diario", {
+      body: { status_only: true },
+    });
+    if (!error && data?.state) setTemplatesSyncState(data.state as TemplatesSyncState);
   };
 
   const carregar = async () => {
@@ -531,6 +550,7 @@ export default function ConfigurarMeta() {
 
   useEffect(() => {
     carregar();
+    carregarEstadoSyncTemplates();
   }, []);
 
   useEffect(() => {
@@ -944,23 +964,21 @@ export default function ConfigurarMeta() {
 
   const sincronizarTodos = async () => {
     setSincronizando("__all__");
-    let total = 0;
-    let erros = 0;
-    for (const inst of instancias.filter((i) => i.ativo)) {
-      try {
-        const { data, error } = await supabase.functions.invoke("meta-sync-templates", {
-          body: { instancia_id: inst.id },
-        });
-        if (error) throw error;
-        total += data?.synced || 0;
-      } catch {
-        erros++;
-      }
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-templates-sync-diario", {
+        body: { force: true },
+      });
+      if (error) throw error;
+      const erros = Array.isArray(data?.failures) ? data.failures.length : 0;
+      if (erros) toast.warning(`${data?.synced || 0} templates sincronizados; ${erros} instância(s) com ressalva`);
+      else toast.success(`${data?.synced || 0} templates sincronizados`);
+      await Promise.all([carregar(), carregarEstadoSyncTemplates()]);
+    } catch (error) {
+      toast.error("Erro ao sincronizar: " + (error instanceof Error ? error.message : "falha inesperada"));
+      await carregarEstadoSyncTemplates();
+    } finally {
+      setSincronizando(null);
     }
-    if (erros) toast.error(`${total} sincronizados, ${erros} instâncias com erro`);
-    else toast.success(`${total} templates sincronizados`);
-    await carregar();
-    setSincronizando(null);
   };
 
   const toggle = async (inst: Instancia) => {
@@ -1756,7 +1774,32 @@ export default function ConfigurarMeta() {
         </TabsContent>
 
         <TabsContent value="templates">
-          <div className="flex justify-end mb-3">
+          <div className="flex flex-wrap items-center justify-end gap-3 mb-3">
+            {templatesSyncState && (
+              <div className="text-right text-xs text-muted-foreground" aria-live="polite">
+                <div className="font-medium text-foreground">
+                  {templatesSyncState.status === "running"
+                    ? "Sincronização em andamento"
+                    : templatesSyncState.last_completed_at
+                      ? `Última sincronização: ${new Intl.DateTimeFormat("pt-BR", {
+                          timeZone: "America/Sao_Paulo",
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        }).format(new Date(templatesSyncState.last_completed_at))}`
+                      : "Ainda não sincronizado"}
+                </div>
+                {templatesSyncState.last_completed_at && templatesSyncState.status !== "running" && (
+                  <div>
+                    {templatesSyncState.last_success
+                      ? "Concluída"
+                      : Array.isArray(templatesSyncState.failures) && templatesSyncState.failures.length > 0 && templatesSyncState.processed_instances > 0
+                        ? "Concluída com ressalvas"
+                        : "Falhou"}
+                    {` · ${templatesSyncState.processed_instances} instâncias · ${templatesSyncState.synced_templates} templates`}
+                  </div>
+                )}
+              </div>
+            )}
             <Button
               size="sm"
               variant="outline"
