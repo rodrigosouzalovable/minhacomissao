@@ -315,6 +315,13 @@ export default function ConfigurarMeta() {
     return map;
   }, [templates]);
 
+  const ultimaSincronizacaoTemplates = useMemo(() => {
+    const datas = templates
+      .map((template) => new Date(template.sincronizado_em).getTime())
+      .filter((timestamp) => Number.isFinite(timestamp));
+    return datas.length > 0 ? new Date(Math.max(...datas)).toISOString() : null;
+  }, [templates]);
+
   const carregarTodosTemplates = async () => {
     const tamanhoPagina = 1000;
     const todos: Template[] = [];
@@ -550,8 +557,11 @@ export default function ConfigurarMeta() {
 
   useEffect(() => {
     carregar();
-    carregarEstadoSyncTemplates();
   }, []);
+
+  useEffect(() => {
+    carregarEstadoSyncTemplates();
+  }, [isAdmin]);
 
   useEffect(() => {
     carregarToken();
@@ -1775,20 +1785,20 @@ export default function ConfigurarMeta() {
 
         <TabsContent value="templates">
           <div className="flex flex-wrap items-center justify-end gap-3 mb-3">
-            {templatesSyncState && (
-              <div className="text-right text-xs text-muted-foreground" aria-live="polite">
+            {(templatesSyncState || ultimaSincronizacaoTemplates) && (
+              <div className="text-right text-sm text-muted-foreground" aria-live="polite">
                 <div className="font-medium text-foreground">
-                  {templatesSyncState.status === "running"
+                  {templatesSyncState?.status === "running"
                     ? "Sincronização em andamento"
-                    : templatesSyncState.last_completed_at
+                    : templatesSyncState?.last_completed_at || ultimaSincronizacaoTemplates
                       ? `Última sincronização: ${new Intl.DateTimeFormat("pt-BR", {
                           timeZone: "America/Sao_Paulo",
                           dateStyle: "short",
                           timeStyle: "short",
-                        }).format(new Date(templatesSyncState.last_completed_at))}`
+                        }).format(new Date(templatesSyncState?.last_completed_at || ultimaSincronizacaoTemplates || ""))}`
                       : "Ainda não sincronizado"}
                 </div>
-                {templatesSyncState.last_completed_at && templatesSyncState.status !== "running" && (
+                {templatesSyncState?.last_completed_at && templatesSyncState.status !== "running" && (
                   <div>
                     {templatesSyncState.last_success
                       ? "Concluída"
