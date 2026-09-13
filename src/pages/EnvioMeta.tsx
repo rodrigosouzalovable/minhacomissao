@@ -1256,13 +1256,10 @@ export default function EnvioMeta() {
                     const total = instanciaIds.length;
                     const ok = g.instanciasAprovadasIds.size;
                     const full = ok === total && total > 0;
-                    const rowsByInst = new Map(g.rows.map((r) => [r.instancia_id, r] as const));
-                    const instBadges = instanciaIds
-                      .map((id) => ({ inst: instancias.find((i) => i.id === id), row: rowsByInst.get(id) }))
-                      .filter((x) => x.inst && x.row);
+                    const textoReal = g.sample.body_text?.trim();
                     return (
                       <SelectItem key={g.key} value={g.key}>
-                        <div className="flex flex-col gap-1 w-full">
+                        <div className="flex min-w-0 max-w-full flex-col gap-1.5 py-1 pr-2">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span>{g.nome}</span>
                             <span className="text-xs text-muted-foreground">({g.idioma})</span>
@@ -1278,26 +1275,14 @@ export default function EnvioMeta() {
                               {ok}/{total} instâncias
                             </Badge>
                           </div>
-                          {instBadges.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {instBadges.map(({ inst, row }) => {
-                                const aprov = row!.status === "approved";
-                                return (
-                                  <span
-                                    key={inst!.id}
-                                    className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                                      aprov
-                                        ? "bg-green-600/15 border-green-600/40 text-green-700 dark:text-green-400"
-                                        : "bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-400"
-                                    }`}
-                                    title={aprov ? "Aprovado" : `Status: ${row!.status}`}
-                                  >
-                                    {inst!.nome}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          )}
+                          <p
+                            className={`max-w-3xl whitespace-pre-line break-words text-xs leading-5 line-clamp-3 ${
+                              textoReal ? "text-muted-foreground" : "italic text-muted-foreground"
+                            }`}
+                            title={textoReal || "Texto do template indisponível — sincronize com a Meta"}
+                          >
+                            {textoReal || "Texto do template indisponível — sincronize com a Meta"}
+                          </p>
                         </div>
                       </SelectItem>
                     );

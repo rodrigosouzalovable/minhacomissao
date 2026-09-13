@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Reformular Templates HSM no Envio Meta para mostrar o texto real no lugar das instâncias
 - [x] Exibir última sincronização dos Templates HSM e executar segunda–sábado às 06h BRT
 - [x] Criar lista permanente de leads do Google Maps com resposta automática no Aquecimento Meta
 - [x] Adicionar relatório manual de aquecimento no WhatsApp e totais acumulados desde o início
