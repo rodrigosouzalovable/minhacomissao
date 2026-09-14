@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Corrigir bolinha vermelha antiga e identificar reenvios Meta concluídos por outra instância
 - [x] Aumentar captação Google Maps para 150 requisições/dia e adicionar chave reserva com troca automática
 - [x] Corrigir gargalos do aquecimento Meta e ampliar a reserva automática de leads Google Maps
 - [x] Ajustar enquadramento, parcelas, identificação e quadro final do termo de acordo em PDF
