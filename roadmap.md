@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Ajustar enquadramento, parcelas, identificação e quadro final do termo de acordo em PDF
 - [x] Gerar termo profissional em PDF com marcas por credor em todos os acordos
 - [x] Auditar aquecimento por BM e mostrar o limite diário total consolidado na API Oficial Meta
 - [x] Reformular Templates HSM no Envio Meta para mostrar o texto real no lugar das instâncias
