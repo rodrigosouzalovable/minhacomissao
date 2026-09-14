@@ -570,6 +570,19 @@ export default function GoogleMapsLeads() {
               <p className="text-xs text-muted-foreground">
                 Bloqueio automático em {limite.limite_bloqueio} requisições • O contador reinicia em {limite.data_reset_br}
               </p>
+              {limite.provedores?.length > 0 && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {limite.provedores.map((conta) => (
+                    <div key={conta.provedor} className="border rounded-md px-3 py-2 text-sm flex items-center justify-between">
+                      <span className="capitalize">Conta {conta.provedor}</span>
+                      <span className="text-muted-foreground">
+                        {conta.configurada ? `${conta.total_consultas} / ${conta.limite_bloqueio}` : "não configurada"}
+                        {limite.conta_ativa === conta.provedor ? " · em uso" : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         );

@@ -198,26 +198,6 @@ Deno.serve(async (req) => {
     const maxRequisicoes = Math.min(Math.max(Number(body.max_requisicoes ?? 18), 1), 18);
     const origem = String(body.origem || "manual").slice(0, 60);
 
-    // Guardrail: verificar limite mensal antes de qualquer chamada à Places API
-    {
-      const { data: st, error: stErr } = await supabase.rpc("gm_status_uso");
-      if (stErr) throw stErr;
-      const s = Array.isArray(st) ? st[0] : st;
-      if (s && !s.pode_buscar) {
-        const resetBr = new Date(s.data_reset).toLocaleDateString("pt-BR");
-        return new Response(
-          JSON.stringify({
-            error: "limite_atingido",
-            message: `Não foi possível realizar a busca. O limite mensal de consultas foi atingido (${s.total_consultas}/${s.limite_bloqueio}). O contador reinicia em ${resetBr}.`,
-            consumo_atual: s.total_consultas,
-            limite_bloqueio: s.limite_bloqueio,
-            data_reset: s.data_reset,
-          }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-    }
-
     // Cria registro de busca
     const { data: busca, error: buscaErr } = await supabase
       .from("google_maps_buscas")
@@ -266,10 +246,11 @@ Deno.serve(async (req) => {
     // Chave própria da Places API (New), se configurada na tela Google Maps Leads
     const { data: cfg } = await supabase
       .from("google_maps_config")
-      .select("api_key")
+      .select("api_key, api_key_reserva, reserva_ativa_mes")
       .eq("id", 1)
       .maybeSingle();
     const chavePropria = (cfg?.api_key ?? "").trim() || null;
+    const chaveReserva = (cfg?.api_key_reserva ?? "").trim() || null;
     if (!chavePropria && (!LOVABLE_API_KEY || !GOOGLE_MAPS_API_KEY)) {
       await supabase
         .from("google_maps_buscas")
@@ -281,12 +262,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    const endpoint = chavePropria
-      ? "https://places.googleapis.com/v1/places:searchText"
-      : `${GATEWAY_URL}/places/v1/places:searchText`;
-    const authHeaders: Record<string, string> = chavePropria
-      ? { "X-Goog-Api-Key": chavePropria }
-      : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
+    const mesAtual = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+      .toISOString().slice(0, 7) + "-01";
+
+    async function escolherProvedor() {
+      const { data: status, error: statusError } = await supabase.rpc("gm_status_provedores");
+      if (statusError) throw statusError;
+      const contas = (status ?? []) as Array<any>;
+      const principal = contas.find((c) => c.provedor === "principal");
+      const reserva = contas.find((c) => c.provedor === "reserva");
+      const reservaTravada = cfg?.reserva_ativa_mes === mesAtual;
+      if (!reservaTravada && principal?.pode_buscar) return "principal" as const;
+      if (chaveReserva && reserva?.pode_buscar) {
+        if (!reservaTravada) {
+          await supabase.from("google_maps_config").update({ reserva_ativa_mes: mesAtual }).eq("id", 1);
+        }
+        return "reserva" as const;
+      }
+      return null;
+    }
+
+    if (!(await escolherProvedor())) {
+      return new Response(
+        JSON.stringify({ error: "limite_atingido", message: "As contas Google Maps configuradas atingiram o limite mensal de segurança." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     /** Guarda apenas empresas inéditas. Retorna quantas foram aceitas. */
     function absorver(places: any[]) {
@@ -325,6 +326,19 @@ Deno.serve(async (req) => {
         };
         if (pageToken) reqBody.pageToken = pageToken;
 
+        const provedor = await escolherProvedor();
+        if (!provedor) {
+          limiteAtingidoNoMeio = true;
+          return;
+        }
+        const chaveSelecionada = provedor === "reserva" ? chaveReserva : chavePropria;
+        const endpoint = chaveSelecionada
+          ? "https://places.googleapis.com/v1/places:searchText"
+          : `${GATEWAY_URL}/places/v1/places:searchText`;
+        const authHeaders: Record<string, string> = chaveSelecionada
+          ? { "X-Goog-Api-Key": chaveSelecionada }
+          : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
+
         const resp = await fetch(endpoint, {
           method: "POST",
           headers: {
@@ -357,9 +371,8 @@ Deno.serve(async (req) => {
 
         // Incrementa contador de uso mensal (1 chamada Places consumida)
         await supabase.rpc("gm_incrementar_uso", { qtd: 1 });
-        const { data: st2 } = await supabase.rpc("gm_status_uso");
-        const s2 = Array.isArray(st2) ? st2[0] : st2;
-        if (s2 && !s2.pode_buscar) {
+        await supabase.rpc("gm_incrementar_uso_provedor", { p_provedor: provedor, p_qtd: 1 });
+        if (!(await escolherProvedor())) {
           limiteAtingidoNoMeio = true;
           return;
         }
