@@ -189,6 +189,8 @@ export default function GoogleMapsLeads() {
         data_reset_br: string;
         nivel: "normal" | "alto" | "critico" | "bloqueado";
         mensagem: string;
+        conta_ativa: "principal" | "reserva" | null;
+        provedores: Array<{ provedor: "principal" | "reserva"; total_consultas: number; limite_maximo: number; limite_bloqueio: number; pode_buscar: boolean; configurada: boolean; ativa: boolean }>;
       };
     },
     refetchInterval: 60_000,
@@ -997,11 +999,16 @@ interface ChaveStatus {
   tem_chave: boolean;
   sufixo: string | null;
   atualizado_em: string | null;
+  tem_chave_reserva: boolean;
+  sufixo_reserva: string | null;
+  reserva_atualizado_em: string | null;
+  provedores: Array<{ provedor: "principal" | "reserva"; total_consultas: number; limite_bloqueio: number; ativa: boolean; configurada: boolean }>;
 }
 
 function ChaveApiCard() {
   const qc = useQueryClient();
   const [novaChave, setNovaChave] = useState("");
+  const [novaChaveReserva, setNovaChaveReserva] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [testando, setTestando] = useState(false);
   const [resultadoTeste, setResultadoTeste] = useState<{ ok: boolean; message: string } | null>(null);
@@ -1024,17 +1031,18 @@ function ChaveApiCard() {
     return data as any;
   }
 
-  async function salvar() {
-    if (!novaChave.trim()) {
+  async function salvar(slot: "principal" | "reserva" = "principal") {
+    const chave = slot === "reserva" ? novaChaveReserva : novaChave;
+    if (!chave.trim()) {
       toast.error("Cole a chave da Places API (New)");
       return;
     }
     setSalvando(true);
     setResultadoTeste(null);
     try {
-      await chamar("salvar", { api_key: novaChave.trim() });
-      setNovaChave("");
-      toast.success("Chave salva. As buscas passarão a usar essa chave.");
+      await chamar("salvar", { api_key: chave.trim(), slot });
+      if (slot === "reserva") setNovaChaveReserva(""); else setNovaChave("");
+      toast.success(slot === "reserva" ? "Chave reserva salva" : "Chave principal salva");
       qc.invalidateQueries({ queryKey: ["gm-chave-status"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar chave");
@@ -1043,11 +1051,12 @@ function ChaveApiCard() {
     }
   }
 
-  async function testar() {
+  async function testar(slot: "principal" | "reserva" = "principal") {
     setTestando(true);
     setResultadoTeste(null);
     try {
-      const r = await chamar("testar", novaChave.trim() ? { api_key: novaChave.trim() } : {});
+      const chave = slot === "reserva" ? novaChaveReserva : novaChave;
+      const r = await chamar("testar", chave.trim() ? { api_key: chave.trim(), slot } : { slot });
       setResultadoTeste({ ok: !!r.ok, message: r.message ?? (r.ok ? "Chave válida" : "Falha no teste") });
       if (r.ok) toast.success("Chave válida");
       else toast.error(r.message ?? "Chave recusada pelo Google");
@@ -1061,10 +1070,10 @@ function ChaveApiCard() {
     }
   }
 
-  async function remover() {
-    if (!confirm("Remover a chave própria e voltar a usar a conexão padrão?")) return;
+  async function remover(slot: "principal" | "reserva" = "principal") {
+    if (!confirm(slot === "reserva" ? "Remover a chave reserva?" : "Remover a chave própria e voltar a usar a conexão padrão?")) return;
     try {
-      await chamar("remover");
+      await chamar("remover", { slot });
       setResultadoTeste(null);
       toast.success("Chave removida");
       qc.invalidateQueries({ queryKey: ["gm-chave-status"] });
@@ -1100,17 +1109,34 @@ function ChaveApiCard() {
               maxLength={200}
             />
           </div>
-          <Button onClick={salvar} disabled={salvando || !novaChave.trim()}>
+          <Button onClick={() => salvar("principal")} disabled={salvando || !novaChave.trim()}>
             {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar chave"}
           </Button>
-          <Button variant="outline" onClick={testar} disabled={testando || (!novaChave.trim() && !status?.tem_chave)}>
+          <Button variant="outline" onClick={() => testar("principal")} disabled={testando || (!novaChave.trim() && !status?.tem_chave)}>
             {testando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Testar chave"}
           </Button>
           {status?.tem_chave && (
-            <Button variant="ghost" onClick={remover} className="text-destructive">
+            <Button variant="ghost" onClick={() => remover("principal")} className="text-destructive">
               <Trash2 className="h-4 w-4 mr-1" /> Remover
             </Button>
           )}
+        </div>
+
+        <div className="border-t pt-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="gm-chave-reserva">Chave reserva da nova conta</Label>
+            <Badge variant={status?.tem_chave_reserva ? "secondary" : "outline"}>
+              {status?.tem_chave_reserva ? `Configurada ····${status.sufixo_reserva}` : "Não configurada"}
+            </Badge>
+            {status?.provedores?.find((p) => p.provedor === "reserva")?.ativa && <Badge>Em uso</Badge>}
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-end">
+            <Input id="gm-chave-reserva" type="password" autoComplete="off" placeholder={status?.tem_chave_reserva ? "Cole uma nova chave para substituir" : "AIza..."} value={novaChaveReserva} onChange={(e) => setNovaChaveReserva(e.target.value)} maxLength={200} />
+            <Button onClick={() => salvar("reserva")} disabled={salvando || !novaChaveReserva.trim()}>Salvar reserva</Button>
+            <Button variant="outline" onClick={() => testar("reserva")} disabled={testando || (!novaChaveReserva.trim() && !status?.tem_chave_reserva)}>Testar reserva</Button>
+            {status?.tem_chave_reserva && <Button variant="ghost" onClick={() => remover("reserva")} className="text-destructive"><Trash2 className="h-4 w-4 mr-1" /> Remover</Button>}
+          </div>
+          <p className="text-xs text-muted-foreground">A reserva entra automaticamente quando a principal atingir 4.800 requisições no mês.</p>
         </div>
 
         {resultadoTeste && (

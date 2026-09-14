@@ -58,6 +58,13 @@ Deno.serve(async (req) => {
     const { data, error } = await supabase.rpc("gm_status_uso");
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
+    const { data: provedores, error: provedoresError } = await supabase.rpc("gm_status_provedores");
+    if (provedoresError) throw provedoresError;
+    const contas = (provedores ?? []) as Array<any>;
+    const principal = contas.find((c) => c.provedor === "principal");
+    const reserva = contas.find((c) => c.provedor === "reserva");
+    const ativa = contas.find((c) => c.ativa && c.configurada && c.pode_buscar)
+      ?? contas.find((c) => c.configurada && c.pode_buscar);
     const dataResetBR = new Date(row.data_reset).toLocaleDateString("pt-BR");
     const mensagem = mensagemPorNivel(
       row.nivel,
@@ -69,10 +76,10 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        pode_buscar: row.pode_buscar,
-        consumo_atual: row.total_consultas,
-        limite_maximo: row.limite_maximo,
-        limite_bloqueio: row.limite_bloqueio,
+        pode_buscar: !!ativa,
+        consumo_atual: Number(principal?.total_consultas ?? row.total_consultas) + Number(reserva?.total_consultas ?? 0),
+        limite_maximo: Number(principal?.limite_maximo ?? 5000) + (reserva?.configurada ? Number(reserva.limite_maximo ?? 5000) : 0),
+        limite_bloqueio: Number(principal?.limite_bloqueio ?? 4800) + (reserva?.configurada ? Number(reserva.limite_bloqueio ?? 4800) : 0),
         alerta_percentual: row.alerta_percentual,
         percentual_consumido: Number(row.percentual_consumido),
         data_reset: row.data_reset,
@@ -80,6 +87,8 @@ Deno.serve(async (req) => {
         nivel: row.nivel,
         mes_referencia: row.mes_referencia,
         mensagem,
+        conta_ativa: ativa?.provedor ?? null,
+        provedores: contas,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
