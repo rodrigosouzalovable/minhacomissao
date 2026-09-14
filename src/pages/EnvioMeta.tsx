@@ -2642,8 +2642,8 @@ export default function EnvioMeta() {
 
 function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
   detalhes: {
-    enviados: { telefone: string; instancia?: string; erro?: string; ts: number; deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed'; deliveryErro?: string }[];
-    erros: { telefone: string; instancia?: string; erro?: string; ts: number }[];
+    enviados: { telefone: string; instancia?: string; erro?: string; ts: number; tentativas?: number; deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed'; deliveryErro?: string }[];
+    erros: { telefone: string; instancia?: string; erro?: string; ts: number; tentativas?: number }[];
     semWhatsapp: string[];
     erroValidacao: string[];
   };
@@ -2747,6 +2747,9 @@ function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
               <span className="flex items-center gap-2 min-w-0">
                 {e.telefone}
                 <DeliveryBadge s={e.deliveryStatus} erro={e.deliveryErro} />
+                {(e.tentativas || 0) > 0 && e.deliveryStatus !== 'failed' && (
+                  <span className="text-[10px] text-green-600 dark:text-green-400">Entregue após nova tentativa</span>
+                )}
               </span>
               <span className="text-muted-foreground whitespace-nowrap">{e.instancia} · {new Date(e.ts).toLocaleTimeString()}</span>
             </div>
@@ -2768,6 +2771,7 @@ function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
       >
         {detalhes.erros.map((e, i) => (
           <div key={i} className="border-b last:border-b-0 py-1">
+            <div className="text-[10px] font-medium text-red-600">Falha final · {Math.max(1, e.tentativas || 0)} tentativa(s)</div>
             <div className="flex items-center justify-between gap-2">
               <span>{e.telefone}</span>
               <span className="text-muted-foreground">{e.instancia}</span>
