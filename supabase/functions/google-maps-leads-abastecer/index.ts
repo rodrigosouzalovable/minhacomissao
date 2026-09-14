@@ -23,6 +23,9 @@ const SEMENTES = [
   { nicho: "contabilidade", cidade: "Goiânia GO" },
   { nicho: "imobiliária", cidade: "Goiânia GO" },
   { nicho: "academia", cidade: "Goiânia GO" },
+  { nicho: "clínica odontológica", cidade: "Aparecida de Goiânia GO" },
+  { nicho: "contabilidade", cidade: "Anápolis GO" },
+  { nicho: "imobiliária", cidade: "Brasília DF" },
 ];
 
 const json = (payload: unknown, status = 200) =>
@@ -108,7 +111,7 @@ Deno.serve(async (req) => {
           max_resultados: MAX_RESULTADOS,
           somente_novos: true,
           origem: "resgate_engajamento",
-           max_requisicoes: limiteRun,
+          max_requisicoes: limiteRun,
         },
       },
     );

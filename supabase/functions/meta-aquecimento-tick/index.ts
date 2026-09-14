@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
     // Log do dia (destinos já usados)
     const { data: logsHoje } = await supabase
       .from('meta_aquecimento_destino_log')
-      .select('instancia_id, destino_instancia_id, destino_telefone, fonte, status, enviado_em')
+      .select('instancia_id, destino_instancia_id, destino_telefone, fonte, status, erro, enviado_em')
       .eq('dia', dia)
       .limit(20000);
 

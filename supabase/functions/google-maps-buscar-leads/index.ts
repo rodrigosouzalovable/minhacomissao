@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
         user_id: userId,
         categoria,
         localizacao,
-         origem,
+        origem,
         raio_metros: body.raio_metros ?? null,
         status: "processando",
       })
@@ -316,7 +316,7 @@ Deno.serve(async (req) => {
       let pageToken: string | undefined;
       let paginasQuery = 0;
 
-       while (collected.length < maxRes && paginasQuery < 3 && pages < maxRequisicoes) {
+      while (collected.length < maxRes && paginasQuery < 3 && pages < maxRequisicoes) {
         const reqBody: any = {
           textQuery,
           languageCode: "pt-BR",
@@ -366,9 +366,9 @@ Deno.serve(async (req) => {
     await rodarConsulta(`${categoria} em ${localizacao}`);
 
     // Se faltaram leads inéditos, tenta variações da consulta para achar empresas diferentes
-     if (!erroGoogle && !limiteAtingidoNoMeio && somenteNovos && collected.length < maxRes && pages < maxRequisicoes) {
+    if (!erroGoogle && !limiteAtingidoNoMeio && somenteNovos && collected.length < maxRes && pages < maxRequisicoes) {
       for (const variacao of gerarVariacoes(categoria, localizacao, maxVariacoes)) {
-         if (collected.length >= maxRes || erroGoogle || limiteAtingidoNoMeio || pages >= maxRequisicoes) break;
+        if (collected.length >= maxRes || erroGoogle || limiteAtingidoNoMeio || pages >= maxRequisicoes) break;
         variacoesUsadas++;
         await rodarConsulta(variacao);
       }
@@ -426,7 +426,7 @@ Deno.serve(async (req) => {
         status: limiteAtingidoNoMeio ? "parcial_limite" : "concluida",
         total_resultados: rows.length,
         custo_estimado_usd: custo,
-         requisicoes_places: pages,
+        requisicoes_places: pages,
       })
       .eq("id", busca.id);
 
