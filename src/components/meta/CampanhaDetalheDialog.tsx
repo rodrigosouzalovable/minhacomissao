@@ -1005,7 +1005,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             <div className="h-64 overflow-auto px-3 py-2 space-y-1 text-xs font-mono" style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}>
               {detalhes.enviados.map((e, i) => (
                 <div key={i} className="flex items-center justify-between gap-2 border-b border-border/40 py-0.5">
-                  <span>{e.telefone}</span>
+                  <div className="flex items-center gap-2">
+                    <span>{e.telefone}</span>
+                    {(e.tentativas || 0) > 0 && (
+                      <Badge variant="outline" className="h-5 text-[10px] text-green-700 dark:text-green-300">
+                        Entregue após nova tentativa ({(e.tentativas || 0) + 1}ª)
+                      </Badge>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     {e.ts && <span className="text-muted-foreground text-[10px]">{new Date(e.ts).toLocaleString("pt-BR")}</span>}
                     <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
@@ -1081,7 +1088,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 {detalhes.erros.map((e, i) => (
                   <div key={i} className="border-b border-border/40 py-1">
                     <div className="flex justify-between gap-2">
-                      <span>{e.telefone}</span>
+                       <div className="flex items-center gap-2">
+                         <span>{e.telefone}</span>
+                         <Badge variant="destructive" className="h-5 text-[10px]">Falha final · {Math.max(1, e.tentativas || 0)} tentativa(s)</Badge>
+                       </div>
                       <div className="flex items-center gap-2">
                         {e.ts && <span className="text-muted-foreground text-[10px]">{new Date(e.ts).toLocaleString("pt-BR")}</span>}
                         <span className="text-muted-foreground text-[10px]">{e.instancia}</span>
@@ -1106,6 +1116,22 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 )}
               </div>
 
+            </details>
+          )}
+
+          {detalhes.tentandoNovamente.length > 0 && (
+            <details className="rounded-md border bg-card">
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300">
+                Tentando novamente <span className="text-muted-foreground font-normal">({detalhes.tentandoNovamente.length})</span>
+              </summary>
+              <div className="max-h-52 overflow-auto px-3 pb-3 space-y-1 text-xs font-mono">
+                {detalhes.tentandoNovamente.map((e, i) => (
+                  <div key={i} className="flex justify-between gap-2 border-b border-border/40 py-1">
+                    <span>{e.telefone}</span>
+                    <span className="text-muted-foreground">Próxima tentativa: {(e.tentativas || 0) + 1}ª · outra instância elegível</span>
+                  </div>
+                ))}
+              </div>
             </details>
           )}
 

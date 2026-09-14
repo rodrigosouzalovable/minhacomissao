@@ -78,6 +78,13 @@
       "when": 1789393619284,
       "tag": "0010_google_maps_dual_api_keys_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789394563076,
+      "tag": "0011_fix_meta_campaign_delivery_latest_attempt",
+      "breakpoints": true
     }
   ]
 }
