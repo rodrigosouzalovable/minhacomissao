@@ -163,15 +163,22 @@ Deno.serve(async (req) => {
     }
 
     // Log do dia (destinos já usados)
-    const { data: logsHoje } = await supabase
-      .from('meta_aquecimento_destino_log')
-      .select('instancia_id, destino_instancia_id, destino_telefone, fonte, status, erro, enviado_em')
-      .eq('dia', dia)
-      .limit(20000);
+    const logsHoje: any[] = [];
+    for (let inicio = 0; ; inicio += 1000) {
+      const { data: paginaLogs, error: paginaLogsError } = await supabase
+        .from('meta_aquecimento_destino_log')
+        .select('instancia_id, destino_instancia_id, destino_telefone, fonte, status, erro, enviado_em')
+        .eq('dia', dia)
+        .order('enviado_em', { ascending: true })
+        .range(inicio, inicio + 999);
+      if (paginaLogsError) throw paginaLogsError;
+      logsHoje.push(...(paginaLogs || []));
+      if (!paginaLogs || paginaLogs.length < 1000) break;
+    }
 
     const usoDestinoUazapi = new Map<string, number>();
     const destinosUazapiInvalidos = new Set<string>();
-    (logsHoje || []).forEach((l: any) => {
+    logsHoje.forEach((l: any) => {
       if (l.fonte === 'uazapi' && l.status === 'falha' && l.destino_instancia_id &&
           String(l.erro || '').includes('131026')) {
         destinosUazapiInvalidos.add(l.destino_instancia_id);
@@ -238,7 +245,7 @@ Deno.serve(async (req) => {
       // Ninguém respondendo: volta para os destinos que respondem garantido.
       if (corrigirRota) mixUazapi = Math.max(mixUazapi, 70);
 
-      const feitos = (logsHoje || []).filter(
+       const feitos = logsHoje.filter(
         (l: any) => l.instancia_id === inst.id && l.status !== 'falha',
       );
       const faltam = alvoDia - feitos.length;
@@ -263,7 +270,7 @@ Deno.serve(async (req) => {
         if (enviosRun >= MAX_ENVIOS_POR_RUN) break;
         if (Number(orc.gasto_reais) + gastoRun >= Number(orc.teto_reais)) break;
 
-        const meus = (logsHoje || []).filter(
+        const meus = logsHoje.filter(
           (l: any) => l.instancia_id === inst.id && l.status !== 'falha',
         );
         if (meus.length >= alvoDia) break;
@@ -383,7 +390,7 @@ Deno.serve(async (req) => {
           enviosRun++;
           enviadosInstancia++;
           gastoRun += custo;
-          (logsHoje as any[]).push({
+          logsHoje.push({
             instancia_id: inst.id, fonte, destino_instancia_id: destinoInstanciaId,
             destino_telefone: telefone, status: 'enviado', enviado_em: new Date().toISOString(),
           });

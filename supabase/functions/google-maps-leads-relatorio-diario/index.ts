@@ -106,11 +106,18 @@ Deno.serve(async (req) => {
     const custoDia = buscas.reduce((s, b) => s + Number(b.custo_estimado_usd || 0), 0);
 
     // Disparos de hoje — total e separado por origem.
-    const { data: logsDia } = await supabase
-      .from("meta_aquecimento_destino_log")
-      .select("instancia_id, fonte, status, erro, respondeu_em, entregue_em, lido_em, nicho, custo_estimado, enviado_em")
-      .eq("dia", hojeStr);
-    const todosLogs = (logsDia as any[]) || [];
+    const todosLogs: any[] = [];
+    for (let inicio = 0; ; inicio += 1000) {
+      const { data: paginaLogs, error: paginaLogsError } = await supabase
+        .from("meta_aquecimento_destino_log")
+        .select("instancia_id, fonte, status, erro, respondeu_em, entregue_em, lido_em, nicho, custo_estimado, enviado_em")
+        .eq("dia", hojeStr)
+        .order("enviado_em", { ascending: true })
+        .range(inicio, inicio + 999);
+      if (paginaLogsError) throw paginaLogsError;
+      todosLogs.push(...((paginaLogs as any[]) || []));
+      if (!paginaLogs || paginaLogs.length < 1000) break;
+    }
     const logs = todosLogs.filter((item) => item.fonte === "lead");
     const enviadosTotal = todosLogs.filter((item) => item.status !== "falha").length;
     const enviadosUazapi = todosLogs.filter((item) => item.fonte === "uazapi" && item.status !== "falha").length;

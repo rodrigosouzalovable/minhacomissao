@@ -348,6 +348,13 @@ Deno.serve(async (req) => {
         paginasQuery++;
         pages++;
 
+        // Persiste o consumo imediatamente; se a execução for interrompida,
+        // o abastecedor seguinte ainda respeita o teto diário.
+        await supabase
+          .from("google_maps_buscas")
+          .update({ requisicoes_places: pages })
+          .eq("id", busca.id);
+
         // Incrementa contador de uso mensal (1 chamada Places consumida)
         await supabase.rpc("gm_incrementar_uso", { qtd: 1 });
         const { data: st2 } = await supabase.rpc("gm_status_uso");

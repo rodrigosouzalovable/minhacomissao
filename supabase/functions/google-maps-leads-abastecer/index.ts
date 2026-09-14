@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     const requisicoesHoje = ((buscasHoje as any[]) || [])
       .reduce((s, b) => s + Number(b.requisicoes_places || 0), 0);
     const restantesHoje = Math.max(0, MAX_REQUISICOES_POR_DIA - requisicoesHoje);
-    if (!forcar && restantesHoje <= 0) {
+    if (restantesHoje <= 0) {
       return json({ ok: true, skipped: "limite_diario_de_requisicoes", requisicoes_hoje: requisicoesHoje });
     }
 
@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
       (item, idx, arr) => arr.findIndex((x) => x.nicho === item.nicho && x.cidade === item.cidade) === idx,
     );
     const alvo = alvos[requisicoesHoje % Math.max(1, alvos.length)] || SEMENTES[0];
-    const limiteRun = Math.min(MAX_REQUISICOES_POR_RUN, restantesHoje || MAX_REQUISICOES_POR_RUN);
+    const limiteRun = Math.min(MAX_REQUISICOES_POR_RUN, restantesHoje);
 
     // ===== Busca no Google Maps =====
     const { data: busca, error: erroBusca } = await supabase.functions.invoke(
