@@ -2653,6 +2653,27 @@ export type Database = {
           },
         ]
       }
+      google_maps_abastecimento_state: {
+        Row: {
+          id: boolean
+          lock_expires_at: string | null
+          lock_token: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          lock_expires_at?: string | null
+          lock_token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          lock_expires_at?: string | null
+          lock_token?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       google_maps_buscas: {
         Row: {
           categoria: string
@@ -2661,7 +2682,9 @@ export type Database = {
           erro: string | null
           id: string
           localizacao: string
+          origem: string
           raio_metros: number | null
+          requisicoes_places: number
           status: string
           total_resultados: number
           updated_at: string
@@ -2674,7 +2697,9 @@ export type Database = {
           erro?: string | null
           id?: string
           localizacao: string
+          origem?: string
           raio_metros?: number | null
+          requisicoes_places?: number
           status?: string
           total_resultados?: number
           updated_at?: string
@@ -2687,7 +2712,9 @@ export type Database = {
           erro?: string | null
           id?: string
           localizacao?: string
+          origem?: string
           raio_metros?: number | null
+          requisicoes_places?: number
           status?: string
           total_resultados?: number
           updated_at?: string
@@ -10287,6 +10314,11 @@ export type Database = {
         }[]
       }
       get_table_ddl: { Args: { p_table: string }; Returns: string }
+      gm_abastecimento_claim: {
+        Args: { p_lock_minutes?: number; p_token: string }
+        Returns: boolean
+      }
+      gm_abastecimento_release: { Args: { p_token: string }; Returns: boolean }
       gm_incrementar_uso: { Args: { qtd?: number }; Returns: number }
       gm_mes_atual: { Args: never; Returns: string }
       gm_status_uso: {
