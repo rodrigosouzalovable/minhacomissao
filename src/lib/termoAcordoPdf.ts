@@ -32,7 +32,9 @@ const dataBR = (value?: string | null) => {
 const slug = (value: string) =>
   value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-async function carregarImagem(url: string): Promise<string> {
+export const formatarNumeroAcordo = (id: string) => id.slice(0, 8).toUpperCase();
+
+async function carregarImagem(url: string, recortarTransparencia = false): Promise<string> {
   const resposta = await fetch(url);
   if (!resposta.ok) throw new Error('Não foi possível carregar uma das marcas do documento.');
   const blob = await resposta.blob();
@@ -40,9 +42,49 @@ async function carregarImagem(url: string): Promise<string> {
   return await new Promise((resolve, reject) => {
     const imagem = new Image();
     imagem.onload = () => {
+      const canvasOriginal = document.createElement('canvas');
+      canvasOriginal.width = imagem.naturalWidth;
+      canvasOriginal.height = imagem.naturalHeight;
+      const contextoOriginal = canvasOriginal.getContext('2d');
+      if (!contextoOriginal) {
+        URL.revokeObjectURL(enderecoTemporario);
+        reject(new Error('Não foi possível preparar uma das marcas do documento.'));
+        return;
+      }
+      contextoOriginal.drawImage(imagem, 0, 0);
+
+      let origemX = 0;
+      let origemY = 0;
+      let origemLargura = imagem.naturalWidth;
+      let origemAltura = imagem.naturalHeight;
+      if (recortarTransparencia) {
+        const pixels = contextoOriginal.getImageData(0, 0, imagem.naturalWidth, imagem.naturalHeight).data;
+        let minX = imagem.naturalWidth;
+        let minY = imagem.naturalHeight;
+        let maxX = -1;
+        let maxY = -1;
+        for (let py = 0; py < imagem.naturalHeight; py += 1) {
+          for (let px = 0; px < imagem.naturalWidth; px += 1) {
+            if (pixels[(py * imagem.naturalWidth + px) * 4 + 3] > 12) {
+              minX = Math.min(minX, px);
+              minY = Math.min(minY, py);
+              maxX = Math.max(maxX, px);
+              maxY = Math.max(maxY, py);
+            }
+          }
+        }
+        if (maxX >= minX && maxY >= minY) {
+          const margemRecorte = Math.max(4, Math.round((maxY - minY + 1) * 0.08));
+          origemX = Math.max(0, minX - margemRecorte);
+          origemY = Math.max(0, minY - margemRecorte);
+          origemLargura = Math.min(imagem.naturalWidth - origemX, maxX - origemX + 1 + margemRecorte);
+          origemAltura = Math.min(imagem.naturalHeight - origemY, maxY - origemY + 1 + margemRecorte);
+        }
+      }
+
       const canvas = document.createElement('canvas');
-      canvas.width = imagem.naturalWidth;
-      canvas.height = imagem.naturalHeight;
+      canvas.width = origemLargura;
+      canvas.height = origemAltura;
       const contexto = canvas.getContext('2d');
       if (!contexto) {
         URL.revokeObjectURL(enderecoTemporario);
@@ -51,7 +93,7 @@ async function carregarImagem(url: string): Promise<string> {
       }
       contexto.fillStyle = '#ffffff';
       contexto.fillRect(0, 0, canvas.width, canvas.height);
-      contexto.drawImage(imagem, 0, 0);
+      contexto.drawImage(canvasOriginal, origemX, origemY, origemLargura, origemAltura, 0, 0, origemLargura, origemAltura);
       URL.revokeObjectURL(enderecoTemporario);
       resolve(canvas.toDataURL('image/jpeg', 0.92));
     };
@@ -71,14 +113,17 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
   const [{ default: jsPDF }, logoSouza, logoCredor] = await Promise.all([
     import('jspdf'),
     carregarImagem(souzaRibeiroAsset.url),
-    carregarImagem(acordo.empresa === 'mundo_da_moda' ? umeAsset.url : novoMundoAsset.url),
+    carregarImagem(
+      acordo.empresa === 'mundo_da_moda' ? umeAsset.url : novoMundoAsset.url,
+      acordo.empresa !== 'mundo_da_moda',
+    ),
   ]);
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const credor = getEmpresaLabel(acordo.empresa);
   const parcelasOrdenadas = [...pagamentos].sort((a, b) => a.numero_parcela - b.numero_parcela);
   const emitidoEm = new Date().toLocaleDateString('pt-BR');
-  const identificador = acordo.id.slice(0, 8).toUpperCase();
+  const identificador = formatarNumeroAcordo(acordo.id);
   let y = 0;
 
   const novaPagina = () => {
@@ -115,7 +160,7 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
   if (acordo.empresa === 'mundo_da_moda') {
     doc.addImage(logoCredor, 'JPEG', 164, 9, 24, 24);
   } else {
-    doc.addImage(logoCredor, 'JPEG', 143, 11, 49, 22);
+    doc.addImage(logoCredor, 'JPEG', 139, 15, 53, 13);
   }
   doc.setDrawColor(20, 58, 92);
   doc.setLineWidth(0.7);
@@ -174,37 +219,43 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
   tituloClausula('CLÁUSULA SEGUNDA — DAS CONDIÇÕES DE PAGAMENTO');
   texto(`O valor total negociado é de ${moeda(acordo.valor_total)}, a ser pago em ${acordo.parcelas} parcela(s), conforme o cronograma abaixo. A quitação de cada parcela somente ocorrerá após a efetiva compensação do respectivo pagamento.`);
 
-  garantirEspaco(22);
-  const larguras = [22, 48, 58, 46];
+  garantirEspaco(26);
+  const larguras = [26, 46, 52, 50];
   const cabecalhos = ['PARCELA', 'VENCIMENTO', 'VALOR', 'SITUAÇÃO'];
-  let x = margem;
-  doc.setFillColor(20, 58, 92);
-  doc.rect(margem, y, larguraConteudo, 8, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(255, 255, 255);
-  cabecalhos.forEach((cabecalho, index) => {
-    doc.text(cabecalho, x + 3, y + 5.2);
-    x += larguras[index];
-  });
-  y += 8;
+  const desenharCabecalhoTabela = () => {
+    let inicioColuna = margem;
+    doc.setFillColor(20, 58, 92);
+    doc.rect(margem, y, larguraConteudo, 10, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    cabecalhos.forEach((cabecalho, index) => {
+      doc.text(cabecalho, inicioColuna + larguras[index] / 2, y + 6.4, { align: 'center' });
+      inicioColuna += larguras[index];
+    });
+    y += 10;
+  };
+  desenharCabecalhoTabela();
 
   parcelasOrdenadas.forEach((pagamento, index) => {
-    garantirEspaco(8);
-    x = margem;
+    if (y + 11 > alturaPagina - 22) {
+      novaPagina();
+      desenharCabecalhoTabela();
+    }
+    let inicioColuna = margem;
     if (index % 2 === 0) {
       doc.setFillColor(247, 249, 251);
-      doc.rect(margem, y, larguraConteudo, 8, 'F');
+      doc.rect(margem, y, larguraConteudo, 11, 'F');
     }
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(8.5);
     doc.setTextColor(40, 44, 48);
     const situacao = pagamento.status === 'pago' ? `Pago em ${dataBR(pagamento.data_paga)}` : 'Pendente';
     [`${pagamento.numero_parcela}/${parcelasOrdenadas.length}`, dataBR(pagamento.data_prevista), moeda(pagamento.valor_parcela), situacao].forEach((valor, colunaIndex) => {
-      doc.text(valor, x + 3, y + 5.3);
-      x += larguras[colunaIndex];
+      doc.text(valor, inicioColuna + larguras[colunaIndex] / 2, y + 7, { align: 'center' });
+      inicioColuna += larguras[colunaIndex];
     });
-    y += 8;
+    y += 11;
   });
 
   tituloClausula('CLÁUSULA TERCEIRA — DA COMPROVAÇÃO E QUITAÇÃO');
@@ -222,25 +273,28 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
   tituloClausula('CLÁUSULA SÉTIMA — DAS DISPOSIÇÕES GERAIS');
   texto('As partes declaram que compreenderam e aceitaram as condições descritas neste termo. Eventual tolerância quanto ao cumprimento de qualquer obrigação não representa renúncia de direito. Questões não previstas serão resolvidas conforme a legislação aplicável e os documentos da relação original.');
 
-  garantirEspaco(58);
-  y += 8;
-  doc.setDrawColor(90, 96, 102);
-  doc.line(margem, y, 91, y);
-  doc.line(119, y, larguraPagina - margem, y);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(30, 34, 38);
-  doc.text(acordo.cliente_nome, 54.5, y + 5, { align: 'center' });
-  doc.text(credor, 155.5, y + 5, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.text(`CPF: ${acordo.cliente_cpf || 'não informado'}`, 54.5, y + 10, { align: 'center' });
-  doc.text('CREDOR', 155.5, y + 10, { align: 'center' });
-  y += 27;
-  doc.line(margem, y, 91, y);
-  doc.line(119, y, larguraPagina - margem, y);
-  doc.text('TESTEMUNHA 1 — Nome e CPF', 54.5, y + 5, { align: 'center' });
-  doc.text('TESTEMUNHA 2 — Nome e CPF', 155.5, y + 5, { align: 'center' });
+  garantirEspaco(43);
+  y += 7;
+  doc.setFillColor(244, 247, 250);
+  doc.setDrawColor(218, 223, 229);
+  doc.roundedRect(margem, y, larguraConteudo, 34, 2, 2, 'FD');
+  const informacoes = [
+    ['CLIENTE', acordo.cliente_nome],
+    ['CPF', acordo.cliente_cpf || 'não informado'],
+    ['CREDOR', credor],
+    ['INTERMEDIAÇÃO', 'Souza e Ribeiro Advocacia e Cobrança — empresa terceirizada de cobrança'],
+  ];
+  informacoes.forEach(([rotulo, valor], index) => {
+    const linhaY = y + 7 + index * 7.2;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.2);
+    doc.setTextColor(95, 101, 109);
+    doc.text(rotulo, margem + 5, linhaY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 34, 38);
+    doc.text(valor, margem + 34, linhaY);
+  });
 
   const totalPaginas = doc.getNumberOfPages();
   for (let pagina = 1; pagina <= totalPaginas; pagina += 1) {

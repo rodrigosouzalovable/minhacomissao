@@ -35,7 +35,7 @@ import { AlertTriangle } from 'lucide-react';
 import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
-import { gerarTermoAcordoPdf } from '@/lib/termoAcordoPdf';
+import { formatarNumeroAcordo, gerarTermoAcordoPdf } from '@/lib/termoAcordoPdf';
 type Acordo = Tables<'acordos'>;
 
 interface WhatsAppInstance {
@@ -269,6 +269,8 @@ function AcordoCard({
                   {acordo.parcelas}x de {formatarMoeda(acordo.valor_parcela)} • {acordo.dias_atraso} dias em atraso
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
+                  Acordo nº {formatarNumeroAcordo(acordo.id)}
+                  <span className="mx-1.5">•</span>
                   Criado em {formatarData(acordo.criado_em)}
                   {lancadoPor && (
                     <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-foreground/80 font-medium">
