@@ -14,7 +14,7 @@ import { IdeiasTemplatesTab } from "@/components/meta/IdeiasTemplatesTab";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, X, Power, AlertTriangle, ExternalLink, Pencil, Building2 } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, X, Power, AlertTriangle, ExternalLink, Pencil, Building2, Gauge } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
@@ -109,7 +109,7 @@ type TemplatesSyncState = {
 
 
 export default function ConfigurarMeta() {
-  const { cotaDaBm, recarregar: recarregarCotas } = useBmCotas();
+  const { cotas, loading: loadingCotas, cotaDaBm, recarregar: recarregarCotas } = useBmCotas();
   const { parceiroMeta } = useUserPermissions();
   const { isAdmin } = useUserRole();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
@@ -128,6 +128,19 @@ export default function ConfigurarMeta() {
   const [verifyToken, setVerifyToken] = useState("");
   const [previewTpl, setPreviewTpl] = useState<Template | null>(null);
   const [bms, setBms] = useState<BM[]>([]);
+
+  const resumoCotasBm = useMemo(() => {
+    const bmsConectadas = Object.values(cotas).filter((cota) => cota.instancias > 0);
+    const bmsIlimitadas = bmsConectadas.filter((cota) => cota.tier_ilimitado);
+    const bmsLimitadas = bmsConectadas.filter((cota) => !cota.tier_ilimitado);
+    return {
+      quantidade: bmsConectadas.length,
+      ilimitadas: bmsIlimitadas.length,
+      limite: bmsLimitadas.reduce((total, cota) => total + cota.tier_diario, 0),
+      usados: bmsLimitadas.reduce((total, cota) => total + cota.enviados_24h, 0),
+      restantes: bmsLimitadas.reduce((total, cota) => total + cota.restantes, 0),
+    };
+  }, [cotas]);
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
   const [verificandoWebhooks, setVerificandoWebhooks] = useState(false);
@@ -1137,9 +1150,56 @@ export default function ConfigurarMeta() {
         </p>
       </div>
 
-
-
-
+      <Card className="mb-6">
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <Gauge className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Limite diário total das BMs</p>
+              <p className="text-xs text-muted-foreground">
+                Cada BM ativa com número Meta ativo é somada uma única vez.
+              </p>
+            </div>
+          </div>
+          {loadingCotas ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Calculando limites…
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 sm:text-right">
+              <div>
+                <p className="text-xs text-muted-foreground">Limite combinado</p>
+                <p className="text-xl font-semibold tabular-nums">
+                  {resumoCotasBm.ilimitadas > 0
+                    ? "Ilimitado"
+                    : resumoCotasBm.limite.toLocaleString("pt-BR")}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Usado em 24h</p>
+                <p className="text-base font-semibold tabular-nums">{resumoCotasBm.usados.toLocaleString("pt-BR")}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Disponível</p>
+                <p className="text-base font-semibold tabular-nums">
+                  {resumoCotasBm.ilimitadas > 0
+                    ? "Ilimitado"
+                    : resumoCotasBm.restantes.toLocaleString("pt-BR")}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">BMs conectadas</p>
+                <p className="text-base font-semibold tabular-nums">{resumoCotasBm.quantidade}</p>
+                {resumoCotasBm.ilimitadas > 0 && (
+                  <p className="text-xs text-muted-foreground">{resumoCotasBm.ilimitadas} ilimitada(s)</p>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <MetaGuardrailCard />
 
       <Card className="mb-6">

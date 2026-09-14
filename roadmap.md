@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Auditar aquecimento por BM e mostrar o limite diário total consolidado na API Oficial Meta
 - [x] Reformular Templates HSM no Envio Meta para mostrar o texto real no lugar das instâncias
 - [x] Exibir última sincronização dos Templates HSM e executar segunda–sábado às 06h BRT
 - [x] Criar lista permanente de leads do Google Maps com resposta automática no Aquecimento Meta
