@@ -1021,8 +1021,14 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const reativarJob = useCallback(async (jobId: string) => {
     const j = jobs.find((x) => x.id === jobId);
     if (!j) return;
-    if (j.restantes <= 0) {
-      toast.info("Não há contatos pendentes para reativar");
+    const { count: reativaveis } = await (supabase as any)
+      .from("envio_meta_job_item")
+      .select("id", { count: "exact", head: true })
+      .eq("job_id", jobId)
+      .in("status", ["pendente", "processando", "erro", "falha"]);
+    if (Number(reativaveis || 0) <= 0) {
+      await refreshCountersJob(jobId);
+      toast.info("Campanha já concluída — não há contatos pendentes para enviar");
       return;
     }
     manuallyCanceledRef.current.delete(jobId);
