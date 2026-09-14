@@ -36,11 +36,30 @@ async function carregarImagem(url: string): Promise<string> {
   const resposta = await fetch(url);
   if (!resposta.ok) throw new Error('Não foi possível carregar uma das marcas do documento.');
   const blob = await resposta.blob();
+  const enderecoTemporario = URL.createObjectURL(blob);
   return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('Não foi possível preparar uma das marcas do documento.'));
-    reader.readAsDataURL(blob);
+    const imagem = new Image();
+    imagem.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = imagem.naturalWidth;
+      canvas.height = imagem.naturalHeight;
+      const contexto = canvas.getContext('2d');
+      if (!contexto) {
+        URL.revokeObjectURL(enderecoTemporario);
+        reject(new Error('Não foi possível preparar uma das marcas do documento.'));
+        return;
+      }
+      contexto.fillStyle = '#ffffff';
+      contexto.fillRect(0, 0, canvas.width, canvas.height);
+      contexto.drawImage(imagem, 0, 0);
+      URL.revokeObjectURL(enderecoTemporario);
+      resolve(canvas.toDataURL('image/jpeg', 0.92));
+    };
+    imagem.onerror = () => {
+      URL.revokeObjectURL(enderecoTemporario);
+      reject(new Error('Não foi possível preparar uma das marcas do documento.'));
+    };
+    imagem.src = enderecoTemporario;
   });
 }
 
@@ -92,11 +111,11 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
   };
 
   // Cabeçalho institucional
-  doc.addImage(logoSouza, 'PNG', margem, 12, 74, 21);
+  doc.addImage(logoSouza, 'JPEG', margem, 12, 74, 21);
   if (acordo.empresa === 'mundo_da_moda') {
-    doc.addImage(logoCredor, 'PNG', 164, 9, 24, 24);
+    doc.addImage(logoCredor, 'JPEG', 164, 9, 24, 24);
   } else {
-    doc.addImage(logoCredor, 'PNG', 143, 11, 49, 22);
+    doc.addImage(logoCredor, 'JPEG', 143, 11, 49, 22);
   }
   doc.setDrawColor(20, 58, 92);
   doc.setLineWidth(0.7);
