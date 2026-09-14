@@ -148,6 +148,7 @@ export type CampanhaJob = {
   instancia_ids: string[] | null;
   enviados: number;
   erros: number;
+  sem_whatsapp: number;
   total: number;
   atual_telefone: string | null;
   atual_instancia: string | null;
@@ -274,20 +275,21 @@ function toCampanhaJob(j: any): CampanhaJob {
   const total = j.total || 0;
   const enviados = j.enviados || 0;
   const erros = j.erros || 0;
+  const semWhatsapp = j.sem_whatsapp || 0;
   return {
     id: j.id,
     status: j.status,
     template_nome: j.template_nome ?? null,
     nome_campanha: j.nome_campanha ?? null,
     instancia_ids: j.instancia_ids ?? null,
-    enviados, erros, total,
+    enviados, erros, sem_whatsapp: semWhatsapp, total,
     atual_telefone: j.atual_telefone ?? null,
     atual_instancia: j.atual_instancia ?? null,
     proximo_em: j.proximo_em ?? null,
     iniciado_em: j.iniciado_em ?? null,
     concluido_em: j.concluido_em ?? null,
     status_motivo: j.status_motivo ?? null,
-    restantes: Math.max(0, total - enviados - erros),
+    restantes: Math.max(0, total - enviados - erros - semWhatsapp),
     instancias_bloqueadas_run: Array.isArray(j.instancias_bloqueadas_run) ? j.instancias_bloqueadas_run : [],
     bloqueados_blacklist: Array.isArray(j.bloqueados_blacklist) ? j.bloqueados_blacklist : [],
     dias_antirrepeticao: Number(j.dias_antirrepeticao ?? 1),
@@ -646,28 +648,37 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   // Refresh parcial: contadores + status/motivo reais do banco.
   // O motivo precisa aparecer: sem ele a campanha parecia "Rodando" mesmo parada.
   const refreshCountersJob = useCallback(async (jobId: string) => {
-    const { data } = await (supabase as any)
-      .from("envio_meta_job")
-      .select("enviados, erros, total, atual_telefone, atual_instancia, proximo_em, status, status_motivo")
-      .eq("id", jobId)
-      .maybeSingle();
+    const [{ data }, { count: reativaveis }] = await Promise.all([
+      (supabase as any)
+        .from("envio_meta_job")
+        .select("enviados, erros, sem_whatsapp, total, atual_telefone, atual_instancia, proximo_em, status, status_motivo")
+        .eq("id", jobId)
+        .maybeSingle(),
+      (supabase as any)
+        .from("envio_meta_job_item")
+        .select("id", { count: "exact", head: true })
+        .eq("job_id", jobId)
+        .in("status", ["pendente", "processando", "erro", "falha"]),
+    ]);
     if (!data) return;
     setJobs((prev) => prev.map((j) => {
       if (j.id !== jobId) return j;
       const enviados = data.enviados || 0;
       const erros = data.erros || 0;
+      const semWhatsapp = data.sem_whatsapp || 0;
       const total = data.total || j.total;
       return {
         ...j,
         enviados,
         erros,
+        sem_whatsapp: semWhatsapp,
         total,
         atual_telefone: data.atual_telefone ?? j.atual_telefone,
         atual_instancia: data.atual_instancia ?? j.atual_instancia,
         proximo_em: data.proximo_em ?? j.proximo_em,
         status: data.status || j.status,
         status_motivo: data.status_motivo ?? null,
-        restantes: Math.max(0, total - enviados - erros),
+        restantes: Math.max(0, Number(reativaveis || 0)),
       };
     }));
   }, []);
@@ -1010,8 +1021,14 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const reativarJob = useCallback(async (jobId: string) => {
     const j = jobs.find((x) => x.id === jobId);
     if (!j) return;
-    if (j.restantes <= 0) {
-      toast.info("Não há contatos pendentes para reativar");
+    const { count: reativaveis } = await (supabase as any)
+      .from("envio_meta_job_item")
+      .select("id", { count: "exact", head: true })
+      .eq("job_id", jobId)
+      .in("status", ["pendente", "processando", "erro", "falha"]);
+    if (Number(reativaveis || 0) <= 0) {
+      await refreshCountersJob(jobId);
+      toast.info("Campanha já concluída — não há contatos pendentes para enviar");
       return;
     }
     manuallyCanceledRef.current.delete(jobId);
@@ -1020,12 +1037,19 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
     const ok = await reativarJobInterno(jobId);
     if (ok) {
-      toast.success(`Campanha reativada — ${j.restantes} contatos restantes`);
-      carregarJobs();
+      await refreshCountersJob(jobId);
+      const { count: pendentes } = await (supabase as any)
+        .from("envio_meta_job_item")
+        .select("id", { count: "exact", head: true })
+        .eq("job_id", jobId)
+        .in("status", ["pendente", "processando"]);
+      if (Number(pendentes || 0) > 0) toast.success(`Campanha reativada — ${pendentes} contatos na fila`);
+      else toast.info("Campanha já concluída — não há contatos pendentes para enviar");
+      await carregarJobs();
     } else {
       toast.error("Erro ao reativar");
     }
-  }, [jobs, carregarJobs, reativarJobInterno]);
+  }, [jobs, carregarJobs, reativarJobInterno, refreshCountersJob]);
 
   // Auto-retomada: só para jobs que caíram por erro/conclusão prematura, e nunca
   // quando o motivo é cota/qualidade (nesse caso o worker já agendou a retomada).

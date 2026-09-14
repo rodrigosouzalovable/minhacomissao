@@ -106,9 +106,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   useEffect(() => {
     if (!open || !jobId) return;
     marcarJobAberto(jobId, true);
+    refreshCountersJob(jobId);
     recarregarItensJob(jobId);
     return () => marcarJobAberto(jobId, false);
-  }, [open, jobId, marcarJobAberto, recarregarItensJob]);
+  }, [open, jobId, marcarJobAberto, recarregarItensJob, refreshCountersJob]);
 
   // Polling leve enquanto o diálogo está aberto — só refetch quando cache diverge do backend
   // e apenas com a aba visível (economia de CPU do banco).
@@ -957,7 +958,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 </Button>
               </>
             )}
-            {!ativa && resultado && job.restantes > 0 && (
+            {!ativa && job.restantes > 0 && (
               <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => reativarJob(job.id)}>
                 <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reativar ({job.restantes})
               </Button>

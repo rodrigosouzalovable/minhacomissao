@@ -92,6 +92,13 @@
       "when": 1789395005747,
       "tag": "0012_fix_google_maps_provider_ambiguity",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789407742892,
+      "tag": "0013_optimize_meta_campaign_delivery_summary",
+      "breakpoints": true
     }
   ]
 }
