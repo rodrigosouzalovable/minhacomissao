@@ -35,6 +35,7 @@ import { AlertTriangle } from 'lucide-react';
 import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
+import { gerarTermoAcordoPdf } from '@/lib/termoAcordoPdf';
 type Acordo = Tables<'acordos'>;
 
 interface WhatsAppInstance {
@@ -178,6 +179,33 @@ function AcordoCard({
 }) {
   const isEnviando = enviandoWhatsApp === acordo.id;
   const boletoEnviadoEfetivo = acordo.boleto_enviado || !!ultimaParcelaPaga;
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const { toast } = useToast();
+
+  const baixarTermo = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setGerandoPdf(true);
+    try {
+      const { data, error } = await supabase
+        .from('pagamentos')
+        .select('*')
+        .eq('acordo_id', acordo.id)
+        .order('numero_parcela', { ascending: true });
+      if (error) throw error;
+      await gerarTermoAcordoPdf({ acordo, pagamentos: data || [] });
+      toast({ title: 'Termo gerado', description: 'O PDF do acordo foi baixado.' });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Não foi possível gerar o termo',
+        description: error instanceof Error ? error.message : 'Tente novamente em alguns instantes.',
+      });
+    } finally {
+      setGerandoPdf(false);
+    }
+  };
+
   return <Link to={`/acordos/${acordo.id}`}>
       <Card className={cn("hover:border-primary/50 transition-all cursor-pointer",
     // VERDE - Mensagem enviada com sucesso
@@ -295,6 +323,23 @@ function AcordoCard({
                     {getEmpresaLabel(acordo.empresa)}
                   </Badge>
                 )}
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={baixarTermo}
+                        disabled={gerandoPdf}
+                        aria-label="Baixar termo em PDF"
+                      >
+                        {gerandoPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Baixar termo em PDF</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <Badge variant={getStatusVariant(acordo.status)}>
                   {getStatusLabel(acordo.status)}
                 </Badge>

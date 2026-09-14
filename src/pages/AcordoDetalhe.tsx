@@ -14,7 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send, Trash2, MessageCircle } from 'lucide-react';
+import { gerarTermoAcordoPdf } from '@/lib/termoAcordoPdf';
+import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send, Trash2, MessageCircle, Download, Loader2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,12 +57,30 @@ export default function AcordoDetalhe() {
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [excluindoLote, setExcluindoLote] = useState(false);
   const [isQuebraAcordo, setIsQuebraAcordo] = useState(false);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
   const canEdit = isOwner || isAdmin || (acordosCompartilhados && acordo?.user_id === concedidoPor);
   // Permissão granular para marcar/desmarcar parcelas como pagas em qualquer acordo
   const canMarcarPago = isAdmin || (canEdit && podeMarcarPagoGlobal);
+
+  const baixarTermo = async () => {
+    if (!acordo) return;
+    setGerandoPdf(true);
+    try {
+      await gerarTermoAcordoPdf({ acordo, pagamentos });
+      toast({ title: 'Termo gerado', description: 'O PDF do acordo foi baixado.' });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Não foi possível gerar o termo',
+        description: error instanceof Error ? error.message : 'Tente novamente em alguns instantes.',
+      });
+    } finally {
+      setGerandoPdf(false);
+    }
+  };
 
   useEffect(() => {
     async function loadAcordo() {
@@ -667,6 +686,10 @@ export default function AcordoDetalhe() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={baixarTermo} disabled={gerandoPdf}>
+              {gerandoPdf ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+              Baixar termo em PDF
+            </Button>
             {canEdit && acordo.status === 'ativo' && (
               <>
                 <Button
