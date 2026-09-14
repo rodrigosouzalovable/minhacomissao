@@ -71,23 +71,32 @@ Deno.serve(async (req) => {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const action = String(body?.action ?? "status");
 
+    const isReserva = body?.slot === "reserva";
+    const keyColumn = isReserva ? "api_key_reserva" : "api_key";
+
     async function lerChave(): Promise<string | null> {
-      const { data } = await supabase.from("google_maps_config").select("api_key").eq("id", 1).maybeSingle();
-      const k = (data?.api_key ?? "").trim();
+      const { data } = await supabase.from("google_maps_config").select(keyColumn).eq("id", 1).maybeSingle();
+      const k = (data?.[keyColumn] ?? "").trim();
       return k ? k : null;
     }
 
     if (action === "status") {
       const { data } = await supabase
         .from("google_maps_config")
-        .select("api_key, updated_at")
+        .select("api_key, api_key_reserva, updated_at, reserva_updated_at, reserva_ativa_mes")
         .eq("id", 1)
         .maybeSingle();
       const key = (data?.api_key ?? "").trim();
+      const reserva = (data?.api_key_reserva ?? "").trim();
+      const { data: usos } = await supabase.rpc("gm_status_provedores");
       return json({
         tem_chave: !!key,
         sufixo: key ? key.slice(-4) : null,
         atualizado_em: data?.updated_at ?? null,
+        tem_chave_reserva: !!reserva,
+        sufixo_reserva: reserva ? reserva.slice(-4) : null,
+        reserva_atualizado_em: data?.reserva_updated_at ?? null,
+        provedores: usos ?? [],
       });
     }
 
@@ -98,7 +107,9 @@ Deno.serve(async (req) => {
       }
       const { error } = await supabase
         .from("google_maps_config")
-        .upsert({ id: 1, api_key: chave, updated_by: user.id, updated_at: new Date().toISOString() });
+        .upsert(isReserva
+          ? { id: 1, api_key_reserva: chave, reserva_updated_by: user.id, reserva_updated_at: new Date().toISOString() }
+          : { id: 1, api_key: chave, updated_by: user.id, updated_at: new Date().toISOString() });
       if (error) throw error;
       return json({ ok: true, tem_chave: true, sufixo: chave.slice(-4) });
     }
@@ -106,7 +117,9 @@ Deno.serve(async (req) => {
     if (action === "remover") {
       const { error } = await supabase
         .from("google_maps_config")
-        .upsert({ id: 1, api_key: null, updated_by: user.id, updated_at: new Date().toISOString() });
+        .upsert(isReserva
+          ? { id: 1, api_key_reserva: null, reserva_updated_by: user.id, reserva_updated_at: new Date().toISOString() }
+          : { id: 1, api_key: null, updated_by: user.id, updated_at: new Date().toISOString() });
       if (error) throw error;
       return json({ ok: true, tem_chave: false, sufixo: null });
     }
@@ -148,6 +161,7 @@ Deno.serve(async (req) => {
       await resp.json().catch(() => ({}));
       // Consome 1 chamada Places — contabiliza no uso mensal
       await supabase.rpc("gm_incrementar_uso", { qtd: 1 });
+      await supabase.rpc("gm_incrementar_uso_provedor", { p_provedor: isReserva ? "reserva" : "principal", p_qtd: 1 });
       return json({ ok: true, message: "Chave válida: a Places API (New) respondeu com sucesso." });
     }
 

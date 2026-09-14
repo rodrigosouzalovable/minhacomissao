@@ -2725,19 +2725,31 @@ export type Database = {
       google_maps_config: {
         Row: {
           api_key: string | null
+          api_key_reserva: string | null
           id: number
+          reserva_ativa_mes: string | null
+          reserva_updated_at: string | null
+          reserva_updated_by: string | null
           updated_at: string
           updated_by: string | null
         }
         Insert: {
           api_key?: string | null
+          api_key_reserva?: string | null
           id?: number
+          reserva_ativa_mes?: string | null
+          reserva_updated_at?: string | null
+          reserva_updated_by?: string | null
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
           api_key?: string | null
+          api_key_reserva?: string | null
           id?: number
+          reserva_ativa_mes?: string | null
+          reserva_updated_at?: string | null
+          reserva_updated_by?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -2919,6 +2931,36 @@ export type Database = {
           limite_bloqueio?: number
           limite_maximo?: number
           mes_referencia?: string
+          total_consultas?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      google_maps_uso_provedor: {
+        Row: {
+          created_at: string
+          limite_bloqueio: number
+          limite_maximo: number
+          mes_referencia: string
+          provedor: string
+          total_consultas: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          limite_bloqueio?: number
+          limite_maximo?: number
+          mes_referencia: string
+          provedor: string
+          total_consultas?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          limite_bloqueio?: number
+          limite_maximo?: number
+          mes_referencia?: string
+          provedor?: string
           total_consultas?: number
           updated_at?: string
         }
@@ -10320,7 +10362,25 @@ export type Database = {
       }
       gm_abastecimento_release: { Args: { p_token: string }; Returns: boolean }
       gm_incrementar_uso: { Args: { qtd?: number }; Returns: number }
+      gm_incrementar_uso_provedor: {
+        Args: { p_provedor: string; p_qtd?: number }
+        Returns: number
+      }
       gm_mes_atual: { Args: never; Returns: string }
+      gm_status_provedores: {
+        Args: never
+        Returns: {
+          ativa: boolean
+          configurada: boolean
+          data_reset: string
+          limite_bloqueio: number
+          limite_maximo: number
+          percentual_consumido: number
+          pode_buscar: boolean
+          provedor: string
+          total_consultas: number
+        }[]
+      }
       gm_status_uso: {
         Args: never
         Returns: {

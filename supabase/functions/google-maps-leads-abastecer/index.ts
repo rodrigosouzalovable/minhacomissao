@@ -12,7 +12,7 @@ const corsHeaders = {
 };
 
 const ESTOQUE_MINIMO = 600;
-const MAX_REQUISICOES_POR_DIA = 60;
+const MAX_REQUISICOES_POR_DIA = 150;
 const MAX_REQUISICOES_POR_RUN = 12;
 const MAX_RESULTADOS = 60;
 

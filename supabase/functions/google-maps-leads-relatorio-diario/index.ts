@@ -104,6 +104,8 @@ Deno.serve(async (req) => {
       .lte("created_at", fimDia);
     const buscas = (buscasHoje as any[]) || [];
     const custoDia = buscas.reduce((s, b) => s + Number(b.custo_estimado_usd || 0), 0);
+    const { data: usoProvedores } = await supabase.rpc("gm_status_provedores");
+    const contasMaps = (usoProvedores ?? []) as Array<any>;
 
     // Disparos de hoje — total e separado por origem.
     const todosLogs: any[] = [];
@@ -280,6 +282,11 @@ Deno.serve(async (req) => {
       for (const [nicho, qtd] of top) l.push(`   – ${nicho}: ${qtd}`);
     }
     l.push(`• ${buscas.length} busca(s) no Google hoje · custo ~US$ ${custoDia.toFixed(2)}`);
+    for (const conta of contasMaps) {
+      const nome = conta.provedor === "principal" ? "Principal" : "Reserva";
+      const estado = conta.configurada ? `${conta.total_consultas}/${conta.limite_bloqueio}` : "não configurada";
+      l.push(`• Conta ${nome}: ${estado}${conta.ativa && conta.configurada ? " · ativa" : ""}`);
+    }
 
     l.push("");
     l.push("*📇 Base acumulada*");
