@@ -57,6 +57,13 @@
       "when": 1789206371435,
       "tag": "0007_reschedule_meta_templates_sync_monday_saturday",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789382669334,
+      "tag": "0008_filter_bm_quota_to_active_meta_instances",
+      "breakpoints": true
     }
   ]
 }
