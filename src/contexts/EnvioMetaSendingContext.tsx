@@ -473,6 +473,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       .in("status", ["enviado", "erro"])
       .order("processado_em", { ascending: false })
       .range(offset, offset + PAGINA_ITENS - 1);
+    const itensProcessados = error ? [] : (data || []);
     const { data: retries } = offset === 0 ? await (supabase as any)
       .from("envio_meta_job_item")
       .select("telefone,status,instancia_nome,erro,processado_em,wa_message_id,tentativas")
@@ -481,7 +482,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       .gt("tentativas", 0)
       .order("tentativas", { ascending: false })
       .limit(50) : { data: [] };
-    const pagina = error ? [] : [...(data || []), ...(retries || [])];
+    const pagina = [...itensProcessados, ...(retries || [])];
     setItensByJob((prev) => {
       const n = new Map(prev);
       const anteriores = append ? (prev.get(jobId) || []) : [];
@@ -490,7 +491,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     });
     setPagByJob((prev) => {
       const n = new Map(prev);
-      n.set(jobId, { temMais: pagina.length === PAGINA_ITENS });
+      n.set(jobId, { temMais: itensProcessados.length === PAGINA_ITENS });
       return n;
     });
     return pagina;
