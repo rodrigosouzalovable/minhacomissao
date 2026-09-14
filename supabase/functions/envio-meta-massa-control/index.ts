@@ -124,19 +124,22 @@ Deno.serve(async (req) => {
     } else if (acao === 'reativar') {
       // Reconcilia o cabeçalho com os itens reais antes de decidir se existe algo
       // para retomar. Isso evita botões falsos quando itens sem WhatsApp encerram a fila.
-      const { data: estados, error: estadosErr } = await supabase
-        .from('envio_meta_job_item')
-        .select('status')
-        .eq('job_id', jobId);
-      if (estadosErr) throw estadosErr;
-      const contagens = (estados || []).reduce((acc: Record<string, number>, item: any) => {
-        const status = String(item.status || '');
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {});
-      const enviadosReais = contagens.enviado || 0;
-      const errosReais = (contagens.erro || 0) + (contagens.falha || 0);
-      const semWhatsappReais = contagens.sem_whatsapp || 0;
+      const contarStatus = async (status: string) => {
+        const { count, error } = await supabase
+          .from('envio_meta_job_item')
+          .select('id', { count: 'exact', head: true })
+          .eq('job_id', jobId)
+          .eq('status', status);
+        if (error) throw error;
+        return Number(count || 0);
+      };
+      const [enviadosReais, erros, falhas, semWhatsappReais] = await Promise.all([
+        contarStatus('enviado'),
+        contarStatus('erro'),
+        contarStatus('falha'),
+        contarStatus('sem_whatsapp'),
+      ]);
+      const errosReais = erros + falhas;
 
       await supabase.from('envio_meta_job').update({
         enviados: enviadosReais,
@@ -213,6 +216,7 @@ Deno.serve(async (req) => {
       }
       await supabase.from('envio_meta_job').update({
         status: 'rodando',
+        erros: 0,
         concluido_em: null,
         status_motivo: null,
         proximo_em: new Date().toISOString(),
