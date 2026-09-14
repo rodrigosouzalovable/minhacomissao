@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Aumentar captação Google Maps para 150 requisições/dia e adicionar chave reserva com troca automática
 
 ## Concluído
 - [x] Corrigir gargalos do aquecimento Meta e ampliar a reserva automática de leads Google Maps
