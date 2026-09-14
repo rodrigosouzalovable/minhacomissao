@@ -28,7 +28,6 @@ export type DeliveryResumo = { aceito: number; entregue: number; lida: number; f
 export type EnvioProgresso = {
   enviados: number;
   erros: number;
-  sem_whatsapp: number;
   total: number;
   atualTelefone: string;
   atualInstancia: string;
@@ -149,6 +148,7 @@ export type CampanhaJob = {
   instancia_ids: string[] | null;
   enviados: number;
   erros: number;
+  sem_whatsapp: number;
   total: number;
   atual_telefone: string | null;
   atual_instancia: string | null;
