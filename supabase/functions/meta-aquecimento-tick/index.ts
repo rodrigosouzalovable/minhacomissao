@@ -18,6 +18,7 @@ import {
   hojeBrt,
   renderTemplateBody,
   sorteio,
+  instanciasComTemplateLeadAprovado,
 } from '../_shared/meta-aquecimento-alvo.ts';
 import {
   carregarOrcamento,
@@ -92,9 +93,16 @@ Deno.serve(async (req) => {
       .eq('provider', 'meta')
       .eq('aquecimento_meta_ativo', true);
 
+    const templatesLeadAprovados = await instanciasComTemplateLeadAprovado(
+      supabase,
+      (insts || []).map((i: any) => String(i.id)),
+    );
     const elegiveis = (insts || []).filter((i: any) => {
       if (i.recuperacao_ativa === true) return false; // cuidado por meta-recuperacao-tick
-      if (i.estado_pool && i.estado_pool !== 'ativo') return false;
+      if (i.estado_pool && i.estado_pool !== 'ativo') {
+        const aguardandoComTemplate = i.estado_pool === 'aguardando_templates' && templatesLeadAprovados.has(i.id);
+        if (!aguardandoComTemplate) return false;
+      }
       if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate) > new Date()) return false;
       if (i.quarentena_ate && new Date(i.quarentena_ate) > new Date()) return false;
       const q = String(i.saude_quality || 'UNKNOWN').toUpperCase();
