@@ -2644,6 +2644,7 @@ function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
   detalhes: {
     enviados: { telefone: string; instancia?: string; erro?: string; ts: number; tentativas?: number; deliveryStatus?: 'sent' | 'delivered' | 'read' | 'failed'; deliveryErro?: string }[];
     erros: { telefone: string; instancia?: string; erro?: string; ts: number; tentativas?: number }[];
+    tentandoNovamente: { telefone: string; instancia?: string; erro?: string; ts: number; tentativas?: number }[];
     semWhatsapp: string[];
     erroValidacao: string[];
   };
@@ -2761,6 +2762,19 @@ function DetalhesEnvioPainel({ detalhes, deliveryResumo, onRefresh }: {
           </div>
         ))}
 
+      </Section>
+
+      <Section
+        titulo="🔄 Tentando novamente"
+        cor="text-amber-600"
+        count={detalhes.tentandoNovamente.length}
+      >
+        {detalhes.tentandoNovamente.map((e, i) => (
+          <div key={i} className="flex justify-between gap-2 border-b last:border-b-0 py-1">
+            <span>{e.telefone}</span>
+            <span className="text-muted-foreground">Próxima: {(e.tentativas || 0) + 1}ª tentativa</span>
+          </div>
+        ))}
       </Section>
 
       <Section

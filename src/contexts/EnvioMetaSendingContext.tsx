@@ -18,6 +18,7 @@ export type EnvioItem = {
 export type EnvioDetalhes = {
   enviados: EnvioItem[];
   erros: EnvioItem[];
+  tentandoNovamente: EnvioItem[];
   semWhatsapp: string[];
   erroValidacao: string[];
 };
@@ -226,7 +227,7 @@ type Ctx = {
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
 
-const EMPTY_DETALHES: EnvioDetalhes = { enviados: [], erros: [], semWhatsapp: [], erroValidacao: [] };
+const EMPTY_DETALHES: EnvioDetalhes = { enviados: [], erros: [], tentandoNovamente: [], semWhatsapp: [], erroValidacao: [] };
 const EMPTY_RESUMO: DeliveryResumo = { aceito: 0, entregue: 0, lida: 0, falhou: 0, aguardando: 0 };
 const LOCAL_EXTRAS_KEY = "envio_meta_extras_multi_v1"; // { [jobId]: { semWhatsapp, erroValidacao } }
 
@@ -472,7 +473,15 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       .in("status", ["enviado", "erro"])
       .order("processado_em", { ascending: false })
       .range(offset, offset + PAGINA_ITENS - 1);
-    const pagina = error ? [] : (data || []);
+    const { data: retries } = offset === 0 ? await (supabase as any)
+      .from("envio_meta_job_item")
+      .select("telefone,status,instancia_nome,erro,processado_em,wa_message_id,tentativas")
+      .eq("job_id", jobId)
+      .in("status", ["pendente", "processando"])
+      .gt("tentativas", 0)
+      .order("tentativas", { ascending: false })
+      .limit(50) : { data: [] };
+    const pagina = error ? [] : [...(data || []), ...(retries || [])];
     setItensByJob((prev) => {
       const n = new Map(prev);
       const anteriores = append ? (prev.get(jobId) || []) : [];
@@ -823,6 +832,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     const logs = logByJob.get(jobId) || new Map();
     const enviados: EnvioItem[] = [];
     const erros: EnvioItem[] = [];
+    const tentandoNovamente: EnvioItem[] = [];
     for (const it of its) {
       const ts = it.processado_em ? new Date(it.processado_em).getTime() : Date.now();
       const key = String(it.wa_message_id || "");
@@ -839,10 +849,12 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       } else if (it.status === "erro") {
         if (isRateLimitErro(it.erro)) continue;
         erros.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, erro: it.erro || undefined, ts, tentativas: Number(it.tentativas || 0) });
+      } else if ((it.status === "pendente" || it.status === "processando") && Number(it.tentativas || 0) > 0) {
+        tentandoNovamente.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, erro: it.erro || undefined, ts, tentativas: Number(it.tentativas || 0) });
       }
     }
     const ex = extras[jobId] || { semWhatsapp: [], erroValidacao: [] };
-    return { enviados, erros, semWhatsapp: ex.semWhatsapp, erroValidacao: ex.erroValidacao };
+    return { enviados, erros, tentandoNovamente, semWhatsapp: ex.semWhatsapp, erroValidacao: ex.erroValidacao };
   }, [itensByJob, logByJob, extras]);
 
   const getDeliveryResumoJob = useCallback((jobId: string): DeliveryResumo => {

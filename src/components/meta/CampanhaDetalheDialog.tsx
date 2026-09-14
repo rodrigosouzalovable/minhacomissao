@@ -1119,6 +1119,22 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             </details>
           )}
 
+          {detalhes.tentandoNovamente.length > 0 && (
+            <details className="rounded-md border bg-card">
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300">
+                Tentando novamente <span className="text-muted-foreground font-normal">({detalhes.tentandoNovamente.length})</span>
+              </summary>
+              <div className="max-h-52 overflow-auto px-3 pb-3 space-y-1 text-xs font-mono">
+                {detalhes.tentandoNovamente.map((e, i) => (
+                  <div key={i} className="flex justify-between gap-2 border-b border-border/40 py-1">
+                    <span>{e.telefone}</span>
+                    <span className="text-muted-foreground">Próxima tentativa: {(e.tentativas || 0) + 1}ª · outra instância elegível</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
           {/* Falharam na entrega */}
           {falhasEntrega.length > 0 && (
             <details className="rounded-md border bg-card" open={openFalhas} onToggle={(e) => setOpenFalhas((e.currentTarget as HTMLDetailsElement).open)}>
