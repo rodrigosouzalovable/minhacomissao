@@ -241,7 +241,7 @@ Deno.serve(async (req) => {
       com_whatsapp: comWhats.length,
       sem_whatsapp: semWhats.length,
       erros,
-      instancia: validador.nome ?? null,
+      instancias_validadoras: conectadas.map((i) => i.nome).filter(Boolean),
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "erro";

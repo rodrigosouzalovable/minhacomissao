@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Corrigir gargalos do aquecimento Meta e ampliar a reserva automática de leads Google Maps
 - [x] Ajustar enquadramento, parcelas, identificação e quadro final do termo de acordo em PDF
 - [x] Gerar termo profissional em PDF com marcas por credor em todos os acordos
 - [x] Auditar aquecimento por BM e mostrar o limite diário total consolidado na API Oficial Meta

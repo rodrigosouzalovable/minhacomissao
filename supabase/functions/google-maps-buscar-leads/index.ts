@@ -11,6 +11,8 @@ interface Body {
   somente_novos?: boolean; // ignora empresas já trazidas em buscas anteriores
   max_variacoes?: number; // variações extras de consulta quando faltam leads novos
   enriquecer_instagram?: boolean; // busca Instagram/seguidores dos leads encontrados
+  origem?: string; // identifica buscas automáticas sem misturar com buscas manuais
+  max_requisicoes?: number; // teto de páginas Places consumidas nesta execução
 }
 
 function normalizarChave(v: string | null | undefined) {
@@ -193,6 +195,8 @@ Deno.serve(async (req) => {
       });
     }
     const maxRes = Math.min(Math.max(body.max_resultados ?? 60, 1), 60);
+    const maxRequisicoes = Math.min(Math.max(Number(body.max_requisicoes ?? 18), 1), 18);
+    const origem = String(body.origem || "manual").slice(0, 60);
 
     // Guardrail: verificar limite mensal antes de qualquer chamada à Places API
     {
@@ -221,6 +225,7 @@ Deno.serve(async (req) => {
         user_id: userId,
         categoria,
         localizacao,
+         origem,
         raio_metros: body.raio_metros ?? null,
         status: "processando",
       })
@@ -311,7 +316,7 @@ Deno.serve(async (req) => {
       let pageToken: string | undefined;
       let paginasQuery = 0;
 
-      while (collected.length < maxRes && paginasQuery < 3) {
+       while (collected.length < maxRes && paginasQuery < 3 && pages < maxRequisicoes) {
         const reqBody: any = {
           textQuery,
           languageCode: "pt-BR",
@@ -361,9 +366,9 @@ Deno.serve(async (req) => {
     await rodarConsulta(`${categoria} em ${localizacao}`);
 
     // Se faltaram leads inéditos, tenta variações da consulta para achar empresas diferentes
-    if (!erroGoogle && !limiteAtingidoNoMeio && somenteNovos && collected.length < maxRes) {
+     if (!erroGoogle && !limiteAtingidoNoMeio && somenteNovos && collected.length < maxRes && pages < maxRequisicoes) {
       for (const variacao of gerarVariacoes(categoria, localizacao, maxVariacoes)) {
-        if (collected.length >= maxRes || erroGoogle || limiteAtingidoNoMeio) break;
+         if (collected.length >= maxRes || erroGoogle || limiteAtingidoNoMeio || pages >= maxRequisicoes) break;
         variacoesUsadas++;
         await rodarConsulta(variacao);
       }
@@ -421,6 +426,7 @@ Deno.serve(async (req) => {
         status: limiteAtingidoNoMeio ? "parcial_limite" : "concluida",
         total_resultados: rows.length,
         custo_estimado_usd: custo,
+         requisicoes_places: pages,
       })
       .eq("id", busca.id);
 
