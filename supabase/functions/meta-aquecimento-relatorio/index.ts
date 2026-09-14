@@ -1,6 +1,7 @@
 // Relatório diário de aquecimento Meta - enviado às 12h e 18h BRT
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarNumeros } from "../_shared/notificar-numeros.ts";
+import { instanciasComTemplateLeadAprovado } from "../_shared/meta-aquecimento-alvo.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -132,7 +133,7 @@ Deno.serve(async (req) => {
     linhas.push("*🔥 Aquecimento de tier (novas BMs)*");
     const { data: instAqRaw } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, saude_quality, saude_tier, tier_diario, estado_pool, pausa_automatica_ate")
+      .select("id, nome, display_phone, saude_quality, saude_tier, tier_diario, estado_pool, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, phone_number_id, access_token")
       .eq("provider", "meta")
       .eq("ativo", true)
       .eq("aquecimento_meta_ativo", true);
@@ -142,6 +143,7 @@ Deno.serve(async (req) => {
       linhas.push("_Motor parado — nenhum número selecionado._");
     } else {
       const idsAq = instAq.map((i: any) => i.id);
+      const templatesLeadAprovados = await instanciasComTemplateLeadAprovado(supabase, idsAq);
       const desde7d = new Date(Date.now() - 7 * 86400000).toISOString();
       const [{ data: trilhas }, { data: logsAqDia }, { data: logsAq7d }, { data: orcAq }] = await Promise.all([
         supabase
@@ -198,12 +200,23 @@ Deno.serve(async (req) => {
           }
         } else {
           linhas.push("   _sem trilha planejada hoje_");
+          let motivo = "aguardando próxima rodada";
+          if (inst.recuperacao_ativa === true) motivo = "em recuperação";
+          else if (inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date()) motivo = "em quarentena";
+          else if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) motivo = "bloqueio/pausa da Meta";
+          else if (!inst.phone_number_id || !inst.access_token) motivo = "credenciais Meta incompletas";
+          else if (q === "YELLOW" || q === "RED") motivo = `qualidade ${q}`;
+          else if (inst.estado_pool === "aguardando_templates" && !templatesLeadAprovados.has(inst.id)) motivo = "sem template UTILITY aprovado para leads";
+          else if (inst.estado_pool && inst.estado_pool !== "ativo" && inst.estado_pool !== "aguardando_templates") motivo = `estado ${inst.estado_pool}`;
+          linhas.push(`   Motivo: ${motivo}`);
         }
         if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
           linhas.push("   ⛔ número pausado automaticamente (erro da Meta)");
         }
         if (q === "YELLOW" || q === "RED") {
           linhas.push(`   ⚠️ qualidade caiu para ${q} — aquecimento reduzido`);
+        } else if (q === "?" || q === "UNKNOWN") {
+          linhas.push("   ℹ️ nome/qualidade em análise — permitido no aquecimento");
         }
       }
 

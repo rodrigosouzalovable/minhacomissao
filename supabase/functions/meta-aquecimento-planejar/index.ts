@@ -3,7 +3,7 @@
 // destinatários ÚNICOS do dia e o mix entre destinos UAZAPI e leads reais.
 // Sem loop, sem auto-invocação: 1 execução por dia, 1 chamada de IA.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { hojeBrt } from '../_shared/meta-aquecimento-alvo.ts';
+import { hojeBrt, instanciasComTemplateLeadAprovado } from '../_shared/meta-aquecimento-alvo.ts';
 import { carregarOrcamento, proximoTier, tierAtual } from '../_shared/meta-aquecimento-inteligente.ts';
 import { notificarNumeros } from '../_shared/notificar-numeros.ts';
 
@@ -49,15 +49,6 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const forcar = body?.forcar === true;
 
-    // Single-flight: se já existe plano do dia, não replaneja.
-    const { count: jaFeitos } = await supabase
-      .from('meta_aquecimento_trilha')
-      .select('id', { count: 'exact', head: true })
-      .eq('dia', dia);
-    if ((jaFeitos ?? 0) > 0 && !forcar) {
-      return json({ ok: true, skipped: 'plano_do_dia_existente', dia });
-    }
-
     const orc = await carregarOrcamento(supabase, dia);
 
     const { data: insts } = await supabase
@@ -68,18 +59,32 @@ Deno.serve(async (req) => {
       .eq('aquecimento_meta_ativo', true)
       .limit(200);
 
+    const idsSelecionados = (insts || []).map((i: any) => String(i.id));
+    const templatesLeadAprovados = await instanciasComTemplateLeadAprovado(supabase, idsSelecionados);
+    const { data: trilhasExistentes } = await supabase
+      .from('meta_aquecimento_trilha')
+      .select('instancia_id')
+      .eq('dia', dia)
+      .in('instancia_id', idsSelecionados);
+    const idsPlanejados = new Set(((trilhasExistentes as any[]) || []).map((t) => String(t.instancia_id)));
+
     const elegiveis = (insts || []).filter((i: any) => {
       if (i.recuperacao_ativa === true) return false;
-      if (i.estado_pool && i.estado_pool !== 'ativo') return false;
+      if (i.estado_pool && i.estado_pool !== 'ativo') {
+        const aguardandoComTemplate = i.estado_pool === 'aguardando_templates' && templatesLeadAprovados.has(i.id);
+        if (!aguardandoComTemplate) return false;
+      }
       if (i.quarentena_ate && new Date(i.quarentena_ate) > new Date()) return false;
       if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate) > new Date()) return false;
       if (!i.phone_number_id || !i.access_token) return false;
       const q = String(i.saude_quality || 'UNKNOWN').toUpperCase();
       return q === 'GREEN' || q === 'UNKNOWN';
-    }).slice(0, LIMITE_INSTANCIAS);
+    }).filter((i: any) => forcar || !idsPlanejados.has(i.id)).slice(0, LIMITE_INSTANCIAS);
 
     if ((insts || []).length === 0) return json({ ok: true, skipped: 'nenhuma_selecionada', dia });
-    if (elegiveis.length === 0) return json({ ok: true, skipped: 'nenhuma_elegivel', dia });
+    if (elegiveis.length === 0) {
+      return json({ ok: true, skipped: idsPlanejados.size > 0 ? 'todas_ja_planejadas' : 'nenhuma_elegivel', dia });
+    }
 
     const desde = new Date(Date.now() - 7 * 86400000).toISOString();
 

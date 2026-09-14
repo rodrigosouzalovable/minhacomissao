@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Liberar aquecimento de DICEPAY/GREENAUTO com template de leads aprovado, inclusive UNKNOWN/nome em análise
 - [x] Corrigir totais e reativação falsa da campanha Novo Mundo1
 - [x] Restringir o resumo do limite diário total das BMs somente ao administrador
 - [x] Corrigir bolinha vermelha antiga e identificar reenvios Meta concluídos por outra instância

@@ -48,6 +48,36 @@ export interface TemplateAquecimento {
   params: { tipo: "posicional" | "nomeado"; chaves: string[] };
 }
 
+/**
+ * Números que já possuem ao menos um template UTILITY aprovado e autorizado
+ * para leads. Isso permite aquecer enquanto o pool geral ainda aguarda os
+ * demais templates, sem liberar a instância para campanhas comuns.
+ */
+export async function instanciasComTemplateLeadAprovado(
+  supabase: any,
+  instanciaIds: string[],
+): Promise<Set<string>> {
+  if (instanciaIds.length === 0) return new Set<string>();
+
+  const { data: mestres } = await supabase
+    .from("meta_templates_mestre")
+    .select("id")
+    .eq("categoria", "UTILITY")
+    .eq("usar_em_leads", true)
+    .eq("reclassificado_marketing", false);
+  const mestreIds = (mestres || []).map((m: any) => String(m.id));
+  if (mestreIds.length === 0) return new Set<string>();
+
+  const { data: aprovados } = await supabase
+    .from("meta_templates_instancia")
+    .select("instancia_id")
+    .in("instancia_id", instanciaIds)
+    .in("template_mestre_id", mestreIds)
+    .eq("status", "APPROVED");
+
+  return new Set((aprovados || []).map((t: any) => String(t.instancia_id)));
+}
+
 const VALOR_PADRAO = "confirmação de cadastro";
 
 /** Palavras genéricas que não servem sozinhas como "nome curto" da empresa. */
