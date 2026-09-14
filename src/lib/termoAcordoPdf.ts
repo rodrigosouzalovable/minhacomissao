@@ -1,7 +1,7 @@
 import type { Tables } from '@/integrations/supabase/types';
 import souzaRibeiroAsset from '@/assets/souza-e-ribeiro-oficial.png.asset.json';
 import umeAsset from '@/assets/ume-oficial.png.asset.json';
-import novoMundoAsset from '@/assets/novo-mundo-oficial.png.asset.json';
+import novoMundoAsset from '@/assets/logo-novo-mundo-termo.png.asset.json';
 import { getEmpresaLabel } from '@/lib/empresaLabels';
 
 type Acordo = Tables<'acordos'>;
@@ -115,7 +115,7 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
     carregarImagem(souzaRibeiroAsset.url),
     carregarImagem(
       acordo.empresa === 'mundo_da_moda' ? umeAsset.url : novoMundoAsset.url,
-      acordo.empresa !== 'mundo_da_moda',
+      false,
     ),
   ]);
 
@@ -160,7 +160,7 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
   if (acordo.empresa === 'mundo_da_moda') {
     doc.addImage(logoCredor, 'JPEG', 164, 9, 24, 24);
   } else {
-    doc.addImage(logoCredor, 'JPEG', 139, 15, 53, 13);
+    doc.addImage(logoCredor, 'JPEG', 164, 9, 24, 24);
   }
   doc.setDrawColor(20, 58, 92);
   doc.setLineWidth(0.7);
