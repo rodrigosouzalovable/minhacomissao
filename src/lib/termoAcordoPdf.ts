@@ -257,6 +257,7 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
     });
     y += 11;
   });
+  y += 5;
 
   tituloClausula('CLÁUSULA TERCEIRA — DA COMPROVAÇÃO E QUITAÇÃO');
   texto('Os comprovantes de pagamento deverão ser conservados pelo(a) DEVEDOR(A). A quitação será reconhecida individualmente após a confirmação de cada parcela e, de forma integral, somente depois da compensação de todas as parcelas previstas neste termo.');
