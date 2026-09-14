@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Corrigir totais e reativação falsa da campanha Novo Mundo1
 - [x] Restringir o resumo do limite diário total das BMs somente ao administrador
 - [x] Corrigir bolinha vermelha antiga e identificar reenvios Meta concluídos por outra instância
 - [x] Aumentar captação Google Maps para 150 requisições/dia e adicionar chave reserva com troca automática

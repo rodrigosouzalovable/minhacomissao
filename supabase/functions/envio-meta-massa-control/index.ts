@@ -122,6 +122,28 @@ Deno.serve(async (req) => {
       }).eq('id', jobId);
       await devolverProcessandoParaFila();
     } else if (acao === 'reativar') {
+      // Reconcilia o cabeçalho com os itens reais antes de decidir se existe algo
+      // para retomar. Isso evita botões falsos quando itens sem WhatsApp encerram a fila.
+      const { data: estados, error: estadosErr } = await supabase
+        .from('envio_meta_job_item')
+        .select('status')
+        .eq('job_id', jobId);
+      if (estadosErr) throw estadosErr;
+      const contagens = (estados || []).reduce((acc: Record<string, number>, item: any) => {
+        const status = String(item.status || '');
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {});
+      const enviadosReais = contagens.enviado || 0;
+      const errosReais = (contagens.erro || 0) + (contagens.falha || 0);
+      const semWhatsappReais = contagens.sem_whatsapp || 0;
+
+      await supabase.from('envio_meta_job').update({
+        enviados: enviadosReais,
+        erros: errosReais,
+        sem_whatsapp: semWhatsappReais,
+      }).eq('id', jobId);
+
       // Reenfileira itens com erro/falha de volta para pendente e devolve órfãos em "processando"
       await supabase
         .from('envio_meta_job_item')
@@ -169,8 +191,23 @@ Deno.serve(async (req) => {
         .eq('job_id', jobId)
         .eq('status', 'pendente');
       if (!pendentes || pendentes === 0) {
-        // Nada para reativar — não é erro: responde 200 para não quebrar a UI/auto-retomada.
-        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'sem_pendentes' }), {
+        // Nada para reativar: mantém o estado final e devolve os totais reconciliados.
+        await supabase.from('envio_meta_job').update({
+          status: 'concluido',
+          atual_telefone: null,
+          atual_instancia: null,
+          proximo_em: null,
+          worker_lock_token: null,
+          worker_locked_until: null,
+        }).eq('id', jobId);
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'sem_pendentes',
+          enviados: enviadosReais,
+          erros: errosReais,
+          sem_whatsapp: semWhatsappReais,
+        }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -179,6 +216,8 @@ Deno.serve(async (req) => {
         concluido_em: null,
         status_motivo: null,
         proximo_em: new Date().toISOString(),
+        worker_lock_token: null,
+        worker_locked_until: null,
       }).eq('id', jobId);
       dispararWorker(job);
 
