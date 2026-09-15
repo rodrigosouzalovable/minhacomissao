@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Preservar no IAGO os valores à vista e parcelado já enviados pela campanha
 - [x] Enviar plano matinal de aquecimento por WhatsApp e separar metas dos tiers 250 e 2.000
 - [x] Liberar aquecimento de DICEPAY/GREENAUTO com template de leads aprovado, inclusive UNKNOWN/nome em análise
 - [x] Corrigir totais e reativação falsa da campanha Novo Mundo1

@@ -12,6 +12,7 @@ import {
   FOLDER_AQUECIMENTO_INBOX,
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
+import { detectarPropostaPreviaNoHistorico, type PropostaPrevia } from '../_shared/proposta-previa.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
 
@@ -319,7 +320,7 @@ Deno.serve(async (req) => {
       .filter(Boolean);
 
     // ===== Proposta já enviada por nós antes do IAGO (campanha/template/atendente) =====
-    let propostaPrevia = detectarPropostaPrevia(historico);
+    let propostaPrevia = detectarPropostaPreviaNoHistorico(historico);
     // Resposta automática do cliente (ausência/atendimento automático): não é resposta real.
     let respostaAutomatica = ehRespostaAutomatica(textoAtual);
 
@@ -548,7 +549,7 @@ Deno.serve(async (req) => {
           .filter((m) => m.direcao === 'saida')
           .map((m) => normalizarTexto(m.conteudo))
           .filter(Boolean);
-        propostaPrevia = detectarPropostaPrevia(historico);
+        propostaPrevia = detectarPropostaPreviaNoHistorico(historico);
         respostaAutomatica = ehRespostaAutomatica(textoAtual);
       }
     }
@@ -619,7 +620,7 @@ Deno.serve(async (req) => {
           }
         }
         // Nunca substitua a tabela UME por uma proposta genérica do credor.
-        if (!proposta && !ehUme) {
+        if (!proposta && !ehUme && !propostaPrevia) {
           proposta = await calcularProposta(supabase, cpf, {
             descAvista: (cfg as any).desconto_avista_pct,
             descParcelado: (cfg as any).desconto_parcelado_pct,
@@ -984,7 +985,7 @@ async function gerarResposta(args: {
   escolhaAnterior?: string;
   imagemCtx?: { descricao: string; classificacao: string } | null;
   qualificacoes?: QualificacaoIA[];
-  propostaPrevia?: { valor: string; texto: string } | null;
+  propostaPrevia?: PropostaPrevia | null;
   respostaAutomatica?: boolean;
   precisaPerguntarNome?: boolean;
   modoAquecimento?: boolean;
@@ -1009,10 +1010,17 @@ async function gerarResposta(args: {
   const credorFinal = credorAmbiguo ? '' : String(credorCaixa || proposta?.credor || '').trim();
 
 
+  const resumoOfertaPrevia = propostaPrevia
+    ? [
+        propostaPrevia.valorAvista ? `à vista R$ ${propostaPrevia.valorAvista}` : '',
+        ...propostaPrevia.parcelas.map((opcao) => `${opcao.quantidade}x de R$ ${opcao.valor}`),
+      ].filter(Boolean).join(' ou ')
+    : '';
+
   const semDebito = cpfIdentificado
     ? 'Já identifiquei o cliente pelo telefone, mas não há débitos em aberto para ele. NÃO peça o CPF: informe que não localizou débitos em aberto e escale para um humano conferir (escalar=true).'
     : propostaPrevia
-      ? `Ainda não tenho os débitos calculados no sistema, MAS nós já enviamos a este cliente uma proposta de pagamento à vista no valor de R$ ${propostaPrevia.valor}. NÃO peça o CPF agora: retome essa proposta.`
+      ? `Já enviamos a este cliente a condição ${resumoOfertaPrevia}. NÃO peça o CPF agora: continue essa negociação.`
       : 'Ainda não identifiquei os débitos deste cliente. Peça o CPF de forma natural para consultar.';
 
 
@@ -1020,7 +1028,15 @@ async function gerarResposta(args: {
     .map((o: any) => `   ${o.parcelas}x de R$ ${fmtBRL(o.valorParcela)}`)
     .join('\n');
 
-  const dados = proposta
+  const dados = propostaPrevia
+    ? [
+        `Cliente: ${nomeCliente || '(sem nome)'}`,
+        `Credor: ${credorFinal}`,
+        `PROPOSTA ATIVA E AUTORIZADA: ${resumoOfertaPrevia}.`,
+        `Mensagem original: "${propostaPrevia.texto.slice(0, 700)}"`,
+        'Use exclusivamente esses valores. Não recalcule, não arredonde e não apresente outras quantidades de parcelas.',
+      ].join('\n')
+    : proposta
     ? [
         `Cliente: ${nomeCliente || '(sem nome)'}`,
         `Credor: ${credorFinal}`,
@@ -1063,13 +1079,16 @@ async function gerarResposta(args: {
         : 'Se já pediu o CPF e o cliente ainda não o informou, não peça novamente; apenas aguarde. Se o CPF chegou, avance diretamente para a consulta/proposta.',
     'PROIBIDO citar "a proposta que te mandei" (ou equivalente) se nenhum valor/proposta aparece no HISTÓRICO RECENTE. Só fale de proposta enviada se ela realmente foi enviada antes.',
 
-    propostaPrevia && !proposta
+    propostaPrevia
       ? [
-        `PROPOSTA JÁ ENVIADA POR NÓS NESTA CONVERSA (valor à vista R$ ${propostaPrevia.valor}):`,
+        `PROPOSTA JÁ ENVIADA POR NÓS NESTA CONVERSA (${resumoOfertaPrevia}):`,
         `"${propostaPrevia.texto.slice(0, 500)}"`,
-        'RETOMADA OBRIGATÓRIA: pergunte se o cliente conseguiu visualizar essa condição de pagamento à vista, cite o mesmo valor R$ ' + propostaPrevia.valor + ' (nunca outro valor, nunca arredonde) e pergunte o que ele achou, oferecendo verificar opções de parcelamento caso prefira.',
-        'É PROIBIDO pedir CPF, documento ou dados de cadastro nesta resposta. Só peça o CPF em uma etapa posterior, se o cliente demonstrar interesse em parcelamento e for necessário para calcular as parcelas — explicando que é para consultar o cadastro.',
-        'Não repita a mensagem da proposta inteira: apenas retome de forma curta e natural.',
+        'ESSA É A PROPOSTA ATIVA E TEM PRIORIDADE ABSOLUTA sobre qualquer cálculo pelo CPF. Nunca cite, sugira ou calcule outro valor ou outra quantidade de parcelas.',
+        'Se o cliente cumprimentar, disser “ok” ou demonstrar interesse, retome brevemente essa mesma condição. Não repita a mensagem inteira.',
+        'Se escolher uma opção disponível, confirme exatamente o valor original e pergunte se consegue pagar hoje.',
+        'Se pedir uma quantidade de parcelas que não consta na proposta, não calcule: informe que um colega continuará o atendimento e use escalar=true.',
+        'Se os valores não estiverem claros, não invente nem recalcule: use escalar=true.',
+        'É PROIBIDO pedir CPF, documento ou dados de cadastro nesta resposta.',
       ].join('\n')
       : '',
 
@@ -1200,26 +1219,6 @@ async function gerarResposta(args: {
     console.error('[IAGO] falha na IA', e?.message || e);
     return { mensagens: [], escalar: true, motivo: `falha técnica da IA (${String(e?.message || e).slice(0, 60)})` };
   }
-}
-
-/**
- * Procura, nas mensagens de saída (campanha/template/atendente/IAGO), uma proposta
- * de pagamento já enviada ao cliente. Retorna o valor e o texto original.
- */
-function detectarPropostaPrevia(historico: any[]): { valor: string; texto: string } | null {
-  const saidas = historico.filter((m) => m?.direcao === 'saida');
-  for (let i = saidas.length - 1; i >= 0; i--) {
-    const texto = String(saidas[i]?.conteudo || '').trim();
-    if (!texto) continue;
-    const semAcento = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const falaProposta = /(a\s*vista|avista|parcel|desconto|debito|divida|pagamento|proposta|autorizado)/.test(semAcento);
-    if (!falaProposta) continue;
-    const valores = texto.match(/r\$\s*[\d.]+,\d{2}/gi);
-    if (!valores?.length) continue;
-    const valor = valores[0].replace(/r\$\s*/i, '').trim();
-    return { valor, texto };
-  }
-  return null;
 }
 
 /** Mensagem automática de ausência do cliente (não é resposta real). */
