@@ -76,6 +76,14 @@ Deno.serve(async (req) => {
 
     const dia = hojeBrt();
 
+    // A captação é independente do orçamento Meta e da existência de números
+    // elegíveis nesta rodada; usa apenas a cadência já existente deste tick.
+    try {
+      await supabase.functions.invoke('google-maps-leads-abastecer', { body: { dia } });
+    } catch (err) {
+      console.log('[aquecimento] abastecer falhou:', String(err).slice(0, 200));
+    }
+
     // ===== Orçamento do dia (circuit breaker de custo) =====
     const orc = await carregarOrcamento(supabase, dia);
     if (Number(orc.gasto_reais) >= Number(orc.teto_reais)) {
@@ -201,15 +209,6 @@ Deno.serve(async (req) => {
     );
     const limiteLeads = Math.min(600, Math.max(60, Math.ceil(alvoTotalDia / 2)));
     let leadsDisponiveis = await leadsParaAquecimento(supabase, limiteLeads);
-
-    // A captação tem meta própria de 500 confirmações/dia. O abastecedor decide
-    // se deve buscar, pausar por falta de verificador ou encerrar ao atingir a meta.
-    try {
-      await supabase.functions.invoke('google-maps-leads-abastecer', { body: { dia } });
-      leadsDisponiveis = await leadsParaAquecimento(supabase, limiteLeads);
-    } catch (err) {
-      console.log('[aquecimento] abastecer falhou:', String(err).slice(0, 200));
-    }
 
     // Rodadas restantes na janela do dia (para dimensionar o lote da rodada).
     const spNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
