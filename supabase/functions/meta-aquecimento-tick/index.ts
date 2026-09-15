@@ -202,14 +202,13 @@ Deno.serve(async (req) => {
     const limiteLeads = Math.min(600, Math.max(60, Math.ceil(alvoTotalDia / 2)));
     let leadsDisponiveis = await leadsParaAquecimento(supabase, limiteLeads);
 
-    // Estoque baixo de contatos do Google Maps: pede reabastecimento.
-    if (leadsDisponiveis.length < Math.min(600, limiteLeads)) {
-      try {
-        await supabase.functions.invoke('google-maps-leads-abastecer', { body: { dia } });
-        leadsDisponiveis = await leadsParaAquecimento(supabase, limiteLeads);
-      } catch (err) {
-        console.log('[aquecimento] abastecer falhou:', String(err).slice(0, 200));
-      }
+    // A captação tem meta própria de 500 confirmações/dia. O abastecedor decide
+    // se deve buscar, pausar por falta de verificador ou encerrar ao atingir a meta.
+    try {
+      await supabase.functions.invoke('google-maps-leads-abastecer', { body: { dia } });
+      leadsDisponiveis = await leadsParaAquecimento(supabase, limiteLeads);
+    } catch (err) {
+      console.log('[aquecimento] abastecer falhou:', String(err).slice(0, 200));
     }
 
     // Rodadas restantes na janela do dia (para dimensionar o lote da rodada).
