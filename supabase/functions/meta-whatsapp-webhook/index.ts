@@ -307,14 +307,23 @@ serve(async (req) => {
             let bmAfetada = 'BM não identificada';
             let numerosPausados = 0;
             if (violacaoConta && wabaIdEntry) {
-              const { data: irmas } = await supabase
+              const { data: mesmaWaba } = await supabase
                 .from('meta_whatsapp_instances')
                 .select('id, meta_bm_id')
                 .eq('waba_id', wabaIdEntry)
                 .eq('provider', 'meta');
-              const ids = (irmas || []).map((i: any) => i.id);
+              const bmId = (mesmaWaba || []).find((i: any) => i.meta_bm_id)?.meta_bm_id;
+              let irmas = mesmaWaba || [];
+              if (bmId) {
+                const { data: mesmaBm } = await supabase
+                  .from('meta_whatsapp_instances')
+                  .select('id, meta_bm_id')
+                  .eq('meta_bm_id', bmId)
+                  .eq('provider', 'meta');
+                irmas = mesmaBm || irmas;
+              }
+              const ids = irmas.map((i: any) => i.id);
               numerosPausados = ids.length;
-              const bmId = (irmas || []).find((i: any) => i.meta_bm_id)?.meta_bm_id;
               if (bmId) {
                 const { data: bm } = await supabase.from('meta_business_managers').select('nome').eq('id', bmId).maybeSingle();
                 bmAfetada = String(bm?.nome || bmAfetada);

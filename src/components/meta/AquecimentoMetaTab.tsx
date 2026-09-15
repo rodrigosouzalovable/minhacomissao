@@ -235,7 +235,8 @@ export function AquecimentoMetaTab() {
         nome: inst?.bm?.nome || "BM não vinculada", alvo: 0, feitos: new Set<string>(), numeros: 0,
         tier: 0, bloqueios: new Set<string>(), qualidades: new Set<string>(),
       };
-      atual.alvo += Number(t.alvo_unicos_dia || 0);
+      const metaOperacional = Number(t.tier_atual || inst?.tier_diario || 0) <= 250 ? 25 : 450;
+      atual.alvo = Math.max(atual.alvo, metaOperacional);
       atual.numeros += 1;
       atual.tier = Math.max(atual.tier, Number(t.tier_atual || inst?.tier_diario || 0));
       atual.qualidades.add(String(inst?.saude_quality || "UNKNOWN"));

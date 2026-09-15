@@ -269,7 +269,7 @@ Deno.serve(async (req) => {
     for (const t of listaTrilhas) {
       const bm = instBmMap.get(t.instancia_id) || { id: t.instancia_id, nome: "BM não vinculada" };
       const atual = resumoBm.get(bm.id) || { nome: bm.nome, alvo: 0, feitos: new Set<string>(), falhas: 0 };
-      atual.alvo += Number(t.alvo_unicos_dia || 0);
+      atual.alvo = Math.max(atual.alvo, Number(t.tier_atual || 0) <= 250 ? 25 : 450);
       resumoBm.set(bm.id, atual);
     }
     for (const item of todosLogs) {
