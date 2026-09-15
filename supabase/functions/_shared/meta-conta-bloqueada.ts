@@ -10,6 +10,11 @@ export const MOTIVO_CONTA_BLOQUEADA = "Business Account locked";
 export const MSG_CONTA_BLOQUEADA =
   "A conta do Business Manager desta instância está bloqueada pela Meta (#131031). Enquanto o bloqueio existir, a Meta recusa todos os envios deste número — inclusive respostas dentro da janela de 24h. Resolva a restrição no Business Manager (Central de Contas/Qualidade, apelação e método de pagamento) ou responda por outra instância. Não é problema de qualidade nem do contato.";
 
+export function ehMotivoViolacaoConta(motivo?: string | null): boolean {
+  const s = String(motivo || "").toLowerCase();
+  return s.includes("account_violation") || s.includes("violação de conta") || s.includes("violacao de conta");
+}
+
 export function ehContaBloqueada(erro: unknown, code?: unknown): boolean {
   const s = String(erro || "").toLowerCase();
   if (String(code || "") === "131031") return true;
@@ -41,6 +46,7 @@ export function ehMotivoBloqueioMeta(motivo?: string | null): boolean {
     s.includes("status=banned") ||
     s.includes("status=restricted") ||
     s.includes("status=flagged") ||
+    ehMotivoViolacaoConta(s) ||
     ehMotivoPagamento(s)
   );
 }

@@ -321,7 +321,8 @@ Deno.serve(async (req) => {
             updatePayload.green_contado_dia = hojeBrtDia;
           }
 
-          if (inst.recuperacao_ativa === true && diasGreen >= diasGreenAlta) {
+          const pausaPorViolacao = String(inst.pausa_automatica_motivo || '').toLowerCase().includes('account_violation');
+          if (inst.recuperacao_ativa === true && diasGreen >= diasGreenAlta && !pausaPorViolacao) {
             updatePayload.recuperacao_ativa = false;
             updatePayload.recuperacao_msgs_meta_dia = null;
             updatePayload.quarentena_ate = null;
@@ -381,10 +382,11 @@ Deno.serve(async (req) => {
         // restrição de envio informada pela Meta. Se o bloqueio saiu mas a
         // qualidade continua YELLOW/RED (ou a conta segue restrita), o número
         // permanece fora das campanhas e em aquecimento automático.
-        const { ehMotivoBloqueioMeta, ehMotivoPagamento } = await import('../_shared/meta-conta-bloqueada.ts');
+        const { ehMotivoBloqueioMeta, ehMotivoPagamento, ehMotivoViolacaoConta } = await import('../_shared/meta-conta-bloqueada.ts');
         const motivoAtual = String(inst.pausa_automatica_motivo || '');
         const eraBloqueioMeta = ehMotivoBloqueioMeta(motivoAtual);
         const eraPagamento = ehMotivoPagamento(motivoAtual);
+        const eraViolacaoConta = ehMotivoViolacaoConta(motivoAtual);
         const semBanAgora = !r.ban_info ||
           (typeof r.ban_info === 'object' && Object.keys(r.ban_info).length === 0);
         const graphOk = !r.error && st === 'CONNECTED' && semBanAgora;
@@ -394,7 +396,7 @@ Deno.serve(async (req) => {
         const quarentenaAtiva = !!quarentenaAlvo && new Date(quarentenaAlvo).getTime() > Date.now();
         const saudavel = liberacaoGlobal || (qual === 'GREEN' && !quarentenaAtiva && !restritoMeta);
 
-        if (eraBloqueioMeta && graphOk && !notificarPausa) {
+        if (eraBloqueioMeta && !eraViolacaoConta && graphOk && !notificarPausa) {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
           if (saudavel) {

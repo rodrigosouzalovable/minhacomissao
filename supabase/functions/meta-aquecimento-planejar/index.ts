@@ -129,6 +129,7 @@ Deno.serve(async (req) => {
       const r = respostas.get(i.id) || { env: 0, resp: 0 };
       return {
         id: i.id,
+        meta_bm_id: i.meta_bm_id || null,
         nome: i.nome || i.display_phone,
         qualidade: String(i.saude_quality || 'UNKNOWN').toUpperCase(),
         tier_atual: tier,
@@ -223,10 +224,26 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
       iaErro = 'LOVABLE_API_KEY ausente';
     }
 
+    const membrosPorBm = new Map<string, typeof resumo>();
+    for (const r of resumo) {
+      const chave = r.meta_bm_id || `sem-bm:${r.id}`;
+      const membros = membrosPorBm.get(chave) || [];
+      membros.push(r);
+      membrosPorBm.set(chave, membros);
+    }
+    const alvoPorInstancia = new Map<string, number>();
+    for (const membros of membrosPorBm.values()) {
+      const tierBm = Math.max(...membros.map((m) => m.tier_atual));
+      const metaBm = tierBm <= 250 ? 25 : 450;
+      const base = Math.floor(metaBm / membros.length);
+      const sobra = metaBm % membros.length;
+      membros.forEach((m, idx) => alvoPorInstancia.set(m.id, base + (idx < sobra ? 1 : 0)));
+    }
+
     const linhas = resumo.map((r) => {
       const d = decisoes[r.id];
       const intensivo = r.tier_atual < 10000;
-      const alvo = alvoDiarioPorTier(r.tier_atual, d?.alvo || r.alvo_base);
+      const alvo = alvoPorInstancia.get(r.id) ?? alvoDiarioPorTier(r.tier_atual, d?.alvo || r.alvo_base);
       const mixIa = d ? d.mix_uazapi : (r.taxa_resposta === null ? 80 : 60);
       // Volume alto exige destinatários ÚNICOS: no intensivo o peso vai para leads.
       const mixU = intensivo ? Math.min(mixIa, 25) : mixIa;
@@ -240,7 +257,7 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
         unicos_7d: r.unicos_7d,
         mix_uazapi_pct: mixU,
         mix_leads_pct: 100 - mixU,
-        decisao_ia: { fonte: d ? 'ia' : 'regra', observacao: d?.observacao ?? iaErro, base: r },
+        decisao_ia: { fonte: 'meta_por_bm', observacao: d?.observacao ?? iaErro, base: r, meta_bm: r.tier_atual <= 250 ? 25 : 450 },
         status: 'ativa',
         atualizado_em: new Date().toISOString(),
       };

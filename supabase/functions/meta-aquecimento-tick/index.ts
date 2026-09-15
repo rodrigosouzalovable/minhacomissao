@@ -221,10 +221,23 @@ Deno.serve(async (req) => {
     let gastoRun = 0;
 
     // Números em resgate de campanha (resposta baixa) vão na frente da fila.
+    const progressoBm = new Map<string, { feitos: number; alvo: number }>();
+    for (const inst of elegiveis as any[]) {
+      const chave = String(inst.meta_bm_id || inst.id);
+      const atual = progressoBm.get(chave) || { feitos: 0, alvo: 0 };
+      atual.alvo += Number(trilhaMap.get(inst.id)?.alvo_unicos_dia || 0);
+      atual.feitos += logsHoje.filter((l: any) => l.instancia_id === inst.id && l.status !== 'falha').length;
+      progressoBm.set(chave, atual);
+    }
     const ordenadas = (elegiveis as any[]).slice().sort((a, b) => {
       const ra = trilhaMap.get(a.id)?.motivo === 'resgate_campanha' ? 1 : 0;
       const rb = trilhaMap.get(b.id)?.motivo === 'resgate_campanha' ? 1 : 0;
-      return rb - ra;
+      if (ra !== rb) return rb - ra;
+      const pa = progressoBm.get(String(a.meta_bm_id || a.id));
+      const pb = progressoBm.get(String(b.meta_bm_id || b.id));
+      const pctA = pa?.alvo ? pa.feitos / pa.alvo : 1;
+      const pctB = pb?.alvo ? pb.feitos / pb.alvo : 1;
+      return pctA - pctB;
     });
 
     for (const inst of ordenadas) {
