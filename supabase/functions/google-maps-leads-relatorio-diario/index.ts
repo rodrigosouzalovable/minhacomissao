@@ -111,6 +111,10 @@ Deno.serve(async (req) => {
     const taxaWhatsappDia = capHoje > 0 ? (capHojeWa / capHoje) * 100 : 0;
     const { data: usoProvedores } = await supabase.rpc("gm_status_provedores");
     const contasMaps = (usoProvedores ?? []) as Array<any>;
+    const diaMes = nowBrt.getDate();
+    const diasNoMes = new Date(nowBrt.getFullYear(), nowBrt.getMonth() + 1, 0).getDate();
+    const consumoMensal = contasMaps.reduce((s, c) => s + Number(c.total_consultas || 0), 0);
+    const projecaoMensal = diaMes > 0 ? Math.round((consumoMensal / diaMes) * diasNoMes) : consumoMensal;
 
     // Disparos de hoje — total e separado por origem.
     const todosLogs: any[] = [];
@@ -296,6 +300,7 @@ Deno.serve(async (req) => {
       const estado = conta.configurada ? `${conta.total_consultas}/${conta.limite_bloqueio}` : "não configurada";
       l.push(`• Conta ${nome}: ${estado}${conta.ativa && conta.configurada ? " · ativa" : ""}`);
     }
+    l.push(`• Projeção mensal: ~${projecaoMensal} consultas de 9.600 disponíveis nas duas contas`);
 
     l.push("");
     l.push("*📇 Base acumulada*");

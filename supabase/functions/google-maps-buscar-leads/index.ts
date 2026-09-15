@@ -242,6 +242,7 @@ Deno.serve(async (req) => {
     const collected: any[] = [];
     const chavesColetadas = new Set<string>();
     let pages = 0;
+    let ultimoProvedor: "principal" | "reserva" | null = null;
     let ignoradosDuplicados = 0;
     let variacoesUsadas = 0;
     let limiteAtingidoNoMeio = false;
@@ -338,6 +339,7 @@ Deno.serve(async (req) => {
           return;
         }
         const chaveSelecionada = provedor === "reserva" ? chaveReserva : chavePropria;
+        ultimoProvedor = provedor;
         const endpoint = chaveSelecionada
           ? "https://places.googleapis.com/v1/places:searchText"
           : `${GATEWAY_URL}/places/v1/places:searchText`;
@@ -453,6 +455,7 @@ Deno.serve(async (req) => {
         total_resultados: rows.length,
         custo_estimado_usd: custo,
         requisicoes_places: pages,
+        provedor_utilizado: ultimoProvedor,
       })
       .eq("id", busca.id);
 

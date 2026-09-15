@@ -1,6 +1,6 @@
 // Reabastece a lista de contatos do Google Maps usada no resgate de engajamento.
 // Roda de carona no tick do aquecimento (sem cron novo):
-//  - só entra em ação quando o estoque de contatos com WhatsApp confirmado está baixo
+//  - persegue 500 contatos inéditos com WhatsApp confirmado em cada dia
 //  - escolhe os nichos/cidades com melhor histórico de resposta (aquecimento_nicho_score)
 //  - busca no Google Maps, confirma quem tem WhatsApp e guarda sem duplicar telefone
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -227,7 +227,11 @@ Deno.serve(async (req) => {
       .lte("created_at", fimDia);
 
     const consultasDepois = requisicoesHoje + Number((busca as any)?.requisicoes_places ?? 0);
-    const marco = (confirmadosDepois ?? 0) >= META_WHATSAPP_DIA
+    const trocouParaReserva = (busca as any)?.provedor_utilizado === "reserva" &&
+      !((buscasHoje as any[]) || []).some((b) => b?.provedor_utilizado === "reserva");
+    const marco = trocouParaReserva
+      ? "reserva"
+      : (confirmadosDepois ?? 0) >= META_WHATSAPP_DIA
       ? "500"
       : (confirmadosDepois ?? 0) >= 400
       ? "400"
@@ -235,7 +239,7 @@ Deno.serve(async (req) => {
       ? "80pct"
       : null;
     if (marco) {
-      const titulo = marco === "500" ? "Meta diária alcançada" : marco === "400" ? "Captação chegou a 400" : "80% do teto diário consumido";
+      const titulo = marco === "reserva" ? "Conta reserva ativada" : marco === "500" ? "Meta diária alcançada" : marco === "400" ? "Captação chegou a 400" : "80% do teto diário consumido";
       await notificarNumeros(supabase, {
         tipo: "google_maps_captacao_marco",
         destinatarios: DESTINATARIOS_AVISO,
