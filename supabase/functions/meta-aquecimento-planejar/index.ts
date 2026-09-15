@@ -279,31 +279,45 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
       return 'não elegível nesta rodada';
     };
     const totalProgramado = linhas.reduce((s, l) => s + Number(l.alvo_unicos_dia || 0), 0);
-    const relatorio = [
+    const cabecalhoRelatorio = [
       `📋 *Plano de aquecimento — ${dia}*`,
       `Total programado: *${totalProgramado.toLocaleString('pt-BR')} mensagens* em ${linhas.length} números`,
       `Orçamento diário: *R$ ${Number(orc.teto_reais).toFixed(2).replace('.', ',')}*`,
       '',
       '*Programação por número:*',
     ];
+    const detalhesRelatorio: string[] = [];
     for (const i of (insts || []) as any[]) {
       const nome = i.nome || i.display_phone || String(i.id).slice(0, 8);
       const bm = bmMap.get(String(i.meta_bm_id)) || 'BM não vinculada';
       const l = linhaMap.get(i.id);
       if (l) {
-        relatorio.push(`• ${bm} — ${nome}: ${Number(l.alvo_unicos_dia)} (tier ${Number(l.tier_atual).toLocaleString('pt-BR')}; ${l.mix_leads_pct}% Maps / ${l.mix_uazapi_pct}% UAZAPI)`);
+        detalhesRelatorio.push(`• ${bm} — ${nome}: ${Number(l.alvo_unicos_dia)} (tier ${Number(l.tier_atual).toLocaleString('pt-BR')}; ${l.mix_leads_pct}% Maps / ${l.mix_uazapi_pct}% UAZAPI)`);
       } else {
-        relatorio.push(`• ${bm} — ${nome}: não programado — ${motivoSemPlano(i)}`);
+        detalhesRelatorio.push(`• ${bm} — ${nome}: não programado — ${motivoSemPlano(i)}`);
       }
     }
-    relatorio.push('', '_Metas podem diminuir se faltarem leads elegíveis, o orçamento acabar ou a Meta aplicar um bloqueio real._');
+    const rodapeRelatorio = '_Metas podem diminuir se faltarem leads elegíveis, o orçamento acabar ou a Meta aplicar um bloqueio real._';
+    const partes: string[] = [];
+    let parte = cabecalhoRelatorio.join('\n');
+    for (const detalhe of detalhesRelatorio) {
+      if (`${parte}\n${detalhe}\n${rodapeRelatorio}`.length > 3800) {
+        partes.push(parte);
+        parte = `📋 *Plano de aquecimento — continuação*\n${detalhe}`;
+      } else {
+        parte += `\n${detalhe}`;
+      }
+    }
+    partes.push(`${parte}\n\n${rodapeRelatorio}`);
     try {
-      await notificarNumeros(supabase, {
-        tipo: 'aquecimento_plano_matinal',
-        mensagem: relatorio.join('\n'),
-        destinatarios: DESTINATARIOS_AVISO,
-        chaveIdempotencia: `aquecimento-plano-matinal-${dia}`,
-      });
+      for (let idx = 0; idx < partes.length; idx++) {
+        await notificarNumeros(supabase, {
+          tipo: 'aquecimento_plano_matinal',
+          mensagem: partes[idx],
+          destinatarios: DESTINATARIOS_AVISO,
+          chaveIdempotencia: `aquecimento-plano-matinal-${dia}-parte-${idx + 1}`,
+        });
+      }
     } catch (e) {
       console.log('[planejar] falha ao enviar resumo matinal', String(e).slice(0, 200));
     }
