@@ -3,6 +3,7 @@
 ## Em aberto
 
 ## Concluído
+- [x] Enviar plano matinal de aquecimento por WhatsApp e separar metas dos tiers 250 e 2.000
 - [x] Liberar aquecimento de DICEPAY/GREENAUTO com template de leads aprovado, inclusive UNKNOWN/nome em análise
 - [x] Corrigir totais e reativação falsa da campanha Novo Mundo1
 - [x] Restringir o resumo do limite diário total das BMs somente ao administrador

@@ -22,6 +22,7 @@ import {
 } from '../_shared/meta-aquecimento-alvo.ts';
 import {
   carregarOrcamento,
+  alvoDiarioPorTier,
   proximoTier,
   tierAtual,
   custoDoTemplate,
@@ -149,9 +150,8 @@ Deno.serve(async (req) => {
       const novas = semTrilha.map((i: any) => {
         const tier = tierAtual(i);
         const intensivo = tier < 10000;
-        const alvo = intensivo
-          ? Math.max(5, Math.min(450, Math.round(tier * 0.6)))
-          : Math.max(5, metaDiaPadrao);
+        const alvoAdaptativo = intensivo ? 450 : metaDiaPadrao;
+        const alvo = alvoDiarioPorTier(tier, alvoAdaptativo);
         return {
           instancia_id: i.id,
           dia,
