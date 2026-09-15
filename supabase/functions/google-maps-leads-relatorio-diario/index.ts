@@ -248,11 +248,36 @@ Deno.serve(async (req) => {
     if (idsInstancias.length) {
       const { data: insts } = await supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone")
+        .select("id, nome, display_phone, meta_bm_id, bm:meta_business_managers(nome)")
         .in("id", idsInstancias);
       for (const i of (insts as any[]) || []) {
         nomeMap.set(i.id, i.nome || i.display_phone || String(i.id).slice(0, 8));
       }
+    }
+
+    const instBmMap = new Map<string, { id: string; nome: string }>();
+    if (idsInstancias.length) {
+      const { data: instsBm } = await supabase
+        .from("meta_whatsapp_instances")
+        .select("id, meta_bm_id, bm:meta_business_managers(nome)")
+        .in("id", idsInstancias);
+      for (const i of (instsBm as any[]) || []) {
+        instBmMap.set(i.id, { id: String(i.meta_bm_id || i.id), nome: String(i.bm?.nome || "BM não vinculada") });
+      }
+    }
+    const resumoBm = new Map<string, { nome: string; alvo: number; feitos: Set<string>; falhas: number }>();
+    for (const t of listaTrilhas) {
+      const bm = instBmMap.get(t.instancia_id) || { id: t.instancia_id, nome: "BM não vinculada" };
+      const atual = resumoBm.get(bm.id) || { nome: bm.nome, alvo: 0, feitos: new Set<string>(), falhas: 0 };
+      atual.alvo += Number(t.alvo_unicos_dia || 0);
+      resumoBm.set(bm.id, atual);
+    }
+    for (const item of todosLogs) {
+      const bm = instBmMap.get(item.instancia_id);
+      if (!bm || !resumoBm.has(bm.id)) continue;
+      const atual = resumoBm.get(bm.id)!;
+      if (item.status === "falha") atual.falhas += 1;
+      else atual.feitos.add(String(item.destino_telefone || item.wamid || crypto.randomUUID()).replace(/\D/g, "").slice(-8));
     }
 
 
@@ -323,6 +348,11 @@ Deno.serve(async (req) => {
     l.push(`• Meta: ${alvoTotal} destinatários · ${listaTrilhas.length} números (${intensivos} intensivos)`);
     l.push(`• ${enviadosTotal} enviados: ${enviadosUazapi} UAZAPI + ${enviadas} Google Maps`);
     l.push(`• Faltam ${faltamMeta} para a meta planejada · ${falhasTotal} tentativa(s) com falha`);
+    for (const bm of [...resumoBm.values()].sort((a, b) => a.nome.localeCompare(b.nome))) {
+      const feitos = bm.feitos.size;
+      const situacao = feitos >= bm.alvo ? "✅" : "⏳";
+      l.push(`   ${situacao} ${bm.nome}: ${feitos}/${bm.alvo} · faltam ${Math.max(0, bm.alvo - feitos)}${bm.falhas ? ` · ${bm.falhas} falhas` : ""}`);
+    }
     for (const [motivo, qtd] of falhasHojeTop) l.push(`   – ${motivo}: ${qtd}`);
 
     l.push("");
