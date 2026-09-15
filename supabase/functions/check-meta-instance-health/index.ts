@@ -204,14 +204,15 @@ Deno.serve(async (req) => {
         // pausa por qualidade, quarentena nem modo recuperação.
         const liberacaoGlobal = cfg?.liberar_qualidade_global === true;
         const liberadaManual = inst.qualidade_liberada_manual === true || liberacaoGlobal;
+        const pausaViolacaoConta = String(inst.pausa_automatica_motivo || '').toLowerCase().includes('account_violation');
 
-        if (!liberadaManual && cfg?.auto_pausa_yellow !== false && qual === 'YELLOW' && !inst.pausa_automatica_ate) {
+        if (!pausaViolacaoConta && !liberadaManual && cfg?.auto_pausa_yellow !== false && qual === 'YELLOW' && !inst.pausa_automatica_ate) {
           updatePayload.pausa_automatica_ate = new Date(Date.now() + dur).toISOString();
           updatePayload.pausa_automatica_motivo = 'quality=YELLOW';
           updatePayload.estado_pool = 'pausado';
           notificarPausa = { motivo: `Qualidade caiu para YELLOW (pausado por ${cfg?.duracao_pausa_yellow_horas ?? 48}h)`, alcance: 'numero' };
         }
-        if (!liberadaManual && cfg?.auto_pausa_red_waba !== false && qual === 'RED' && !inst.pausa_automatica_ate) {
+        if (!pausaViolacaoConta && !liberadaManual && cfg?.auto_pausa_red_waba !== false && qual === 'RED' && !inst.pausa_automatica_ate) {
           updatePayload.pausa_automatica_ate = new Date(Date.now() + dur * 2).toISOString();
           updatePayload.pausa_automatica_motivo = 'quality=RED';
           updatePayload.estado_pool = 'pausado';
@@ -226,7 +227,7 @@ Deno.serve(async (req) => {
           }
         }
         const st = String(r.status || '').toUpperCase();
-        if ((st === 'FLAGGED' || st === 'RESTRICTED' || st === 'BANNED') && !inst.pausa_automatica_ate) {
+        if (!pausaViolacaoConta && (st === 'FLAGGED' || st === 'RESTRICTED' || st === 'BANNED') && !inst.pausa_automatica_ate) {
           updatePayload.pausa_automatica_ate = new Date(Date.now() + dur * 3).toISOString();
           updatePayload.pausa_automatica_motivo = `status=${st}`;
           updatePayload.estado_pool = 'pausado';
@@ -285,7 +286,7 @@ Deno.serve(async (req) => {
         // reaquecimento na checagem seguinte.
         let entrouPorVarredura = false;
         if (
-          !caiu && (qual === 'YELLOW' || qual === 'RED') &&
+          !pausaViolacaoConta && !caiu && (qual === 'YELLOW' || qual === 'RED') &&
           inst.recuperacao_ativa !== true &&
           inst.qualidade_liberada_manual !== true &&
           inst.aquecimento_qualidade_permitido !== false &&

@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
     for (let inicio = 0; ; inicio += 1000) {
       const { data: paginaLogs, error: paginaLogsError } = await supabase
         .from("meta_aquecimento_destino_log")
-        .select("instancia_id, fonte, status, erro, respondeu_em, entregue_em, lido_em, nicho, custo_estimado, enviado_em")
+        .select("instancia_id, fonte, status, erro, respondeu_em, entregue_em, lido_em, nicho, custo_estimado, enviado_em, destino_telefone")
         .eq("dia", hojeStr)
         .order("enviado_em", { ascending: true })
         .range(inicio, inicio + 999);
