@@ -2683,6 +2683,7 @@ export type Database = {
           id: string
           localizacao: string
           origem: string
+          provedor_utilizado: string | null
           raio_metros: number | null
           requisicoes_places: number
           status: string
@@ -2698,6 +2699,7 @@ export type Database = {
           id?: string
           localizacao: string
           origem?: string
+          provedor_utilizado?: string | null
           raio_metros?: number | null
           requisicoes_places?: number
           status?: string
@@ -2713,6 +2715,7 @@ export type Database = {
           id?: string
           localizacao?: string
           origem?: string
+          provedor_utilizado?: string | null
           raio_metros?: number | null
           requisicoes_places?: number
           status?: string

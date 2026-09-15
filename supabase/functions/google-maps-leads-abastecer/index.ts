@@ -1,20 +1,22 @@
 // Reabastece a lista de contatos do Google Maps usada no resgate de engajamento.
 // Roda de carona no tick do aquecimento (sem cron novo):
-//  - só entra em ação quando o estoque de contatos com WhatsApp confirmado está baixo
+//  - persegue 500 contatos inéditos com WhatsApp confirmado em cada dia
 //  - escolhe os nichos/cidades com melhor histórico de resposta (aquecimento_nicho_score)
 //  - busca no Google Maps, confirma quem tem WhatsApp e guarda sem duplicar telefone
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hojeBrt } from "../_shared/meta-aquecimento-alvo.ts";
+import { notificarNumeros } from "../_shared/notificar-numeros.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ESTOQUE_MINIMO = 600;
-const MAX_REQUISICOES_POR_DIA = 150;
-const MAX_REQUISICOES_POR_RUN = 12;
+const META_WHATSAPP_DIA = 500;
+const MAX_REQUISICOES_POR_DIA = 300;
+const MAX_REQUISICOES_POR_RUN = 18;
 const MAX_RESULTADOS = 60;
+const DESTINATARIOS_AVISO = ["62991672674"];
 
 const SEMENTES = [
   { nicho: "clínica odontológica", cidade: "Goiânia GO" },
@@ -26,6 +28,24 @@ const SEMENTES = [
   { nicho: "clínica odontológica", cidade: "Aparecida de Goiânia GO" },
   { nicho: "contabilidade", cidade: "Anápolis GO" },
   { nicho: "imobiliária", cidade: "Brasília DF" },
+  { nicho: "clínica de estética", cidade: "Goiânia GO" },
+  { nicho: "fisioterapia", cidade: "Goiânia GO" },
+  { nicho: "advocacia", cidade: "Goiânia GO" },
+  { nicho: "pet shop", cidade: "Goiânia GO" },
+  { nicho: "restaurante", cidade: "Goiânia GO" },
+  { nicho: "oficina mecânica", cidade: "Goiânia GO" },
+  { nicho: "materiais de construção", cidade: "Aparecida de Goiânia GO" },
+  { nicho: "auto elétrica", cidade: "Anápolis GO" },
+  { nicho: "marmoraria", cidade: "Brasília DF" },
+  { nicho: "clínica odontológica", cidade: "Rio Verde GO" },
+  { nicho: "contabilidade", cidade: "Catalão GO" },
+  { nicho: "imobiliária", cidade: "Uberlândia MG" },
+  { nicho: "academia", cidade: "Campo Grande MS" },
+  { nicho: "clínica veterinária", cidade: "Cuiabá MT" },
+  { nicho: "ótica", cidade: "Palmas TO" },
+  { nicho: "pizzaria", cidade: "Belo Horizonte MG" },
+  { nicho: "dedetizadora", cidade: "Brasília DF" },
+  { nicho: "escola de idiomas", cidade: "Goiânia GO" },
 ];
 
 const json = (payload: unknown, status = 200) =>
@@ -33,6 +53,37 @@ const json = (payload: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+async function haInstanciaVerificadora(supabase: any) {
+  const { data: instancias } = await supabase
+    .from("user_whatsapp_instances")
+    .select("server_url, instance_token")
+    .eq("ativo", true)
+    .not("server_url", "is", null)
+    .not("instance_token", "is", null);
+
+  for (const inst of instancias ?? []) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(`${String(inst.server_url).replace(/\/+$/, "")}/instance/status`, {
+        headers: { token: String(inst.instance_token) },
+        signal: controller.signal,
+      });
+      if (!response.ok) continue;
+      const data = await response.json().catch(() => ({}));
+      const estado = String(data?.instance?.status ?? data?.status?.status ?? data?.status ?? "").toLowerCase();
+      if (data?.connected === true || data?.status?.connected === true || ["connected", "open", "online", "ready"].includes(estado)) {
+        return true;
+      }
+    } catch (_) {
+      // Tenta a próxima instância.
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return false;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -58,23 +109,35 @@ Deno.serve(async (req) => {
 
     try {
 
-    // ===== Estoque atual =====
+    // ===== Progresso diário: só contam contatos inéditos captados hoje e confirmados =====
     const carencia = new Date(Date.now() - 15 * 86400000).toISOString();
+    const inicioDia = new Date(`${dia}T00:00:00-03:00`).toISOString();
+    const fimDia = new Date(`${dia}T23:59:59-03:00`).toISOString();
+    const { count: confirmadosHoje } = await supabase
+      .from("google_maps_leads")
+      .select("id", { count: "exact", head: true })
+      .eq("tem_whatsapp", true)
+      .gte("created_at", inicioDia)
+      .lte("created_at", fimDia);
     const { count: estoque } = await supabase
       .from("google_maps_leads")
       .select("id", { count: "exact", head: true })
       .eq("tem_whatsapp", true)
       .or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`);
 
-    if (!forcar && (estoque ?? 0) >= ESTOQUE_MINIMO) {
-      return json({ ok: true, skipped: "estoque_suficiente", estoque: estoque ?? 0 });
+    if (!forcar && (confirmadosHoje ?? 0) >= META_WHATSAPP_DIA) {
+      return json({ ok: true, skipped: "meta_diaria_atingida", confirmados_hoje: confirmadosHoje ?? 0, meta: META_WHATSAPP_DIA });
+    }
+
+    // Não gasta consultas se não houver como transformar telefones em contatos confirmados.
+    if (!(await haInstanciaVerificadora(supabase))) {
+      return json({ ok: true, skipped: "sem_instancia_verificadora", confirmados_hoje: confirmadosHoje ?? 0, meta: META_WHATSAPP_DIA });
     }
 
     // ===== Orçamento diário de requisições Places =====
-    const inicioDia = new Date(`${dia}T00:00:00-03:00`).toISOString();
     const { data: buscasHoje } = await supabase
       .from("google_maps_buscas")
-      .select("requisicoes_places")
+      .select("requisicoes_places, provedor_utilizado")
       .eq("origem", "resgate_engajamento")
       .gte("created_at", inicioDia);
     const requisicoesHoje = ((buscasHoje as any[]) || [])
@@ -98,8 +161,19 @@ Deno.serve(async (req) => {
     const alvos = [...bons, ...SEMENTES].filter(
       (item, idx, arr) => arr.findIndex((x) => x.nicho === item.nicho && x.cidade === item.cidade) === idx,
     );
-    const alvo = alvos[requisicoesHoje % Math.max(1, alvos.length)] || SEMENTES[0];
-    const limiteRun = Math.min(MAX_REQUISICOES_POR_RUN, restantesHoje);
+    // O cursor por quantidade de buscas evita insistir no mesmo alvo quando uma busca usa várias páginas.
+    const { count: buscasExecutadas } = await supabase
+      .from("google_maps_buscas")
+      .select("id", { count: "exact", head: true })
+      .eq("origem", "resgate_engajamento")
+      .gte("created_at", inicioDia);
+    const alvo = alvos[(buscasExecutadas ?? 0) % Math.max(1, alvos.length)] || SEMENTES[0];
+
+    // Ajusta o lote pelo rendimento real do dia, sem ultrapassar o teto por execução.
+    const rendimento = requisicoesHoje > 0 ? (confirmadosHoje ?? 0) / requisicoesHoje : 2.4;
+    const faltam = Math.max(0, META_WHATSAPP_DIA - (confirmadosHoje ?? 0));
+    const estimadasRestantes = Math.ceil(faltam / Math.max(0.5, rendimento));
+    const limiteRun = Math.min(MAX_REQUISICOES_POR_RUN, restantesHoje, Math.max(6, estimadasRestantes));
 
     // ===== Busca no Google Maps =====
     const { data: busca, error: erroBusca } = await supabase.functions.invoke(
@@ -133,7 +207,7 @@ Deno.serve(async (req) => {
     // Aproveita a mesma execução para limpar o estoque antigo ainda pendente.
     const { data: pendentesData, error: pendentesErr } = await supabase.functions.invoke(
       "google-maps-verificar-whatsapp",
-      { body: { limite: 300 } },
+      { body: { limite: 600 } },
     );
 
 
@@ -145,11 +219,43 @@ Deno.serve(async (req) => {
       .eq("tem_whatsapp", true)
       .or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`);
 
+    const { count: confirmadosDepois } = await supabase
+      .from("google_maps_leads")
+      .select("id", { count: "exact", head: true })
+      .eq("tem_whatsapp", true)
+      .gte("created_at", inicioDia)
+      .lte("created_at", fimDia);
+
+    const consultasDepois = requisicoesHoje + Number((busca as any)?.requisicoes_places ?? 0);
+    const trocouParaReserva = (busca as any)?.provedor_utilizado === "reserva" &&
+      !((buscasHoje as any[]) || []).some((b) => b?.provedor_utilizado === "reserva");
+    const marco = trocouParaReserva
+      ? "reserva"
+      : (confirmadosDepois ?? 0) >= META_WHATSAPP_DIA
+      ? "500"
+      : (confirmadosDepois ?? 0) >= 400
+      ? "400"
+      : consultasDepois >= Math.ceil(MAX_REQUISICOES_POR_DIA * 0.8)
+      ? "80pct"
+      : null;
+    if (marco) {
+      const titulo = marco === "reserva" ? "Conta reserva ativada" : marco === "500" ? "Meta diária alcançada" : marco === "400" ? "Captação chegou a 400" : "80% do teto diário consumido";
+      await notificarNumeros(supabase, {
+        tipo: "google_maps_captacao_marco",
+        destinatarios: DESTINATARIOS_AVISO,
+        chaveIdempotencia: `gm-captacao-${dia}-${marco}`,
+        mensagem: `🗺️ *${titulo}*\n• ${(confirmadosDepois ?? 0)}/${META_WHATSAPP_DIA} contatos com WhatsApp confirmados hoje\n• ${consultasDepois}/${MAX_REQUISICOES_POR_DIA} consultas utilizadas\n• Estoque disponível: ${estoqueFinal ?? 0}`,
+      });
+    }
+
     return json({
       ok: true,
       alvo,
       estoque_antes: estoque ?? 0,
       estoque_depois: estoqueFinal ?? 0,
+      confirmados_antes: confirmadosHoje ?? 0,
+      confirmados_depois: confirmadosDepois ?? 0,
+      meta_confirmados_dia: META_WHATSAPP_DIA,
       busca_id: buscaId,
       nicho_usado: alvo.nicho,
       verificacao_whatsapp: verificacao,

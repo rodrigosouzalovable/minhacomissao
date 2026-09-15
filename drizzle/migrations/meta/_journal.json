@@ -99,6 +99,13 @@
       "when": 1789407742892,
       "tag": "0013_optimize_meta_campaign_delivery_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789504344485,
+      "tag": "0014_google_maps_daily_500_capture_support",
+      "breakpoints": true
     }
   ]
 }

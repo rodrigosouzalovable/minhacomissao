@@ -219,6 +219,7 @@ Deno.serve(async (req) => {
     // Empresas já trazidas em buscas anteriores deste usuário
     const jaVistosPlaceId = new Set<string>();
     const jaVistosNomeTel = new Set<string>();
+    const jaVistosTelefone = new Set<string>();
     if (somenteNovos) {
       const pageSizeDb = 1000;
       for (let from = 0; ; from += pageSizeDb) {
@@ -231,6 +232,8 @@ Deno.serve(async (req) => {
         for (const l of antigos ?? []) {
           if (l.place_id) jaVistosPlaceId.add(l.place_id);
           jaVistosNomeTel.add(`${normalizarChave(l.nome)}|${normalizarChave(l.telefone)}`);
+          const telefone = String(l.telefone ?? "").replace(/\D/g, "");
+          if (telefone.length >= 8) jaVistosTelefone.add(telefone.slice(-8));
         }
         if (!antigos || antigos.length < pageSizeDb) break;
       }
@@ -239,6 +242,7 @@ Deno.serve(async (req) => {
     const collected: any[] = [];
     const chavesColetadas = new Set<string>();
     let pages = 0;
+    let ultimoProvedor: "principal" | "reserva" | null = null;
     let ignoradosDuplicados = 0;
     let variacoesUsadas = 0;
     let limiteAtingidoNoMeio = false;
@@ -296,13 +300,16 @@ Deno.serve(async (req) => {
         if (collected.length >= maxRes) break;
         const pid = p.id ?? null;
         const chaveNomeTel = `${normalizarChave(p.displayName?.text)}|${normalizarChave(p.nationalPhoneNumber)}`;
+        const telefone = String(p.internationalPhoneNumber ?? p.nationalPhoneNumber ?? "").replace(/\D/g, "");
+        const sufixoTelefone = telefone.length >= 8 ? telefone.slice(-8) : "";
         const chaveInterna = pid ?? chaveNomeTel;
         if (chavesColetadas.has(chaveInterna)) continue;
-        if (somenteNovos && ((pid && jaVistosPlaceId.has(pid)) || jaVistosNomeTel.has(chaveNomeTel))) {
+        if (somenteNovos && ((pid && jaVistosPlaceId.has(pid)) || jaVistosNomeTel.has(chaveNomeTel) || (sufixoTelefone && jaVistosTelefone.has(sufixoTelefone)))) {
           ignoradosDuplicados++;
           continue;
         }
         chavesColetadas.add(chaveInterna);
+        if (sufixoTelefone) jaVistosTelefone.add(sufixoTelefone);
         collected.push(p);
         aceitos++;
       }
@@ -326,12 +333,13 @@ Deno.serve(async (req) => {
         };
         if (pageToken) reqBody.pageToken = pageToken;
 
-        const provedor = await escolherProvedor();
+        let provedor = await escolherProvedor();
         if (!provedor) {
           limiteAtingidoNoMeio = true;
           return;
         }
         const chaveSelecionada = provedor === "reserva" ? chaveReserva : chavePropria;
+        ultimoProvedor = provedor;
         const endpoint = chaveSelecionada
           ? "https://places.googleapis.com/v1/places:searchText"
           : `${GATEWAY_URL}/places/v1/places:searchText`;
@@ -339,7 +347,7 @@ Deno.serve(async (req) => {
           ? { "X-Goog-Api-Key": chaveSelecionada }
           : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
 
-        const resp = await fetch(endpoint, {
+        const requestInit = {
           method: "POST",
           headers: {
             ...authHeaders,
@@ -349,7 +357,29 @@ Deno.serve(async (req) => {
               "places.id,places.displayName,places.nationalPhoneNumber,places.internationalPhoneNumber,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.websiteUri,places.primaryTypeDisplayName,nextPageToken",
           },
           body: JSON.stringify(reqBody),
-        });
+        };
+        let resp = await fetch(endpoint, requestInit);
+
+        // Além do corte mensal interno, respeita a cota diária configurada no Google.
+        // Se a principal responder 429, fixa a reserva para o restante do mês e repete
+        // esta página uma única vez, sem perder a busca em andamento.
+        if (resp.status === 429 && provedor === "principal" && chaveReserva) {
+          const erroPrincipal = await resp.text();
+          if (erroPrincipal.includes("RESOURCE_EXHAUSTED") || erroPrincipal.includes("RATE_LIMIT_EXCEEDED")) {
+            await supabase.from("google_maps_config").update({ reserva_ativa_mes: mesAtual }).eq("id", 1);
+            resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
+              ...requestInit,
+              headers: { ...requestInit.headers, "X-Goog-Api-Key": chaveReserva },
+            });
+            if (resp.ok) {
+              provedor = "reserva";
+              ultimoProvedor = "reserva";
+            }
+          } else {
+            erroGoogle = { status: 429, body: erroPrincipal };
+            return;
+          }
+        }
 
         if (!resp.ok) {
           erroGoogle = { status: resp.status, body: await resp.text() };
@@ -447,6 +477,7 @@ Deno.serve(async (req) => {
         total_resultados: rows.length,
         custo_estimado_usd: custo,
         requisicoes_places: pages,
+        provedor_utilizado: ultimoProvedor,
       })
       .eq("id", busca.id);
 
@@ -473,6 +504,8 @@ Deno.serve(async (req) => {
         variacoes_usadas: variacoesUsadas,
         somente_novos: somenteNovos,
         com_telefone: rows.filter((r) => r.telefone).length,
+        requisicoes_places: pages,
+        provedor_utilizado: ultimoProvedor,
         custo_estimado_usd: custo,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
