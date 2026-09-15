@@ -333,7 +333,7 @@ Deno.serve(async (req) => {
         };
         if (pageToken) reqBody.pageToken = pageToken;
 
-        const provedor = await escolherProvedor();
+        let provedor = await escolherProvedor();
         if (!provedor) {
           limiteAtingidoNoMeio = true;
           return;
@@ -371,7 +371,10 @@ Deno.serve(async (req) => {
               ...requestInit,
               headers: { ...requestInit.headers, "X-Goog-Api-Key": chaveReserva },
             });
-            if (resp.ok) ultimoProvedor = "reserva";
+            if (resp.ok) {
+              provedor = "reserva";
+              ultimoProvedor = "reserva";
+            }
           } else {
             erroGoogle = { status: 429, body: erroPrincipal };
             return;
