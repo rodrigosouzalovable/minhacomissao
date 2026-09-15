@@ -347,7 +347,7 @@ Deno.serve(async (req) => {
           ? { "X-Goog-Api-Key": chaveSelecionada }
           : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
 
-        const resp = await fetch(endpoint, {
+        const requestInit = {
           method: "POST",
           headers: {
             ...authHeaders,
@@ -357,7 +357,26 @@ Deno.serve(async (req) => {
               "places.id,places.displayName,places.nationalPhoneNumber,places.internationalPhoneNumber,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.websiteUri,places.primaryTypeDisplayName,nextPageToken",
           },
           body: JSON.stringify(reqBody),
-        });
+        };
+        let resp = await fetch(endpoint, requestInit);
+
+        // Além do corte mensal interno, respeita a cota diária configurada no Google.
+        // Se a principal responder 429, fixa a reserva para o restante do mês e repete
+        // esta página uma única vez, sem perder a busca em andamento.
+        if (resp.status === 429 && provedor === "principal" && chaveReserva) {
+          const erroPrincipal = await resp.text();
+          if (erroPrincipal.includes("RESOURCE_EXHAUSTED") || erroPrincipal.includes("RATE_LIMIT_EXCEEDED")) {
+            await supabase.from("google_maps_config").update({ reserva_ativa_mes: mesAtual }).eq("id", 1);
+            resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
+              ...requestInit,
+              headers: { ...requestInit.headers, "X-Goog-Api-Key": chaveReserva },
+            });
+            if (resp.ok) ultimoProvedor = "reserva";
+          } else {
+            erroGoogle = { status: 429, body: erroPrincipal };
+            return;
+          }
+        }
 
         if (!resp.ok) {
           erroGoogle = { status: resp.status, body: await resp.text() };
