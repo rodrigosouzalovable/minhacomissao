@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extrairPropostaDoTexto } from '../_shared/proposta-previa.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1809,6 +1810,7 @@ serve(async (req) => {
     if (isFromMe) {
       const textoFromMe = extractTextFromPayload(payload);
       const textoFromMeLower = textoFromMe.toLowerCase();
+      const propostaFromMe = extrairPropostaDoTexto(textoFromMe);
       const destinoTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
 
       // --- DESBLOQUEIO + ATENDIMENTO HUMANO ---
@@ -1840,7 +1842,7 @@ serve(async (req) => {
         const etapaAtualConv = convAguardando?.etapa || 'novo';
         const dadosAtuais = convAguardando?.dados || {};
         // Só marca atendimento_humano se NÃO for proposta (proposta tem lógica própria abaixo)
-        if (!textoFromMeLower.includes('50% de desconto') && !textoFromMeLower.includes('parcelas em aberto')) {
+        if (!propostaFromMe) {
           console.log(`[HUMAN] Mensagem manual detectada para ${destinoTelefone}, pausando bot por 30min`);
           const etapaParaSalvar = etapaAtualConv === 'atendimento_humano' 
             ? 'atendimento_humano' 
@@ -1862,7 +1864,7 @@ serve(async (req) => {
         }
 
         // --- Proposta detection (existing logic) ---
-        if (textoFromMeLower.includes('50% de desconto') || textoFromMeLower.includes('parcelas em aberto')) {
+        if (propostaFromMe) {
           console.log(`[fromMe] Proposta detectada para ${destinoTelefone}, atualizando estado...`);
 
           const serverUrlFm = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
@@ -1906,6 +1908,13 @@ serve(async (req) => {
 
           const preHydrated = existingPreHydrated?.dados;
           const hasPreHydration = preHydrated?.valor_total && preHydrated?.valor_avista;
+          const opcaoParcelada = propostaFromMe.parcelas[0];
+          const dadosOfertaOriginal = {
+            proposta_original: propostaFromMe,
+            valor_avista: propostaFromMe.valorAvistaNumero || preHydrated?.valor_avista,
+            valor_parcelado: opcaoParcelada?.totalNumero || preHydrated?.valor_parcelado,
+            max_parcelas: opcaoParcelada?.quantidade || preHydrated?.max_parcelas,
+          };
 
           if (hasPreHydration) {
             console.log(`[fromMe] Pre-hydrated data found for ${destinoTelefone}: valor_total=${preHydrated.valor_total}, preserving spreadsheet values`);
@@ -1914,6 +1923,7 @@ serve(async (req) => {
               etapa: 'proposta_enviada',
               dados: {
                 ...preHydrated,
+                ...dadosOfertaOriginal,
                 mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
               },
               server_url: serverUrlFm, instance_token: instanceTokenFm,
@@ -1938,8 +1948,10 @@ serve(async (req) => {
               etapa: 'proposta_enviada',
               dados: {
                 cpf, nome: devedor.nome, valor_total: valorTotal,
-                valor_avista: valorAvista, valor_parcelado: valorParcelado,
-                max_parcelas: maxParcelas, credor: credorNome,
+                valor_avista: propostaFromMe.valorAvistaNumero || valorAvista,
+                valor_parcelado: opcaoParcelada?.totalNumero || valorParcelado,
+                max_parcelas: opcaoParcelada?.quantidade || maxParcelas, credor: credorNome,
+                proposta_original: propostaFromMe,
                 mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
               },
               server_url: serverUrlFm, instance_token: instanceTokenFm,
@@ -1956,6 +1968,7 @@ serve(async (req) => {
             const existingDados = existingConv?.dados || {};
             const newDados = {
               ...existingDados,
+              ...dadosOfertaOriginal,
               mensagens_historico: [{ role: 'assistente', content: textoFromMe, ts: new Date().toISOString() }],
             };
 
@@ -2806,6 +2819,13 @@ serve(async (req) => {
         
         if (matchParcelasProposta) {
           const parcelasPedidas = parseInt(matchParcelasProposta[1]);
+          const propostaOriginal = dados.proposta_original;
+          const opcaoOriginal = propostaOriginal?.parcelas?.find((opcao: any) => Number(opcao.quantidade) === parcelasPedidas);
+
+          if (propostaOriginal && parcelasPedidas > 1 && !opcaoOriginal) {
+            await salvarSilenciosoENotificar('aguardando_humano', `Cliente pediu ${parcelasPedidas}x, opção não prevista na proposta original`);
+            break;
+          }
           
           // Recalculate values if needed
           let vaP = Number(dados.valor_avista);
@@ -2834,8 +2854,8 @@ serve(async (req) => {
             resposta = `À vista fica *${formatCurrency(vaP)}*. Você consegue fazer o pagamento hoje?`;
             await salvarEResponder('aguardando_pagamento_hoje');
             break;
-          } else if (parcelasPedidas >= 2 && parcelasPedidas <= 24 && vpP / parcelasPedidas >= VALOR_MINIMO_PARCELA) {
-            const valorParcCalc = vpP / parcelasPedidas;
+          } else if (parcelasPedidas >= 2 && parcelasPedidas <= 24 && (opcaoOriginal || vpP / parcelasPedidas >= VALOR_MINIMO_PARCELA)) {
+            const valorParcCalc = opcaoOriginal?.valorNumero || vpP / parcelasPedidas;
             dados = { ...dados, tipo_pagamento: 'parcelado', parcelas: parcelasPedidas, valor_final: vpP };
             resposta = `Em ${parcelasPedidas}x fica *${formatCurrency(valorParcCalc)}* cada parcela. Você consegue fazer o pagamento hoje?`;
             await salvarEResponder('aguardando_pagamento_hoje');
@@ -2900,7 +2920,16 @@ serve(async (req) => {
             }
           }
 
-          resposta = gerarMensagemProposta(valorAvista, valorParcelado);
+          const propostaOriginal = dados.proposta_original;
+          if (propostaOriginal) {
+            const partes = [
+              propostaOriginal.valorAvista ? `à vista por *R$ ${propostaOriginal.valorAvista}*` : '',
+              ...(propostaOriginal.parcelas || []).map((opcao: any) => `${opcao.quantidade}x de *R$ ${opcao.valor}*`),
+            ].filter(Boolean);
+            resposta = `A condição disponível é ${partes.join(' ou ')}. Qual opção fica melhor para você?`;
+          } else {
+            resposta = gerarMensagemProposta(valorAvista, valorParcelado);
+          }
 
           await salvarEResponder('oferta_valores');
           break;
