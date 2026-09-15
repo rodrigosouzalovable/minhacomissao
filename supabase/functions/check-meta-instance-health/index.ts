@@ -204,14 +204,15 @@ Deno.serve(async (req) => {
         // pausa por qualidade, quarentena nem modo recuperação.
         const liberacaoGlobal = cfg?.liberar_qualidade_global === true;
         const liberadaManual = inst.qualidade_liberada_manual === true || liberacaoGlobal;
+        const pausaViolacaoConta = String(inst.pausa_automatica_motivo || '').toLowerCase().includes('account_violation');
 
-        if (!liberadaManual && cfg?.auto_pausa_yellow !== false && qual === 'YELLOW' && !inst.pausa_automatica_ate) {
+        if (!pausaViolacaoConta && !liberadaManual && cfg?.auto_pausa_yellow !== false && qual === 'YELLOW' && !inst.pausa_automatica_ate) {
           updatePayload.pausa_automatica_ate = new Date(Date.now() + dur).toISOString();
           updatePayload.pausa_automatica_motivo = 'quality=YELLOW';
           updatePayload.estado_pool = 'pausado';
           notificarPausa = { motivo: `Qualidade caiu para YELLOW (pausado por ${cfg?.duracao_pausa_yellow_horas ?? 48}h)`, alcance: 'numero' };
         }
-        if (!liberadaManual && cfg?.auto_pausa_red_waba !== false && qual === 'RED' && !inst.pausa_automatica_ate) {
+        if (!pausaViolacaoConta && !liberadaManual && cfg?.auto_pausa_red_waba !== false && qual === 'RED' && !inst.pausa_automatica_ate) {
           updatePayload.pausa_automatica_ate = new Date(Date.now() + dur * 2).toISOString();
           updatePayload.pausa_automatica_motivo = 'quality=RED';
           updatePayload.estado_pool = 'pausado';
@@ -226,7 +227,7 @@ Deno.serve(async (req) => {
           }
         }
         const st = String(r.status || '').toUpperCase();
-        if ((st === 'FLAGGED' || st === 'RESTRICTED' || st === 'BANNED') && !inst.pausa_automatica_ate) {
+        if (!pausaViolacaoConta && (st === 'FLAGGED' || st === 'RESTRICTED' || st === 'BANNED') && !inst.pausa_automatica_ate) {
           updatePayload.pausa_automatica_ate = new Date(Date.now() + dur * 3).toISOString();
           updatePayload.pausa_automatica_motivo = `status=${st}`;
           updatePayload.estado_pool = 'pausado';
@@ -285,7 +286,7 @@ Deno.serve(async (req) => {
         // reaquecimento na checagem seguinte.
         let entrouPorVarredura = false;
         if (
-          !caiu && (qual === 'YELLOW' || qual === 'RED') &&
+          !pausaViolacaoConta && !caiu && (qual === 'YELLOW' || qual === 'RED') &&
           inst.recuperacao_ativa !== true &&
           inst.qualidade_liberada_manual !== true &&
           inst.aquecimento_qualidade_permitido !== false &&
@@ -321,7 +322,8 @@ Deno.serve(async (req) => {
             updatePayload.green_contado_dia = hojeBrtDia;
           }
 
-          if (inst.recuperacao_ativa === true && diasGreen >= diasGreenAlta) {
+          const pausaPorViolacao = String(inst.pausa_automatica_motivo || '').toLowerCase().includes('account_violation');
+          if (inst.recuperacao_ativa === true && diasGreen >= diasGreenAlta && !pausaPorViolacao) {
             updatePayload.recuperacao_ativa = false;
             updatePayload.recuperacao_msgs_meta_dia = null;
             updatePayload.quarentena_ate = null;
@@ -381,10 +383,11 @@ Deno.serve(async (req) => {
         // restrição de envio informada pela Meta. Se o bloqueio saiu mas a
         // qualidade continua YELLOW/RED (ou a conta segue restrita), o número
         // permanece fora das campanhas e em aquecimento automático.
-        const { ehMotivoBloqueioMeta, ehMotivoPagamento } = await import('../_shared/meta-conta-bloqueada.ts');
+        const { ehMotivoBloqueioMeta, ehMotivoPagamento, ehMotivoViolacaoConta } = await import('../_shared/meta-conta-bloqueada.ts');
         const motivoAtual = String(inst.pausa_automatica_motivo || '');
         const eraBloqueioMeta = ehMotivoBloqueioMeta(motivoAtual);
         const eraPagamento = ehMotivoPagamento(motivoAtual);
+        const eraViolacaoConta = ehMotivoViolacaoConta(motivoAtual);
         const semBanAgora = !r.ban_info ||
           (typeof r.ban_info === 'object' && Object.keys(r.ban_info).length === 0);
         const graphOk = !r.error && st === 'CONNECTED' && semBanAgora;
@@ -394,7 +397,7 @@ Deno.serve(async (req) => {
         const quarentenaAtiva = !!quarentenaAlvo && new Date(quarentenaAlvo).getTime() > Date.now();
         const saudavel = liberacaoGlobal || (qual === 'GREEN' && !quarentenaAtiva && !restritoMeta);
 
-        if (eraBloqueioMeta && graphOk && !notificarPausa) {
+        if (eraBloqueioMeta && !eraViolacaoConta && graphOk && !notificarPausa) {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
           if (saudavel) {

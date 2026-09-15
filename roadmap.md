@@ -2,8 +2,10 @@
 
 ## Em aberto
 - [ ] Cadastrar a chave Google Maps reserva e elevar no Google Cloud a cota diária da Places API acima das 100 consultas atuais
+- [ ] Validar um dia completo da meta de 450 por BM após ampliar o estoque de Google Leads
 
 ## Concluído
+- [x] Planejar 450 mensagens por BM, dividir entre números saudáveis e pausar a WABA inteira em ACCOUNT_VIOLATION
 - [x] Reconfigurar Google Maps para meta adaptativa de 500 contatos confirmados/dia e teto de 300 consultas
 - [x] Validar o ciclo real: o sistema detectou corretamente o limite externo de 100 consultas da chave principal e preservou os contatos já captados
 - [x] Preservar no IAGO os valores à vista e parcelado já enviados pela campanha

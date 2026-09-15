@@ -155,11 +155,28 @@ Deno.serve(async (req) => {
     // hora, para começar a aquecer sem esperar o planejamento da manhã seguinte.
     const semTrilha = (elegiveis as any[]).filter((i: any) => !trilhaMap.get(i.id));
     if (semTrilha.length > 0) {
+      const semTrilhaPorBm = new Map<string, any[]>();
+      for (const i of semTrilha) {
+        const chave = String(i.meta_bm_id || i.id);
+        const grupo = semTrilhaPorBm.get(chave) || [];
+        grupo.push(i);
+        semTrilhaPorBm.set(chave, grupo);
+      }
+      const alvoNovo = new Map<string, number>();
+      for (const [bmId, grupo] of semTrilhaPorBm) {
+        const membrosBm = (elegiveis as any[]).filter((i) => String(i.meta_bm_id || i.id) === bmId);
+        const tierBm = Math.max(...membrosBm.map((i) => tierAtual(i)));
+        const metaBm = tierBm <= 250 ? 25 : 450;
+        const jaPlanejado = membrosBm.reduce((s, i) => s + Number(trilhaMap.get(i.id)?.alvo_unicos_dia || 0), 0);
+        const restante = Math.max(0, metaBm - jaPlanejado);
+        const base = Math.floor(restante / grupo.length);
+        const sobra = restante % grupo.length;
+        grupo.forEach((i, idx) => alvoNovo.set(i.id, base + (idx < sobra ? 1 : 0)));
+      }
       const novas = semTrilha.map((i: any) => {
         const tier = tierAtual(i);
         const intensivo = tier < 10000;
-        const alvoAdaptativo = intensivo ? 450 : metaDiaPadrao;
-        const alvo = alvoDiarioPorTier(tier, alvoAdaptativo);
+        const alvo = alvoNovo.get(i.id) ?? 0;
         return {
           instancia_id: i.id,
           dia,
@@ -169,8 +186,9 @@ Deno.serve(async (req) => {
           modo_intensivo: intensivo,
           mix_uazapi_pct: intensivo ? 25 : 80,
           mix_leads_pct: intensivo ? 75 : 20,
-          status: 'ativa',
-          decisao_ia: { fonte: 'tick_automatico' },
+          decisao_ia: { fonte: 'tick_meta_por_bm', meta_bm: tier <= 250 ? 25 : 450 },
+          status: alvo > 0 ? 'ativa' : 'concluida',
+          motivo: alvo > 0 ? null : 'meta_bm_ja_distribuida',
           atualizado_em: new Date().toISOString(),
         };
       });
@@ -221,10 +239,23 @@ Deno.serve(async (req) => {
     let gastoRun = 0;
 
     // Números em resgate de campanha (resposta baixa) vão na frente da fila.
+    const progressoBm = new Map<string, { feitos: number; alvo: number }>();
+    for (const inst of elegiveis as any[]) {
+      const chave = String(inst.meta_bm_id || inst.id);
+      const atual = progressoBm.get(chave) || { feitos: 0, alvo: 0 };
+      atual.alvo += Number(trilhaMap.get(inst.id)?.alvo_unicos_dia || 0);
+      atual.feitos += logsHoje.filter((l: any) => l.instancia_id === inst.id && l.status !== 'falha').length;
+      progressoBm.set(chave, atual);
+    }
     const ordenadas = (elegiveis as any[]).slice().sort((a, b) => {
       const ra = trilhaMap.get(a.id)?.motivo === 'resgate_campanha' ? 1 : 0;
       const rb = trilhaMap.get(b.id)?.motivo === 'resgate_campanha' ? 1 : 0;
-      return rb - ra;
+      if (ra !== rb) return rb - ra;
+      const pa = progressoBm.get(String(a.meta_bm_id || a.id));
+      const pb = progressoBm.get(String(b.meta_bm_id || b.id));
+      const pctA = pa?.alvo ? pa.feitos / pa.alvo : 1;
+      const pctB = pb?.alvo ? pb.feitos / pb.alvo : 1;
+      return pctA - pctB;
     });
 
     for (const inst of ordenadas) {

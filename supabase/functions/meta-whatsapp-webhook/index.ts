@@ -302,12 +302,56 @@ serve(async (req) => {
               detalhes: value,
             }).select('id').maybeSingle();
 
+            const violacaoConta = String(tipo).toUpperCase() === 'ACCOUNT_VIOLATION';
+            const tipoViolacao = String(value?.violation_info?.violation_type || 'NÃO INFORMADA').toUpperCase();
+            let bmAfetada = 'BM não identificada';
+            let numerosPausados = 0;
+            if (violacaoConta && wabaIdEntry) {
+              const { data: mesmaWaba } = await supabase
+                .from('meta_whatsapp_instances')
+                .select('id, meta_bm_id')
+                .eq('waba_id', wabaIdEntry)
+                .eq('provider', 'meta');
+              const bmId = (mesmaWaba || []).find((i: any) => i.meta_bm_id)?.meta_bm_id;
+              let irmas = mesmaWaba || [];
+              if (bmId) {
+                const { data: mesmaBm } = await supabase
+                  .from('meta_whatsapp_instances')
+                  .select('id, meta_bm_id')
+                  .eq('meta_bm_id', bmId)
+                  .eq('provider', 'meta');
+                irmas = mesmaBm || irmas;
+              }
+              const ids = irmas.map((i: any) => i.id);
+              numerosPausados = ids.length;
+              if (bmId) {
+                const { data: bm } = await supabase.from('meta_business_managers').select('nome').eq('id', bmId).maybeSingle();
+                bmAfetada = String(bm?.nome || bmAfetada);
+              }
+              if (ids.length > 0) {
+                await supabase.from('meta_whatsapp_instances').update({
+                  estado_pool: 'restrita',
+                  pausa_automatica_ate: null,
+                  pausa_automatica_motivo: `ACCOUNT_VIOLATION:${tipoViolacao}`,
+                  recuperacao_ativa: false,
+                  recuperacao_proximo_envio_em: null,
+                }).in('id', ids);
+                await supabase.from('meta_aquecimento_trilha').update({
+                  status: 'pausada',
+                  motivo: `ACCOUNT_VIOLATION:${tipoViolacao}`,
+                  atualizado_em: new Date().toISOString(),
+                }).in('instancia_id', ids).eq('dia', new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10));
+              }
+            }
+
             // Dispara notificação WhatsApp ao admin
             try {
               const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
               const brl = (v: number | null) => v == null ? '-' : `R$ ${v.toFixed(2).replace('.', ',')}`;
               const usd = valorUsd ? `US$ ${valorUsd.toFixed(2)}` : '';
-              const mensagem = `💳 *Alerta Meta WhatsApp*\n\n*Tipo:* ${tipo}\n${usd ? `*Valor:* ${usd} (~${brl(valorBrl)})\n` : ''}*WABA:* ${wabaIdEntry || '-'}\n*Horário:* ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
+              const mensagem = violacaoConta
+                ? `🛑 *BM pausada por violação da Meta*\n\n*BM:* ${bmAfetada}\n*Classificação:* ${tipoViolacao}\n*Números pausados:* ${numerosPausados}\n*Horário:* ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\n\nTodos os números desta BM foram retirados dos envios. A classificação não informa quantidade de denúncias e não haverá liberação automática insegura.`
+                : `💳 *Alerta Meta WhatsApp*\n\n*Tipo:* ${tipo}\n${usd ? `*Valor:* ${usd} (~${brl(valorBrl)})\n` : ''}*WABA:* ${wabaIdEntry || '-'}\n*Horário:* ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
               await notificarAdmin(supabase, {
                 tipo: 'meta_billing_alert',
                 mensagem,

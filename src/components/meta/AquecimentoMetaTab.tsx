@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Flame, RefreshCw, Play, Brain, DollarSign, Send, Loader2, Bot, Search, Copy, Download } from "lucide-react";
+import { Flame, RefreshCw, Play, Brain, DollarSign, Send, Loader2, Bot, Search, Copy, Download, Building2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { exportarParaExcel } from "@/lib/exportExcel";
 
@@ -38,7 +38,7 @@ export function AquecimentoMetaTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meta_aquecimento_trilha")
-        .select("*, instancia:meta_whatsapp_instances(nome, display_phone, saude_quality, saude_tier, tier_diario)")
+        .select("*, instancia:meta_whatsapp_instances(nome, display_phone, saude_quality, saude_tier, tier_diario, meta_bm_id, estado_pool, pausa_automatica_motivo, bm:meta_business_managers(nome))")
         .eq("dia", dia);
       if (error) throw error;
       return data ?? [];
@@ -72,12 +72,19 @@ export function AquecimentoMetaTab() {
     queryKey: ["aq-logs", dia],
     staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("meta_aquecimento_destino_log")
-        .select("*")
-        .order("enviado_em", { ascending: false })
-        .limit(40);
-      return data ?? [];
+      const todos: any[] = [];
+      for (let inicio = 0; ; inicio += 1000) {
+        const { data, error } = await supabase
+          .from("meta_aquecimento_destino_log")
+          .select("*")
+          .eq("dia", dia)
+          .order("enviado_em", { ascending: false })
+          .range(inicio, inicio + 999);
+        if (error) throw error;
+        todos.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return todos;
     },
   });
 
@@ -87,7 +94,7 @@ export function AquecimentoMetaTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, saude_quality, saude_tier, tier_diario, aquecimento_meta_ativo")
+        .select("id, nome, display_phone, saude_quality, saude_tier, tier_diario, aquecimento_meta_ativo, meta_bm_id, estado_pool, pausa_automatica_motivo, bm:meta_business_managers(nome)")
         .eq("provider", "meta")
         .eq("ativo", true)
         .order("nome", { ascending: true });
@@ -219,6 +226,34 @@ export function AquecimentoMetaTab() {
   const teto = Number(orcamento?.teto_reais ?? 50);
   const enviadosHoje = (logs ?? []).filter((l: any) => l.dia === dia && l.status !== "falha").length;
   const respondidos = (logs ?? []).filter((l: any) => l.respondeu_em).length;
+  const resumoBms = (() => {
+    const mapa = new Map<string, any>();
+    for (const t of (trilhas ?? []) as any[]) {
+      const inst = t.instancia;
+      const chave = String(inst?.meta_bm_id || `sem-bm:${t.instancia_id}`);
+      const atual = mapa.get(chave) || {
+        nome: inst?.bm?.nome || "BM não vinculada", alvo: 0, feitos: new Set<string>(), numeros: 0,
+        tier: 0, bloqueios: new Set<string>(), qualidades: new Set<string>(),
+      };
+      const metaOperacional = Number(t.tier_atual || inst?.tier_diario || 0) <= 250 ? 25 : 450;
+      atual.alvo = Math.max(atual.alvo, metaOperacional);
+      atual.numeros += 1;
+      atual.tier = Math.max(atual.tier, Number(t.tier_atual || inst?.tier_diario || 0));
+      atual.qualidades.add(String(inst?.saude_quality || "UNKNOWN"));
+      if (inst?.estado_pool === "restrita" || inst?.pausa_automatica_motivo) {
+        atual.bloqueios.add(String(inst?.pausa_automatica_motivo || inst?.estado_pool));
+      }
+      mapa.set(chave, atual);
+    }
+    const bmPorInstancia = new Map<string, string>();
+    for (const t of (trilhas ?? []) as any[]) bmPorInstancia.set(t.instancia_id, String(t.instancia?.meta_bm_id || `sem-bm:${t.instancia_id}`));
+    for (const l of (logs ?? []) as any[]) {
+      if (l.status === "falha") continue;
+      const chave = bmPorInstancia.get(l.instancia_id);
+      if (chave && mapa.has(chave)) mapa.get(chave).feitos.add(String(l.destino_telefone || l.id).replace(/\D/g, "").slice(-8));
+    }
+    return [...mapa.values()].sort((a, b) => (a.feitos.size / Math.max(1, a.alvo)) - (b.feitos.size / Math.max(1, b.alvo)));
+  })();
 
   return (
     <div className="space-y-4">
@@ -324,6 +359,43 @@ export function AquecimentoMetaTab() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><Building2 className="h-4 w-4" /> Meta diária por BM</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {resumoBms.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma BM planejada hoje.</p>
+          ) : (
+            <div className="space-y-3">
+              {resumoBms.map((bm) => {
+                const feitos = bm.feitos.size;
+                const faltam = Math.max(0, bm.alvo - feitos);
+                const bloqueada = bm.bloqueios.size > 0;
+                const atingida = bm.alvo > 0 && faltam === 0;
+                const limitada = bm.tier <= 250;
+                return (
+                  <div key={bm.nome} className="rounded-md border p-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-medium text-sm">{bm.nome}</div>
+                      <Badge variant={bloqueada ? "destructive" : atingida ? "default" : "outline"}>
+                        {bloqueada ? <AlertTriangle className="mr-1 h-3 w-3" /> : atingida ? <CheckCircle2 className="mr-1 h-3 w-3" /> : null}
+                        {bloqueada ? "pausada pela Meta" : atingida ? "meta atingida" : limitada ? "limitada pelo tier" : "em andamento"}
+                      </Badge>
+                    </div>
+                    <Progress value={bm.alvo > 0 ? Math.min(100, (feitos / bm.alvo) * 100) : 0} />
+                    <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                      <span>{feitos}/{bm.alvo} aceitas hoje</span><span>faltam {faltam}</span><span>{bm.numeros} números</span><span>tier {bm.tier || "—"}</span>
+                    </div>
+                    {bloqueada && <p className="text-xs text-destructive">{[...bm.bloqueios].join(" · ")}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">
