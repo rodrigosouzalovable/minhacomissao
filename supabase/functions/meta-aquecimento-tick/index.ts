@@ -186,7 +186,6 @@ Deno.serve(async (req) => {
           modo_intensivo: intensivo,
           mix_uazapi_pct: intensivo ? 25 : 80,
           mix_leads_pct: intensivo ? 75 : 20,
-          status: 'ativa',
           decisao_ia: { fonte: 'tick_meta_por_bm', meta_bm: tier <= 250 ? 25 : 450 },
           status: alvo > 0 ? 'ativa' : 'concluida',
           motivo: alvo > 0 ? null : 'meta_bm_ja_distribuida',

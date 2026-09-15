@@ -275,7 +275,8 @@ Deno.serve(async (req) => {
     for (const item of todosLogs) {
       const bm = instBmMap.get(item.instancia_id);
       if (!bm || !resumoBm.has(bm.id)) continue;
-      const atual = resumoBm.get(bm.id)!;
+      const atual = resumoBm.get(bm.id);
+      if (!atual) continue;
       if (item.status === "falha") atual.falhas += 1;
       else atual.feitos.add(String(item.destino_telefone || item.wamid || crypto.randomUUID()).replace(/\D/g, "").slice(-8));
     }
