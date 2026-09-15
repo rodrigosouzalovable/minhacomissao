@@ -275,6 +275,18 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
       .from('meta_aquecimento_trilha')
       .upsert(linhas, { onConflict: 'instancia_id,dia' });
     if (error) throw error;
+    if (forcar) {
+      const idsAtivos = new Set(linhas.map((l) => String(l.instancia_id)));
+      const idsFora = idsSelecionados.filter((id) => !idsAtivos.has(id));
+      if (idsFora.length > 0) {
+        await supabase.from('meta_aquecimento_trilha').update({
+          alvo_unicos_dia: 0,
+          status: 'pausada',
+          motivo: 'instancia_inelegivel',
+          atualizado_em: new Date().toISOString(),
+        }).eq('dia', dia).in('instancia_id', idsFora);
+      }
+    }
 
     // Resumo matinal consolidado: reutiliza o planejamento das 07h e não cria
     // uma segunda rotina recorrente. Inclui também os selecionados sem plano.
