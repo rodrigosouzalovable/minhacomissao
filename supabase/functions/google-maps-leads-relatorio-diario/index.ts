@@ -8,6 +8,8 @@ const corsHeaders = {
 };
 
 const DESTINATARIOS = ["62991672674"];
+const META_CAPTACAO_DIA = 500;
+const TETO_CONSULTAS_DIA = 300;
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -99,11 +101,14 @@ Deno.serve(async (req) => {
     // Buscas do dia (inclui reabastecimento automático)
     const { data: buscasHoje } = await supabase
       .from("google_maps_buscas")
-      .select("categoria, localizacao, total_resultados, status, custo_estimado_usd")
+      .select("categoria, localizacao, total_resultados, status, custo_estimado_usd, requisicoes_places")
       .gte("created_at", inicioDia)
       .lte("created_at", fimDia);
     const buscas = (buscasHoje as any[]) || [];
     const custoDia = buscas.reduce((s, b) => s + Number(b.custo_estimado_usd || 0), 0);
+    const consultasDia = buscas.reduce((s, b) => s + Number(b.requisicoes_places || 0), 0);
+    const progressoCaptacao = Math.min(100, (capHojeWa / META_CAPTACAO_DIA) * 100);
+    const taxaWhatsappDia = capHoje > 0 ? (capHojeWa / capHoje) * 100 : 0;
     const { data: usoProvedores } = await supabase.rpc("gm_status_provedores");
     const contasMaps = (usoProvedores ?? []) as Array<any>;
 
@@ -270,18 +275,22 @@ Deno.serve(async (req) => {
       diagnostico.push(
         `${pendentesWa} telefone(s) ainda sem verificação de WhatsApp (se continuar assim, confira se há número UAZAPI conectado)`,
       );
+    if (capHojeWa < META_CAPTACAO_DIA && consultasDia >= TETO_CONSULTAS_DIA) {
+      diagnostico.push(`meta de captação não alcançada porque o teto de ${TETO_CONSULTAS_DIA} consultas foi consumido`);
+    }
 
     // ===== Mensagem =====
     const l: string[] = [];
     l.push(`🗺️ *Relatório diário — Google Maps Leads* — ${dataFmt}`);
     l.push("");
     l.push("*📥 Captação de hoje*");
-    l.push(`• ${capHoje} empresas novas (${capHojeWa} já com WhatsApp confirmado)`);
+    l.push(`• Meta: ${capHojeWa}/${META_CAPTACAO_DIA} contatos com WhatsApp (${progressoCaptacao.toFixed(1)}%)`);
+    l.push(`• ${capHoje} empresas novas · ${capHojeWa} confirmadas · taxa de aproveitamento ${taxaWhatsappDia.toFixed(1)}%`);
     if (porNicho.size > 0) {
       const top = [...porNicho.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
       for (const [nicho, qtd] of top) l.push(`   – ${nicho}: ${qtd}`);
     }
-    l.push(`• ${buscas.length} busca(s) no Google hoje · custo ~US$ ${custoDia.toFixed(2)}`);
+    l.push(`• ${consultasDia}/${TETO_CONSULTAS_DIA} consultas Places em ${buscas.length} busca(s) · custo ~US$ ${custoDia.toFixed(2)}`);
     for (const conta of contasMaps) {
       const nome = conta.provedor === "principal" ? "Principal" : "Reserva";
       const estado = conta.configurada ? `${conta.total_consultas}/${conta.limite_bloqueio}` : "não configurada";
@@ -389,6 +398,10 @@ Deno.serve(async (req) => {
       ok: true,
       ...result,
       capHoje,
+      capHojeWa,
+      metaCaptacaoDia: META_CAPTACAO_DIA,
+      consultasDia,
+      tetoConsultasDia: TETO_CONSULTAS_DIA,
       enviadas,
       respostas,
       enviadosTotal,

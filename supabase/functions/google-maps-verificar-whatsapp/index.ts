@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     const revalidar = body?.revalidar === true;
     // Modo varredura: sem busca_id, limpa a fila de pendentes de toda a base
     const varredura = !buscaId;
-    const limite = Math.min(Math.max(Number(body?.limite ?? 300), 1), 600);
+    const limite = Math.min(Math.max(Number(body?.limite ?? 600), 1), 1200);
 
     // Chamadas internas (cron / outras functions) usam a service role
     const isService = authHeader.includes(SERVICE_ROLE);
@@ -138,7 +138,8 @@ Deno.serve(async (req) => {
     let erros = 0;
 
     const BATCH = 15;
-    const CONCURRENCY = 3;
+    // Acompanha a quantidade de conexões saudáveis, sem abrir concorrência excessiva.
+    const CONCURRENCY = Math.max(1, Math.min(conectadas.length, 8));
     const TIMEOUT = 45000;
 
     type Item = { id: string; numero: string };

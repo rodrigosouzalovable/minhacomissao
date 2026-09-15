@@ -1,8 +1,10 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Validar ciclo real da captação adaptativa de 500 contatos WhatsApp/dia
 
 ## Concluído
+- [x] Reconfigurar Google Maps para meta adaptativa de 500 contatos confirmados/dia e teto de 300 consultas
 - [x] Preservar no IAGO os valores à vista e parcelado já enviados pela campanha
 - [x] Enviar plano matinal de aquecimento por WhatsApp e separar metas dos tiers 250 e 2.000
 - [x] Liberar aquecimento de DICEPAY/GREENAUTO com template de leads aprovado, inclusive UNKNOWN/nome em análise

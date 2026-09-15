@@ -219,6 +219,7 @@ Deno.serve(async (req) => {
     // Empresas já trazidas em buscas anteriores deste usuário
     const jaVistosPlaceId = new Set<string>();
     const jaVistosNomeTel = new Set<string>();
+    const jaVistosTelefone = new Set<string>();
     if (somenteNovos) {
       const pageSizeDb = 1000;
       for (let from = 0; ; from += pageSizeDb) {
@@ -231,6 +232,8 @@ Deno.serve(async (req) => {
         for (const l of antigos ?? []) {
           if (l.place_id) jaVistosPlaceId.add(l.place_id);
           jaVistosNomeTel.add(`${normalizarChave(l.nome)}|${normalizarChave(l.telefone)}`);
+          const telefone = String(l.telefone ?? "").replace(/\D/g, "");
+          if (telefone.length >= 8) jaVistosTelefone.add(telefone.slice(-8));
         }
         if (!antigos || antigos.length < pageSizeDb) break;
       }
@@ -296,13 +299,16 @@ Deno.serve(async (req) => {
         if (collected.length >= maxRes) break;
         const pid = p.id ?? null;
         const chaveNomeTel = `${normalizarChave(p.displayName?.text)}|${normalizarChave(p.nationalPhoneNumber)}`;
+        const telefone = String(p.internationalPhoneNumber ?? p.nationalPhoneNumber ?? "").replace(/\D/g, "");
+        const sufixoTelefone = telefone.length >= 8 ? telefone.slice(-8) : "";
         const chaveInterna = pid ?? chaveNomeTel;
         if (chavesColetadas.has(chaveInterna)) continue;
-        if (somenteNovos && ((pid && jaVistosPlaceId.has(pid)) || jaVistosNomeTel.has(chaveNomeTel))) {
+        if (somenteNovos && ((pid && jaVistosPlaceId.has(pid)) || jaVistosNomeTel.has(chaveNomeTel) || (sufixoTelefone && jaVistosTelefone.has(sufixoTelefone)))) {
           ignoradosDuplicados++;
           continue;
         }
         chavesColetadas.add(chaveInterna);
+        if (sufixoTelefone) jaVistosTelefone.add(sufixoTelefone);
         collected.push(p);
         aceitos++;
       }
