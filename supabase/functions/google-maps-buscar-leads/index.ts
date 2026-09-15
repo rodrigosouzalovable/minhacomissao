@@ -483,6 +483,7 @@ Deno.serve(async (req) => {
         somente_novos: somenteNovos,
         com_telefone: rows.filter((r) => r.telefone).length,
         requisicoes_places: pages,
+        provedor_utilizado: ultimoProvedor,
         custo_estimado_usd: custo,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
     // ===== Orçamento diário de requisições Places =====
     const { data: buscasHoje } = await supabase
       .from("google_maps_buscas")
-      .select("requisicoes_places")
+      .select("requisicoes_places, provedor_utilizado")
       .eq("origem", "resgate_engajamento")
       .gte("created_at", inicioDia);
     const requisicoesHoje = ((buscasHoje as any[]) || [])
@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
     // Aproveita a mesma execução para limpar o estoque antigo ainda pendente.
     const { data: pendentesData, error: pendentesErr } = await supabase.functions.invoke(
       "google-maps-verificar-whatsapp",
-      { body: { limite: 300 } },
+      { body: { limite: 600 } },
     );
 
 
