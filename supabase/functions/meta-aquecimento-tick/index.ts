@@ -22,6 +22,7 @@ import {
 } from '../_shared/meta-aquecimento-alvo.ts';
 import {
   carregarOrcamento,
+  alvoDiarioPorTier,
   proximoTier,
   tierAtual,
   custoDoTemplate,
@@ -88,7 +89,7 @@ Deno.serve(async (req) => {
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, estado_pool, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
+      .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, saude_tier, tier_diario, estado_pool, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
       .eq('ativo', true)
       .eq('provider', 'meta')
       .eq('aquecimento_meta_ativo', true);
@@ -149,9 +150,8 @@ Deno.serve(async (req) => {
       const novas = semTrilha.map((i: any) => {
         const tier = tierAtual(i);
         const intensivo = tier < 10000;
-        const alvo = intensivo
-          ? Math.max(5, Math.min(450, Math.round(tier * 0.6)))
-          : Math.max(5, metaDiaPadrao);
+        const alvoAdaptativo = intensivo ? 450 : metaDiaPadrao;
+        const alvo = alvoDiarioPorTier(tier, alvoAdaptativo);
         return {
           instancia_id: i.id,
           dia,

@@ -4,7 +4,7 @@
 // Sem loop, sem auto-invocação: 1 execução por dia, 1 chamada de IA.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { hojeBrt, instanciasComTemplateLeadAprovado } from '../_shared/meta-aquecimento-alvo.ts';
-import { carregarOrcamento, proximoTier, tierAtual } from '../_shared/meta-aquecimento-inteligente.ts';
+import { alvoDiarioPorTier, carregarOrcamento, proximoTier, tierAtual } from '../_shared/meta-aquecimento-inteligente.ts';
 import { notificarNumeros } from '../_shared/notificar-numeros.ts';
 
 const DESTINATARIOS_AVISO = ['62991672674'];
@@ -14,9 +14,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const LIMITE_INSTANCIAS = 40;
-/** Alvo diário no modo intensivo (≈1.300 destinatários únicos em 3 dias). */
-const ALVO_INTENSIVO_DIA = 450;
+const LIMITE_INSTANCIAS = 200;
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -53,7 +51,7 @@ Deno.serve(async (req) => {
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, display_phone, saude_quality, saude_tier, tier_diario, dias_green_consecutivos, estado_pool, recuperacao_ativa, quarentena_ate, pausa_automatica_ate, ativo, provider, phone_number_id, access_token, data_ativacao_api')
+      .select('id, nome, display_phone, meta_bm_id, saude_quality, saude_tier, tier_diario, dias_green_consecutivos, estado_pool, recuperacao_ativa, quarentena_ate, pausa_automatica_ate, ativo, provider, phone_number_id, access_token, data_ativacao_api')
       .eq('ativo', true)
       .eq('provider', 'meta')
       .eq('aquecimento_meta_ativo', true)
@@ -227,13 +225,8 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
 
     const linhas = resumo.map((r) => {
       const d = decisoes[r.id];
-      const tetoDuro = Math.max(10, Math.round(r.tier_atual * 0.6));
-      // Modo intensivo: número ainda abaixo de 10k/dia corre atrás do volume que
-      // destrava o próximo tier (~1.300 únicos em 3 dias).
       const intensivo = r.tier_atual < 10000;
-      const alvo = intensivo
-        ? Math.max(5, Math.min(ALVO_INTENSIVO_DIA, tetoDuro))
-        : Math.max(5, Math.min(d?.alvo || r.alvo_base, tetoDuro));
+      const alvo = alvoDiarioPorTier(r.tier_atual, d?.alvo || r.alvo_base);
       const mixIa = d ? d.mix_uazapi : (r.taxa_resposta === null ? 80 : 60);
       // Volume alto exige destinatários ÚNICOS: no intensivo o peso vai para leads.
       const mixU = intensivo ? Math.min(mixIa, 25) : mixIa;
@@ -265,6 +258,69 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
       .from('meta_aquecimento_trilha')
       .upsert(linhas, { onConflict: 'instancia_id,dia' });
     if (error) throw error;
+
+    // Resumo matinal consolidado: reutiliza o planejamento das 07h e não cria
+    // uma segunda rotina recorrente. Inclui também os selecionados sem plano.
+    const { data: bms } = await supabase
+      .from('meta_business_managers')
+      .select('id, nome')
+      .in('id', [...new Set((insts || []).map((i: any) => i.meta_bm_id).filter(Boolean))]);
+    const bmMap = new Map((bms || []).map((b: any) => [String(b.id), String(b.nome || 'BM sem nome')]));
+    const linhaMap = new Map(linhas.map((l) => [l.instancia_id, l]));
+    const motivoSemPlano = (i: any) => {
+      const q = String(i.saude_quality || 'UNKNOWN').toUpperCase();
+      if (i.recuperacao_ativa === true) return 'em recuperação';
+      if (i.quarentena_ate && new Date(i.quarentena_ate) > new Date()) return 'em quarentena';
+      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate) > new Date()) return 'pausa/bloqueio da Meta';
+      if (!i.phone_number_id || !i.access_token) return 'credenciais Meta incompletas';
+      if (q === 'YELLOW' || q === 'RED') return `qualidade ${q}`;
+      if (i.estado_pool === 'aguardando_templates' && !templatesLeadAprovados.has(i.id)) return 'sem template UTILITY aprovado para leads';
+      if (i.estado_pool && i.estado_pool !== 'ativo' && i.estado_pool !== 'aguardando_templates') return `estado ${i.estado_pool}`;
+      return 'não elegível nesta rodada';
+    };
+    const totalProgramado = linhas.reduce((s, l) => s + Number(l.alvo_unicos_dia || 0), 0);
+    const cabecalhoRelatorio = [
+      `📋 *Plano de aquecimento — ${dia}*`,
+      `Total programado: *${totalProgramado.toLocaleString('pt-BR')} mensagens* em ${linhas.length} números`,
+      `Orçamento diário: *R$ ${Number(orc.teto_reais).toFixed(2).replace('.', ',')}*`,
+      '',
+      '*Programação por número:*',
+    ];
+    const detalhesRelatorio: string[] = [];
+    for (const i of (insts || []) as any[]) {
+      const nome = i.nome || i.display_phone || String(i.id).slice(0, 8);
+      const bm = bmMap.get(String(i.meta_bm_id)) || 'BM não vinculada';
+      const l = linhaMap.get(i.id);
+      if (l) {
+        detalhesRelatorio.push(`• ${bm} — ${nome}: ${Number(l.alvo_unicos_dia)} (tier ${Number(l.tier_atual).toLocaleString('pt-BR')}; ${l.mix_leads_pct}% Maps / ${l.mix_uazapi_pct}% UAZAPI)`);
+      } else {
+        detalhesRelatorio.push(`• ${bm} — ${nome}: não programado — ${motivoSemPlano(i)}`);
+      }
+    }
+    const rodapeRelatorio = '_Metas podem diminuir se faltarem leads elegíveis, o orçamento acabar ou a Meta aplicar um bloqueio real._';
+    const partes: string[] = [];
+    let parte = cabecalhoRelatorio.join('\n');
+    for (const detalhe of detalhesRelatorio) {
+      if (`${parte}\n${detalhe}\n${rodapeRelatorio}`.length > 3800) {
+        partes.push(parte);
+        parte = `📋 *Plano de aquecimento — continuação*\n${detalhe}`;
+      } else {
+        parte += `\n${detalhe}`;
+      }
+    }
+    partes.push(`${parte}\n\n${rodapeRelatorio}`);
+    try {
+      for (let idx = 0; idx < partes.length; idx++) {
+        await notificarNumeros(supabase, {
+          tipo: 'aquecimento_plano_matinal',
+          mensagem: partes[idx],
+          destinatarios: DESTINATARIOS_AVISO,
+          chaveIdempotencia: `aquecimento-plano-matinal-${dia}-parte-${idx + 1}`,
+        });
+      }
+    } catch (e) {
+      console.log('[planejar] falha ao enviar resumo matinal', String(e).slice(0, 200));
+    }
 
     // Aviso de início do aquecimento (uma vez por número)
     const novos = linhas.filter((l) => !jaAquecidos.has(l.instancia_id));

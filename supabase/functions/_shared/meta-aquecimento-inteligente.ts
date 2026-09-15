@@ -249,9 +249,22 @@ export async function marcarLeadUsado(
 /** Tier corrente do número, na melhor informação disponível. */
 export function tierAtual(inst: any): number {
   const bruto = String(inst?.saude_tier || "").toUpperCase();
-  const m = bruto.match(/(\d+)/);
-  if (m) return Number(m[1]);
+  const m = bruto.match(/(\d+(?:[.,]\d+)?)\s*([KM])?/);
+  if (m) {
+    const numero = Number(m[1].replace(",", "."));
+    const multiplicador = m[2] === "M" ? 1_000_000 : m[2] === "K" ? 1_000 : 1;
+    const tier = numero * multiplicador;
+    if (Number.isFinite(tier) && tier > 0) return tier;
+  }
   return Number(inst?.tier_diario ?? 250);
+}
+
+/** Meta diária por faixa, sempre limitada a 60% do tier informado. */
+export function alvoDiarioPorTier(tier: number, alvoAdaptativo: number): number {
+  const tetoDuro = Math.max(10, Math.round(tier * 0.6));
+  if (tier <= 250) return Math.min(25, tetoDuro);
+  if (tier >= 2000 && tier < 10000) return Math.min(450, tetoDuro);
+  return Math.max(5, Math.min(alvoAdaptativo, tetoDuro));
 }
 
 export function proximoTier(atual: number): number {

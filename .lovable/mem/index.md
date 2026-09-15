@@ -1,3 +1,4 @@
+- [Relatório Matinal por Tier](mem://features/whatsapp/aquecimento-relatorio-matinal-por-tier) — Às 07h informa metas por número; tier 250 usa 25/dia e tier 2.000 usa até 450/dia
 - [Etiqueta no Envio](mem://features/whatsapp/etiqueta-atendente-no-envio) — Conversa recebe etiqueta do atendente nomeado já no envio, sem esperar resposta
 - [IAGO Atendente IA](mem://features/whatsapp/iago-atendente-ia) — Atendente de IA na fila do Inbox Meta: caixas por membership, follow-up único 2h (08-19h), opt-out, escalada Aguardando Humano
 - [Follow-up do IAGO mantém card lido](mem://features/whatsapp/iago-followup-card-lido) — Retorno automático limpa não lidas sem apagar resposta simultânea do cliente

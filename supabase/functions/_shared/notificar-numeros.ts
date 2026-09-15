@@ -124,7 +124,8 @@ export async function notificarNumeros(
       .from("admin_notificacoes_log")
       .select("id")
       .eq("tipo", params.tipo)
-      .eq("chave_idempotencia", params.chaveIdempotencia)
+      .like("chave_idempotencia", `${params.chaveIdempotencia}%`)
+      .limit(1)
       .maybeSingle();
     if (ja) return { success: false, enviados: 0, erros: [], skipped: "ja_enviado" };
   }
