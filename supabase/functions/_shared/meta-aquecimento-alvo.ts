@@ -14,7 +14,15 @@ export interface DestinoAquecimento {
   telefone: string;
 }
 
-/** Números UAZAPI (espelhos) vinculados às pastas de aquecimento. */
+function conexaoUazapiAtiva(data: any): boolean {
+  const estado = String(
+    data?.instance?.status ?? data?.status?.status ?? data?.status ?? data?.state ?? "",
+  ).toLowerCase();
+  return data?.connected === true || data?.status?.connected === true ||
+    ["connected", "open", "online", "ready"].includes(estado);
+}
+
+/** Números UAZAPI conectados em tempo real e vinculados às pastas de aquecimento. */
 export async function destinosAquecimento(supabase: any): Promise<DestinoAquecimento[]> {
   const { data: folders } = await supabase
     .from("meta_inbox_folders")
@@ -25,12 +33,45 @@ export async function destinosAquecimento(supabase: any): Promise<DestinoAquecim
 
   const { data } = await supabase
     .from("meta_whatsapp_instances")
-    .select("id, nome, display_phone, provider, ativo, folder_padrao_id")
+    .select("id, nome, display_phone, provider, ativo, folder_padrao_id, uazapi_instance_id")
     .eq("provider", "uazapi")
     .eq("ativo", true)
+    .not("uazapi_instance_id", "is", null)
     .in("folder_padrao_id", ids);
 
-  return (data || [])
+  const espelhos = data || [];
+  const uazapiIds = espelhos.map((d: any) => d.uazapi_instance_id).filter(Boolean);
+  if (uazapiIds.length === 0) return [];
+
+  const { data: conexoes } = await supabase
+    .from("user_whatsapp_instances")
+    .select("id, ativo, server_url, instance_token")
+    .in("id", uazapiIds)
+    .eq("ativo", true)
+    .not("server_url", "is", null)
+    .not("instance_token", "is", null);
+
+  const online = new Set<string>();
+  await Promise.all((conexoes || []).map(async (inst: any) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    try {
+      const response = await fetch(`${String(inst.server_url).replace(/\/+$/, "")}/instance/status`, {
+        headers: { token: String(inst.instance_token) },
+        signal: controller.signal,
+      });
+      if (!response.ok) return;
+      const status = await response.json().catch(() => ({}));
+      if (conexaoUazapiAtiva(status)) online.add(String(inst.id));
+    } catch (_) {
+      // Destino indisponível nesta rodada: os leads confirmados assumem o envio.
+    } finally {
+      clearTimeout(timeout);
+    }
+  }));
+
+  return espelhos
+    .filter((d: any) => online.has(String(d.uazapi_instance_id)))
     .map((d: any) => ({
       id: d.id,
       nome: d.nome,

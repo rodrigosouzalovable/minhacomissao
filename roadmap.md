@@ -3,8 +3,10 @@
 ## Em aberto
 - [ ] Cadastrar a chave Google Maps reserva e elevar no Google Cloud a cota diária da Places API acima das 100 consultas atuais
 - [ ] Validar um dia completo da meta de 450 por BM após ampliar o estoque de Google Leads
+- [ ] Validar a primeira captação completa entre 07h e 07h50 e o total de 500 WhatsApps confirmados
 
 ## Concluído
+- [x] Antecipar a captação para 07h, priorizar 90% Google Maps e usar apenas UAZAPI conectadas em tempo real
 - [x] Adicionar script pessoal de vendas e objeções na prospecção Google Maps para admin e colaboradores
 - [x] Criar esteira diária de 10 Google Maps Leads exclusivos por colaborador, com contato, resultado e telas separadas por perfil
 - [x] Planejar 450 mensagens por BM, dividir entre números saudáveis e pausar a WABA inteira em ACCOUNT_VIOLATION

@@ -69,20 +69,25 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: 'aquecimento_desativado' });
     }
 
+    const dia = hojeBrt();
+    const agoraBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const horaBrt = agoraBrt.getHours();
+    const domingo = agoraBrt.getDay() === 0;
+
+    // Das 07h às 07h50, o cron já existente trabalha apenas na formação do
+    // estoque. Depois, continua repondo durante a janela normal sem cron extra.
+    if (!domingo && horaBrt >= 7 && horaBrt < 19) {
+      try {
+        await supabase.functions.invoke('google-maps-leads-abastecer', { body: { dia } });
+      } catch (err) {
+        console.log('[aquecimento] abastecer falhou:', String(err).slice(0, 200));
+      }
+    }
+
     const hIni = Number(String(cfg?.horario_inicio || '09:00').split(':')[0]) || 9;
     const hFim = Number(String(cfg?.horario_fim || '19:00').split(':')[0]) || 19;
     const janela = dentroJanelaAquecimento(Math.max(8, hIni), Math.min(19, hFim));
     if (!janela.ok && !forcar) return json({ ok: true, skipped: janela.motivo });
-
-    const dia = hojeBrt();
-
-    // A captação é independente do orçamento Meta e da existência de números
-    // elegíveis nesta rodada; usa apenas a cadência já existente deste tick.
-    try {
-      await supabase.functions.invoke('google-maps-leads-abastecer', { body: { dia } });
-    } catch (err) {
-      console.log('[aquecimento] abastecer falhou:', String(err).slice(0, 200));
-    }
 
     // ===== Orçamento do dia (circuit breaker de custo) =====
     const orc = await carregarOrcamento(supabase, dia);
@@ -184,8 +189,8 @@ Deno.serve(async (req) => {
           tier_alvo: proximoTier(tier),
           alvo_unicos_dia: alvo,
           modo_intensivo: intensivo,
-          mix_uazapi_pct: intensivo ? 25 : 80,
-          mix_leads_pct: intensivo ? 75 : 20,
+          mix_uazapi_pct: intensivo ? 10 : 20,
+          mix_leads_pct: intensivo ? 90 : 80,
           decisao_ia: { fonte: 'tick_meta_por_bm', meta_bm: tier <= 250 ? 25 : 450 },
           status: alvo > 0 ? 'ativa' : 'concluida',
           motivo: alvo > 0 ? null : 'meta_bm_ja_distribuida',
@@ -279,8 +284,10 @@ Deno.serve(async (req) => {
       let mixUazapi = mixLeadsPlan != null
         ? 100 - mixLeadsPlan
         : Math.max(0, Math.min(100, Number(trilha?.mix_uazapi_pct ?? 100)));
-      // Ninguém respondendo: volta para os destinos que respondem garantido.
-      if (corrigirRota) mixUazapi = Math.max(mixUazapi, 70);
+      // Uma resposta baixa não deve consumir números UAZAPI desconectados nem
+      // retirar a prioridade dos leads; a seleção abaixo ainda usa UAZAPI online
+      // como complemento quando o estoque confirmado acabar.
+      if (corrigirRota) mixUazapi = Math.min(Math.max(mixUazapi, 10), 20);
 
        const feitos = logsHoje.filter(
         (l: any) => l.instancia_id === inst.id && l.status !== 'falha',

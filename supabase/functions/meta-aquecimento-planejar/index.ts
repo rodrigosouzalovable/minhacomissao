@@ -244,9 +244,9 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
       const d = decisoes[r.id];
       const intensivo = r.tier_atual < 10000;
       const alvo = alvoPorInstancia.get(r.id) ?? alvoDiarioPorTier(r.tier_atual, d?.alvo || r.alvo_base);
-      const mixIa = d ? d.mix_uazapi : (r.taxa_resposta === null ? 80 : 60);
-      // Volume alto exige destinatários ÚNICOS: no intensivo o peso vai para leads.
-      const mixU = intensivo ? Math.min(mixIa, 25) : mixIa;
+      const mixIa = d ? d.mix_uazapi : 10;
+      // Google Maps é a fonte principal; UAZAPI online fica como complemento.
+      const mixU = intensivo ? Math.min(mixIa, 10) : Math.min(mixIa, 20);
       return {
         instancia_id: r.id,
         dia,

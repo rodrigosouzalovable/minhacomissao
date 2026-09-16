@@ -7,7 +7,7 @@ interface Body {
   categoria: string;
   localizacao: string;
   raio_metros?: number;
-  max_resultados?: number; // padrão 60 (3 páginas x 20)
+  max_resultados?: number; // padrão 60; automação matinal pode pedir até 120
   somente_novos?: boolean; // ignora empresas já trazidas em buscas anteriores
   max_variacoes?: number; // variações extras de consulta quando faltam leads novos
   enriquecer_instagram?: boolean; // busca Instagram/seguidores dos leads encontrados
@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const maxRes = Math.min(Math.max(body.max_resultados ?? 60, 1), 60);
+    const maxRes = Math.min(Math.max(body.max_resultados ?? 60, 1), 120);
     const maxRequisicoes = Math.min(Math.max(Number(body.max_requisicoes ?? 18), 1), 18);
     const origem = String(body.origem || "manual").slice(0, 60);
 
