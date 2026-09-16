@@ -1,7 +1,7 @@
 ---
 name: Captação Google Maps de 1.000 WhatsApps com rodízio seguro
 description: Meta diária de 1.000 confirmados, teto de 650 consultas/dia e bloqueio em 950 por conta/mês
- type: feature
+type: feature
 ---
 - A captação automática busca 1.000 contatos novos com WhatsApp confirmado por dia.
 - O teto global é 650 consultas Places por dia.
