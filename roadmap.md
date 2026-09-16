@@ -1,11 +1,12 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Cadastrar a chave Google Maps reserva e elevar no Google Cloud a cota diária da Places API acima das 100 consultas atuais
+- [ ] Informar no painel os e-mails das duas contas Google Cloud já migradas e elevar suas cotas diárias da Places API acima das 100 consultas atuais
 - [ ] Validar um dia completo da meta de 450 por BM após ampliar o estoque de Google Leads
 - [ ] Validar a primeira captação completa entre 07h e 07h50 e o total de 500 WhatsApps confirmados
 
 ## Concluído
+- [x] Substituir os dois campos fixos por uma fila dinâmica de contas Google Maps, com e-mail, prioridade, ativação, consumo e troca automática de chave
 - [x] Criar ações rápidas para colaboradores e central administrativa de leads interessados, com detalhes, Google Maps e prompt profissional sem consulta adicional de fotos
 - [x] Antecipar a captação para 07h, priorizar 90% Google Maps e usar apenas UAZAPI conectadas em tempo real
 - [x] Adicionar script pessoal de vendas e objeções na prospecção Google Maps para admin e colaboradores

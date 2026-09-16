@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const { data: isAdmin } = await supabase.rpc("pode_google_maps_leads", { _user_id: user.id });
+    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
     if (!isAdmin) {
       return new Response(JSON.stringify({ error: "Sem permissão para o Google Maps Leads" }), {
         status: 403,
@@ -58,36 +58,39 @@ Deno.serve(async (req) => {
     const { data, error } = await supabase.rpc("gm_status_uso");
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
-    const { data: provedores, error: provedoresError } = await supabase.rpc("gm_status_provedores");
+    const { data: provedores, error: provedoresError } = await supabase.rpc("gm_status_chaves");
     if (provedoresError) throw provedoresError;
     const contas = (provedores ?? []) as Array<any>;
-    const principal = contas.find((c) => c.provedor === "principal");
-    const reserva = contas.find((c) => c.provedor === "reserva");
-    const ativa = contas.find((c) => c.ativa && c.configurada && c.pode_buscar)
+    const ativa = contas.find((c) => c.em_uso && c.configurada && c.pode_buscar)
       ?? contas.find((c) => c.configurada && c.pode_buscar);
+    const consumoAtual = contas.reduce((total, conta) => total + Number(conta.total_consultas || 0), 0);
+    const limiteMaximo = contas.reduce((total, conta) => total + Number(conta.limite_maximo || 0), 0);
+    const limiteBloqueio = contas.reduce((total, conta) => total + Number(conta.limite_bloqueio || 0), 0);
+    const percentual = limiteMaximo > 0 ? (consumoAtual / limiteMaximo) * 100 : 0;
+    const nivel = !ativa ? "bloqueado" : percentual >= 90 ? "critico" : percentual >= 75 ? "alto" : "normal";
     const dataResetBR = new Date(row.data_reset).toLocaleDateString("pt-BR");
     const mensagem = mensagemPorNivel(
-      row.nivel,
-      row.total_consultas,
-      row.limite_maximo,
-      row.limite_bloqueio,
+      nivel,
+      consumoAtual,
+      limiteMaximo,
+      limiteBloqueio,
       dataResetBR,
     );
 
     return new Response(
       JSON.stringify({
         pode_buscar: !!ativa,
-        consumo_atual: Number(principal?.total_consultas ?? row.total_consultas) + Number(reserva?.total_consultas ?? 0),
-        limite_maximo: Number(principal?.limite_maximo ?? 5000) + (reserva?.configurada ? Number(reserva.limite_maximo ?? 5000) : 0),
-        limite_bloqueio: Number(principal?.limite_bloqueio ?? 4800) + (reserva?.configurada ? Number(reserva.limite_bloqueio ?? 4800) : 0),
+        consumo_atual: consumoAtual,
+        limite_maximo: limiteMaximo,
+        limite_bloqueio: limiteBloqueio,
         alerta_percentual: row.alerta_percentual,
-        percentual_consumido: Number(row.percentual_consumido),
+        percentual_consumido: percentual,
         data_reset: row.data_reset,
         data_reset_br: dataResetBR,
-        nivel: row.nivel,
+        nivel,
         mes_referencia: row.mes_referencia,
         mensagem,
-        conta_ativa: ativa?.provedor ?? null,
+        conta_ativa: ativa?.chave_id ?? null,
         provedores: contas,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

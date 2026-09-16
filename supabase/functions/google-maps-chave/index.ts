@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { chavePodeBuscar, listarChavesGoogleMaps, mascararEmail } from "../_shared/google-maps-keys.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,6 +50,12 @@ function parseGooglePermissionError(status: number, rawBody: string) {
   return { message: "O Google negou a chamada (403). Verifique as restrições da chave." };
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function chaveValida(chave: string) {
+  return chave.length >= 20 && chave.length <= 200 && !/\s/.test(chave);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -65,67 +72,124 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return json({ error: "Não autenticado" }, 401);
 
-    const { data: isAdmin } = await supabase.rpc("pode_google_maps_leads", { _user_id: user.id });
+    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
     if (!isAdmin) return json({ error: "Sem permissão para o Google Maps Leads" }, 403);
 
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const action = String(body?.action ?? "status");
 
-    const isReserva = body?.slot === "reserva";
-    const keyColumn = isReserva ? "api_key_reserva" : "api_key";
+    const chaveId = String(body?.chave_id ?? "").trim();
 
-    async function lerChave(): Promise<string | null> {
-      const { data } = await supabase.from("google_maps_config").select(keyColumn).eq("id", 1).maybeSingle();
-      const k = (data?.[keyColumn] ?? "").trim();
-      return k ? k : null;
+    async function lerChave(id: string): Promise<string | null> {
+      if (!id) return null;
+      const { data, error } = await supabase.from("google_maps_api_keys").select("api_key").eq("id", id).maybeSingle();
+      if (error) throw error;
+      const chave = String(data?.api_key ?? "").trim();
+      return chave || null;
     }
 
     if (action === "status") {
-      const { data } = await supabase
-        .from("google_maps_config")
-        .select("api_key, api_key_reserva, updated_at, reserva_updated_at, reserva_ativa_mes")
-        .eq("id", 1)
-        .maybeSingle();
-      const key = (data?.api_key ?? "").trim();
-      const reserva = (data?.api_key_reserva ?? "").trim();
-      const { data: usos } = await supabase.rpc("gm_status_provedores");
+      const chaves = await listarChavesGoogleMaps(supabase);
+      const disponivel = chaves.find(chavePodeBuscar);
       return json({
-        tem_chave: !!key,
-        sufixo: key ? key.slice(-4) : null,
-        atualizado_em: data?.updated_at ?? null,
-        tem_chave_reserva: !!reserva,
-        sufixo_reserva: reserva ? reserva.slice(-4) : null,
-        reserva_atualizado_em: data?.reserva_updated_at ?? null,
-        provedores: usos ?? [],
+        chaves: chaves.map((chave) => ({
+          id: chave.id,
+          email_conta: chave.email_conta,
+          email_mascarado: mascararEmail(chave.email_conta),
+          sufixo: chave.api_key ? chave.api_key.slice(-4) : null,
+          ordem_prioridade: chave.ordem_prioridade,
+          ativa: chave.ativa,
+          em_uso: chave.id === disponivel?.id,
+          total_consultas: chave.total_consultas,
+          limite_maximo: chave.limite_maximo,
+          limite_bloqueio: chave.limite_bloqueio,
+          indisponivel_mes: chave.indisponivel_mes,
+          atualizado_em: chave.updated_at,
+        })),
       });
     }
 
-    if (action === "salvar") {
+    if (action === "criar") {
       const chave = String(body?.api_key ?? "").trim();
-      if (chave.length < 20 || chave.length > 200 || /\s/.test(chave)) {
+      const email = String(body?.email_conta ?? "").trim().toLowerCase();
+      if (!EMAIL_RE.test(email) || email.length > 254) {
+        return json({ error: "Informe um e-mail válido da conta Google Cloud." }, 400);
+      }
+      if (!chaveValida(chave)) {
         return json({ error: "Chave inválida. Cole a chave completa da Places API (New)." }, 400);
       }
-      const { error } = await supabase
-        .from("google_maps_config")
-        .upsert(isReserva
-          ? { id: 1, api_key_reserva: chave, reserva_updated_by: user.id, reserva_updated_at: new Date().toISOString() }
-          : { id: 1, api_key: chave, updated_by: user.id, updated_at: new Date().toISOString() });
+      const { data: ultima } = await supabase
+        .from("google_maps_api_keys")
+        .select("ordem_prioridade")
+        .order("ordem_prioridade", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const { data: criada, error } = await supabase
+        .from("google_maps_api_keys")
+        .insert({
+          email_conta: email,
+          api_key: chave,
+          ordem_prioridade: Number(ultima?.ordem_prioridade ?? 0) + 1,
+          created_by: user.id,
+          updated_by: user.id,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
-      return json({ ok: true, tem_chave: true, sufixo: chave.slice(-4) });
+      return json({ ok: true, id: criada.id, sufixo: chave.slice(-4) });
+    }
+
+    if (action === "atualizar") {
+      if (!chaveId) return json({ error: "Conta não informada." }, 400);
+      const atualizacoes: Record<string, unknown> = { updated_by: user.id, updated_at: new Date().toISOString() };
+      if (body?.email_conta !== undefined) {
+        const email = String(body.email_conta).trim().toLowerCase();
+        if (!EMAIL_RE.test(email) || email.length > 254) return json({ error: "Informe um e-mail válido da conta Google Cloud." }, 400);
+        atualizacoes.email_conta = email;
+      }
+      if (body?.api_key !== undefined && String(body.api_key).trim()) {
+        const chave = String(body.api_key).trim();
+        if (!chaveValida(chave)) return json({ error: "Chave inválida. Cole a chave completa da Places API (New)." }, 400);
+        atualizacoes.api_key = chave;
+        atualizacoes.indisponivel_mes = null;
+      }
+      if (typeof body?.ativa === "boolean") atualizacoes.ativa = body.ativa;
+      if (Number.isInteger(body?.ordem_prioridade) && body.ordem_prioridade > 0) atualizacoes.ordem_prioridade = body.ordem_prioridade;
+      const { error } = await supabase.from("google_maps_api_keys").update(atualizacoes).eq("id", chaveId);
+      if (error) throw error;
+      return json({ ok: true });
     }
 
     if (action === "remover") {
+      if (!chaveId) return json({ error: "Conta não informada." }, 400);
       const { error } = await supabase
-        .from("google_maps_config")
-        .upsert(isReserva
-          ? { id: 1, api_key_reserva: null, reserva_updated_by: user.id, reserva_updated_at: new Date().toISOString() }
-          : { id: 1, api_key: null, updated_by: user.id, updated_at: new Date().toISOString() });
+        .from("google_maps_api_keys")
+        .update({ ativa: false, api_key: null, indisponivel_mes: null, updated_by: user.id, updated_at: new Date().toISOString() })
+        .eq("id", chaveId);
       if (error) throw error;
-      return json({ ok: true, tem_chave: false, sufixo: null });
+      return json({ ok: true });
+    }
+
+    if (action === "reordenar") {
+      const ids = Array.isArray(body?.chave_ids) ? body.chave_ids.map((id: unknown) => String(id)) : [];
+      const chaves = await listarChavesGoogleMaps(supabase);
+      if (ids.length !== chaves.length || new Set(ids).size !== ids.length || chaves.some((chave) => !ids.includes(chave.id))) {
+        return json({ error: "Ordem de contas inválida." }, 400);
+      }
+      for (let indice = 0; indice < ids.length; indice++) {
+        const { error } = await supabase
+          .from("google_maps_api_keys")
+          .update({ ordem_prioridade: indice + 1, updated_by: user.id, updated_at: new Date().toISOString() })
+          .eq("id", ids[indice]);
+        if (error) throw error;
+      }
+      return json({ ok: true });
     }
 
     if (action === "testar") {
-      const chave = String(body?.api_key ?? "").trim() || (await lerChave());
+      const chaveInformada = String(body?.api_key ?? "").trim();
+      if (chaveInformada && !chaveValida(chaveInformada)) return json({ error: "Chave inválida. Cole a chave completa da Places API (New)." }, 400);
+      const chave = chaveInformada || (await lerChave(chaveId));
       if (!chave) return json({ error: "Nenhuma chave configurada para testar." }, 400);
 
       const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
@@ -160,8 +224,8 @@ Deno.serve(async (req) => {
       }
       await resp.json().catch(() => ({}));
       // Consome 1 chamada Places — contabiliza no uso mensal
+      if (chaveId) await supabase.rpc("gm_incrementar_uso_chave", { p_chave_id: chaveId, p_qtd: 1 });
       await supabase.rpc("gm_incrementar_uso", { qtd: 1 });
-      await supabase.rpc("gm_incrementar_uso_provedor", { p_provedor: isReserva ? "reserva" : "principal", p_qtd: 1 });
       return json({ ok: true, message: "Chave válida: a Places API (New) respondeu com sucesso." });
     }
 

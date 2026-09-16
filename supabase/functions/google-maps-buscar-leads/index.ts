@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { chavePodeBuscar, listarChavesGoogleMaps, marcarChaveIndisponivelNoMes, mesAtualBrt, type GoogleMapsKeyRow } from "../_shared/google-maps-keys.ts";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 
@@ -242,20 +243,13 @@ Deno.serve(async (req) => {
     const collected: any[] = [];
     const chavesColetadas = new Set<string>();
     let pages = 0;
-    let ultimoProvedor: "principal" | "reserva" | null = null;
+    let ultimoProvedor: string | null = null;
     let ignoradosDuplicados = 0;
     let variacoesUsadas = 0;
     let limiteAtingidoNoMeio = false;
 
-    // Chave própria da Places API (New), se configurada na tela Google Maps Leads
-    const { data: cfg } = await supabase
-      .from("google_maps_config")
-      .select("api_key, api_key_reserva, reserva_ativa_mes")
-      .eq("id", 1)
-      .maybeSingle();
-    const chavePropria = (cfg?.api_key ?? "").trim() || null;
-    const chaveReserva = (cfg?.api_key_reserva ?? "").trim() || null;
-    if (!chavePropria && (!LOVABLE_API_KEY || !GOOGLE_MAPS_API_KEY)) {
+    let chaves = await listarChavesGoogleMaps(supabase);
+    if (chaves.length === 0 && (!LOVABLE_API_KEY || !GOOGLE_MAPS_API_KEY)) {
       await supabase
         .from("google_maps_buscas")
         .update({ status: "erro", erro: "Nenhuma chave da Places API (New) configurada" })
@@ -266,27 +260,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    const mesAtual = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
-      .toISOString().slice(0, 7) + "-01";
-
-    async function escolherProvedor() {
-      const { data: status, error: statusError } = await supabase.rpc("gm_status_provedores");
-      if (statusError) throw statusError;
-      const contas = (status ?? []) as Array<any>;
-      const principal = contas.find((c) => c.provedor === "principal");
-      const reserva = contas.find((c) => c.provedor === "reserva");
-      const reservaTravada = cfg?.reserva_ativa_mes === mesAtual;
-      if (!reservaTravada && principal?.pode_buscar) return "principal" as const;
-      if (chaveReserva && reserva?.pode_buscar) {
-        if (!reservaTravada) {
-          await supabase.from("google_maps_config").update({ reserva_ativa_mes: mesAtual }).eq("id", 1);
-        }
-        return "reserva" as const;
-      }
-      return null;
+    function escolherChave(excluir = new Set<string>()): GoogleMapsKeyRow | null {
+      return chaves.find((chave) => !excluir.has(chave.id) && chavePodeBuscar(chave)) ?? null;
     }
 
-    if (!(await escolherProvedor())) {
+    const usaGatewayPadrao = chaves.length === 0 && !!LOVABLE_API_KEY && !!GOOGLE_MAPS_API_KEY;
+    if (!usaGatewayPadrao && !escolherChave()) {
       return new Response(
         JSON.stringify({ error: "limite_atingido", message: "As contas Google Maps configuradas atingiram o limite mensal de segurança." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -333,18 +312,17 @@ Deno.serve(async (req) => {
         };
         if (pageToken) reqBody.pageToken = pageToken;
 
-        let provedor = await escolherProvedor();
-        if (!provedor) {
+        let chaveSelecionada = escolherChave();
+        if (!chaveSelecionada && !usaGatewayPadrao) {
           limiteAtingidoNoMeio = true;
           return;
         }
-        const chaveSelecionada = provedor === "reserva" ? chaveReserva : chavePropria;
-        ultimoProvedor = provedor;
+        ultimoProvedor = chaveSelecionada?.id ?? "conexao_padrao";
         const endpoint = chaveSelecionada
           ? "https://places.googleapis.com/v1/places:searchText"
           : `${GATEWAY_URL}/places/v1/places:searchText`;
         const authHeaders: Record<string, string> = chaveSelecionada
-          ? { "X-Goog-Api-Key": chaveSelecionada }
+          ? { "X-Goog-Api-Key": chaveSelecionada.api_key }
           : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
 
         const requestInit = {
@@ -360,23 +338,26 @@ Deno.serve(async (req) => {
         };
         let resp = await fetch(endpoint, requestInit);
 
-        // Além do corte mensal interno, respeita a cota diária configurada no Google.
-        // Se a principal responder 429, fixa a reserva para o restante do mês e repete
-        // esta página uma única vez, sem perder a busca em andamento.
-        if (resp.status === 429 && provedor === "principal" && chaveReserva) {
-          const erroPrincipal = await resp.text();
-          if (erroPrincipal.includes("RESOURCE_EXHAUSTED") || erroPrincipal.includes("RATE_LIMIT_EXCEEDED")) {
-            await supabase.from("google_maps_config").update({ reserva_ativa_mes: mesAtual }).eq("id", 1);
+        // Uma conta sem cota fica suspensa até o próximo mês e a mesma página
+        // é repetida uma única vez na próxima chave disponível.
+        if (resp.status === 429 && chaveSelecionada) {
+          const erroCota = await resp.text();
+          if (erroCota.includes("RESOURCE_EXHAUSTED") || erroCota.includes("RATE_LIMIT_EXCEEDED")) {
+            await marcarChaveIndisponivelNoMes(supabase, chaveSelecionada.id);
+            chaveSelecionada.indisponivel_mes = mesAtualBrt();
+            const proxima = escolherChave(new Set([chaveSelecionada.id]));
+            if (!proxima) {
+              erroGoogle = { status: 429, body: "Todas as contas Google Maps atingiram a cota disponível." };
+              return;
+            }
+            chaveSelecionada = proxima;
+            ultimoProvedor = proxima.id;
             resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
               ...requestInit,
-              headers: { ...requestInit.headers, "X-Goog-Api-Key": chaveReserva },
+              headers: { ...requestInit.headers, "X-Goog-Api-Key": proxima.api_key },
             });
-            if (resp.ok) {
-              provedor = "reserva";
-              ultimoProvedor = "reserva";
-            }
           } else {
-            erroGoogle = { status: 429, body: erroPrincipal };
+            erroGoogle = { status: 429, body: erroCota };
             return;
           }
         }
@@ -401,8 +382,11 @@ Deno.serve(async (req) => {
 
         // Incrementa contador de uso mensal (1 chamada Places consumida)
         await supabase.rpc("gm_incrementar_uso", { qtd: 1 });
-        await supabase.rpc("gm_incrementar_uso_provedor", { p_provedor: provedor, p_qtd: 1 });
-        if (!(await escolherProvedor())) {
+        if (chaveSelecionada) {
+          await supabase.rpc("gm_incrementar_uso_chave", { p_chave_id: chaveSelecionada.id, p_qtd: 1 });
+          chaveSelecionada.total_consultas += 1;
+        }
+        if (!usaGatewayPadrao && !escolherChave()) {
           limiteAtingidoNoMeio = true;
           return;
         }

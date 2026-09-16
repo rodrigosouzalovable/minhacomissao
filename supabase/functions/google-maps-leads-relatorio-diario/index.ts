@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     const consultasDia = buscas.reduce((s, b) => s + Number(b.requisicoes_places || 0), 0);
     const progressoCaptacao = Math.min(100, (capHojeWa / META_CAPTACAO_DIA) * 100);
     const taxaWhatsappDia = capHoje > 0 ? (capHojeWa / capHoje) * 100 : 0;
-    const { data: usoProvedores } = await supabase.rpc("gm_status_provedores");
+    const { data: usoProvedores } = await supabase.rpc("gm_status_chaves");
     const contasMaps = (usoProvedores ?? []) as Array<any>;
     const diaMes = nowBrt.getDate();
     const diasNoMes = new Date(nowBrt.getFullYear(), nowBrt.getMonth() + 1, 0).getDate();
@@ -322,11 +322,12 @@ Deno.serve(async (req) => {
     }
     l.push(`• ${consultasDia}/${TETO_CONSULTAS_DIA} consultas Places em ${buscas.length} busca(s) · custo ~US$ ${custoDia.toFixed(2)}`);
     for (const conta of contasMaps) {
-      const nome = conta.provedor === "principal" ? "Principal" : "Reserva";
+      const nome = conta.email_conta || `Conta ${conta.ordem_prioridade}`;
       const estado = conta.configurada ? `${conta.total_consultas}/${conta.limite_bloqueio}` : "não configurada";
-      l.push(`• Conta ${nome}: ${estado}${conta.ativa && conta.configurada ? " · ativa" : ""}`);
+      l.push(`• ${nome}: ${estado}${conta.em_uso ? " · em uso" : conta.ativa ? " · disponível" : " · desativada"}`);
     }
-    l.push(`• Projeção mensal: ~${projecaoMensal} consultas de 9.600 disponíveis nas duas contas`);
+    const capacidadeTotal = contasMaps.filter((conta) => conta.ativa).reduce((s, conta) => s + Number(conta.limite_bloqueio || 0), 0);
+    l.push(`• Projeção mensal: ~${projecaoMensal} consultas de ${capacidadeTotal} disponíveis nas contas ativas`);
 
     l.push("");
     l.push("*📇 Base acumulada*");
