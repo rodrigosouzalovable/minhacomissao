@@ -159,6 +159,43 @@ Deno.serve(async (req) => {
         const restritoMeta = avaliaHealth(r.phone_health) || avaliaHealth(r.waba_health);
         r.restrito_meta = restritoMeta;
 
+        // A Graph não expõe os dados do cartão, mas informa a elegibilidade de
+        // envio por entidade. BUSINESS/WABA disponíveis confirmam que não há
+        // bloqueio comercial ativo; limitações exclusivas do PHONE_NUMBER
+        // (por exemplo, nome ainda não aprovado) devem ser reportadas à parte.
+        const healthEntities = [
+          ...(Array.isArray(r.phone_health?.entities) ? r.phone_health.entities : []),
+          ...(Array.isArray(r.waba_health?.entities) ? r.waba_health.entities : []),
+        ];
+        const entidadeStatus = (tipo: string) => healthEntities
+          .filter((e: any) => String(e?.entity_type || '').toUpperCase() === tipo)
+          .map((e: any) => String(e?.can_send_message || '').toUpperCase())
+          .filter(Boolean);
+        const statusBusiness = entidadeStatus('BUSINESS');
+        const statusWaba = entidadeStatus('WABA');
+        const statusComercial = [...statusBusiness, ...statusWaba];
+        const comercialBloqueado = statusComercial.some((s: string) => RUIM.has(s));
+        const comercialDisponivel = statusBusiness.includes('AVAILABLE') && statusWaba.includes('AVAILABLE');
+        const motivoAnteriorPagamento = /#131042|payment|billing|eligibility|pagamento/i.test(
+          String(inst.pausa_automatica_motivo || ''),
+        );
+        r.pagamento_status = comercialBloqueado
+          ? (motivoAnteriorPagamento ? 'pendente' : 'nao_confirmado')
+          : comercialDisponivel
+            ? 'confirmado'
+            : 'nao_confirmado';
+        r.pagamento_detalhe = r.pagamento_status === 'confirmado'
+          ? 'A Meta informa BUSINESS e WABA disponíveis, sem bloqueio comercial ativo.'
+          : r.pagamento_status === 'pendente'
+            ? 'A Meta ainda informa restrição comercial na BUSINESS/WABA.'
+            : 'A Meta não retornou informação suficiente para confirmar o pagamento.';
+        r.limitacao_numero = !comercialBloqueado && avaliaHealth(r.phone_health)
+          ? (r.phone_health?.entities || []).find((e: any) =>
+              String(e?.entity_type || '').toUpperCase() === 'PHONE_NUMBER' &&
+              RUIM.has(String(e?.can_send_message || '').toUpperCase())
+            )?.additional_info?.[0] || 'O número possui outra limitação independente do pagamento.'
+          : null;
+
         r.restricoes = restricoes;
 
         // Leitura de qualidade confirmada? (false = token inválido / API falhou)

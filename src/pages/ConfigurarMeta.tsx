@@ -55,6 +55,8 @@ type Instancia = {
   saude_ban_info?: any;
   saude_name_status?: string | null;
   saude_checked_at?: string | null;
+  saude_restricoes?: any;
+  saude_raw?: any;
   messaging_limit_manual?: string | null;
   aquecimento_meta_ativo?: boolean | null;
   templates_auto_copiar?: boolean | null;
@@ -1075,28 +1077,39 @@ export default function ConfigurarMeta() {
 
   };
 
-  // Consulta a Meta agora e, se o bloqueio real (conta bloqueada #131031 /
-  // número inacessível #100) já não existir, devolve o número ao pool.
-  const revalidarBloqueio = async (inst: Instancia) => {
+  // Confere a elegibilidade comercial na Meta. Dados do cartão não são
+  // expostos pela Graph; BUSINESS + WABA disponíveis significam que não há
+  // bloqueio de pagamento ativo. Outras limitações permanecem separadas.
+  const verificarPagamento = async (inst: Instancia) => {
     setRevalidando(inst.id);
-    const toastId = toast.loading(`Revalidando ${inst.nome} na Meta...`);
+    const toastId = toast.loading(`Verificando pagamento de ${inst.nome} na Meta...`);
     try {
       const { data, error } = await supabase.functions.invoke("check-meta-instance-health", {
         body: { instancia_id: inst.id },
       });
       if (error) throw error;
       const res = (data?.resultados || data?.results || [])[0] || {};
-      if (res?.liberada) {
-        toast.success("Bloqueio liberado — número voltou para o pool de envios", { id: toastId, duration: 10000 });
-      } else if (res?.error) {
-        toast.error(`A Meta ainda recusa este número: ${res.error}`, { id: toastId, duration: 15000 });
-      } else {
-        const st = res?.status || "?";
-        const q = res?.quality_rating || "?";
-        toast.message(`Status na Meta: ${st} · Qualidade: ${q}`, {
+      if (res?.pagamento_status === "confirmado") {
+        toast.success("Pagamento confirmado pela Meta", {
           id: toastId,
-          description: "Se o número segue fora do pool, o bloqueio ainda está ativo no Business Manager.",
-          duration: 12000,
+          description: res?.limitacao_numero
+            ? `O pagamento está regular, mas o número continua limitado: ${res.limitacao_numero}`
+            : "Conta e WABA disponíveis, sem bloqueio comercial ativo.",
+          duration: 15000,
+        });
+      } else if (res?.pagamento_status === "pendente") {
+        toast.error("Pagamento ainda pendente na Meta", {
+          id: toastId,
+          description: res?.pagamento_detalhe,
+          duration: 15000,
+        });
+      } else if (res?.error) {
+        toast.error(`Não foi possível confirmar: ${res.error}`, { id: toastId, duration: 15000 });
+      } else {
+        toast.warning("Não foi possível confirmar o pagamento", {
+          id: toastId,
+          description: res?.pagamento_detalhe || "A Meta não retornou informação comercial suficiente.",
+          duration: 15000,
         });
       }
       carregar();
@@ -1807,13 +1820,31 @@ export default function ConfigurarMeta() {
                           variant="ghost"
                           className="h-7 text-xs"
                           disabled={revalidando === inst.id}
-                          onClick={() => revalidarBloqueio(inst)}
-                          title="Consultar a Meta agora e liberar o número no pool se o bloqueio (conta bloqueada / número inacessível) já não existir"
+                          onClick={() => verificarPagamento(inst)}
+                          title="Consultar agora se a Meta ainda informa bloqueio de pagamento na conta ou WABA"
                         >
                           {revalidando === inst.id
                             ? <Loader2 className="h-3 w-3 animate-spin" />
-                            : <><ShieldCheck className="h-3 w-3 mr-1" /> Revalidar na Meta</>}
+                            : <><ShieldCheck className="h-3 w-3 mr-1" /> Verificar pagamento</>}
                         </Button>
+                        {inst.saude_checked_at && (() => {
+                          const entities = [
+                            ...(Array.isArray(inst.saude_restricoes?.phone_health?.entities) ? inst.saude_restricoes.phone_health.entities : []),
+                            ...(Array.isArray(inst.saude_restricoes?.waba_health?.entities) ? inst.saude_restricoes.waba_health.entities : []),
+                          ];
+                          const statusPorTipo = (tipo: string) => entities
+                            .filter((e: any) => String(e?.entity_type || "").toUpperCase() === tipo)
+                            .map((e: any) => String(e?.can_send_message || "").toUpperCase());
+                          const business = statusPorTipo("BUSINESS");
+                          const waba = statusPorTipo("WABA");
+                          const confirmado = business.includes("AVAILABLE") && waba.includes("AVAILABLE");
+                          if (!confirmado) return null;
+                          return (
+                            <Badge variant="outline" className="text-[10px] border-green-500/50 text-green-700 dark:text-green-400">
+                              <CheckCircle2 className="h-3 w-3 mr-1" /> Pagamento confirmado · {new Date(inst.saude_checked_at).toLocaleString("pt-BR")}
+                            </Badge>
+                          );
+                        })()}
                         {(inst as any).pausa_automatica_motivo && (
                           (() => {
                             const motivo = String((inst as any).pausa_automatica_motivo);

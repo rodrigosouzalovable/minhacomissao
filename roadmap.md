@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Adicionar verificação individual de pagamento Meta e corrigir o motivo desatualizado da GoldImage
 - [x] Elevar a meta para 1.000 WhatsApps/dia, teto de 650 consultas e bloqueio conservador de 950 por conta/mês
 - [x] Limitar contas Meta tier 250 a 2 templates de utilidade por número/dia em todos os caminhos manuais e automáticos
 - [x] Substituir os dois campos fixos por uma fila dinâmica de contas Google Maps, com e-mail, prioridade, ativação, consumo e troca automática de chave
