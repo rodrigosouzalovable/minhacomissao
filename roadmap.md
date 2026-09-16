@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Criar ações rápidas para colaboradores e central administrativa de leads interessados, com detalhes, Google Maps e prompt profissional sem consulta adicional de fotos
 - [ ] Cadastrar a chave Google Maps reserva e elevar no Google Cloud a cota diária da Places API acima das 100 consultas atuais
 - [ ] Validar um dia completo da meta de 450 por BM após ampliar o estoque de Google Leads
 - [ ] Validar a primeira captação completa entre 07h e 07h50 e o total de 500 WhatsApps confirmados
