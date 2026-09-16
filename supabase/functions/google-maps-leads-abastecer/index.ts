@@ -15,7 +15,9 @@ const corsHeaders = {
 const META_WHATSAPP_DIA = 500;
 const MAX_REQUISICOES_POR_DIA = 300;
 const MAX_REQUISICOES_POR_RUN = 18;
-const MAX_RESULTADOS = 60;
+// Até 120 empresas por rodada: os seis ticks entre 07h e 07h50 conseguem
+// formar o estoque antes do aquecimento, respeitando o teto diário de consultas.
+const MAX_RESULTADOS = 120;
 const DESTINATARIOS_AVISO = ["62991672674"];
 
 const SEMENTES = [
