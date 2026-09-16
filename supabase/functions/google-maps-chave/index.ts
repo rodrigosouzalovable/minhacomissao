@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { listarChavesGoogleMaps, mascararEmail } from "../_shared/google-maps-keys.ts";
+import { chavePodeBuscar, listarChavesGoogleMaps, mascararEmail } from "../_shared/google-maps-keys.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
 
     if (action === "status") {
       const chaves = await listarChavesGoogleMaps(supabase);
-      const disponivel = chaves.find((chave) => chave.ativa && chave.api_key && chave.total_consultas < chave.limite_bloqueio && !chave.indisponivel_mes);
+      const disponivel = chaves.find(chavePodeBuscar);
       return json({
         chaves: chaves.map((chave) => ({
           id: chave.id,
@@ -167,6 +167,22 @@ Deno.serve(async (req) => {
         .update({ ativa: false, api_key: null, indisponivel_mes: null, updated_by: user.id, updated_at: new Date().toISOString() })
         .eq("id", chaveId);
       if (error) throw error;
+      return json({ ok: true });
+    }
+
+    if (action === "reordenar") {
+      const ids = Array.isArray(body?.chave_ids) ? body.chave_ids.map((id: unknown) => String(id)) : [];
+      const chaves = await listarChavesGoogleMaps(supabase);
+      if (ids.length !== chaves.length || new Set(ids).size !== ids.length || chaves.some((chave) => !ids.includes(chave.id))) {
+        return json({ error: "Ordem de contas inválida." }, 400);
+      }
+      for (let indice = 0; indice < ids.length; indice++) {
+        const { error } = await supabase
+          .from("google_maps_api_keys")
+          .update({ ordem_prioridade: indice + 1, updated_by: user.id, updated_at: new Date().toISOString() })
+          .eq("id", ids[indice]);
+        if (error) throw error;
+      }
       return json({ ok: true });
     }
 

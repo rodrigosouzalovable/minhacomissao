@@ -1148,6 +1148,23 @@ function ChaveApiCard() {
     }
   }
 
+  async function moverConta(indice: number, direcao: -1 | 1) {
+    const destino = indice + direcao;
+    if (destino < 0 || destino >= chaves.length) return;
+    const ordenadas = [...chaves];
+    [ordenadas[indice], ordenadas[destino]] = [ordenadas[destino], ordenadas[indice]];
+    setProcessando("reordenar");
+    try {
+      await chamar("reordenar", { chave_ids: ordenadas.map((conta) => conta.id) });
+      toast.success("Prioridade atualizada");
+      atualizarConsultas();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao reordenar contas");
+    } finally {
+      setProcessando(null);
+    }
+  }
+
   async function remover(conta: ContaGoogleMaps) {
     if (!confirm(`Remover a chave vinculada a ${conta.email_conta || "esta conta"}? O histórico de consumo será preservado.`)) return;
     setProcessando(`remover-${conta.id}`);
@@ -1197,8 +1214,8 @@ function ChaveApiCard() {
               <Badge variant={conta.em_uso ? "default" : conta.ativa ? "secondary" : "outline"}>{conta.em_uso ? "Em uso" : !conta.ativa ? "Desativada" : indisponivel ? "Cota esgotada" : "Disponível"}</Badge>
               <span className="text-sm text-muted-foreground">Chave ····{conta.sufixo ?? "----"} · {conta.total_consultas}/{conta.limite_bloqueio} no mês</span>
               <div className="ml-auto flex items-center gap-1">
-                <Button size="icon" variant="ghost" title="Subir prioridade" disabled={indice === 0 || !!processando} onClick={() => alterarConta(conta, { ordem_prioridade: Math.max(1, conta.ordem_prioridade - 1) }, "Prioridade atualizada")}><ArrowUp className="h-4 w-4" /></Button>
-                <Button size="icon" variant="ghost" title="Descer prioridade" disabled={indice === chaves.length - 1 || !!processando} onClick={() => alterarConta(conta, { ordem_prioridade: conta.ordem_prioridade + 1 }, "Prioridade atualizada")}><ArrowDown className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" title="Subir prioridade" disabled={indice === 0 || !!processando} onClick={() => moverConta(indice, -1)}><ArrowUp className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" title="Descer prioridade" disabled={indice === chaves.length - 1 || !!processando} onClick={() => moverConta(indice, 1)}><ArrowDown className="h-4 w-4" /></Button>
                 <Button size="icon" variant="ghost" title={conta.ativa ? "Desativar conta" : "Ativar conta"} disabled={!!processando} onClick={() => alterarConta(conta, { ativa: !conta.ativa }, conta.ativa ? "Conta desativada" : "Conta ativada")}><Power className="h-4 w-4" /></Button>
                 <Button size="icon" variant="ghost" title="Remover chave" className="text-destructive" disabled={!!processando} onClick={() => remover(conta)}><Trash2 className="h-4 w-4" /></Button>
               </div>
