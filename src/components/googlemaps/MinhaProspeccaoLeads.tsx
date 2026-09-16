@@ -54,7 +54,8 @@ export function MinhaProspeccaoLeads() {
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["gm-minha-prospeccao"],
     queryFn: async () => {
-      await supabase.rpc("gm_atribuir_leads_diarios", { _limite: 10 });
+      const { error: atribuicaoError } = await supabase.rpc("gm_atribuir_leads_diarios", { _limite: 10 });
+      if (atribuicaoError) throw atribuicaoError;
       const { data, error } = await supabase.rpc("gm_meus_leads_prospeccao");
       if (error) throw error;
       return (data ?? []) as Atribuicao[];
