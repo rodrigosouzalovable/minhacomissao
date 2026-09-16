@@ -1,6 +1,6 @@
 // Reabastece a lista de contatos do Google Maps usada no resgate de engajamento.
 // Roda de carona no tick do aquecimento (sem cron novo):
-//  - persegue 500 contatos inéditos com WhatsApp confirmado em cada dia
+//  - persegue 1.000 contatos inéditos com WhatsApp confirmado em cada dia
 //  - escolhe os nichos/cidades com melhor histórico de resposta (aquecimento_nicho_score)
 //  - busca no Google Maps, confirma quem tem WhatsApp e guarda sem duplicar telefone
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -12,8 +12,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const META_WHATSAPP_DIA = 500;
-const MAX_REQUISICOES_POR_DIA = 300;
+const META_WHATSAPP_DIA = 1000;
+const MAX_REQUISICOES_POR_DIA = 650;
 const MAX_REQUISICOES_POR_RUN = 18;
 // Até 120 empresas por rodada: os seis ticks entre 07h e 07h50 conseguem
 // formar o estoque antes do aquecimento, respeitando o teto diário de consultas.
@@ -234,14 +234,14 @@ Deno.serve(async (req) => {
     const marco = trocouConta
       ? `conta-${provedorAtual}`
       : (confirmadosDepois ?? 0) >= META_WHATSAPP_DIA
-      ? "500"
-      : (confirmadosDepois ?? 0) >= 400
-      ? "400"
+      ? "1000"
+      : (confirmadosDepois ?? 0) >= 800
+      ? "800"
       : consultasDepois >= Math.ceil(MAX_REQUISICOES_POR_DIA * 0.8)
       ? "80pct"
       : null;
     if (marco) {
-      const titulo = marco.startsWith("conta-") ? "Conta Google Maps selecionada" : marco === "500" ? "Meta diária alcançada" : marco === "400" ? "Captação chegou a 400" : "80% do teto diário consumido";
+      const titulo = marco.startsWith("conta-") ? "Conta Google Maps selecionada" : marco === "1000" ? "Meta diária alcançada" : marco === "800" ? "Captação chegou a 800" : "80% do teto diário consumido";
       await notificarNumeros(supabase, {
         tipo: "google_maps_captacao_marco",
         destinatarios: DESTINATARIOS_AVISO,

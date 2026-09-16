@@ -130,6 +130,8 @@ Deno.serve(async (req) => {
           email_conta: email,
           api_key: chave,
           ordem_prioridade: Number(ultima?.ordem_prioridade ?? 0) + 1,
+          limite_maximo: 1000,
+          limite_bloqueio: 950,
           created_by: user.id,
           updated_by: user.id,
         })
