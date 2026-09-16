@@ -366,7 +366,7 @@ Deno.serve(async (req) => {
       let erroEnvio: string | null = null;
       try {
         const { data: res, error } = await supabase.functions.invoke("meta-criar-template-lote", {
-          body: { mestre_id: proximo.template_mestre_id, instancia_ids: [inst.id] },
+          body: { mestre_id: proximo.template_mestre_id, instancia_ids: [inst.id], cota_reservada: true },
         });
         if (error) erroEnvio = String(error.message || error);
         else if ((res as any)?.success === false) erroEnvio = String((res as any)?.error || "falha");

@@ -220,7 +220,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { mestre_id, instancia_ids, apenas_falhas, modo, ignorar_validacao } = await req.json();
+    const { mestre_id, instancia_ids, apenas_falhas, modo, ignorar_validacao, cota_reservada } = await req.json();
     if (!mestre_id) throw new Error("mestre_id obrigatório");
 
     const supabase = createClient(
@@ -329,14 +329,18 @@ serve(async (req) => {
     const instanciasProtegidas: any[] = [];
     const adiadasTier250: any[] = [];
     for (const inst of instancias) {
-      const reserva = await reservarEnvioTemplateTier250(
-        supabase,
-        inst.id,
-        mestre_id,
-        apenas_falhas ? "reenvio_manual" : modo === "piloto" ? "piloto" : modo === "replicar" ? "replicacao" : "manual",
-      );
+      const reserva = cota_reservada === true
+        ? "reserved"
+        : await reservarEnvioTemplateTier250(
+            supabase,
+            inst.id,
+            mestre_id,
+            apenas_falhas ? "reenvio_manual" : modo === "piloto" ? "piloto" : modo === "replicar" ? "replicacao" : "manual",
+          );
       if (reserva === "limit_reached") {
         adiadasTier250.push({ instancia_id: inst.id, nome: inst.nome, motivo: "limite_tier_250" });
+      } else if (reserva === "already_reserved" && cota_reservada !== true) {
+        adiadasTier250.push({ instancia_id: inst.id, nome: inst.nome, motivo: "template_ja_reservado_hoje" });
       } else {
         instanciasProtegidas.push(inst);
       }
