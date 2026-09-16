@@ -589,7 +589,7 @@ export default function GoogleMapsLeads() {
                 </Alert>
               )}
               <p className="text-xs text-muted-foreground">
-                Bloqueio automático em {limite.limite_bloqueio} requisições • O contador reinicia em {limite.data_reset_br}
+                Corte de segurança total em {limite.limite_bloqueio} requisições • Cada conta troca automaticamente ao atingir 4.800 • Reinício em {limite.data_reset_br}
               </p>
               {limite.provedores?.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-2">

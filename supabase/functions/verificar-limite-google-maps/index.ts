@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const { data: isAdmin } = await supabase.rpc("pode_google_maps_leads", { _user_id: user.id });
+    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
     if (!isAdmin) {
       return new Response(JSON.stringify({ error: "Sem permissão para o Google Maps Leads" }), {
         status: 403,
@@ -66,12 +66,14 @@ Deno.serve(async (req) => {
     const consumoAtual = contas.reduce((total, conta) => total + Number(conta.total_consultas || 0), 0);
     const limiteMaximo = contas.reduce((total, conta) => total + Number(conta.limite_maximo || 0), 0);
     const limiteBloqueio = contas.reduce((total, conta) => total + Number(conta.limite_bloqueio || 0), 0);
+    const percentual = limiteMaximo > 0 ? (consumoAtual / limiteMaximo) * 100 : 0;
+    const nivel = !ativa ? "bloqueado" : percentual >= 90 ? "critico" : percentual >= 75 ? "alto" : "normal";
     const dataResetBR = new Date(row.data_reset).toLocaleDateString("pt-BR");
     const mensagem = mensagemPorNivel(
-      row.nivel,
-      row.total_consultas,
-      row.limite_maximo,
-      row.limite_bloqueio,
+      nivel,
+      consumoAtual,
+      limiteMaximo,
+      limiteBloqueio,
       dataResetBR,
     );
 
@@ -82,10 +84,10 @@ Deno.serve(async (req) => {
         limite_maximo: limiteMaximo,
         limite_bloqueio: limiteBloqueio,
         alerta_percentual: row.alerta_percentual,
-        percentual_consumido: Number(row.percentual_consumido),
+        percentual_consumido: percentual,
         data_reset: row.data_reset,
         data_reset_br: dataResetBR,
-        nivel: row.nivel,
+        nivel,
         mes_referencia: row.mes_referencia,
         mensagem,
         conta_ativa: ativa?.chave_id ?? null,
