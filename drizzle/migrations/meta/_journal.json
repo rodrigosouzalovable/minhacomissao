@@ -127,6 +127,13 @@
       "when": 1789559504606,
       "tag": "0017_allow_assigned_lead_distribution_for_authorized_staff",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789559610268,
+      "tag": "0018_allow_scheduling_return_in_two_steps",
+      "breakpoints": true
     }
   ]
 }

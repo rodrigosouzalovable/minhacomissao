@@ -1,7 +1,7 @@
 ---
 name: Prospecção diária Google Maps por colaborador
 description: Colaboradores comuns recebem 10 leads exclusivos/dia da base existente; parceiros Meta só usam busca; admin vê tudo
- type: feature
+type: feature
 ---
 - Cada colaborador comum autorizado recebe até 10 leads exclusivos por dia, reaproveitados da base existente, sem novas consultas Google Maps.
 - Elegíveis: WhatsApp confirmado, sem site próprio ou apenas rede social, fora da blacklist e nunca atribuído a outra pessoa.
