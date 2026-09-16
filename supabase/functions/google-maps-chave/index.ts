@@ -229,13 +229,6 @@ Deno.serve(async (req) => {
       return json({ ok: true, message: "Chave válida: a Places API (New) respondeu com sucesso." });
     }
 
-    if (action === "liberar_mes") {
-      if (!chaveId) return json({ error: "Conta não informada." }, 400);
-      const { error } = await supabase.from("google_maps_api_keys").update({ indisponivel_mes: null, updated_by: user.id, updated_at: new Date().toISOString() }).eq("id", chaveId);
-      if (error) throw error;
-      return json({ ok: true });
-    }
-
     return json({ error: "Ação inválida" }, 400);
   } catch (err) {
     console.error("google-maps-chave erro:", err);
