@@ -141,6 +141,13 @@
       "when": 1789561239222,
       "tag": "0019_create_google_maps_sales_scripts",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789570546528,
+      "tag": "0020_list_interested_google_maps_leads_for_admin",
+      "breakpoints": true
     }
   ]
 }
