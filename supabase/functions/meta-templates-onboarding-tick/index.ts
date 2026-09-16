@@ -11,7 +11,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";
-import { reservarEnvioTemplateTier250 } from "../_shared/meta-template-tier-protection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -343,19 +342,6 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Tier 250: reserva atômica por número/dia antes de qualquer submissão.
-      // O item excedente permanece PENDENTE para o próximo dia.
-      const reserva = await reservarEnvioTemplateTier250(
-        supabase,
-        inst.id,
-        proximo.template_mestre_id,
-        "onboarding_tick",
-      );
-      if (reserva === "limit_reached") {
-        processados.push({ instancia_id: inst.id, ok: true, adiado: "limite_tier_250" });
-        continue;
-      }
-
       // Marca antes de submeter (evita duplicidade se o tick rodar de novo)
       await supabase
         .from("meta_templates_onboarding_fila")
@@ -366,10 +352,18 @@ Deno.serve(async (req) => {
       let erroEnvio: string | null = null;
       try {
         const { data: res, error } = await supabase.functions.invoke("meta-criar-template-lote", {
-          body: { mestre_id: proximo.template_mestre_id, instancia_ids: [inst.id], cota_reservada: true },
+          body: { mestre_id: proximo.template_mestre_id, instancia_ids: [inst.id] },
         });
         if (error) erroEnvio = String(error.message || error);
         else if ((res as any)?.success === false) erroEnvio = String((res as any)?.error || "falha");
+        else if (Number((res as any)?.total || 0) === 0 && Number((res as any)?.adiadas_tier_250 || 0) > 0) {
+          await supabase
+            .from("meta_templates_onboarding_fila")
+            .update({ status: "PENDENTE", enviado_em: null, motivo: "limite diário tier 250: próximo dia útil", tentativas: 0 })
+            .eq("id", proximo.id);
+          processados.push({ instancia_id: inst.id, ok: true, adiado: "limite_tier_250" });
+          continue;
+        }
       } catch (e) {
         erroEnvio = String(e);
       }
