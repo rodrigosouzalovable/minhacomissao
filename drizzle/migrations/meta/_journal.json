@@ -169,6 +169,13 @@
       "when": 1789578061421,
       "tag": "0023_prioritize_actual_tier_250_for_template_safety",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789597976888,
+      "tag": "0024_set_google_maps_key_safety_defaults",
+      "breakpoints": true
     }
   ]
 }

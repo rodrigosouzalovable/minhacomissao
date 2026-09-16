@@ -261,7 +261,9 @@ Deno.serve(async (req) => {
     }
 
     function escolherChave(excluir = new Set<string>()): GoogleMapsKeyRow | null {
-      return chaves.find((chave) => !excluir.has(chave.id) && chavePodeBuscar(chave)) ?? null;
+      return chaves
+        .filter((chave) => !excluir.has(chave.id) && chavePodeBuscar(chave))
+        .sort((a, b) => a.total_consultas - b.total_consultas || a.ordem_prioridade - b.ordem_prioridade)[0] ?? null;
     }
 
     const usaGatewayPadrao = chaves.length === 0 && !!LOVABLE_API_KEY && !!GOOGLE_MAPS_API_KEY;

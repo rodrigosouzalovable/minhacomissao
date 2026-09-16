@@ -3,9 +3,10 @@
 ## Em aberto
 - [ ] Informar no painel os e-mails das duas contas Google Cloud já migradas e elevar suas cotas diárias da Places API acima das 100 consultas atuais
 - [ ] Validar um dia completo da meta de 450 por BM após ampliar o estoque de Google Leads
-- [ ] Validar a primeira captação completa entre 07h e 07h50 e o total de 500 WhatsApps confirmados
+- [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Elevar a meta para 1.000 WhatsApps/dia, teto de 650 consultas e bloqueio conservador de 950 por conta/mês
 - [x] Limitar contas Meta tier 250 a 2 templates de utilidade por número/dia em todos os caminhos manuais e automáticos
 - [x] Substituir os dois campos fixos por uma fila dinâmica de contas Google Maps, com e-mail, prioridade, ativação, consumo e troca automática de chave
 - [x] Criar ações rápidas para colaboradores e central administrativa de leads interessados, com detalhes, Google Maps e prompt profissional sem consulta adicional de fotos

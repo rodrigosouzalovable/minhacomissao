@@ -8,8 +8,8 @@ const corsHeaders = {
 };
 
 const DESTINATARIOS = ["62991672674"];
-const META_CAPTACAO_DIA = 500;
-const TETO_CONSULTAS_DIA = 300;
+const META_CAPTACAO_DIA = 1000;
+const TETO_CONSULTAS_DIA = 650;
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
