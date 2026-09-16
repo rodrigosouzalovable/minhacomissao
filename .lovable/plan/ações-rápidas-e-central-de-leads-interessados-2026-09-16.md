@@ -6,7 +6,7 @@
 - A cópia terá somente **DDD + número**, removendo o DDI `55` quando ele estiver presente.
 - Substituir o atual botão de ligação por um botão para copiar esta abertura, preenchendo automaticamente o nome da empresa:
 
-> Olá, bom dia! Meu nome é Fernanda. Eu estava pesquisando empresas da sua região e encontrei a [nome da empresa]. Falo com a responsável?
+> Olá, bom dia! Meu nome é [nome do atendente]. Eu estava pesquisando empresas da sua região e encontrei a [nome da empresa]. Falo com a responsável?
 
 - Remover o botão que abre o WhatsApp.
 - No lugar dele, adicionar um botão com ícone de check verde para marcar que o lead demonstrou interesse em ver o site.

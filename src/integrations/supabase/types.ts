@@ -10454,6 +10454,32 @@ export type Database = {
         Args: { p_provedor: string; p_qtd?: number }
         Returns: number
       }
+      gm_leads_interessados_admin: {
+        Args: never
+        Returns: {
+          atribuicao_id: string
+          avaliacao: number
+          busca_id: string
+          categoria: string
+          colaborador_id: string
+          colaborador_nome: string
+          endereco: string
+          instagram_seguidores: number
+          instagram_site: string
+          instagram_url: string
+          instagram_username: string
+          lead_id: string
+          marcado_em: string
+          nome: string
+          place_id: string
+          site: string
+          telefone: string
+          telefone_internacional: string
+          tem_whatsapp: boolean
+          total_avaliacoes: number
+          whatsapp_verificado_em: string
+        }[]
+      }
       gm_mes_atual: { Args: never; Returns: string }
       gm_meus_leads_prospeccao: {
         Args: never

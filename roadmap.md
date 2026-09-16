@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa entre 07h e 07h50 e o total de 500 WhatsApps confirmados
 
 ## Concluído
+- [x] Criar ações rápidas para colaboradores e central administrativa de leads interessados, com detalhes, Google Maps e prompt profissional sem consulta adicional de fotos
 - [x] Antecipar a captação para 07h, priorizar 90% Google Maps e usar apenas UAZAPI conectadas em tempo real
 - [x] Adicionar script pessoal de vendas e objeções na prospecção Google Maps para admin e colaboradores
 - [x] Criar esteira diária de 10 Google Maps Leads exclusivos por colaborador, com contato, resultado e telas separadas por perfil
