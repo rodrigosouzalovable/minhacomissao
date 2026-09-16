@@ -1,0 +1,168 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CalendarClock, CheckCircle2, Loader2, MessageCircle, Phone, Plus, Target } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { toast } from "sonner";
+
+type Resultado = "interessado" | "sem_interesse" | "nao_respondeu" | "retorno_agendado";
+type Filtro = "todos" | "pendentes" | "contatados" | Resultado;
+
+interface Atribuicao {
+  atribuicao_id: string;
+  lead_id: string;
+  nome: string;
+  telefone: string | null;
+  telefone_internacional: string | null;
+  endereco: string | null;
+  categoria: string | null;
+  avaliacao: number | null;
+  total_avaliacoes: number | null;
+  atribuido_em: string;
+  dia: string;
+  contatado_em: string | null;
+  resultado: Resultado | null;
+  retorno_em: string | null;
+}
+
+const RESULTADOS: Array<{ value: Resultado; label: string }> = [
+  { value: "interessado", label: "Interessado" },
+  { value: "nao_respondeu", label: "Não respondeu" },
+  { value: "retorno_agendado", label: "Retorno agendado" },
+  { value: "sem_interesse", label: "Sem interesse" },
+];
+
+function telefoneLimpo(lead: Atribuicao) {
+  return (lead.telefone_internacional ?? lead.telefone ?? "").replace(/\D/g, "");
+}
+
+function hojeBrasilia() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+}
+
+export function MinhaProspeccaoLeads() {
+  const qc = useQueryClient();
+  const [filtro, setFiltro] = useState<Filtro>("pendentes");
+  const [salvando, setSalvando] = useState<string | null>(null);
+
+  const { data: leads = [], isLoading } = useQuery({
+    queryKey: ["gm-minha-prospeccao"],
+    queryFn: async () => {
+      await supabase.rpc("gm_atribuir_leads_diarios", { _limite: 10 });
+      const { data, error } = await supabase.rpc("gm_meus_leads_prospeccao");
+      if (error) throw error;
+      return (data ?? []) as Atribuicao[];
+    },
+    staleTime: 60_000,
+  });
+
+  const trazer = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc("gm_atribuir_leads_diarios", { _limite: 10 });
+      if (error) throw error;
+      return data?.[0] as { adicionados: number; total_hoje: number; estoque_restante: number } | undefined;
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["gm-minha-prospeccao"] });
+      if (!r?.adicionados) toast.message("Sua lista de hoje já está completa");
+      else toast.success(`${r.adicionados} novo${r.adicionados === 1 ? " lead adicionado" : "s leads adicionados"}`);
+    },
+    onError: () => toast.error("Não foi possível trazer novos leads"),
+  });
+
+  async function atualizar(lead: Atribuicao, contatado: boolean, resultado: Resultado | null, retornoEm?: string | null) {
+    setSalvando(lead.atribuicao_id);
+    const { error } = await supabase.rpc("gm_atualizar_contato_lead", {
+      _atribuicao_id: lead.atribuicao_id,
+      _contatado: contatado,
+      _resultado: resultado,
+      _retorno_em: retornoEm ? new Date(retornoEm).toISOString() : null,
+    });
+    setSalvando(null);
+    if (error) {
+      toast.error(resultado === "retorno_agendado" ? "Informe a data do retorno" : "Não foi possível salvar");
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ["gm-minha-prospeccao"] });
+  }
+
+  const hoje = hojeBrasilia();
+  const hojeRecebidos = leads.filter((l) => l.dia === hoje).length;
+  const contatados = leads.filter((l) => l.contatado_em).length;
+  const interessados = leads.filter((l) => l.resultado === "interessado").length;
+  const filtrados = useMemo(() => leads.filter((l) => {
+    if (filtro === "pendentes") return !l.contatado_em;
+    if (filtro === "contatados") return !!l.contatado_em;
+    if (filtro !== "todos") return l.resultado === filtro;
+    return true;
+  }), [filtro, leads]);
+
+  return (
+    <div className="container mx-auto space-y-6 p-4 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold"><Target className="h-6 w-6 text-primary" /> Minha lista de prospecção</h1>
+          <p className="text-sm text-muted-foreground">Empresas com WhatsApp confirmado e sem site próprio.</p>
+        </div>
+        <Button onClick={() => trazer.mutate()} disabled={trazer.isPending || hojeRecebidos >= 10}>
+          {trazer.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+          Trazer 10 novos leads
+        </Button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card><CardContent className="p-4"><div className="text-2xl font-semibold">{hojeRecebidos}/10</div><div className="text-sm text-muted-foreground">Recebidos hoje</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-2xl font-semibold">{contatados}</div><div className="text-sm text-muted-foreground">Contatados</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-2xl font-semibold">{interessados}</div><div className="text-sm text-muted-foreground">Interessados</div></CardContent></Card>
+      </div>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+          <CardTitle className="text-base">Meus leads <Badge variant="secondary">{filtrados.length}</Badge></CardTitle>
+          <Select value={filtro} onValueChange={(v) => setFiltro(v as Filtro)}>
+            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pendentes">Pendentes</SelectItem><SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="contatados">Contatados</SelectItem><SelectItem value="interessado">Interessados</SelectItem>
+              <SelectItem value="nao_respondeu">Não responderam</SelectItem><SelectItem value="retorno_agendado">Retornos</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader><TableRow><TableHead>Contato</TableHead><TableHead>Empresa</TableHead><TableHead>Nicho</TableHead><TableHead>Localização</TableHead><TableHead>Nota</TableHead><TableHead>Ações</TableHead><TableHead>Resultado</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {filtrados.map((lead) => {
+                  const tel = telefoneLimpo(lead);
+                  return <TableRow key={lead.atribuicao_id}>
+                    <TableCell><Checkbox checked={!!lead.contatado_em} disabled={salvando === lead.atribuicao_id} onCheckedChange={(v) => atualizar(lead, !!v, v ? lead.resultado : null, lead.retorno_em)} aria-label={`Marcar ${lead.nome} como contatado`} /></TableCell>
+                    <TableCell><div className="font-medium">{lead.nome}</div><div className="text-xs text-muted-foreground">{lead.telefone_internacional ?? lead.telefone}</div></TableCell>
+                    <TableCell>{lead.categoria ?? "—"}</TableCell><TableCell className="max-w-64 truncate">{lead.endereco ?? "—"}</TableCell>
+                    <TableCell>{lead.avaliacao ? `${lead.avaliacao} (${lead.total_avaliacoes ?? 0})` : "—"}</TableCell>
+                    <TableCell><div className="flex gap-1"><a href={`tel:+${tel}`}><Button size="icon" variant="ghost" title="Ligar"><Phone className="h-4 w-4" /></Button></a><a href={`https://wa.me/${tel.startsWith("55") ? tel : `55${tel}`}`} target="_blank" rel="noreferrer"><Button size="icon" variant="ghost" title="Abrir WhatsApp"><MessageCircle className="h-4 w-4" /></Button></a></div></TableCell>
+                    <TableCell className="min-w-52"><Select value={lead.resultado ?? "sem_resultado"} onValueChange={(v) => atualizar(lead, v !== "sem_resultado", v === "sem_resultado" ? null : v as Resultado, lead.retorno_em)}><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger><SelectContent><SelectItem value="sem_resultado">Sem resultado</SelectItem>{RESULTADOS.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent></Select>{lead.resultado === "retorno_agendado" && <div className="mt-2 flex items-center gap-2"><CalendarClock className="h-4 w-4 text-muted-foreground" /><Input type="datetime-local" value={lead.retorno_em?.slice(0, 16) ?? ""} onChange={(e) => atualizar(lead, true, "retorno_agendado", e.target.value)} /></div>}</TableCell>
+                  </TableRow>;
+                })}
+                {!isLoading && !filtrados.length && <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground"><CheckCircle2 className="mx-auto mb-2 h-6 w-6" />Nenhum lead neste filtro.</TableCell></TableRow>}
+                {isLoading && <TableRow><TableCell colSpan={7} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export function ResumoProspeccaoAdmin() {
+  const { data = [] } = useQuery({ queryKey: ["gm-resumo-prospeccao"], queryFn: async () => { const { data, error } = await supabase.rpc("gm_resumo_prospeccao_admin"); if (error) throw error; return data ?? []; }, staleTime: 60_000 });
+  if (!data.length) return null;
+  return <Card><CardHeader><CardTitle className="text-base">Prospecção da equipe</CardTitle></CardHeader><CardContent><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Colaborador</TableHead><TableHead>Entregues</TableHead><TableHead>Contatados</TableHead><TableHead>Interessados</TableHead><TableHead>Retornos</TableHead><TableHead>Sem interesse</TableHead><TableHead>Não responderam</TableHead></TableRow></TableHeader><TableBody>{data.map((r: any) => <TableRow key={r.colaborador_id}><TableCell className="font-medium">{r.colaborador_nome}</TableCell><TableCell>{r.entregues}</TableCell><TableCell>{r.contatados}</TableCell><TableCell>{r.interessados}</TableCell><TableCell>{r.retornos}</TableCell><TableCell>{r.sem_interesse}</TableCell><TableCell>{r.nao_responderam}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card>;
+}

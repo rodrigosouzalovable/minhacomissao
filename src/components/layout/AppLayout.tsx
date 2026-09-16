@@ -338,6 +338,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     // Parceiros Meta sempre veem a Blacklist (só os bloqueios das instâncias deles, via RLS)
     if (parceiroMeta && item.href === '/admin/blacklist') return true;
     if ((parceiroMeta || veCampanhas) && item.href === '/admin/campanhas-meta') return true;
+    if (parceiroMeta && item.href === '/admin/google-maps-leads') return true;
     if (abasPermitidas) {
       return abasPermitidas.includes(item.href);
     }

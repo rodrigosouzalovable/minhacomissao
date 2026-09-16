@@ -24,6 +24,9 @@ import { AnalisarNichoCard } from "@/components/googlemaps/AnalisarNichoCard";
 import { PromptSiteLeadDialog } from "@/components/googlemaps/PromptSiteLeadDialog";
 import { NICHOS, NICHOS_DESTAQUE, TODOS_NICHOS, dicaDoNicho } from "@/components/googlemaps/nichos";
 import { BaseLeadsCard } from "@/components/googlemaps/BaseLeadsCard";
+import { MinhaProspeccaoLeads, ResumoProspeccaoAdmin } from "@/components/googlemaps/MinhaProspeccaoLeads";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 
 type SiteTipo = "sem_site" | "rede_social" | "com_site";
 
@@ -152,6 +155,9 @@ function getFunctionErrorMessage(payload: FunctionErrorPayload) {
 
 export default function GoogleMapsLeads() {
   const qc = useQueryClient();
+  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { parceiroMeta, isLoading: permissionsLoading } = useUserPermissions();
+  const podePesquisar = isAdmin || parceiroMeta;
   const [categoria, setCategoria] = useState("");
   const [localizacao, setLocalizacao] = useState("");
   const [maxResultados, setMaxResultados] = useState(60);
@@ -193,6 +199,7 @@ export default function GoogleMapsLeads() {
         provedores: Array<{ provedor: "principal" | "reserva"; total_consultas: number; limite_maximo: number; limite_bloqueio: number; pode_buscar: boolean; configurada: boolean; ativa: boolean }>;
       };
     },
+    enabled: isAdmin,
     refetchInterval: 60_000,
   });
 
@@ -207,6 +214,7 @@ export default function GoogleMapsLeads() {
       if (error) throw error;
       return data as Busca[];
     },
+    enabled: podePesquisar,
   });
 
   const { data: leads } = useQuery({
@@ -520,6 +528,14 @@ export default function GoogleMapsLeads() {
     qc.invalidateQueries({ queryKey: ["gm-buscas"] });
   }
 
+  if (roleLoading || permissionsLoading) {
+    return <AppLayout><div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div></AppLayout>;
+  }
+
+  if (!isAdmin && !parceiroMeta) {
+    return <AppLayout><MinhaProspeccaoLeads /></AppLayout>;
+  }
+
   return (
     <AppLayout>
     <div className="container mx-auto p-6 space-y-6">
@@ -533,11 +549,11 @@ export default function GoogleMapsLeads() {
         </div>
       </div>
 
-      <ChaveApiCard />
+      {isAdmin && <ChaveApiCard />}
 
 
 
-      {limite && (() => {
+      {isAdmin && limite && (() => {
         const pctBar = Math.min(100, (limite.consumo_atual / Math.max(limite.limite_maximo, 1)) * 100);
         const cor =
           limite.nivel === "bloqueado" ? "bg-muted-foreground" :
@@ -732,12 +748,12 @@ export default function GoogleMapsLeads() {
         </Alert>
       )}
 
-      <AnalisarNichoCard
+      {isAdmin && <AnalisarNichoCard
         buscaId={buscaSel}
         categoria={buscas?.find((b) => b.id === buscaSel)?.categoria}
         localizacao={buscas?.find((b) => b.id === buscaSel)?.localizacao}
         leads={leads ?? []}
-      />
+      />}
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <Card>
@@ -995,7 +1011,8 @@ export default function GoogleMapsLeads() {
         </Card>
       </div>
 
-      <BaseLeadsCard />
+      {isAdmin && <ResumoProspeccaoAdmin />}
+      {isAdmin && <BaseLeadsCard />}
     </div>
       <PromptSiteLeadDialog
         lead={leadPrompt}
