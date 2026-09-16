@@ -159,6 +159,43 @@ Deno.serve(async (req) => {
         const restritoMeta = avaliaHealth(r.phone_health) || avaliaHealth(r.waba_health);
         r.restrito_meta = restritoMeta;
 
+        // A Graph não expõe os dados do cartão, mas informa a elegibilidade de
+        // envio por entidade. BUSINESS/WABA disponíveis confirmam que não há
+        // bloqueio comercial ativo; limitações exclusivas do PHONE_NUMBER
+        // (por exemplo, nome ainda não aprovado) devem ser reportadas à parte.
+        const healthEntities = [
+          ...(Array.isArray(r.phone_health?.entities) ? r.phone_health.entities : []),
+          ...(Array.isArray(r.waba_health?.entities) ? r.waba_health.entities : []),
+        ];
+        const entidadeStatus = (tipo: string) => healthEntities
+          .filter((e: any) => String(e?.entity_type || '').toUpperCase() === tipo)
+          .map((e: any) => String(e?.can_send_message || '').toUpperCase())
+          .filter(Boolean);
+        const statusBusiness = entidadeStatus('BUSINESS');
+        const statusWaba = entidadeStatus('WABA');
+        const statusComercial = [...statusBusiness, ...statusWaba];
+        const comercialBloqueado = statusComercial.some((s: string) => RUIM.has(s));
+        const comercialDisponivel = statusBusiness.includes('AVAILABLE') && statusWaba.includes('AVAILABLE');
+        const motivoAnteriorPagamento = /#131042|payment|billing|eligibility|pagamento/i.test(
+          String(inst.pausa_automatica_motivo || ''),
+        );
+        r.pagamento_status = comercialBloqueado
+          ? (motivoAnteriorPagamento ? 'pendente' : 'nao_confirmado')
+          : comercialDisponivel
+            ? 'confirmado'
+            : 'nao_confirmado';
+        r.pagamento_detalhe = r.pagamento_status === 'confirmado'
+          ? 'A Meta informa BUSINESS e WABA disponíveis, sem bloqueio comercial ativo.'
+          : r.pagamento_status === 'pendente'
+            ? 'A Meta ainda informa restrição comercial na BUSINESS/WABA.'
+            : 'A Meta não retornou informação suficiente para confirmar o pagamento.';
+        r.limitacao_numero = !comercialBloqueado && avaliaHealth(r.phone_health)
+          ? (r.phone_health?.entities || []).find((e: any) =>
+              String(e?.entity_type || '').toUpperCase() === 'PHONE_NUMBER' &&
+              RUIM.has(String(e?.can_send_message || '').toUpperCase())
+            )?.additional_info?.[0] || 'O número possui outra limitação independente do pagamento.'
+          : null;
+
         r.restricoes = restricoes;
 
         // Leitura de qualidade confirmada? (false = token inválido / API falhou)
@@ -395,7 +432,16 @@ Deno.serve(async (req) => {
           ? updatePayload.quarentena_ate
           : inst.quarentena_ate;
         const quarentenaAtiva = !!quarentenaAlvo && new Date(quarentenaAlvo).getTime() > Date.now();
-        const saudavel = liberacaoGlobal || (qual === 'GREEN' && !quarentenaAtiva && !restritoMeta);
+        // A liberação global ignora somente a cor de qualidade; nunca pode
+        // ignorar uma limitação explícita de envio retornada pela Meta.
+        const saudavel = (liberacaoGlobal || qual === 'GREEN') && !quarentenaAtiva && !restritoMeta;
+
+        // Uma limitação explícita do PHONE_NUMBER nunca pode permanecer no
+        // pool, mesmo quando não veio acompanhada de um código de pagamento.
+        if (r.limitacao_numero && !pausaViolacaoConta) {
+          updatePayload.estado_pool = 'restrita';
+          updatePayload.pausa_automatica_motivo = 'Nome de exibição ainda não aprovado pela Meta';
+        }
 
         if (eraBloqueioMeta && !eraViolacaoConta && graphOk && !notificarPausa) {
           updatePayload.pausa_automatica_ate = null;
@@ -406,6 +452,9 @@ Deno.serve(async (req) => {
           } else {
             // Bloqueio saiu, mas o número não está apto: fica restrito.
             updatePayload.estado_pool = 'restrita';
+            updatePayload.pausa_automatica_motivo = r.limitacao_numero
+              ? 'Nome de exibição ainda não aprovado pela Meta'
+              : null;
             r.liberada_parcial = true;
           }
           r.liberada_pagamento = eraPagamento;
