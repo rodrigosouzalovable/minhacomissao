@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa entre 07h e 07h50 e o total de 500 WhatsApps confirmados
 
 ## Concluído
+- [x] Limitar contas Meta tier 250 a 2 templates de utilidade por número/dia em todos os caminhos manuais e automáticos
 - [x] Substituir os dois campos fixos por uma fila dinâmica de contas Google Maps, com e-mail, prioridade, ativação, consumo e troca automática de chave
 - [x] Criar ações rápidas para colaboradores e central administrativa de leads interessados, com detalhes, Google Maps e prompt profissional sem consulta adicional de fotos
 - [x] Antecipar a captação para 07h, priorizar 90% Google Maps e usar apenas UAZAPI conectadas em tempo real

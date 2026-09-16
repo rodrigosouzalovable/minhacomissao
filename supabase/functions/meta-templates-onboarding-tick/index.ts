@@ -11,6 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";
+import { reservarEnvioTemplateTier250 } from "../_shared/meta-template-tier-protection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -340,6 +341,19 @@ Deno.serve(async (req) => {
           processados.push({ instancia_id: inst.id, ok: true, ja_existia: mestreItem.nome });
           continue;
         }
+      }
+
+      // Tier 250: reserva atômica por número/dia antes de qualquer submissão.
+      // O item excedente permanece PENDENTE para o próximo dia.
+      const reserva = await reservarEnvioTemplateTier250(
+        supabase,
+        inst.id,
+        proximo.template_mestre_id,
+        "onboarding_tick",
+      );
+      if (reserva === "limit_reached") {
+        processados.push({ instancia_id: inst.id, ok: true, adiado: "limite_tier_250" });
+        continue;
       }
 
       // Marca antes de submeter (evita duplicidade se o tick rodar de novo)

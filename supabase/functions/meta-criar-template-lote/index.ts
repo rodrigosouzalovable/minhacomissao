@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  finalizarEnvioTemplateTier250,
+  reservarEnvioTemplateTier250,
+} from "../_shared/meta-template-tier-protection.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -320,6 +324,37 @@ serve(async (req) => {
       instancias = instancias.slice(0, 1);
     }
 
+    // Proteção única para todos os caminhos (manual, piloto, replicação, reenvio e fila).
+    // Tier 250 reserva no máximo duas submissões por número no dia BRT.
+    const instanciasProtegidas: any[] = [];
+    const adiadasTier250: any[] = [];
+    for (const inst of instancias) {
+      const reserva = await reservarEnvioTemplateTier250(
+        supabase,
+        inst.id,
+        mestre_id,
+        apenas_falhas ? "reenvio_manual" : modo === "piloto" ? "piloto" : modo === "replicar" ? "replicacao" : "manual",
+      );
+      if (reserva === "limit_reached") {
+        adiadasTier250.push({ instancia_id: inst.id, nome: inst.nome, motivo: "limite_tier_250" });
+      } else {
+        instanciasProtegidas.push(inst);
+      }
+    }
+    instancias = instanciasProtegidas;
+    if (instancias.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          queued: false,
+          total: 0,
+          adiadas_tier_250: adiadasTier250.length,
+          message: "Limite seguro de 2 templates por número/dia atingido. Os próximos ficam para o dia seguinte.",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // Se o mestre usa cabeçalho de mídia, pré-carregamos o arquivo do Storage
     const precisaMidia =
       ["IMAGE", "VIDEO", "DOCUMENT"].includes(mestre.cabecalho_tipo || "") &&
@@ -493,6 +528,7 @@ serve(async (req) => {
               erro: errMsg,
             }, { onConflict: "template_mestre_id,instancia_id" });
             detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: errMsg });
+            await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", errMsg);
           } else {
             sucessos++;
             const metaStatus = (data?.status || "PENDING").toUpperCase();
@@ -507,6 +543,7 @@ serve(async (req) => {
               motivo_rejeicao: null,
             }, { onConflict: "template_mestre_id,instancia_id" });
             detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: true, meta_id: data?.id, status: metaStatus });
+            await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "ENVIADO");
           }
 
         } catch (err) {
@@ -521,6 +558,7 @@ serve(async (req) => {
             erro: msg,
           }, { onConflict: "template_mestre_id,instancia_id" });
           detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: msg });
+          await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", msg);
         }
 
         await sleep(400);
@@ -549,7 +587,10 @@ serve(async (req) => {
         success: true,
         queued: true,
         total: instancias.length,
-        message: "Processamento iniciado em background. Acompanhe pela aba Status.",
+        adiadas_tier_250: adiadasTier250.length,
+        message: adiadasTier250.length > 0
+          ? `${instancias.length} envio(s) iniciado(s); ${adiadasTier250.length} número(s) tier 250 atingiram o limite diário.`
+          : "Processamento iniciado em background. Acompanhe pela aba Status.",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 202 },
     );

@@ -742,7 +742,7 @@ export default function ConfigurarMeta() {
         toast.message("Nenhum modelo aprovado disponível para copiar agora.", { id: toastId });
       } else {
         toast.success(
-          `${total} modelos na fila. O envio é gradual (3 no 1º dia, 5 no 2º, 8 no 3º, 10/dia depois) e você recebe aviso no WhatsApp.`,
+          `${total} modelos na fila. Números tier 250 recebem no máximo 2 templates de utilidade por dia; tier 2 mil mantém o fluxo atual.`,
           { id: toastId, duration: 9000 },
         );
       }
