@@ -208,6 +208,16 @@ function MetaCampaignRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function GoogleMapsLeadsRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { parceiroMeta, abasPermitidas, isLoading: permLoading } = useUserPermissions();
+  if (loading || roleLoading || permLoading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isAdmin && !parceiroMeta && !abasPermitidas?.includes('/admin/google-maps-leads')) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 function GestorRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { isGestor, isAdmin, loading: roleLoading } = useUserRole();
@@ -302,7 +312,7 @@ const App = () => (
             <Route path="/admin/meta-templates" element={<PermissionRoute><MetaTemplates /></PermissionRoute>} />
             <Route path="/admin/cotacoes" element={<AdminRoute><Cotacoes /></AdminRoute>} />
             <Route path="/admin/lembrete-meta" element={<AdminRoute><LembreteMeta /></AdminRoute>} />
-            <Route path="/admin/google-maps-leads" element={<PermissionRoute><GoogleMapsLeads /></PermissionRoute>} />
+            <Route path="/admin/google-maps-leads" element={<GoogleMapsLeadsRoute><GoogleMapsLeads /></GoogleMapsLeadsRoute>} />
             <Route path="/admin/ponto" element={<AdminRoute><PontoAdmin /></AdminRoute>} />
              <Route path="/admin/blacklist" element={<ProtectedRoute><Blacklist /></ProtectedRoute>} />
               <Route path="/admin/dominios" element={<AdminRoute><AdminDominios /></AdminRoute>} />

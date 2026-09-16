@@ -106,6 +106,34 @@
       "when": 1789504344485,
       "tag": "0014_google_maps_daily_500_capture_support",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789559430101,
+      "tag": "0015_create_google_maps_lead_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789559489652,
+      "tag": "0016_restrict_google_maps_full_access_by_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789559504606,
+      "tag": "0017_allow_assigned_lead_distribution_for_authorized_staff",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789559610268,
+      "tag": "0018_allow_scheduling_return_in_two_steps",
+      "breakpoints": true
     }
   ]
 }

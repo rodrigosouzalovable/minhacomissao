@@ -2758,6 +2758,50 @@ export type Database = {
         }
         Relationships: []
       }
+      google_maps_lead_atribuicoes: {
+        Row: {
+          atribuido_em: string
+          atualizado_em: string
+          colaborador_id: string
+          contatado_em: string | null
+          dia: string
+          id: string
+          lead_id: string
+          resultado: string | null
+          retorno_em: string | null
+        }
+        Insert: {
+          atribuido_em?: string
+          atualizado_em?: string
+          colaborador_id: string
+          contatado_em?: string | null
+          dia?: string
+          id?: string
+          lead_id: string
+          resultado?: string | null
+          retorno_em?: string | null
+        }
+        Update: {
+          atribuido_em?: string
+          atualizado_em?: string
+          colaborador_id?: string
+          contatado_em?: string | null
+          dia?: string
+          id?: string
+          lead_id?: string
+          resultado?: string | null
+          retorno_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_maps_lead_atribuicoes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "google_maps_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_maps_leads: {
         Row: {
           avaliacao: number | null
@@ -10364,12 +10408,61 @@ export type Database = {
         Returns: boolean
       }
       gm_abastecimento_release: { Args: { p_token: string }; Returns: boolean }
+      gm_atribuir_leads_diarios: {
+        Args: { _limite?: number }
+        Returns: {
+          adicionados: number
+          estoque_restante: number
+          total_hoje: number
+        }[]
+      }
+      gm_atualizar_contato_lead: {
+        Args: {
+          _atribuicao_id: string
+          _contatado: boolean
+          _resultado?: string
+          _retorno_em?: string
+        }
+        Returns: undefined
+      }
       gm_incrementar_uso: { Args: { qtd?: number }; Returns: number }
       gm_incrementar_uso_provedor: {
         Args: { p_provedor: string; p_qtd?: number }
         Returns: number
       }
       gm_mes_atual: { Args: never; Returns: string }
+      gm_meus_leads_prospeccao: {
+        Args: never
+        Returns: {
+          atribuicao_id: string
+          atribuido_em: string
+          avaliacao: number
+          categoria: string
+          contatado_em: string
+          dia: string
+          endereco: string
+          lead_id: string
+          nome: string
+          resultado: string
+          retorno_em: string
+          telefone: string
+          telefone_internacional: string
+          total_avaliacoes: number
+        }[]
+      }
+      gm_resumo_prospeccao_admin: {
+        Args: never
+        Returns: {
+          colaborador_id: string
+          colaborador_nome: string
+          contatados: number
+          entregues: number
+          interessados: number
+          nao_responderam: number
+          retornos: number
+          sem_interesse: number
+        }[]
+      }
       gm_status_provedores: {
         Args: never
         Returns: {
