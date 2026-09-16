@@ -356,6 +356,14 @@ Deno.serve(async (req) => {
         });
         if (error) erroEnvio = String(error.message || error);
         else if ((res as any)?.success === false) erroEnvio = String((res as any)?.error || "falha");
+        else if (Number((res as any)?.total || 0) === 0 && Number((res as any)?.adiadas_tier_250 || 0) > 0) {
+          await supabase
+            .from("meta_templates_onboarding_fila")
+            .update({ status: "PENDENTE", enviado_em: null, motivo: "limite diário tier 250: próximo dia útil", tentativas: 0 })
+            .eq("id", proximo.id);
+          processados.push({ instancia_id: inst.id, ok: true, adiado: "limite_tier_250" });
+          continue;
+        }
       } catch (e) {
         erroEnvio = String(e);
       }

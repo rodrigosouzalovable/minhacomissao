@@ -5624,6 +5624,60 @@ export type Database = {
           },
         ]
       }
+      meta_template_daily_reservations: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          detalhe: string | null
+          dia_brt: string
+          id: string
+          instancia_id: string
+          origem: string
+          slot: number
+          status: string
+          template_mestre_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          detalhe?: string | null
+          dia_brt: string
+          id?: string
+          instancia_id: string
+          origem?: string
+          slot: number
+          status?: string
+          template_mestre_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          detalhe?: string | null
+          dia_brt?: string
+          id?: string
+          instancia_id?: string
+          origem?: string
+          slot?: number
+          status?: string
+          template_mestre_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_template_daily_reservations_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_template_daily_reservations_template_mestre_id_fkey"
+            columns: ["template_mestre_id"]
+            isOneToOne: false
+            referencedRelation: "meta_templates_mestre"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_template_ideias: {
         Row: {
           atualizado_em: string
@@ -10463,6 +10517,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      finish_tier_250_template_slot: {
+        Args: {
+          p_detalhe?: string
+          p_instancia_id: string
+          p_status: string
+          p_template_mestre_id: string
+        }
+        Returns: undefined
+      }
       get_acordo_status_flags: {
         Args: { p_acordo_ids: string[] }
         Returns: {
@@ -10797,6 +10860,10 @@ export type Database = {
         Args: { _folder: string; _uid: string }
         Returns: boolean
       }
+      meta_instance_template_tier: {
+        Args: { p_instancia_id: string }
+        Returns: number
+      }
       meta_mensagens_thread: {
         Args: {
           _instancia: string
@@ -10925,6 +10992,14 @@ export type Database = {
           quantidade: number
           telefone: string
         }[]
+      }
+      reserve_tier_250_template_slot: {
+        Args: {
+          p_instancia_id: string
+          p_origem?: string
+          p_template_mestre_id: string
+        }
+        Returns: string
       }
       tresc_limpar_cache_antigo: { Args: never; Returns: number }
       user_can_access_tenant: {

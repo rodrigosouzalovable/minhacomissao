@@ -441,10 +441,13 @@ export default function MetaTemplates() {
       toast.error(v?.length ? v.join(" ") : ((data as any).error || "Falha"), { duration: 12000 });
       return;
     }
+    const adiadas = Number((data as any)?.adiadas_tier_250 || 0);
     toast.success(
-      modo === "piloto"
-        ? "Piloto enviado. Aguarde a aprovação da Meta e depois clique em 'Replicar nas demais'."
-        : `Enviado: ${(data as any)?.sucessos ?? 0} sucesso(s), ${(data as any)?.falhas ?? 0} falha(s)`,
+      adiadas > 0
+        ? `${(data as any)?.total || 0} envio(s) iniciado(s). ${adiadas} número(s) tier 250 chegaram ao limite de 2 hoje.`
+        : modo === "piloto"
+          ? "Piloto enviado. Aguarde a aprovação da Meta e depois clique em 'Replicar nas demais'."
+          : ((data as any)?.message || "Processamento iniciado. Acompanhe pela aba Status."),
     );
     carregar();
   };
@@ -1128,6 +1131,7 @@ export default function MetaTemplates() {
                 <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-muted-foreground space-y-1">
                   <p className="font-medium text-foreground">Fluxo recomendado (evita rejeição em massa)</p>
                   <p>1. Envie o <b>piloto</b> para 1 número. 2. Aguarde a aprovação da Meta. 3. Clique em <b>Replicar nas demais</b> — só as instâncias ainda não aprovadas recebem.</p>
+                  <p><b>Tier 250:</b> somente utilidade, no máximo 2 templates por número/dia, inclusive em envios manuais. Tier 2 mil permanece sem essa limitação.</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">

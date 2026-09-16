@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
       .from("meta_templates_mestre")
       .select("id, nome, idioma")
       .eq("injetar_em_novos", true)
+      .eq("categoria", "UTILITY")
       .eq("reclassificado_marketing", false)
       .order("criado_em", { ascending: true });
     const lista = ((marcados as any[]) || []).map((r) => ({
@@ -228,7 +229,7 @@ Deno.serve(async (req) => {
             `Número: *${r.nome}*\n` +
             (inst ? `${await linhaBmInstancia(supabase, inst)}\n` : "") +
             `Modelos que faltavam: *${r.a_enfileirar}*\n\n` +
-            `Envio gradual: 1 por vez com 2–5 min de intervalo, das 07h às 20h e nunca no domingo.`,
+            `Envio gradual: contas tier 250 recebem no máximo 2 modelos de utilidade por número/dia; demais tiers mantêm o fluxo atual. Sempre das 07h às 20h e nunca no domingo.`,
         });
       }
     }

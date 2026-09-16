@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     const templateIdioma = String(body?.idioma || "").trim();
     let restricaoMestres: string[] | null = null;
     if (templateNome) {
-      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma").eq("nome", templateNome).eq("reclassificado_marketing", false);
+      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma").eq("nome", templateNome).eq("categoria", "UTILITY").eq("reclassificado_marketing", false);
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
       const { data: mestres } = await q;
       restricaoMestres = ((mestres as any[]) || []).map((r) => r.id as string);
@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
           .from("meta_templates_mestre")
           .select("id")
           .eq("injetar_em_novos", true)
+          .eq("categoria", "UTILITY")
           .eq("reclassificado_marketing", false)
           .order("criado_em", { ascending: true });
 
@@ -180,7 +181,7 @@ Deno.serve(async (req) => {
           (bm ? `${bm}\n` : "") +
           (templateNome ? `Modelo: *${templateNome}*\n` : "") +
           `Modelos na fila: *${rows.length}*\n\n` +
-          `Envio gradual: 1 por vez com 2–5 min de intervalo, das 07h às 20h e nunca no domingo.`,
+          `Envio gradual: contas tier 250 recebem no máximo 2 modelos de utilidade por número/dia; demais tiers mantêm o fluxo atual. Sempre das 07h às 20h e nunca no domingo.`,
       });
 
       resultados.push({ instancia_id: instanciaId, ok: true, enfileirados: rows.length });
