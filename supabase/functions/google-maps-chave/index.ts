@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return json({ error: "Não autenticado" }, 401);
 
-    const { data: isAdmin } = await supabase.rpc("pode_google_maps_leads", { _user_id: user.id });
+    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
     if (!isAdmin) return json({ error: "Sem permissão para o Google Maps Leads" }, 403);
 
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
