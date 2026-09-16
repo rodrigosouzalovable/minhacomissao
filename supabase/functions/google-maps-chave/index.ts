@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { listarChavesGoogleMaps, marcarChaveIndisponivelNoMes, mascararEmail } from "../_shared/google-maps-keys.ts";
+import { listarChavesGoogleMaps, mascararEmail } from "../_shared/google-maps-keys.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
