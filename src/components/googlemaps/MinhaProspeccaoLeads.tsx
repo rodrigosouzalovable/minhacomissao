@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
+import { ScriptVendasDialog } from "@/components/googlemaps/ScriptVendasDialog";
 
 type Resultado = "interessado" | "sem_interesse" | "nao_respondeu" | "retorno_agendado";
 type Filtro = "todos" | "pendentes" | "contatados" | Resultado;
@@ -111,10 +112,13 @@ export function MinhaProspeccaoLeads() {
           <h1 className="flex items-center gap-2 text-2xl font-bold"><Target className="h-6 w-6 text-primary" /> Minha lista de prospecção</h1>
           <p className="text-sm text-muted-foreground">Empresas com WhatsApp confirmado e sem site próprio.</p>
         </div>
-        <Button onClick={() => trazer.mutate()} disabled={trazer.isPending || hojeRecebidos >= 10}>
-          {trazer.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-          Trazer 10 novos leads
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <ScriptVendasDialog />
+          <Button onClick={() => trazer.mutate()} disabled={trazer.isPending || hojeRecebidos >= 10}>
+            {trazer.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+            Trazer 10 novos leads
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">

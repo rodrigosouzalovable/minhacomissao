@@ -5,6 +5,7 @@
 - [ ] Validar um dia completo da meta de 450 por BM após ampliar o estoque de Google Leads
 
 ## Concluído
+- [x] Adicionar script pessoal de vendas e objeções na prospecção Google Maps para admin e colaboradores
 - [x] Criar esteira diária de 10 Google Maps Leads exclusivos por colaborador, com contato, resultado e telas separadas por perfil
 - [x] Planejar 450 mensagens por BM, dividir entre números saudáveis e pausar a WABA inteira em ACCOUNT_VIOLATION
 - [x] Reconfigurar Google Maps para meta adaptativa de 500 contatos confirmados/dia e teto de 300 consultas

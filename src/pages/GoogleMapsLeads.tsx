@@ -25,6 +25,7 @@ import { PromptSiteLeadDialog } from "@/components/googlemaps/PromptSiteLeadDial
 import { NICHOS, NICHOS_DESTAQUE, TODOS_NICHOS, dicaDoNicho } from "@/components/googlemaps/nichos";
 import { BaseLeadsCard } from "@/components/googlemaps/BaseLeadsCard";
 import { MinhaProspeccaoLeads, ResumoProspeccaoAdmin } from "@/components/googlemaps/MinhaProspeccaoLeads";
+import { ScriptVendasDialog } from "@/components/googlemaps/ScriptVendasDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 
@@ -539,14 +540,17 @@ export default function GoogleMapsLeads() {
   return (
     <AppLayout>
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <MapPin className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold">Google Maps Leads</h1>
-          <p className="text-sm text-muted-foreground">
-            Extraia empresas do Google Maps por categoria e localização (nome + telefone).
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <MapPin className="h-6 w-6 text-primary" />
+          <div>
+            <h1 className="text-2xl font-bold">Google Maps Leads</h1>
+            <p className="text-sm text-muted-foreground">
+              Extraia empresas do Google Maps por categoria e localização (nome + telefone).
+            </p>
+          </div>
         </div>
+        {isAdmin && <ScriptVendasDialog />}
       </div>
 
       {isAdmin && <ChaveApiCard />}
