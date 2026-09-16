@@ -24,7 +24,7 @@ import { AnalisarNichoCard } from "@/components/googlemaps/AnalisarNichoCard";
 import { PromptSiteLeadDialog } from "@/components/googlemaps/PromptSiteLeadDialog";
 import { NICHOS, NICHOS_DESTAQUE, TODOS_NICHOS, dicaDoNicho } from "@/components/googlemaps/nichos";
 import { BaseLeadsCard } from "@/components/googlemaps/BaseLeadsCard";
-import { MinhaProspeccaoLeads, ResumoProspeccaoAdmin } from "@/components/googlemaps/MinhaProspeccaoLeads";
+import { MinhaProspeccaoLeads, ResumoProspeccaoAdmin, type InteressadoAdmin } from "@/components/googlemaps/MinhaProspeccaoLeads";
 import { ScriptVendasDialog } from "@/components/googlemaps/ScriptVendasDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -174,6 +174,7 @@ export default function GoogleMapsLeads() {
   const [ordenarPotencial, setOrdenarPotencial] = useState(false);
   const [modoVisualizacao, setModoVisualizacao] = useState<"tabela" | "mapa">("tabela");
   const [leadPrompt, setLeadPrompt] = useState<Lead | null>(null);
+  const [interessadoPrompt, setInteressadoPrompt] = useState<InteressadoAdmin | null>(null);
   const [dialogNichosAberto, setDialogNichosAberto] = useState(false);
 
   const [verificandoWhats, setVerificandoWhats] = useState(false);
@@ -1015,15 +1016,15 @@ export default function GoogleMapsLeads() {
         </Card>
       </div>
 
-      {isAdmin && <ResumoProspeccaoAdmin />}
+      {isAdmin && <ResumoProspeccaoAdmin onCriarSite={setInteressadoPrompt} />}
       {isAdmin && <BaseLeadsCard />}
     </div>
       <PromptSiteLeadDialog
-        lead={leadPrompt}
-        buscaId={buscaSel}
-        categoriaBusca={buscas?.find((b) => b.id === buscaSel)?.categoria}
-        localizacao={buscas?.find((b) => b.id === buscaSel)?.localizacao}
-        onClose={() => setLeadPrompt(null)}
+        lead={interessadoPrompt ?? leadPrompt}
+        buscaId={interessadoPrompt?.busca_id ?? buscaSel}
+        categoriaBusca={interessadoPrompt?.categoria ?? buscas?.find((b) => b.id === buscaSel)?.categoria}
+        localizacao={interessadoPrompt?.endereco ?? buscas?.find((b) => b.id === buscaSel)?.localizacao}
+        onClose={() => { setLeadPrompt(null); setInteressadoPrompt(null); }}
       />
     </AppLayout>
   );
