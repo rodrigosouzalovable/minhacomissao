@@ -15,9 +15,9 @@ import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { AlertTriangle, Clipboard, Globe, Instagram, KeyRound, Loader2, Download, Map, MapPin, MessageCircle, Phone, Search, Shuffle, Sparkles, Table2, Trash2, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Clipboard, Globe, Instagram, KeyRound, Loader2, Download, Map, MapPin, MessageCircle, Phone, Plus, Power, Search, Shuffle, Sparkles, Table2, Trash2, Wand2 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { LeadsMapa, linkGoogleMaps, type LeadMapa } from "@/components/googlemaps/LeadsMapa";
 import { AnalisarNichoCard } from "@/components/googlemaps/AnalisarNichoCard";
@@ -197,8 +197,8 @@ export default function GoogleMapsLeads() {
         data_reset_br: string;
         nivel: "normal" | "alto" | "critico" | "bloqueado";
         mensagem: string;
-        conta_ativa: "principal" | "reserva" | null;
-        provedores: Array<{ provedor: "principal" | "reserva"; total_consultas: number; limite_maximo: number; limite_bloqueio: number; pode_buscar: boolean; configurada: boolean; ativa: boolean }>;
+        conta_ativa: string | null;
+        provedores: Array<{ chave_id: string; email_conta: string | null; total_consultas: number; limite_maximo: number; limite_bloqueio: number; pode_buscar: boolean; configurada: boolean; ativa: boolean; em_uso: boolean; ordem_prioridade: number }>;
       };
     },
     enabled: isAdmin,
@@ -594,11 +594,11 @@ export default function GoogleMapsLeads() {
               {limite.provedores?.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {limite.provedores.map((conta) => (
-                    <div key={conta.provedor} className="border rounded-md px-3 py-2 text-sm flex items-center justify-between">
-                      <span className="capitalize">Conta {conta.provedor}</span>
+                    <div key={conta.chave_id} className="border rounded-md px-3 py-2 text-sm flex items-center justify-between gap-3">
+                      <span className="truncate">{conta.email_conta || `Conta ${conta.ordem_prioridade}`}</span>
                       <span className="text-muted-foreground">
                         {conta.configurada ? `${conta.total_consultas} / ${conta.limite_bloqueio}` : "não configurada"}
-                        {limite.conta_ativa === conta.provedor ? " · em uso" : ""}
+                        {conta.em_uso ? " · em uso" : ""}
                       </span>
                     </div>
                   ))}
@@ -1030,22 +1030,30 @@ export default function GoogleMapsLeads() {
   );
 }
 
-interface ChaveStatus {
-  tem_chave: boolean;
+interface ContaGoogleMaps {
+  id: string;
+  email_conta: string | null;
+  email_mascarado: string;
   sufixo: string | null;
-  atualizado_em: string | null;
-  tem_chave_reserva: boolean;
-  sufixo_reserva: string | null;
-  reserva_atualizado_em: string | null;
-  provedores: Array<{ provedor: "principal" | "reserva"; total_consultas: number; limite_bloqueio: number; ativa: boolean; configurada: boolean }>;
+  ordem_prioridade: number;
+  ativa: boolean;
+  em_uso: boolean;
+  total_consultas: number;
+  limite_maximo: number;
+  limite_bloqueio: number;
+  indisponivel_mes: string | null;
+  atualizado_em: string;
 }
+
+interface ChaveStatus { chaves: ContaGoogleMaps[] }
 
 function ChaveApiCard() {
   const qc = useQueryClient();
+  const [dialogAberto, setDialogAberto] = useState(false);
   const [novaChave, setNovaChave] = useState("");
-  const [novaChaveReserva, setNovaChaveReserva] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const [testando, setTestando] = useState(false);
+  const [novoEmail, setNovoEmail] = useState("");
+  const [edicoes, setEdicoes] = useState<Record<string, { email: string; chave: string }>>({});
+  const [processando, setProcessando] = useState<string | null>(null);
   const [resultadoTeste, setResultadoTeste] = useState<{ ok: boolean; message: string } | null>(null);
 
   const { data: status } = useQuery({
@@ -1066,113 +1074,146 @@ function ChaveApiCard() {
     return data as any;
   }
 
-  async function salvar(slot: "principal" | "reserva" = "principal") {
-    const chave = slot === "reserva" ? novaChaveReserva : novaChave;
-    if (!chave.trim()) {
-      toast.error("Cole a chave da Places API (New)");
+  function atualizarConsultas() {
+    qc.invalidateQueries({ queryKey: ["gm-chave-status"] });
+    qc.invalidateQueries({ queryKey: ["gm-limite"] });
+  }
+
+  async function adicionar() {
+    if (!novaChave.trim() || !novoEmail.trim()) {
+      toast.error("Informe a chave e o e-mail da conta Google Cloud");
       return;
     }
-    setSalvando(true);
+    setProcessando("nova");
     setResultadoTeste(null);
     try {
-      await chamar("salvar", { api_key: chave.trim(), slot });
-      if (slot === "reserva") setNovaChaveReserva(""); else setNovaChave("");
-      toast.success(slot === "reserva" ? "Chave reserva salva" : "Chave principal salva");
-      qc.invalidateQueries({ queryKey: ["gm-chave-status"] });
+      await chamar("criar", { api_key: novaChave.trim(), email_conta: novoEmail.trim() });
+      setNovaChave("");
+      setNovoEmail("");
+      setDialogAberto(false);
+      toast.success("Nova conta adicionada à fila automática");
+      atualizarConsultas();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar chave");
     } finally {
-      setSalvando(false);
+      setProcessando(null);
     }
   }
 
-  async function testar(slot: "principal" | "reserva" = "principal") {
-    setTestando(true);
+  async function salvarConta(conta: ContaGoogleMaps) {
+    const edicao = edicoes[conta.id] ?? { email: conta.email_conta ?? "", chave: "" };
+    if (!edicao.email.trim()) return toast.error("Informe o e-mail da conta Google Cloud");
+    setProcessando(`salvar-${conta.id}`);
+    try {
+      await chamar("atualizar", { chave_id: conta.id, email_conta: edicao.email.trim(), ...(edicao.chave.trim() ? { api_key: edicao.chave.trim() } : {}) });
+      setEdicoes((atual) => ({ ...atual, [conta.id]: { email: edicao.email, chave: "" } }));
+      toast.success("Conta atualizada");
+      atualizarConsultas();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao atualizar conta");
+    } finally {
+      setProcessando(null);
+    }
+  }
+
+  async function testar(conta: ContaGoogleMaps) {
+    setProcessando(`testar-${conta.id}`);
     setResultadoTeste(null);
     try {
-      const chave = slot === "reserva" ? novaChaveReserva : novaChave;
-      const r = await chamar("testar", chave.trim() ? { api_key: chave.trim(), slot } : { slot });
+      const chave = edicoes[conta.id]?.chave?.trim();
+      const r = await chamar("testar", { chave_id: conta.id, ...(chave ? { api_key: chave } : {}) });
       setResultadoTeste({ ok: !!r.ok, message: r.message ?? (r.ok ? "Chave válida" : "Falha no teste") });
       if (r.ok) toast.success("Chave válida");
       else toast.error(r.message ?? "Chave recusada pelo Google");
-      qc.invalidateQueries({ queryKey: ["gm-limite"] });
+      atualizarConsultas();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Falha no teste";
       setResultadoTeste({ ok: false, message: msg });
       toast.error(msg);
     } finally {
-      setTestando(false);
+      setProcessando(null);
     }
   }
 
-  async function remover(slot: "principal" | "reserva" = "principal") {
-    if (!confirm(slot === "reserva" ? "Remover a chave reserva?" : "Remover a chave própria e voltar a usar a conexão padrão?")) return;
+  async function alterarConta(conta: ContaGoogleMaps, extra: Record<string, unknown>, sucesso: string) {
+    setProcessando(`alterar-${conta.id}`);
     try {
-      await chamar("remover", { slot });
-      setResultadoTeste(null);
-      toast.success("Chave removida");
-      qc.invalidateQueries({ queryKey: ["gm-chave-status"] });
+      await chamar("atualizar", { chave_id: conta.id, ...extra });
+      toast.success(sucesso);
+      atualizarConsultas();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Falha ao remover");
+      toast.error(e instanceof Error ? e.message : "Falha ao alterar conta");
+    } finally {
+      setProcessando(null);
     }
   }
+
+  async function remover(conta: ContaGoogleMaps) {
+    if (!confirm(`Remover a chave vinculada a ${conta.email_conta || "esta conta"}? O histórico de consumo será preservado.`)) return;
+    setProcessando(`remover-${conta.id}`);
+    try {
+      await chamar("remover", { chave_id: conta.id });
+      toast.success("Chave removida da fila");
+      atualizarConsultas();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao remover");
+    } finally {
+      setProcessando(null);
+    }
+  }
+
+  const chaves = status?.chaves ?? [];
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-primary" />
-          Chave da Places API (New)
-          {status && (
-            <Badge variant={status.tem_chave ? "secondary" : "outline"}>
-              {status.tem_chave ? `Configurada ····${status.sufixo}` : "Usando conexão padrão"}
-            </Badge>
-          )}
+          Contas da Places API (New)
+          <Badge variant="secondary">{chaves.filter((conta) => conta.ativa).length} ativas</Badge>
+          <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+            <DialogTrigger asChild><Button size="sm" variant="outline" className="ml-auto"><Plus className="h-4 w-4 mr-1" />Adicionar outra chave</Button></DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Adicionar conta Google Cloud</DialogTitle>
+                <DialogDescription>A nova conta entrará automaticamente no fim da fila de requisições.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-1.5"><Label htmlFor="gm-nova-chave">Chave da Places API (New)</Label><Input id="gm-nova-chave" type="password" autoComplete="off" placeholder="AIza..." value={novaChave} onChange={(e) => setNovaChave(e.target.value)} maxLength={200} /></div>
+                <div className="space-y-1.5"><Label htmlFor="gm-novo-email">E-mail da conta Google Cloud</Label><Input id="gm-novo-email" type="email" autoComplete="email" placeholder="conta@exemplo.com" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} maxLength={254} /></div>
+              </div>
+              <DialogFooter><Button onClick={adicionar} disabled={processando === "nova" || !novaChave.trim() || !novoEmail.trim()}>{processando === "nova" && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Adicionar à fila</Button></DialogFooter>
+            </DialogContent>
+          </Dialog>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-end">
-          <div className="space-y-1.5">
-            <Label htmlFor="gm-chave">Chave de API do Google Cloud</Label>
-            <Input
-              id="gm-chave"
-              type="password"
-              autoComplete="off"
-              placeholder={status?.tem_chave ? "Cole uma nova chave para substituir" : "AIza..."}
-              value={novaChave}
-              onChange={(e) => setNovaChave(e.target.value)}
-              maxLength={200}
-            />
-          </div>
-          <Button onClick={() => salvar("principal")} disabled={salvando || !novaChave.trim()}>
-            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar chave"}
-          </Button>
-          <Button variant="outline" onClick={() => testar("principal")} disabled={testando || (!novaChave.trim() && !status?.tem_chave)}>
-            {testando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Testar chave"}
-          </Button>
-          {status?.tem_chave && (
-            <Button variant="ghost" onClick={() => remover("principal")} className="text-destructive">
-              <Trash2 className="h-4 w-4 mr-1" /> Remover
-            </Button>
-          )}
-        </div>
-
-        <div className="border-t pt-3 space-y-3">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="gm-chave-reserva">Chave reserva da nova conta</Label>
-            <Badge variant={status?.tem_chave_reserva ? "secondary" : "outline"}>
-              {status?.tem_chave_reserva ? `Configurada ····${status.sufixo_reserva}` : "Não configurada"}
-            </Badge>
-            {status?.provedores?.find((p) => p.provedor === "reserva")?.ativa && <Badge>Em uso</Badge>}
-          </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-end">
-            <Input id="gm-chave-reserva" type="password" autoComplete="off" placeholder={status?.tem_chave_reserva ? "Cole uma nova chave para substituir" : "AIza..."} value={novaChaveReserva} onChange={(e) => setNovaChaveReserva(e.target.value)} maxLength={200} />
-            <Button onClick={() => salvar("reserva")} disabled={salvando || !novaChaveReserva.trim()}>Salvar reserva</Button>
-            <Button variant="outline" onClick={() => testar("reserva")} disabled={testando || (!novaChaveReserva.trim() && !status?.tem_chave_reserva)}>Testar reserva</Button>
-            {status?.tem_chave_reserva && <Button variant="ghost" onClick={() => remover("reserva")} className="text-destructive"><Trash2 className="h-4 w-4 mr-1" /> Remover</Button>}
-          </div>
-          <p className="text-xs text-muted-foreground">A reserva entra automaticamente quando a principal atingir 4.800 requisições no mês.</p>
-        </div>
+      <CardContent className="space-y-4">
+        {chaves.map((conta, indice) => {
+          const edicao = edicoes[conta.id] ?? { email: conta.email_conta ?? "", chave: "" };
+          const indisponivel = !!conta.indisponivel_mes;
+          return <div key={conta.id} className="border rounded-md p-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">Conta {indice + 1}</span>
+              <Badge variant={conta.em_uso ? "default" : conta.ativa ? "secondary" : "outline"}>{conta.em_uso ? "Em uso" : !conta.ativa ? "Desativada" : indisponivel ? "Cota esgotada" : "Disponível"}</Badge>
+              <span className="text-sm text-muted-foreground">Chave ····{conta.sufixo ?? "----"} · {conta.total_consultas}/{conta.limite_bloqueio} no mês</span>
+              <div className="ml-auto flex items-center gap-1">
+                <Button size="icon" variant="ghost" title="Subir prioridade" disabled={indice === 0 || !!processando} onClick={() => alterarConta(conta, { ordem_prioridade: Math.max(1, conta.ordem_prioridade - 1) }, "Prioridade atualizada")}><ArrowUp className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" title="Descer prioridade" disabled={indice === chaves.length - 1 || !!processando} onClick={() => alterarConta(conta, { ordem_prioridade: conta.ordem_prioridade + 1 }, "Prioridade atualizada")}><ArrowDown className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" title={conta.ativa ? "Desativar conta" : "Ativar conta"} disabled={!!processando} onClick={() => alterarConta(conta, { ativa: !conta.ativa }, conta.ativa ? "Conta desativada" : "Conta ativada")}><Power className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" title="Remover chave" className="text-destructive" disabled={!!processando} onClick={() => remover(conta)}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5"><Label htmlFor={`gm-chave-${conta.id}`}>Chave de API</Label><Input id={`gm-chave-${conta.id}`} type="password" autoComplete="off" placeholder="Cole uma nova chave para substituir" value={edicao.chave} onChange={(e) => setEdicoes((atual) => ({ ...atual, [conta.id]: { ...edicao, chave: e.target.value } }))} maxLength={200} /></div>
+              <div className="space-y-1.5"><Label htmlFor={`gm-email-${conta.id}`}>E-mail da conta Google Cloud</Label><Input id={`gm-email-${conta.id}`} type="email" autoComplete="email" placeholder="conta@exemplo.com" value={edicao.email} onChange={(e) => setEdicoes((atual) => ({ ...atual, [conta.id]: { ...edicao, email: e.target.value } }))} maxLength={254} /></div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => salvarConta(conta)} disabled={!!processando || !edicao.email.trim()}>{processando === `salvar-${conta.id}` && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Salvar alterações</Button>
+              <Button size="sm" variant="outline" onClick={() => testar(conta)} disabled={!!processando}>{processando === `testar-${conta.id}` && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Testar chave</Button>
+            </div>
+          </div>;
+        })}
+        {!chaves.length && <p className="text-sm text-muted-foreground">Nenhuma conta cadastrada. Adicione a primeira chave para iniciar as buscas.</p>}
 
         {resultadoTeste && (
           <Alert variant={resultadoTeste.ok ? "default" : "destructive"}>
@@ -1183,9 +1224,8 @@ function ChaveApiCard() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          A chave fica guardada apenas no backend (nunca é exibida de volta). Para uso no servidor, ela precisa ter a
-          Places API (New) permitida e "Restrições de aplicativo" como "Nenhuma" (ou IPs liberados). O teste consome 1
-          consulta do contador mensal.
+          As chaves ficam guardadas apenas no backend e nunca são exibidas de volta. O sistema usa as contas pela ordem
+          acima e passa automaticamente à próxima ao atingir 4.800 requisições. O teste consome 1 consulta do contador mensal.
         </p>
       </CardContent>
     </Card>
