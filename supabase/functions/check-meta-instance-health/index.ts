@@ -436,6 +436,13 @@ Deno.serve(async (req) => {
         // ignorar uma limitação explícita de envio retornada pela Meta.
         const saudavel = (liberacaoGlobal || qual === 'GREEN') && !quarentenaAtiva && !restritoMeta;
 
+        // Uma limitação explícita do PHONE_NUMBER nunca pode permanecer no
+        // pool, mesmo quando não veio acompanhada de um código de pagamento.
+        if (r.limitacao_numero && !pausaViolacaoConta) {
+          updatePayload.estado_pool = 'restrita';
+          updatePayload.pausa_automatica_motivo = 'Nome de exibição ainda não aprovado pela Meta';
+        }
+
         if (eraBloqueioMeta && !eraViolacaoConta && graphOk && !notificarPausa) {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
