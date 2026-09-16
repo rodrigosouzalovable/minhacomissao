@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BookOpenText, Clipboard, Loader2, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -135,7 +136,7 @@ export function ScriptVendasDialog() {
     const { error } = await supabase.from("google_maps_scripts_usuario").upsert({
       user_id: user.id,
       script_texto: script.trim(),
-      objecoes: limpas,
+      objecoes: limpas as unknown as Json,
       atualizado_em: new Date().toISOString(),
     });
     setSalvando(false);
