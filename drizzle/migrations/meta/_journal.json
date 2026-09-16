@@ -134,6 +134,13 @@
       "when": 1789559610268,
       "tag": "0018_allow_scheduling_return_in_two_steps",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789561239222,
+      "tag": "0019_create_google_maps_sales_scripts",
+      "breakpoints": true
     }
   ]
 }
