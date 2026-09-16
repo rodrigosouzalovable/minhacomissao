@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { chavePodeBuscar, listarChavesGoogleMaps, marcarChaveIndisponivelNoMes, type GoogleMapsKeyRow } from "../_shared/google-maps-keys.ts";
+import { chavePodeBuscar, listarChavesGoogleMaps, marcarChaveIndisponivelNoMes, mesAtualBrt, type GoogleMapsKeyRow } from "../_shared/google-maps-keys.ts";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 
@@ -344,7 +344,7 @@ Deno.serve(async (req) => {
           const erroCota = await resp.text();
           if (erroCota.includes("RESOURCE_EXHAUSTED") || erroCota.includes("RATE_LIMIT_EXCEEDED")) {
             await marcarChaveIndisponivelNoMes(supabase, chaveSelecionada.id);
-            chaveSelecionada.indisponivel_mes = new Date().toISOString().slice(0, 7) + "-01";
+            chaveSelecionada.indisponivel_mes = mesAtualBrt();
             const proxima = escolherChave(new Set([chaveSelecionada.id]));
             if (!proxima) {
               erroGoogle = { status: 429, body: "Todas as contas Google Maps atingiram a cota disponível." };
