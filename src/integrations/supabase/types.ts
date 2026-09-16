@@ -2950,6 +2950,30 @@ export type Database = {
           },
         ]
       }
+      google_maps_scripts_usuario: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          objecoes: Json
+          script_texto: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          objecoes?: Json
+          script_texto: string
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          objecoes?: Json
+          script_texto?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       google_maps_uso_mensal: {
         Row: {
           alerta_percentual: number
