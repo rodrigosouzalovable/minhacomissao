@@ -2674,6 +2674,54 @@ export type Database = {
         }
         Relationships: []
       }
+      google_maps_api_keys: {
+        Row: {
+          api_key: string | null
+          ativa: boolean
+          created_at: string
+          created_by: string | null
+          email_conta: string | null
+          id: string
+          indisponivel_mes: string | null
+          legacy_slot: string | null
+          limite_bloqueio: number
+          limite_maximo: number
+          ordem_prioridade: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          ativa?: boolean
+          created_at?: string
+          created_by?: string | null
+          email_conta?: string | null
+          id?: string
+          indisponivel_mes?: string | null
+          legacy_slot?: string | null
+          limite_bloqueio?: number
+          limite_maximo?: number
+          ordem_prioridade?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          ativa?: boolean
+          created_at?: string
+          created_by?: string | null
+          email_conta?: string | null
+          id?: string
+          indisponivel_mes?: string | null
+          legacy_slot?: string | null
+          limite_bloqueio?: number
+          limite_maximo?: number
+          ordem_prioridade?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       google_maps_buscas: {
         Row: {
           categoria: string
@@ -2973,6 +3021,38 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      google_maps_uso_chave: {
+        Row: {
+          chave_id: string
+          created_at: string
+          mes_referencia: string
+          total_consultas: number
+          updated_at: string
+        }
+        Insert: {
+          chave_id: string
+          created_at?: string
+          mes_referencia: string
+          total_consultas?: number
+          updated_at?: string
+        }
+        Update: {
+          chave_id?: string
+          created_at?: string
+          mes_referencia?: string
+          total_consultas?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_maps_uso_chave_chave_id_fkey"
+            columns: ["chave_id"]
+            isOneToOne: false
+            referencedRelation: "google_maps_api_keys"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       google_maps_uso_mensal: {
         Row: {
@@ -10450,6 +10530,10 @@ export type Database = {
         Returns: undefined
       }
       gm_incrementar_uso: { Args: { qtd?: number }; Returns: number }
+      gm_incrementar_uso_chave: {
+        Args: { p_chave_id: string; p_qtd?: number }
+        Returns: number
+      }
       gm_incrementar_uso_provedor: {
         Args: { p_provedor: string; p_qtd?: number }
         Returns: number
@@ -10511,6 +10595,26 @@ export type Database = {
           nao_responderam: number
           retornos: number
           sem_interesse: number
+        }[]
+      }
+      gm_status_chaves: {
+        Args: never
+        Returns: {
+          ativa: boolean
+          chave_id: string
+          configurada: boolean
+          data_reset: string
+          em_uso: boolean
+          email_conta: string
+          indisponivel_mes: string
+          limite_bloqueio: number
+          limite_maximo: number
+          ordem_prioridade: number
+          percentual_consumido: number
+          pode_buscar: boolean
+          sufixo: string
+          total_consultas: number
+          updated_at: string
         }[]
       }
       gm_status_provedores: {
