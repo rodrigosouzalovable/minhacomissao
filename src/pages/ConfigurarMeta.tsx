@@ -1857,6 +1857,8 @@ export default function ConfigurarMeta() {
                               >
                                 {pagamento
                                   ? "fora do pool: pendência de pagamento da Business Manager (#131042) — troque/regularize o cartão e as faturas na BM. Volta ao pool automaticamente após a revalidação."
+                                  : /nome de exibição|display name/i.test(motivo)
+                                    ? "fora do pool: pagamento confirmado; o nome de exibição ainda precisa ser aprovado pela Meta."
                                   : `fora do pool: ${motivo}`}
                               </Badge>
                             );

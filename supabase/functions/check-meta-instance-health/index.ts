@@ -432,7 +432,9 @@ Deno.serve(async (req) => {
           ? updatePayload.quarentena_ate
           : inst.quarentena_ate;
         const quarentenaAtiva = !!quarentenaAlvo && new Date(quarentenaAlvo).getTime() > Date.now();
-        const saudavel = liberacaoGlobal || (qual === 'GREEN' && !quarentenaAtiva && !restritoMeta);
+        // A liberação global ignora somente a cor de qualidade; nunca pode
+        // ignorar uma limitação explícita de envio retornada pela Meta.
+        const saudavel = (liberacaoGlobal || qual === 'GREEN') && !quarentenaAtiva && !restritoMeta;
 
         if (eraBloqueioMeta && !eraViolacaoConta && graphOk && !notificarPausa) {
           updatePayload.pausa_automatica_ate = null;
@@ -443,6 +445,9 @@ Deno.serve(async (req) => {
           } else {
             // Bloqueio saiu, mas o número não está apto: fica restrito.
             updatePayload.estado_pool = 'restrita';
+            updatePayload.pausa_automatica_motivo = r.limitacao_numero
+              ? 'Nome de exibição ainda não aprovado pela Meta'
+              : null;
             r.liberada_parcial = true;
           }
           r.liberada_pagamento = eraPagamento;
