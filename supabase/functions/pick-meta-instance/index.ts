@@ -157,6 +157,10 @@ Deno.serve(async (req) => {
     const reprovadosGuardrail: any[] = [];
     for (const inst of insts) {
       const rotulo = inst.nome || inst.phone_number_id || inst.id;
+      if (inst.pool_fora_manual === true) {
+        descartados.push(`${rotulo}: fora do pool manualmente`);
+        continue;
+      }
       if (excluidas.includes(inst.id)) { descartados.push(`${rotulo}: já falhou na entrega para este contato`); continue; }
       // Nome de exibição REPROVADO gera falha de entrega (#131000).
       // Nome em análise (PENDING_REVIEW) continua enviando normalmente.
