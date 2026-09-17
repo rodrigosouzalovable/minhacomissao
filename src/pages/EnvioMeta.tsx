@@ -892,6 +892,13 @@ export default function EnvioMeta() {
     return instancias.filter((i) => bmFiltro.includes(i.meta_bm_id || SEM_BM));
   }, [instancias, bmFiltro]);
 
+  const instanciasElegiveisSelecaoMassa = useMemo(() => {
+    return instanciasVisiveis.filter((instancia) => {
+      const qualidade = String(instancia.saude_quality || "").trim().toUpperCase();
+      return qualidade === "GREEN" || qualidade === "UNKNOWN" || qualidade === "";
+    });
+  }, [instanciasVisiveis]);
+
   const toggleBmFiltro = (id: string) => {
     setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
@@ -1582,19 +1589,20 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona ou desmarca todas as instâncias visíveis somente para esta campanha."
-              disabled={instanciasVisiveis.length === 0}
+              title="Seleciona instâncias GREEN ou sem qualidade confirmada. YELLOW e RED continuam disponíveis para seleção manual."
+              disabled={instanciasElegiveisSelecaoMassa.length === 0}
               onClick={() => {
                 const idsVisiveis = instanciasVisiveis.map((i) => i.id);
-                const todasMarcadas = idsVisiveis.length > 0 && idsVisiveis.every((id) => instanciaIds.includes(id));
+                const idsElegiveis = instanciasElegiveisSelecaoMassa.map((i) => i.id);
+                const todasMarcadas = idsElegiveis.length > 0 && idsElegiveis.every((id) => instanciaIds.includes(id));
                 if (todasMarcadas) {
                   setInstanciaIds((prev) => prev.filter((id) => !idsVisiveis.includes(id)));
                 } else {
-                  setInstanciaIds((prev) => Array.from(new Set([...prev, ...idsVisiveis])));
+                  setInstanciaIds((prev) => Array.from(new Set([...prev, ...idsElegiveis])));
                 }
               }}
             >
-              {instanciasVisiveis.length > 0 && instanciasVisiveis.every((i) => instanciaIds.includes(i.id))
+              {instanciasElegiveisSelecaoMassa.length > 0 && instanciasElegiveisSelecaoMassa.every((i) => instanciaIds.includes(i.id))
                 ? "Limpar seleção"
                 : "Selecionar todas"}
             </Button>
