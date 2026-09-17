@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CopyButton } from '@/components/CopyButton';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,6 +26,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { AcordosAbandonadosDialog } from '@/components/AcordosAbandonadosDialog';
 import { ImportarPagosDialog } from '@/components/ImportarPagosDialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
@@ -50,6 +52,7 @@ interface TeamMember {
 
 export default function EquipeAcordos() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { acordosCompartilhados, isLoading: permLoading } = useUserPermissions();
   const verComoAdmin = isAdmin || acordosCompartilhados;
@@ -91,6 +94,59 @@ export default function EquipeAcordos() {
   const [viewFilter, setViewFilter] = useState<'todos' | 'com_pagos' | 'quebra_acordo'>(initial.viewFilter ?? 'todos');
   const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(parseDate(initial.filtroDataVencimento));
   const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
+  const [podeAlterarCredor, setPodeAlterarCredor] = useState(false);
+  const [alteracaoCredor, setAlteracaoCredor] = useState<{ acordo: AcordoComFuncionario; novoCredor: 'ume_novo_mundo' | 'mundo_da_moda' } | null>(null);
+  const [alterandoCredorId, setAlterandoCredorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setPodeAlterarCredor(false);
+      return;
+    }
+    supabase.rpc('pode_alterar_credor_acordo').then(({ data, error }) => {
+      setPodeAlterarCredor(!error && data === true);
+    });
+  }, [user]);
+
+  const confirmarAlteracaoCredor = async () => {
+    if (!alteracaoCredor) return;
+    const { acordo, novoCredor } = alteracaoCredor;
+    setAlterandoCredorId(acordo.id);
+    try {
+      const { error } = await supabase.rpc('alterar_credor_acordo', {
+        p_acordo_id: acordo.id,
+        p_novo_credor: novoCredor,
+      });
+      if (error) throw error;
+
+      setAcordos((atuais) => atuais.map((item) =>
+        item.id === acordo.id ? { ...item, empresa: novoCredor } : item
+      ));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['ranking-mensal'] }),
+        queryClient.invalidateQueries({ queryKey: ['mural-top3'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['historico-mes'] }),
+        queryClient.invalidateQueries({ queryKey: ['metas-mensal'] }),
+        queryClient.invalidateQueries({ queryKey: ['meus-acordos'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-acordos'] }),
+      ]);
+      toast({
+        title: 'Credor atualizado',
+        description: `${acordo.cliente_nome} agora está em ${getEmpresaLabel(novoCredor)}.`,
+      });
+      setAlteracaoCredor(null);
+    } catch (error) {
+      console.error('Erro ao alterar credor do acordo:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Não foi possível alterar o credor',
+        description: 'O acordo permaneceu com o credor anterior.',
+      });
+    } finally {
+      setAlterandoCredorId(null);
+    }
+  };
 
   // Salvar filtros sempre que mudarem
   useEffect(() => {
@@ -924,6 +980,33 @@ export default function EquipeAcordos() {
                               QUEBRA DE ACORDO
                             </Badge>
                           )}
+                          {podeAlterarCredor ? (
+                            <Select
+                              value={acordo.empresa || 'ume_novo_mundo'}
+                              disabled={alterandoCredorId === acordo.id}
+                              onValueChange={(valor) => {
+                                if (valor === acordo.empresa) return;
+                                setAlteracaoCredor({ acordo, novoCredor: valor as 'ume_novo_mundo' | 'mundo_da_moda' });
+                              }}
+                            >
+                              <SelectTrigger
+                                className="h-7 w-[142px] text-xs font-semibold"
+                                aria-label={`Alterar credor de ${acordo.cliente_nome}`}
+                                onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                                onPointerDown={(event) => event.stopPropagation()}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent onClick={(event) => event.stopPropagation()}>
+                                <SelectItem value="ume_novo_mundo">NOVO MUNDO</SelectItem>
+                                <SelectItem value="mundo_da_moda">UME</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="outline" className="font-semibold">
+                              {getEmpresaLabel(acordo.empresa)}
+                            </Badge>
+                          )}
                           <Badge variant={getStatusVariant(acordo.status)}>
                             {getStatusLabel(acordo.status)}
                           </Badge>
@@ -956,6 +1039,24 @@ export default function EquipeAcordos() {
             </CardContent>
           </Card>
         )}
+        <AlertDialog open={!!alteracaoCredor} onOpenChange={(aberto) => !aberto && !alterandoCredorId && setAlteracaoCredor(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Alterar credor do acordo?</AlertDialogTitle>
+              <AlertDialogDescription>
+                O cliente <strong>{alteracaoCredor?.acordo.cliente_nome}</strong> passará de{' '}
+                <strong>{getEmpresaLabel(alteracaoCredor?.acordo.empresa)}</strong> para{' '}
+                <strong>{getEmpresaLabel(alteracaoCredor?.novoCredor)}</strong>. Os valores recebidos do operador serão reorganizados por credor, sem alterar o total geral.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={!!alterandoCredorId}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmarAlteracaoCredor} disabled={!!alterandoCredorId}>
+                {alterandoCredorId ? 'Salvando...' : 'Confirmar alteração'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );
