@@ -1,4 +1,5 @@
 - [Liberação total Envio Meta do Thiago](mem://features/whatsapp/thiago-liberacao-total-envio-meta) — Thiago pode tentar por todas as instâncias próprias, ignorando travas internas; recusas da Meta continuam registradas
+- [Novo Mundo 3144 conectada](mem://features/whatsapp/novo-mundo-3144-conectada) — Pode selecionar e enviar quando CONNECTED apesar de alerta de nome/qualidade; bloqueios comerciais e retirada manual persistem
 - [Prospecção diária Google Maps](mem://features/google-maps/prospeccao-diaria-colaboradores) — 10 leads exclusivos/dia por colaborador; parceiro busca; admin vê tudo
 - [Relatório Matinal por Tier](mem://features/whatsapp/aquecimento-relatorio-matinal-por-tier) — Às 07h informa metas por número; tier 250 usa 25/dia e tier 2.000 usa até 450/dia
 - [Etiqueta no Envio](mem://features/whatsapp/etiqueta-atendente-no-envio) — Conversa recebe etiqueta do atendente nomeado já no envio, sem esperar resposta
