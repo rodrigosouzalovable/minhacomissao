@@ -365,12 +365,15 @@ Deno.serve(async (req) => {
             updatePayload.recuperacao_msgs_meta_dia = null;
             updatePayload.quarentena_ate = null;
             updatePayload.quarentena_motivo = null;
-            updatePayload.estado_pool = 'ativo';
+            if (inst.pool_fora_manual !== true) updatePayload.estado_pool = 'ativo';
             alertaRecuperado =
               `✅ *Número recuperado — qualidade GREEN*\n\n` +
               `Número: *${inst.nome || inst.display_phone}*\n` +
               `${await linhaBmInstancia(supabase, inst)}\n` +
-              `${diasGreen} dias seguidos em GREEN. Aquecimento automático encerrado; o número volta ao pool com teto de ${inst.teto_escada ?? escada[0] ?? 20}/dia e sobe em escada.`;
+              `${diasGreen} dias seguidos em GREEN. Aquecimento automático encerrado; ` +
+              (inst.pool_fora_manual === true
+                ? `o número permanece fora do pool por decisão manual.`
+                : `o número volta ao pool com teto de ${inst.teto_escada ?? escada[0] ?? 20}/dia e sobe em escada.`);
           } else if (inst.recuperacao_ativa === true && !contadoHoje) {
             // Voltou/segue em GREEN mas ainda não completou os dias necessários
             alertaProgressoGreen = {
@@ -447,8 +450,14 @@ Deno.serve(async (req) => {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
           if (saudavel) {
-            updatePayload.estado_pool = 'ativo';
-            r.liberada = true;
+            if (inst.pool_fora_manual === true) {
+              updatePayload.estado_pool = 'fora_manual';
+              r.liberada_parcial = true;
+              r.fora_pool_manual = true;
+            } else {
+              updatePayload.estado_pool = 'ativo';
+              r.liberada = true;
+            }
           } else {
             // Bloqueio saiu, mas o número não está apto: fica restrito.
             updatePayload.estado_pool = 'restrita';
@@ -509,7 +518,9 @@ Deno.serve(async (req) => {
                 `Número: *${inst.nome || inst.display_phone}*\n` +
                 `${bmLinha}\n` +
                 `${causa}\n` +
-                `Mas o número continua ${qual === 'GREEN' ? 'com pendência' : `com qualidade *${qual || 'desconhecida'}*`}` +
+                (r.fora_pool_manual
+                  ? `O número permanece *fora do pool manualmente*`
+                  : `Mas o número continua ${qual === 'GREEN' ? 'com pendência' : `com qualidade *${qual || 'desconhecida'}*`}`) +
                 (restritoMeta ? ` e *restrito pela Meta* (envio limitado no painel)` : '') +
                 (quarentenaAtiva
                   ? ` e em quarentena até ${new Date(quarentenaAlvo).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
