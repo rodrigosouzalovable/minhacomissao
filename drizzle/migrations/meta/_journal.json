@@ -190,6 +190,13 @@
       "when": 1789651822859,
       "tag": "0026_manual_meta_pool_hold",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789651848734,
+      "tag": "0027_admin_return_meta_instance_to_pool",
+      "breakpoints": true
     }
   ]
 }
