@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Liberar todas as instâncias Meta vinculadas ao Thiago para tentativa de envio, preservando as recusas reais da Meta
 - [x] Impedir que rate limit temporário ou erro de destinatário retire a instância saudável do Thiago e encerre a campanha
 - [x] Corrigir restrição Meta mal classificada do parceiro Thiago e manter disparos nas instâncias saudáveis
 - [x] Impedir retorno automático de instâncias retiradas no Envio Meta e permitir retorno saudável somente pelo administrador
