@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Exibir NOVO MUNDO/UME nos cards de Acordos da Equipe e permitir troca auditada somente pelo acesso de Rodrigo
 - [x] Permitir que Parceiros Meta ativem e retomem no pool somente as próprias instâncias vinculadas
 - [x] Liberar todas as instâncias Meta vinculadas ao Thiago para tentativa de envio, preservando as recusas reais da Meta
 - [x] Impedir que rate limit temporário ou erro de destinatário retire a instância saudável do Thiago e encerre a campanha
