@@ -26,6 +26,7 @@ import { RecordePessoalCard } from '@/components/RecordePessoalCard';
 import { ConfigMotivacaoDialog } from '@/components/ConfigMotivacaoDialog';
 import { HistoricoMesesCard } from '@/components/HistoricoMesesCard';
 import { PontoCard } from '@/components/ponto/PontoCard';
+import { RankingMensal } from '@/components/RankingMensal';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 
 
@@ -222,7 +223,10 @@ export default function Dashboard() {
         )}
 
         {isAdmin && (
-          <MetasMensal mesAno={format(new Date(), 'yyyy-MM')} />
+          <>
+            <MetasMensal mesAno={format(new Date(), 'yyyy-MM')} />
+            <RankingMensal />
+          </>
         )}
 
         {data?.comparativo && (
