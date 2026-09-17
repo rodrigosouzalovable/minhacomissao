@@ -35,6 +35,7 @@ import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadg
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useBmCotas } from "@/hooks/useBmCotas";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 
 
 
@@ -192,6 +193,8 @@ function dedupRecipientsRaw(raw: string, isentos?: Set<string>): { texto: string
 export default function EnvioMeta() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { parceiroMeta } = useUserPermissions();
+  const liberacaoTotalThiago = parceiroMeta && user?.id === "a3e72fe9-5522-42ce-a0ce-fc1113a45f20";
   const {
     enviando,
     pausado,
@@ -714,7 +717,7 @@ export default function EnvioMeta() {
       setInstancias(mapped as any);
       const idsElegiveis = new Set(
         mapped
-          .filter((inst) => inst.pool_fora_manual !== true && (inst.estado_pool || "aguardando_templates") === "ativo")
+          .filter((inst) => liberacaoTotalThiago || (inst.pool_fora_manual !== true && (inst.estado_pool || "aguardando_templates") === "ativo"))
           .map((inst) => inst.id),
       );
       setInstanciaIds((prev) => prev.filter((id) => idsElegiveis.has(id)));
@@ -933,6 +936,7 @@ export default function EnvioMeta() {
   // (UNKNOWN e sem leitura entram) e que já tenham sido ativadas no pool.
   // A instância "Novo Mundo 3144" fica sempre fora da seleção.
   const instanciaSemProblema = (i: any) => {
+    if (liberacaoTotalThiago) return true;
     const status = (i.saude_status || "").toUpperCase();
     const nomeStatus = (i.meta_name_status || "").toUpperCase();
     const qual = (i.saude_quality || "").toUpperCase();
@@ -950,7 +954,7 @@ export default function EnvioMeta() {
       await retirarDoPool(inst);
       return;
     }
-    if (!selecionada && inst.pool_fora_manual) {
+    if (!liberacaoTotalThiago && !selecionada && inst.pool_fora_manual) {
       toast.warning("Esta instância está fora do pool manualmente. Use “Voltar para o pool”.");
       return;
     }
@@ -993,7 +997,7 @@ export default function EnvioMeta() {
 
     // Nome de exibição REPROVADO na Meta = entrega rejeitada (#131000).
     // Nome em análise (PENDING_REVIEW) envia normalmente.
-    const nomeProblema = filteredInstanciaIds.filter((id) => {
+    const nomeProblema = liberacaoTotalThiago ? [] : filteredInstanciaIds.filter((id) => {
       const inst = instancias.find((x) => x.id === id) as any;
       return String(inst?.meta_name_status || "").toUpperCase() === "REJECTED";
     });
@@ -1017,7 +1021,7 @@ export default function EnvioMeta() {
 
     // Cota por BM (janela de 24h): remove instâncias de BMs já esgotadas
     await recarregarCotas();
-    const semCota = idsOk.filter((id) => {
+    const semCota = liberacaoTotalThiago ? [] : idsOk.filter((id) => {
       const inst = instancias.find((x) => x.id === id) as any;
       return inst ? bmSemSaldo(inst.meta_bm_id) : false;
     });
@@ -1157,7 +1161,7 @@ export default function EnvioMeta() {
         nome: i.nome || i.display_phone || i.id,
         qualidade: (i.saude_quality || "").toUpperCase(),
       }));
-    const okRisco = await pedirConfirmacaoRisco(arriscadas);
+    const okRisco = liberacaoTotalThiago || await pedirConfirmacaoRisco(arriscadas);
     if (!okRisco) { toast.error("Envio cancelado"); return; }
 
     // ✅ Confirmação de custo — mostra R$ estimado e exige digitação do valor
@@ -1253,7 +1257,7 @@ export default function EnvioMeta() {
     setEnviandoTeste(true);
     try {
       const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
-        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true },
+        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true, liberacao_total_parceiro: liberacaoTotalThiago },
       });
       if (error) throw error;
       if (data?.success) {
@@ -1701,6 +1705,13 @@ export default function EnvioMeta() {
 
           </div>
 
+          {liberacaoTotalThiago && (
+            <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-xs text-foreground flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5 text-warning" />
+              <span>Todas as suas instâncias estão liberadas para tentativa. Os alertas continuam visíveis e a Meta ainda pode recusar o envio.</span>
+            </div>
+          )}
+
           <div className="overflow-auto flex-1 -mx-1 px-1">
           {instanciaIds.length > 0 && instanciaIds.every((id) => (instancias.find((x) => x.id === id)?.estado_pool || "aguardando_templates") !== "ativo") && (
             <div className="mb-3 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
@@ -1721,7 +1732,7 @@ export default function EnvioMeta() {
               <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm || i.pool_fora_manual ? "opacity-60" : ""} ${semSaldoBm ? "border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
-                  disabled={semSaldoBm || i.pool_fora_manual || (i.estado_pool || "aguardando_templates") !== "ativo" || ativandoPoolId === i.id}
+                  disabled={(!liberacaoTotalThiago && (semSaldoBm || i.pool_fora_manual || (i.estado_pool || "aguardando_templates") !== "ativo")) || ativandoPoolId === i.id}
                   onCheckedChange={() => toggleInstancia(i)}
                 />
 

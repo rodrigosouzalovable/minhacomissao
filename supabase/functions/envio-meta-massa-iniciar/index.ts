@@ -2,6 +2,7 @@
 // O envio propriamente dito é feito pelo cron `envio-meta-massa-tick`.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { calcularJanelaEnvio } from '../_shared/metaJanelaEnvio.ts';
+import { instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
 
 
 const corsHeaders = {
@@ -98,6 +99,8 @@ Deno.serve(async (req) => {
     const { data: cfgQualidade } = await supabase
       .from('meta_envio_pool_config').select('liberar_qualidade_global').eq('id', 1).maybeSingle();
     const liberacaoQualidadeGlobal = cfgQualidade?.liberar_qualidade_global === true;
+    const liberadasThiago = await instanciasLiberadasThiago(supabase, user.id, instanciaIds);
+    const liberacaoTotalThiago = liberadasThiago.size > 0;
 
     // Consulta a Meta somente para as instâncias selecionadas e somente quando
     // a campanha começa. Isso libera bloqueios antigos já resolvidos sem uma
@@ -133,6 +136,7 @@ Deno.serve(async (req) => {
         continue;
       }
       const rotulo = r.nome || r.id;
+      if (liberadasThiago.has(id)) continue;
       if (r.pool_fora_manual === true) {
         badIds.add(id);
         motivos.push(`${rotulo}: fora do pool manualmente`);
@@ -175,7 +179,11 @@ Deno.serve(async (req) => {
         }
       }
     }
-    let instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
+    // A exceção do Thiago nunca amplia o escopo: somente IDs vinculados a ele
+    // podem entrar no job. Isso também protege contra payload adulterado.
+    let instanciaIdsFiltradas = instanciaIds.filter(
+      (id) => !badIds.has(id) && (!liberacaoTotalThiago || liberadasThiago.has(id)),
+    );
     if (instanciaIdsFiltradas.length === 0) {
       return new Response(JSON.stringify({
         success: false,
@@ -188,13 +196,14 @@ Deno.serve(async (req) => {
     // só entram se o usuário confirmou o aviso de risco na tela. Eles podem
     // disparar, mas se a qualidade cair mais durante a campanha o tick os retira
     // igual a qualquer outro número.
-    let instanciasRiscoAceito: string[] = [];
+    let instanciasRiscoAceito: string[] = liberacaoTotalThiago ? Array.from(liberadasThiago) : [];
     try {
       const { data: qRows } = await supabase
         .from('meta_whatsapp_instances')
         .select('id, nome, display_phone, saude_quality')
         .in('id', instanciaIdsFiltradas);
       const arriscadas = (qRows || []).filter((r: any) => {
+        if (liberadasThiago.has(r.id)) return false;
         const q = String(r.saude_quality || '').toUpperCase();
         return q === 'YELLOW' || q === 'RED';
       });
@@ -214,7 +223,10 @@ Deno.serve(async (req) => {
             })),
           }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
-        instanciasRiscoAceito = arriscadas.map((r: any) => r.id);
+        instanciasRiscoAceito = Array.from(new Set([
+          ...instanciasRiscoAceito,
+          ...arriscadas.map((r: any) => r.id),
+        ]));
       }
     } catch (_) { /* não bloqueia início */ }
     const permitirQualidadeBaixa = instanciasRiscoAceito.length > 0;
@@ -236,7 +248,11 @@ Deno.serve(async (req) => {
         .in('id', instanciaIdsFiltradas)
         .not('quarentena_ate', 'is', null)
         .gt('quarentena_ate', new Date().toISOString());
-      const emQuarentena = new Set((quarentena || []).map((r: any) => r.id));
+      const emQuarentena = new Set(
+        (quarentena || [])
+          .filter((r: any) => !liberadasThiago.has(r.id))
+          .map((r: any) => r.id),
+      );
       if (emQuarentena.size > 0) {
         instanciaIdsFiltradas = instanciaIdsFiltradas.filter((id) => !emQuarentena.has(id));
         if (instanciaIdsFiltradas.length === 0) {

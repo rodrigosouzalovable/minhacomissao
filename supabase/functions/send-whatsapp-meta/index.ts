@@ -5,6 +5,7 @@ import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
 import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
+import { THIAGO_NOGUEIRA_USER_ID, instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
 
 
 const corsHeaders = {
@@ -412,7 +413,7 @@ async function sendOne(
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const { template_id, instancia_id, cliente: clienteRaw, user_id, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor } = await req.json();
+    const { template_id, instancia_id, cliente: clienteRaw, user_id, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro } = await req.json();
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
@@ -422,6 +423,15 @@ Deno.serve(async (req) => {
     const isTeste = modo_teste === true;
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const authToken = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    const chamadaInterna = authToken === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    let liberarTudoThiago = chamadaInterna && user_id === THIAGO_NOGUEIRA_USER_ID && liberacao_total_parceiro === true;
+    if (!chamadaInterna && liberacao_total_parceiro === true) {
+      const { data: authData } = await supabase.auth.getUser(authToken);
+      const uid = authData?.user?.id;
+      const vinculadas = await instanciasLiberadasThiago(supabase, uid, [instancia_id]);
+      liberarTudoThiago = vinculadas.has(instancia_id);
+    }
 
     const { data: template } = await supabase
       .from('meta_whatsapp_templates').select('*').eq('id', template_id).maybeSingle();
@@ -518,7 +528,7 @@ Deno.serve(async (req) => {
     if (!inst) throw new Error('Instância Meta não encontrada/ativa');
 
     // ===== Cota da BM (janela móvel de 24h) =====
-    if (!isTeste && inst.meta_bm_id) {
+    if (!isTeste && inst.meta_bm_id && !liberarTudoThiago) {
       const cotas = await carregarCotasBm(supabase);
       const motivoBm = motivoBloqueioBm(cotas, inst.meta_bm_id);
       if (motivoBm) {
@@ -536,7 +546,7 @@ Deno.serve(async (req) => {
     // ===== Pool checks =====
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
 
-    if (inst.pool_fora_manual === true && !isTeste) {
+    if (inst.pool_fora_manual === true && !isTeste && !liberarTudoThiago) {
       return new Response(JSON.stringify({
         success: false,
         error: 'Instância fora do pool por decisão manual do administrador',
@@ -557,7 +567,7 @@ Deno.serve(async (req) => {
     const ignoraQualidade = liberacaoGlobal || ignorar_pausa_qualidade === true || inst.qualidade_liberada_manual === true;
     const pausaLiberavel = pausaPorQualidade || motivoPausaLower === '';
 
-    if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste) {
+    if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste && !liberarTudoThiago) {
       // A chave global libera estados causados por qualidade; bloqueios reais da Meta permanecem.
       const bloqueioReal = pausaPorStatus ||
         (inst.estado_pool === 'restrita' && !pausaPorQualidade);
@@ -571,7 +581,7 @@ Deno.serve(async (req) => {
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
-    if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
+    if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date() && !liberarTudoThiago) {
       const bloqueiaPausa = !(ignoraQualidade && pausaLiberavel);
       if (bloqueiaPausa) {
         return new Response(JSON.stringify({
