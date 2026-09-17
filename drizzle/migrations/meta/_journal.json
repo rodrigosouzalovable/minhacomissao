@@ -218,6 +218,13 @@
       "when": 1789663528796,
       "tag": "0030_secure_agreement_creditor_change",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789669336654,
+      "tag": "0031_allow_meta_partners_toggle_own_pool",
+      "breakpoints": true
     }
   ]
 }
