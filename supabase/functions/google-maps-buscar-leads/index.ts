@@ -314,23 +314,15 @@ Deno.serve(async (req) => {
         };
         if (pageToken) reqBody.pageToken = pageToken;
 
-        let chaveSelecionada = escolherChave();
+        let chaveSelecionada: GoogleMapsKeyRow | null = escolherChave();
         if (!chaveSelecionada && !usaGatewayPadrao) {
           limiteAtingidoNoMeio = true;
           return;
         }
-        ultimoProvedor = chaveSelecionada?.id ?? "conexao_padrao";
-        const endpoint = chaveSelecionada
-          ? "https://places.googleapis.com/v1/places:searchText"
-          : `${GATEWAY_URL}/places/v1/places:searchText`;
-        const authHeaders: Record<string, string> = chaveSelecionada
-          ? { "X-Goog-Api-Key": chaveSelecionada.api_key }
-          : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
 
         const requestInit = {
           method: "POST",
           headers: {
-            ...authHeaders,
             "Content-Type": "application/json",
             // Só cobramos o que precisamos: id/nome/telefone/endereco/local + avaliação básica
             "X-Goog-FieldMask":
@@ -338,30 +330,54 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify(reqBody),
         };
-        let resp = await fetch(endpoint, requestInit);
 
-        // Uma conta sem cota fica suspensa até o próximo mês e a mesma página
-        // é repetida uma única vez na próxima chave disponível.
-        if (resp.status === 429 && chaveSelecionada) {
-          const erroCota = await resp.text();
-          if (erroCota.includes("RESOURCE_EXHAUSTED") || erroCota.includes("RATE_LIMIT_EXCEEDED")) {
-            await marcarChaveIndisponivelNoMes(supabase, chaveSelecionada.id);
-            chaveSelecionada.indisponivel_mes = mesAtualBrt();
-            const proxima = escolherChave(new Set([chaveSelecionada.id]));
-            if (!proxima) {
-              erroGoogle = { status: 429, body: "Todas as contas Google Maps atingiram a cota disponível." };
+        let resp: Response;
+        const chavesTentadas = new Set<string>();
+        while (true) {
+          ultimoProvedor = chaveSelecionada?.id ?? "conexao_padrao";
+          const endpoint = chaveSelecionada
+            ? "https://places.googleapis.com/v1/places:searchText"
+            : `${GATEWAY_URL}/places/v1/places:searchText`;
+          const authHeaders: Record<string, string> = chaveSelecionada
+            ? { "X-Goog-Api-Key": chaveSelecionada.api_key }
+            : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
+
+          resp = await fetch(endpoint, {
+            ...requestInit,
+            headers: { ...requestInit.headers, ...authHeaders },
+          });
+
+          // Chaves próprias negadas por configuração (403) ou sem cota (429)
+          // ficam fora do rodízio no mês. A mesma página avança por todas as
+          // demais contas disponíveis, sem repetir a chave que acabou de falhar.
+          if (chaveSelecionada && (resp.status === 403 || resp.status === 429)) {
+            const corpoFalha = await resp.text();
+            const cotaEsgotada = resp.status === 429 &&
+              (corpoFalha.includes("RESOURCE_EXHAUSTED") || corpoFalha.includes("RATE_LIMIT_EXCEEDED"));
+            if (resp.status === 403 || cotaEsgotada) {
+              chavesTentadas.add(chaveSelecionada.id);
+              await marcarChaveIndisponivelNoMes(supabase, chaveSelecionada.id);
+              chaveSelecionada.indisponivel_mes = mesAtualBrt();
+              console.warn(`[google-maps-buscar-leads] chave ${chaveSelecionada.id} removida do rodízio no mês após HTTP ${resp.status}`);
+
+              const proxima = escolherChave(chavesTentadas);
+              if (proxima) {
+                chaveSelecionada = proxima;
+                continue;
+              }
+
+              erroGoogle = {
+                status: resp.status,
+                body: resp.status === 403
+                  ? "Todas as contas Google Maps disponíveis foram recusadas por configuração (403)."
+                  : "Todas as contas Google Maps atingiram a cota disponível.",
+              };
               return;
             }
-            chaveSelecionada = proxima;
-            ultimoProvedor = proxima.id;
-            resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
-              ...requestInit,
-              headers: { ...requestInit.headers, "X-Goog-Api-Key": proxima.api_key },
-            });
-          } else {
-            erroGoogle = { status: 429, body: erroCota };
+            erroGoogle = { status: resp.status, body: corpoFalha };
             return;
           }
+          break;
         }
 
         if (!resp.ok) {
