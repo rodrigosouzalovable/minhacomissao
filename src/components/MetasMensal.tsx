@@ -26,6 +26,8 @@ interface FuncionarioData {
   faltante: number;
   porDia: number;
   percentualEquipe: number;
+  novoMundoRecebido: number;
+  umeRecebido: number;
 }
 
 interface EvolucaoDiaria {
@@ -60,6 +62,8 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
   const [loading, setLoading] = useState(true);
   const [metaValor, setMetaValor] = useState(0);
   const [totalRecebido, setTotalRecebido] = useState(0);
+  const [totalNovoMundo, setTotalNovoMundo] = useState(0);
+  const [totalUme, setTotalUme] = useState(0);
   const [funcionarios, setFuncionarios] = useState<FuncionarioData[]>([]);
   const [evolucaoDiaria, setEvolucaoDiaria] = useState<EvolucaoDiaria[]>([]);
   const [totalFuncionarios, setTotalFuncionarios] = useState(0);
@@ -172,22 +176,28 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
       // Buscar acordos para mapear user_id
       const acordoIds = [...new Set(pagamentos?.map(p => p.acordo_id) || [])];
       
-      let acordoUserMap: Record<string, string> = {};
+      const acordoUserMap: Record<string, string> = {};
+      const acordoEmpresaMap: Record<string, string> = {};
       if (acordoIds.length > 0) {
         const { data: acordos } = await supabase
           .from('acordos')
-          .select('id, user_id')
+          .select('id, user_id, empresa')
           .in('id', acordoIds);
         
         acordos?.forEach(a => {
           acordoUserMap[a.id] = a.user_id;
+          acordoEmpresaMap[a.id] = a.empresa;
         });
       }
 
       // Calcular totais
       let total = 0;
       const valoresPorFuncionario: Record<string, number> = {};
+      const novoMundoPorFuncionario: Record<string, number> = {};
+      const umePorFuncionario: Record<string, number> = {};
       const valoresPorDia: Record<string, number> = {};
+      let novoMundoTotal = 0;
+      let umeTotal = 0;
 
       pagamentos?.forEach(p => {
         const valor = Number(p.valor_parcela) || 0;
@@ -196,6 +206,14 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
         const userId = acordoUserMap[p.acordo_id];
         if (userId) {
           valoresPorFuncionario[userId] = (valoresPorFuncionario[userId] || 0) + valor;
+          if (acordoEmpresaMap[p.acordo_id] === 'ume_novo_mundo') {
+            novoMundoPorFuncionario[userId] = (novoMundoPorFuncionario[userId] || 0) + valor;
+            novoMundoTotal += valor;
+          }
+          if (acordoEmpresaMap[p.acordo_id] === 'mundo_da_moda') {
+            umePorFuncionario[userId] = (umePorFuncionario[userId] || 0) + valor;
+            umeTotal += valor;
+          }
         }
 
         if (p.data_paga) {
@@ -204,6 +222,8 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
       });
 
       setTotalRecebido(total);
+      setTotalNovoMundo(novoMundoTotal);
+      setTotalUme(umeTotal);
 
       // Calcular dados por funcionário
       const metaIndividual = metaValor / (profiles?.length || 1);
@@ -218,6 +238,8 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
           faltante,
           porDia: diasUteisRestantes > 0 ? faltante / diasUteisRestantes : 0,
           percentualEquipe: total > 0 ? (recebido / total) * 100 : 0,
+          novoMundoRecebido: novoMundoPorFuncionario[p.id] || 0,
+          umeRecebido: umePorFuncionario[p.id] || 0,
         };
       }).sort((a, b) => b.totalRecebido - a.totalRecebido) || [];
 
@@ -503,6 +525,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
               <div>
                 <p className="text-sm text-muted-foreground">Já Recebido</p>
                 <p className="text-xl font-bold text-green-500">{formatCurrency(totalRecebido)}</p>
+                <p className="text-xs text-muted-foreground">NOVO MUNDO {formatCurrency(totalNovoMundo)} · UME {formatCurrency(totalUme)}</p>
               </div>
             </div>
           </CardContent>
@@ -641,10 +664,10 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-sm text-green-500">
-                      {formatCurrency(func.totalRecebido)}
-                    </p>
+                  <div className="grid grid-cols-1 gap-0.5 text-right text-xs sm:grid-cols-3 sm:gap-3">
+                    <span><span className="text-muted-foreground">NOVO MUNDO</span><br /><strong>{formatCurrency(func.novoMundoRecebido)}</strong></span>
+                    <span><span className="text-muted-foreground">UME</span><br /><strong>{formatCurrency(func.umeRecebido)}</strong></span>
+                    <span><span className="text-muted-foreground">Total</span><br /><strong className="text-green-500">{formatCurrency(func.totalRecebido)}</strong></span>
                   </div>
                 </div>
               ))}
@@ -676,7 +699,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
                   <div className="relative">
                     <Progress value={Math.min(100, percentualMeta)} className="h-2" />
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
                     <div>
                       <span className="text-muted-foreground">Recebido: </span>
                       <span className="font-medium text-green-500">{formatCurrency(func.totalRecebido)}</span>
@@ -689,6 +712,8 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
                       <span className="text-muted-foreground">Por dia útil: </span>
                       <span className="font-medium text-purple-500">{formatCurrency(func.porDia)}</span>
                     </div>
+                    <div><span className="text-muted-foreground">NOVO MUNDO: </span><span className="font-medium">{formatCurrency(func.novoMundoRecebido)}</span></div>
+                    <div><span className="text-muted-foreground">UME: </span><span className="font-medium">{formatCurrency(func.umeRecebido)}</span></div>
                   </div>
                 </div>
               );
