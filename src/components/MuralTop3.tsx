@@ -25,7 +25,7 @@ export function MuralTop3() {
   const { data: ranking } = useQuery({
     queryKey: ['mural-top3'],
     queryFn: async () => {
-      const { data } = await supabase.rpc('ranking_mensal' as any);
+      const { data } = await supabase.rpc('ranking_mensal_por_credor' as any);
       const arr = (data as any[]) || [];
       return arr.slice(0, 3);
     },
@@ -57,6 +57,10 @@ export function MuralTop3() {
             />
             <p className="text-sm font-semibold text-center truncate w-full">{p.item.nome}</p>
             <p className="text-xs text-emerald-600 font-bold">{fmt(Number(p.item.total_recebido))}</p>
+            <p className="text-[11px] text-muted-foreground text-center leading-4">
+              NOVO MUNDO {fmt(Number(p.item.novo_mundo_recebido))}<br />
+              UME {fmt(Number(p.item.ume_recebido))}
+            </p>
             <div
               className={cn(
                 'w-full rounded-t-lg flex items-start justify-center pt-2 text-3xl bg-gradient-to-b',

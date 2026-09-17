@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Separar recebimentos e comissões por NOVO MUNDO e UME no Dashboard, ranking, histórico e telas por operador
 - [x] Remover automaticamente do rodízio mensal cada chave Google Maps com erro 403 e continuar a mesma busca na próxima conta disponível
 - [x] Adicionar verificação individual de pagamento Meta e corrigir o motivo desatualizado da GoldImage
 - [x] Elevar a meta para 1.000 WhatsApps/dia, teto de 650 consultas e bloqueio conservador de 950 por conta/mês
