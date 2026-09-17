@@ -58,7 +58,7 @@ export default function Dashboard() {
       // Personal data queries
       const [acordosRes, pagamentosRes] = await Promise.all([
         supabase.from('acordos').select('*').eq('user_id', user.id).order('criado_em', { ascending: false }),
-        supabase.from('pagamentos').select('*, acordos!inner(user_id)').eq('acordos.user_id', user.id),
+        supabase.from('pagamentos').select('*, acordos!inner(user_id, empresa)').eq('acordos.user_id', user.id),
       ]);
 
       const acordos = acordosRes.data || [];
@@ -69,12 +69,20 @@ export default function Dashboard() {
       const pagamentosPendentes = pagamentos.filter(p => p.status === 'pendente');
       const comissaoRecebida = pagamentosPagos.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
       const comissaoPendente = pagamentosPendentes.reduce((sum, p) => sum + Number(p.comissao_parcela), 0);
+      const somarComissaoEmpresa = (lista: typeof pagamentos, empresa: string) =>
+        lista.reduce((sum, p) => sum + (p.acordos?.empresa === empresa ? Number(p.comissao_parcela) : 0), 0);
+      const comissaoRecebidaNovoMundo = somarComissaoEmpresa(pagamentosPagos, 'ume_novo_mundo');
+      const comissaoRecebidaUme = somarComissaoEmpresa(pagamentosPagos, 'mundo_da_moda');
+      const comissaoPendenteNovoMundo = somarComissaoEmpresa(pagamentosPendentes, 'ume_novo_mundo');
+      const comissaoPendenteUme = somarComissaoEmpresa(pagamentosPendentes, 'mundo_da_moda');
 
-      const comissoesPorMes: Record<string, number> = {};
+      const comissoesPorMes: Record<string, { novoMundo: number; ume: number }> = {};
       pagamentosPagos.forEach(p => {
         if (p.data_paga) {
           const mes = new Date(p.data_paga).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-          comissoesPorMes[mes] = (comissoesPorMes[mes] || 0) + Number(p.comissao_parcela);
+          comissoesPorMes[mes] ||= { novoMundo: 0, ume: 0 };
+          if (p.acordos?.empresa === 'ume_novo_mundo') comissoesPorMes[mes].novoMundo += Number(p.comissao_parcela);
+          if (p.acordos?.empresa === 'mundo_da_moda') comissoesPorMes[mes].ume += Number(p.comissao_parcela);
         }
       });
 
@@ -126,9 +134,13 @@ export default function Dashboard() {
         totalAcordos: acordos.length,
         acordosAtivos,
         comissaoPendente,
+        comissaoPendenteNovoMundo,
+        comissaoPendenteUme,
         comissaoRecebida,
+        comissaoRecebidaNovoMundo,
+        comissaoRecebidaUme,
         ultimosAcordos: acordos.slice(0, 5),
-        comissoesPorMes: Object.entries(comissoesPorMes).map(([mes, valor]) => ({ mes, valor })),
+        comissoesPorMes: Object.entries(comissoesPorMes).map(([mes, valores]) => ({ mes, ...valores })),
         comparativo,
         diaAtual: agora.getDate(),
       };
@@ -249,6 +261,7 @@ export default function Dashboard() {
                   <div className="text-2xl font-bold text-warning">
                     {formatarMoeda(data?.comissaoPendente || 0)}
                   </div>
+                  <p className="mt-1 text-xs text-muted-foreground">NOVO MUNDO {formatarMoeda(data?.comissaoPendenteNovoMundo || 0)} · UME {formatarMoeda(data?.comissaoPendenteUme || 0)}</p>
                 </CardContent>
               </Card>
 
@@ -261,6 +274,7 @@ export default function Dashboard() {
                   <div className="text-2xl font-bold text-secondary">
                     {formatarMoeda(data?.comissaoRecebida || 0)}
                   </div>
+                  <p className="mt-1 text-xs text-muted-foreground">NOVO MUNDO {formatarMoeda(data?.comissaoRecebidaNovoMundo || 0)} · UME {formatarMoeda(data?.comissaoRecebidaUme || 0)}</p>
                 </CardContent>
               </Card>
             </>
@@ -284,7 +298,8 @@ export default function Dashboard() {
                         formatter={(value: number) => formatarMoeda(value)}
                         contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                       />
-                      <Bar dataKey="valor" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="novoMundo" name="NOVO MUNDO" stackId="comissao" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="ume" name="UME" stackId="comissao" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
