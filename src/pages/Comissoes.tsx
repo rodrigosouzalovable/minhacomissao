@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { formatarMoeda, formatarData, calcularComissaoFuncionarioParcela } from '@/lib/comissao';
+import { getEmpresaLabel } from '@/lib/empresaLabels';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Clock, CheckCircle, Download, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,6 +26,7 @@ interface Acordo {
   parcelas: number;
   status: string;
   dias_atraso: number;
+  empresa: string;
 }
 
 interface Pagamento {
@@ -43,13 +45,14 @@ export default function Comissoes() {
   const [filtro, setFiltro] = useState<'todas' | 'pagas' | 'duplicados'>('todas');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [credor, setCredor] = useState<'todos' | 'ume_novo_mundo' | 'mundo_da_moda'>('todos');
 
   const { data: acordos, isLoading: loadingAcordos } = useQuery({
     queryKey: ['meus-acordos', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('acordos')
-        .select('id, cliente_nome, cliente_cpf, valor_total, comissao_total, parcelas, status, dias_atraso')
+        .select('id, cliente_nome, cliente_cpf, valor_total, comissao_total, parcelas, status, dias_atraso, empresa')
         .eq('user_id', user!.id)
         .order('criado_em', { ascending: false });
 
@@ -110,8 +113,16 @@ export default function Comissoes() {
 
   // Calcular totais (apenas parcelas pagas no período)
   const pagamentosPagosNoPeriodo = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
-  const totalPaga = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + comissaoFuncionarioParcela(p), 0);
-  const totalValorParcelasPagas = pagamentosPagosNoPeriodo.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+  const acordoPorId = new Map((acordos || []).map((a) => [a.id, a]));
+  const pagamentosPagosFiltrados = pagamentosPagosNoPeriodo.filter((p) => credor === 'todos' || acordoPorId.get(p.acordo_id)?.empresa === credor);
+  const resumoPorCredor = (empresa: string) => {
+    const itens = pagamentosPagosNoPeriodo.filter((p) => acordoPorId.get(p.acordo_id)?.empresa === empresa);
+    return { recebido: itens.reduce((s, p) => s + Number(p.valor_parcela), 0), comissao: itens.reduce((s, p) => s + comissaoFuncionarioParcela(p), 0) };
+  };
+  const resumoNovoMundo = resumoPorCredor('ume_novo_mundo');
+  const resumoUme = resumoPorCredor('mundo_da_moda');
+  const totalPaga = pagamentosPagosFiltrados.reduce((sum, p) => sum + comissaoFuncionarioParcela(p), 0);
+  const totalValorParcelasPagas = pagamentosPagosFiltrados.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
   // Normalizar CPF (apenas dígitos)
   const normalizarCPF = (cpf: string | null) => 
@@ -156,7 +167,8 @@ export default function Comissoes() {
   }) || [];
 
   // Usar acordos filtrados pelo tipo de filtro
-  const acordosParaExibir = filtro === 'duplicados' ? acordosDuplicados : acordos;
+  const acordosBase = filtro === 'duplicados' ? acordosDuplicados : (acordos || []);
+  const acordosParaExibir = acordosBase.filter((a) => credor === 'todos' || a.empresa === credor);
 
   // Agrupar acordos por CPF
   const acordosPorCpf = acordosParaExibir?.reduce((acc, acordo) => {
@@ -179,7 +191,7 @@ export default function Comissoes() {
 
   const handleExportarExcel = () => {
     // Filtrar apenas parcelas pagas no período
-    const parcelasPagas = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
+    const parcelasPagas = pagamentosPagosFiltrados;
     
     if (parcelasPagas.length === 0) {
       toast.error('Nenhuma parcela paga para exportar no período selecionado');
@@ -191,6 +203,7 @@ export default function Comissoes() {
       return {
         cpf: acordo?.cliente_cpf || '',
         cliente: acordo?.cliente_nome || '',
+        credor: getEmpresaLabel(acordo?.empresa),
         valor_total: acordo?.valor_total || 0,
         valor_parcela: parcela.valor_parcela,
         data_pagamento: formatarData(parcela.data_paga),
@@ -204,6 +217,7 @@ export default function Comissoes() {
     const colunas = [
       { chave: 'cpf' as const, titulo: 'CPF' },
       { chave: 'cliente' as const, titulo: 'Cliente' },
+      { chave: 'credor' as const, titulo: 'Credor' },
       { chave: 'valor_total' as const, titulo: 'Valor Total' },
       { chave: 'valor_parcela' as const, titulo: 'Valor Parcela' },
       { chave: 'data_pagamento' as const, titulo: 'Data Pagamento' },
@@ -240,7 +254,7 @@ export default function Comissoes() {
         {/* Filtro por período */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-4">
               <p className="text-sm font-medium text-muted-foreground">Filtrar por data de pagamento:</p>
               <DateRangePicker
                 startDate={startDate}
@@ -248,6 +262,13 @@ export default function Comissoes() {
                 onStartDateChange={setStartDate}
                 onEndDateChange={setEndDate}
               />
+              <div className="flex flex-wrap gap-2">
+                {(['todos', 'ume_novo_mundo', 'mundo_da_moda'] as const).map((valor) => (
+                  <Button key={valor} type="button" size="sm" variant={credor === valor ? 'default' : 'outline'} onClick={() => setCredor(valor)}>
+                    {valor === 'todos' ? 'Todos' : getEmpresaLabel(valor)}
+                  </Button>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -277,6 +298,10 @@ export default function Comissoes() {
               </div>
             </CardContent>
           </Card>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card><CardContent className="pt-6"><p className="text-sm font-medium">NOVO MUNDO</p><p className="text-sm text-muted-foreground">Recebido: {formatarMoeda(resumoNovoMundo.recebido)}</p><p className="text-xl font-bold">Comissão: {formatarMoeda(resumoNovoMundo.comissao)}</p></CardContent></Card>
+          <Card><CardContent className="pt-6"><p className="text-sm font-medium">UME</p><p className="text-sm text-muted-foreground">Recebido: {formatarMoeda(resumoUme.recebido)}</p><p className="text-xl font-bold">Comissão: {formatarMoeda(resumoUme.comissao)}</p></CardContent></Card>
         </div>
 
         {/* Tabs de filtro */}
@@ -336,6 +361,7 @@ export default function Comissoes() {
                                     </Badge>
                                   )}
                                   <Badge variant="outline">{acordo.parcelas} parcelas</Badge>
+                                  <Badge variant="outline">{getEmpresaLabel(acordo.empresa)}</Badge>
                                   <Badge variant="secondary">Total: {formatarMoeda(acordo.valor_total)}</Badge>
                                   <Badge>Comissão: {formatarMoeda(comissaoTotalAcordoFuncionario)}</Badge>
                                 </div>

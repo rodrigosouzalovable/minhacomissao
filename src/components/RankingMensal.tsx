@@ -8,6 +8,8 @@ import { Trophy } from 'lucide-react';
 interface RankingItem {
   user_id: string;
   nome: string;
+  novo_mundo_recebido: number;
+  ume_recebido: number;
   total_recebido: number;
 }
 
@@ -20,13 +22,15 @@ export function RankingMensal() {
   const { data: ranking, isLoading } = useQuery({
     queryKey: ['ranking-mensal'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('ranking_mensal' as any);
+      const { data, error } = await supabase.rpc('ranking_mensal_por_credor' as any);
       if (error) throw error;
       return (data as RankingItem[]) || [];
     },
   });
 
   const totalEquipe = ranking?.reduce((sum, r) => sum + Number(r.total_recebido), 0) || 0;
+  const totalNovoMundo = ranking?.reduce((sum, r) => sum + Number(r.novo_mundo_recebido), 0) || 0;
+  const totalUme = ranking?.reduce((sum, r) => sum + Number(r.ume_recebido), 0) || 0;
 
   return (
     <Card>
@@ -77,18 +81,19 @@ export function RankingMensal() {
                         </span>
                       </div>
                     </div>
-                    <span className="text-sm font-semibold text-green-600 dark:text-green-400 shrink-0">
-                      {formatarMoeda(Number(item.total_recebido))}
-                    </span>
+                    <div className="grid shrink-0 grid-cols-1 gap-0.5 text-right text-xs sm:grid-cols-3 sm:gap-4">
+                      <span><span className="text-muted-foreground">NOVO MUNDO</span><br /><strong>{formatarMoeda(Number(item.novo_mundo_recebido))}</strong></span>
+                      <span><span className="text-muted-foreground">UME</span><br /><strong>{formatarMoeda(Number(item.ume_recebido))}</strong></span>
+                      <span><span className="text-muted-foreground">Total</span><br /><strong className="text-green-600 dark:text-green-400">{formatarMoeda(Number(item.total_recebido))}</strong></span>
+                    </div>
                   </div>
                 );
               })}
             </div>
-            <div className="mt-3 pt-3 border-t text-right">
-              <span className="text-sm text-muted-foreground">Total da equipe: </span>
-              <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-                {formatarMoeda(totalEquipe)}
-              </span>
+            <div className="mt-3 grid grid-cols-1 gap-1 border-t pt-3 text-right text-sm sm:grid-cols-3">
+              <span><span className="text-muted-foreground">NOVO MUNDO: </span><strong>{formatarMoeda(totalNovoMundo)}</strong></span>
+              <span><span className="text-muted-foreground">UME: </span><strong>{formatarMoeda(totalUme)}</strong></span>
+              <span><span className="text-muted-foreground">Total: </span><strong className="text-green-600 dark:text-green-400">{formatarMoeda(totalEquipe)}</strong></span>
             </div>
           </ScrollArea>
         )}
