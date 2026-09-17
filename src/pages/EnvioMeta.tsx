@@ -625,9 +625,10 @@ export default function EnvioMeta() {
   };
 
   const ativarNoPool = async (inst: Instancia) => {
-    if (!isAdmin) return;
+    if (!isAdmin && !parceiroMeta) return;
     if (inst.pool_fora_manual) {
-      await voltarParaPool(inst);
+      if (isAdmin) await voltarParaPool(inst);
+      else toast.warning("Esta instância foi retirada manualmente. Somente um administrador pode devolvê-la ao pool.");
       return;
     }
     const estado = inst.estado_pool || "aguardando_templates";
@@ -636,26 +637,9 @@ export default function EnvioMeta() {
       if (!confirm(`Ativar "${inst.nome}" no pool? O ramp-up começa hoje (Dia 1 = 20 msg máx).`)) return;
     }
     setAtivandoPoolId(inst.id);
-    const patch: Record<string, any> = isRetomar
-      ? {
-          estado_pool: "ativo",
-          pausa_automatica_ate: null,
-          pausa_automatica_motivo: null,
-          // Retomada manual: libera envio mesmo com qualidade YELLOW/RED
-          qualidade_liberada_manual: true,
-          qualidade_liberada_em: new Date().toISOString(),
-        }
-      : {
-          estado_pool: "ativo",
-          data_ativacao_api: new Date().toISOString().slice(0, 10),
-          fase_rampup: "fase1",
-          pausa_automatica_ate: null,
-          pausa_automatica_motivo: null,
-        };
-    const { error } = await (supabase as any)
-      .from("meta_whatsapp_instances")
-      .update(patch)
-      .eq("id", inst.id);
+    const { error } = await (supabase as any).rpc("ativar_meta_instancia_pool", {
+      p_instancia_id: inst.id,
+    });
     setAtivandoPoolId(null);
     if (error) {
       toast.error("Erro ao ativar: " + error.message);
@@ -1870,7 +1854,7 @@ export default function EnvioMeta() {
                           ? "ilimitado"
                           : `${cotaBm.restantes} restantes (BM)`}
                     </Badge>
-                    {isAdmin && (i.estado_pool || "aguardando_templates") !== "ativo" && (
+                    {(isAdmin || parceiroMeta) && !i.pool_fora_manual && (i.estado_pool || "aguardando_templates") !== "ativo" && (
                       <Button
                         type="button"
                         size="sm"
