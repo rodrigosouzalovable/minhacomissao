@@ -34,6 +34,7 @@ import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemp
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useBmCotas } from "@/hooks/useBmCotas";
+import { useUserRole } from "@/hooks/useUserRole";
 
 
 
@@ -69,6 +70,8 @@ type Instancia = {
   meta_profile_about?: string | null;
   meta_perfil_sync_em?: string | null;
   meta_bm_id?: string | null;
+  pool_fora_manual?: boolean;
+  pool_fora_manual_em?: string | null;
 };
 
 
@@ -186,6 +189,7 @@ function dedupRecipientsRaw(raw: string, isentos?: Set<string>): { texto: string
 
 export default function EnvioMeta() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const {
     enviando,
     pausado,
@@ -557,7 +561,56 @@ export default function EnvioMeta() {
 
   const [ativandoPoolId, setAtivandoPoolId] = useState<string | null>(null);
 
+  const retirarDoPool = async (inst: Instancia) => {
+    if (!isAdmin) return;
+    if (!confirm(`Retirar "${inst.nome}" do pool permanentemente? Ela só voltará quando um administrador usar “Voltar para o pool”.`)) return;
+    setAtivandoPoolId(inst.id);
+    const { error } = await (supabase as any).rpc("retirar_meta_instancia_pool_manual", {
+      p_instancia_id: inst.id,
+    });
+    setAtivandoPoolId(null);
+    if (error) {
+      toast.error("Não foi possível retirar do pool: " + error.message);
+      return;
+    }
+    setInstanciaIds((prev) => prev.filter((id) => id !== inst.id));
+    toast.success(`${inst.nome} ficará fora do pool até o retorno manual`);
+    await carregar();
+  };
+
+  const voltarParaPool = async (inst: Instancia) => {
+    if (!isAdmin) return;
+    setAtivandoPoolId(inst.id);
+    try {
+      const { data: healthData, error: healthError } = await supabase.functions.invoke(
+        "check-meta-instance-health",
+        { body: { instancia_id: inst.id } },
+      );
+      if (healthError) throw healthError;
+      const resultado = healthData?.results?.[0];
+      if (!resultado || resultado.error) {
+        throw new Error(resultado?.error || "A Meta não confirmou a saúde desta instância");
+      }
+      const { error } = await (supabase as any).rpc("voltar_meta_instancia_pool_manual", {
+        p_instancia_id: inst.id,
+      });
+      if (error) throw error;
+      toast.success(`${inst.nome} voltou para o pool`);
+      await carregar();
+    } catch (e: any) {
+      toast.error("A instância continua fora do pool: " + (e?.message || e));
+      await carregar();
+    } finally {
+      setAtivandoPoolId(null);
+    }
+  };
+
   const ativarNoPool = async (inst: Instancia) => {
+    if (!isAdmin) return;
+    if (inst.pool_fora_manual) {
+      await voltarParaPool(inst);
+      return;
+    }
     const estado = inst.estado_pool || "aguardando_templates";
     const isRetomar = estado === "pausado";
     if (!isRetomar) {
@@ -862,14 +915,24 @@ export default function EnvioMeta() {
     const nomeStatus = (i.meta_name_status || "").toUpperCase();
     const qual = (i.saude_quality || "").toUpperCase();
     if (qual === "YELLOW" || qual === "RED") return false;
+    if (i.pool_fora_manual === true) return false;
     if ((i.estado_pool || "aguardando_templates") !== "ativo") return false;
     const ident = `${i.nome || ""} ${i.telefone || ""}`.replace(/\D/g, " ");
     if (ident.includes("3144")) return false; // Novo Mundo 3144 nunca entra no "selecionar todas"
     return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
   };
 
-  const toggleInstancia = (id: string) => {
-    setInstanciaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleInstancia = async (inst: Instancia) => {
+    const selecionada = instanciaIds.includes(inst.id);
+    if (selecionada && isAdmin && !inst.pool_fora_manual) {
+      await retirarDoPool(inst);
+      return;
+    }
+    if (!selecionada && inst.pool_fora_manual) {
+      toast.warning("Esta instância está fora do pool manualmente. Use “Voltar para o pool”.");
+      return;
+    }
+    setInstanciaIds((prev) => selecionada ? prev.filter((x) => x !== inst.id) : [...prev, inst.id]);
   };
 
 
@@ -1633,11 +1696,11 @@ export default function EnvioMeta() {
               const cotaBm = cotaDaBm(i.meta_bm_id);
               const semSaldoBm = bmSemSaldo(i.meta_bm_id);
               return (
-              <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm ? "opacity-60 border-destructive/50" : ""}`}>
+              <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm || i.pool_fora_manual ? "opacity-60" : ""} ${semSaldoBm ? "border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
-                  disabled={semSaldoBm}
-                  onCheckedChange={() => toggleInstancia(i.id)}
+                  disabled={semSaldoBm || i.pool_fora_manual || ativandoPoolId === i.id}
+                  onCheckedChange={() => toggleInstancia(i)}
                 />
 
                 <Avatar className="h-9 w-9 flex-shrink-0">
@@ -1688,6 +1751,11 @@ export default function EnvioMeta() {
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
                           <SaudeBadgeStatus status={i.saude_status} />
                           <SaudeBadgeQuality quality={i.saude_quality} />
+                          {i.pool_fora_manual && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
+                              <Ban className="h-3 w-3" /> Fora do pool manualmente
+                            </Badge>
+                          )}
                           {["YELLOW", "RED"].includes((i.saude_quality || "").toUpperCase()) && instanciaIds.includes(i.id) && (
                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
                               <AlertTriangle className="h-3 w-3" /> RISCO — precisa confirmar
@@ -1759,7 +1827,7 @@ export default function EnvioMeta() {
                           ? "ilimitado"
                           : `${cotaBm.restantes} restantes (BM)`}
                     </Badge>
-                    {(i.estado_pool || "aguardando_templates") !== "ativo" && (
+                    {isAdmin && (i.estado_pool || "aguardando_templates") !== "ativo" && (
                       <Button
                         type="button"
                         size="sm"
@@ -1767,14 +1835,14 @@ export default function EnvioMeta() {
                         className="h-7 px-2 text-xs"
                         disabled={ativandoPoolId === i.id}
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); ativarNoPool(i); }}
-                        title={i.estado_pool === "pausado" ? "Retomar envio pelo pool" : "Ativar esta instância no pool (Dia 1 = 20 msg)"}
+                        title={i.pool_fora_manual ? "Verificar saúde na Meta e voltar para o pool" : i.estado_pool === "pausado" ? "Retomar envio pelo pool" : "Ativar esta instância no pool (Dia 1 = 20 msg)"}
                       >
                         {ativandoPoolId === i.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
                           <>
                             <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                            {i.estado_pool === "pausado" ? "Retomar" : "Ativar no pool"}
+                            {i.pool_fora_manual ? "Voltar para o pool" : i.estado_pool === "pausado" ? "Retomar" : "Ativar no pool"}
                           </>
                         )}
                       </Button>
