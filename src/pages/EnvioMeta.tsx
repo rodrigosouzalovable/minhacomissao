@@ -62,6 +62,7 @@ type Instancia = {
   saude_tier?: string | null;
   saude_name_status?: string | null;
   saude_ban_info?: any;
+  saude_restricoes?: any;
   saude_raw?: any;
   saude_checked_at?: string | null;
   meta_verified_name?: string | null;
@@ -517,6 +518,17 @@ export default function EnvioMeta() {
       const { data, error } = await supabase.functions.invoke("check-meta-instance-health", { body: {} });
       if (error) throw error;
       const results: any[] = data?.results || [];
+      const inelegiveis = new Set(
+        results
+          .filter((r) => {
+            const status = String(r.status || "").toUpperCase();
+            return !!r.error || (status && status !== "CONNECTED") || r.restrito_meta === true;
+          })
+          .map((r) => String(r.instancia_id)),
+      );
+      if (inelegiveis.size > 0) {
+        setInstanciaIds((prev) => prev.filter((id) => !inelegiveis.has(id)));
+      }
       const bannedOrFlagged = results.filter((r) => r.ban_info || ["FLAGGED", "RESTRICTED"].includes(String(r.status || "").toUpperCase()));
       if (bannedOrFlagged.length > 0) {
         toast.warning(`${bannedOrFlagged.length} instância(s) com problema: ${bannedOrFlagged.map((r) => r.nome).join(", ")}`);
@@ -696,6 +708,12 @@ export default function EnvioMeta() {
         return { ...inst, tier_diario: efetivo ?? inst.tier_diario ?? 250 };
       });
       setInstancias(mapped as any);
+      const idsElegiveis = new Set(
+        mapped
+          .filter((inst) => inst.pool_fora_manual !== true && (inst.estado_pool || "aguardando_templates") === "ativo")
+          .map((inst) => inst.id),
+      );
+      setInstanciaIds((prev) => prev.filter((id) => idsElegiveis.has(id)));
     }
 
     if (t.data) setTemplates(t.data as any);
@@ -1685,7 +1703,7 @@ export default function EnvioMeta() {
               <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium mb-0.5">Nenhuma instância marcada está ativa no pool</div>
-                <div>O disparo em massa está bloqueado. Ative as instâncias em Configurar Meta → Pool.</div>
+                <div>Essas instâncias estão fora do pool. Use outra instância saudável ou peça ao administrador para revisar a restrição.</div>
               </div>
             </div>
           )}
@@ -1699,7 +1717,7 @@ export default function EnvioMeta() {
               <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm || i.pool_fora_manual ? "opacity-60" : ""} ${semSaldoBm ? "border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
-                  disabled={semSaldoBm || i.pool_fora_manual || ativandoPoolId === i.id}
+                  disabled={semSaldoBm || i.pool_fora_manual || (i.estado_pool || "aguardando_templates") !== "ativo" || ativandoPoolId === i.id}
                   onCheckedChange={() => toggleInstancia(i)}
                 />
 

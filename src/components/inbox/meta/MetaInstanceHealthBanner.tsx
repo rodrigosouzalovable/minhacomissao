@@ -10,6 +10,8 @@ export interface MetaInstanceHealth {
   estado_pool?: string | null;
   pausa_automatica_ate?: string | null;
   pausa_automatica_motivo?: string | null;
+  meta_name_status?: string | null;
+  saude_restricoes?: any;
 }
 
 /** Motivo de pausa que representa bloqueio real da Meta (não é qualidade). */
@@ -44,12 +46,30 @@ function avaliar(inst: MetaInstanceHealth | null | undefined): { nivel: Nivel; t
   const status = (inst.saude_status || '').toUpperCase();
   const qual = (inst.saude_quality || '').toUpperCase();
   const nameSt = (inst.saude_name_status || '').toUpperCase();
+  const phoneHealth = inst.saude_restricoes?.phone_health;
+  const phoneEntities = Array.isArray(phoneHealth?.entities) ? phoneHealth.entities : [];
+  const phoneEntity = phoneEntities.find((e: any) => String(e?.entity_type || '').toUpperCase() === 'PHONE_NUMBER');
+  const phoneStatus = String(phoneEntity?.can_send_message || phoneHealth?.can_send_message || '').toUpperCase();
+  const phoneLimitado = ['BLOCKED', 'LIMITED', 'RESTRICTED'].includes(phoneStatus);
+  const detalhePhone = String(phoneEntity?.additional_info?.[0] || '');
+
+  if (phoneLimitado) {
+    const porQualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalhePhone) ||
+      ['YELLOW', 'RED'].includes(qual);
+    return {
+      nivel: 'critico',
+      titulo: porQualidade ? 'Envios limitados por qualidade' : 'Envios limitados pela Meta',
+      detalhe: detalhePhone || 'A Meta confirmou uma limitação no próprio número. Use outra instância saudável até a liberação.',
+    };
+  }
 
   // Bloqueio real da Meta vem antes de qualquer aviso de qualidade — é o motivo
   // pelo qual os envios estão sendo recusados de fato.
   const pausaAtiva = !!inst.pausa_automatica_ate &&
     new Date(inst.pausa_automatica_ate).getTime() > Date.now();
-  const motivoBloqueio = bloqueioReal(inst.pausa_automatica_motivo);
+  const motivoNomeObsoleto = /nome de exibição|display name/i.test(String(inst.pausa_automatica_motivo || '')) &&
+    String(inst.meta_name_status || nameSt).toUpperCase() === 'APPROVED';
+  const motivoBloqueio = motivoNomeObsoleto ? null : bloqueioReal(inst.pausa_automatica_motivo);
   if (motivoBloqueio && (pausaAtiva || inst.estado_pool === 'restrita')) {
     const ate = pausaAtiva
       ? ` Revalidação automática até ${new Date(inst.pausa_automatica_ate as string).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
