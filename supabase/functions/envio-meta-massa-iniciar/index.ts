@@ -152,25 +152,26 @@ Deno.serve(async (req) => {
       const motivoLower = motivoPausa.toLowerCase();
       const pausaAtiva = !!r.pausa_automatica_ate && new Date(r.pausa_automatica_ate).getTime() > Date.now();
       const status = String(r.saude_status || fresh.status || '').toUpperCase();
-      const liberar3144 = isNovoMundo3144(id) && status === 'CONNECTED' && (
-        fresh?.limitacao_tipo === 'nome' || isDisplayNameOrQualityRestriction(motivoPausa)
+      const liberar3144Conectada = isNovoMundo3144(id) && status === 'CONNECTED';
+      const liberarPool3144 = liberar3144Conectada && (
+        fresh?.limitacao_tipo === 'nome' || fresh?.limitacao_tipo === 'qualidade' || isDisplayNameOrQualityRestriction(motivoPausa)
       );
       if (status && status !== 'CONNECTED') {
         badIds.add(id);
         motivos.push(`${rotulo}: status ${status} confirmado pela Meta`);
         continue;
       }
-      if (r.estado_pool !== 'ativo' && !motivoLower.startsWith('quality=') && !liberar3144) {
+      if (r.estado_pool !== 'ativo' && !motivoLower.startsWith('quality=') && !liberarPool3144) {
         badIds.add(id);
         motivos.push(`${rotulo}: fora do pool${motivoPausa ? ` — ${motivoPausa}` : ''}`);
         continue;
       }
-      if (pausaAtiva && !motivoLower.startsWith('quality=') && !liberar3144) {
+      if (pausaAtiva && !motivoLower.startsWith('quality=') && !liberarPool3144) {
         badIds.add(id);
         motivos.push(`${rotulo}: bloqueio ainda ativo — ${motivoPausa || 'restrição confirmada'}`);
         continue;
       }
-      if (!liberacaoQualidadeGlobal && !liberar3144) {
+      if (!liberacaoQualidadeGlobal && !liberar3144Conectada) {
         const q = String(r.saude_quality || '').toUpperCase();
         if (r.qualidade_leitura_ok === false) {
           badIds.add(id);

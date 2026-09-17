@@ -357,11 +357,12 @@ async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: strin
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, display_phone, saude_quality')
+      .select('id, nome, display_phone, saude_quality, saude_status')
       .in('id', candidatas);
 
     const ruins = (insts || []).filter((i: any) => {
       if (riscoAceito.includes(i.id)) return false;
+      if (isNovoMundo3144Connected(i)) return false;
       const q = String(i.saude_quality || '').toUpperCase();
       return q === 'YELLOW' || q === 'RED';
     });

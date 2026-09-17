@@ -936,7 +936,7 @@ export default function EnvioMeta() {
     if (i.pool_fora_manual === true) return false;
     if (!liberada3144 && (qual === "YELLOW" || qual === "RED")) return false;
     if ((i.estado_pool || "aguardando_templates") !== "ativo" && !(liberada3144 && restricaoInformativa3144(i))) return false;
-    return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
+    return status === "CONNECTED" && (liberada3144 || nomeStatus !== "REJECTED") && !bmSemSaldo(i.meta_bm_id);
   };
 
   const toggleInstancia = async (inst: Instancia) => {

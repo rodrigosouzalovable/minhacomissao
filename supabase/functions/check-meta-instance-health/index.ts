@@ -461,7 +461,9 @@ Deno.serve(async (req) => {
         // ignorar uma limitação explícita de envio retornada pela Meta.
         const saudavel = (liberacaoGlobal || qual === 'GREEN') && !quarentenaAtiva && !restritoMeta;
 
-        const liberarLimitacao3144 = conectado3144 && graphOk && ['nome', 'qualidade'].includes(String(r.limitacao_tipo || ''));
+        const liberarLimitacao3144 = conectado3144 && graphOk && !comercialBloqueado && (
+          !r.limitacao_numero || ['nome', 'qualidade'].includes(String(r.limitacao_tipo || ''))
+        );
 
         // A Novo Mundo 3144 permanece utilizável quando CONNECTED mesmo com o
         // nome pendente. Outras limitações explícitas continuam restringindo.
@@ -473,6 +475,8 @@ Deno.serve(async (req) => {
         if (liberarLimitacao3144 && !eraViolacaoConta) {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
+          updatePayload.quarentena_ate = null;
+          updatePayload.quarentena_motivo = null;
           updatePayload.estado_pool = inst.pool_fora_manual === true ? 'fora_manual' : 'ativo';
           r.liberada = inst.pool_fora_manual !== true;
           r.liberada_parcial = inst.pool_fora_manual === true;
