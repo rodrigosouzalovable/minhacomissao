@@ -73,6 +73,7 @@ type Instancia = {
   meta_bm_id?: string | null;
   pool_fora_manual?: boolean;
   pool_fora_manual_em?: string | null;
+  pausa_automatica_motivo?: string | null;
 };
 
 
@@ -529,9 +530,12 @@ export default function EnvioMeta() {
       if (inelegiveis.size > 0) {
         setInstanciaIds((prev) => prev.filter((id) => !inelegiveis.has(id)));
       }
-      const bannedOrFlagged = results.filter((r) => r.ban_info || ["FLAGGED", "RESTRICTED"].includes(String(r.status || "").toUpperCase()));
-      if (bannedOrFlagged.length > 0) {
-        toast.warning(`${bannedOrFlagged.length} instância(s) com problema: ${bannedOrFlagged.map((r) => r.nome).join(", ")}`);
+      const comRestricao = results.filter((r) =>
+        r.error || r.ban_info || r.restrito_meta === true ||
+        ["FLAGGED", "RESTRICTED", "BANNED"].includes(String(r.status || "").toUpperCase()),
+      );
+      if (comRestricao.length > 0) {
+        toast.warning(`${results.length - comRestricao.length} saudável(is) e ${comRestricao.length} restrita(s) após consultar a Meta`);
       } else {
         toast.success(`Todas as ${results.length} instância(s) OK`);
       }
@@ -1774,6 +1778,16 @@ export default function EnvioMeta() {
                               <Ban className="h-3 w-3" /> Fora do pool manualmente
                             </Badge>
                           )}
+                           {!i.pool_fora_manual && i.estado_pool === "ativo" && (
+                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-green-500/50 text-green-700 dark:text-green-400">
+                               <CheckCircle2 className="h-3 w-3" /> Pronta para envio
+                             </Badge>
+                           )}
+                           {!i.pool_fora_manual && i.estado_pool === "restrita" && (
+                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0 max-w-[360px] whitespace-normal" title={i.pausa_automatica_motivo || undefined}>
+                               <Ban className="h-3 w-3" /> {i.pausa_automatica_motivo || "Restrição confirmada pela Meta"}
+                             </Badge>
+                           )}
                           {["YELLOW", "RED"].includes((i.saude_quality || "").toUpperCase()) && instanciaIds.includes(i.id) && (
                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
                               <AlertTriangle className="h-3 w-3" /> RISCO — precisa confirmar
