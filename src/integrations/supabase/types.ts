@@ -10944,6 +10944,16 @@ export type Database = {
           user_id: string
         }[]
       }
+      ranking_mensal_por_credor: {
+        Args: { p_mes_ano?: string }
+        Returns: {
+          nome: string
+          novo_mundo_recebido: number
+          total_recebido: number
+          ume_recebido: number
+          user_id: string
+        }[]
+      }
       registrar_meta_aquecimento_auto_resposta: {
         Args: {
           _cidade: string
