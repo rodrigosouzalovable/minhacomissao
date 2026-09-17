@@ -6,6 +6,7 @@ import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
 import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
 import { THIAGO_NOGUEIRA_USER_ID, instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
+import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
 
 
 const corsHeaders = {
@@ -559,6 +560,7 @@ Deno.serve(async (req) => {
     // Se o chamador (burst) pede para ignorar pausas por qualidade, só bloqueamos quando
     // o motivo da pausa/restrição for de fato um status Meta (BANNED/FLAGGED/RESTRICTED).
     const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
+    const liberar3144 = isNovoMundo3144Connected(inst) && isDisplayNameOrQualityRestriction(inst.pausa_automatica_motivo);
     const pausaPorStatus = motivoPausaLower.startsWith('status=');
     const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
     // Liberação manual (botão "Retomar") ou chave global "Liberar YELLOW/RED"
@@ -567,7 +569,7 @@ Deno.serve(async (req) => {
     const ignoraQualidade = liberacaoGlobal || ignorar_pausa_qualidade === true || inst.qualidade_liberada_manual === true;
     const pausaLiberavel = pausaPorQualidade || motivoPausaLower === '';
 
-    if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste && !liberarTudoThiago) {
+    if (inst.estado_pool && inst.estado_pool !== 'ativo' && !isTeste && !liberarTudoThiago && !liberar3144) {
       // A chave global libera estados causados por qualidade; bloqueios reais da Meta permanecem.
       const bloqueioReal = pausaPorStatus ||
         (inst.estado_pool === 'restrita' && !pausaPorQualidade);
@@ -581,7 +583,7 @@ Deno.serve(async (req) => {
         }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
-    if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date() && !liberarTudoThiago) {
+    if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date() && !liberarTudoThiago && !liberar3144) {
       const bloqueiaPausa = !(ignoraQualidade && pausaLiberavel);
       if (bloqueiaPausa) {
         return new Response(JSON.stringify({

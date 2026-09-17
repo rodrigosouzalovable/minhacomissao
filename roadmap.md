@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Liberar a Novo Mundo 3144 para seleção e campanhas quando CONNECTED, mantendo recusas reais e retirada manual
 - [x] Exibir NOVO MUNDO/UME nos cards de Acordos da Equipe e permitir troca auditada somente pelo acesso de Rodrigo
 - [x] Permitir que Parceiros Meta ativem e retomem no pool somente as próprias instâncias vinculadas
 - [x] Liberar todas as instâncias Meta vinculadas ao Thiago para tentativa de envio, preservando as recusas reais da Meta

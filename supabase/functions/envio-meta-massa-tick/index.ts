@@ -4,6 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
 import { esperaAteJanela } from '../_shared/metaJanelaEnvio.ts';
+import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
 
 
 const corsHeaders = {
@@ -356,11 +357,12 @@ async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: strin
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, display_phone, saude_quality')
+      .select('id, nome, display_phone, saude_quality, saude_status')
       .in('id', candidatas);
 
     const ruins = (insts || []).filter((i: any) => {
       if (riscoAceito.includes(i.id)) return false;
+      if (isNovoMundo3144Connected(i)) return false;
       const q = String(i.saude_quality || '').toUpperCase();
       return q === 'YELLOW' || q === 'RED';
     });
@@ -453,22 +455,23 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, display_phone, saude_quality, saude_status, pausa_automatica_ate, estado_pool, ativo, pool_fora_manual')
+      .select('id, nome, display_phone, saude_quality, saude_status, pausa_automatica_ate, pausa_automatica_motivo, estado_pool, ativo, pool_fora_manual')
       .in('id', candidatas);
 
     const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
     const liberadas = (insts || []).filter((i: any) => {
       if (i.ativo === false) return false;
       if (i.pool_fora_manual === true && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
+      const liberar3144 = isNovoMundo3144Connected(i) && isDisplayNameOrQualityRestriction(i.pausa_automatica_motivo);
       const q = String(i.saude_quality || '').toUpperCase();
       // Números aceitos com risco desde o início podem voltar sem estar GREEN.
-      if (q !== 'GREEN' && !riscoAceito.includes(i.id) && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
+      if (q !== 'GREEN' && !riscoAceito.includes(i.id) && job.user_id !== THIAGO_NOGUEIRA_USER_ID && !liberar3144) return false;
 
 
       const st = String(i.saude_status || '').toUpperCase();
       if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x)) && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
-      if (String(i.estado_pool || '') !== 'ativo' && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
-      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now() && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
+      if (String(i.estado_pool || '') !== 'ativo' && job.user_id !== THIAGO_NOGUEIRA_USER_ID && !liberar3144) return false;
+      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now() && job.user_id !== THIAGO_NOGUEIRA_USER_ID && !liberar3144) return false;
       return true;
     });
     if (liberadas.length === 0) return bloqueadasRun;
