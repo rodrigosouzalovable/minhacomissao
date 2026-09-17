@@ -536,6 +536,16 @@ Deno.serve(async (req) => {
     // ===== Pool checks =====
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
 
+    if (inst.pool_fora_manual === true && !isTeste) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Instância fora do pool por decisão manual do administrador',
+        pool_blocked: true,
+        manual_pool_hold: true,
+        instancia_id,
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     // Se o chamador (burst) pede para ignorar pausas por qualidade, só bloqueamos quando
     // o motivo da pausa/restrição for de fato um status Meta (BANNED/FLAGGED/RESTRICTED).
     const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();

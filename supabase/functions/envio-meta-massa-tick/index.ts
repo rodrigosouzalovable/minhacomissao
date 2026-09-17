@@ -442,12 +442,13 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, display_phone, saude_quality, saude_status, pausa_automatica_ate, estado_pool, ativo')
+      .select('id, nome, display_phone, saude_quality, saude_status, pausa_automatica_ate, estado_pool, ativo, pool_fora_manual')
       .in('id', candidatas);
 
     const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
     const liberadas = (insts || []).filter((i: any) => {
       if (i.ativo === false) return false;
+      if (i.pool_fora_manual === true) return false;
       const q = String(i.saude_quality || '').toUpperCase();
       // Números aceitos com risco desde o início podem voltar sem estar GREEN.
       if (q !== 'GREEN' && !riscoAceito.includes(i.id)) return false;
@@ -455,7 +456,7 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
 
       const st = String(i.saude_status || '').toUpperCase();
       if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x))) return false;
-      if (String(i.estado_pool || '') === 'restrita') return false;
+      if (String(i.estado_pool || '') !== 'ativo') return false;
       if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now()) return false;
       return true;
     });

@@ -6354,6 +6354,9 @@ export type Database = {
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
           phone_number_id: string | null
+          pool_fora_manual: boolean
+          pool_fora_manual_em: string | null
+          pool_fora_manual_por: string | null
           provider: string
           qualidade_leitura_erro: string | null
           qualidade_leitura_ok: boolean | null
@@ -6432,6 +6435,9 @@ export type Database = {
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id?: string | null
+          pool_fora_manual?: boolean
+          pool_fora_manual_em?: string | null
+          pool_fora_manual_por?: string | null
           provider?: string
           qualidade_leitura_erro?: string | null
           qualidade_leitura_ok?: boolean | null
@@ -6510,6 +6516,9 @@ export type Database = {
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
           phone_number_id?: string | null
+          pool_fora_manual?: boolean
+          pool_fora_manual_em?: string | null
+          pool_fora_manual_por?: string | null
           provider?: string
           qualidade_leitura_erro?: string | null
           qualidade_leitura_ok?: boolean | null
@@ -11011,6 +11020,96 @@ export type Database = {
         }
         Returns: string
       }
+      retirar_meta_instancia_pool_manual: {
+        Args: { p_instancia_id: string }
+        Returns: {
+          access_token: string | null
+          aquecimento_meta_ativo: boolean
+          aquecimento_qualidade_permitido: boolean
+          ativo: boolean
+          atualizado_em: string
+          business_id: string | null
+          chamadas_habilitadas: boolean
+          criado_em: string
+          data_ativacao_api: string | null
+          dias_green_consecutivos: number
+          display_phone: string | null
+          enviados_hoje: number
+          estado_pool: string | null
+          fase_rampup: string | null
+          folder_padrao_id: string | null
+          green_contado_dia: string | null
+          id: string
+          messaging_limit_manual: string | null
+          messaging_limit_source: string | null
+          messaging_limit_synced_at: string | null
+          meta_bm_id: string | null
+          meta_name_status: string | null
+          meta_perfil_sync_em: string | null
+          meta_profile_about: string | null
+          meta_profile_pic_url: string | null
+          meta_verified_name: string | null
+          nome: string
+          partner_client_id: string | null
+          pausa_automatica_ate: string | null
+          pausa_automatica_motivo: string | null
+          phone_number_id: string | null
+          pool_fora_manual: boolean
+          pool_fora_manual_em: string | null
+          pool_fora_manual_por: string | null
+          provider: string
+          qualidade_leitura_erro: string | null
+          qualidade_leitura_ok: boolean | null
+          qualidade_liberada_em: string | null
+          qualidade_liberada_manual: boolean
+          quarentena_ate: string | null
+          quarentena_motivo: string | null
+          rajada_taxa_atual: number
+          rajada_ultimo_ajuste_em: string | null
+          rate_limit_ate: string | null
+          recuperacao_ativa: boolean
+          recuperacao_desde: string | null
+          recuperacao_msgs_meta_dia: number | null
+          recuperacao_proximo_envio_em: string | null
+          recuperacao_ultimo_envio_em: string | null
+          saude_ban_info: Json | null
+          saude_checked_at: string | null
+          saude_name_status: string | null
+          saude_quality: string | null
+          saude_raw: Json | null
+          saude_restricoes: Json | null
+          saude_status: string | null
+          saude_throughput: Json | null
+          saude_tier: string | null
+          score_saude_cache: number | null
+          templates_auto_copiar: boolean
+          templates_auto_iniciado_em: string | null
+          templates_auto_pausado_ate: string | null
+          templates_auto_rejeicoes_seguidas: number
+          templates_auto_status: string | null
+          templates_resync_pendente: boolean
+          tenant_id: string
+          teto_escada: number | null
+          throughput_level: string | null
+          tier_diario: number
+          uazapi_instance_id: string | null
+          ultimo_reset: string
+          user_id: string
+          waba_id: string | null
+          webhook_callback_url: string | null
+          webhook_perda_suspeita: Json | null
+          webhook_saude_status: string | null
+          webhook_saude_verificado_em: string | null
+          webhook_ultimo_erro: string | null
+          webhook_verify_token: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "meta_whatsapp_instances"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       tresc_limpar_cache_antigo: { Args: never; Returns: number }
       user_can_access_tenant: {
         Args: { _tenant: string; _uid: string }
@@ -11018,6 +11117,96 @@ export type Database = {
       }
       user_tenants: { Args: { _uid: string }; Returns: string[] }
       usuario_cliente_parceiro: { Args: { _uid: string }; Returns: string }
+      voltar_meta_instancia_pool_manual: {
+        Args: { p_instancia_id: string }
+        Returns: {
+          access_token: string | null
+          aquecimento_meta_ativo: boolean
+          aquecimento_qualidade_permitido: boolean
+          ativo: boolean
+          atualizado_em: string
+          business_id: string | null
+          chamadas_habilitadas: boolean
+          criado_em: string
+          data_ativacao_api: string | null
+          dias_green_consecutivos: number
+          display_phone: string | null
+          enviados_hoje: number
+          estado_pool: string | null
+          fase_rampup: string | null
+          folder_padrao_id: string | null
+          green_contado_dia: string | null
+          id: string
+          messaging_limit_manual: string | null
+          messaging_limit_source: string | null
+          messaging_limit_synced_at: string | null
+          meta_bm_id: string | null
+          meta_name_status: string | null
+          meta_perfil_sync_em: string | null
+          meta_profile_about: string | null
+          meta_profile_pic_url: string | null
+          meta_verified_name: string | null
+          nome: string
+          partner_client_id: string | null
+          pausa_automatica_ate: string | null
+          pausa_automatica_motivo: string | null
+          phone_number_id: string | null
+          pool_fora_manual: boolean
+          pool_fora_manual_em: string | null
+          pool_fora_manual_por: string | null
+          provider: string
+          qualidade_leitura_erro: string | null
+          qualidade_leitura_ok: boolean | null
+          qualidade_liberada_em: string | null
+          qualidade_liberada_manual: boolean
+          quarentena_ate: string | null
+          quarentena_motivo: string | null
+          rajada_taxa_atual: number
+          rajada_ultimo_ajuste_em: string | null
+          rate_limit_ate: string | null
+          recuperacao_ativa: boolean
+          recuperacao_desde: string | null
+          recuperacao_msgs_meta_dia: number | null
+          recuperacao_proximo_envio_em: string | null
+          recuperacao_ultimo_envio_em: string | null
+          saude_ban_info: Json | null
+          saude_checked_at: string | null
+          saude_name_status: string | null
+          saude_quality: string | null
+          saude_raw: Json | null
+          saude_restricoes: Json | null
+          saude_status: string | null
+          saude_throughput: Json | null
+          saude_tier: string | null
+          score_saude_cache: number | null
+          templates_auto_copiar: boolean
+          templates_auto_iniciado_em: string | null
+          templates_auto_pausado_ate: string | null
+          templates_auto_rejeicoes_seguidas: number
+          templates_auto_status: string | null
+          templates_resync_pendente: boolean
+          tenant_id: string
+          teto_escada: number | null
+          throughput_level: string | null
+          tier_diario: number
+          uazapi_instance_id: string | null
+          ultimo_reset: string
+          user_id: string
+          waba_id: string | null
+          webhook_callback_url: string | null
+          webhook_perda_suspeita: Json | null
+          webhook_saude_status: string | null
+          webhook_saude_verificado_em: string | null
+          webhook_ultimo_erro: string | null
+          webhook_verify_token: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "meta_whatsapp_instances"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       app_role: "funcionario" | "gestor" | "admin"

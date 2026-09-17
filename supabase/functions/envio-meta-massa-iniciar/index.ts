@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
     const resultadoHealth = new Map(healthResults.map((r: any) => [r.instancia_id, r]));
     const { data: instancesRows } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, saude_status, saude_quality, qualidade_leitura_ok, qualidade_leitura_erro, estado_pool, pausa_automatica_ate, pausa_automatica_motivo')
+      .select('id, nome, saude_status, saude_quality, qualidade_leitura_ok, qualidade_leitura_erro, estado_pool, pausa_automatica_ate, pausa_automatica_motivo, pool_fora_manual')
       .in('id', instanciaIds);
     const motivos: string[] = [];
     const badIds = new Set<string>();
@@ -133,6 +133,11 @@ Deno.serve(async (req) => {
         continue;
       }
       const rotulo = r.nome || r.id;
+      if (r.pool_fora_manual === true) {
+        badIds.add(id);
+        motivos.push(`${rotulo}: fora do pool manualmente`);
+        continue;
+      }
       if (!fresh || fresh.error) {
         badIds.add(id);
         motivos.push(`${rotulo}: não foi possível confirmar a liberação na Meta${fresh?.error ? ` — ${fresh.error}` : ''}`);

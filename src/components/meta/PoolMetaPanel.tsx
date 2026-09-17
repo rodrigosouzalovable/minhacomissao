@@ -37,6 +37,7 @@ type MetaInst = {
   saude_checked_at?: string | null;
   qualidade_leitura_ok?: boolean | null;
   qualidade_leitura_erro?: string | null;
+  pool_fora_manual?: boolean;
 };
 
 /** Estado da leitura de qualidade na Meta — separa "Meta disse UNKNOWN" de
@@ -106,6 +107,7 @@ function estadoBadge(e: string | null | undefined) {
   const v = e || "aguardando_templates";
   if (v === "ativo") return { label: "Ativo", cls: "bg-green-600 text-white" };
   if (v === "pausado") return { label: "Pausado", cls: "bg-red-600 text-white" };
+  if (v === "fora_manual") return { label: "Fora manualmente", cls: "bg-muted text-muted-foreground" };
   return { label: "Aguardando templates", cls: "bg-amber-500 text-white" };
 }
 function cotaDaFase(fase: string | null, cfg: PoolConfig | null): number {
@@ -553,7 +555,7 @@ export function PoolMetaPanel() {
                   )}
 
                   <div className="flex gap-2 pt-1">
-                    {(inst.estado_pool || "aguardando_templates") === "aguardando_templates" && (
+                    {!inst.pool_fora_manual && (inst.estado_pool || "aguardando_templates") === "aguardando_templates" && (
                       <Button size="sm" onClick={() => ativarNoPool(inst)} disabled={savingId === inst.id} className="flex-1">
                         <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Ativar no pool
                       </Button>
@@ -563,7 +565,7 @@ export function PoolMetaPanel() {
                         <PauseCircle className="h-3.5 w-3.5 mr-1" /> Pausar
                       </Button>
                     )}
-                    {(inst.estado_pool === "pausado" || pausado) && (
+                    {!inst.pool_fora_manual && (inst.estado_pool === "pausado" || pausado) && (
                       <Button size="sm" onClick={() => retomar(inst)} disabled={savingId === inst.id} className="flex-1">
                         <PlayCircle className="h-3.5 w-3.5 mr-1" /> Retomar
                       </Button>
