@@ -327,6 +327,7 @@ const CACHE_QUALIDADE_MS = 120_000;
 const cacheQualidade = new Map<string, number>();
 
 async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: string[]): Promise<string[]> {
+  if (job.liberacao_total_parceiro === true) return [...bloqueadasRun];
   const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
   const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
   const candidatas = todas.filter((id) => !bloqueadasRun.includes(id));
@@ -457,16 +458,16 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
     const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
     const liberadas = (insts || []).filter((i: any) => {
       if (i.ativo === false) return false;
-      if (i.pool_fora_manual === true) return false;
+      if (i.pool_fora_manual === true && job.liberacao_total_parceiro !== true) return false;
       const q = String(i.saude_quality || '').toUpperCase();
       // Números aceitos com risco desde o início podem voltar sem estar GREEN.
-      if (q !== 'GREEN' && !riscoAceito.includes(i.id)) return false;
+      if (q !== 'GREEN' && !riscoAceito.includes(i.id) && job.liberacao_total_parceiro !== true) return false;
 
 
       const st = String(i.saude_status || '').toUpperCase();
-      if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x))) return false;
-      if (String(i.estado_pool || '') !== 'ativo') return false;
-      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now()) return false;
+      if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x)) && job.liberacao_total_parceiro !== true) return false;
+      if (String(i.estado_pool || '') !== 'ativo' && job.liberacao_total_parceiro !== true) return false;
+      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now() && job.liberacao_total_parceiro !== true) return false;
       return true;
     });
     if (liberadas.length === 0) return bloqueadasRun;
@@ -687,6 +688,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       excluir_id: job.ultima_instancia_id || null,
       excluir_ids: exclItem,
       ignorar_pausa_qualidade: job.modo_rajada === true || job.permitir_qualidade_baixa === true,
+      liberacao_total_parceiro: job.liberacao_total_parceiro === true,
       contexto: 'campanha',
     }),
 
@@ -783,7 +785,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
-      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, credor: (pend as any).credor ?? job.credor ?? null }),
+      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, credor: (pend as any).credor ?? job.credor ?? null, liberacao_total_parceiro: job.liberacao_total_parceiro === true }),
     }).then((r) => r.json());
 
     if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused || sendResp?.bm_quota_blocked) {
@@ -864,7 +866,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
         falhasMap[`mot:${id}`] = 'Business Account locked (#131031) — número recusado pela Meta';
       }
     }
-    if (falhasMap[instId] >= MAX_FALHAS_CONSECUTIVAS && !bloqueadasRunAtual.includes(instId)) {
+    if (job.liberacao_total_parceiro !== true && falhasMap[instId] >= MAX_FALHAS_CONSECUTIVAS && !bloqueadasRunAtual.includes(instId)) {
       bloqueadasRunAtual.push(instId);
       delete falhasMap[instId];
     }
@@ -881,7 +883,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     ...bloqueadasRunAtual,
     ...Object.keys(falhasMap),
   ]);
-  const todasFalharamSemSucesso =
+  const todasFalharamSemSucesso = job.liberacao_total_parceiro !== true &&
     !ok &&
     (job.enviados || 0) === 0 &&
     todasInstancias.length > 0 &&
@@ -989,7 +991,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   await supabase.from('envio_meta_job').update(updateJob).eq('id', job.id);
 
   // Se todas as instâncias foram bloqueadas → encerra o job
-  if (restantesDisponiveis.length === 0 && bloqueadasRunAtual.length > 0) {
+  if (job.liberacao_total_parceiro !== true && restantesDisponiveis.length === 0 && bloqueadasRunAtual.length > 0) {
     await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas foram ignoradas por falhas consecutivas');
     return { advanced: false, stop: true };
   }

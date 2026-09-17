@@ -4,6 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
 import { enviadosHojeBrtLote, tetoBase } from '../_shared/meta-freio.ts';
+import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
 
 
 const corsHeaders = {
@@ -56,6 +57,7 @@ Deno.serve(async (req) => {
   try {
     const reqBody = await req.json();
     const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = reqBody;
+    const liberacaoTotalThiago = user_id === THIAGO_NOGUEIRA_USER_ID && reqBody?.liberacao_total_parceiro === true;
     // contexto 'aquecimento' = recuperação/aquecimento interno (YELLOW/RED permitidos).
     // Qualquer outro valor é tratado como CAMPANHA: exige GREEN confirmado.
     const modoCampanha = String(reqBody?.contexto || 'campanha') !== 'aquecimento';
@@ -157,7 +159,7 @@ Deno.serve(async (req) => {
     const reprovadosGuardrail: any[] = [];
     for (const inst of insts) {
       const rotulo = inst.nome || inst.phone_number_id || inst.id;
-      if (inst.pool_fora_manual === true) {
+      if (inst.pool_fora_manual === true && !liberacaoTotalThiago) {
         descartados.push(`${rotulo}: fora do pool manualmente`);
         continue;
       }
@@ -165,16 +167,16 @@ Deno.serve(async (req) => {
       // Nome de exibição REPROVADO gera falha de entrega (#131000).
       // Nome em análise (PENDING_REVIEW) continua enviando normalmente.
       const nameStatus = String(inst.meta_name_status || '').toUpperCase();
-      if (nameStatus === 'REJECTED') {
+      if (nameStatus === 'REJECTED' && !liberacaoTotalThiago) {
         descartados.push(`${rotulo}: nome de exibição ${nameStatus} na Meta (entrega bloqueada)`);
         continue;
       }
       const motivoBm = motivoBloqueioBm(cotasBm, inst.meta_bm_id);
-      if (motivoBm) { descartados.push(`${rotulo}: ${motivoBm}`); continue; }
+      if (motivoBm && !liberacaoTotalThiago) { descartados.push(`${rotulo}: ${motivoBm}`); continue; }
 
       // ===== CAMPANHA: só GREEN com leitura recente e bem-sucedida =====
       // (dispensado quando a chave "Liberar YELLOW/RED" está ligada)
-      if (modoCampanha && !liberacaoQualidadeGlobal) {
+      if (modoCampanha && !liberacaoQualidadeGlobal && !liberacaoTotalThiago) {
         const qCamp = String(inst.saude_quality || '').toUpperCase();
         const checado = inst.saude_checked_at ? new Date(inst.saude_checked_at).getTime() : 0;
         const idadeH = checado ? (Date.now() - checado) / 3600000 : 9999;
@@ -213,14 +215,14 @@ Deno.serve(async (req) => {
 
 
 
-      if (inst.estado_pool && inst.estado_pool !== 'ativo') {
+      if (inst.estado_pool && inst.estado_pool !== 'ativo' && !liberacaoTotalThiago) {
         // A chave global libera estados causados por qualidade; status reais da Meta continuam bloqueando.
         const bloqueia = pausaPorStatus ||
           (inst.estado_pool === 'restrita' && !pausaPorQualidade) ||
           (inst.estado_pool === 'pausado' && !(ignoraQualidade && pausaPorQualidade));
         if (bloqueia) { descartados.push(`${rotulo}: estado do pool = ${inst.estado_pool}`); continue; }
       }
-      if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date()) {
+      if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date() && !liberacaoTotalThiago) {
         const bloqueia = !(ignoraQualidade && pausaPorQualidade);
         if (bloqueia) { descartados.push(`${rotulo}: pausada até ${new Date(inst.pausa_automatica_ate).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (${inst.pausa_automatica_motivo || 'sem motivo'})`); continue; }
         // pausa por status sempre bloqueia
@@ -228,7 +230,7 @@ Deno.serve(async (req) => {
       }
 
       // Quarentena por queda de qualidade: fora do pool de campanha até a data.
-      if (inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date() && !ignoraQualidadeGlobal) {
+      if (inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date() && !ignoraQualidadeGlobal && !liberacaoTotalThiago) {
         descartados.push(
           `${rotulo}: em quarentena até ${new Date(inst.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` +
           `${inst.quarentena_motivo ? ` (${inst.quarentena_motivo})` : ''}`,
@@ -237,7 +239,7 @@ Deno.serve(async (req) => {
       }
 
       // Modo recuperação: número só faz aquecimento interno, nunca campanha.
-      if (inst.recuperacao_ativa === true && !ignoraQualidadeGlobal) {
+      if (inst.recuperacao_ativa === true && !ignoraQualidadeGlobal && !liberacaoTotalThiago) {
         descartados.push(`${rotulo}: em recuperação de qualidade (aquecimento automático em andamento)`);
         continue;
       }
@@ -257,7 +259,7 @@ Deno.serve(async (req) => {
       // Modo "sem teto": qualquer número liberado no pool envia até a cota da
       // própria Meta (tier), independente de GREEN/YELLOW/RED.
       const semTeto = cfg?.sem_teto_global === true;
-      if (freioAtivo && !semTeto) {
+      if (freioAtivo && !semTeto && !liberacaoTotalThiago) {
         const freio = freioMap.get(inst.id);
         const tetoDia = freio ? Number(freio.teto_efetivo) : tetoBase(inst, cfg, fase);
         const enviadosDia = usoDia(inst.id);
@@ -290,7 +292,7 @@ Deno.serve(async (req) => {
       // No modo "sem teto", o guardião continua produzindo telemetria e
       // aquecimento, mas não reduz nem interrompe campanhas.
       const freioG = freioMap.get(inst.id);
-      const fatorGuardiao = semTeto || freioG?.guardiao_fator == null
+      const fatorGuardiao = semTeto || liberacaoTotalThiago || freioG?.guardiao_fator == null
         ? 1
         : Number(freioG.guardiao_fator);
       if (fatorGuardiao <= 0) {
@@ -338,7 +340,7 @@ Deno.serve(async (req) => {
         const ratio = mo.inbound / Math.max(1, mo.enviadas) * 100;
         if (ratio < ratioMinPct) tetoQualidade = 0.3; // sem inbound = teto 30% da cota
       }
-      const q = pesoQualidade(inst.saude_quality, ignoraQualidadeGate);
+      const q = pesoQualidade(inst.saude_quality, ignoraQualidadeGate || liberacaoTotalThiago);
       if (q === 0) { descartados.push(`${rotulo}: qualidade ${String(inst.saude_quality || 'desconhecida').toUpperCase()}`); continue; }
       if (String(inst.saude_quality || '').toUpperCase() === 'YELLOW') tetoQualidade = Math.min(tetoQualidade, 0.3);
       if (String(inst.saude_quality || '').toUpperCase() === 'RED' && ignoraQualidadeGate) tetoQualidade = Math.min(tetoQualidade, 0.3);

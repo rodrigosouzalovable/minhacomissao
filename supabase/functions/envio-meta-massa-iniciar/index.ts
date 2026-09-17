@@ -2,6 +2,7 @@
 // O envio propriamente dito é feito pelo cron `envio-meta-massa-tick`.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { calcularJanelaEnvio } from '../_shared/metaJanelaEnvio.ts';
+import { instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
 
 
 const corsHeaders = {
@@ -98,6 +99,8 @@ Deno.serve(async (req) => {
     const { data: cfgQualidade } = await supabase
       .from('meta_envio_pool_config').select('liberar_qualidade_global').eq('id', 1).maybeSingle();
     const liberacaoQualidadeGlobal = cfgQualidade?.liberar_qualidade_global === true;
+    const liberadasThiago = await instanciasLiberadasThiago(supabase, user.id, instanciaIds);
+    const liberacaoTotalThiago = liberadasThiago.size > 0;
 
     // Consulta a Meta somente para as instâncias selecionadas e somente quando
     // a campanha começa. Isso libera bloqueios antigos já resolvidos sem uma
@@ -133,6 +136,7 @@ Deno.serve(async (req) => {
         continue;
       }
       const rotulo = r.nome || r.id;
+      if (liberadasThiago.has(id)) continue;
       if (r.pool_fora_manual === true) {
         badIds.add(id);
         motivos.push(`${rotulo}: fora do pool manualmente`);
@@ -188,7 +192,7 @@ Deno.serve(async (req) => {
     // só entram se o usuário confirmou o aviso de risco na tela. Eles podem
     // disparar, mas se a qualidade cair mais durante a campanha o tick os retira
     // igual a qualquer outro número.
-    let instanciasRiscoAceito: string[] = [];
+    let instanciasRiscoAceito: string[] = liberacaoTotalThiago ? Array.from(liberadasThiago) : [];
     try {
       const { data: qRows } = await supabase
         .from('meta_whatsapp_instances')
@@ -198,7 +202,7 @@ Deno.serve(async (req) => {
         const q = String(r.saude_quality || '').toUpperCase();
         return q === 'YELLOW' || q === 'RED';
       });
-      if (arriscadas.length > 0) {
+      if (arriscadas.length > 0 && !liberacaoTotalThiago) {
         if (body?.riscoQualidadeConfirmado !== true) {
           const rotulos = arriscadas
             .map((r: any) => `${r.nome || r.display_phone || r.id} (${String(r.saude_quality || 'sem leitura').toUpperCase()})`)
@@ -227,7 +231,7 @@ Deno.serve(async (req) => {
 
     // Remove instâncias em quarentena por queda de qualidade
     // (ignorado quando a chave "Liberar YELLOW/RED" está ligada).
-    if (!liberacaoQualidadeGlobal) {
+    if (!liberacaoQualidadeGlobal && !liberacaoTotalThiago) {
 
 
       const { data: quarentena } = await supabase
