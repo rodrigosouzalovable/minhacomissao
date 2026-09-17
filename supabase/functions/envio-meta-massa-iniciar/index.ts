@@ -199,10 +199,11 @@ Deno.serve(async (req) => {
         .select('id, nome, display_phone, saude_quality')
         .in('id', instanciaIdsFiltradas);
       const arriscadas = (qRows || []).filter((r: any) => {
+        if (liberadasThiago.has(r.id)) return false;
         const q = String(r.saude_quality || '').toUpperCase();
         return q === 'YELLOW' || q === 'RED';
       });
-      if (arriscadas.length > 0 && !liberacaoTotalThiago) {
+      if (arriscadas.length > 0) {
         if (body?.riscoQualidadeConfirmado !== true) {
           const rotulos = arriscadas
             .map((r: any) => `${r.nome || r.display_phone || r.id} (${String(r.saude_quality || 'sem leitura').toUpperCase()})`)
@@ -218,7 +219,10 @@ Deno.serve(async (req) => {
             })),
           }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
-        instanciasRiscoAceito = arriscadas.map((r: any) => r.id);
+        instanciasRiscoAceito = Array.from(new Set([
+          ...instanciasRiscoAceito,
+          ...arriscadas.map((r: any) => r.id),
+        ]));
       }
     } catch (_) { /* não bloqueia início */ }
     const permitirQualidadeBaixa = instanciasRiscoAceito.length > 0;
@@ -231,7 +235,7 @@ Deno.serve(async (req) => {
 
     // Remove instâncias em quarentena por queda de qualidade
     // (ignorado quando a chave "Liberar YELLOW/RED" está ligada).
-    if (!liberacaoQualidadeGlobal && !liberacaoTotalThiago) {
+    if (!liberacaoQualidadeGlobal) {
 
 
       const { data: quarentena } = await supabase
@@ -240,7 +244,11 @@ Deno.serve(async (req) => {
         .in('id', instanciaIdsFiltradas)
         .not('quarentena_ate', 'is', null)
         .gt('quarentena_ate', new Date().toISOString());
-      const emQuarentena = new Set((quarentena || []).map((r: any) => r.id));
+      const emQuarentena = new Set(
+        (quarentena || [])
+          .filter((r: any) => !liberadasThiago.has(r.id))
+          .map((r: any) => r.id),
+      );
       if (emQuarentena.size > 0) {
         instanciaIdsFiltradas = instanciaIdsFiltradas.filter((id) => !emQuarentena.has(id));
         if (instanciaIdsFiltradas.length === 0) {

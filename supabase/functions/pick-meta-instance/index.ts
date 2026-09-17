@@ -57,7 +57,9 @@ Deno.serve(async (req) => {
   try {
     const reqBody = await req.json();
     const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = reqBody;
-    const liberacaoTotalThiago = user_id === THIAGO_NOGUEIRA_USER_ID && reqBody?.liberacao_total_parceiro === true;
+    const authToken = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    const chamadaInterna = authToken === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const liberacaoTotalThiago = chamadaInterna && user_id === THIAGO_NOGUEIRA_USER_ID && reqBody?.liberacao_total_parceiro === true;
     // contexto 'aquecimento' = recuperação/aquecimento interno (YELLOW/RED permitidos).
     // Qualquer outro valor é tratado como CAMPANHA: exige GREEN confirmado.
     const modoCampanha = String(reqBody?.contexto || 'campanha') !== 'aquecimento';
