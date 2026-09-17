@@ -117,6 +117,15 @@ function ehBloqueioTemporario(motivo: string): boolean {
   return /teto di[aá]rio|cota|quarentena|qualidade|freio|rate\s*limit|pausa/i.test(String(motivo || ''));
 }
 
+function esperaRateLimitMs(motivo: string): number {
+  const texto = String(motivo || '');
+  const ms = texto.match(/retry\s+after\s+(\d+)\s*ms/i);
+  if (ms?.[1]) return Math.max(1_000, Math.min(5 * 60_000, Number(ms[1]) + 1_000));
+  const segundos = texto.match(/retry\s+after\s+(\d+)\s*(?:s|sec|seconds?)/i);
+  if (segundos?.[1]) return Math.max(1_000, Math.min(5 * 60_000, Number(segundos[1]) * 1_000 + 1_000));
+  return 60_000;
+}
+
 // Próxima reavaliação: 5 min à frente, mas nunca depois das 08:00 BRT do
 // próximo dia útil (o dia BRT zera os contadores de cota).
 const REAVALIACAO_MS = 5 * 60 * 1000;
@@ -812,8 +821,28 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     erroMsg = e instanceof Error ? e.message : String(e);
   }
 
-  // Contadores por instância — auto-ignora instância no PRIMEIRO erro
-  const MAX_FALHAS_CONSECUTIVAS = 1;
+  // Rate limit é uma espera temporária da Meta, não uma falha do número.
+  // Mantém o contato pendente, preserva a instância no rodízio e retoma no
+  // prazo informado pela própria Meta.
+  if (!ok && /rate\s*limit|retry\s+after/i.test(String(erroMsg || ''))) {
+    const waitMs = esperaRateLimitMs(String(erroMsg || ''));
+    const retomaEm = new Date(Date.now() + waitMs).toISOString();
+    await supabase.from('envio_meta_job_item').update({
+      status: 'pendente',
+      instancia_id: null,
+      instancia_nome: null,
+      erro: null,
+    }).eq('id', pend.id);
+    await supabase.from('envio_meta_job').update({
+      proximo_em: retomaEm,
+      status_motivo: `Aguardando liberação temporária da Meta até ${retomaEm}`,
+    }).eq('id', job.id);
+    return { advanced: false, waitMs };
+  }
+
+  // Só retira uma instância após repetição de falhas atribuíveis a ela.
+  // Erro isolado de destinatário não pode interromper uma campanha saudável.
+  const MAX_FALHAS_CONSECUTIVAS = 3;
   const falhasMap: Record<string, number> = (job.falhas_por_instancia_run && typeof job.falhas_por_instancia_run === 'object')
     ? { ...job.falhas_por_instancia_run } : {};
   const bloqueadasRunAtual: string[] = Array.isArray(job.instancias_bloqueadas_run)
@@ -822,8 +851,9 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   // #131053 (Media upload error) é falha da mídia do template, não da instância:
   // o contato volta pra fila mas a instância NÃO é bloqueada.
   const erroDeMidia = !ok && /#131053|media upload error/i.test(String(erroMsg || ''));
+  const erroDoDestinatario = !ok && /#131026|#131051|message undeliverable|recipient|n[uú]mero inv[aá]lido|n[aã]o possui whatsapp/i.test(String(erroMsg || ''));
 
-  if (ok || erroDeMidia) {
+  if (ok || erroDeMidia || erroDoDestinatario) {
     if (ok && falhasMap[instId]) delete falhasMap[instId];
   } else {
     falhasMap[instId] = (falhasMap[instId] || 0) + 1;
