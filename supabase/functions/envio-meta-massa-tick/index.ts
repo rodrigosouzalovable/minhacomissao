@@ -454,7 +454,7 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, display_phone, saude_quality, saude_status, pausa_automatica_ate, estado_pool, ativo, pool_fora_manual')
+      .select('id, nome, display_phone, saude_quality, saude_status, pausa_automatica_ate, pausa_automatica_motivo, estado_pool, ativo, pool_fora_manual')
       .in('id', candidatas);
 
     const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
