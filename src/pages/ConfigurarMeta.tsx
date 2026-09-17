@@ -1849,6 +1849,16 @@ export default function ConfigurarMeta() {
                           (() => {
                             const motivo = String((inst as any).pausa_automatica_motivo);
                             const pagamento = /#131042|payment|billing|eligibility|pagamento/i.test(motivo);
+                            const nomeStatus = String(inst.meta_name_status || inst.saude_name_status || "").toUpperCase();
+                            const phoneHealth = inst.saude_restricoes?.phone_health;
+                            const phoneEntity = (Array.isArray(phoneHealth?.entities) ? phoneHealth.entities : [])
+                              .find((e: any) => String(e?.entity_type || "").toUpperCase() === "PHONE_NUMBER");
+                            const phoneLimitado = ["BLOCKED", "LIMITED", "RESTRICTED"].includes(
+                              String(phoneEntity?.can_send_message || phoneHealth?.can_send_message || "").toUpperCase(),
+                            );
+                            const detalhePhone = String(phoneEntity?.additional_info?.[0] || "");
+                            const qualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalhePhone) ||
+                              ["YELLOW", "RED"].includes(String(inst.saude_quality || "").toUpperCase());
                             return (
                               <Badge
                                 variant="destructive"
@@ -1857,8 +1867,12 @@ export default function ConfigurarMeta() {
                               >
                                 {pagamento
                                   ? "fora do pool: pendência de pagamento da Business Manager (#131042) — troque/regularize o cartão e as faturas na BM. Volta ao pool automaticamente após a revalidação."
-                                  : /nome de exibição|display name/i.test(motivo)
+                                  : phoneLimitado && qualidade
+                                    ? `fora do pool: restrição de qualidade/reputação confirmada pela Meta${detalhePhone ? ` — ${detalhePhone}` : "."}`
+                                  : /nome de exibição|display name/i.test(motivo) && nomeStatus !== "APPROVED"
                                     ? "fora do pool: pagamento confirmado; o nome de exibição ainda precisa ser aprovado pela Meta."
+                                  : /nome de exibição|display name/i.test(motivo) && nomeStatus === "APPROVED"
+                                    ? "fora do pool: o nome está aprovado; atualize a saúde para identificar a restrição atual da Meta."
                                   : `fora do pool: ${motivo}`}
                               </Badge>
                             );

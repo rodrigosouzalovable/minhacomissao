@@ -195,6 +195,26 @@ Deno.serve(async (req) => {
               RUIM.has(String(e?.can_send_message || '').toUpperCase())
             )?.additional_info?.[0] || 'O número possui outra limitação independente do pagamento.'
           : null;
+        const nomeAtual = String(r.name_status || '').toUpperCase();
+        const detalheLimitacao = String(r.limitacao_numero || '');
+        const limitacaoPorQualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalheLimitacao) ||
+          ['YELLOW', 'RED'].includes(String(r.quality_rating || '').toUpperCase());
+        const limitacaoPorNome = nomeAtual !== 'APPROVED' &&
+          /name|display/i.test(detalheLimitacao);
+        r.limitacao_tipo = r.limitacao_numero
+          ? limitacaoPorNome
+            ? 'nome'
+            : limitacaoPorQualidade
+              ? 'qualidade'
+              : 'numero'
+          : null;
+        r.limitacao_motivo = r.limitacao_numero
+          ? r.limitacao_tipo === 'nome'
+            ? 'Nome de exibição ainda não aprovado pela Meta'
+            : r.limitacao_tipo === 'qualidade'
+              ? 'Restrição de qualidade/reputação confirmada pela Meta'
+              : 'Restrição de envio no número confirmada pela Meta'
+          : null;
 
         r.restricoes = restricoes;
 
@@ -443,10 +463,11 @@ Deno.serve(async (req) => {
         // pool, mesmo quando não veio acompanhada de um código de pagamento.
         if (r.limitacao_numero && !pausaViolacaoConta) {
           updatePayload.estado_pool = 'restrita';
-          updatePayload.pausa_automatica_motivo = 'Nome de exibição ainda não aprovado pela Meta';
+          updatePayload.pausa_automatica_motivo = r.limitacao_motivo;
         }
 
-        if (eraBloqueioMeta && !eraViolacaoConta && graphOk && !notificarPausa) {
+        const eraLimitacaoNumero = /nome de exibição|display name|restrição de qualidade|restricao de qualidade|restrição de envio no número|restricao de envio no numero/i.test(motivoAtual);
+        if ((eraBloqueioMeta || eraLimitacaoNumero) && !eraViolacaoConta && graphOk && !notificarPausa) {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
           if (saudavel) {
@@ -461,9 +482,7 @@ Deno.serve(async (req) => {
           } else {
             // Bloqueio saiu, mas o número não está apto: fica restrito.
             updatePayload.estado_pool = 'restrita';
-            updatePayload.pausa_automatica_motivo = r.limitacao_numero
-              ? 'Nome de exibição ainda não aprovado pela Meta'
-              : null;
+            updatePayload.pausa_automatica_motivo = r.limitacao_motivo;
             r.liberada_parcial = true;
           }
           r.liberada_pagamento = eraPagamento;

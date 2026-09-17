@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Corrigir restrição Meta mal classificada do parceiro Thiago e manter disparos nas instâncias saudáveis
 - [x] Impedir retorno automático de instâncias retiradas no Envio Meta e permitir retorno saudável somente pelo administrador
 - [x] Separar recebimentos e comissões por NOVO MUNDO e UME no Dashboard, ranking, histórico e telas por operador
 - [x] Remover automaticamente do rodízio mensal cada chave Google Maps com erro 403 e continuar a mesma busca na próxima conta disponível
