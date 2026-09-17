@@ -2,6 +2,7 @@
 // campanha elegível e encerra; o pg_cron agenda o próximo tick sem manter uma
 // função ociosa durante o delay configurado pelo usuário.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
 import { esperaAteJanela } from '../_shared/metaJanelaEnvio.ts';
 
 
@@ -327,7 +328,7 @@ const CACHE_QUALIDADE_MS = 120_000;
 const cacheQualidade = new Map<string, number>();
 
 async function removerInstanciasComQuedaQualidade(job: any, bloqueadasRun: string[]): Promise<string[]> {
-  if (job.liberacao_total_parceiro === true) return [...bloqueadasRun];
+  if (job.user_id === THIAGO_NOGUEIRA_USER_ID) return [...bloqueadasRun];
   const todas: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
   const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
   const candidatas = todas.filter((id) => !bloqueadasRun.includes(id));
@@ -458,16 +459,16 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
     const riscoAceito: string[] = Array.isArray(job.instancias_risco_aceito) ? job.instancias_risco_aceito : [];
     const liberadas = (insts || []).filter((i: any) => {
       if (i.ativo === false) return false;
-      if (i.pool_fora_manual === true && job.liberacao_total_parceiro !== true) return false;
+      if (i.pool_fora_manual === true && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
       const q = String(i.saude_quality || '').toUpperCase();
       // Números aceitos com risco desde o início podem voltar sem estar GREEN.
-      if (q !== 'GREEN' && !riscoAceito.includes(i.id) && job.liberacao_total_parceiro !== true) return false;
+      if (q !== 'GREEN' && !riscoAceito.includes(i.id) && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
 
 
       const st = String(i.saude_status || '').toUpperCase();
-      if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x)) && job.liberacao_total_parceiro !== true) return false;
-      if (String(i.estado_pool || '') !== 'ativo' && job.liberacao_total_parceiro !== true) return false;
-      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now() && job.liberacao_total_parceiro !== true) return false;
+      if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x)) && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
+      if (String(i.estado_pool || '') !== 'ativo' && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
+      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now() && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
       return true;
     });
     if (liberadas.length === 0) return bloqueadasRun;
@@ -688,7 +689,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       excluir_id: job.ultima_instancia_id || null,
       excluir_ids: exclItem,
       ignorar_pausa_qualidade: job.modo_rajada === true || job.permitir_qualidade_baixa === true,
-      liberacao_total_parceiro: job.liberacao_total_parceiro === true,
+      liberacao_total_parceiro: job.user_id === THIAGO_NOGUEIRA_USER_ID,
       contexto: 'campanha',
     }),
 
@@ -785,7 +786,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
-      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, credor: (pend as any).credor ?? job.credor ?? null, liberacao_total_parceiro: job.liberacao_total_parceiro === true }),
+      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, credor: (pend as any).credor ?? job.credor ?? null, liberacao_total_parceiro: job.user_id === THIAGO_NOGUEIRA_USER_ID }),
     }).then((r) => r.json());
 
     if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused || sendResp?.bm_quota_blocked) {
@@ -866,7 +867,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
         falhasMap[`mot:${id}`] = 'Business Account locked (#131031) — número recusado pela Meta';
       }
     }
-    if (job.liberacao_total_parceiro !== true && falhasMap[instId] >= MAX_FALHAS_CONSECUTIVAS && !bloqueadasRunAtual.includes(instId)) {
+    if (job.user_id !== THIAGO_NOGUEIRA_USER_ID && falhasMap[instId] >= MAX_FALHAS_CONSECUTIVAS && !bloqueadasRunAtual.includes(instId)) {
       bloqueadasRunAtual.push(instId);
       delete falhasMap[instId];
     }
@@ -883,7 +884,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     ...bloqueadasRunAtual,
     ...Object.keys(falhasMap),
   ]);
-  const todasFalharamSemSucesso = job.liberacao_total_parceiro !== true &&
+  const todasFalharamSemSucesso = job.user_id !== THIAGO_NOGUEIRA_USER_ID &&
     !ok &&
     (job.enviados || 0) === 0 &&
     todasInstancias.length > 0 &&
@@ -991,7 +992,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   await supabase.from('envio_meta_job').update(updateJob).eq('id', job.id);
 
   // Se todas as instâncias foram bloqueadas → encerra o job
-  if (job.liberacao_total_parceiro !== true && restantesDisponiveis.length === 0 && bloqueadasRunAtual.length > 0) {
+  if (job.user_id !== THIAGO_NOGUEIRA_USER_ID && restantesDisponiveis.length === 0 && bloqueadasRunAtual.length > 0) {
     await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas foram ignoradas por falhas consecutivas');
     return { advanced: false, stop: true };
   }

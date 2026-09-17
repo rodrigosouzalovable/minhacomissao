@@ -1257,7 +1257,7 @@ export default function EnvioMeta() {
     setEnviandoTeste(true);
     try {
       const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
-        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true },
+        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true, liberacao_total_parceiro: liberacaoTotalThiago },
       });
       if (error) throw error;
       if (data?.success) {
