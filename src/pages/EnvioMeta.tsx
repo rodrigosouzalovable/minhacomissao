@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock, Power, PowerOff } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -585,8 +585,8 @@ export default function EnvioMeta() {
   const [ativandoPoolId, setAtivandoPoolId] = useState<string | null>(null);
 
   const retirarDoPool = async (inst: Instancia) => {
-    if (!isAdmin) return;
-    if (!confirm(`Retirar "${inst.nome}" do pool permanentemente? Ela só voltará quando um administrador usar “Voltar para o pool”.`)) return;
+    if (!isAdmin && !parceiroMeta) return;
+    if (!confirm(`Desativar o pool de "${inst.nome}"? Ela não será usada nos disparos até ser ativada novamente.`)) return;
     setAtivandoPoolId(inst.id);
     const { error } = await (supabase as any).rpc("retirar_meta_instancia_pool_manual", {
       p_instancia_id: inst.id,
@@ -596,61 +596,42 @@ export default function EnvioMeta() {
       toast.error("Não foi possível retirar do pool: " + error.message);
       return;
     }
-    setInstanciaIds((prev) => prev.filter((id) => id !== inst.id));
-    toast.success(`${inst.nome} ficará fora do pool até o retorno manual`);
+    toast.success(`Pool desativado para ${inst.nome}`);
     await carregar();
-  };
-
-  const voltarParaPool = async (inst: Instancia) => {
-    if (!isAdmin) return;
-    setAtivandoPoolId(inst.id);
-    try {
-      const { data: healthData, error: healthError } = await supabase.functions.invoke(
-        "check-meta-instance-health",
-        { body: { instancia_id: inst.id } },
-      );
-      if (healthError) throw healthError;
-      const resultado = healthData?.results?.[0];
-      if (!resultado || resultado.error) {
-        throw new Error(resultado?.error || "A Meta não confirmou a saúde desta instância");
-      }
-      const { error } = await (supabase as any).rpc("voltar_meta_instancia_pool_manual", {
-        p_instancia_id: inst.id,
-      });
-      if (error) throw error;
-      toast.success(`${inst.nome} voltou para o pool`);
-      await carregar();
-    } catch (e: any) {
-      toast.error("A instância continua fora do pool: " + (e?.message || e));
-      await carregar();
-    } finally {
-      setAtivandoPoolId(null);
-    }
   };
 
   const ativarNoPool = async (inst: Instancia) => {
     if (!isAdmin && !parceiroMeta) return;
-    if (inst.pool_fora_manual) {
-      if (isAdmin) await voltarParaPool(inst);
-      else toast.warning("Esta instância foi retirada manualmente. Somente um administrador pode devolvê-la ao pool.");
-      return;
-    }
+    const estavaForaManual = inst.pool_fora_manual === true;
     const estado = inst.estado_pool || "aguardando_templates";
     const isRetomar = estado === "pausado";
-    if (!isRetomar) {
-      if (!confirm(`Ativar "${inst.nome}" no pool? O ramp-up começa hoje (Dia 1 = 20 msg máx).`)) return;
-    }
+    if (!isRetomar && !confirm(`Ativar o pool de "${inst.nome}"?${estavaForaManual ? " A saúde será validada na Meta antes da liberação." : " O ramp-up começa hoje (Dia 1 = 20 msg máx)."}`)) return;
     setAtivandoPoolId(inst.id);
-    const { error } = await (supabase as any).rpc("ativar_meta_instancia_pool", {
-      p_instancia_id: inst.id,
-    });
-    setAtivandoPoolId(null);
-    if (error) {
-      toast.error("Erro ao ativar: " + error.message);
-      return;
+    try {
+      if (estavaForaManual) {
+        const { data: healthData, error: healthError } = await supabase.functions.invoke(
+          "check-meta-instance-health",
+          { body: { instancia_id: inst.id } },
+        );
+        if (healthError) throw healthError;
+        const resultado = healthData?.results?.[0];
+        if (!resultado || resultado.error) {
+          throw new Error(resultado?.error || "A Meta não confirmou a saúde desta instância");
+        }
+      }
+
+      const { error } = await (supabase as any).rpc("ativar_meta_instancia_pool", {
+        p_instancia_id: inst.id,
+      });
+      if (error) throw error;
+      toast.success(isRetomar ? `${inst.nome} retomado` : `Pool ativado para ${inst.nome}`);
+      await carregar();
+    } catch (e: any) {
+      toast.error("Não foi possível ativar o pool: " + (e?.message || e));
+      await carregar();
+    } finally {
+      setAtivandoPoolId(null);
     }
-    toast.success(isRetomar ? `${inst.nome} retomado` : `${inst.nome} ativado no pool — Dia 1 iniciado`);
-    await carregar();
   };
 
   const carregar = async () => {
@@ -703,17 +684,8 @@ export default function EnvioMeta() {
         return { ...inst, tier_diario: efetivo ?? inst.tier_diario ?? 250 };
       });
       setInstancias(mapped as any);
-      const idsElegiveis = new Set(
-        mapped
-          .filter((inst) => liberacaoTotalThiago || (
-            inst.pool_fora_manual !== true && (
-              (inst.estado_pool || "aguardando_templates") === "ativo" ||
-              (novoMundo3144Conectada(inst) && restricaoInformativa3144(inst))
-            )
-          ))
-          .map((inst) => inst.id),
-      );
-      setInstanciaIds((prev) => prev.filter((id) => idsElegiveis.has(id)));
+      const idsDisponiveis = new Set(mapped.map((inst) => inst.id));
+      setInstanciaIds((prev) => prev.filter((id) => idsDisponiveis.has(id)));
     }
 
     if (t.data) setTemplates(t.data as any);
@@ -941,14 +913,6 @@ export default function EnvioMeta() {
 
   const toggleInstancia = async (inst: Instancia) => {
     const selecionada = instanciaIds.includes(inst.id);
-    if (selecionada && isAdmin && !inst.pool_fora_manual) {
-      await retirarDoPool(inst);
-      return;
-    }
-    if (!liberacaoTotalThiago && !selecionada && inst.pool_fora_manual) {
-      toast.warning("Esta instância está fora do pool manualmente. Use “Voltar para o pool”.");
-      return;
-    }
     setInstanciaIds((prev) => selecionada ? prev.filter((x) => x !== inst.id) : [...prev, inst.id]);
   };
 
@@ -1616,22 +1580,19 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona instâncias conectadas, com BM disponível e ativas no pool. A Novo Mundo 3144 entra quando estiver conectada; seus alertas continuam visíveis."
+              title="Seleciona ou desmarca todas as instâncias visíveis somente para esta campanha."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
-                const boasInstancias = instanciasVisiveis.filter(instanciaSemProblema);
-                const boaIds = boasInstancias.map((i) => i.id);
-                const todasMarcadas = boaIds.length > 0 && boaIds.every((id) => instanciaIds.includes(id));
+                const idsVisiveis = instanciasVisiveis.map((i) => i.id);
+                const todasMarcadas = idsVisiveis.length > 0 && idsVisiveis.every((id) => instanciaIds.includes(id));
                 if (todasMarcadas) {
-                  setInstanciaIds((prev) => prev.filter((id) => !boaIds.includes(id)));
+                  setInstanciaIds((prev) => prev.filter((id) => !idsVisiveis.includes(id)));
                 } else {
-                  setInstanciaIds((prev) => Array.from(new Set([...prev, ...boaIds])));
+                  setInstanciaIds((prev) => Array.from(new Set([...prev, ...idsVisiveis])));
                 }
               }}
             >
-              {instanciasVisiveis.length > 0 && instanciasVisiveis
-                .filter(instanciaSemProblema)
-                .every((i) => instanciaIds.includes(i.id))
+              {instanciasVisiveis.length > 0 && instanciasVisiveis.every((i) => instanciaIds.includes(i.id))
                 ? "Limpar seleção"
                 : "Selecionar todas"}
             </Button>
@@ -1722,10 +1683,10 @@ export default function EnvioMeta() {
               const liberada3144 = novoMundo3144Conectada(i);
               const bloqueioPool = (i.estado_pool || "aguardando_templates") !== "ativo" && !(liberada3144 && restricaoInformativa3144(i));
               return (
-              <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm || i.pool_fora_manual ? "opacity-60" : ""} ${semSaldoBm ? "border-destructive/50" : ""}`}>
+              <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm ? "border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
-                  disabled={(!liberacaoTotalThiago && (semSaldoBm || i.pool_fora_manual || bloqueioPool)) || ativandoPoolId === i.id}
+                  disabled={ativandoPoolId === i.id}
                   onCheckedChange={() => toggleInstancia(i)}
                 />
 
@@ -1863,7 +1824,7 @@ export default function EnvioMeta() {
                           ? "ilimitado"
                           : `${cotaBm.restantes} restantes (BM)`}
                     </Badge>
-                    {(isAdmin || parceiroMeta) && !i.pool_fora_manual && (i.estado_pool || "aguardando_templates") !== "ativo" && (
+                    {(isAdmin || parceiroMeta) && (i.pool_fora_manual || (i.estado_pool || "aguardando_templates") !== "ativo") && (
                       <Button
                         type="button"
                         size="sm"
@@ -1871,15 +1832,32 @@ export default function EnvioMeta() {
                         className="h-7 px-2 text-xs"
                         disabled={ativandoPoolId === i.id}
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); ativarNoPool(i); }}
-                        title={i.pool_fora_manual ? "Verificar saúde na Meta e voltar para o pool" : i.estado_pool === "pausado" ? "Retomar envio pelo pool" : "Ativar esta instância no pool (Dia 1 = 20 msg)"}
+                        title={i.pool_fora_manual ? "Verificar saúde na Meta e ativar o pool" : i.estado_pool === "pausado" ? "Retomar envio pelo pool" : "Ativar esta instância no pool (Dia 1 = 20 msg)"}
                       >
                         {ativandoPoolId === i.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
                           <>
-                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                            {i.pool_fora_manual ? "Voltar para o pool" : i.estado_pool === "pausado" ? "Retomar" : "Ativar no pool"}
+                            <Power className="h-3.5 w-3.5 mr-1" />
+                            {i.estado_pool === "pausado" && !i.pool_fora_manual ? "Retomar Pool" : "Ativar Pool"}
                           </>
+                        )}
+                      </Button>
+                    )}
+                    {(isAdmin || parceiroMeta) && !i.pool_fora_manual && (i.estado_pool || "aguardando_templates") === "ativo" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        disabled={ativandoPoolId === i.id}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); retirarDoPool(i); }}
+                        title="Desativar esta instância no pool sem alterar a seleção da campanha"
+                      >
+                        {ativandoPoolId === i.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <><PowerOff className="h-3.5 w-3.5 mr-1" /> Desativar Pool</>
                         )}
                       </Button>
                     )}
