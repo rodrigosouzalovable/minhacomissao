@@ -179,7 +179,11 @@ Deno.serve(async (req) => {
         }
       }
     }
-    let instanciaIdsFiltradas = instanciaIds.filter((id) => !badIds.has(id));
+    // A exceção do Thiago nunca amplia o escopo: somente IDs vinculados a ele
+    // podem entrar no job. Isso também protege contra payload adulterado.
+    let instanciaIdsFiltradas = instanciaIds.filter(
+      (id) => !badIds.has(id) && (!liberacaoTotalThiago || liberadasThiago.has(id)),
+    );
     if (instanciaIdsFiltradas.length === 0) {
       return new Response(JSON.stringify({
         success: false,

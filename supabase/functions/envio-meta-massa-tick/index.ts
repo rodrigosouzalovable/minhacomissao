@@ -860,7 +860,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     if (ok && falhasMap[instId]) delete falhasMap[instId];
   } else {
     falhasMap[instId] = (falhasMap[instId] || 0) + 1;
-    if (idsBloqueadosPorBm.length > 0) {
+    if (job.user_id !== THIAGO_NOGUEIRA_USER_ID && idsBloqueadosPorBm.length > 0) {
       for (const id of idsBloqueadosPorBm) {
         if (!(job.instancia_ids || []).includes(id)) continue;
         if (!bloqueadasRunAtual.includes(id)) bloqueadasRunAtual.push(id);
