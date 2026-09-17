@@ -77,6 +77,41 @@ export type Database = {
         }
         Relationships: []
       }
+      acordo_credor_auditoria: {
+        Row: {
+          acordo_id: string
+          alterado_em: string
+          alterado_por: string
+          credor_anterior: string
+          credor_novo: string
+          id: string
+        }
+        Insert: {
+          acordo_id: string
+          alterado_em?: string
+          alterado_por: string
+          credor_anterior: string
+          credor_novo: string
+          id?: string
+        }
+        Update: {
+          acordo_id?: string
+          alterado_em?: string
+          alterado_por?: string
+          credor_anterior?: string
+          credor_novo?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acordo_credor_auditoria_acordo_id_fkey"
+            columns: ["acordo_id"]
+            isOneToOne: false
+            referencedRelation: "acordos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       acordos: {
         Row: {
           atualizado_em: string
@@ -10271,6 +10306,40 @@ export type Database = {
           ultima_pendente_data: string
         }[]
       }
+      alterar_credor_acordo: {
+        Args: { p_acordo_id: string; p_novo_credor: string }
+        Returns: {
+          atualizado_em: string
+          boleto_enviado: boolean
+          cliente_cpf: string | null
+          cliente_nome: string
+          cliente_telefone: string | null
+          comissao_total: number
+          criado_em: string
+          data_primeiro_pagamento: string
+          dias_atraso: number
+          duplicado_verificado: boolean
+          empresa: string
+          id: string
+          instancia_negociacao_id: string | null
+          observacoes: string | null
+          parcelas: number
+          percentual_comissao: number
+          status: string
+          user_id: string
+          valor_parcela: number
+          valor_total: number
+          whatsapp_opt_in: boolean
+          whatsapp_opt_in_em: string | null
+          whatsapp_opt_in_origem: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "acordos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       apify_incrementar_uso: { Args: { _qtd?: number }; Returns: number }
       apify_status_uso: {
         Args: never
@@ -11003,6 +11072,7 @@ export type Database = {
         Returns: boolean
       }
       phone_suffix8: { Args: { tel: string }; Returns: string }
+      pode_alterar_credor_acordo: { Args: never; Returns: boolean }
       pode_google_maps_leads: { Args: { _user_id: string }; Returns: boolean }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
       pode_ver_cliente_parceiro: {

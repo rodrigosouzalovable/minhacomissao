@@ -211,6 +211,13 @@
       "when": 1789657941501,
       "tag": "0029_allow_meta_partners_activate_own_pool_instances",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1789663528796,
+      "tag": "0030_secure_agreement_creditor_change",
+      "breakpoints": true
     }
   ]
 }
