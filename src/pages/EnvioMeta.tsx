@@ -896,22 +896,7 @@ export default function EnvioMeta() {
     setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  // "Selecionar todas" marca números sem problema real e já ativos no pool.
-  // A Novo Mundo 3144 pode ser usada quando estiver CONNECTED; pendências de
-  // nome/qualidade permanecem visíveis apenas como alerta para essa instância.
-  const instanciaSemProblema = (i: any) => {
-    if (liberacaoTotalThiago) return true;
-    const liberada3144 = novoMundo3144Conectada(i);
-    const status = (i.saude_status || "").toUpperCase();
-    const nomeStatus = (i.meta_name_status || "").toUpperCase();
-    const qual = (i.saude_quality || "").toUpperCase();
-    if (i.pool_fora_manual === true) return false;
-    if (!liberada3144 && (qual === "YELLOW" || qual === "RED")) return false;
-    if ((i.estado_pool || "aguardando_templates") !== "ativo" && !(liberada3144 && restricaoInformativa3144(i))) return false;
-    return status === "CONNECTED" && (liberada3144 || nomeStatus !== "REJECTED") && !bmSemSaldo(i.meta_bm_id);
-  };
-
-  const toggleInstancia = async (inst: Instancia) => {
+  const toggleInstancia = (inst: Instancia) => {
     const selecionada = instanciaIds.includes(inst.id);
     setInstanciaIds((prev) => selecionada ? prev.filter((x) => x !== inst.id) : [...prev, inst.id]);
   };
@@ -949,6 +934,23 @@ export default function EnvioMeta() {
     // reais da Meta (banimento, restrição, cobrança e nome reprovado). A tela não
     // remove YELLOW, RED ou sem leitura antes de enviar.
     const filteredInstanciaIds = instanciaIds;
+
+    const foraDoPool = liberacaoTotalThiago ? [] : filteredInstanciaIds.filter((id) => {
+      const inst = instancias.find((x) => x.id === id);
+      if (!inst) return true;
+      if (inst.pool_fora_manual === true) return true;
+      const liberada3144 = novoMundo3144Conectada(inst) && restricaoInformativa3144(inst);
+      return (inst.estado_pool || "aguardando_templates") !== "ativo" && !liberada3144;
+    });
+    if (foraDoPool.length > 0) {
+      const nomes = foraDoPool
+        .map((id) => instancias.find((x) => x.id === id)?.nome || id)
+        .slice(0, 5)
+        .join(", ");
+      return toast.error(
+        `Ative o pool antes de iniciar a campanha. ${foraDoPool.length} instância(s) selecionada(s) estão fora do pool: ${nomes}. A seleção foi mantida.`,
+      );
+    }
 
     // Nome de exibição REPROVADO na Meta = entrega rejeitada (#131000).
     // Nome em análise (PENDING_REVIEW) envia normalmente.
@@ -1670,7 +1672,7 @@ export default function EnvioMeta() {
               <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium mb-0.5">Nenhuma instância marcada está ativa no pool</div>
-                <div>Essas instâncias estão fora do pool. Use outra instância saudável ou peça ao administrador para revisar a restrição.</div>
+                <div>Essas instâncias continuam selecionadas, mas precisam ter o pool ativado antes do disparo.</div>
               </div>
             </div>
           )}
@@ -1680,8 +1682,6 @@ export default function EnvioMeta() {
               const isEditing = editingId === i.id;
               const cotaBm = cotaDaBm(i.meta_bm_id);
               const semSaldoBm = bmSemSaldo(i.meta_bm_id);
-              const liberada3144 = novoMundo3144Conectada(i);
-              const bloqueioPool = (i.estado_pool || "aguardando_templates") !== "ativo" && !(liberada3144 && restricaoInformativa3144(i));
               return (
               <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm ? "border-destructive/50" : ""}`}>
                 <Checkbox
@@ -1813,7 +1813,7 @@ export default function EnvioMeta() {
                     </Button>
                   </div>
                 ) : (
-                  <>
+                  <div className="flex max-w-[280px] flex-wrap items-center justify-end gap-1">
                     <Badge
                       variant={semSaldoBm ? "destructive" : "secondary"}
                       title={cotaBm ? `Cota compartilhada da BM ${cotaBm.nome} (janela de 24h)` : "Instância sem BM vinculada"}
@@ -1871,7 +1871,7 @@ export default function EnvioMeta() {
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                  </>
+                  </div>
                 )}
               </label>
               );
