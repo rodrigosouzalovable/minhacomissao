@@ -37,9 +37,13 @@ import { useBmCotas } from "@/hooks/useBmCotas";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 
+const NOVO_MUNDO_3144_INSTANCE_ID = "b103ac3e-5781-47c4-8e11-24a323f5f0ee";
 
+const novoMundo3144Conectada = (inst: Pick<Instancia, "id" | "saude_status">) =>
+  inst.id === NOVO_MUNDO_3144_INSTANCE_ID && String(inst.saude_status || "").toUpperCase() === "CONNECTED";
 
-
+const restricaoInformativa3144 = (inst: Pick<Instancia, "pausa_automatica_motivo">) =>
+  /nome de exibição|display name|quality=|qualidade|reputation/i.test(String(inst.pausa_automatica_motivo || ""));
 type UazInstancia = {
   id: string;
   nome: string;
@@ -701,7 +705,12 @@ export default function EnvioMeta() {
       setInstancias(mapped as any);
       const idsElegiveis = new Set(
         mapped
-          .filter((inst) => liberacaoTotalThiago || (inst.pool_fora_manual !== true && (inst.estado_pool || "aguardando_templates") === "ativo"))
+          .filter((inst) => liberacaoTotalThiago || (
+            inst.pool_fora_manual !== true && (
+              (inst.estado_pool || "aguardando_templates") === "ativo" ||
+              (novoMundo3144Conectada(inst) && restricaoInformativa3144(inst))
+            )
+          ))
           .map((inst) => inst.id),
       );
       setInstanciaIds((prev) => prev.filter((id) => idsElegiveis.has(id)));
@@ -915,20 +924,18 @@ export default function EnvioMeta() {
     setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  // "Selecionar todas" marca números sem problema real e já ativos no pool:
-  // conectados, nome aprovado, BM com saldo, qualidade que NÃO seja YELLOW/RED
-  // (UNKNOWN e sem leitura entram) e que já tenham sido ativadas no pool.
-  // A instância "Novo Mundo 3144" fica sempre fora da seleção.
+  // "Selecionar todas" marca números sem problema real e já ativos no pool.
+  // A Novo Mundo 3144 pode ser usada quando estiver CONNECTED; pendências de
+  // nome/qualidade permanecem visíveis apenas como alerta para essa instância.
   const instanciaSemProblema = (i: any) => {
     if (liberacaoTotalThiago) return true;
+    const liberada3144 = novoMundo3144Conectada(i);
     const status = (i.saude_status || "").toUpperCase();
     const nomeStatus = (i.meta_name_status || "").toUpperCase();
     const qual = (i.saude_quality || "").toUpperCase();
-    if (qual === "YELLOW" || qual === "RED") return false;
     if (i.pool_fora_manual === true) return false;
-    if ((i.estado_pool || "aguardando_templates") !== "ativo") return false;
-    const ident = `${i.nome || ""} ${i.telefone || ""}`.replace(/\D/g, " ");
-    if (ident.includes("3144")) return false; // Novo Mundo 3144 nunca entra no "selecionar todas"
+    if (!liberada3144 && (qual === "YELLOW" || qual === "RED")) return false;
+    if ((i.estado_pool || "aguardando_templates") !== "ativo" && !(liberada3144 && restricaoInformativa3144(i))) return false;
     return status === "CONNECTED" && nomeStatus !== "REJECTED" && !bmSemSaldo(i.meta_bm_id);
   };
 
@@ -1609,7 +1616,7 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona instâncias sem problema: conectadas, nome aprovado, BM com saldo e já ativas no pool. Ficam de fora YELLOW/RED, instâncias com botão 'Ativar no pool' e a Novo Mundo 3144. Qualidade desconhecida entra normalmente."
+              title="Seleciona instâncias conectadas, com BM disponível e ativas no pool. A Novo Mundo 3144 entra quando estiver conectada; seus alertas continuam visíveis."
               disabled={instanciasVisiveis.length === 0}
               onClick={() => {
                 const boasInstancias = instanciasVisiveis.filter(instanciaSemProblema);
@@ -1712,11 +1719,13 @@ export default function EnvioMeta() {
               const isEditing = editingId === i.id;
               const cotaBm = cotaDaBm(i.meta_bm_id);
               const semSaldoBm = bmSemSaldo(i.meta_bm_id);
+              const liberada3144 = novoMundo3144Conectada(i);
+              const bloqueioPool = (i.estado_pool || "aguardando_templates") !== "ativo" && !(liberada3144 && restricaoInformativa3144(i));
               return (
               <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm || i.pool_fora_manual ? "opacity-60" : ""} ${semSaldoBm ? "border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
-                  disabled={(!liberacaoTotalThiago && (semSaldoBm || i.pool_fora_manual || (i.estado_pool || "aguardando_templates") !== "ativo")) || ativandoPoolId === i.id}
+                  disabled={(!liberacaoTotalThiago && (semSaldoBm || i.pool_fora_manual || bloqueioPool)) || ativandoPoolId === i.id}
                   onCheckedChange={() => toggleInstancia(i)}
                 />
 

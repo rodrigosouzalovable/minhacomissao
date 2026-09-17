@@ -5,6 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
 import { enviadosHojeBrtLote, tetoBase } from '../_shared/meta-freio.ts';
 import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
+import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
 
 
 const corsHeaders = {
@@ -161,6 +162,7 @@ Deno.serve(async (req) => {
     const reprovadosGuardrail: any[] = [];
     for (const inst of insts) {
       const rotulo = inst.nome || inst.phone_number_id || inst.id;
+      const liberar3144 = isNovoMundo3144Connected(inst) && isDisplayNameOrQualityRestriction(inst.pausa_automatica_motivo);
       if (inst.pool_fora_manual === true && !liberacaoTotalThiago) {
         descartados.push(`${rotulo}: fora do pool manualmente`);
         continue;
@@ -169,7 +171,7 @@ Deno.serve(async (req) => {
       // Nome de exibição REPROVADO gera falha de entrega (#131000).
       // Nome em análise (PENDING_REVIEW) continua enviando normalmente.
       const nameStatus = String(inst.meta_name_status || '').toUpperCase();
-      if (nameStatus === 'REJECTED' && !liberacaoTotalThiago) {
+      if (nameStatus === 'REJECTED' && !liberacaoTotalThiago && !liberar3144) {
         descartados.push(`${rotulo}: nome de exibição ${nameStatus} na Meta (entrega bloqueada)`);
         continue;
       }
@@ -178,7 +180,7 @@ Deno.serve(async (req) => {
 
       // ===== CAMPANHA: só GREEN com leitura recente e bem-sucedida =====
       // (dispensado quando a chave "Liberar YELLOW/RED" está ligada)
-      if (modoCampanha && !liberacaoQualidadeGlobal && !liberacaoTotalThiago) {
+      if (modoCampanha && !liberacaoQualidadeGlobal && !liberacaoTotalThiago && !liberar3144) {
         const qCamp = String(inst.saude_quality || '').toUpperCase();
         const checado = inst.saude_checked_at ? new Date(inst.saude_checked_at).getTime() : 0;
         const idadeH = checado ? (Date.now() - checado) / 3600000 : 9999;
@@ -217,14 +219,14 @@ Deno.serve(async (req) => {
 
 
 
-      if (inst.estado_pool && inst.estado_pool !== 'ativo' && !liberacaoTotalThiago) {
+      if (inst.estado_pool && inst.estado_pool !== 'ativo' && !liberacaoTotalThiago && !liberar3144) {
         // A chave global libera estados causados por qualidade; status reais da Meta continuam bloqueando.
         const bloqueia = pausaPorStatus ||
           (inst.estado_pool === 'restrita' && !pausaPorQualidade) ||
           (inst.estado_pool === 'pausado' && !(ignoraQualidade && pausaPorQualidade));
         if (bloqueia) { descartados.push(`${rotulo}: estado do pool = ${inst.estado_pool}`); continue; }
       }
-      if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date() && !liberacaoTotalThiago) {
+      if (inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date() && !liberacaoTotalThiago && !liberar3144) {
         const bloqueia = !(ignoraQualidade && pausaPorQualidade);
         if (bloqueia) { descartados.push(`${rotulo}: pausada até ${new Date(inst.pausa_automatica_ate).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (${inst.pausa_automatica_motivo || 'sem motivo'})`); continue; }
         // pausa por status sempre bloqueia
@@ -232,7 +234,7 @@ Deno.serve(async (req) => {
       }
 
       // Quarentena por queda de qualidade: fora do pool de campanha até a data.
-      if (inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date() && !ignoraQualidadeGlobal && !liberacaoTotalThiago) {
+      if (inst.quarentena_ate && new Date(inst.quarentena_ate) > new Date() && !ignoraQualidadeGlobal && !liberacaoTotalThiago && !liberar3144) {
         descartados.push(
           `${rotulo}: em quarentena até ${new Date(inst.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` +
           `${inst.quarentena_motivo ? ` (${inst.quarentena_motivo})` : ''}`,

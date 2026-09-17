@@ -4,6 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
+import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -459,11 +460,21 @@ Deno.serve(async (req) => {
         // ignorar uma limitação explícita de envio retornada pela Meta.
         const saudavel = (liberacaoGlobal || qual === 'GREEN') && !quarentenaAtiva && !restritoMeta;
 
-        // Uma limitação explícita do PHONE_NUMBER nunca pode permanecer no
-        // pool, mesmo quando não veio acompanhada de um código de pagamento.
-        if (r.limitacao_numero && !pausaViolacaoConta) {
+        const liberarNome3144 = isNovoMundo3144(inst.id) && graphOk && r.limitacao_tipo === 'nome';
+
+        // A Novo Mundo 3144 permanece utilizável quando CONNECTED mesmo com o
+        // nome pendente. Outras limitações explícitas continuam restringindo.
+        if (r.limitacao_numero && !pausaViolacaoConta && !liberarNome3144) {
           updatePayload.estado_pool = 'restrita';
           updatePayload.pausa_automatica_motivo = r.limitacao_motivo;
+        }
+
+        if (liberarNome3144 && !eraViolacaoConta) {
+          updatePayload.pausa_automatica_ate = null;
+          updatePayload.pausa_automatica_motivo = null;
+          updatePayload.estado_pool = inst.pool_fora_manual === true ? 'fora_manual' : 'ativo';
+          r.liberada = inst.pool_fora_manual !== true;
+          r.liberada_parcial = inst.pool_fora_manual === true;
         }
 
         const eraLimitacaoNumero = /nome de exibição|display name|restrição de qualidade|restricao de qualidade|restrição de envio no número|restricao de envio no numero/i.test(motivoAtual);

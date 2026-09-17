@@ -4,6 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
 import { esperaAteJanela } from '../_shared/metaJanelaEnvio.ts';
+import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
 
 
 const corsHeaders = {
@@ -460,15 +461,16 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
     const liberadas = (insts || []).filter((i: any) => {
       if (i.ativo === false) return false;
       if (i.pool_fora_manual === true && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
+      const liberar3144 = isNovoMundo3144Connected(i) && isDisplayNameOrQualityRestriction(i.pausa_automatica_motivo);
       const q = String(i.saude_quality || '').toUpperCase();
       // Números aceitos com risco desde o início podem voltar sem estar GREEN.
-      if (q !== 'GREEN' && !riscoAceito.includes(i.id) && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
+      if (q !== 'GREEN' && !riscoAceito.includes(i.id) && job.user_id !== THIAGO_NOGUEIRA_USER_ID && !liberar3144) return false;
 
 
       const st = String(i.saude_status || '').toUpperCase();
       if (['BANNED', 'RESTRICTED', 'FLAGGED', 'DISABLED'].some((x) => st.includes(x)) && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
-      if (String(i.estado_pool || '') !== 'ativo' && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
-      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now() && job.user_id !== THIAGO_NOGUEIRA_USER_ID) return false;
+      if (String(i.estado_pool || '') !== 'ativo' && job.user_id !== THIAGO_NOGUEIRA_USER_ID && !liberar3144) return false;
+      if (i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now() && job.user_id !== THIAGO_NOGUEIRA_USER_ID && !liberar3144) return false;
       return true;
     });
     if (liberadas.length === 0) return bloqueadasRun;
