@@ -10586,6 +10586,7 @@ export type Database = {
       cpf_has_acordo: { Args: { p_cpf: string }; Returns: boolean }
       cpf_normalize: { Args: { cpf_input: string }; Returns: string }
       cpf_ultimo_acordo_quebrado: { Args: { p_cpf: string }; Returns: boolean }
+      definir_ponto_exigencia: { Args: { p_ativo: boolean }; Returns: boolean }
       delete_acordo_atomico: {
         Args: { p_acordo_id: string }
         Returns: undefined
@@ -11083,6 +11084,7 @@ export type Database = {
         Args: { _instancia: string; _uid: string }
         Returns: boolean
       }
+      ponto_exigencia_ativa: { Args: never; Returns: boolean }
       portal_faixas_credor: {
         Args: { _credor: string }
         Returns: {
