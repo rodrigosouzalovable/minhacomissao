@@ -1,6 +1,7 @@
 import { useAtividadeMonitor, formatarDuracao } from '@/hooks/useAtividadeMonitor';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { usePontoExigencia } from '@/hooks/usePonto';
 import { Eye } from 'lucide-react';
 
 /**
@@ -10,7 +11,8 @@ import { Eye } from 'lucide-react';
 export function InatividadeFlutuante() {
   const { isAdmin, isGestor, loading } = useUserRole();
   const { batePonto, isLoading: permLoading } = useUserPermissions();
-  const monitorar = !loading && !permLoading && !isAdmin && !isGestor && !!batePonto;
+  const { data: exigenciaAtiva = true, isLoading: exigenciaLoading } = usePontoExigencia();
+  const monitorar = !loading && !permLoading && !exigenciaLoading && exigenciaAtiva && !isAdmin && !isGestor && !!batePonto;
   const { inativo, segundos } = useAtividadeMonitor(monitorar);
 
   if (!monitorar || !inativo) return null;

@@ -28,6 +28,7 @@ import { HistoricoMesesCard } from '@/components/HistoricoMesesCard';
 import { PontoCard } from '@/components/ponto/PontoCard';
 import { RankingMensal } from '@/components/RankingMensal';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { usePontoExigencia } from '@/hooks/usePonto';
 
 
 
@@ -36,6 +37,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const { batePonto } = useUserPermissions();
+  const { data: exigenciaAtiva = true } = usePontoExigencia();
 
   const [definirMetasOpen, setDefinirMetasOpen] = useState(false);
   const [configMotivOpen, setConfigMotivOpen] = useState(false);
@@ -187,7 +189,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {!isAdmin && batePonto && <PontoCard />}
+        {!isAdmin && batePonto && exigenciaAtiva && <PontoCard />}
 
         <HistoricoMesesCard />
 

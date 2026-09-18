@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { AlarmClock, X, UtensilsCrossed, LogOut } from 'lucide-react';
-import { usePonto, LABEL_PONTO, type PontoTipo } from '@/hooks/usePonto';
+import { usePonto, usePontoExigencia, LABEL_PONTO, type PontoTipo } from '@/hooks/usePonto';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useUserRole } from '@/hooks/useUserRole';
 
@@ -39,6 +39,7 @@ const ICONES: Partial<Record<PontoTipo, React.ComponentType<{ className?: string
 export function PontoLembreteFlutuante() {
   const { isAdmin, isGestor, loading: roleLoading } = useUserRole();
   const { batePonto, isLoading: permLoading } = useUserPermissions();
+  const { data: exigenciaAtiva = true, isLoading: exigenciaLoading } = usePontoExigencia();
   const { tipos, proximo, bater, entradaOk } = usePonto();
   const [minutos, setMinutos] = useState(() => minutosBRT());
   const [snoozeAte, setSnoozeAte] = useState(0);
@@ -48,7 +49,7 @@ export function PontoLembreteFlutuante() {
     return () => window.clearInterval(t);
   }, []);
 
-  if (roleLoading || permLoading || isAdmin || isGestor || !batePonto) return null;
+  if (roleLoading || permLoading || exigenciaLoading || isAdmin || isGestor || !batePonto || !exigenciaAtiva) return null;
   if (domingoBRT() || !entradaOk || tipos.includes('saida')) return null;
   if (Date.now() < snoozeAte) return null;
 

@@ -41,6 +41,18 @@ export interface PontoRegistro {
   ip: string | null;
 }
 
+export function usePontoExigencia() {
+  return useQuery({
+    queryKey: ['ponto-exigencia-global'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ponto_exigencia_ativa');
+      if (error) throw error;
+      return data !== false;
+    },
+    staleTime: 60_000,
+  });
+}
+
 export function usePonto() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
