@@ -30,6 +30,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    const { data: exigenciaAtiva, error: exigenciaErr } = await admin.rpc("ponto_exigencia_ativa");
+    if (exigenciaErr) throw exigenciaErr;
+    if (exigenciaAtiva === false) {
+      return new Response(JSON.stringify({ ok: true, ignorado: "exigencia_desativada" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const [{ data: perfis }, { data: registros }, { data: jornadas }, { data: perms }] = await Promise.all([
       admin.from("profiles").select("id, nome, ativo"),
       admin.from("ponto_registros").select("user_id, tipo, registrado_em").eq("data", data),

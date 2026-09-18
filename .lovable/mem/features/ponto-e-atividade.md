@@ -15,4 +15,5 @@ type: feature
 - `ponto-registrar` notifica 62991672674 no WhatsApp em TODA marcação (nome, tipo, data/hora BRT, IP), via `notificarNumeros` com idempotência `ponto:{user}:{data}:{tipo}`; falha no envio nunca bloqueia a batida.
 - Relatório, presença ao vivo (RPC `presenca_ao_vivo`), redes e jornadas só para admin em `/admin/ponto`. Funcionário só vê as próprias marcações.
 - Crons: `ponto-alerta-manha` 12:15 UTC (09:15 BRT) e `ponto-alerta-noite` 21:30 UTC (18:30 BRT) → `ponto-alertas-diarios` avisa 62991672674; domingo é ignorado.
+- O painel administrativo tem um controle geral para ativar/desativar a exigência de ponto. Quando desligado, libera o sistema e suspende card, lembretes, monitoramento de inatividade e alertas automáticos, sem apagar permissões ou registros; somente admin altera.
 

@@ -225,6 +225,13 @@
       "when": 1789669336654,
       "tag": "0031_allow_meta_partners_toggle_own_pool",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789727840334,
+      "tag": "0032_add_global_point_requirement_control",
+      "breakpoints": true
     }
   ]
 }

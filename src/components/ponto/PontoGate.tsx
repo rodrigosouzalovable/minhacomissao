@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { useUserRole } from '@/hooks/useUserRole';
-import { usePonto } from '@/hooks/usePonto';
+import { usePonto, usePontoExigencia } from '@/hooks/usePonto';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 
 import { PontoCard } from './PontoCard';
@@ -17,11 +17,13 @@ import { LogOut, ShieldAlert } from 'lucide-react';
 export function PontoGate({ children }: { children: ReactNode }) {
   const { isAdmin, isGestor, loading: roleLoading } = useUserRole();
   const { batePonto, isLoading: permLoading } = useUserPermissions();
+  const { data: exigenciaAtiva = true, isLoading: exigenciaLoading } = usePontoExigencia();
   const { entradaOk, emAlmoco, isLoading } = usePonto();
   const { signOut } = useAuth();
 
-  if (roleLoading || permLoading || isLoading) return <>{children}</>;
+  if (roleLoading || permLoading || exigenciaLoading || isLoading) return <>{children}</>;
   if (isAdmin || isGestor) return <>{children}</>;
+  if (!exigenciaAtiva) return <>{children}</>;
   if (!batePonto) return <>{children}</>;
 
   const bloqueado = !entradaOk || emAlmoco;

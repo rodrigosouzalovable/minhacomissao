@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { formatarDuracao } from '@/hooks/useAtividadeMonitor';
-import { Clock, Download, FileText, Plus, Trash2, Wifi, Users, RefreshCw } from 'lucide-react';
+import { Clock, Download, FileText, Plus, Trash2, Wifi, Users, RefreshCw, Power, PowerOff } from 'lucide-react';
 
 const TZ = 'America/Sao_Paulo';
 
@@ -63,6 +63,29 @@ export default function PontoAdmin() {
   const [funcionario, setFuncionario] = useState<string>('todos');
   const [novoCidr, setNovoCidr] = useState('');
   const [novaDescricao, setNovaDescricao] = useState('');
+
+  const { data: exigenciaAtiva = true, isLoading: loadingExigencia } = useQuery({
+    queryKey: ['ponto-exigencia-global'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ponto_exigencia_ativa');
+      if (error) throw error;
+      return data !== false;
+    },
+    staleTime: 60_000,
+  });
+
+  const alterarExigencia = useMutation({
+    mutationFn: async (ativo: boolean) => {
+      const { data, error } = await supabase.rpc('definir_ponto_exigencia', { p_ativo: ativo });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (ativo) => {
+      queryClient.setQueryData(['ponto-exigencia-global'], ativo !== false);
+      toast.success(ativo ? 'Exigência de ponto ativada' : 'Exigência de ponto desativada');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const { data: perfis = [] } = useQuery({
     queryKey: ['ponto-perfis'],
@@ -360,6 +383,34 @@ export default function PontoAdmin() {
             Controle de Ponto
           </h1>
         </div>
+
+        <Card className={exigenciaAtiva ? 'border-primary/40' : 'border-warning/40'}>
+          <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold">
+                Exigência de ponto {exigenciaAtiva ? 'ativada' : 'desativada'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {exigenciaAtiva
+                  ? 'Funcionários marcados precisam bater o ponto para acessar o sistema.'
+                  : 'Funcionários podem acessar normalmente, sem bloqueio, lembretes ou monitoramento de ponto.'}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant={exigenciaAtiva ? 'destructive' : 'default'}
+              disabled={loadingExigencia || alterarExigencia.isPending}
+              onClick={() => alterarExigencia.mutate(!exigenciaAtiva)}
+            >
+              {exigenciaAtiva ? <PowerOff className="mr-2 h-4 w-4" /> : <Power className="mr-2 h-4 w-4" />}
+              {alterarExigencia.isPending
+                ? 'Salvando...'
+                : exigenciaAtiva
+                  ? 'Desativar exigência'
+                  : 'Ativar exigência'}
+            </Button>
+          </CardContent>
+        </Card>
 
         <Tabs defaultValue="relatorio">
           <TabsList>
