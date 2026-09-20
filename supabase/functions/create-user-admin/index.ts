@@ -102,6 +102,32 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: humanizeCreateUserError(createError.message) }, 200)
     }
 
+    const { error: permissionsError } = await supabaseAdmin
+      .from('user_permissions')
+      .upsert({
+        user_id: newUser.user.id,
+        abas_permitidas: [],
+        credores: [],
+        visivel_ranking: false,
+        inbox_compartilhado: false,
+        acordos_compartilhados: false,
+        permite_cpf_duplicado: false,
+        pode_excluir_acordos: false,
+        pode_marcar_pago_global: false,
+        recebe_consulta_cpf: false,
+        atende_inbox_meta: false,
+        parceiro_meta: false,
+        ve_campanhas: false,
+        bate_ponto: false,
+        meus_sites: false,
+      }, { onConflict: 'user_id' })
+
+    if (permissionsError) {
+      console.error('Create default permissions error:', permissionsError)
+      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)
+      return jsonResponse({ success: false, error: 'Não foi possível criar as permissões iniciais do usuário.' }, 200)
+    }
+
     // 8. Log de sucesso
     console.log(`SUCCESS: Admin ${callingUser.email} created user ${email} (ID: ${newUser.user.id})`)
 

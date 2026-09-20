@@ -45,18 +45,16 @@ export function EditPermissionsDialog({
 }: EditPermissionsDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedTabs, setSelectedTabs] = useState<string[]>(
-    AVAILABLE_TABS.map((t) => t.path)
-  );
-  const [credores, setCredores] = useState<string[]>(['ume_novo_mundo']);
-  const [visivelRanking, setVisivelRanking] = useState(true);
+  const [selectedTabs, setSelectedTabs] = useState<string[]>([]);
+  const [credores, setCredores] = useState<string[]>([]);
+  const [visivelRanking, setVisivelRanking] = useState(false);
   const [inboxCompartilhado, setInboxCompartilhado] = useState(false);
   const [acordosCompartilhados, setAcordosCompartilhados] = useState(false);
   const [permiteCpfDuplicado, setPermiteCpfDuplicado] = useState(false);
   const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
   const [podeMarcarPago, setPodeMarcarPago] = useState(false);
-  const [atendeInboxMeta, setAtendeInboxMeta] = useState(true);
+  const [atendeInboxMeta, setAtendeInboxMeta] = useState(false);
   const [parceiroMeta, setParceiroMeta] = useState(false);
   const [veCampanhas, setVeCampanhas] = useState(false);
   const [batePonto, setBatePonto] = useState(false);
@@ -147,30 +145,30 @@ export function EditPermissionsDialog({
   useEffect(() => {
     if (permissions) {
       setSelectedTabs(permissions.abas_permitidas);
-      setCredores((permissions as any).credores ?? ['ume_novo_mundo']);
-      setVisivelRanking((permissions as any).visivel_ranking ?? true);
+      setCredores((permissions as any).credores ?? []);
+      setVisivelRanking((permissions as any).visivel_ranking ?? false);
       setInboxCompartilhado((permissions as any).inbox_compartilhado ?? false);
       setAcordosCompartilhados((permissions as any).acordos_compartilhados ?? false);
       setPermiteCpfDuplicado((permissions as any).permite_cpf_duplicado ?? false);
       setPodeExcluirAcordos((permissions as any).pode_excluir_acordos ?? false);
       setRecebeConsultaCpf((permissions as any).recebe_consulta_cpf ?? false);
       setPodeMarcarPago((permissions as any).pode_marcar_pago_global ?? false);
-      setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? true);
+      setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? false);
       setParceiroMeta((permissions as any).parceiro_meta ?? false);
       setVeCampanhas((permissions as any).ve_campanhas ?? false);
       setBatePonto((permissions as any).bate_ponto ?? false);
 
     } else {
-      setSelectedTabs(AVAILABLE_TABS.map((t) => t.path));
-      setCredores(['ume_novo_mundo']);
-      setVisivelRanking(true);
+      setSelectedTabs([]);
+      setCredores([]);
+      setVisivelRanking(false);
       setInboxCompartilhado(false);
       setAcordosCompartilhados(false);
       setPermiteCpfDuplicado(false);
       setPodeExcluirAcordos(false);
       setRecebeConsultaCpf(false);
       setPodeMarcarPago(false);
-      setAtendeInboxMeta(true);
+      setAtendeInboxMeta(false);
       setParceiroMeta(false);
       setVeCampanhas(false);
       setBatePonto(false);
