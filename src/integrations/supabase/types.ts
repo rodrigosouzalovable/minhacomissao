@@ -302,6 +302,8 @@ export type Database = {
         Row: {
           admin_phone: string
           created_at: string
+          fila_processando_ate: string | null
+          fila_processando_id: string | null
           id: number
           instancia_notificacao_id: string | null
           notificar_chip_desconectado: boolean
@@ -315,6 +317,8 @@ export type Database = {
         Insert: {
           admin_phone?: string
           created_at?: string
+          fila_processando_ate?: string | null
+          fila_processando_id?: string | null
           id?: number
           instancia_notificacao_id?: string | null
           notificar_chip_desconectado?: boolean
@@ -328,6 +332,8 @@ export type Database = {
         Update: {
           admin_phone?: string
           created_at?: string
+          fila_processando_ate?: string | null
+          fila_processando_id?: string | null
           id?: number
           instancia_notificacao_id?: string | null
           notificar_chip_desconectado?: boolean
@@ -339,6 +345,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "admin_notificacoes_config_fila_processando_id_fkey"
+            columns: ["fila_processando_id"]
+            isOneToOne: false
+            referencedRelation: "admin_notificacoes_fila"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "admin_notificacoes_config_instancia_notificacao_id_fkey"
             columns: ["instancia_notificacao_id"]
@@ -10817,6 +10830,16 @@ export type Database = {
         Args: { p_pagamento_id: string }
         Returns: undefined
       }
+      finalizar_notificacao_admin: {
+        Args: {
+          p_erro?: string
+          p_fallback?: boolean
+          p_id: string
+          p_instancia_id?: string
+          p_status: string
+        }
+        Returns: number
+      }
       finish_meta_templates_sync_diario: {
         Args: {
           p_failures?: Json
@@ -11086,6 +11109,7 @@ export type Database = {
       is_consultoria_aluno: { Args: { _uid: string }; Returns: boolean }
       is_instancia_parceiro: { Args: { _instancia: string }; Returns: boolean }
       is_parceiro_meta: { Args: { _uid: string }; Returns: boolean }
+      liberar_trava_notificacao_admin: { Args: never; Returns: undefined }
       limpar_pix_links_expirados: { Args: never; Returns: number }
       listar_credores_distintos: {
         Args: never
@@ -11284,6 +11308,30 @@ export type Database = {
       }
       reivindicar_notificacao_admin: {
         Args: { p_id: string }
+        Returns: {
+          agendada_para: string
+          chave_idempotencia: string | null
+          criada_em: string
+          destinatario: string
+          erro_detalhe: string | null
+          fallback: boolean
+          id: string
+          instancia_envio_id: string | null
+          mensagem: string
+          processada_em: string | null
+          status: string
+          tentativas: number
+          tipo: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_notificacoes_fila"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reivindicar_proxima_notificacao_admin: {
+        Args: never
         Returns: {
           agendada_para: string
           chave_idempotencia: string | null
