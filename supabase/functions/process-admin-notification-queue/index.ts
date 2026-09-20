@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
   const delaySeconds = Number(delay || 0);
   if (delaySeconds > 0) {
     EdgeRuntime.waitUntil((async () => {
-      await wait(delaySeconds * 1000);
+      await wait((delaySeconds + 1) * 1000);
       await fetch(`${url}/functions/v1/process-admin-notification-queue`, {
         method: "POST",
         headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
