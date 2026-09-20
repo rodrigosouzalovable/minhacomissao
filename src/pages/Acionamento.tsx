@@ -1679,7 +1679,7 @@ export default function Acionamento() {
 
 
   const handleConnectQr = async () => {
-    if (!user) return;
+    if (!user || !isOwnerAdmin) return;
     setQrLoading(true);
     setQrImage(null);
     setPairingCode(null);
@@ -1731,7 +1731,7 @@ export default function Acionamento() {
   };
 
   const handleRefreshQr = async () => {
-    if (!createdInstanceId || !user) return;
+    if (!createdInstanceId || !user || !isOwnerAdmin) return;
     stopQrPolling();
     setQrLoading(true);
     try {
@@ -1776,7 +1776,7 @@ export default function Acionamento() {
   };
 
   const handleReconnectQr = async () => {
-    if (!user || !editingInstance?.id) return;
+    if (!user || !editingInstance?.id || !isOwnerAdmin) return;
     const instanceId = editingInstance.id;
     setReconnectingInstanceId(instanceId);
     setQrLoading(true);
@@ -2024,6 +2024,7 @@ export default function Acionamento() {
   };
 
   const handleExportarNumeros = async () => {
+    if (!isOwnerAdmin) return;
     let statusMap: Record<string, boolean> = {};
     const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
     if (!jaTemAlgumStatus) {
@@ -2064,13 +2065,13 @@ export default function Acionamento() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">UAZAPI</h1>
           <div className="flex flex-wrap items-center gap-2">
-            {instances.some(i => i.telefone) && (
+            {isOwnerAdmin && instances.some(i => i.telefone) && (
               <Button variant="outline" size="sm" onClick={handleExportarNumeros} className="gap-1">
                 <Download className="h-4 w-4" />
                 <span className="text-xs">Exportar números (Excel)</span>
               </Button>
             )}
-            {instances.length > 0 && (
+            {isOwnerAdmin && instances.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -2114,7 +2115,7 @@ export default function Acionamento() {
                       Cadastre múltiplos WhatsApps para rotação automática dos envios.
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2 lg:shrink-0">
+                  {isOwnerAdmin && <div className="flex flex-wrap gap-2 lg:shrink-0">
                     <Button
                       size="sm"
                       variant="outline"
@@ -2152,11 +2153,11 @@ export default function Acionamento() {
                     >
                       <Plus className="h-4 w-4 mr-1" /> Manual
                     </Button>
-                  </div>
+                  </div>}
                 </div>
 
                   {/* QR Code / Pairing Code connection flow */}
-                  {qrStep === 'qr' && (
+                  {isOwnerAdmin && qrStep === 'qr' && (
                     <div className="rounded-md border p-6 space-y-4 bg-muted/20">
                       {/* Phone input step (only for code method, before generation) */}
                       {connectMethod === 'code' && !qrImage && !pairingCode && (
@@ -2310,7 +2311,7 @@ export default function Acionamento() {
                       </div>
 
                       {/* Reconnect via QR button - only for existing disconnected instances */}
-                      {editingInstance.id && connectionStatus[editingInstance.id] === 'disconnected' && !reconnectingInstanceId && (
+                      {isOwnerAdmin && editingInstance.id && connectionStatus[editingInstance.id] === 'disconnected' && !reconnectingInstanceId && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -2324,7 +2325,7 @@ export default function Acionamento() {
                       )}
 
                       {/* Inline QR for reconnection */}
-                      {editingInstance.id && reconnectingInstanceId === editingInstance.id && qrImage && (
+                      {isOwnerAdmin && editingInstance.id && reconnectingInstanceId === editingInstance.id && qrImage && (
                         <div className="flex flex-col items-center gap-3 p-3 rounded-md border bg-background">
                           <p className="text-sm font-medium text-foreground">Escaneie o QR Code para reconectar</p>
                           <img src={qrImage} alt="QR Code" className="w-48 h-48 rounded" />
@@ -2350,7 +2351,7 @@ export default function Acionamento() {
                       )}
 
                       {/* Reconnecting loading state */}
-                      {editingInstance.id && reconnectingInstanceId === editingInstance.id && !qrImage && qrLoading && (
+                      {isOwnerAdmin && editingInstance.id && reconnectingInstanceId === editingInstance.id && !qrImage && qrLoading && (
                         <div className="flex items-center justify-center gap-2 p-4">
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                           <span className="text-sm text-muted-foreground">Obtendo QR Code...</span>
