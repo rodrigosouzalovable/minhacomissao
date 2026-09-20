@@ -1,9 +1,36 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { z } from 'npm:zod@3.23.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const CreateUserSchema = z.object({
+  nome: z.string().trim().min(2).max(120),
+  email: z.string().trim().email().max(255),
+  password: z.string().min(8).max(72)
+    .regex(/[a-z]/, 'A senha precisa ter uma letra minúscula')
+    .regex(/[A-Z]/, 'A senha precisa ter uma letra maiúscula')
+    .regex(/[0-9]/, 'A senha precisa ter um número')
+    .regex(/[^A-Za-z0-9]/, 'A senha precisa ter um caractere especial'),
+})
+
+const jsonResponse = (body: Record<string, unknown>, status = 200) => new Response(
+  JSON.stringify(body),
+  { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+)
+
+function humanizeCreateUserError(message: string) {
+  const normalized = message.toLowerCase()
+  if (normalized.includes('weak') || normalized.includes('easy to guess')) {
+    return 'Esta senha é muito comum ou fácil de adivinhar. Escolha outra senha forte e exclusiva.'
+  }
+  if (normalized.includes('already') || normalized.includes('registered')) {
+    return 'Já existe um usuário cadastrado com este e-mail.'
+  }
+  return message || 'Não foi possível criar o usuário.'
 }
 
 serve(async (req) => {
@@ -48,15 +75,12 @@ serve(async (req) => {
     }
 
     // 5. Obter dados da requisição
-    const { nome, email, password } = await req.json()
-    
-    if (!nome || !email || !password) {
-      throw new Error('Nome, email e senha são obrigatórios')
+    const parsed = CreateUserSchema.safeParse(await req.json())
+    if (!parsed.success) {
+      const firstError = parsed.error.issues[0]?.message ?? 'Dados inválidos'
+      return jsonResponse({ success: false, error: firstError }, 200)
     }
-
-    if (password.length < 6) {
-      throw new Error('A senha deve ter pelo menos 6 caracteres')
-    }
+    const { nome, email, password } = parsed.data
 
     // 6. Criar cliente admin
     const supabaseAdmin = createClient(
@@ -75,20 +99,17 @@ serve(async (req) => {
 
     if (createError) {
       console.error('Create user error:', createError)
-      throw createError
+      return jsonResponse({ success: false, error: humanizeCreateUserError(createError.message) }, 200)
     }
 
     // 8. Log de sucesso
     console.log(`SUCCESS: Admin ${callingUser.email} created user ${email} (ID: ${newUser.user.id})`)
 
-    return new Response(
-      JSON.stringify({ 
+    return jsonResponse({
         success: true, 
         message: 'Usuário criado com sucesso',
         userId: newUser.user.id 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      })
 
   } catch (error) {
     console.error('Error in create-user-admin:', error)
