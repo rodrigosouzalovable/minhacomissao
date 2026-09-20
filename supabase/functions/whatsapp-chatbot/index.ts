@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extrairPropostaDoTexto } from '../_shared/proposta-previa.ts';
+import { enqueueAdminNotification } from '../_shared/enqueue-admin-notification.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -533,17 +534,22 @@ Mantenha o tom informal e cordial. Não mencione o administrador. Responda APENA
   return out || instrucao;
 }
 
-async function notificarAdmin(serverUrl: string, instanceToken: string, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
+async function notificarAdmin(supabase: any, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
   try {
     const msg = `Olá Rodrigo, na mensagem enviada pelo número ${telefoneInstancia} para o número ${telefoneCliente}, o cliente respondeu algo que eu não soube informar: "${textoCliente}". Você poderia analisar por favor?`;
     console.log(`[ADMIN] Notificando admin: ${msg}`);
-    await sendMessage(serverUrl, instanceToken, ADMIN_NUMERO, msg);
+    await enqueueAdminNotification(supabase, {
+      tipo: 'iago_aguardando_humano',
+      mensagem: `🤖 *Aviso Sistema*\n\n${msg}`,
+      destinatario: ADMIN_NUMERO,
+      chaveIdempotencia: `${telefoneCliente}:${Date.now()}`,
+    });
   } catch (e) {
     console.error('[ADMIN] Falha ao notificar admin:', e);
   }
 }
 
-async function notificarAcordoFechado(serverUrl: string, instanceToken: string, telefoneCliente: string, dados: any) {
+async function notificarAcordoFechado(supabase: any, telefoneCliente: string, dados: any) {
   try {
     const nomeCliente = dados.nome || 'cliente';
     const primeiroNome = nomeCliente.split(' ')[0];
@@ -564,7 +570,12 @@ async function notificarAcordoFechado(serverUrl: string, instanceToken: string, 
     const telefoneFormatado = telefoneCliente.replace(/^55/, '');
     const msg = `Rodrigo, acabei de fechar um acordo com o cliente ${primeiroNome}, número ${telefoneFormatado}, ${detalhes}, para pagamento ${dataPgto}.`;
     console.log(`[ACORDO] Notificando admin: ${msg}`);
-    await sendMessage(serverUrl, instanceToken, ADMIN_NUMERO, msg);
+    await enqueueAdminNotification(supabase, {
+      tipo: 'iago_acordo_fechado',
+      mensagem: `🤖 *Aviso Sistema*\n\n${msg}`,
+      destinatario: ADMIN_NUMERO,
+      chaveIdempotencia: `${telefoneCliente}:${dados.data_pagamento || 'hoje'}:${dados.valor_final || dados.valor_avista || dados.valor_parcelado || ''}`,
+    });
   } catch (e) {
     console.error('[ACORDO] Falha ao notificar admin sobre acordo:', e);
   }
@@ -2595,7 +2606,7 @@ serve(async (req) => {
         atualizado_em: new Date().toISOString(),
       }, { onConflict: 'telefone' });
 
-      await notificarAdmin(serverUrl!, instanceToken!, telefone, telefoneInstancia, textoCliente);
+      await notificarAdmin(supabase, telefone, telefoneInstancia, textoCliente);
     }
 
     // =============================================
@@ -3161,7 +3172,7 @@ serve(async (req) => {
 
         resposta = `OK, irei te enviar o boleto para essa data!`;
         await salvarEResponder('acordo_finalizado', { data_pagamento: formatDataBR(dataInformada) });
-        await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: formatDataBR(dataInformada) });
+        await notificarAcordoFechado(supabase, telefone, { ...dados, data_pagamento: formatDataBR(dataInformada) });
         break;
       }
 
@@ -3169,7 +3180,7 @@ serve(async (req) => {
       case 'aguardando_humano': {
         // Não responde nada ao cliente, apenas re-notifica o admin se insistir
         console.log(`[AGUARDANDO_HUMANO] Cliente ${telefone} insistiu: "${texto}" — re-notificando admin`);
-        await notificarAdmin(serverUrl!, instanceToken!, telefone, telefoneInstancia, texto);
+        await notificarAdmin(supabase, telefone, telefoneInstancia, texto);
         // Salvar histórico sem mudar etapa
         await supabase.from('chatbot_conversas').upsert({
           telefone, etapa: 'aguardando_humano', dados,
