@@ -232,6 +232,13 @@
       "when": 1789727840334,
       "tag": "0032_add_global_point_requirement_control",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789942275535,
+      "tag": "0033_create_uazapi_personal_notification_queue",
+      "breakpoints": true
     }
   ]
 }

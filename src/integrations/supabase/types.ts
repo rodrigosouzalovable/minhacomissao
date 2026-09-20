@@ -234,6 +234,70 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_notificacao_instancias: {
+        Row: {
+          ativa: boolean
+          ativada_por: string | null
+          atualizada_em: string
+          criada_em: string
+          instancia_id: string
+        }
+        Insert: {
+          ativa?: boolean
+          ativada_por?: string | null
+          atualizada_em?: string
+          criada_em?: string
+          instancia_id: string
+        }
+        Update: {
+          ativa?: boolean
+          ativada_por?: string | null
+          atualizada_em?: string
+          criada_em?: string
+          instancia_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notificacao_instancias_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: true
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_notificacao_instancias_auditoria: {
+        Row: {
+          alterada_em: string
+          alterada_por: string | null
+          ativa: boolean
+          id: string
+          instancia_id: string | null
+        }
+        Insert: {
+          alterada_em?: string
+          alterada_por?: string | null
+          ativa: boolean
+          id?: string
+          instancia_id?: string | null
+        }
+        Update: {
+          alterada_em?: string
+          alterada_por?: string | null
+          ativa?: boolean
+          id?: string
+          instancia_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notificacao_instancias_auditoria_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_notificacoes_config: {
         Row: {
           admin_phone: string
@@ -244,6 +308,7 @@ export type Database = {
           notificar_chip_pausado: boolean
           notificar_proxies_faltando: boolean
           notificar_resumo_diario: boolean
+          proxima_notificacao_em: string | null
           ultima_instancia_id: string | null
           updated_at: string
         }
@@ -256,6 +321,7 @@ export type Database = {
           notificar_chip_pausado?: boolean
           notificar_proxies_faltando?: boolean
           notificar_resumo_diario?: boolean
+          proxima_notificacao_em?: string | null
           ultima_instancia_id?: string | null
           updated_at?: string
         }
@@ -268,6 +334,7 @@ export type Database = {
           notificar_chip_pausado?: boolean
           notificar_proxies_faltando?: boolean
           notificar_resumo_diario?: boolean
+          proxima_notificacao_em?: string | null
           ultima_instancia_id?: string | null
           updated_at?: string
         }
@@ -275,6 +342,62 @@ export type Database = {
           {
             foreignKeyName: "admin_notificacoes_config_instancia_notificacao_id_fkey"
             columns: ["instancia_notificacao_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_notificacoes_fila: {
+        Row: {
+          agendada_para: string
+          chave_idempotencia: string | null
+          criada_em: string
+          destinatario: string
+          erro_detalhe: string | null
+          fallback: boolean
+          id: string
+          instancia_envio_id: string | null
+          mensagem: string
+          processada_em: string | null
+          status: string
+          tentativas: number
+          tipo: string
+        }
+        Insert: {
+          agendada_para: string
+          chave_idempotencia?: string | null
+          criada_em?: string
+          destinatario: string
+          erro_detalhe?: string | null
+          fallback?: boolean
+          id?: string
+          instancia_envio_id?: string | null
+          mensagem: string
+          processada_em?: string | null
+          status?: string
+          tentativas?: number
+          tipo: string
+        }
+        Update: {
+          agendada_para?: string
+          chave_idempotencia?: string | null
+          criada_em?: string
+          destinatario?: string
+          erro_detalhe?: string | null
+          fallback?: boolean
+          id?: string
+          instancia_envio_id?: string | null
+          mensagem?: string
+          processada_em?: string | null
+          status?: string
+          tentativas?: number
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notificacoes_fila_instancia_envio_id_fkey"
+            columns: ["instancia_envio_id"]
             isOneToOne: false
             referencedRelation: "user_whatsapp_instances"
             referencedColumns: ["id"]
@@ -10586,6 +10709,10 @@ export type Database = {
       cpf_has_acordo: { Args: { p_cpf: string }; Returns: boolean }
       cpf_normalize: { Args: { cpf_input: string }; Returns: string }
       cpf_ultimo_acordo_quebrado: { Args: { p_cpf: string }; Returns: boolean }
+      definir_instancia_notificacao_uazapi: {
+        Args: { p_ativa: boolean; p_instancia_id: string }
+        Returns: boolean
+      }
       definir_ponto_exigencia: { Args: { p_ativo: boolean }; Returns: boolean }
       delete_acordo_atomico: {
         Args: { p_acordo_id: string }
@@ -10594,6 +10721,19 @@ export type Database = {
       delete_importacao_em_lotes: {
         Args: { p_importacao_id: string }
         Returns: Json
+      }
+      enfileirar_notificacao_admin: {
+        Args: {
+          p_chave_idempotencia: string
+          p_destinatario: string
+          p_mensagem: string
+          p_tipo: string
+        }
+        Returns: {
+          agendada_para: string
+          criada: boolean
+          id: string
+        }[]
       }
       envio_meta_claim_due_job: {
         Args: { _job_id?: string; _lock_seconds?: number }
@@ -11141,6 +11281,30 @@ export type Database = {
           _telefone_normalizado: string
         }
         Returns: undefined
+      }
+      reivindicar_notificacao_admin: {
+        Args: { p_id: string }
+        Returns: {
+          agendada_para: string
+          chave_idempotencia: string | null
+          criada_em: string
+          destinatario: string
+          erro_detalhe: string | null
+          fallback: boolean
+          id: string
+          instancia_envio_id: string | null
+          mensagem: string
+          processada_em: string | null
+          status: string
+          tentativas: number
+          tipo: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_notificacoes_fila"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       relatorio_ume_acionamentos: {
         Args: { _data: string }
