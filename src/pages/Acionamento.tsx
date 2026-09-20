@@ -2438,7 +2438,7 @@ export default function Acionamento() {
 
                         const status = connectionStatus[inst.id];
                         return (
-                          <SortableInstanceCard key={inst.id} id={inst.id}>
+                          <SortableInstanceCard key={inst.id} id={inst.id} canDrag={isOwnerAdmin}>
                             <div className={`flex items-center gap-3 rounded-md border px-3 py-2 ${inst.ativo ? '' : 'opacity-50'}`}>
                               <div className="flex items-center gap-2 min-w-0 flex-1">
                                 {inst.whatsapp_profile_photo_url ? (
@@ -2451,40 +2451,42 @@ export default function Acionamento() {
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5">
                                     <span className="font-medium text-sm truncate">{inst.nome || 'Sem nome'}</span>
-                                    <Badge variant={inst.ativo ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 shrink-0">
-                                      {inst.ativo ? 'Ativo' : 'Inativo'}
-                                    </Badge>
-                                    {inst.ativo && status === 'connected' && (
+                                    {isOwnerAdmin && (
+                                      <Badge variant={inst.ativo ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 shrink-0">
+                                        {inst.ativo ? 'Ativo' : 'Inativo'}
+                                      </Badge>
+                                    )}
+                                    {status === 'connected' && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
                                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
                                         Conectado
                                       </Badge>
                                     )}
-                                    {inst.ativo && status === 'disconnected' && (
+                                    {status === 'disconnected' && (
                                       <Badge variant="destructive" className="text-[10px] px-1.5 py-0 shrink-0">
                                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-destructive-foreground mr-1" />
                                         Desconectado
                                       </Badge>
                                     )}
-                                    {inst.ativo && status === 'checking' && (
+                                    {status === 'checking' && (
                                       <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                     )}
-                                    {inst.apenas_lembretes && (
+                                    {isOwnerAdmin && inst.apenas_lembretes && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-amber-500 text-amber-600">
                                         Só Lembretes
                                       </Badge>
                                     )}
-                                    {inst.robo && (
+                                    {isOwnerAdmin && inst.robo && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-blue-500 text-blue-600">
                                         Robô
                                       </Badge>
                                     )}
-                                    {inst.ia_responde && (
+                                    {isOwnerAdmin && inst.ia_responde && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
                                         IA Responde
                                       </Badge>
                                     )}
-                                    {inst.proxy_enabled && (
+                                    {isOwnerAdmin && inst.proxy_enabled && (
                                       <Badge
                                         variant="outline"
                                         className="text-[10px] px-1.5 py-0 shrink-0 border-purple-500 text-purple-600 gap-1"
@@ -2494,7 +2496,7 @@ export default function Acionamento() {
                                         Proxy
                                       </Badge>
                                     )}
-                                    {notificationInstanceIds.has(inst.id) && (
+                                    {isOwnerAdmin && notificationInstanceIds.has(inst.id) && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-primary text-primary gap-1">
                                         <BellRing className="h-3 w-3" />
                                         Notificações
@@ -2511,29 +2513,33 @@ export default function Acionamento() {
                                         Número não cadastrado
                                       </span>
                                     )}
-                                    <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
+                                    {isOwnerAdmin && <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>}
                                   </div>
 
                                 </div>
                               </div>
                               <div className="flex flex-col gap-1 shrink-0">
                                 <div className="flex items-center gap-1">
-                                  <Switch
-                                    checked={inst.ativo}
-                                    onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
-                                    className="scale-90"
-                                    title="Ativar/Desativar"
-                                  />
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={() => handleTestInstance(inst)}
-                                    disabled={testingInstanceId === inst.id}
-                                    title="Testar conexão"
-                                  >
-                                    {testingInstanceId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
-                                  </Button>
+                                  {isOwnerAdmin && (
+                                    <>
+                                      <Switch
+                                        checked={inst.ativo}
+                                        onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
+                                        className="scale-90"
+                                        title="Ativar/Desativar"
+                                      />
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => handleTestInstance(inst)}
+                                        disabled={testingInstanceId === inst.id}
+                                        title="Testar conexão"
+                                      >
+                                        {testingInstanceId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+                                      </Button>
+                                    </>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -2554,17 +2560,19 @@ export default function Acionamento() {
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 text-destructive hover:text-destructive"
-                                    onClick={() => handleDeleteInstance(inst.id)}
-                                    title="Remover"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
+                                  {isOwnerAdmin && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
+                                      onClick={() => handleDeleteInstance(inst.id)}
+                                      title="Remover"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
                                 </div>
-                                {inst.ativo && (
+                                {isOwnerAdmin && inst.ativo && (
                                   <div className="flex flex-col gap-1 items-end">
                                     <div className="flex items-center gap-1.5">
                                       <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
@@ -2601,7 +2609,7 @@ export default function Acionamento() {
                                     </div>
                                   </div>
                                 )}
-                                {isAdmin && (
+                                {isOwnerAdmin && (
                                   <div className="flex items-center gap-1.5 self-end">
                                     <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`notificacoes-${inst.id}`}>
                                       Notificações pessoais
