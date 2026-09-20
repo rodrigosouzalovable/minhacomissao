@@ -2561,23 +2561,6 @@ export default function Acionamento() {
                                         className="h-3.5 w-3.5"
                                       />
                                     </div>
-                                    {isAdmin && (
-                                      <div className="flex items-center gap-1.5">
-                                        <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`notificacoes-${inst.id}`}>
-                                          Notificações pessoais
-                                        </Label>
-                                        {savingNotificationInstanceId === inst.id ? (
-                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                                        ) : (
-                                          <Switch
-                                            id={`notificacoes-${inst.id}`}
-                                            checked={notificationInstanceIds.has(inst.id)}
-                                            onCheckedChange={(checked) => handleToggleNotificationInstance(inst.id, checked)}
-                                            className="scale-75"
-                                          />
-                                        )}
-                                      </div>
-                                    )}
                                     <div className="flex items-center gap-1.5">
                                       <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`robo-${inst.id}`}>
                                         Robô
@@ -2600,6 +2583,23 @@ export default function Acionamento() {
                                         className="h-3.5 w-3.5"
                                       />
                                     </div>
+                                  </div>
+                                )}
+                                {isAdmin && (
+                                  <div className="flex items-center gap-1.5 self-end">
+                                    <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`notificacoes-${inst.id}`}>
+                                      Notificações pessoais
+                                    </Label>
+                                    {savingNotificationInstanceId === inst.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                    ) : (
+                                      <Switch
+                                        id={`notificacoes-${inst.id}`}
+                                        checked={notificationInstanceIds.has(inst.id)}
+                                        onCheckedChange={(checked) => handleToggleNotificationInstance(inst.id, checked)}
+                                        className="scale-75"
+                                      />
+                                    )}
                                   </div>
                                 )}
                               </div>
