@@ -5,6 +5,9 @@
 - [ ] Validar um dia completo da meta de 450 por BM após ampliar o estoque de Google Leads
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
+## Em andamento
+- [ ] Adicionar remetentes UAZAPI selecionáveis e fila global de notificações pessoais com intervalo aleatório de 30–60 segundos
+
 ## Concluído
 - [x] Adicionar controle geral do ponto e desativar bloqueios, lembretes, monitoramento e alertas quando desligado
 - [x] Selecionar em massa no Envio Meta somente instâncias GREEN ou sem qualidade, mantendo YELLOW/RED manuais
