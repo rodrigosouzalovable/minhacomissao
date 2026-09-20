@@ -1517,6 +1517,7 @@ export default function Acionamento() {
 
   const handleSaveInstance = async () => {
     if (!user || !editingInstance) return;
+    if (!editingInstance.id && !isOwnerAdmin) return;
     if (!editingInstance.server_url.trim() || !editingInstance.instance_token.trim()) {
       toast.error('Preencha Server URL e Instance Token');
       return;
@@ -2112,7 +2113,9 @@ export default function Acionamento() {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Cadastre múltiplos WhatsApps para rotação automática dos envios.
+                      {isOwnerAdmin
+                        ? 'Cadastre múltiplos WhatsApps para rotação automática dos envios.'
+                        : 'Consulte suas instâncias e o estado atual da conexão.'}
                     </p>
                   </div>
                   {isOwnerAdmin && <div className="flex flex-wrap gap-2 lg:shrink-0">
