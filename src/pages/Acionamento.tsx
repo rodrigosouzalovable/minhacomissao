@@ -203,8 +203,8 @@ function formatarTelefoneBR(v?: string | null): string {
 }
 
 
-function SortableInstanceCard({ id, children }: { id: string; children: React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+function SortableInstanceCard({ id, children, canDrag = true }: { id: string; children: React.ReactNode; canDrag?: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !canDrag });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -213,15 +213,17 @@ function SortableInstanceCard({ id, children }: { id: string; children: React.Re
   };
   return (
     <div ref={setNodeRef} style={style} className="group/drag relative">
-      <button
-        {...attributes}
-        {...listeners}
-        className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/drag:opacity-60 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 z-10"
-        tabIndex={-1}
-      >
-        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-      </button>
-      <div className="pl-5">{children}</div>
+      {canDrag && (
+        <button
+          {...attributes}
+          {...listeners}
+          className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/drag:opacity-60 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 z-10"
+          tabIndex={-1}
+        >
+          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+      )}
+      <div className={canDrag ? "pl-5" : undefined}>{children}</div>
     </div>
   );
 }
@@ -1515,6 +1517,7 @@ export default function Acionamento() {
 
   const handleSaveInstance = async () => {
     if (!user || !editingInstance) return;
+    if (!editingInstance.id && !isOwnerAdmin) return;
     if (!editingInstance.server_url.trim() || !editingInstance.instance_token.trim()) {
       toast.error('Preencha Server URL e Instance Token');
       return;
@@ -1561,6 +1564,7 @@ export default function Acionamento() {
   };
 
   const handleInstanceDragEnd = async (event: DragEndEvent) => {
+    if (!isOwnerAdmin) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = instances.findIndex(i => i.id === active.id);
@@ -1676,7 +1680,7 @@ export default function Acionamento() {
 
 
   const handleConnectQr = async () => {
-    if (!user) return;
+    if (!user || !isOwnerAdmin) return;
     setQrLoading(true);
     setQrImage(null);
     setPairingCode(null);
@@ -1728,7 +1732,7 @@ export default function Acionamento() {
   };
 
   const handleRefreshQr = async () => {
-    if (!createdInstanceId || !user) return;
+    if (!createdInstanceId || !user || !isOwnerAdmin) return;
     stopQrPolling();
     setQrLoading(true);
     try {
@@ -1773,7 +1777,7 @@ export default function Acionamento() {
   };
 
   const handleReconnectQr = async () => {
-    if (!user || !editingInstance?.id) return;
+    if (!user || !editingInstance?.id || !isOwnerAdmin) return;
     const instanceId = editingInstance.id;
     setReconnectingInstanceId(instanceId);
     setQrLoading(true);
@@ -1835,6 +1839,7 @@ export default function Acionamento() {
   };
 
   const handleDeleteInstance = async (id: string) => {
+    if (!isOwnerAdmin) return;
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
       .delete()
@@ -1848,6 +1853,7 @@ export default function Acionamento() {
   };
 
   const handleToggleInstance = async (id: string, ativo: boolean) => {
+    if (!isOwnerAdmin) return;
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
       .update({ ativo } as any)
@@ -1860,7 +1866,7 @@ export default function Acionamento() {
   };
 
   const handleToggleNotificationInstance = async (id: string, ativa: boolean) => {
-    if (!isAdmin) return;
+    if (!isOwnerAdmin) return;
     setSavingNotificationInstanceId(id);
     const { error } = await supabase.rpc('definir_instancia_notificacao_uazapi', {
       p_instancia_id: id,
@@ -1881,6 +1887,7 @@ export default function Acionamento() {
 
   const [ativandoTodas, setAtivandoTodas] = useState(false);
   const handleAtivarTodasInstancias = async () => {
+    if (!isOwnerAdmin) return;
     const inativas = instances.filter(i => !i.ativo);
     if (inativas.length === 0) {
       toast.info('Todas as instâncias já estão ativas.');
@@ -1904,6 +1911,7 @@ export default function Acionamento() {
   };
 
   const handleToggleApenasLembretes = async (id: string, apenas_lembretes: boolean) => {
+    if (!isOwnerAdmin) return;
     const updateData: any = { apenas_lembretes };
     if (apenas_lembretes) { updateData.robo = false; updateData.ia_responde = false; }
     const { error } = await supabase
@@ -1935,6 +1943,7 @@ export default function Acionamento() {
   };
 
   const handleToggleRobo = async (id: string, robo: boolean) => {
+    if (!isOwnerAdmin) return;
     const updateData: any = { robo };
     if (robo) updateData.apenas_lembretes = false;
     const { error } = await supabase
@@ -1950,6 +1959,7 @@ export default function Acionamento() {
   };
 
   const handleToggleIaResponde = async (id: string, ia_responde: boolean) => {
+    if (!isOwnerAdmin) return;
     const updateData: any = { ia_responde };
     if (ia_responde) updateData.apenas_lembretes = false;
     const { error } = await supabase
@@ -1965,6 +1975,7 @@ export default function Acionamento() {
   };
 
   const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
+    if (!isOwnerAdmin) return;
     setTestingInstanceId(instance.id);
     try {
       const { data, error } = await supabase.functions.invoke('test-uazapi-connection', {
@@ -2014,6 +2025,7 @@ export default function Acionamento() {
   };
 
   const handleExportarNumeros = async () => {
+    if (!isOwnerAdmin) return;
     let statusMap: Record<string, boolean> = {};
     const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
     if (!jaTemAlgumStatus) {
@@ -2054,13 +2066,13 @@ export default function Acionamento() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">UAZAPI</h1>
           <div className="flex flex-wrap items-center gap-2">
-            {instances.some(i => i.telefone) && (
+            {isOwnerAdmin && instances.some(i => i.telefone) && (
               <Button variant="outline" size="sm" onClick={handleExportarNumeros} className="gap-1">
                 <Download className="h-4 w-4" />
                 <span className="text-xs">Exportar números (Excel)</span>
               </Button>
             )}
-            {instances.length > 0 && (
+            {isOwnerAdmin && instances.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -2101,10 +2113,12 @@ export default function Acionamento() {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Cadastre múltiplos WhatsApps para rotação automática dos envios.
+                      {isOwnerAdmin
+                        ? 'Cadastre múltiplos WhatsApps para rotação automática dos envios.'
+                        : 'Consulte suas instâncias e o estado atual da conexão.'}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2 lg:shrink-0">
+                  {isOwnerAdmin && <div className="flex flex-wrap gap-2 lg:shrink-0">
                     <Button
                       size="sm"
                       variant="outline"
@@ -2142,11 +2156,11 @@ export default function Acionamento() {
                     >
                       <Plus className="h-4 w-4 mr-1" /> Manual
                     </Button>
-                  </div>
+                  </div>}
                 </div>
 
                   {/* QR Code / Pairing Code connection flow */}
-                  {qrStep === 'qr' && (
+                  {isOwnerAdmin && qrStep === 'qr' && (
                     <div className="rounded-md border p-6 space-y-4 bg-muted/20">
                       {/* Phone input step (only for code method, before generation) */}
                       {connectMethod === 'code' && !qrImage && !pairingCode && (
@@ -2300,7 +2314,7 @@ export default function Acionamento() {
                       </div>
 
                       {/* Reconnect via QR button - only for existing disconnected instances */}
-                      {editingInstance.id && connectionStatus[editingInstance.id] === 'disconnected' && !reconnectingInstanceId && (
+                      {isOwnerAdmin && editingInstance.id && connectionStatus[editingInstance.id] === 'disconnected' && !reconnectingInstanceId && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -2314,7 +2328,7 @@ export default function Acionamento() {
                       )}
 
                       {/* Inline QR for reconnection */}
-                      {editingInstance.id && reconnectingInstanceId === editingInstance.id && qrImage && (
+                      {isOwnerAdmin && editingInstance.id && reconnectingInstanceId === editingInstance.id && qrImage && (
                         <div className="flex flex-col items-center gap-3 p-3 rounded-md border bg-background">
                           <p className="text-sm font-medium text-foreground">Escaneie o QR Code para reconectar</p>
                           <img src={qrImage} alt="QR Code" className="w-48 h-48 rounded" />
@@ -2340,7 +2354,7 @@ export default function Acionamento() {
                       )}
 
                       {/* Reconnecting loading state */}
-                      {editingInstance.id && reconnectingInstanceId === editingInstance.id && !qrImage && qrLoading && (
+                      {isOwnerAdmin && editingInstance.id && reconnectingInstanceId === editingInstance.id && !qrImage && qrLoading && (
                         <div className="flex items-center justify-center gap-2 p-4">
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                           <span className="text-sm text-muted-foreground">Obtendo QR Code...</span>
@@ -2428,7 +2442,7 @@ export default function Acionamento() {
 
                         const status = connectionStatus[inst.id];
                         return (
-                          <SortableInstanceCard key={inst.id} id={inst.id}>
+                          <SortableInstanceCard key={inst.id} id={inst.id} canDrag={isOwnerAdmin}>
                             <div className={`flex items-center gap-3 rounded-md border px-3 py-2 ${inst.ativo ? '' : 'opacity-50'}`}>
                               <div className="flex items-center gap-2 min-w-0 flex-1">
                                 {inst.whatsapp_profile_photo_url ? (
@@ -2441,40 +2455,42 @@ export default function Acionamento() {
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5">
                                     <span className="font-medium text-sm truncate">{inst.nome || 'Sem nome'}</span>
-                                    <Badge variant={inst.ativo ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 shrink-0">
-                                      {inst.ativo ? 'Ativo' : 'Inativo'}
-                                    </Badge>
-                                    {inst.ativo && status === 'connected' && (
+                                    {isOwnerAdmin && (
+                                      <Badge variant={inst.ativo ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 shrink-0">
+                                        {inst.ativo ? 'Ativo' : 'Inativo'}
+                                      </Badge>
+                                    )}
+                                    {status === 'connected' && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
                                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
                                         Conectado
                                       </Badge>
                                     )}
-                                    {inst.ativo && status === 'disconnected' && (
+                                    {status === 'disconnected' && (
                                       <Badge variant="destructive" className="text-[10px] px-1.5 py-0 shrink-0">
                                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-destructive-foreground mr-1" />
                                         Desconectado
                                       </Badge>
                                     )}
-                                    {inst.ativo && status === 'checking' && (
+                                    {status === 'checking' && (
                                       <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                     )}
-                                    {inst.apenas_lembretes && (
+                                    {isOwnerAdmin && inst.apenas_lembretes && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-amber-500 text-amber-600">
                                         Só Lembretes
                                       </Badge>
                                     )}
-                                    {inst.robo && (
+                                    {isOwnerAdmin && inst.robo && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-blue-500 text-blue-600">
                                         Robô
                                       </Badge>
                                     )}
-                                    {inst.ia_responde && (
+                                    {isOwnerAdmin && inst.ia_responde && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
                                         IA Responde
                                       </Badge>
                                     )}
-                                    {inst.proxy_enabled && (
+                                    {isOwnerAdmin && inst.proxy_enabled && (
                                       <Badge
                                         variant="outline"
                                         className="text-[10px] px-1.5 py-0 shrink-0 border-purple-500 text-purple-600 gap-1"
@@ -2484,7 +2500,7 @@ export default function Acionamento() {
                                         Proxy
                                       </Badge>
                                     )}
-                                    {notificationInstanceIds.has(inst.id) && (
+                                    {isOwnerAdmin && notificationInstanceIds.has(inst.id) && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-primary text-primary gap-1">
                                         <BellRing className="h-3 w-3" />
                                         Notificações
@@ -2501,29 +2517,33 @@ export default function Acionamento() {
                                         Número não cadastrado
                                       </span>
                                     )}
-                                    <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>
+                                    {isOwnerAdmin && <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>}
                                   </div>
 
                                 </div>
                               </div>
                               <div className="flex flex-col gap-1 shrink-0">
                                 <div className="flex items-center gap-1">
-                                  <Switch
-                                    checked={inst.ativo}
-                                    onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
-                                    className="scale-90"
-                                    title="Ativar/Desativar"
-                                  />
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={() => handleTestInstance(inst)}
-                                    disabled={testingInstanceId === inst.id}
-                                    title="Testar conexão"
-                                  >
-                                    {testingInstanceId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
-                                  </Button>
+                                  {isOwnerAdmin && (
+                                    <>
+                                      <Switch
+                                        checked={inst.ativo}
+                                        onCheckedChange={(checked) => handleToggleInstance(inst.id, checked)}
+                                        className="scale-90"
+                                        title="Ativar/Desativar"
+                                      />
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => handleTestInstance(inst)}
+                                        disabled={testingInstanceId === inst.id}
+                                        title="Testar conexão"
+                                      >
+                                        {testingInstanceId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+                                      </Button>
+                                    </>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -2544,17 +2564,19 @@ export default function Acionamento() {
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 text-destructive hover:text-destructive"
-                                    onClick={() => handleDeleteInstance(inst.id)}
-                                    title="Remover"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
+                                  {isOwnerAdmin && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
+                                      onClick={() => handleDeleteInstance(inst.id)}
+                                      title="Remover"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
                                 </div>
-                                {inst.ativo && (
+                                {isOwnerAdmin && inst.ativo && (
                                   <div className="flex flex-col gap-1 items-end">
                                     <div className="flex items-center gap-1.5">
                                       <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
@@ -2591,7 +2613,7 @@ export default function Acionamento() {
                                     </div>
                                   </div>
                                 )}
-                                {isAdmin && (
+                                {isOwnerAdmin && (
                                   <div className="flex items-center gap-1.5 self-end">
                                     <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`notificacoes-${inst.id}`}>
                                       Notificações pessoais
