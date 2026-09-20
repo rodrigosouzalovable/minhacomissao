@@ -1,6 +1,7 @@
 // Envia notificação WhatsApp para lista de destinatários via UAZAPI
 // Reusa lógica de round-robin de instâncias conectadas do notificar-admin.
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { enqueueAdminNotification } from "./enqueue-admin-notification.ts";
 
 export interface NotificarNumerosParams {
   tipo: string;
@@ -118,6 +119,34 @@ export async function notificarNumeros(
   const erros: string[] = [];
   const instanciaUsadaPorDestino: Record<string, string> = {};
 
+  const { data: adminConfig } = await supabase
+    .from("admin_notificacoes_config")
+    .select("admin_phone")
+    .eq("id", 1)
+    .maybeSingle();
+  const adminPhone = String(adminConfig?.admin_phone || "").replace(/\D/g, "").slice(-8);
+  const adminDestinations = params.destinatarios.filter((destino) => {
+    const digits = String(destino).replace(/\D/g, "");
+    return adminPhone.length === 8 && digits.slice(-8) === adminPhone;
+  });
+  const directDestinations = params.destinatarios.filter((destino) => !adminDestinations.includes(destino));
+
+  let enviadosFila = 0;
+  for (const rawDest of adminDestinations) {
+    const queued = await enqueueAdminNotification(supabase, {
+      tipo: params.tipo,
+      mensagem: params.mensagem,
+      destinatario: rawDest,
+      chaveIdempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${normalizarNumero(rawDest)}` : undefined,
+    });
+    if (queued.queued || queued.skipped === "ja_enfileirada") enviadosFila++;
+    else if (queued.error) erros.push(`${rawDest}: ${queued.error}`);
+  }
+
+  if (!directDestinations.length) {
+    return { success: enviadosFila > 0, enviados: enviadosFila, erros, instanciaUsadaPorDestino };
+  }
+
   // Idempotência global (mesmo tipo+chave = pula tudo)
   if (params.chaveIdempotencia) {
     const { data: ja } = await supabase
@@ -159,7 +188,7 @@ export async function notificarNumeros(
   let cursor = 0;
   const mortas = new Set<string>(); // instâncias descartadas nesta execução (banida/desconectada/token)
 
-  for (const rawDest of params.destinatarios) {
+  for (const rawDest of directDestinations) {
     const numero = normalizarNumero(rawDest);
     let sucesso = false;
     let ultimoErro = "sem_tentativas";
@@ -247,9 +276,11 @@ export async function notificarNumeros(
       });
     }
 
-    // Delay pequeno entre destinatários
-    await new Promise((r) => setTimeout(r, 1500));
+    // Destinos externos ao número pessoal mantêm o fluxo próprio com jitter curto.
+    if (rawDest !== directDestinations[directDestinations.length - 1]) {
+      await new Promise((r) => setTimeout(r, 1000 + Math.floor(Math.random() * 2001)));
+    }
   }
 
-  return { success: enviados > 0, enviados, erros, instanciaUsadaPorDestino };
+  return { success: enviados + enviadosFila > 0, enviados: enviados + enviadosFila, erros, instanciaUsadaPorDestino };
 }

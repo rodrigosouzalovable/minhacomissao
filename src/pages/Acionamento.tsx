@@ -27,7 +27,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAutoSend } from '@/hooks/useAutoSend';
 import type { UazapiInstance } from '@/hooks/useAutoSend';
-import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy, Calculator, Clock, CalendarClock, Download, Power, Network } from 'lucide-react';
+import { Upload, Save, Check, X, Loader2, Trash2, FileSpreadsheet, Play, Square, Settings, Wifi, WifiOff, Send, Plus, Pencil, Target, AlertTriangle, RefreshCw, Bot, MessageCircle, Copy, Calculator, Clock, CalendarClock, Download, Power, Network, BellRing } from 'lucide-react';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -251,6 +251,8 @@ export default function Acionamento() {
   
   // Multi-instance UAZAPI state
   const [instances, setInstances] = useState<Array<{ id: string; nome: string; telefone?: string | null; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string; proxy_enabled?: boolean; proxy_host?: string | null }>>([]);
+  const [notificationInstanceIds, setNotificationInstanceIds] = useState<Set<string>>(new Set());
+  const [savingNotificationInstanceId, setSavingNotificationInstanceId] = useState<string | null>(null);
   const [filtroInstancia, setFiltroInstancia] = useState('');
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
 
@@ -398,6 +400,22 @@ export default function Acionamento() {
     }
     localStorage.removeItem(AUTO_SENDING_KEY);
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !isAdmin) return;
+    const loadNotificationInstances = async () => {
+      const { data, error } = await supabase
+        .from('admin_notificacao_instancias')
+        .select('instancia_id')
+        .eq('ativa', true);
+      if (error) {
+        toast.error('Não foi possível carregar os números de notificações');
+        return;
+      }
+      setNotificationInstanceIds(new Set((data || []).map((row) => row.instancia_id)));
+    };
+    loadNotificationInstances();
+  }, [user, isAdmin]);
 
   // Fetch UAZAPI instances from database
   useEffect(() => {
@@ -1835,6 +1853,26 @@ export default function Acionamento() {
     setInstances(prev => prev.map(i => i.id === id ? { ...i, ativo } : i));
   };
 
+  const handleToggleNotificationInstance = async (id: string, ativa: boolean) => {
+    if (!isAdmin) return;
+    setSavingNotificationInstanceId(id);
+    const { error } = await supabase.rpc('definir_instancia_notificacao_uazapi', {
+      p_instancia_id: id,
+      p_ativa: ativa,
+    });
+    setSavingNotificationInstanceId(null);
+    if (error) {
+      toast.error(`Erro ao alterar notificações: ${error.message}`);
+      return;
+    }
+    setNotificationInstanceIds((current) => {
+      const next = new Set(current);
+      if (ativa) next.add(id); else next.delete(id);
+      return next;
+    });
+    toast.success(ativa ? 'Número ativado para notificações pessoais' : 'Número removido das notificações pessoais');
+  };
+
   const [ativandoTodas, setAtivandoTodas] = useState(false);
   const handleAtivarTodasInstancias = async () => {
     const inativas = instances.filter(i => !i.ativo);
@@ -2440,6 +2478,12 @@ export default function Acionamento() {
                                         Proxy
                                       </Badge>
                                     )}
+                                    {notificationInstanceIds.has(inst.id) && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-primary text-primary gap-1">
+                                        <BellRing className="h-3 w-3" />
+                                        Notificações
+                                      </Badge>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-2">
                                     {inst.telefone ? (
@@ -2539,6 +2583,23 @@ export default function Acionamento() {
                                         className="h-3.5 w-3.5"
                                       />
                                     </div>
+                                  </div>
+                                )}
+                                {isAdmin && (
+                                  <div className="flex items-center gap-1.5 self-end">
+                                    <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`notificacoes-${inst.id}`}>
+                                      Notificações pessoais
+                                    </Label>
+                                    {savingNotificationInstanceId === inst.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                    ) : (
+                                      <Switch
+                                        id={`notificacoes-${inst.id}`}
+                                        checked={notificationInstanceIds.has(inst.id)}
+                                        onCheckedChange={(checked) => handleToggleNotificationInstance(inst.id, checked)}
+                                        className="scale-75"
+                                      />
+                                    )}
                                   </div>
                                 )}
                               </div>

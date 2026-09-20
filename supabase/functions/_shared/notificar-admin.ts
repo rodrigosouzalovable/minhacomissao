@@ -1,6 +1,7 @@
 // Helper compartilhado para enviar notificações ao admin via WhatsApp
 // Round-robin entre instâncias ativas, com idempotência
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { enqueueAdminNotification } from "./enqueue-admin-notification.ts";
 
 export interface NotificarAdminParams {
   tipo: string;
@@ -208,67 +209,6 @@ export async function notificarAdmin(
       return { success: false, skipped: "flag_desativada" };
     }
 
-    if (params.chaveIdempotencia) {
-      let q = supabase
-        .from("admin_notificacoes_log")
-        .select("id")
-        .eq("tipo", params.tipo)
-        .like("chave_idempotencia", `${params.chaveIdempotencia}%`);
-      // Por padrão só bloqueia se já foi entregue; com umaVezPorChave qualquer
-      // tentativa registrada (inclusive com erro) impede o reenvio.
-      if (!params.umaVezPorChave) q = q.eq("status", "enviado");
-      const { data: ja } = await q.limit(1);
-      if (ja?.length) return { success: false, skipped: "ja_enviado" };
-    }
-
-
-    // Remetente ÚNICO: todas as notificações saem sempre pelo mesmo número.
-    // Só troca (e persiste o novo) se o remetente fixo estiver fora do ar.
-    const { data: insts } = await supabase
-      .from("user_whatsapp_instances")
-      .select("id, server_url, instance_token, nome")
-      .eq("ativo", true)
-      .not("server_url", "is", null)
-      .not("instance_token", "is", null)
-      .order("id", { ascending: true });
-
-    if (!insts?.length) return { success: false, error: "sem_instancia_ativa", fallback: true };
-
-    const fixaId: string | null = (cfg as any).instancia_notificacao_id ?? null;
-    const fixa = fixaId ? insts.find((i: any) => i.id === fixaId) : null;
-
-    let orderedInsts: any[] = [];
-    if (fixa && (await checkInstanceConnected(fixa))) {
-      // Caminho normal: nem verifica as outras (mais rápido e mais barato).
-      orderedInsts = [fixa];
-    } else {
-      const statusChecks = await Promise.allSettled(
-        insts.map(async (inst: any) => ({ inst, connected: await checkInstanceConnected(inst) })),
-      );
-      const connectedIds = new Set(
-        statusChecks
-          .filter((r): r is PromiseFulfilledResult<{ inst: any; connected: boolean }> => r.status === "fulfilled")
-          .filter((r) => r.value.connected)
-          .map((r) => r.value.inst.id),
-      );
-      orderedInsts = insts.filter((inst: any) => connectedIds.has(inst.id));
-    }
-
-
-    if (!orderedInsts.length) {
-      const erroFinal = `nenhuma_instancia_conectada; ativas_verificadas=${insts.length}`;
-      await supabase.from("admin_notificacoes_log").insert({
-        tipo: params.tipo,
-        chave_idempotencia: params.chaveIdempotencia ?? null,
-        mensagem: params.mensagem,
-        status: "erro",
-        erro_detalhe: erroFinal,
-      });
-      return { success: false, error: erroFinal, fallback: true };
-    }
-
-
-
     const brutos = params.destinatarios?.length
       ? params.destinatarios
       : [String(cfg.admin_phone)];
@@ -283,131 +223,17 @@ export async function notificarAdmin(
     if (!destinos.length) return { success: false, error: "sem_destinatario", fallback: true };
 
     const mensagemFinal = `🤖 *Aviso Sistema*\n\n${params.mensagem}`;
-
-    const enviarPara = async (numeroFinal: string): Promise<{ ok: boolean; erro?: string; skipped?: string }> => {
-      const chaveDest = params.chaveIdempotencia ? `${params.chaveIdempotencia}:${numeroFinal}` : null;
-
-      // === TRAVA ATÔMICA ===
-      // Reserva a chave ANTES de enviar. Se outra execução simultânea já
-      // reservou (índice único em tipo + chave_idempotencia), aborta sem enviar.
-      let reservaId: string | null = null;
-      if (chaveDest) {
-        const { data: reserva, error: erroReserva } = await supabase
-          .from("admin_notificacoes_log")
-          .insert({
-            tipo: params.tipo,
-            chave_idempotencia: chaveDest,
-            mensagem: `[${numeroFinal}] ${params.mensagem}`,
-            status: "reservado",
-          })
-          .select("id")
-          .maybeSingle();
-        if (erroReserva || !reserva?.id) {
-          return { ok: false, skipped: "ja_enviado", erro: "ja_reservado" };
-        }
-        reservaId = (reserva as any).id;
-      }
-
-      const registrar = async (campos: Record<string, unknown>) => {
-        if (reservaId) {
-          await supabase.from("admin_notificacoes_log").update(campos).eq("id", reservaId);
-          return;
-        }
-        await supabase.from("admin_notificacoes_log").insert({
-          tipo: params.tipo,
-          chave_idempotencia: chaveDest,
-          mensagem: `[${numeroFinal}] ${params.mensagem}`,
-          ...campos,
-        });
-      };
-
-      let ultimoErro = "sem_tentativas";
-      const errosTentativas: string[] = [];
-      // Ordem fixa: remetente único primeiro; as demais são só plano B.
-      for (let t = 0; t < orderedInsts.length; t++) {
-        const inst: any = orderedInsts[t];
-
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-          const ctrl = new AbortController();
-          timer = setTimeout(() => ctrl.abort(), 7000);
-          const cleanUrl = String(inst.server_url).replace(/\/+$/, "");
-          const endpoints = [`${cleanUrl}/send/text`, `${cleanUrl}/message/sendText`, `${cleanUrl}/sendText`];
-
-          for (const endpoint of endpoints) {
-            const res = await fetch(endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", token: inst.instance_token },
-              body: JSON.stringify({ number: numeroFinal, text: mensagemFinal }),
-              signal: ctrl.signal,
-            });
-            const respText = await res.text();
-            const providerError = hasProviderError(respText);
-            if (res.ok && !providerError) {
-              if (timer) clearTimeout(timer);
-              await registrar({ instancia_envio_id: inst.id, status: "enviado", enviado_em: new Date().toISOString() });
-              await supabase
-                .from("admin_notificacoes_config")
-                .update({
-                  ultima_instancia_id: inst.id,
-                  instancia_notificacao_id: inst.id,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", 1);
-
-              return { ok: true };
-            }
-
-            ultimoErro = `${inst.nome ?? inst.id}: ${respText || `HTTP ${res.status}`}`.substring(0, 1000);
-            errosTentativas.push(ultimoErro);
-            if (res.status === 405) continue;
-            if (!isRetryableInstanceError(respText, res.status)) break;
-          }
-          if (timer) clearTimeout(timer);
-        } catch (e) {
-          if (timer) clearTimeout(timer);
-          ultimoErro = `${inst.nome ?? inst.id}: ${String(e)}`.substring(0, 1000);
-          errosTentativas.push(ultimoErro);
-        }
-      }
-
-      // Último recurso: tenta pela API Oficial da Meta (só entrega se houver janela de 24h aberta)
-      const viaMeta = await tentarViaMetaOficial(supabase, numeroFinal, mensagemFinal);
-      if (viaMeta.ok) {
-        await registrar({
-          status: "enviado",
-          enviado_em: new Date().toISOString(),
-          erro_detalhe: `fallback_meta_oficial; uazapi: ${errosTentativas.slice(-3).join(" | ")}`.slice(0, 4000),
-        });
-        return { ok: true };
-      }
-      if (viaMeta.erro) errosTentativas.push(`meta_oficial: ${viaMeta.erro}`);
-
-      const erroFinal = errosTentativas.slice(-10).join(" | ") || ultimoErro;
-      if (reservaId && !params.umaVezPorChave) {
-        // Falhou a entrega: libera a chave para que uma tentativa futura possa
-        // reenviar, mas mantém o registro de erro (sem chave) para auditoria.
-        await supabase.from("admin_notificacoes_log")
-          .update({ chave_idempotencia: null, status: "erro", erro_detalhe: erroFinal })
-          .eq("id", reservaId);
-      } else {
-        await registrar({ status: "erro", erro_detalhe: erroFinal });
-      }
-      return { ok: false, erro: erroFinal };
-    };
-
-
-    const resultados: { ok: boolean; erro?: string }[] = [];
-    for (const dest of destinos) {
-      resultados.push(await enviarPara(dest));
+    const resultados = await Promise.all(destinos.map((destino) => enqueueAdminNotification(supabase, {
+      tipo: params.tipo,
+      mensagem: mensagemFinal,
+      destinatario: destino,
+      chaveIdempotencia: params.chaveIdempotencia ? `${params.chaveIdempotencia}:${destino}` : undefined,
+    })));
+    if (resultados.some((resultado) => resultado.queued)) return { success: true };
+    if (resultados.every((resultado) => resultado.skipped === "ja_enfileirada")) {
+      return { success: false, skipped: "ja_enviado" };
     }
-
-    if (resultados.some((r) => r.ok)) return { success: true };
-    return {
-      success: false,
-      error: resultados.map((r) => r.erro).filter(Boolean).join(" || ").substring(0, 1000),
-      fallback: true,
-    };
+    return { success: false, error: resultados.map((resultado) => resultado.error).filter(Boolean).join(" || ").slice(0, 1000), fallback: true };
   } catch (e) {
     return { success: false, error: String(e).substring(0, 200), fallback: true };
   }

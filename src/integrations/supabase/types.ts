@@ -234,47 +234,183 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_notificacao_instancias: {
+        Row: {
+          ativa: boolean
+          ativada_por: string | null
+          atualizada_em: string
+          criada_em: string
+          instancia_id: string
+        }
+        Insert: {
+          ativa?: boolean
+          ativada_por?: string | null
+          atualizada_em?: string
+          criada_em?: string
+          instancia_id: string
+        }
+        Update: {
+          ativa?: boolean
+          ativada_por?: string | null
+          atualizada_em?: string
+          criada_em?: string
+          instancia_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notificacao_instancias_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: true
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_notificacao_instancias_auditoria: {
+        Row: {
+          alterada_em: string
+          alterada_por: string | null
+          ativa: boolean
+          id: string
+          instancia_id: string | null
+        }
+        Insert: {
+          alterada_em?: string
+          alterada_por?: string | null
+          ativa: boolean
+          id?: string
+          instancia_id?: string | null
+        }
+        Update: {
+          alterada_em?: string
+          alterada_por?: string | null
+          ativa?: boolean
+          id?: string
+          instancia_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notificacao_instancias_auditoria_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_notificacoes_config: {
         Row: {
           admin_phone: string
           created_at: string
+          fila_processando_ate: string | null
+          fila_processando_id: string | null
           id: number
           instancia_notificacao_id: string | null
           notificar_chip_desconectado: boolean
           notificar_chip_pausado: boolean
           notificar_proxies_faltando: boolean
           notificar_resumo_diario: boolean
+          proxima_notificacao_em: string | null
           ultima_instancia_id: string | null
           updated_at: string
         }
         Insert: {
           admin_phone?: string
           created_at?: string
+          fila_processando_ate?: string | null
+          fila_processando_id?: string | null
           id?: number
           instancia_notificacao_id?: string | null
           notificar_chip_desconectado?: boolean
           notificar_chip_pausado?: boolean
           notificar_proxies_faltando?: boolean
           notificar_resumo_diario?: boolean
+          proxima_notificacao_em?: string | null
           ultima_instancia_id?: string | null
           updated_at?: string
         }
         Update: {
           admin_phone?: string
           created_at?: string
+          fila_processando_ate?: string | null
+          fila_processando_id?: string | null
           id?: number
           instancia_notificacao_id?: string | null
           notificar_chip_desconectado?: boolean
           notificar_chip_pausado?: boolean
           notificar_proxies_faltando?: boolean
           notificar_resumo_diario?: boolean
+          proxima_notificacao_em?: string | null
           ultima_instancia_id?: string | null
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "admin_notificacoes_config_fila_processando_id_fkey"
+            columns: ["fila_processando_id"]
+            isOneToOne: false
+            referencedRelation: "admin_notificacoes_fila"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "admin_notificacoes_config_instancia_notificacao_id_fkey"
             columns: ["instancia_notificacao_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_notificacoes_fila: {
+        Row: {
+          agendada_para: string
+          chave_idempotencia: string | null
+          criada_em: string
+          destinatario: string
+          erro_detalhe: string | null
+          fallback: boolean
+          id: string
+          instancia_envio_id: string | null
+          mensagem: string
+          processada_em: string | null
+          status: string
+          tentativas: number
+          tipo: string
+        }
+        Insert: {
+          agendada_para: string
+          chave_idempotencia?: string | null
+          criada_em?: string
+          destinatario: string
+          erro_detalhe?: string | null
+          fallback?: boolean
+          id?: string
+          instancia_envio_id?: string | null
+          mensagem: string
+          processada_em?: string | null
+          status?: string
+          tentativas?: number
+          tipo: string
+        }
+        Update: {
+          agendada_para?: string
+          chave_idempotencia?: string | null
+          criada_em?: string
+          destinatario?: string
+          erro_detalhe?: string | null
+          fallback?: boolean
+          id?: string
+          instancia_envio_id?: string | null
+          mensagem?: string
+          processada_em?: string | null
+          status?: string
+          tentativas?: number
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notificacoes_fila_instancia_envio_id_fkey"
+            columns: ["instancia_envio_id"]
             isOneToOne: false
             referencedRelation: "user_whatsapp_instances"
             referencedColumns: ["id"]
@@ -10586,6 +10722,10 @@ export type Database = {
       cpf_has_acordo: { Args: { p_cpf: string }; Returns: boolean }
       cpf_normalize: { Args: { cpf_input: string }; Returns: string }
       cpf_ultimo_acordo_quebrado: { Args: { p_cpf: string }; Returns: boolean }
+      definir_instancia_notificacao_uazapi: {
+        Args: { p_ativa: boolean; p_instancia_id: string }
+        Returns: boolean
+      }
       definir_ponto_exigencia: { Args: { p_ativo: boolean }; Returns: boolean }
       delete_acordo_atomico: {
         Args: { p_acordo_id: string }
@@ -10594,6 +10734,19 @@ export type Database = {
       delete_importacao_em_lotes: {
         Args: { p_importacao_id: string }
         Returns: Json
+      }
+      enfileirar_notificacao_admin: {
+        Args: {
+          p_chave_idempotencia: string
+          p_destinatario: string
+          p_mensagem: string
+          p_tipo: string
+        }
+        Returns: {
+          agendada_para: string
+          criada: boolean
+          id: string
+        }[]
       }
       envio_meta_claim_due_job: {
         Args: { _job_id?: string; _lock_seconds?: number }
@@ -10676,6 +10829,16 @@ export type Database = {
       excluir_parcela_pendente: {
         Args: { p_pagamento_id: string }
         Returns: undefined
+      }
+      finalizar_notificacao_admin: {
+        Args: {
+          p_erro?: string
+          p_fallback?: boolean
+          p_id: string
+          p_instancia_id?: string
+          p_status: string
+        }
+        Returns: number
       }
       finish_meta_templates_sync_diario: {
         Args: {
@@ -10946,6 +11109,7 @@ export type Database = {
       is_consultoria_aluno: { Args: { _uid: string }; Returns: boolean }
       is_instancia_parceiro: { Args: { _instancia: string }; Returns: boolean }
       is_parceiro_meta: { Args: { _uid: string }; Returns: boolean }
+      liberar_trava_notificacao_admin: { Args: never; Returns: undefined }
       limpar_pix_links_expirados: { Args: never; Returns: number }
       listar_credores_distintos: {
         Args: never
@@ -11141,6 +11305,54 @@ export type Database = {
           _telefone_normalizado: string
         }
         Returns: undefined
+      }
+      reivindicar_notificacao_admin: {
+        Args: { p_id: string }
+        Returns: {
+          agendada_para: string
+          chave_idempotencia: string | null
+          criada_em: string
+          destinatario: string
+          erro_detalhe: string | null
+          fallback: boolean
+          id: string
+          instancia_envio_id: string | null
+          mensagem: string
+          processada_em: string | null
+          status: string
+          tentativas: number
+          tipo: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_notificacoes_fila"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reivindicar_proxima_notificacao_admin: {
+        Args: never
+        Returns: {
+          agendada_para: string
+          chave_idempotencia: string | null
+          criada_em: string
+          destinatario: string
+          erro_detalhe: string | null
+          fallback: boolean
+          id: string
+          instancia_envio_id: string | null
+          mensagem: string
+          processada_em: string | null
+          status: string
+          tentativas: number
+          tipo: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "admin_notificacoes_fila"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       relatorio_ume_acionamentos: {
         Args: { _data: string }
