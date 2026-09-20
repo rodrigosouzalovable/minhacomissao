@@ -8,6 +8,7 @@ const corsHeaders = {
 
 // Provedores no protocolo padrão de ativação SMS (compatível SMS-Activate)
 type Provider = "virtualsms" | "sms24h";
+const OWNER_ADMIN_ID = "ee649720-b8ce-47a2-859e-100a3a9ae6bb";
 
 const PROVIDERS: Record<Provider, { base: string; secret: string; label: string; moeda: string }> = {
   virtualsms: {
@@ -121,7 +122,9 @@ serve(async (req) => {
     if (userErr || !user) return json({ error: "Sessão inválida" }, 401);
 
     const { data: isAdmin } = await admin.rpc("has_role", { _user_id: user.id, _role: "admin" });
-    if (!isAdmin) return json({ error: "Apenas administradores podem usar números virtuais." }, 403);
+    if (!isAdmin || user.id !== OWNER_ADMIN_ID) {
+      return json({ error: "Acesso restrito ao administrador proprietário." }, 403);
+    }
 
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const action = String(body?.action || "saldo");

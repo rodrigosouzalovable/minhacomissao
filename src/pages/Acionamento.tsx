@@ -64,6 +64,7 @@ const SEND_STATUS_BASE = 'acionamento_send_status';
 const MANUAL_CHECKED_BASE = 'acionamento_manual_checked';
 const SEND_TIMESTAMPS_BASE = 'acionamento_send_timestamps';
 const AUTO_SENDING_BASE = 'acionamento_auto_sending_state';
+const OWNER_ADMIN_ID = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
 
 const normalizePhoneForWhatsApp = (phone: string): string => {
   const clean = phone.replace(/\D/g, '');
@@ -228,6 +229,7 @@ function SortableInstanceCard({ id, children }: { id: string; children: React.Re
 export default function Acionamento() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const isOwnerAdmin = isAdmin && user?.id === OWNER_ADMIN_ID;
   const [clientes, setClientes] = useState<ClienteData[]>([]);
   const [mensagem, setMensagem] = useState('');
   const [mensagensSalvas, setMensagensSalvas] = useState<string[]>([]);
@@ -402,7 +404,7 @@ export default function Acionamento() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || !isAdmin) return;
+    if (!user || !isOwnerAdmin) return;
     const loadNotificationInstances = async () => {
       const { data, error } = await supabase
         .from('admin_notificacao_instancias')
@@ -415,7 +417,7 @@ export default function Acionamento() {
       setNotificationInstanceIds(new Set((data || []).map((row) => row.instancia_id)));
     };
     loadNotificationInstances();
-  }, [user, isAdmin]);
+  }, [user, isOwnerAdmin]);
 
   // Fetch UAZAPI instances from database
   useEffect(() => {
@@ -437,7 +439,7 @@ export default function Acionamento() {
 
   // Load relatório diário config
   useEffect(() => {
-    if (!user || !isAdmin) return;
+    if (!user || !isOwnerAdmin) return;
     const loadRelatorioConfig = async () => {
       const { data } = await supabase
         .from('relatorio_diario_config' as any)
@@ -451,9 +453,13 @@ export default function Acionamento() {
       }
     };
     loadRelatorioConfig();
-  }, [user, isAdmin]);
+  }, [user, isOwnerAdmin]);
 
   const handleSalvarRelatorio = async () => {
+    if (!isOwnerAdmin) {
+      toast.error('Acesso restrito ao administrador proprietário');
+      return;
+    }
     if (!relatorioInstanciaId || !relatorioTelefone) {
       toast.error('Selecione uma instância e informe o telefone destino');
       return;
@@ -2355,7 +2361,7 @@ export default function Acionamento() {
                   )}
 
                   {/* Números virtuais (VirtualSMS) — só admin, recolhível (inicia minimizado) */}
-                  {isAdmin && (
+                  {isOwnerAdmin && (
                     <Collapsible open={numerosVirtuaisOpen} onOpenChange={setNumerosVirtuaisOpen}>
                       <CollapsibleTrigger asChild>
                         <button
@@ -2613,7 +2619,7 @@ export default function Acionamento() {
 
 
 
-              {isAdmin && (
+              {isOwnerAdmin && (
                 <>
                   <Separator />
                   <div className="space-y-3">
@@ -2658,7 +2664,7 @@ export default function Acionamento() {
                 </>
               )}
 
-              {user?.email === 'rodrigo.rs2013@gmail.com' && (
+              {isOwnerAdmin && (
                 <>
                   <Separator />
                   <div className="space-y-3">

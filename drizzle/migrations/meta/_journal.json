@@ -246,6 +246,13 @@
       "when": 1789942312221,
       "tag": "0034_serialize_uazapi_personal_notification_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1789946801732,
+      "tag": "0035_restrict_whatsapp_advanced_controls_to_owner_admin",
+      "breakpoints": true
     }
   ]
 }

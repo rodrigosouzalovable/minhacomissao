@@ -29,6 +29,8 @@ import { RecuperacaoQualidadePanel } from '@/components/meta/RecuperacaoQualidad
 
 import { RampupTierAvisoCard } from '@/components/meta/RampupTierAvisoCard';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from '@/hooks/use-toast';
 import {
   MessageSquare,
@@ -64,6 +66,8 @@ interface WebhookDiag {
   error?: string;
 }
 
+const OWNER_ADMIN_ID = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
+
 function getStatus(inst: InstanceStats, limite: number) {
   if (!inst.ativo) return { label: 'Pausado', color: 'bg-muted text-muted-foreground', emoji: '⏸️' };
   if (inst.enviadas_hoje >= limite) return { label: 'Limite atingido', color: 'bg-destructive/15 text-destructive', emoji: '🔴' };
@@ -80,6 +84,9 @@ function calcProximoEnvio(inst: InstanceStats, delay: number, totalAtivas: numbe
 }
 
 export default function MonitorEnvios() {
+  const { user } = useAuth();
+  const { isAdmin } = useUserRole();
+  const isOwnerAdmin = isAdmin && user?.id === OWNER_ADMIN_ID;
   const [limiteDiario, setLimiteDiario] = useState(30);
   const [delaySegundos, setDelaySegundos] = useState(400);
   const [configOpen, setConfigOpen] = useState(false);
@@ -128,6 +135,10 @@ export default function MonitorEnvios() {
   };
 
   const handleRepairAll = async () => {
+    if (!isOwnerAdmin) {
+      toast({ title: 'Acesso restrito', description: 'Esta ação é exclusiva do administrador proprietário.', variant: 'destructive' });
+      return;
+    }
     if (!confirm('Reativar o webhook de TODAS as instâncias ativas?\n\nIsso restaura o recebimento de respostas no Inbox mantendo grupos e broadcasts BLOQUEADOS.')) return;
     setRepairLoading(true);
     try {
@@ -193,17 +204,19 @@ export default function MonitorEnvios() {
               <Stethoscope className="h-4 w-4 mr-1" />
               {diagLoading ? 'Diagnosticando...' : 'Diagnosticar Webhooks'}
             </Button>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleRepairAll}
-              disabled={repairLoading}
-              title="Reativa o webhook de TODAS as instâncias ativas em um clique (UAZAPI)"
-              className="bg-amber-500 hover:bg-amber-600 text-white"
-            >
-              <Zap className="h-4 w-4 mr-1" />
-              {repairLoading ? 'Reativando...' : 'Reativar Todos Webhooks'}
-            </Button>
+            {isOwnerAdmin && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleRepairAll}
+                disabled={repairLoading}
+                title="Reativa o webhook de TODAS as instâncias ativas em um clique (UAZAPI)"
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                <Zap className="h-4 w-4 mr-1" />
+                {repairLoading ? 'Reativando...' : 'Reativar Todos Webhooks'}
+              </Button>
+            )}
             <Button
               variant="destructive"
               size="sm"
