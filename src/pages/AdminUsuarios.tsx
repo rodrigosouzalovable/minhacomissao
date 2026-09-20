@@ -318,6 +318,16 @@ export default function AdminUsuarios() {
     },
   });
 
+  const newPasswordError = (() => {
+    if (!newUserPassword) return '';
+    if (newUserPassword.length < 8) return 'Use pelo menos 8 caracteres.';
+    if (!/[a-z]/.test(newUserPassword)) return 'Inclua uma letra minúscula.';
+    if (!/[A-Z]/.test(newUserPassword)) return 'Inclua uma letra maiúscula.';
+    if (!/[0-9]/.test(newUserPassword)) return 'Inclua um número.';
+    if (!/[^A-Za-z0-9]/.test(newUserPassword)) return 'Inclua um caractere especial.';
+    return '';
+  })();
+
   const handleResetPassword = (newPassword: string) => {
     if (resetPasswordUser) {
       resetPasswordMutation.mutate({ userId: resetPasswordUser.id, newPassword });
@@ -446,6 +456,10 @@ export default function AdminUsuarios() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (newPasswordError) {
+                  toast({ title: 'Senha inválida', description: newPasswordError, variant: 'destructive' });
+                  return;
+                }
                 createUserMutation.mutate({
                   nome: newUserNome,
                   email: newUserEmail,
@@ -481,11 +495,14 @@ export default function AdminUsuarios() {
                   <Input
                     id="newUserPassword"
                     type={showNewUserPassword ? 'text' : 'password'}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Senha forte com 8+ caracteres"
                     value={newUserPassword}
                     onChange={(e) => setNewUserPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
+                    maxLength={72}
+                    aria-invalid={Boolean(newPasswordError)}
+                    aria-describedby="newUserPasswordError"
                     className="pr-10"
                   />
                   <Button
@@ -502,10 +519,13 @@ export default function AdminUsuarios() {
                     )}
                   </Button>
                 </div>
+                {newPasswordError && (
+                  <p id="newUserPasswordError" className="text-xs text-destructive">{newPasswordError}</p>
+                )}
               </div>
               <Button
                 type="submit"
-                disabled={createUserMutation.isPending}
+                disabled={createUserMutation.isPending || Boolean(newPasswordError)}
                 className="w-full"
               >
                 {createUserMutation.isPending ? 'Criando...' : 'Criar Usuário'}
