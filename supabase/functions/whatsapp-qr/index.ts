@@ -29,25 +29,25 @@ async function getInstanceById(instanceId: string) {
 async function authenticateUazapiAccess(req: Request) {
   const authHeader = req.headers.get("Authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token) return { error: json({ error: "Não autenticado" }, 401) };
+  if (!token) return { error: json({ error: "Não autenticado" }, 401), requester: null, isAdmin: false };
 
   const sb = getSupabaseAdmin();
   const { data: userData, error: userError } = await sb.auth.getUser(token);
   const requester = userData?.user;
-  if (userError || !requester) return { error: json({ error: "Sessão inválida" }, 401) };
+  if (userError || !requester) return { error: json({ error: "Sessão inválida" }, 401), requester: null, isAdmin: false };
 
   const [{ data: isAdmin }, { data: isGestor }, { data: permissions, error: permissionsError }] = await Promise.all([
     sb.rpc("has_role", { _user_id: requester.id, _role: "admin" }),
     sb.rpc("has_role", { _user_id: requester.id, _role: "gestor" }),
     sb.from("user_permissions").select("abas_permitidas").eq("user_id", requester.id).maybeSingle(),
   ]);
-  if (permissionsError) return { error: json({ error: "Não foi possível validar a permissão" }, 500) };
+  if (permissionsError) return { error: json({ error: "Não foi possível validar a permissão" }, 500), requester: null, isAdmin: false };
 
   const abasPermitidas = Array.isArray(permissions?.abas_permitidas) ? permissions.abas_permitidas : null;
   const hasAccess = Boolean(isAdmin) || abasPermitidas?.includes("/admin/acionamento") || (!permissions && Boolean(isGestor));
-  if (!hasAccess) return { error: json({ error: "Sem acesso à aba UAZAPI" }, 403) };
+  if (!hasAccess) return { error: json({ error: "Sem acesso à aba UAZAPI" }, 403), requester: null, isAdmin: false };
 
-  return { requester, isAdmin: Boolean(isAdmin) };
+  return { error: null, requester, isAdmin: Boolean(isAdmin) };
 }
 
 async function assertInstanceOwnership(instanceId: string, userId: string) {
@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
     const access = await authenticateUazapiAccess(req);
     if (access.error) return access.error;
     const requester = access.requester;
+    if (!requester) return json({ error: "Sessão inválida" }, 401);
 
     if (action === "setup-webhook-all") {
       if (!access.isAdmin || requester.id !== OWNER_ADMIN_ID) {
