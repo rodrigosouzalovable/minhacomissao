@@ -203,8 +203,8 @@ function formatarTelefoneBR(v?: string | null): string {
 }
 
 
-function SortableInstanceCard({ id, children }: { id: string; children: React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+function SortableInstanceCard({ id, children, canDrag = true }: { id: string; children: React.ReactNode; canDrag?: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !canDrag });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -213,15 +213,17 @@ function SortableInstanceCard({ id, children }: { id: string; children: React.Re
   };
   return (
     <div ref={setNodeRef} style={style} className="group/drag relative">
-      <button
-        {...attributes}
-        {...listeners}
-        className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/drag:opacity-60 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 z-10"
-        tabIndex={-1}
-      >
-        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-      </button>
-      <div className="pl-5">{children}</div>
+      {canDrag && (
+        <button
+          {...attributes}
+          {...listeners}
+          className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/drag:opacity-60 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 z-10"
+          tabIndex={-1}
+        >
+          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+      )}
+      <div className={canDrag ? "pl-5" : undefined}>{children}</div>
     </div>
   );
 }
@@ -1561,6 +1563,7 @@ export default function Acionamento() {
   };
 
   const handleInstanceDragEnd = async (event: DragEndEvent) => {
+    if (!isOwnerAdmin) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = instances.findIndex(i => i.id === active.id);
@@ -1835,6 +1838,7 @@ export default function Acionamento() {
   };
 
   const handleDeleteInstance = async (id: string) => {
+    if (!isOwnerAdmin) return;
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
       .delete()
@@ -1848,6 +1852,7 @@ export default function Acionamento() {
   };
 
   const handleToggleInstance = async (id: string, ativo: boolean) => {
+    if (!isOwnerAdmin) return;
     const { error } = await supabase
       .from('user_whatsapp_instances' as any)
       .update({ ativo } as any)
@@ -1860,7 +1865,7 @@ export default function Acionamento() {
   };
 
   const handleToggleNotificationInstance = async (id: string, ativa: boolean) => {
-    if (!isAdmin) return;
+    if (!isOwnerAdmin) return;
     setSavingNotificationInstanceId(id);
     const { error } = await supabase.rpc('definir_instancia_notificacao_uazapi', {
       p_instancia_id: id,
@@ -1881,6 +1886,7 @@ export default function Acionamento() {
 
   const [ativandoTodas, setAtivandoTodas] = useState(false);
   const handleAtivarTodasInstancias = async () => {
+    if (!isOwnerAdmin) return;
     const inativas = instances.filter(i => !i.ativo);
     if (inativas.length === 0) {
       toast.info('Todas as instâncias já estão ativas.');
@@ -1904,6 +1910,7 @@ export default function Acionamento() {
   };
 
   const handleToggleApenasLembretes = async (id: string, apenas_lembretes: boolean) => {
+    if (!isOwnerAdmin) return;
     const updateData: any = { apenas_lembretes };
     if (apenas_lembretes) { updateData.robo = false; updateData.ia_responde = false; }
     const { error } = await supabase
@@ -1935,6 +1942,7 @@ export default function Acionamento() {
   };
 
   const handleToggleRobo = async (id: string, robo: boolean) => {
+    if (!isOwnerAdmin) return;
     const updateData: any = { robo };
     if (robo) updateData.apenas_lembretes = false;
     const { error } = await supabase
@@ -1950,6 +1958,7 @@ export default function Acionamento() {
   };
 
   const handleToggleIaResponde = async (id: string, ia_responde: boolean) => {
+    if (!isOwnerAdmin) return;
     const updateData: any = { ia_responde };
     if (ia_responde) updateData.apenas_lembretes = false;
     const { error } = await supabase
@@ -1965,6 +1974,7 @@ export default function Acionamento() {
   };
 
   const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
+    if (!isOwnerAdmin) return;
     setTestingInstanceId(instance.id);
     try {
       const { data, error } = await supabase.functions.invoke('test-uazapi-connection', {
