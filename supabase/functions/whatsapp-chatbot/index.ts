@@ -3062,7 +3062,7 @@ serve(async (req) => {
             if (tambemConfirmou) {
               resposta = `Ok! Iremos te enviar o boleto à vista no valor de *${formatCurrency(vaCalc)}*.`;
               await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
-              await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
+              await notificarAcordoFechado(supabase, telefone, { ...dados, data_pagamento: 'hoje' });
             } else {
               resposta = `À vista fica *${formatCurrency(vaCalc)}*. Você consegue fazer o pagamento hoje?`;
               await salvarEResponder('aguardando_pagamento_hoje');
@@ -3074,7 +3074,7 @@ serve(async (req) => {
             if (tambemConfirmou) {
               resposta = `Ok! Iremos te enviar o boleto em ${parcelasPedidas}x de *${formatCurrency(valorParcCalc)}*.`;
               await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
-              await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
+              await notificarAcordoFechado(supabase, telefone, { ...dados, data_pagamento: 'hoje' });
             } else {
               resposta = `Em ${parcelasPedidas}x fica *${formatCurrency(valorParcCalc)}* cada parcela. Você consegue fazer o pagamento hoje?`;
               await salvarEResponder('aguardando_pagamento_hoje');
@@ -3098,7 +3098,7 @@ serve(async (req) => {
           resposta = `Ok! Iremos te enviar o boleto para pagamento hoje.`;
           // TODO: here you can trigger boleto generation
           await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
-          await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
+          await notificarAcordoFechado(supabase, telefone, { ...dados, data_pagamento: 'hoje' });
           break;
 
         } else if (isNao) {
@@ -3114,7 +3114,7 @@ serve(async (req) => {
             if (dias <= 7 && dias >= 0) {
               resposta = `OK, irei te enviar o boleto para essa data!`;
               await salvarEResponder('acordo_finalizado', { data_pagamento: formatDataBR(dataInformada) });
-              await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: formatDataBR(dataInformada) });
+              await notificarAcordoFechado(supabase, telefone, { ...dados, data_pagamento: formatDataBR(dataInformada) });
             } else {
               resposta = `Infelizmente o prazo máximo para pagamento é de 7 dias. Poderia escolher uma data dentro desse período?`;
               await salvarEResponder('aguardando_data');
@@ -3139,14 +3139,14 @@ serve(async (req) => {
           if (intencao?.includes('hoje')) {
             resposta = `Ok! Iremos te enviar o boleto para pagamento hoje.`;
             await salvarEResponder('acordo_finalizado', { data_pagamento: 'hoje' });
-            await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: 'hoje' });
+            await notificarAcordoFechado(supabase, telefone, { ...dados, data_pagamento: 'hoje' });
             break;
           } else if (intencao?.includes('amanha')) {
             const amanha = new Date();
             amanha.setDate(amanha.getDate() + 1);
             resposta = `OK, irei te enviar o boleto para essa data!`;
             await salvarEResponder('acordo_finalizado', { data_pagamento: formatDataBR(amanha) });
-            await notificarAcordoFechado(serverUrl!, instanceToken!, telefone, { ...dados, data_pagamento: formatDataBR(amanha) });
+            await notificarAcordoFechado(supabase, telefone, { ...dados, data_pagamento: formatDataBR(amanha) });
             break;
           }
 
