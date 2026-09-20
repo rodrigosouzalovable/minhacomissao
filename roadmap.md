@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Liberar conexão UAZAPI por QR Code e exportação de números para usuários autorizados na aba
 - [x] Restringir controles avançados dos cartões UAZAPI ao login administrativo de Rodrigo, mantendo somente conexão e edição para os demais
 - [x] Restringir Números Virtuais, Relatório Diário e configurações globais de webhook ao login administrativo de Rodrigo
 - [x] Adicionar remetentes UAZAPI selecionáveis e fila global de notificações pessoais com intervalo aleatório de 30–60 segundos

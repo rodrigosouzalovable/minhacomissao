@@ -1680,7 +1680,7 @@ export default function Acionamento() {
 
 
   const handleConnectQr = async () => {
-    if (!user || !isOwnerAdmin) return;
+    if (!user) return;
     setQrLoading(true);
     setQrImage(null);
     setPairingCode(null);
@@ -1732,7 +1732,7 @@ export default function Acionamento() {
   };
 
   const handleRefreshQr = async () => {
-    if (!createdInstanceId || !user || !isOwnerAdmin) return;
+    if (!createdInstanceId || !user) return;
     stopQrPolling();
     setQrLoading(true);
     try {
@@ -2025,7 +2025,7 @@ export default function Acionamento() {
   };
 
   const handleExportarNumeros = async () => {
-    if (!isOwnerAdmin) return;
+    if (!user) return;
     let statusMap: Record<string, boolean> = {};
     const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
     if (!jaTemAlgumStatus) {
@@ -2066,7 +2066,7 @@ export default function Acionamento() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">UAZAPI</h1>
           <div className="flex flex-wrap items-center gap-2">
-            {isOwnerAdmin && instances.some(i => i.telefone) && (
+            {instances.some(i => i.telefone) && (
               <Button variant="outline" size="sm" onClick={handleExportarNumeros} className="gap-1">
                 <Download className="h-4 w-4" />
                 <span className="text-xs">Exportar números (Excel)</span>
@@ -2115,20 +2115,22 @@ export default function Acionamento() {
                     <p className="text-sm text-muted-foreground">
                       {isOwnerAdmin
                         ? 'Cadastre múltiplos WhatsApps para rotação automática dos envios.'
-                        : 'Consulte suas instâncias e o estado atual da conexão.'}
+                        : 'Consulte suas instâncias, acompanhe a conexão e conecte seu WhatsApp por QR Code.'}
                     </p>
                   </div>
-                  {isOwnerAdmin && <div className="flex flex-wrap gap-2 lg:shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleAtivarTodasInstancias}
-                      disabled={ativandoTodas || instances.every(i => i.ativo)}
-                      title="Marca todas as instâncias inativas como ativas (não reconecta a UAZAPI)"
-                    >
-                      {ativandoTodas ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Power className="h-4 w-4 mr-1" />}
-                      Ativar todas
-                    </Button>
+                  <div className="flex flex-wrap gap-2 lg:shrink-0">
+                    {isOwnerAdmin && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleAtivarTodasInstancias}
+                        disabled={ativandoTodas || instances.every(i => i.ativo)}
+                        title="Marca todas as instâncias inativas como ativas (não reconecta a UAZAPI)"
+                      >
+                        {ativandoTodas ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Power className="h-4 w-4 mr-1" />}
+                        Ativar todas
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       onClick={() => { setConnectMethod('qr'); handleConnectQr(); }}
@@ -2137,30 +2139,34 @@ export default function Acionamento() {
                       {qrLoading && connectMethod === 'qr' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <QrCode className="h-4 w-4 mr-1" />}
                       Conectar via QR Code
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => { setConnectMethod('code'); setQrStep('qr'); }}
-                      disabled={qrLoading || qrStep === 'qr'}
-                    >
-                      <Smartphone className="h-4 w-4 mr-1" />
-                      Conectar via Código
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setQrStep('manual');
-                        setEditingInstance({ nome: '', server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' });
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-1" /> Manual
-                    </Button>
-                  </div>}
+                    {isOwnerAdmin && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => { setConnectMethod('code'); setQrStep('qr'); }}
+                          disabled={qrLoading || qrStep === 'qr'}
+                        >
+                          <Smartphone className="h-4 w-4 mr-1" />
+                          Conectar via Código
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setQrStep('manual');
+                            setEditingInstance({ nome: '', server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' });
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-1" /> Manual
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                   {/* QR Code / Pairing Code connection flow */}
-                  {isOwnerAdmin && qrStep === 'qr' && (
+                  {qrStep === 'qr' && (
                     <div className="rounded-md border p-6 space-y-4 bg-muted/20">
                       {/* Phone input step (only for code method, before generation) */}
                       {connectMethod === 'code' && !qrImage && !pairingCode && (
