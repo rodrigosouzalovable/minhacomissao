@@ -26,6 +26,38 @@ async function getInstanceById(instanceId: string) {
   return data;
 }
 
+async function authenticateUazapiAccess(req: Request) {
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!token) return { error: json({ error: "Não autenticado" }, 401), requester: null, isAdmin: false };
+
+  const sb = getSupabaseAdmin();
+  const { data: userData, error: userError } = await sb.auth.getUser(token);
+  const requester = userData?.user;
+  if (userError || !requester) return { error: json({ error: "Sessão inválida" }, 401), requester: null, isAdmin: false };
+
+  const [{ data: isAdmin }, { data: isGestor }, { data: permissions, error: permissionsError }] = await Promise.all([
+    sb.rpc("has_role", { _user_id: requester.id, _role: "admin" }),
+    sb.rpc("has_role", { _user_id: requester.id, _role: "gestor" }),
+    sb.from("user_permissions").select("abas_permitidas").eq("user_id", requester.id).maybeSingle(),
+  ]);
+  if (permissionsError) return { error: json({ error: "Não foi possível validar a permissão" }, 500), requester: null, isAdmin: false };
+
+  const abasPermitidas = Array.isArray(permissions?.abas_permitidas) ? permissions.abas_permitidas : null;
+  const hasAccess = Boolean(isAdmin) || abasPermitidas?.includes("/admin/acionamento") || (!permissions && Boolean(isGestor));
+  if (!hasAccess) return { error: json({ error: "Sem acesso à aba UAZAPI" }, 403), requester: null, isAdmin: false };
+
+  return { error: null, requester, isAdmin: Boolean(isAdmin) };
+}
+
+async function assertInstanceOwnership(instanceId: string, userId: string) {
+  const instance = await getInstanceById(instanceId);
+  if (!instance || instance.user_id !== userId) {
+    return { error: json({ error: "Instância não encontrada para este usuário" }, 404) };
+  }
+  return { instance };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -35,29 +67,30 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, userId, instanceId, phone } = body;
 
+    const access = await authenticateUazapiAccess(req);
+    if (access.error) return access.error;
+    const requester = access.requester;
+    if (!requester) return json({ error: "Sessão inválida" }, 401);
+
     if (action === "setup-webhook-all") {
-      const authHeader = req.headers.get("Authorization") || "";
-      const token = authHeader.replace(/^Bearer\s+/i, "");
-      if (!token) return json({ error: "Não autenticado" }, 401);
-
-      const sb = getSupabaseAdmin();
-      const { data: userData, error: userError } = await sb.auth.getUser(token);
-      const requester = userData?.user;
-      if (userError || !requester) return json({ error: "Sessão inválida" }, 401);
-
-      const { data: isAdmin } = await sb.rpc("has_role", { _user_id: requester.id, _role: "admin" });
-      if (!isAdmin || requester.id !== OWNER_ADMIN_ID) {
+      if (!access.isAdmin || requester.id !== OWNER_ADMIN_ID) {
         return json({ error: "Acesso restrito ao administrador proprietário" }, 403);
       }
       return await setupWebhookAll();
     }
 
-    if (!userId) return json({ error: "userId is required" }, 400);
+    if (userId && userId !== requester.id) return json({ error: "Acesso negado para outro usuário" }, 403);
+    const authenticatedUserId = requester.id;
 
-    if (action === "create-instance") return await createInstance(userId);
-    if (action === "qr") return await fetchQr(instanceId || await getLatestInstanceId(userId), phone);
-    if (action === "status") return await checkStatus(instanceId || await getLatestInstanceId(userId));
-    if (action === "setup-webhook") return await setupWebhook(instanceId || await getLatestInstanceId(userId));
+    if (instanceId) {
+      const ownership = await assertInstanceOwnership(instanceId, authenticatedUserId);
+      if (ownership.error) return ownership.error;
+    }
+
+    if (action === "create-instance") return await createInstance(authenticatedUserId);
+    if (action === "qr") return await fetchQr(instanceId || await getLatestInstanceId(authenticatedUserId), phone);
+    if (action === "status") return await checkStatus(instanceId || await getLatestInstanceId(authenticatedUserId));
+    if (action === "setup-webhook") return await setupWebhook(instanceId || await getLatestInstanceId(authenticatedUserId));
     if (action === "disconnect") return await disconnectInstance(instanceId);
 
     return json({ error: "Unknown action" }, 400);
