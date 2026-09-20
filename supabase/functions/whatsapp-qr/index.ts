@@ -6,6 +6,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const OWNER_ADMIN_ID = "ee649720-b8ce-47a2-859e-100a3a9ae6bb";
+
 function getSupabaseAdmin() {
   return createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -33,8 +35,22 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, userId, instanceId, phone } = body;
 
-    // setup-webhook-all is an admin/global operation that doesn't require userId
-    if (action === "setup-webhook-all") return await setupWebhookAll();
+    if (action === "setup-webhook-all") {
+      const authHeader = req.headers.get("Authorization") || "";
+      const token = authHeader.replace(/^Bearer\s+/i, "");
+      if (!token) return json({ error: "Não autenticado" }, 401);
+
+      const sb = getSupabaseAdmin();
+      const { data: userData, error: userError } = await sb.auth.getUser(token);
+      const requester = userData?.user;
+      if (userError || !requester) return json({ error: "Sessão inválida" }, 401);
+
+      const { data: isAdmin } = await sb.rpc("has_role", { _user_id: requester.id, _role: "admin" });
+      if (!isAdmin || requester.id !== OWNER_ADMIN_ID) {
+        return json({ error: "Acesso restrito ao administrador proprietário" }, 403);
+      }
+      return await setupWebhookAll();
+    }
 
     if (!userId) return json({ error: "userId is required" }, 400);
 

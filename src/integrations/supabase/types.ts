@@ -11108,6 +11108,7 @@ export type Database = {
       is_consultoria_admin: { Args: { _uid: string }; Returns: boolean }
       is_consultoria_aluno: { Args: { _uid: string }; Returns: boolean }
       is_instancia_parceiro: { Args: { _instancia: string }; Returns: boolean }
+      is_owner_admin: { Args: { _user_id: string }; Returns: boolean }
       is_parceiro_meta: { Args: { _uid: string }; Returns: boolean }
       liberar_trava_notificacao_admin: { Args: never; Returns: undefined }
       limpar_pix_links_expirados: { Args: never; Returns: number }
