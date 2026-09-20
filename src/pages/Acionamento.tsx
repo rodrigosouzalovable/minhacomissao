@@ -439,7 +439,7 @@ export default function Acionamento() {
 
   // Load relatório diário config
   useEffect(() => {
-    if (!user || !isAdmin) return;
+    if (!user || !isOwnerAdmin) return;
     const loadRelatorioConfig = async () => {
       const { data } = await supabase
         .from('relatorio_diario_config' as any)
@@ -453,7 +453,7 @@ export default function Acionamento() {
       }
     };
     loadRelatorioConfig();
-  }, [user, isAdmin]);
+  }, [user, isOwnerAdmin]);
 
   const handleSalvarRelatorio = async () => {
     if (!isOwnerAdmin) {
