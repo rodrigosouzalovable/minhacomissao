@@ -174,9 +174,17 @@ Deno.serve(async (req) => {
           .filter(Boolean);
         const statusBusiness = entidadeStatus('BUSINESS');
         const statusWaba = entidadeStatus('WABA');
+        const statusPhone = entidadeStatus('PHONE_NUMBER');
         const statusComercial = [...statusBusiness, ...statusWaba];
         const comercialBloqueado = statusComercial.some((s: string) => RUIM.has(s));
         const comercialDisponivel = statusBusiness.includes('AVAILABLE') && statusWaba.includes('AVAILABLE');
+        // ACCOUNT_VIOLATION chega pelo webhook e pausa preventivamente toda a BM.
+        // Para desfazer essa trava exigimos confirmação positiva (não apenas ausência
+        // de erro) em todas as entidades relevantes retornadas pela própria Meta.
+        const envioDisponivelConfirmado =
+          String(r.phone_health?.can_send_message || '').toUpperCase() === 'AVAILABLE' &&
+          statusPhone.includes('AVAILABLE') &&
+          comercialDisponivel;
         const motivoAnteriorPagamento = /#131042|payment|billing|eligibility|pagamento/i.test(
           String(inst.pausa_automatica_motivo || ''),
         );
@@ -467,6 +475,9 @@ Deno.serve(async (req) => {
         // A liberação global ignora somente a cor de qualidade; nunca pode
         // ignorar uma limitação explícita de envio retornada pela Meta.
         const saudavel = (liberacaoGlobal || qual === 'GREEN') && !quarentenaAtiva && !restritoMeta;
+        const violacaoContaLiberavel = eraViolacaoConta && graphOk && qual === 'GREEN' &&
+          semBanAgora && !quarentenaAtiva && !restritoMeta && envioDisponivelConfirmado &&
+          inst.recuperacao_ativa !== true;
 
         const liberarLimitacao3144 = conectado3144 && graphOk && !comercialBloqueado && (
           !r.limitacao_numero || ['nome', 'qualidade'].includes(String(r.limitacao_tipo || ''))
@@ -490,7 +501,11 @@ Deno.serve(async (req) => {
         }
 
         const eraLimitacaoNumero = /nome de exibição|display name|restrição de qualidade|restricao de qualidade|restrição de envio no número|restricao de envio no numero/i.test(motivoAtual);
-        if ((eraBloqueioMeta || eraLimitacaoNumero) && !eraViolacaoConta && graphOk && !notificarPausa && !liberarLimitacao3144) {
+        if (
+          (eraBloqueioMeta || eraLimitacaoNumero) &&
+          (!eraViolacaoConta || violacaoContaLiberavel) &&
+          graphOk && !notificarPausa && !liberarLimitacao3144
+        ) {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
           const aptaComNomeSemRevisao = limitacaoNomeInformativa &&
