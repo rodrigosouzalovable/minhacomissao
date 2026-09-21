@@ -18,9 +18,11 @@ const providerFailed = (text: string) => {
 const connected = async (inst: any) => {
   const base = String(inst.server_url || "").replace(/\/+$/, "");
   const token = String(inst.instance_token || "");
+  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
   for (const attempt of [
     { url: `${base}/instance/status?token=${encodeURIComponent(token)}`, headers: {} },
     { url: `${base}/instance/status`, headers: { token } },
+    { url: `${base}/instance/status`, headers: { token, admintoken: adminToken } },
   ]) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -30,8 +32,17 @@ const connected = async (inst: any) => {
       if (timer) clearTimeout(timer);
       if (!response.ok) continue;
       const data = await response.json();
-      const raw = String(data?.status ?? data?.state ?? data?.instance?.status ?? data?.data?.status ?? "").toLowerCase();
-      if (data?.connected === true || data?.instance?.connected === true || ["connected", "open", "online", "ready"].includes(raw)) return true;
+      const raw = String(
+        data?.status ?? data?.state ?? data?.instance?.status ?? data?.instance?.state ??
+        data?.data?.status ?? data?.data?.state ?? data?.data?.instance?.status ?? "",
+      ).toLowerCase();
+      if (
+        data?.connected === true || data?.isConnected === true || data?.loggedIn === true ||
+        data?.instance?.connected === true || data?.instance?.isConnected === true ||
+        data?.status?.connected === true || data?.status?.loggedIn === true ||
+        data?.data?.connected === true || data?.data?.isConnected === true ||
+        ["connected", "open", "online", "ready", "authenticated", "loggedin"].includes(raw)
+      ) return true;
     } catch {
       if (timer) clearTimeout(timer);
     }

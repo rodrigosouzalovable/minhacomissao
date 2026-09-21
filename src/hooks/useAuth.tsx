@@ -41,19 +41,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !session?.access_token) {
       accessNotificationUserRef.current = null;
       return;
     }
     if (accessNotificationUserRef.current === user.id) return;
     accessNotificationUserRef.current = user.id;
 
-    supabase.functions.invoke('notificar-acesso-usuario', {
-      body: { accessId: crypto.randomUUID() },
-    }).then(({ error }) => {
-      if (error) console.error('Falha ao registrar acesso do usuário:', error.message);
-    });
-  }, [user]);
+    const accessId = crypto.randomUUID();
+    let cancelled = false;
+    const registerAccess = async () => {
+      for (let attempt = 1; attempt <= 3 && !cancelled; attempt += 1) {
+        const { data, error } = await supabase.functions.invoke('notificar-acesso-usuario', {
+          body: { accessId },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!error && (data?.ok || data?.skipped)) return;
+        console.error(`Falha ao registrar acesso do usuário (tentativa ${attempt}):`, error?.message || data?.error);
+        if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+      }
+      if (!cancelled) accessNotificationUserRef.current = null;
+    };
+    void registerAccess();
+    return () => { cancelled = true; };
+  }, [user, session?.access_token]);
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });

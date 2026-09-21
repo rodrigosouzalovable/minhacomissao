@@ -267,6 +267,20 @@
       "when": 1789949749694,
       "tag": "0037_add_user_access_whatsapp_notification_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1789951262332,
+      "tag": "0038_make_admin_notification_sender_exclusive",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1789951356133,
+      "tag": "0039_fix_internal_admin_notification_queue_authorization",
+      "breakpoints": true
     }
   ]
 }

@@ -45,7 +45,10 @@ Deno.serve(async (req) => {
       admin.from("admin_notificacoes_config").select("admin_phone").eq("id", 1).maybeSingle(),
     ]);
 
-    if (!permission?.notificar_acesso_whatsapp) return json({ ok: true, skipped: "desativado" });
+    if (!permission?.notificar_acesso_whatsapp) {
+      console.info("[notificar-acesso-usuario] aviso desativado", { userId: user.id });
+      return json({ ok: true, skipped: "desativado" });
+    }
 
     const destinatario = String(config?.admin_phone || "").replace(/\D/g, "");
     if (destinatario.length < 10) return json({ error: "WhatsApp pessoal não configurado" }, 500);
@@ -63,7 +66,16 @@ Deno.serve(async (req) => {
       chaveIdempotencia: `${user.id}:${parsed.data.accessId}`,
     });
 
-    if (result.error) return json({ error: result.error }, 500);
+    if (result.error) {
+      console.error("[notificar-acesso-usuario] falha ao enfileirar", { userId: user.id, error: result.error });
+      return json({ error: result.error }, 500);
+    }
+    console.info("[notificar-acesso-usuario] acesso registrado", {
+      userId: user.id,
+      queueId: result.id,
+      queued: result.queued,
+      skipped: result.skipped,
+    });
     return json({ ok: true, queued: result.queued, scheduledAt: result.scheduledAt });
   } catch (error) {
     console.error("[notificar-acesso-usuario] erro", error);

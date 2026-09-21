@@ -1877,11 +1877,12 @@ export default function Acionamento() {
       return;
     }
     setNotificationInstanceIds((current) => {
+      if (ativa) return new Set([id]);
       const next = new Set(current);
-      if (ativa) next.add(id); else next.delete(id);
+      next.delete(id);
       return next;
     });
-    toast.success(ativa ? 'Número ativado para notificações pessoais' : 'Número removido das notificações pessoais');
+    toast.success(ativa ? 'Número definido como responsável pelas notificações pessoais' : 'Número removido das notificações pessoais');
   };
 
   const [ativandoTodas, setAtivandoTodas] = useState(false);

@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Corrigir o aviso de acesso do Alexander, fixar a sessão autenticada e tornar o iPhone B1 o único remetente pessoal
 - [x] Preencher automaticamente o telefone após conectar uma instância UAZAPI e recuperar números ausentes na verificação
 - [x] Adicionar aviso individual por WhatsApp a cada abertura autenticada dos usuários selecionados nas Permissões
 - [x] Compartilhar com usuários autorizados a visualização das instâncias UAZAPI conectadas, com exportação geral e edição somente das próprias

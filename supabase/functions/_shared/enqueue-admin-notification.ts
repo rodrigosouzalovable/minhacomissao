@@ -33,11 +33,24 @@ export async function enqueueAdminNotification(
   const url = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (url && serviceKey) {
-    EdgeRuntime.waitUntil(fetch(`${url}/functions/v1/process-admin-notification-queue`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-      body: "{}",
-    }).catch((err) => console.error("[admin-notification-queue] falha ao despertar processador", err)));
+    let wakeError = "";
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const response = await fetch(`${url}/functions/v1/process-admin-notification-queue`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+          body: "{}",
+        });
+        if (response.ok) {
+          wakeError = "";
+          break;
+        }
+        wakeError = `HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`;
+      } catch (error) {
+        wakeError = String(error);
+      }
+    }
+    if (wakeError) console.error("[admin-notification-queue] falha ao despertar processador", wakeError);
   }
 
   return { queued: true, id: row?.id, scheduledAt: row?.agendada_para };
