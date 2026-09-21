@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { isMetaDisplayNameUsable } from '../_shared/meta-name-status.ts';
 
 const GRAPH_VERSION = 'v21.0';
 
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
 
     const problems: string[] = [];
     if (!hasCallback) problems.push('Webhook não assinado nesta WABA — clique em "Webhook" para reinscrever.');
-    if (nameStatus && nameStatus !== 'APPROVED') {
+    if (nameStatus && !isMetaDisplayNameUsable(nameStatus)) {
       problems.push(
         `Display Name está "${nameStatus}". Meta aceita a chamada, devolve wamid, mas frequentemente descarta a entrega quando o nome não está APPROVED. Solicite aprovação do Display Name no Business Manager.`,
       );
