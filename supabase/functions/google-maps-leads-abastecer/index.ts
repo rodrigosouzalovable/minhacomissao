@@ -48,7 +48,38 @@ const SEMENTES = [
   { nicho: "pizzaria", cidade: "Belo Horizonte MG" },
   { nicho: "dedetizadora", cidade: "Brasília DF" },
   { nicho: "escola de idiomas", cidade: "Goiânia GO" },
+  { nicho: "barbearia", cidade: "Aparecida de Goiânia GO" },
+  { nicho: "salão de beleza", cidade: "Anápolis GO" },
+  { nicho: "loja de roupas", cidade: "Brasília DF" },
+  { nicho: "loja de autopeças", cidade: "Goiânia GO" },
+  { nicho: "farmácia", cidade: "Aparecida de Goiânia GO" },
+  { nicho: "supermercado", cidade: "Anápolis GO" },
+  { nicho: "eletricista", cidade: "Brasília DF" },
+  { nicho: "encanador", cidade: "Goiânia GO" },
+  { nicho: "assistência técnica de celular", cidade: "Aparecida de Goiânia GO" },
+  { nicho: "loja de móveis", cidade: "Anápolis GO" },
+  { nicho: "empresa de energia solar", cidade: "Brasília DF" },
+  { nicho: "corretora de seguros", cidade: "Goiânia GO" },
+  { nicho: "agência de viagens", cidade: "Aparecida de Goiânia GO" },
+  { nicho: "escola particular", cidade: "Anápolis GO" },
+  { nicho: "laboratório de análises clínicas", cidade: "Brasília DF" },
+  { nicho: "clínica médica", cidade: "Rio Verde GO" },
+  { nicho: "loja de materiais elétricos", cidade: "Uberlândia MG" },
+  { nicho: "distribuidora de bebidas", cidade: "Campo Grande MS" },
+  { nicho: "empresa de segurança eletrônica", cidade: "Cuiabá MT" },
+  { nicho: "loja de celulares", cidade: "Palmas TO" },
+  { nicho: "restaurante", cidade: "Aparecida de Goiânia GO" },
+  { nicho: "academia", cidade: "Anápolis GO" },
+  { nicho: "pet shop", cidade: "Brasília DF" },
+  { nicho: "imobiliária", cidade: "Rio Verde GO" },
+  { nicho: "clínica odontológica", cidade: "Uberlândia MG" },
+  { nicho: "oficina mecânica", cidade: "Campo Grande MS" },
+  { nicho: "contabilidade", cidade: "Cuiabá MT" },
+  { nicho: "clínica veterinária", cidade: "Palmas TO" },
 ];
+
+const chaveAlvo = (nicho: string, cidade: string) =>
+  `${nicho.trim().toLocaleLowerCase("pt-BR")}|${cidade.trim().toLocaleLowerCase("pt-BR")}`;
 
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), {
@@ -163,13 +194,39 @@ Deno.serve(async (req) => {
     const alvos = [...bons, ...SEMENTES].filter(
       (item, idx, arr) => arr.findIndex((x) => x.nicho === item.nicho && x.cidade === item.cidade) === idx,
     );
-    // O cursor por quantidade de buscas evita insistir no mesmo alvo quando uma busca usa várias páginas.
-    const { count: buscasExecutadas } = await supabase
+    // Prioriza combinações ainda não pesquisadas na semana. Quando todas já
+    // foram usadas, escolhe pelo rendimento recente e deixa combinações com
+    // três buscas seguidas sem nenhum número para o fim da fila.
+    const inicioSemana = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data: buscasRecentes } = await supabase
       .from("google_maps_buscas")
-      .select("id", { count: "exact", head: true })
+      .select("categoria, localizacao, total_resultados, created_at")
       .eq("origem", "resgate_engajamento")
-      .gte("created_at", inicioDia);
-    const alvo = alvos[(buscasExecutadas ?? 0) % Math.max(1, alvos.length)] || SEMENTES[0];
+      .gte("created_at", inicioSemana)
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    const historico = new Map<string, Array<{ total: number; em: string }>>();
+    for (const busca of (buscasRecentes as any[]) || []) {
+      const chave = chaveAlvo(String(busca.categoria || ""), String(busca.localizacao || ""));
+      const lista = historico.get(chave) || [];
+      lista.push({ total: Number(busca.total_resultados || 0), em: String(busca.created_at || "") });
+      historico.set(chave, lista);
+    }
+    const alvosOrdenados = alvos.slice().sort((a, b) => {
+      const ha = historico.get(chaveAlvo(a.nicho, a.cidade)) || [];
+      const hb = historico.get(chaveAlvo(b.nicho, b.cidade)) || [];
+      if (ha.length === 0 && hb.length > 0) return -1;
+      if (hb.length === 0 && ha.length > 0) return 1;
+      const ultimosA = ha.slice(0, 3);
+      const ultimosB = hb.slice(0, 3);
+      const rendimentoA = ultimosA.reduce((s, x) => s + x.total, 0) / Math.max(1, ultimosA.length);
+      const rendimentoB = ultimosB.reduce((s, x) => s + x.total, 0) / Math.max(1, ultimosB.length);
+      if (rendimentoA !== rendimentoB) return rendimentoB - rendimentoA;
+      const ultimoA = ha[0]?.em || "";
+      const ultimoB = hb[0]?.em || "";
+      return ultimoA.localeCompare(ultimoB);
+    });
+    const alvo = alvosOrdenados[0] || SEMENTES[0];
 
     // Ajusta o lote pelo rendimento real do dia, sem ultrapassar o teto por execução.
     const rendimento = requisicoesHoje > 0 ? (confirmadosHoje ?? 0) / requisicoesHoje : 2.4;
