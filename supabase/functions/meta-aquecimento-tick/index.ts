@@ -36,6 +36,7 @@ import {
   taxaRespostaRecenteLeads,
 } from '../_shared/meta-aquecimento-inteligente.ts';
 import { notificarNumeros } from '../_shared/notificar-numeros.ts';
+import { avaliarPiloto, carregarPilotosAtivos, dataBrtDiasAtras, telefoneChave } from '../_shared/meta-bm-escalada-piloto.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -102,7 +103,7 @@ Deno.serve(async (req) => {
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, saude_tier, tier_diario, estado_pool, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
+      .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, saude_tier, tier_diario, estado_pool, pool_fora_manual, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
       .eq('ativo', true)
       .eq('provider', 'meta')
       .eq('aquecimento_meta_ativo', true);
@@ -155,6 +156,12 @@ Deno.serve(async (req) => {
       .eq('dia', dia);
     const trilhaMap = new Map<string, any>();
     (trilhas || []).forEach((t: any) => trilhaMap.set(t.instancia_id, t));
+    const pilotos = await carregarPilotosAtivos(supabase);
+    const avaliacaoPilotos = new Map<string, Awaited<ReturnType<typeof avaliarPiloto>>>();
+    for (const [bmId, piloto] of pilotos.entries()) {
+      const membros = (insts || []).filter((i: any) => String(i.meta_bm_id) === bmId);
+      avaliacaoPilotos.set(bmId, await avaliarPiloto(supabase, piloto, membros));
+    }
 
     // Número novo (ou template aprovado agora) sem plano do dia: cria a trilha na
     // hora, para começar a aquecer sem esperar o planejamento da manhã seguinte.
@@ -171,7 +178,8 @@ Deno.serve(async (req) => {
       for (const [bmId, grupo] of semTrilhaPorBm) {
         const membrosBm = (elegiveis as any[]).filter((i) => String(i.meta_bm_id || i.id) === bmId);
         const tierBm = Math.max(...membrosBm.map((i) => tierAtual(i)));
-        const metaBm = tierBm <= 250 ? 150 : 450;
+         const piloto = avaliacaoPilotos.get(bmId);
+         const metaBm = piloto ? piloto.meta : tierBm <= 250 ? 150 : 450;
         const jaPlanejado = membrosBm.reduce((s, i) => s + Number(trilhaMap.get(i.id)?.alvo_unicos_dia || 0), 0);
         const restante = Math.max(0, metaBm - jaPlanejado);
         const base = Math.floor(restante / grupo.length);
@@ -189,9 +197,9 @@ Deno.serve(async (req) => {
           tier_alvo: proximoTier(tier),
           alvo_unicos_dia: alvo,
           modo_intensivo: intensivo,
-          mix_uazapi_pct: intensivo ? 10 : 20,
-          mix_leads_pct: intensivo ? 90 : 80,
-          decisao_ia: { fonte: 'tick_meta_por_bm', meta_bm: tier <= 250 ? 150 : 450 },
+           mix_uazapi_pct: piloto ? 100 - Number(pilotos.get(String(i.meta_bm_id))?.mix_leads_pct || 90) : intensivo ? 10 : 20,
+           mix_leads_pct: piloto ? Number(pilotos.get(String(i.meta_bm_id))?.mix_leads_pct || 90) : intensivo ? 90 : 80,
+           decisao_ia: { fonte: piloto ? 'piloto_bm' : 'tick_meta_por_bm', meta_bm: metaBm, piloto_etapa: piloto?.etapa ?? null },
           status: alvo > 0 ? 'ativa' : 'concluida',
           motivo: alvo > 0 ? null : 'meta_bm_ja_distribuida',
           atualizado_em: new Date().toISOString(),
@@ -225,6 +233,27 @@ Deno.serve(async (req) => {
       if (l.status === 'falha' || l.fonte !== 'uazapi' || !l.destino_instancia_id) return;
       usoDestinoUazapi.set(l.destino_instancia_id, (usoDestinoUazapi.get(l.destino_instancia_id) || 0) + 1);
     });
+
+    // No piloto, um telefone conta uma única vez em toda a BM durante sete dias.
+    const destinosUsados7dPorBm = new Map<string, Set<string>>();
+    const idsPiloto = (insts || []).filter((i: any) => pilotos.has(String(i.meta_bm_id))).map((i: any) => i.id);
+    if (idsPiloto.length > 0) {
+      const { data: logs7d } = await supabase.from('meta_aquecimento_destino_log')
+        .select('instancia_id, destino_telefone, status')
+        .in('instancia_id', idsPiloto)
+        .gte('dia', dataBrtDiasAtras(6))
+        .neq('status', 'falha')
+        .limit(10000);
+      const bmPorInstancia = new Map((insts || []).map((i: any) => [String(i.id), String(i.meta_bm_id || i.id)]));
+      for (const log of (logs7d || []) as any[]) {
+        const bmId = bmPorInstancia.get(String(log.instancia_id));
+        const telefone = telefoneChave(log.destino_telefone);
+        if (!bmId || !telefone) continue;
+        const usados = destinosUsados7dPorBm.get(bmId) || new Set<string>();
+        usados.add(telefone);
+        destinosUsados7dPorBm.set(bmId, usados);
+      }
+    }
 
     // Estoque de leads dimensionado pelo alvo do dia (modo intensivo pede mais).
     const alvoTotalDia = (elegiveis as any[]).reduce(
@@ -273,6 +302,9 @@ Deno.serve(async (req) => {
       const trilha = trilhaMap.get(inst.id);
       if (trilha && trilha.status !== 'ativa') continue;
       const intensivo = trilha?.modo_intensivo === true;
+      const bmId = String(inst.meta_bm_id || inst.id);
+      const avaliacaoPiloto = avaliacaoPilotos.get(bmId);
+      if (avaliacaoPiloto && avaliacaoPiloto.meta <= 0) continue;
 
       if (!forcar && !intensivo && inst.recuperacao_proximo_envio_em &&
           new Date(inst.recuperacao_proximo_envio_em) > new Date()) continue;
@@ -289,10 +321,13 @@ Deno.serve(async (req) => {
       // como complemento quando o estoque confirmado acabar.
       if (corrigirRota) mixUazapi = Math.min(Math.max(mixUazapi, 10), 20);
 
-       const feitos = logsHoje.filter(
-        (l: any) => l.instancia_id === inst.id && l.status !== 'falha',
-      );
-      const faltam = alvoDia - feitos.length;
+       const feitos = logsHoje.filter((l: any) => {
+         if (l.status === 'falha') return false;
+         if (avaliacaoPiloto) return (insts || []).some((i: any) => i.id === l.instancia_id && String(i.meta_bm_id || i.id) === bmId);
+         return l.instancia_id === inst.id;
+       });
+       const feitosUnicos = new Set(feitos.map((l: any) => telefoneChave(l.destino_telefone)).filter(Boolean));
+       const faltam = alvoDia - (avaliacaoPiloto ? feitosUnicos.size : feitos.length);
       if (faltam <= 0) continue;
 
       const loteInstancia = Math.max(
@@ -314,10 +349,10 @@ Deno.serve(async (req) => {
         if (enviosRun >= MAX_ENVIOS_POR_RUN) break;
         if (Number(orc.gasto_reais) + gastoRun >= Number(orc.teto_reais)) break;
 
-        const meus = logsHoje.filter(
+         const meus = logsHoje.filter(
           (l: any) => l.instancia_id === inst.id && l.status !== 'falha',
         );
-        if (meus.length >= alvoDia) break;
+         if ((avaliacaoPiloto ? feitosUnicos.size + enviadosInstancia : meus.length) >= alvoDia) break;
 
         const ultimo = meus
           .slice()
@@ -330,6 +365,7 @@ Deno.serve(async (req) => {
 
         const destinosUazapiOk = destinos.filter((d) =>
           !destinosUazapiInvalidos.has(d.id) &&
+           (!avaliacaoPiloto || !destinosUsados7dPorBm.get(bmId)?.has(telefoneChave(d.telefone))) &&
           (usoDestinoUazapi.get(d.id) || 0) < maxPorDestino && d.id !== ultimo?.destino_instancia_id
         );
 
@@ -376,7 +412,14 @@ Deno.serve(async (req) => {
           nomeDestino = d.nome;
           destinoInstanciaId = d.id;
         } else {
-          const lead = leadsDisponiveis.shift()!;
+           let lead = leadsDisponiveis.shift();
+           while (lead && avaliacaoPiloto && destinosUsados7dPorBm.get(bmId)?.has(telefoneChave(lead.telefone))) {
+             lead = leadsDisponiveis.shift();
+           }
+           if (!lead) {
+             resultados.push({ instancia: inst.nome, skipped: 'sem_lead_unico_7d' });
+             break;
+           }
           telefone = lead.telefone;
           nomeDestino = lead.nome;
           leadId = lead.id;
@@ -438,6 +481,11 @@ Deno.serve(async (req) => {
             instancia_id: inst.id, fonte, destino_instancia_id: destinoInstanciaId,
             destino_telefone: telefone, status: 'enviado', enviado_em: new Date().toISOString(),
           });
+           if (avaliacaoPiloto) {
+             const usados = destinosUsados7dPorBm.get(bmId) || new Set<string>();
+             usados.add(telefoneChave(telefone));
+             destinosUsados7dPorBm.set(bmId, usados);
+           }
           if (destinoInstanciaId) {
             usoDestinoUazapi.set(destinoInstanciaId, (usoDestinoUazapi.get(destinoInstanciaId) || 0) + 1);
           }

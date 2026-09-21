@@ -55,6 +55,32 @@ export function AquecimentoMetaTab() {
     },
   });
 
+  const { data: pilotos } = useQuery({
+    queryKey: ["aq-pilotos-bm"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("meta_bm_escalada_piloto")
+        .select("*, bm:meta_business_managers(nome)");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: historicoPilotos } = useQuery({
+    queryKey: ["aq-pilotos-historico"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("meta_bm_escalada_diaria")
+        .select("*")
+        .order("dia", { ascending: false })
+        .limit(21);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const { data: nichos } = useQuery({
     queryKey: ["aq-nichos"],
     staleTime: 300_000,
@@ -233,7 +259,7 @@ export function AquecimentoMetaTab() {
       const chave = String(inst?.meta_bm_id || `sem-bm:${t.instancia_id}`);
       const atual = mapa.get(chave) || {
         nome: inst?.bm?.nome || "BM não vinculada", alvo: 0, feitos: new Set<string>(), numeros: 0,
-        tier: 0, bloqueios: new Set<string>(), qualidades: new Set<string>(),
+        id: chave, tier: 0, bloqueios: new Set<string>(), qualidades: new Set<string>(),
       };
       const metaOperacional = Number(t.tier_atual || inst?.tier_diario || 0) <= 250 ? 25 : 450;
       atual.alvo = Math.max(atual.alvo, metaOperacional);
@@ -375,10 +401,17 @@ export function AquecimentoMetaTab() {
                 const bloqueada = bm.bloqueios.size > 0;
                 const atingida = bm.alvo > 0 && faltam === 0;
                 const limitada = bm.tier <= 250;
+                const piloto = (pilotos ?? []).find((p: any) => String(p.bm_id) === bm.id);
+                const historico = (historicoPilotos ?? []).filter((h: any) => String(h.bm_id) === bm.id);
+                const unicos7d = historico.reduce((s: number, h: any) => s + Number(h.entregues_unicos || 0), 0);
+                const ultimo = historico[0];
                 return (
                   <div key={bm.nome} className="rounded-md border p-3 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="font-medium text-sm">{bm.nome}</div>
+                      <div className="flex flex-wrap items-center gap-2 font-medium text-sm">
+                        {bm.nome}
+                        {piloto && <Badge variant="secondary">Piloto 2K → 10K</Badge>}
+                      </div>
                       <Badge variant={bloqueada ? "destructive" : atingida ? "default" : "outline"}>
                         {bloqueada ? <AlertTriangle className="mr-1 h-3 w-3" /> : atingida ? <CheckCircle2 className="mr-1 h-3 w-3" /> : null}
                         {bloqueada ? "pausada pela Meta" : atingida ? "meta atingida" : limitada ? "limitada pelo tier" : "em andamento"}
@@ -388,6 +421,18 @@ export function AquecimentoMetaTab() {
                     <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                       <span>{feitos}/{bm.alvo} aceitas hoje</span><span>faltam {faltam}</span><span>{bm.numeros} números</span><span>tier {bm.tier || "—"}</span>
                     </div>
+                    {piloto && (
+                      <div className="grid gap-2 border-t pt-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                        <span><strong>Situação:</strong> {String(piloto.status).replaceAll("_", " ")}</span>
+                        <span><strong>Etapa:</strong> {piloto.etapa}/3</span>
+                        <span><strong>Entregues únicos 7d:</strong> {unicos7d}</span>
+                        <span><strong>Distância operacional:</strong> {Math.max(0, 1000 - unicos7d)}</span>
+                        <span><strong>Entregues ontem:</strong> {ultimo?.entregues_unicos ?? 0}</span>
+                        <span><strong>Respostas ontem:</strong> {ultimo?.respostas ?? 0}</span>
+                        <span><strong>Falhas ontem:</strong> {ultimo?.falhas ?? 0}</span>
+                        <span><strong>Qualidade:</strong> {ultimo?.qualidade || [...bm.qualidades].join(", ")}</span>
+                      </div>
+                    )}
                     {bloqueada && <p className="text-xs text-destructive">{[...bm.bloqueios].join(" · ")}</p>}
                   </div>
                 );

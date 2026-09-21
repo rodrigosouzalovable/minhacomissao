@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Implantar e validar o piloto de escala 2K→10K da BM Greensoul com rampa 450→550→650 e freios automáticos
+- [x] Implantar e validar o piloto de escala 2K→10K da BM Greensoul com rampa 450→550→650 e freios automáticos
 - [x] Verify and address monitoring findings 1–12
 - [x] Deploy changed functions and validate targeted flows
 - [x] Resolve the 12 supplied findings with verified code and database evidence
