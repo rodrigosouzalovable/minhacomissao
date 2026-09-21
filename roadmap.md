@@ -9,6 +9,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Restringir todo aquecimento automático à BM Greensoul durante o piloto e pausar trilhas abertas nas demais BMs
 - [x] Implantar e validar o piloto de escala 2K→10K da BM Greensoul com rampa 450→550→650 e freios automáticos
 - [x] Corrigir trava permanente ACCOUNT_VIOLATION:SPAM e liberar somente números confirmados como saudáveis pela Meta
 - [x] Revalidar instâncias fora do pool e liberar as aptas; renovar os alvos esgotados da captação Google Maps

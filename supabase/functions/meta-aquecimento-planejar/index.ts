@@ -6,7 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { hojeBrt, instanciasComTemplateLeadAprovado } from '../_shared/meta-aquecimento-alvo.ts';
 import { alvoDiarioPorTier, carregarOrcamento, proximoTier, tierAtual } from '../_shared/meta-aquecimento-inteligente.ts';
 import { notificarNumeros } from '../_shared/notificar-numeros.ts';
-import { avaliarPiloto, carregarPilotosAtivos } from '../_shared/meta-bm-escalada-piloto.ts';
+import { avaliarPiloto, carregarPilotosAtivos, GREEN_SOUL_BM_ID } from '../_shared/meta-bm-escalada-piloto.ts';
 
 const DESTINATARIOS_AVISO = ['62991672674'];
 
@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
       .eq('ativo', true)
       .eq('provider', 'meta')
       .eq('aquecimento_meta_ativo', true)
+      .eq('meta_bm_id', GREEN_SOUL_BM_ID)
       .limit(200);
 
     const idsSelecionados = (insts || []).map((i: any) => String(i.id));

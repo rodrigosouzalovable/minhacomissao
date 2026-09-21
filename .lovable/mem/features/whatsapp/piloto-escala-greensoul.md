@@ -5,6 +5,7 @@ type: feature
 ---
 
 - Piloto exclusivo da BM Greensoul (FB LUIZ), id `843830f9-cd23-4600-8ee6-73674efa460b`.
+- Enquanto o piloto estiver ativo, nenhum planejamento, resgate do guardião ou recuperação automática pode iniciar aquecimento em outras BMs; campanhas manuais não são alteradas.
 - Rampa diária: 450 → 550 → 650 destinatários únicos; avança somente com GREEN, entrega ≥95% e falhas <3%.
 - Falhas entre 3% e 5% reduzem o próximo alvo em 30%; acima de 5% pausam.
 - YELLOW, RED, banimento, quarentena, pausa ou restrição real da Meta pausam imediatamente.
