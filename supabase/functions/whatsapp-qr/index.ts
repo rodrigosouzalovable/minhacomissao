@@ -79,6 +79,10 @@ Deno.serve(async (req) => {
       return await setupWebhookAll();
     }
 
+    if (action === "list-instances-status") {
+      return await listInstancesStatus(requester.id, access.isAdmin && requester.id === OWNER_ADMIN_ID);
+    }
+
     if (userId && userId !== requester.id) return json({ error: "Acesso negado para outro usuário" }, 403);
     const authenticatedUserId = requester.id;
 
@@ -533,6 +537,70 @@ async function checkStatus(instanceId: string) {
   }
 
   return json({ ok: false, connected: false, status: "unknown", stale: true });
+}
+
+async function probeInstanceStatus(instance: any) {
+  const base = String(instance.server_url || "").replace(/\/+$/, "");
+  const token = String(instance.instance_token || "");
+  const adminToken = Deno.env.get("UAZAPI_ADMIN_TOKEN") || "";
+  if (!base || !token) return { connected: false, status: "unknown" };
+
+  const attempts = [
+    { url: `${base}/instance/status`, headers: { token } },
+    { url: `${base}/instance/status`, headers: { token, admintoken: adminToken } },
+  ];
+
+  for (const attempt of attempts) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(attempt.url, { headers: attempt.headers, signal: controller.signal });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const parsed = parseConnectionState(data);
+      return { connected: parsed.connected, status: parsed.status || "unknown" };
+    } catch (_) {
+      // Tenta a próxima forma de autenticação sem interromper as demais instâncias.
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return { connected: false, status: "unknown" };
+}
+
+async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from("user_whatsapp_instances")
+    .select("id,user_id,nome,telefone,server_url,instance_token,ativo")
+    .order("ordem", { ascending: true })
+    .order("criado_em", { ascending: false });
+
+  if (error) return json({ ok: false, error: "Não foi possível carregar as instâncias" }, 500);
+
+  const instances = data || [];
+  const safeRows: Array<Record<string, unknown>> = [];
+  const batchSize = 5;
+  for (let index = 0; index < instances.length; index += batchSize) {
+    const batch = instances.slice(index, index + batchSize);
+    const checked = await Promise.all(batch.map(async (instance) => {
+      const state = await probeInstanceStatus(instance);
+      return {
+        id: instance.id,
+        user_id: instance.user_id,
+        nome: instance.nome,
+        telefone: instance.telefone,
+        ativo: instance.ativo,
+        connected: state.connected,
+        status: state.status,
+        is_own: instance.user_id === requesterId,
+        can_edit: isOwnerAdmin || instance.user_id === requesterId,
+      };
+    }));
+    safeRows.push(...checked);
+  }
+
+  return json({ ok: true, instances: safeRows });
 }
 
 // ── SETUP WEBHOOK ──
