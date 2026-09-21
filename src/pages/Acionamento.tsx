@@ -571,18 +571,6 @@ export default function Acionamento() {
   }, [user, isOwnerAdmin]);
 
 
-  // ECONOMIA: NÃO testar conexão de todas as instâncias automaticamente ao montar a página.
-  // Cada chamada vira invocação da edge function `test-uazapi-connection`.
-  // Mas ao abrir o diálogo "Configurações WhatsApp" disparamos uma verificação
-  // (com cache de 5 min em sessionStorage), para que o badge "X/N conectados"
-  // reflita o estado real em vez de mostrar 0/N.
-  useEffect(() => {
-    if (!configDialogOpen) return;
-    if (instances.length === 0) return;
-    const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
-    if (!jaTemAlgumStatus) checkInstanceConnections(instances);
-  }, [configDialogOpen, instances, connectionStatus, checkInstanceConnections]);
-
   const disconnectedInstances = useMemo(() => 
     instances.filter(i => i.ativo && connectionStatus[i.id] === 'disconnected'),
     [instances, connectionStatus]
@@ -2086,18 +2074,6 @@ export default function Acionamento() {
               {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               <span className="ml-1 text-xs">Verificar conexões</span>
             </Button>
-            {false && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => checkInstanceConnections(instances)}
-                disabled={checkingConnections}
-                className="text-muted-foreground"
-              >
-                {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                <span className="ml-1 text-xs">Verificar conexões</span>
-              </Button>
-            )}
           </div>
         </div>
 

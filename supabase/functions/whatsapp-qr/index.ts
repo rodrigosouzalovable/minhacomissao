@@ -580,7 +580,7 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
 
   const instances = data || [];
   const safeRows: Array<Record<string, unknown>> = [];
-  const batchSize = 5;
+  const batchSize = 10;
   for (let index = 0; index < instances.length; index += batchSize) {
     const batch = instances.slice(index, index + batchSize);
     const checked = await Promise.all(batch.map(async (instance) => {
