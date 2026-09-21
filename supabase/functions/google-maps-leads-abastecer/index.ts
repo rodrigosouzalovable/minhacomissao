@@ -252,18 +252,10 @@ Deno.serve(async (req) => {
       return json({ ok: false, alvo, error: String(erroBusca.message || erroBusca) }, 200);
     }
 
-    // Verifica quem tem WhatsApp nos números recém-captados (usa as instâncias UAZAPI conectadas)
+    // Verifica os números recém-captados junto com os pendentes antigos em uma
+    // única varredura. Isso evita duas checagens UAZAPI simultâneas e também
+    // elimina a falha de autorização observada na chamada específica por busca.
     const buscaId = (busca as any)?.busca_id || null;
-    let verificacao: unknown = null;
-    if (buscaId) {
-      const { data: vData, error: vErr } = await supabase.functions.invoke(
-        "google-maps-verificar-whatsapp",
-        { body: { busca_id: buscaId } },
-      );
-      verificacao = vErr ? { erro: String(vErr.message || vErr) } : vData;
-    }
-
-    // Aproveita a mesma execução para limpar o estoque antigo ainda pendente.
     const { data: pendentesData, error: pendentesErr } = await supabase.functions.invoke(
       "google-maps-verificar-whatsapp",
       { body: { limite: 600 } },
@@ -317,7 +309,7 @@ Deno.serve(async (req) => {
       meta_confirmados_dia: META_WHATSAPP_DIA,
       busca_id: buscaId,
       nicho_usado: alvo.nicho,
-      verificacao_whatsapp: verificacao,
+      verificacao_whatsapp: pendentesErr ? { erro: String(pendentesErr.message || pendentesErr) } : pendentesData,
       verificacao_pendentes: pendentesErr ? { erro: String(pendentesErr.message || pendentesErr) } : pendentesData,
       requisicoes_antes: requisicoesHoje,
       limite_requisicoes_run: limiteRun,
