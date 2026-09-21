@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 import { User, Building2, Mail, MapPin, ImageIcon } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { QrCode, Smartphone, GripVertical, Search, ChevronDown } from 'lucide-react';
@@ -170,23 +169,25 @@ interface InstanceFormData {
   whatsapp_profile_email?: string;
 }
 
-// Extrai o número do WhatsApp conectado a partir da resposta de status da UAZAPI
-function extrairTelefoneUazapi(payload: any): string | null {
-  if (!payload) return null;
-  const p = payload?.instance ?? payload;
-  const candidatos = [
-    payload?.phoneNumber, payload?.phone, payload?.wid, payload?.owner, payload?.jid,
-    p?.phoneNumber, p?.phone, p?.wid, p?.owner, p?.jid,
-    payload?.status?.phoneNumber, payload?.status?.phone,
-    payload?.result?.phone, payload?.data?.phone,
-  ];
-  for (const c of candidatos) {
-    if (typeof c === 'string') {
-      const d = c.replace(/\D/g, '');
-      if (d.length >= 10 && d.length <= 15) return d;
-    }
-  }
-  return null;
+interface WhatsAppInstanceRow {
+  id: string;
+  user_id: string;
+  nome: string;
+  telefone?: string | null;
+  server_url: string;
+  instance_token: string;
+  ativo: boolean;
+  apenas_lembretes: boolean;
+  robo: boolean;
+  ia_responde: boolean;
+  whatsapp_profile_name?: string;
+  whatsapp_profile_photo_url?: string;
+  whatsapp_profile_description?: string;
+  whatsapp_profile_address?: string;
+  whatsapp_profile_email?: string;
+  proxy_enabled?: boolean;
+  proxy_host?: string | null;
+  shared_read_only?: boolean;
 }
 
 // Formata dígitos em (DD) 9NNNN-NNNN
@@ -254,7 +255,7 @@ export default function Acionamento() {
   const [salvandoRelatorio, setSalvandoRelatorio] = useState(false);
   
   // Multi-instance UAZAPI state
-  const [instances, setInstances] = useState<Array<{ id: string; nome: string; telefone?: string | null; server_url: string; instance_token: string; ativo: boolean; apenas_lembretes: boolean; robo: boolean; ia_responde: boolean; whatsapp_profile_name?: string; whatsapp_profile_photo_url?: string; whatsapp_profile_description?: string; whatsapp_profile_address?: string; whatsapp_profile_email?: string; proxy_enabled?: boolean; proxy_host?: string | null }>>([]);
+  const [instances, setInstances] = useState<WhatsAppInstanceRow[]>([]);
   const [notificationInstanceIds, setNotificationInstanceIds] = useState<Set<string>>(new Set());
   const [savingNotificationInstanceId, setSavingNotificationInstanceId] = useState<string | null>(null);
   const [filtroInstancia, setFiltroInstancia] = useState('');
@@ -427,8 +428,8 @@ export default function Acionamento() {
     const fetchInstances = async () => {
       const { data } = await supabase
         .from('user_whatsapp_instances' as any)
-        .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
-        .eq('user_id', user.id)
+        .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
+        .match(isOwnerAdmin ? {} : { user_id: user.id })
         .order('ordem' as any, { ascending: true })
         .order('criado_em', { ascending: false });
       if (data) {
@@ -436,7 +437,7 @@ export default function Acionamento() {
       }
     };
     fetchInstances();
-  }, [user]);
+  }, [user, isOwnerAdmin]);
 
 
   // Load relatório diário config
@@ -524,60 +525,51 @@ export default function Acionamento() {
   const handleDownloadComWhatsApp = () => exportClientes(clientes, 'contatos-com-whatsapp');
   const handleDownloadSemWhatsApp = () => exportClientes(numerosInvalidos, 'contatos-sem-whatsapp');
 
-  const checkInstanceConnections = useCallback(async (instancesToCheck: typeof instances): Promise<Array<{ id: string; connected: boolean }>> => {
-    const activeOnes = instancesToCheck.filter(i => i.ativo);
-    if (activeOnes.length === 0) return [];
-
+  const checkInstanceConnections = useCallback(async (_instancesToCheck: WhatsAppInstanceRow[]): Promise<Array<{ id: string; connected: boolean; telefone?: string | null }>> => {
+    if (!user) return [];
     setCheckingConnections(true);
-    const initialStatus: Record<string, 'connected' | 'disconnected' | 'checking'> = {};
-    activeOnes.forEach(i => { initialStatus[i.id] = 'checking'; });
-    setConnectionStatus(prev => ({ ...prev, ...initialStatus }));
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'list-instances-status' },
+      });
+      if (error || !data?.ok) throw error || new Error(data?.error || 'Falha ao verificar conexões');
 
-    const results = await Promise.all(activeOnes.map(async (inst) => {
-      try {
-        const data = await checkUazapiConnection(inst.id, inst.server_url, inst.instance_token);
-        const isConnected = isResultConnected(data);
-        setConnectionStatus(prev => ({ ...prev, [inst.id]: isConnected ? 'connected' : 'disconnected' }));
-        // Preenche o telefone automaticamente quando a instância ainda não tem número salvo
-        const jaTem = (inst.telefone || '').replace(/\D/g, '').length >= 8;
-        if (!jaTem) {
-          const phone = extrairTelefoneUazapi(data?.data);
-          if (phone) {
-            await supabase
-              .from('user_whatsapp_instances' as any)
-              .update({ telefone: phone } as any)
-              .eq('id', inst.id);
-            setInstances(prev => prev.map(i => i.id === inst.id ? { ...i, telefone: phone } : i));
-          }
-        }
-        return { id: inst.id, connected: isConnected };
-      } catch {
-        setConnectionStatus(prev => ({ ...prev, [inst.id]: 'disconnected' }));
-        return { id: inst.id, connected: false };
-      }
-    }));
+      const checked = (data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean; is_own: boolean; can_edit: boolean }>;
+      const nextStatus: Record<string, 'connected' | 'disconnected'> = {};
+      checked.forEach((row) => { nextStatus[row.id] = row.connected ? 'connected' : 'disconnected'; });
+      setConnectionStatus(nextStatus);
+      setInstances((current) => {
+        const localById = new Map(current.map((instance) => [instance.id, instance]));
+        return checked
+          .filter((row) => row.connected || row.is_own || isOwnerAdmin)
+          .map((row) => {
+            const local = localById.get(row.id);
+            if (local) return local;
+            return {
+              id: row.id,
+              user_id: row.user_id,
+              nome: row.nome || 'Sem nome',
+              telefone: row.telefone,
+              server_url: '',
+              instance_token: '',
+              ativo: row.ativo,
+              apenas_lembretes: false,
+              robo: false,
+              ia_responde: false,
+              shared_read_only: !row.can_edit,
+            };
+          });
+      });
+      toast.success(`${checked.filter((row) => row.connected).length} instância(s) conectada(s) encontrada(s)`);
+      return checked.map((row) => ({ id: row.id, connected: row.connected, telefone: row.telefone }));
+    } catch (error: any) {
+      toast.error(error?.message || 'Não foi possível verificar as conexões');
+      return [];
+    } finally {
+      setCheckingConnections(false);
+    }
+  }, [user, isOwnerAdmin]);
 
-    // NOTE: Não desativamos/reativamos automaticamente o flag `ativo` no banco com
-    // base no status de conexão da UAZAPI. Falhas temporárias de rede ou da própria
-    // UAZAPI estavam derrubando dezenas de chips de uma vez. O ícone Wi-Fi (em
-    // memória, via connectionStatus) já reflete o status real; o flag `ativo` agora
-    // é controlado **apenas manualmente** (toggle individual ou botão "Ativar todas").
-    setCheckingConnections(false);
-    return results;
-  }, []);
-
-
-  // ECONOMIA: NÃO testar conexão de todas as instâncias automaticamente ao montar a página.
-  // Cada chamada vira invocação da edge function `test-uazapi-connection`.
-  // Mas ao abrir o diálogo "Configurações WhatsApp" disparamos uma verificação
-  // (com cache de 5 min em sessionStorage), para que o badge "X/N conectados"
-  // reflita o estado real em vez de mostrar 0/N.
-  useEffect(() => {
-    if (!configDialogOpen) return;
-    if (instances.length === 0) return;
-    const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
-    if (!jaTemAlgumStatus) checkInstanceConnections(instances);
-  }, [configDialogOpen, instances, connectionStatus, checkInstanceConnections]);
 
   const disconnectedInstances = useMemo(() => 
     instances.filter(i => i.ativo && connectionStatus[i.id] === 'disconnected'),
@@ -1637,7 +1629,7 @@ export default function Acionamento() {
           // Refresh instances list
           const { data: refreshed } = await supabase
             .from('user_whatsapp_instances' as any)
-            .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
+            .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
             .eq('user_id', user?.id)
             .order('ordem' as any, { ascending: true })
             .order('criado_em', { ascending: false });
@@ -1705,7 +1697,7 @@ export default function Acionamento() {
       if (qrData?.alreadyConnected) {
         const { data: refreshed } = await supabase
           .from('user_whatsapp_instances' as any)
-          .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
+          .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
           .eq('user_id', user.id)
           .order('criado_em', { ascending: true });
         if (refreshed) setInstances(refreshed as any);
@@ -2027,17 +2019,19 @@ export default function Acionamento() {
   const handleExportarNumeros = async () => {
     if (!user) return;
     let statusMap: Record<string, boolean> = {};
+    let exportRows: Array<{ id: string; telefone?: string | null }> = instances;
     const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
     if (!jaTemAlgumStatus) {
       toast.info('Verificando conexões antes de exportar...');
       const results = await checkInstanceConnections(instances);
       results.forEach(r => { statusMap[r.id] = r.connected; });
+      exportRows = results;
     } else {
       instances.forEach(i => { statusMap[i.id] = connectionStatus[i.id] === 'connected'; });
     }
 
     const numeros = Array.from(new Set(
-      instances
+      exportRows
         .filter(i => statusMap[i.id])
         .map(i => {
           const d = (i.telefone || '').replace(/\D/g, '');
@@ -2066,24 +2060,20 @@ export default function Acionamento() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">UAZAPI</h1>
           <div className="flex flex-wrap items-center gap-2">
-            {instances.some(i => i.telefone) && (
-              <Button variant="outline" size="sm" onClick={handleExportarNumeros} className="gap-1">
+            <Button variant="outline" size="sm" onClick={handleExportarNumeros} disabled={checkingConnections} className="gap-1">
                 <Download className="h-4 w-4" />
                 <span className="text-xs">Exportar números (Excel)</span>
-              </Button>
-            )}
-            {isOwnerAdmin && instances.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => checkInstanceConnections(instances)}
-                disabled={checkingConnections}
-                className="text-muted-foreground"
-              >
-                {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                <span className="ml-1 text-xs">Verificar conexões</span>
-              </Button>
-            )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => checkInstanceConnections(instances)}
+              disabled={checkingConnections}
+              className="text-muted-foreground"
+            >
+              {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="ml-1 text-xs">Verificar conexões</span>
+            </Button>
           </div>
         </div>
 
@@ -2113,9 +2103,9 @@ export default function Acionamento() {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {isOwnerAdmin
+                       {isOwnerAdmin
                         ? 'Cadastre múltiplos WhatsApps para rotação automática dos envios.'
-                        : 'Consulte suas instâncias, acompanhe a conexão e conecte seu WhatsApp por QR Code.'}
+                         : 'Consulte as instâncias conectadas, exporte os números e conecte seu WhatsApp por QR Code.'}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 lg:shrink-0">
@@ -2550,6 +2540,7 @@ export default function Acionamento() {
                                       </Button>
                                     </>
                                   )}
+                                  {(isOwnerAdmin || inst.user_id === user?.id) && (
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -2570,6 +2561,7 @@ export default function Acionamento() {
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
+                                  )}
                                   {isOwnerAdmin && (
                                     <Button
                                       variant="ghost"
