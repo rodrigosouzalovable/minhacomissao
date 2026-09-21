@@ -405,6 +405,11 @@ export function AquecimentoMetaTab() {
                 const historico = (historicoPilotos ?? []).filter((h: any) => String(h.bm_id) === bm.id);
                 const unicos7d = historico.reduce((s: number, h: any) => s + Number(h.entregues_unicos || 0), 0);
                 const ultimo = historico[0];
+                const idsBm = new Set((trilhas ?? []).filter((t: any) => String(t.instancia?.meta_bm_id || `sem-bm:${t.instancia_id}`) === bm.id).map((t: any) => t.instancia_id));
+                const logsBmHoje = (logs ?? []).filter((l: any) => idsBm.has(l.instancia_id));
+                const entreguesHoje = new Set(logsBmHoje.filter((l: any) => l.entregue_em).map((l: any) => String(l.destino_telefone || "").replace(/\D/g, "").slice(-8))).size;
+                const respostasHoje = logsBmHoje.filter((l: any) => l.respondeu_em).length;
+                const falhasHoje = logsBmHoje.filter((l: any) => l.status === "falha").length;
                 return (
                   <div key={bm.nome} className="rounded-md border p-3 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -427,9 +432,9 @@ export function AquecimentoMetaTab() {
                         <span><strong>Etapa:</strong> {piloto.etapa}/3</span>
                         <span><strong>Entregues únicos 7d:</strong> {unicos7d}</span>
                         <span><strong>Distância operacional:</strong> {Math.max(0, 1000 - unicos7d)}</span>
-                        <span><strong>Entregues ontem:</strong> {ultimo?.entregues_unicos ?? 0}</span>
-                        <span><strong>Respostas ontem:</strong> {ultimo?.respostas ?? 0}</span>
-                        <span><strong>Falhas ontem:</strong> {ultimo?.falhas ?? 0}</span>
+                        <span><strong>Entregues hoje:</strong> {entreguesHoje}</span>
+                        <span><strong>Respostas hoje:</strong> {respostasHoje}</span>
+                        <span><strong>Falhas hoje:</strong> {falhasHoje}</span>
                         <span><strong>Qualidade:</strong> {ultimo?.qualidade || [...bm.qualidades].join(", ")}</span>
                       </div>
                     )}

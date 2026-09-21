@@ -53,9 +53,11 @@ export async function avaliarPiloto(
   const participantes = instanciasBm.filter((i) => i.pool_fora_manual !== true && i.estado_pool !== 'fora_manual');
   const bloqueada = participantes.some((i) => {
     const qualidade = String(i.saude_quality || 'UNKNOWN').toUpperCase();
+    const statusMeta = String(i.saude_status || '').toUpperCase();
     const quarentena = i.quarentena_ate && new Date(i.quarentena_ate).getTime() > Date.now();
     const pausa = i.pausa_automatica_ate && new Date(i.pausa_automatica_ate).getTime() > Date.now();
-    return ['YELLOW', 'RED'].includes(qualidade) || quarentena || pausa ||
+    const banida = i.saude_ban_info && typeof i.saude_ban_info === 'object' && Object.keys(i.saude_ban_info).length > 0;
+    return qualidade !== 'GREEN' || (statusMeta && statusMeta !== 'CONNECTED') || banida || quarentena || pausa ||
       ['restrita', 'pausado'].includes(String(i.estado_pool || '').toLowerCase());
   });
   if (bloqueada) return { meta: 0, etapa: piloto.etapa, status: 'pausado', motivo: 'qualidade_ou_restricao_meta', tier };
