@@ -39,6 +39,7 @@ const connected = async (inst: any) => {
       if (
         data?.connected === true || data?.isConnected === true || data?.loggedIn === true ||
         data?.instance?.connected === true || data?.instance?.isConnected === true ||
+        data?.status?.connected === true || data?.status?.loggedIn === true ||
         data?.data?.connected === true || data?.data?.isConnected === true ||
         ["connected", "open", "online", "ready", "authenticated", "loggedin"].includes(raw)
       ) return true;
