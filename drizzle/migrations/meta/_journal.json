@@ -288,6 +288,13 @@
       "when": 1789999194391,
       "tag": "0040_allow_meta_pool_activation_without_approved_display_name",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1789999224555,
+      "tag": "0041_preserve_commercial_blocks_when_display_name_is_pending",
+      "breakpoints": true
     }
   ]
 }
