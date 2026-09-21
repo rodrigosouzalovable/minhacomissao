@@ -295,6 +295,20 @@
       "when": 1789999224555,
       "tag": "0041_preserve_commercial_blocks_when_display_name_is_pending",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790007990369,
+      "tag": "0042_allow_safe_manual_meta_pool_return",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790008009463,
+      "tag": "0043_release_failed_tier_250_template_slots",
+      "breakpoints": true
     }
   ]
 }

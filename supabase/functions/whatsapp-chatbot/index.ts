@@ -256,7 +256,7 @@ async function decryptWhatsAppMedia(
     console.log(`[MEDIA-DECRYPT] Iniciando descriptografia. URL=${encUrl.substring(0, 80)}... info="${infoString}"`);
 
     // 1. Download encrypted file
-    const encResp = await fetch(encUrl);
+    const encResp = await fetch(encUrl, { signal: AbortSignal.timeout(8_000) });
     if (!encResp.ok) {
       console.warn(`[MEDIA-DECRYPT] Falha ao baixar .enc: HTTP ${encResp.status}`);
       await encResp.text();
@@ -328,6 +328,8 @@ async function decryptWhatsAppMedia(
 }
 
 const VALOR_MINIMO_PARCELA = 100;
+const MEDIA_FETCH_TIMEOUT_MS = 6_000;
+const LOCAL_DECRYPT_MAX_BYTES = 2 * 1024 * 1024;
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -1161,6 +1163,7 @@ serve(async (req) => {
                   method: attempt.method,
                   headers,
                   body: JSON.stringify(attempt.body),
+                  signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
                 });
                 const respContentType = uazapiResp.headers.get('content-type') || '';
                 console.log(`[INBOX] UAZAPI resposta: HTTP ${uazapiResp.status} CT=${respContentType} [${headerMode}]`);
@@ -1190,7 +1193,9 @@ serve(async (req) => {
                     }
                   } else if (mediaUrlFromJson && typeof mediaUrlFromJson === 'string' && mediaUrlFromJson.startsWith('http')) {
                     console.log(`[INBOX] UAZAPI retornou URL de mídia: ${mediaUrlFromJson}`);
-                    const mediaFetchResp = await fetch(mediaUrlFromJson);
+                    const mediaFetchResp = await fetch(mediaUrlFromJson, {
+                      signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
+                    });
                     if (mediaFetchResp.ok) {
                       const candidateBlob = await mediaFetchResp.blob();
                       if (await isOriginalQuality(candidateBlob, 'uazapi-url')) {
@@ -1226,7 +1231,9 @@ serve(async (req) => {
         // Strategy 2: Direct fetch (works for already-public URLs)
         if (!downloadSuccess && inboxMediaUrl) {
           try {
-            const mediaResp = await fetch(inboxMediaUrl);
+            const mediaResp = await fetch(inboxMediaUrl, {
+              signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
+            });
             if (mediaResp.ok) {
               const blob = await mediaResp.blob();
               const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
@@ -1258,7 +1265,8 @@ serve(async (req) => {
         }
 
         // Strategy 3: Local decryption of .enc file using mediaKey
-        if (!downloadSuccess && mediaMeta.mediaKey && mediaMeta.encUrl) {
+        const localDecryptPermitido = mediaMeta.fileLength <= 0 || mediaMeta.fileLength <= LOCAL_DECRYPT_MAX_BYTES;
+        if (!downloadSuccess && mediaMeta.mediaKey && mediaMeta.encUrl && localDecryptPermitido) {
           console.log(`[MEDIA] Tentando descriptografia local do .enc...`);
           try {
             const decryptedBlob = await decryptWhatsAppMedia(
@@ -1280,6 +1288,8 @@ serve(async (req) => {
           } catch (decryptErr) {
             console.error(`[MEDIA] Falha na descriptografia local:`, decryptErr);
           }
+        } else if (!downloadSuccess && mediaMeta.mediaKey && mediaMeta.encUrl && !localDecryptPermitido) {
+          console.warn(`[MEDIA] Descriptografia local ignorada para arquivo grande (${mediaMeta.fileLength} bytes)`);
         } else if (!downloadSuccess && !mediaMeta.mediaKey) {
           console.log(`[MEDIA] Sem mediaKey no payload — descriptografia local indisponível`);
         }
@@ -1822,6 +1832,9 @@ serve(async (req) => {
       const textoFromMe = extractTextFromPayload(payload);
       const textoFromMeLower = textoFromMe.toLowerCase();
       const propostaFromMe = extrairPropostaDoTexto(textoFromMe);
+      const aberturaAutomaticaDesconto =
+        textoFromMeLower.includes('50% de desconto') &&
+        textoFromMeLower.includes('parcelas em aberto');
       const destinoTelefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
 
       // --- DESBLOQUEIO + ATENDIMENTO HUMANO ---
@@ -1853,7 +1866,7 @@ serve(async (req) => {
         const etapaAtualConv = convAguardando?.etapa || 'novo';
         const dadosAtuais = convAguardando?.dados || {};
         // Só marca atendimento_humano se NÃO for proposta (proposta tem lógica própria abaixo)
-        if (!propostaFromMe) {
+        if (!propostaFromMe && !aberturaAutomaticaDesconto) {
           console.log(`[HUMAN] Mensagem manual detectada para ${destinoTelefone}, pausando bot por 30min`);
           const etapaParaSalvar = etapaAtualConv === 'atendimento_humano' 
             ? 'atendimento_humano' 

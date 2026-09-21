@@ -11,11 +11,19 @@ import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-in
 
 
 const GRAPH_VERSION = "v21.0";
+const GRAPH_TIMEOUT_MS = 8_000;
+const BATCH_SIZE = 10;
+const EXECUTION_BUDGET_MS = 50_000;
+
+function graphFetch(url: string, init: RequestInit = {}) {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS) });
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const startedAt = Date.now();
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const webhookUrl = `${supabaseUrl}/functions/v1/meta-whatsapp-webhook`;
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -48,8 +56,7 @@ Deno.serve(async (req) => {
     const startTs = Math.floor(inicioDia.getTime() / 1000);
     const nowTs = Math.floor(Date.now() / 1000);
 
-    const resultados: any[] = [];
-    for (const inst of instancias || []) {
+    const verificarInstancia = async (inst: any) => {
       const out: any = { id: inst.id, nome: inst.nome };
       let status: "ok" | "reinscrito" | "erro" | "perda_suspeita" = "ok";
       let erro: string | null = null;
@@ -59,7 +66,7 @@ Deno.serve(async (req) => {
         const auth = { Authorization: `Bearer ${inst.access_token}` };
 
         // 1) Verifica subscribed_apps e o callback registrado.
-        const listRes = await fetch(
+        const listRes = await graphFetch(
           `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}/subscribed_apps?fields=whatsapp_business_api_data`,
           { headers: auth },
         );
@@ -81,7 +88,7 @@ Deno.serve(async (req) => {
           params.set("override_callback_uri", webhookUrl);
           params.set("verify_token", verifyToken);
 
-          const subRes = await fetch(
+          const subRes = await graphFetch(
             `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}/subscribed_apps`,
             {
               method: "POST",
@@ -103,7 +110,7 @@ Deno.serve(async (req) => {
         // 3) Compara conversas user_initiated de hoje vs. inbound em DB.
         if (status !== "erro") {
           try {
-            const anRes = await fetch(
+            const anRes = await graphFetch(
               `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}?fields=conversation_analytics.start(${startTs}).end(${nowTs}).granularity(DAILY).phone_numbers(["${inst.display_phone ?? ""}"]).conversation_types(["USER_INITIATED"]).dimensions(["CONVERSATION_TYPE"])`,
               { headers: auth },
             );
@@ -230,10 +237,27 @@ Deno.serve(async (req) => {
       }
 
 
-      resultados.push(out);
+      return out;
+    };
+
+    const resultados: any[] = [];
+    let parcial = false;
+    for (let i = 0; i < instancias.length; i += BATCH_SIZE) {
+      if (Date.now() - startedAt >= EXECUTION_BUDGET_MS) {
+        parcial = true;
+        break;
+      }
+      const lote = instancias.slice(i, i + BATCH_SIZE);
+      resultados.push(...await Promise.all(lote.map(verificarInstancia)));
     }
 
-    return new Response(JSON.stringify({ success: true, resultados }), {
+    return new Response(JSON.stringify({
+      success: true,
+      parcial,
+      processadas: resultados.length,
+      total: instancias.length,
+      resultados,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {

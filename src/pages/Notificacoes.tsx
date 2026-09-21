@@ -148,7 +148,7 @@ export default function Notificacoes() {
       const inst = instances?.find(i => i.id === selectedInstance);
       if (!inst) throw new Error('Instância não encontrada');
       const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
-        body: { action: 'qr', instanceId: selectedInstance, userId: 'admin' },
+        body: { action: 'qr', instanceId: selectedInstance },
       });
       if (error) throw error;
       const img = data?.qrcode || data?.qr || data?.base64 || null;
