@@ -169,13 +169,8 @@ Deno.serve(async (req) => {
         continue;
       }
       if (excluidas.includes(inst.id)) { descartados.push(`${rotulo}: já falhou na entrega para este contato`); continue; }
-      // Nome de exibição REPROVADO gera falha de entrega (#131000).
-      // Nome em análise (PENDING_REVIEW) continua enviando normalmente.
-      const nameStatus = String(inst.meta_name_status || '').toUpperCase();
-      if (nameStatus === 'REJECTED' && !liberacaoTotalThiago && !liberar3144Conectada) {
-        descartados.push(`${rotulo}: nome de exibição ${nameStatus} na Meta (entrega bloqueada)`);
-        continue;
-      }
+      // O nome de exibição é informativo: a tentativa segue e uma eventual
+      // recusa real da Meta é registrada pelo envio.
       const motivoBm = motivoBloqueioBm(cotasBm, inst.meta_bm_id);
       if (motivoBm && !liberacaoTotalThiago) { descartados.push(`${rotulo}: ${motivoBm}`); continue; }
 

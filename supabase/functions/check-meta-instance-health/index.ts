@@ -5,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
-import { isInformationalDisplayNameLimit, isMetaDisplayNameUsable } from '../_shared/meta-name-status.ts';
+import { isInformationalDisplayNameLimit } from '../_shared/meta-name-status.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -204,8 +204,7 @@ Deno.serve(async (req) => {
         r.limitacao_nome_informativa = limitacaoNomeInformativa;
         const limitacaoPorQualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalheLimitacao) ||
           ['YELLOW', 'RED'].includes(String(r.quality_rating || '').toUpperCase());
-        const limitacaoPorNome = !isMetaDisplayNameUsable(nomeAtual) &&
-          /name|display/i.test(detalheLimitacao);
+        const limitacaoPorNome = /name|display/i.test(detalheLimitacao);
         r.limitacao_tipo = limitacaoNomeInformativa
           ? 'nome_informativo'
           : r.limitacao_numero
@@ -473,8 +472,8 @@ Deno.serve(async (req) => {
           !r.limitacao_numero || ['nome', 'qualidade'].includes(String(r.limitacao_tipo || ''))
         );
 
-        // A Novo Mundo 3144 permanece utilizável quando CONNECTED mesmo com o
-        // nome pendente. Outras limitações explícitas continuam restringindo.
+        // Limitações que mencionam apenas o nome são informativas para todas as
+        // instâncias. Outras limitações explícitas continuam restringindo.
         if (r.limitacao_numero && !limitacaoNomeInformativa && !pausaViolacaoConta && !liberarLimitacao3144) {
           updatePayload.estado_pool = 'restrita';
           updatePayload.pausa_automatica_motivo = r.limitacao_motivo;

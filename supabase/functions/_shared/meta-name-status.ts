@@ -5,5 +5,5 @@ export function isMetaDisplayNameUsable(status: unknown): boolean {
 }
 
 export function isInformationalDisplayNameLimit(detail: unknown, nameStatus: unknown): boolean {
-  return isMetaDisplayNameUsable(nameStatus) && /display name|nome de exibição/i.test(String(detail || ''));
+  return /display name|nome de exibição/i.test(String(detail || ''));
 }
