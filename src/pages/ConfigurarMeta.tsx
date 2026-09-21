@@ -31,6 +31,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useUserRole } from "@/hooks/useUserRole";
 import ParceirosMetaTab from "@/components/meta/ParceirosMetaTab";
+import { isInformationalDisplayNameLimit, isMetaDisplayNameUsable } from "@/lib/metaNameStatus";
 
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
@@ -1857,8 +1858,11 @@ export default function ConfigurarMeta() {
                               String(phoneEntity?.can_send_message || phoneHealth?.can_send_message || "").toUpperCase(),
                             );
                             const detalhePhone = String(phoneEntity?.additional_info?.[0] || "");
+                            const nomeUtilizavel = isMetaDisplayNameUsable(nomeStatus);
+                            const limitacaoNomeInformativa = isInformationalDisplayNameLimit(detalhePhone, nomeStatus);
                             const qualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalhePhone) ||
                               ["YELLOW", "RED"].includes(String(inst.saude_quality || "").toUpperCase());
+                            if (limitacaoNomeInformativa && /nome de exibição|display name/i.test(motivo)) return null;
                             return (
                               <Badge
                                 variant="destructive"
@@ -1869,9 +1873,9 @@ export default function ConfigurarMeta() {
                                   ? "fora do pool: pendência de pagamento da Business Manager (#131042) — troque/regularize o cartão e as faturas na BM. Volta ao pool automaticamente após a revalidação."
                                   : phoneLimitado && qualidade
                                     ? `fora do pool: restrição de qualidade/reputação confirmada pela Meta${detalhePhone ? ` — ${detalhePhone}` : "."}`
-                                  : /nome de exibição|display name/i.test(motivo) && nomeStatus !== "APPROVED"
+                                  : /nome de exibição|display name/i.test(motivo) && !nomeUtilizavel
                                     ? "fora do pool: pagamento confirmado; o nome de exibição ainda precisa ser aprovado pela Meta."
-                                  : /nome de exibição|display name/i.test(motivo) && nomeStatus === "APPROVED"
+                                  : /nome de exibição|display name/i.test(motivo) && nomeUtilizavel
                                     ? "fora do pool: o nome está aprovado; atualize a saúde para identificar a restrição atual da Meta."
                                   : `fora do pool: ${motivo}`}
                               </Badge>

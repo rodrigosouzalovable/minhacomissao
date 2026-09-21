@@ -5,6 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
+import { isInformationalDisplayNameLimit, isMetaDisplayNameUsable } from '../_shared/meta-name-status.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -157,8 +158,7 @@ Deno.serve(async (req) => {
           const ents = Array.isArray(h.entities) ? h.entities : [];
           return ents.some((e: any) => RUIM.has(String(e?.can_send_message || '').toUpperCase()));
         };
-        const restritoMeta = avaliaHealth(r.phone_health) || avaliaHealth(r.waba_health);
-        r.restrito_meta = restritoMeta;
+        const restritoMetaBruto = avaliaHealth(r.phone_health) || avaliaHealth(r.waba_health);
 
         // A Graph não expõe os dados do cartão, mas informa a elegibilidade de
         // envio por entidade. BUSINESS/WABA disponíveis confirmam que não há
@@ -198,18 +198,26 @@ Deno.serve(async (req) => {
           : null;
         const nomeAtual = String(r.name_status || '').toUpperCase();
         const detalheLimitacao = String(r.limitacao_numero || '');
+        const limitacaoNomeInformativa = isInformationalDisplayNameLimit(detalheLimitacao, nomeAtual);
+        const restritoMeta = restritoMetaBruto && !limitacaoNomeInformativa;
+        r.restrito_meta = restritoMeta;
+        r.limitacao_nome_informativa = limitacaoNomeInformativa;
         const limitacaoPorQualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalheLimitacao) ||
           ['YELLOW', 'RED'].includes(String(r.quality_rating || '').toUpperCase());
-        const limitacaoPorNome = nomeAtual !== 'APPROVED' &&
+        const limitacaoPorNome = !isMetaDisplayNameUsable(nomeAtual) &&
           /name|display/i.test(detalheLimitacao);
-        r.limitacao_tipo = r.limitacao_numero
+        r.limitacao_tipo = limitacaoNomeInformativa
+          ? 'nome_informativo'
+          : r.limitacao_numero
           ? limitacaoPorNome
             ? 'nome'
             : limitacaoPorQualidade
               ? 'qualidade'
               : 'numero'
           : null;
-        r.limitacao_motivo = r.limitacao_numero
+        r.limitacao_motivo = limitacaoNomeInformativa
+          ? null
+          : r.limitacao_numero
           ? r.limitacao_tipo === 'nome'
             ? 'Nome de exibição ainda não aprovado pela Meta'
             : r.limitacao_tipo === 'qualidade'
@@ -467,7 +475,7 @@ Deno.serve(async (req) => {
 
         // A Novo Mundo 3144 permanece utilizável quando CONNECTED mesmo com o
         // nome pendente. Outras limitações explícitas continuam restringindo.
-        if (r.limitacao_numero && !pausaViolacaoConta && !liberarLimitacao3144) {
+        if (r.limitacao_numero && !limitacaoNomeInformativa && !pausaViolacaoConta && !liberarLimitacao3144) {
           updatePayload.estado_pool = 'restrita';
           updatePayload.pausa_automatica_motivo = r.limitacao_motivo;
         }
@@ -486,7 +494,9 @@ Deno.serve(async (req) => {
         if ((eraBloqueioMeta || eraLimitacaoNumero) && !eraViolacaoConta && graphOk && !notificarPausa && !liberarLimitacao3144) {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
-          if (saudavel) {
+          const aptaComNomeSemRevisao = limitacaoNomeInformativa &&
+            (qual === 'GREEN' || qual === 'UNKNOWN' || !qual) && !quarentenaAtiva;
+          if (saudavel || aptaComNomeSemRevisao) {
             if (inst.pool_fora_manual === true) {
               updatePayload.estado_pool = 'fora_manual';
               r.liberada_parcial = true;

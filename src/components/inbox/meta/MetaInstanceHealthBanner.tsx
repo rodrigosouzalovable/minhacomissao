@@ -1,5 +1,6 @@
 import { AlertTriangle, Ban, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isInformationalDisplayNameLimit, isMetaDisplayNameUsable } from '@/lib/metaNameStatus';
 
 export interface MetaInstanceHealth {
   saude_status?: string | null;
@@ -52,8 +53,10 @@ function avaliar(inst: MetaInstanceHealth | null | undefined): { nivel: Nivel; t
   const phoneStatus = String(phoneEntity?.can_send_message || phoneHealth?.can_send_message || '').toUpperCase();
   const phoneLimitado = ['BLOCKED', 'LIMITED', 'RESTRICTED'].includes(phoneStatus);
   const detalhePhone = String(phoneEntity?.additional_info?.[0] || '');
+  const nomeStatus = inst.meta_name_status || nameSt;
+  const limitacaoNomeInformativa = isInformationalDisplayNameLimit(detalhePhone, nomeStatus);
 
-  if (phoneLimitado) {
+  if (phoneLimitado && !limitacaoNomeInformativa) {
     const porQualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalhePhone) ||
       ['YELLOW', 'RED'].includes(qual);
     return {
@@ -68,7 +71,7 @@ function avaliar(inst: MetaInstanceHealth | null | undefined): { nivel: Nivel; t
   const pausaAtiva = !!inst.pausa_automatica_ate &&
     new Date(inst.pausa_automatica_ate).getTime() > Date.now();
   const motivoNomeObsoleto = /nome de exibição|display name/i.test(String(inst.pausa_automatica_motivo || '')) &&
-    String(inst.meta_name_status || nameSt).toUpperCase() === 'APPROVED';
+    isMetaDisplayNameUsable(nomeStatus);
   const motivoBloqueio = motivoNomeObsoleto ? null : bloqueioReal(inst.pausa_automatica_motivo);
   if (motivoBloqueio && (pausaAtiva || inst.estado_pool === 'restrita')) {
     const ate = pausaAtiva
