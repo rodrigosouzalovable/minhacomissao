@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Revalidar instâncias fora do pool e liberar as aptas; renovar os alvos esgotados da captação Google Maps
 - [x] Remover o nome de exibição como trava de pool, seleção e envio Meta, mantendo recusas reais registradas
 - [x] Tratar AVAILABLE_WITHOUT_REVIEW como nome Meta utilizável e liberar a instância SOUZA 62 8268-9965 do bloqueio incorreto
 - [x] Corrigir o aviso de acesso do Alexander, fixar a sessão autenticada e tornar o iPhone B1 o único remetente pessoal
