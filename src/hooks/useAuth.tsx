@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -18,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const accessNotificationUserRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -38,6 +39,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      accessNotificationUserRef.current = null;
+      return;
+    }
+    if (accessNotificationUserRef.current === user.id) return;
+    accessNotificationUserRef.current = user.id;
+
+    supabase.functions.invoke('notificar-acesso-usuario', {
+      body: { accessId: crypto.randomUUID() },
+    }).then(({ error }) => {
+      if (error) console.error('Falha ao registrar acesso do usuário:', error.message);
+    });
+  }, [user]);
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });

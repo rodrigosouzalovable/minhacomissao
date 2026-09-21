@@ -58,6 +58,7 @@ export function EditPermissionsDialog({
   const [parceiroMeta, setParceiroMeta] = useState(false);
   const [veCampanhas, setVeCampanhas] = useState(false);
   const [batePonto, setBatePonto] = useState(false);
+  const [notificarAcessoWhatsapp, setNotificarAcessoWhatsapp] = useState(false);
 
   const [instanciasParceiro, setInstanciasParceiro] = useState<string[]>([]);
   const [buscaInstancia, setBuscaInstancia] = useState('');
@@ -157,6 +158,7 @@ export function EditPermissionsDialog({
       setParceiroMeta((permissions as any).parceiro_meta ?? false);
       setVeCampanhas((permissions as any).ve_campanhas ?? false);
       setBatePonto((permissions as any).bate_ponto ?? false);
+      setNotificarAcessoWhatsapp((permissions as any).notificar_acesso_whatsapp ?? false);
 
     } else {
       setSelectedTabs([]);
@@ -172,6 +174,7 @@ export function EditPermissionsDialog({
       setParceiroMeta(false);
       setVeCampanhas(false);
       setBatePonto(false);
+      setNotificarAcessoWhatsapp(false);
 
 
     }
@@ -200,6 +203,7 @@ export function EditPermissionsDialog({
             parceiro_meta: parceiroMeta,
             ve_campanhas: veCampanhas,
             bate_ponto: batePonto,
+            notificar_acesso_whatsapp: notificarAcessoWhatsapp,
 
 
             concedido_por: (inboxCompartilhado || acordosCompartilhados) ? currentUser?.id : null,
@@ -382,6 +386,16 @@ export function EditPermissionsDialog({
                 </p>
               </div>
               <Switch checked={batePonto} onCheckedChange={setBatePonto} />
+            </div>
+
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label className="text-sm font-medium">Notificar quando acessar o sistema</Label>
+                <p className="text-xs text-muted-foreground">
+                  Envia um aviso ao seu WhatsApp pessoal sempre que este usuário abrir ou recarregar o sistema.
+                </p>
+              </div>
+              <Switch checked={notificarAcessoWhatsapp} onCheckedChange={setNotificarAcessoWhatsapp} />
             </div>
 
 
