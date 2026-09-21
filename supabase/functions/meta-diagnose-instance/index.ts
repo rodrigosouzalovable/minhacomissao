@@ -64,11 +64,9 @@ Deno.serve(async (req) => {
 
     const problems: string[] = [];
     if (!hasCallback) problems.push('Webhook não assinado nesta WABA — clique em "Webhook" para reinscrever.');
-    if (nameStatus && !isMetaDisplayNameUsable(nameStatus)) {
-      problems.push(
-        `Display Name está "${nameStatus}". Meta aceita a chamada, devolve wamid, mas frequentemente descarta a entrega quando o nome não está APPROVED. Solicite aprovação do Display Name no Business Manager.`,
-      );
-    }
+    const displayNameNotice = nameStatus && !isMetaDisplayNameUsable(nameStatus)
+      ? `Display Name está "${nameStatus}"; o sistema permite a tentativa e registra qualquer recusa real da Meta.`
+      : null;
     if (quality === 'RED') problems.push('Qualidade RED — risco alto de bloqueio.');
 
     const recommendation =
@@ -83,6 +81,7 @@ Deno.serve(async (req) => {
         phone,
         subscriptions: subs,
         analytics,
+        display_name_notice: displayNameNotice,
         problems,
         recommendation,
       }),

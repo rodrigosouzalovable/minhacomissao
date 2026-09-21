@@ -938,7 +938,7 @@ export default function EnvioMeta() {
     }
 
     // A chave global de qualidade é validada no backend, que mantém os bloqueios
-    // reais da Meta (banimento, restrição, cobrança e nome reprovado). A tela não
+    // reais da Meta (banimento, restrição e cobrança). A tela não
     // remove YELLOW, RED ou sem leitura antes de enviar.
     const filteredInstanciaIds = instanciaIds;
 
@@ -959,27 +959,9 @@ export default function EnvioMeta() {
       );
     }
 
-    // Nome de exibição REPROVADO na Meta = entrega rejeitada (#131000).
-    // Nome em análise (PENDING_REVIEW) envia normalmente.
-    const nomeProblema = liberacaoTotalThiago ? [] : filteredInstanciaIds.filter((id) => {
-      const inst = instancias.find((x) => x.id === id) as any;
-      return String(inst?.meta_name_status || "").toUpperCase() === "REJECTED";
-    });
-    const idsOk = filteredInstanciaIds.filter((id) => !nomeProblema.includes(id));
-    if (idsOk.length === 0) {
-      return toast.error(
-        "Nenhuma instância disponível. As selecionadas estão com o nome de exibição reprovado na Meta, o que faz a entrega falhar com \"Something went wrong (#131000)\". Use outro número.",
-      );
-    }
-    if (nomeProblema.length > 0) {
-      const nomes = nomeProblema
-        .map((id) => instancias.find((x) => x.id === id)?.nome || id)
-        .slice(0, 5)
-        .join(", ");
-      toast.warning(
-        `${nomeProblema.length} instância(s) removidas: nome de exibição reprovado na Meta (causa o erro #131000) — ${nomes}`,
-      );
-    }
+    // O estado do nome de exibição é informativo. A tentativa segue e qualquer
+    // recusa real da Meta é registrada pelo envio.
+    const idsOk = filteredInstanciaIds;
 
 
 
@@ -1769,8 +1751,8 @@ export default function EnvioMeta() {
 
                           {i.saude_tier && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{i.saude_tier}</Badge>}
                           {String(i.meta_name_status || "").toUpperCase() === "REJECTED" && (
-                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3" /> NÃO RECOMENDADA — nome REJECTED
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" /> Nome REJECTED — tentativa permitida
                             </Badge>
                           )}
                           {i.saude_ban_info && (
