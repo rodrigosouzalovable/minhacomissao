@@ -403,8 +403,8 @@ export function AquecimentoMetaTab() {
                 const limitada = bm.tier <= 250;
                 const piloto = (pilotos ?? []).find((p: any) => String(p.bm_id) === bm.id);
                 const historico = (historicoPilotos ?? []).filter((h: any) => String(h.bm_id) === bm.id);
-                const unicos7d = historico.reduce((s: number, h: any) => s + Number(h.entregues_unicos || 0), 0);
                 const ultimo = historico[0];
+                const unicos7d = Number(ultimo?.unicos_entregues_7d || 0);
                 const idsBm = new Set((trilhas ?? []).filter((t: any) => String(t.instancia?.meta_bm_id || `sem-bm:${t.instancia_id}`) === bm.id).map((t: any) => t.instancia_id));
                 const logsBmHoje = (logs ?? []).filter((l: any) => idsBm.has(l.instancia_id));
                 const entreguesHoje = new Set(logsBmHoje.filter((l: any) => l.entregue_em).map((l: any) => String(l.destino_telefone || "").replace(/\D/g, "").slice(-8))).size;

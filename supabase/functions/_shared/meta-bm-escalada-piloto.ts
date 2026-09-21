@@ -74,6 +74,12 @@ export async function avaliarPiloto(
   const entregues = new Set(logs.filter((l) => l.entregue_em).map((l) => telefoneChave(l.destino_telefone)).filter(Boolean));
   const falhas = logs.filter((l) => l.status === 'falha').length;
   const respostas = logs.filter((l) => l.respondeu_em).length;
+  const { data: logs7d } = ids.length > 0
+    ? await supabase.from('meta_aquecimento_destino_log')
+      .select('destino_telefone, entregue_em')
+      .in('instancia_id', ids).gte('dia', dataBrtDiasAtras(6)).not('entregue_em', 'is', null).limit(10000)
+    : { data: [] };
+  const entregues7d = new Set(((logs7d || []) as any[]).map((l) => telefoneChave(l.destino_telefone)).filter(Boolean));
   const entregaPct = enviados.size > 0 ? (entregues.size / enviados.size) * 100 : 0;
   const falhaPct = logs.length > 0 ? (falhas / logs.length) * 100 : 0;
   const metas = Array.isArray(piloto.metas_diarias) && piloto.metas_diarias.length ? piloto.metas_diarias : [450, 550, 650];
@@ -104,6 +110,7 @@ export async function avaliarPiloto(
     meta_unicos: Number(metas[Math.max(0, Number(piloto.etapa || 1) - 1)] || 450),
     enviados_unicos: enviados.size,
     entregues_unicos: entregues.size,
+    unicos_entregues_7d: entregues7d.size,
     respostas,
     falhas,
     qualidade: participantes.map((i) => String(i.saude_quality || 'UNKNOWN')).join(',') || 'UNKNOWN',

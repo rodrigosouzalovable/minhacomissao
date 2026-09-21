@@ -55,5 +55,6 @@
 - [Leads Google Maps na caixa AQUECIMENTO](mem://features/whatsapp/aquecimento-leads-caixa-aquecimento) — Envios/respostas de leads do Google Maps ficam na caixa AQUECIMENTO, sem IAGO, etiqueta ou rodízio
 - [Resultado das Campanhas](mem://features/whatsapp/campanha-resultado-e-relatorio-diario) — Respostas/taxa de retorno/acordos por campanha (admin-only) + relatório WhatsApp 19h30
 - [Aquecimento Intensivo Tier](mem://features/whatsapp/aquecimento-intensivo-tier) — 450 únicos/dia, primeiro nome da empresa, só UTILITY com {{1}}, BM travada pausa 12h
+- [Piloto de escala Greensoul](mem://features/whatsapp/piloto-escala-greensoul) — Rampa exclusiva 450→550→650, únicos entregues por BM, freios e encerramento ao confirmar 10K
 
 - [Histórico individual de Campanhas Meta](mem://features/whatsapp/campanhas-meta-historico) — Cada login vê apenas suas campanhas, com filtros, custos, instâncias e blacklist
