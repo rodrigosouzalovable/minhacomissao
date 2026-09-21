@@ -4400,6 +4400,124 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_bm_escalada_diaria: {
+        Row: {
+          atualizado_em: string
+          bm_id: string
+          dia: string
+          entregues_unicos: number
+          enviados_unicos: number
+          etapa: number
+          falhas: number
+          id: string
+          meta_unicos: number
+          motivo: string | null
+          qualidade: string | null
+          respostas: number
+          status: string
+          tier_oficial: number | null
+          unicos_entregues_7d: number
+        }
+        Insert: {
+          atualizado_em?: string
+          bm_id: string
+          dia: string
+          entregues_unicos?: number
+          enviados_unicos?: number
+          etapa: number
+          falhas?: number
+          id?: string
+          meta_unicos?: number
+          motivo?: string | null
+          qualidade?: string | null
+          respostas?: number
+          status?: string
+          tier_oficial?: number | null
+          unicos_entregues_7d?: number
+        }
+        Update: {
+          atualizado_em?: string
+          bm_id?: string
+          dia?: string
+          entregues_unicos?: number
+          enviados_unicos?: number
+          etapa?: number
+          falhas?: number
+          id?: string
+          meta_unicos?: number
+          motivo?: string | null
+          qualidade?: string | null
+          respostas?: number
+          status?: string
+          tier_oficial?: number | null
+          unicos_entregues_7d?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_bm_escalada_diaria_bm_id_fkey"
+            columns: ["bm_id"]
+            isOneToOne: false
+            referencedRelation: "meta_business_managers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_bm_escalada_piloto: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          bm_id: string
+          encerrado_em: string | null
+          entrega_min_pct: number
+          etapa: number
+          falha_pausar_pct: number
+          falha_reduzir_pct: number
+          iniciado_em: string
+          metas_diarias: number[]
+          mix_leads_pct: number
+          motivo: string | null
+          status: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          bm_id: string
+          encerrado_em?: string | null
+          entrega_min_pct?: number
+          etapa?: number
+          falha_pausar_pct?: number
+          falha_reduzir_pct?: number
+          iniciado_em?: string
+          metas_diarias?: number[]
+          mix_leads_pct?: number
+          motivo?: string | null
+          status?: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          bm_id?: string
+          encerrado_em?: string | null
+          entrega_min_pct?: number
+          etapa?: number
+          falha_pausar_pct?: number
+          falha_reduzir_pct?: number
+          iniciado_em?: string
+          metas_diarias?: number[]
+          mix_leads_pct?: number
+          motivo?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_bm_escalada_piloto_bm_id_fkey"
+            columns: ["bm_id"]
+            isOneToOne: true
+            referencedRelation: "meta_business_managers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_business_managers: {
         Row: {
           app_id: string

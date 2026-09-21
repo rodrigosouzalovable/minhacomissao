@@ -6,6 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { hojeBrt, instanciasComTemplateLeadAprovado } from '../_shared/meta-aquecimento-alvo.ts';
 import { alvoDiarioPorTier, carregarOrcamento, proximoTier, tierAtual } from '../_shared/meta-aquecimento-inteligente.ts';
 import { notificarNumeros } from '../_shared/notificar-numeros.ts';
+import { avaliarPiloto, carregarPilotosAtivos } from '../_shared/meta-bm-escalada-piloto.ts';
 
 const DESTINATARIOS_AVISO = ['62991672674'];
 
@@ -51,7 +52,7 @@ Deno.serve(async (req) => {
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, display_phone, meta_bm_id, saude_quality, saude_tier, tier_diario, dias_green_consecutivos, estado_pool, recuperacao_ativa, quarentena_ate, pausa_automatica_ate, ativo, provider, phone_number_id, access_token, data_ativacao_api')
+      .select('id, nome, display_phone, meta_bm_id, saude_status, saude_quality, saude_tier, saude_ban_info, tier_diario, dias_green_consecutivos, estado_pool, pool_fora_manual, recuperacao_ativa, quarentena_ate, pausa_automatica_ate, ativo, provider, phone_number_id, access_token, data_ativacao_api')
       .eq('ativo', true)
       .eq('provider', 'meta')
       .eq('aquecimento_meta_ativo', true)
@@ -232,9 +233,16 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
       membrosPorBm.set(chave, membros);
     }
     const alvoPorInstancia = new Map<string, number>();
-    for (const membros of membrosPorBm.values()) {
+    const pilotos = await carregarPilotosAtivos(supabase);
+    const pilotoPorBm = new Map<string, Awaited<ReturnType<typeof avaliarPiloto>>>();
+    for (const [chave, membros] of membrosPorBm.entries()) {
       const tierBm = Math.max(...membros.map((m) => m.tier_atual));
-      const metaBm = tierBm <= 250 ? 25 : 450;
+      const piloto = pilotos.get(chave);
+      const avaliacao = piloto
+        ? await avaliarPiloto(supabase, piloto, (insts || []).filter((i: any) => String(i.meta_bm_id) === chave))
+        : null;
+      if (avaliacao) pilotoPorBm.set(chave, avaliacao);
+      const metaBm = avaliacao ? avaliacao.meta : tierBm <= 250 ? 25 : 450;
       const base = Math.floor(metaBm / membros.length);
       const sobra = metaBm % membros.length;
       membros.forEach((m, idx) => alvoPorInstancia.set(m.id, base + (idx < sobra ? 1 : 0)));
@@ -243,6 +251,7 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
     const linhas = resumo.map((r) => {
       const d = decisoes[r.id];
       const intensivo = r.tier_atual < 10000;
+      const piloto = r.meta_bm_id ? pilotoPorBm.get(String(r.meta_bm_id)) : null;
       const alvo = alvoPorInstancia.get(r.id) ?? alvoDiarioPorTier(r.tier_atual, d?.alvo || r.alvo_base);
       const mixIa = d ? d.mix_uazapi : 10;
       // Google Maps é a fonte principal; UAZAPI online fica como complemento.
@@ -257,8 +266,9 @@ Números:\n${JSON.stringify(resumo, null, 1)}`,
         unicos_7d: r.unicos_7d,
         mix_uazapi_pct: mixU,
         mix_leads_pct: 100 - mixU,
-        decisao_ia: { fonte: 'meta_por_bm', observacao: d?.observacao ?? iaErro, base: r, meta_bm: r.tier_atual <= 250 ? 25 : 450 },
-        status: 'ativa',
+        decisao_ia: { fonte: piloto ? 'piloto_bm' : 'meta_por_bm', observacao: piloto?.motivo ?? d?.observacao ?? iaErro, base: r, meta_bm: piloto?.meta ?? (r.tier_atual <= 250 ? 25 : 450), piloto_etapa: piloto?.etapa ?? null },
+        status: piloto && piloto.meta <= 0 ? (piloto.status === 'concluido_10k' ? 'concluida' : 'pausada') : 'ativa',
+        motivo: piloto?.motivo ?? null,
         atualizado_em: new Date().toISOString(),
       };
     });
