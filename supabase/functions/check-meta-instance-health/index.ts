@@ -5,7 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
-import { isInformationalDisplayNameLimit, isMetaDisplayNameUsable } from '../_shared/meta-name-status.ts';
+import { isInformationalDisplayNameLimit } from '../_shared/meta-name-status.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
