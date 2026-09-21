@@ -428,7 +428,7 @@ export function AquecimentoMetaTab() {
                     </div>
                     {piloto && (
                       <div className="grid gap-2 border-t pt-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
-                        <span><strong>Situação:</strong> {String(piloto.status).replaceAll("_", " ")}</span>
+                        <span><strong>Situação:</strong> {String(piloto.status).replace(/_/g, " ")}</span>
                         <span><strong>Etapa:</strong> {piloto.etapa}/3</span>
                         <span><strong>Entregues únicos 7d:</strong> {unicos7d}</span>
                         <span><strong>Distância operacional:</strong> {Math.max(0, 1000 - unicos7d)}</span>
