@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 import { User, Building2, Mail, MapPin, ImageIcon } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { QrCode, Smartphone, GripVertical, Search, ChevronDown } from 'lucide-react';
@@ -189,25 +188,6 @@ interface WhatsAppInstanceRow {
   proxy_enabled?: boolean;
   proxy_host?: string | null;
   shared_read_only?: boolean;
-}
-
-// Extrai o número do WhatsApp conectado a partir da resposta de status da UAZAPI
-function extrairTelefoneUazapi(payload: any): string | null {
-  if (!payload) return null;
-  const p = payload?.instance ?? payload;
-  const candidatos = [
-    payload?.phoneNumber, payload?.phone, payload?.wid, payload?.owner, payload?.jid,
-    p?.phoneNumber, p?.phone, p?.wid, p?.owner, p?.jid,
-    payload?.status?.phoneNumber, payload?.status?.phone,
-    payload?.result?.phone, payload?.data?.phone,
-  ];
-  for (const c of candidatos) {
-    if (typeof c === 'string') {
-      const d = c.replace(/\D/g, '');
-      if (d.length >= 10 && d.length <= 15) return d;
-    }
-  }
-  return null;
 }
 
 // Formata dígitos em (DD) 9NNNN-NNNN
@@ -545,7 +525,7 @@ export default function Acionamento() {
   const handleDownloadComWhatsApp = () => exportClientes(clientes, 'contatos-com-whatsapp');
   const handleDownloadSemWhatsApp = () => exportClientes(numerosInvalidos, 'contatos-sem-whatsapp');
 
-  const checkInstanceConnections = useCallback(async (_instancesToCheck: WhatsAppInstanceRow[]): Promise<Array<{ id: string; connected: boolean }>> => {
+  const checkInstanceConnections = useCallback(async (_instancesToCheck: WhatsAppInstanceRow[]): Promise<Array<{ id: string; connected: boolean; telefone?: string | null }>> => {
     if (!user) return [];
     setCheckingConnections(true);
     try {
@@ -581,7 +561,7 @@ export default function Acionamento() {
           });
       });
       toast.success(`${checked.filter((row) => row.connected).length} instância(s) conectada(s) encontrada(s)`);
-      return checked.map((row) => ({ id: row.id, connected: row.connected }));
+      return checked.map((row) => ({ id: row.id, connected: row.connected, telefone: row.telefone }));
     } catch (error: any) {
       toast.error(error?.message || 'Não foi possível verificar as conexões');
       return [];
@@ -1661,7 +1641,7 @@ export default function Acionamento() {
           // Refresh instances list
           const { data: refreshed } = await supabase
             .from('user_whatsapp_instances' as any)
-            .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
+            .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
             .eq('user_id', user?.id)
             .order('ordem' as any, { ascending: true })
             .order('criado_em', { ascending: false });
@@ -1729,7 +1709,7 @@ export default function Acionamento() {
       if (qrData?.alreadyConnected) {
         const { data: refreshed } = await supabase
           .from('user_whatsapp_instances' as any)
-          .select('id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
+          .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')
           .eq('user_id', user.id)
           .order('criado_em', { ascending: true });
         if (refreshed) setInstances(refreshed as any);
@@ -2051,17 +2031,19 @@ export default function Acionamento() {
   const handleExportarNumeros = async () => {
     if (!user) return;
     let statusMap: Record<string, boolean> = {};
+    let exportRows: Array<{ id: string; telefone?: string | null }> = instances;
     const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
     if (!jaTemAlgumStatus) {
       toast.info('Verificando conexões antes de exportar...');
       const results = await checkInstanceConnections(instances);
       results.forEach(r => { statusMap[r.id] = r.connected; });
+      exportRows = results;
     } else {
       instances.forEach(i => { statusMap[i.id] = connectionStatus[i.id] === 'connected'; });
     }
 
     const numeros = Array.from(new Set(
-      instances
+      exportRows
         .filter(i => statusMap[i.id])
         .map(i => {
           const d = (i.telefone || '').replace(/\D/g, '');
@@ -2090,13 +2072,21 @@ export default function Acionamento() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">UAZAPI</h1>
           <div className="flex flex-wrap items-center gap-2">
-            {instances.some(i => i.telefone) && (
-              <Button variant="outline" size="sm" onClick={handleExportarNumeros} className="gap-1">
+            <Button variant="outline" size="sm" onClick={handleExportarNumeros} disabled={checkingConnections} className="gap-1">
                 <Download className="h-4 w-4" />
                 <span className="text-xs">Exportar números (Excel)</span>
-              </Button>
-            )}
-            {instances.length > 0 && (
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => checkInstanceConnections(instances)}
+              disabled={checkingConnections}
+              className="text-muted-foreground"
+            >
+              {checkingConnections ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="ml-1 text-xs">Verificar conexões</span>
+            </Button>
+            {false && (
               <Button
                 variant="ghost"
                 size="sm"
