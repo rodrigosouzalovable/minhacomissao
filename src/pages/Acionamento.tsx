@@ -544,7 +544,7 @@ export default function Acionamento() {
           .filter((row) => row.connected || row.is_own || isOwnerAdmin)
           .map((row) => {
             const local = localById.get(row.id);
-            if (local) return local;
+            if (local) return { ...local, telefone: row.telefone || local.telefone };
             return {
               id: row.id,
               user_id: row.user_id,
@@ -1695,6 +1695,13 @@ export default function Acionamento() {
 
 
       if (qrData?.alreadyConnected) {
+        const phoneAuto = String(qrData?.phone || '').replace(/\D/g, '');
+        if (phoneAuto.length >= 10) {
+          await supabase
+            .from('user_whatsapp_instances' as any)
+            .update({ telefone: phoneAuto } as any)
+            .eq('id', instanceId);
+        }
         const { data: refreshed } = await supabase
           .from('user_whatsapp_instances' as any)
           .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde')

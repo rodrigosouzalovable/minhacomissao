@@ -119,6 +119,24 @@ function uazUrl(base: string, path: string, params: Record<string, string> = {})
   return url.toString();
 }
 
+function normalizeInstancePhone(value: unknown): string | null {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 15) return null;
+  return digits;
+}
+
+async function persistInstancePhone(instanceId: string, value: unknown): Promise<string | null> {
+  const phone = normalizeInstancePhone(value);
+  if (!phone) return null;
+
+  const { error } = await getSupabaseAdmin()
+    .from("user_whatsapp_instances")
+    .update({ telefone: phone })
+    .eq("id", instanceId);
+  if (error) console.error(`[PHONE] Não foi possível salvar o telefone da instância ${instanceId}: ${error.message}`);
+  return error ? null : phone;
+}
+
 async function getLatestInstanceId(userId: string): Promise<string> {
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
@@ -379,7 +397,10 @@ async function fetchQr(instanceId: string, phone?: string) {
     // UAZAPI responde 200 com qrcode vazio enquanto ainda está gerando a sessão.
     // Fazemos poll alternando connect/status até o QR aparecer antes de desistir.
     const pollResult = await pollForQr(base, token, isPairing, cleanPhone || undefined);
-    if (pollResult.ok) return json(pollResult);
+    if (pollResult.ok) {
+      if (pollResult.connected) await persistInstancePhone(instanceId, pollResult.phone);
+      return json(pollResult);
+    }
     lastPollStatus = pollResult.lastStatus || lastPollStatus;
     debugLogs.push(`poll ${attempt} sem QR (status=${lastPollStatus})`);
 
@@ -418,6 +439,7 @@ async function fetchQr(instanceId: string, phone?: string) {
           try { sData = JSON.parse(sText); } catch (_) {}
           const parsed = sData ? parseConnectionState(sData) : null;
           if (parsed?.connected) {
+            await persistInstancePhone(instanceId, parsed.phone);
             return json({ ok: true, alreadyConnected: true, connected: true, phone: parsed.phone });
           }
         }
@@ -486,9 +508,15 @@ function parseConnectionState(data: any) {
   const connected = connectedByFlag || connectedByStatus;
   const explicitDisconnected = !connected && (disconnectedByFlag || disconnectedByStatus);
 
-  const phone = data?.phoneNumber || data?.phone || data?.wid ||
-    data?.instance?.phone || data?.status?.phoneNumber || data?.status?.phone ||
-    data?.result?.phone || data?.data?.phone || null;
+  const phoneCandidates = [
+    data?.phoneNumber, data?.phone, data?.number, data?.wid, data?.owner, data?.jid,
+    data?.instance?.phoneNumber, data?.instance?.phone, data?.instance?.number,
+    data?.instance?.phoneConnected, data?.instance?.owner, data?.instance?.wid, data?.instance?.jid,
+    data?.status?.phoneNumber, data?.status?.phone, data?.status?.number,
+    data?.result?.phoneNumber, data?.result?.phone, data?.result?.number,
+    data?.data?.phoneNumber, data?.data?.phone, data?.data?.number,
+  ];
+  const phone = phoneCandidates.find((value) => normalizeInstancePhone(value)) || null;
 
   return { connected, explicitDisconnected, status: rawStatus, phone };
 }
@@ -521,11 +549,12 @@ async function checkStatus(instanceId: string) {
       const parsed = parseConnectionState(data);
 
       if (parsed.connected) {
+        const savedPhone = await persistInstancePhone(instanceId, parsed.phone);
         // Fire-and-forget: reinforce webhook config whenever instance is connected
         reinforceWebhook(instanceId).catch((e) => console.log(`[STATUS] Webhook reinforce error (non-blocking): ${(e as Error).message}`));
         // Fire-and-forget: tentar adicionar ao grupo de aquecimento
         triggerWarmingGroupAdd(instanceId).catch((e) => console.log(`[STATUS] Warming group add error (non-blocking): ${(e as Error).message}`));
-        return json({ ok: true, connected: true, status: parsed.status, phone: parsed.phone });
+        return json({ ok: true, connected: true, status: parsed.status, phone: savedPhone || normalizeInstancePhone(parsed.phone) });
       }
 
       if (parsed.explicitDisconnected) {
@@ -558,7 +587,7 @@ async function probeInstanceStatus(instance: any) {
       if (!res.ok) continue;
       const data = await res.json();
       const parsed = parseConnectionState(data);
-      return { connected: parsed.connected, status: parsed.status || "unknown" };
+      return { connected: parsed.connected, status: parsed.status || "unknown", phone: normalizeInstancePhone(parsed.phone) };
     } catch (_) {
       // Tenta a próxima forma de autenticação sem interromper as demais instâncias.
     } finally {
@@ -585,11 +614,12 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
     const batch = instances.slice(index, index + batchSize);
     const checked = await Promise.all(batch.map(async (instance) => {
       const state = await probeInstanceStatus(instance);
+      const detectedPhone = state.connected ? await persistInstancePhone(instance.id, state.phone) : null;
       return {
         id: instance.id,
         user_id: instance.user_id,
         nome: instance.nome,
-        telefone: instance.telefone,
+        telefone: detectedPhone || instance.telefone,
         ativo: instance.ativo,
         connected: state.connected,
         status: state.status,
