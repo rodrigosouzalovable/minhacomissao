@@ -7,6 +7,7 @@
 // A faixa fica gravada em meta_instance_freio_diario (guardiao_faixa/fator) e é
 // lida por pick-meta-instance no rodízio da campanha.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GREEN_SOUL_BM_ID } from "../_shared/meta-bm-escalada-piloto.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,7 +73,7 @@ Deno.serve(async (req) => {
     const [{ data: insts }, { data: parceiros }] = await Promise.all([
       supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, saude_quality, aquecimento_meta_ativo, recuperacao_ativa, tier_diario, provider, ativo")
+        .select("id, nome, display_phone, meta_bm_id, saude_quality, aquecimento_meta_ativo, recuperacao_ativa, tier_diario, provider, ativo")
         .eq("provider", "meta")
         .eq("ativo", true),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
@@ -129,7 +130,7 @@ Deno.serve(async (req) => {
       }, { onConflict: "instancia_id,dia" });
 
       // Liga o aquecimento com os números da UAZAPI para gerar conversa real
-      if (faixa !== "ok") {
+      if (faixa !== "ok" && String(inst.meta_bm_id) === GREEN_SOUL_BM_ID) {
         const alvoDia = ALVO_AQUEC[faixa];
         if (inst.aquecimento_meta_ativo !== true) {
           await supabase.from("meta_whatsapp_instances").update({
@@ -185,7 +186,7 @@ Deno.serve(async (req) => {
         avisos.push(
           `• *${nome}* — resposta ${respostaPct.toFixed(1)}% (${e} de ${s} em ${janelaH}h)\n   ➜ ${rotuloFaixa}`,
         );
-      } else {
+      } else if (String(inst.meta_bm_id) === GREEN_SOUL_BM_ID) {
         // Voltou ao patamar saudável: encerra o resgate do dia e avisa.
         const { data: emResgate } = await supabase
           .from("meta_aquecimento_trilha")

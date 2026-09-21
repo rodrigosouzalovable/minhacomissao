@@ -36,7 +36,7 @@ import {
   taxaRespostaRecenteLeads,
 } from '../_shared/meta-aquecimento-inteligente.ts';
 import { notificarNumeros } from '../_shared/notificar-numeros.ts';
-import { avaliarPiloto, carregarPilotosAtivos, dataBrtDiasAtras, telefoneChave } from '../_shared/meta-bm-escalada-piloto.ts';
+import { avaliarPiloto, carregarPilotosAtivos, dataBrtDiasAtras, GREEN_SOUL_BM_ID, telefoneChave } from '../_shared/meta-bm-escalada-piloto.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -106,7 +106,8 @@ Deno.serve(async (req) => {
       .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_status, saude_quality, saude_tier, saude_ban_info, tier_diario, estado_pool, pool_fora_manual, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
       .eq('ativo', true)
       .eq('provider', 'meta')
-      .eq('aquecimento_meta_ativo', true);
+      .eq('aquecimento_meta_ativo', true)
+      .eq('meta_bm_id', GREEN_SOUL_BM_ID);
 
     const templatesLeadAprovados = await instanciasComTemplateLeadAprovado(
       supabase,
