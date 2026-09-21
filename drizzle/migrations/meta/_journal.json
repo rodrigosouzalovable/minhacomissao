@@ -260,6 +260,13 @@
       "when": 1789947102059,
       "tag": "0036_disable_all_permissions_by_default_for_new_users",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1789949749694,
+      "tag": "0037_add_user_access_whatsapp_notification_permission",
+      "breakpoints": true
     }
   ]
 }

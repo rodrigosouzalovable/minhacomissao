@@ -6,6 +6,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Adicionar aviso individual por WhatsApp a cada abertura autenticada dos usuários selecionados nas Permissões
 - [x] Compartilhar com usuários autorizados a visualização das instâncias UAZAPI conectadas, com exportação geral e edição somente das próprias
 - [x] Liberar conexão UAZAPI por QR Code e exportação de números para usuários autorizados na aba
 - [x] Restringir controles avançados dos cartões UAZAPI ao login administrativo de Rodrigo, mantendo somente conexão e edição para os demais

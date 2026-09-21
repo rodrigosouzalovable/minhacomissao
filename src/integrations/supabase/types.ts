@@ -8615,6 +8615,7 @@ export type Database = {
           id: string
           inbox_compartilhado: boolean
           meus_sites: boolean
+          notificar_acesso_whatsapp: boolean
           parceiro_meta: boolean
           permite_cpf_duplicado: boolean
           pode_excluir_acordos: boolean
@@ -8636,6 +8637,7 @@ export type Database = {
           id?: string
           inbox_compartilhado?: boolean
           meus_sites?: boolean
+          notificar_acesso_whatsapp?: boolean
           parceiro_meta?: boolean
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean
@@ -8657,6 +8659,7 @@ export type Database = {
           id?: string
           inbox_compartilhado?: boolean
           meus_sites?: boolean
+          notificar_acesso_whatsapp?: boolean
           parceiro_meta?: boolean
           permite_cpf_duplicado?: boolean
           pode_excluir_acordos?: boolean

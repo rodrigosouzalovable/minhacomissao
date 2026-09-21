@@ -119,6 +119,7 @@ serve(async (req) => {
         parceiro_meta: false,
         ve_campanhas: false,
         bate_ponto: false,
+        notificar_acesso_whatsapp: false,
         meus_sites: false,
       }, { onConflict: 'user_id' })
 
