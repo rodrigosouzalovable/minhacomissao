@@ -4416,6 +4416,7 @@ export type Database = {
           respostas: number
           status: string
           tier_oficial: number | null
+          unicos_entregues_7d: number
         }
         Insert: {
           atualizado_em?: string
@@ -4432,6 +4433,7 @@ export type Database = {
           respostas?: number
           status?: string
           tier_oficial?: number | null
+          unicos_entregues_7d?: number
         }
         Update: {
           atualizado_em?: string
@@ -4448,6 +4450,7 @@ export type Database = {
           respostas?: number
           status?: string
           tier_oficial?: number | null
+          unicos_entregues_7d?: number
         }
         Relationships: [
           {
