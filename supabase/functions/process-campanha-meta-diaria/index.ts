@@ -32,7 +32,10 @@ async function sleep(ms: number) {
 // estiver configurado; caso contrário mantém a alternância existente.
 function resolverTemplateId(campanha: any, instId: string, varianteIdx: number, credor?: string | null): string {
   const variantes = Array.isArray(campanha?.template_variantes) ? campanha.template_variantes : [];
-  const porCredor = variantes.find((v: any) => v?.credor === credor);
+  const credorRoteavel = credor === 'ume' || credor === 'novo_mundo' ? credor : null;
+  const porCredor = credorRoteavel
+    ? variantes.find((v: any) => v?.credor === credorRoteavel)
+    : null;
   if (porCredor?.template_id_by_instance?.[instId]) return porCredor.template_id_by_instance[instId];
   const n = variantes.length;
   if (n > 0) {

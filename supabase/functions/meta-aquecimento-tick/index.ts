@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
       for (const [bmId, grupo] of semTrilhaPorBm) {
         const membrosBm = (elegiveis as any[]).filter((i) => String(i.meta_bm_id || i.id) === bmId);
         const tierBm = Math.max(...membrosBm.map((i) => tierAtual(i)));
-        const metaBm = tierBm <= 250 ? 25 : 450;
+        const metaBm = tierBm <= 250 ? 150 : 450;
         const jaPlanejado = membrosBm.reduce((s, i) => s + Number(trilhaMap.get(i.id)?.alvo_unicos_dia || 0), 0);
         const restante = Math.max(0, metaBm - jaPlanejado);
         const base = Math.floor(restante / grupo.length);
@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
           modo_intensivo: intensivo,
           mix_uazapi_pct: intensivo ? 10 : 20,
           mix_leads_pct: intensivo ? 90 : 80,
-          decisao_ia: { fonte: 'tick_meta_por_bm', meta_bm: tier <= 250 ? 25 : 450 },
+          decisao_ia: { fonte: 'tick_meta_por_bm', meta_bm: tier <= 250 ? 150 : 450 },
           status: alvo > 0 ? 'ativa' : 'concluida',
           motivo: alvo > 0 ? null : 'meta_bm_ja_distribuida',
           atualizado_em: new Date().toISOString(),

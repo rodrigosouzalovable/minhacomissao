@@ -262,7 +262,7 @@ export function tierAtual(inst: any): number {
 /** Meta diária por faixa, sempre limitada a 60% do tier informado. */
 export function alvoDiarioPorTier(tier: number, alvoAdaptativo: number): number {
   const tetoDuro = Math.max(10, Math.round(tier * 0.6));
-  if (tier <= 250) return Math.min(25, tetoDuro);
+  if (tier <= 250) return Math.min(150, tetoDuro);
   if (tier >= 2000 && tier < 10000) return Math.min(450, tetoDuro);
   return Math.max(5, Math.min(alvoAdaptativo, tetoDuro));
 }

@@ -389,6 +389,15 @@ serve(async (req) => {
       const { data: fileBlob, error: dlErr } = await supabase.storage
         .from(MEDIA_BUCKET).download(path);
       if (dlErr || !fileBlob) {
+        await Promise.all(instancias.map((inst) =>
+          finalizarEnvioTemplateTier250(
+            supabase,
+            inst.id,
+            mestre_id,
+            "FALHA",
+            `Falha ao baixar mídia do cabeçalho: ${dlErr?.message || "arquivo não encontrado"}`,
+          )
+        ));
         throw new Error(`Falha ao baixar mídia do cabeçalho: ${dlErr?.message || "arquivo não encontrado"}`);
       }
       mediaBytes = new Uint8Array(await fileBlob.arrayBuffer());
@@ -441,6 +450,7 @@ serve(async (req) => {
             erro: "waba_id ou access_token ausente",
           }, { onConflict: "template_mestre_id,instancia_id" });
           detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: "credenciais ausentes" });
+          await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", "credenciais ausentes");
           continue;
         }
 

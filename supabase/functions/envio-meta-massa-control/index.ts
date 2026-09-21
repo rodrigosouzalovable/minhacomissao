@@ -122,6 +122,12 @@ Deno.serve(async (req) => {
       }).eq('id', jobId);
       await devolverProcessandoParaFila();
     } else if (acao === 'reativar') {
+      if (job.status === 'cancelado') {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Campanhas canceladas não podem ser reativadas. Crie uma nova campanha.',
+        }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       // Reconcilia o cabeçalho com os itens reais antes de decidir se existe algo
       // para retomar. Isso evita botões falsos quando itens sem WhatsApp encerram a fila.
       const contarStatus = async (status: string) => {
@@ -308,6 +314,12 @@ Deno.serve(async (req) => {
     } else if (acao === 'revalidar_instancias_run') {
       // Revalida somente as instâncias retiradas automaticamente deste job.
       // Itens já aceitos pela Meta nunca voltam para a fila.
+      if (!['rodando', 'pausado'].includes(String(job.status || ''))) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Somente campanhas em andamento ou pausadas podem ser retomadas',
+        }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       const jobInsts: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
       const bloqRunAntes: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
       const bloqueadasTemplate: string[] = Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [];
@@ -423,6 +435,12 @@ Deno.serve(async (req) => {
           }
         }
 
+        if (!['rodando', 'pausado'].includes(String(jobAtual?.status || ''))) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: 'A campanha foi encerrada durante a revalidação e não será retomada',
+          }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
         const estavaRodando = jobAtual?.status === 'rodando';
         const jobPatch: Record<string, unknown> = {
           instancias_bloqueadas_run: bloqRunDepois,

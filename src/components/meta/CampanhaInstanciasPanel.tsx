@@ -9,6 +9,7 @@ import { toast } from "sonner";
 type Props = {
   jobId: string;
   isAdmin: boolean;
+  canResume: boolean;
   initialOpen?: boolean;
 };
 
@@ -76,7 +77,7 @@ function InstanciaRow({
   );
 }
 
-export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = false }: Props) {
+export default function CampanhaInstanciasPanel({ jobId, isAdmin, canResume, initialOpen = false }: Props) {
   const { listarInstanciasStatusJob, revalidarInstanciasJob, reativarInstanciaJob } = useEnvioMetaSending();
   const [instancias, setInstancias] = useState<InstanciaStatusJob[] | null>(null);
   const [open, setOpen] = useState(initialOpen);
@@ -143,7 +144,14 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, initialOpen = 
           {instancias && <span className="text-xs font-normal text-muted-foreground">{ativas.length} ativas · {ignoradas.length} ignoradas</span>}
         </Button>
         {open && (
-          <Button size="sm" variant="ghost" onClick={() => void atualizarERetomar()} disabled={carregando} aria-label="Revalidar instâncias e continuar campanha" title="Revalidar na Meta e continuar o disparo">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void (canResume ? atualizarERetomar() : carregar())}
+            disabled={carregando}
+            aria-label={canResume ? "Revalidar instâncias e continuar campanha" : "Atualizar instâncias"}
+            title={canResume ? "Revalidar na Meta e continuar o disparo" : "Atualizar a lista de instâncias"}
+          >
             <RefreshCw className={carregando ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
           </Button>
         )}

@@ -913,7 +913,12 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             )}
            </div>
 
-           <CampanhaInstanciasPanel jobId={job.id} isAdmin={isAdmin} initialOpen={abrirInstancias} />
+           <CampanhaInstanciasPanel
+             jobId={job.id}
+             isAdmin={isAdmin}
+             canResume={job.status === "rodando" || job.status === "pausado"}
+             initialOpen={abrirInstancias}
+           />
 
            {/* Delivery resumo */}
           <div className="min-h-[24px] flex items-center overflow-hidden">

@@ -1,6 +1,9 @@
 # Roadmap
 
 ## Em aberto
+- [x] Verify and address monitoring findings 1–12
+- [x] Deploy changed functions and validate targeted flows
+- [x] Resolve the 12 supplied findings with verified code and database evidence
 - [ ] Informar no painel os e-mails das duas contas Google Cloud já migradas e elevar suas cotas diárias da Places API acima das 100 consultas atuais
 - [ ] Validar um dia completo da meta de 450 por BM após ampliar o estoque de Google Leads
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
