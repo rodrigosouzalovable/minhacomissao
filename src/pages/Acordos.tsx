@@ -1381,13 +1381,13 @@ export default function Acordos() {
               Pagos ({acordosPagos.length})
             </TabsTrigger>
             <TabsTrigger value="proximas">
-              Próximas ao Vencimento ({acordosProximos.length})
+              Vencem em até 3 dias ({acordosProximos.length})
             </TabsTrigger>
             <TabsTrigger value="acordos_realizados">
-              Vencidas sem pagamento ({acordosRealizados.length})
+              Sem pagamento ({acordosRealizados.length})
             </TabsTrigger>
             <TabsTrigger value="vencidos">
-              Vencidas após pagamento ({acordosVencidos.length})
+              Após pagamento ({acordosVencidos.length})
             </TabsTrigger>
           </TabsList>
 
