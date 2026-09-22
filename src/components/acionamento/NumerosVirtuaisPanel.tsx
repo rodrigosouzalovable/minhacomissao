@@ -293,7 +293,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const comprar = useMutation({
     mutationFn: () => {
       const paisCompra = paisAleatorio && tipoNumero === 'internacional' ? String(precoQuery.data?.pais || '') : pais;
-      if (!paisCompra) throw new Error('Nenhum país internacional disponível dentro do teto configurado.');
+      if (!paisCompra) throw new Error(precoQuery.data?.mensagem || 'Nenhum país internacional disponível dentro do teto configurado.');
       return invoke({
         action: 'comprar',
         provider,
@@ -667,6 +667,10 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
             <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Consultando disponibilidade...</span>
           ) : menorPreco != null ? (
             <span>Disponível agora a partir de <strong className="text-foreground">{moeda(menorPreco)}</strong>.</span>
+          ) : precoQuery.isError ? (
+            <span className="text-destructive">Não foi possível consultar a disponibilidade. Tente novamente.</span>
+          ) : precoQuery.data?.mensagem ? (
+            <span>{precoQuery.data.mensagem}</span>
           ) : (
             <span>Nenhum preço disponível para esta seleção neste momento.</span>
           )}
