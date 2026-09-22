@@ -330,6 +330,13 @@
       "when": 1790071706837,
       "tag": "0046_certificado_prospeccao_piloto",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790080971556,
+      "tag": "0047_certificado_templates_ativos",
+      "breakpoints": true
     }
   ]
 }
