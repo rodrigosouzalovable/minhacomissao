@@ -62,9 +62,10 @@ Deno.serve(async (req) => {
 
     let q = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, recuperacao_ativa, recuperacao_desde, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, dias_green_consecutivos, quarentena_ate, ativo, provider")
+      .select("id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, recuperacao_ativa, recuperacao_desde, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, dias_green_consecutivos, quarentena_ate, ativo, provider, instancia_teste_aquecimento")
       .eq("ativo", true)
       .eq("provider", "meta")
+      .eq("instancia_teste_aquecimento", false)
       .eq("meta_bm_id", GREEN_SOUL_BM_ID)
       // Só os números próprios: parceiros Meta não usam o aquecimento de qualidade.
       .eq("aquecimento_qualidade_permitido", true)

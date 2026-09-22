@@ -44,7 +44,8 @@ Deno.serve(async (req) => {
     const { data: instancias } = await supabase
       .from('meta_whatsapp_instances')
       .select('id, waba_id, access_token, nome')
-      .eq('ativo', true);
+      .eq('ativo', true)
+      .eq('instancia_teste_aquecimento', false);
 
     const wabas = new Map<string, string>(); // waba_id -> token
     for (const i of instancias || []) {

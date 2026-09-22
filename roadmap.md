@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Validar com um remetente autorizado o primeiro recebimento e a resposta do IAGO no número de teste Meta
 - [ ] Validar o primeiro ciclo real do piloto Certificado Digital com BM, template aprovado e 50 envios/dia
 - [x] Verify and address monitoring findings 1–12
 - [x] Deploy changed functions and validate targeted flows
@@ -10,6 +11,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Adicionar instância de teste Meta como destino isolado da caixa AQUECIMENTO, fora de campanhas, cobrança e tier
 - [x] Migrar a coleta da Casa dos Dados da rota pública v2 para a API oficial v5 e validar a chave pelo saldo
 - [x] Adicionar cadastro administrativo protegido da chave API da Casa dos Dados e utilizá-la em todas as coletas
 - [x] Corrigir o botão do Certificado Digital para repetir falhas temporárias, informar indisponibilidade da Casa dos Dados e iniciar a campanha somente após coleta e verificação

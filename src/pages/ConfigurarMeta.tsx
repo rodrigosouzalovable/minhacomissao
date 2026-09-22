@@ -76,6 +76,9 @@ type Instancia = {
   meta_profile_pic_url?: string | null;
   meta_profile_about?: string | null;
   meta_perfil_sync_em?: string | null;
+  instancia_teste_aquecimento?: boolean | null;
+  teste_aquecimento_validado_em?: string | null;
+  teste_aquecimento_ultimo_erro?: string | null;
 };
 
 
@@ -300,6 +303,7 @@ export default function ConfigurarMeta() {
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
     templates_auto_copiar: false,
+    instancia_teste_aquecimento: false,
   });
   const [salvandoEdit, setSalvandoEdit] = useState(false);
   const [form, setForm] = useState({
@@ -311,6 +315,7 @@ export default function ConfigurarMeta() {
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
     templates_auto_copiar: false,
+    instancia_teste_aquecimento: false,
   });
 
 
@@ -632,6 +637,7 @@ export default function ConfigurarMeta() {
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
     templates_auto_copiar: false,
+    instancia_teste_aquecimento: false,
 
   };
 
@@ -687,6 +693,10 @@ export default function ConfigurarMeta() {
         ...camposBmTier(form),
         aquecimento_meta_ativo: isAdmin ? form.aquecimento_meta_ativo : false,
         templates_auto_copiar: isAdmin ? form.templates_auto_copiar : false,
+        instancia_teste_aquecimento: isAdmin ? form.instancia_teste_aquecimento : false,
+        folder_padrao_id: isAdmin && form.instancia_teste_aquecimento ? "4f7a52c0-9c86-4b80-8867-4ade7a6df441" : null,
+        pool_fora_manual: isAdmin && form.instancia_teste_aquecimento,
+        estado_pool: isAdmin && form.instancia_teste_aquecimento ? "fora" : "ativo",
 
         webhook_verify_token: gerarToken(),
       })
@@ -767,6 +777,7 @@ export default function ConfigurarMeta() {
       messaging_limit_manual: inst.messaging_limit_manual || "__auto__",
       aquecimento_meta_ativo: !!inst.aquecimento_meta_ativo,
       templates_auto_copiar: !!inst.templates_auto_copiar,
+      instancia_teste_aquecimento: !!inst.instancia_teste_aquecimento,
 
     });
   };
@@ -796,6 +807,15 @@ export default function ConfigurarMeta() {
       ...camposBmTier(editForm),
       ...(isAdmin ? { aquecimento_meta_ativo: editForm.aquecimento_meta_ativo } : {}),
       ...(isAdmin ? { templates_auto_copiar: editForm.templates_auto_copiar } : {}),
+      ...(isAdmin ? {
+        instancia_teste_aquecimento: editForm.instancia_teste_aquecimento,
+        folder_padrao_id: editForm.instancia_teste_aquecimento ? "4f7a52c0-9c86-4b80-8867-4ade7a6df441" : null,
+        aquecimento_meta_ativo: editForm.instancia_teste_aquecimento ? false : editForm.aquecimento_meta_ativo,
+        recuperacao_ativa: editForm.instancia_teste_aquecimento ? false : editInst.recuperacao_ativa,
+        pool_fora_manual: editForm.instancia_teste_aquecimento ? true : editInst.pool_fora_manual,
+        estado_pool: editForm.instancia_teste_aquecimento ? "fora" : editInst.estado_pool,
+        teste_aquecimento_ultimo_erro: editForm.instancia_teste_aquecimento ? null : editInst.teste_aquecimento_ultimo_erro,
+      } : {}),
 
 
     };
@@ -1547,6 +1567,11 @@ export default function ConfigurarMeta() {
                           ) : (
                             <Badge variant="secondary"><XCircle className="h-3 w-3 mr-1" />Inativa</Badge>
                           )}
+                          {inst.instancia_teste_aquecimento && (
+                            <Badge variant="outline" className="text-[10px] border-amber-500/60 text-amber-700">
+                              TESTE META · AQUECIMENTO
+                            </Badge>
+                          )}
                           {(() => {
                             const bm = bms.find((b) => b.id === inst.meta_bm_id);
                             return bm ? (
@@ -2104,6 +2129,21 @@ export default function ConfigurarMeta() {
             {isAdmin && (
               <div className="flex items-start justify-between gap-3 rounded-md border p-3">
                 <div>
+                  <Label>Instância de teste da Meta — usar como destino do aquecimento</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Recebe mensagens na caixa AQUECIMENTO e responde pelo IAGO. Nunca participa de campanhas, cobrança ou evolução de tier.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.instancia_teste_aquecimento}
+                  onCheckedChange={(v) => setForm({ ...form, instancia_teste_aquecimento: v, aquecimento_meta_ativo: v ? false : form.aquecimento_meta_ativo })}
+                />
+              </div>
+            )}
+
+            {isAdmin && !form.instancia_teste_aquecimento && (
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
                   <Label>Número de nova BM — entrar no aquecimento de tier</Label>
                   <p className="text-xs text-muted-foreground mt-1">
                     Quando ligado, este número entra no motor de aquecimento (UAZAPI + leads) para subir de 2k → 10k → 100k. Desligado, o motor ignora o número.
@@ -2117,6 +2157,24 @@ export default function ConfigurarMeta() {
             )}
 
             {isAdmin && (
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <Label>Instância de teste da Meta — usar como destino do aquecimento</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Vincula esta instância à caixa AQUECIMENTO e a mantém fora de todos os envios comerciais.
+                  </p>
+                  {editInst?.teste_aquecimento_ultimo_erro && (
+                    <p className="text-xs text-destructive mt-1">Última validação: {editInst.teste_aquecimento_ultimo_erro}</p>
+                  )}
+                </div>
+                <Switch
+                  checked={editForm.instancia_teste_aquecimento}
+                  onCheckedChange={(v) => setEditForm({ ...editForm, instancia_teste_aquecimento: v, aquecimento_meta_ativo: v ? false : editForm.aquecimento_meta_ativo })}
+                />
+              </div>
+            )}
+
+            {isAdmin && !editForm.instancia_teste_aquecimento && (
               <div className="flex items-start justify-between gap-3 rounded-md border p-3">
                 <div>
                   <Label>Copiar templates aprovados automaticamente</Label>

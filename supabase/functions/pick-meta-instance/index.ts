@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     // Carrega instâncias candidatas
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances').select('*')
-      .in('id', instancia_ids).eq('ativo', true);
+      .in('id', instancia_ids).eq('ativo', true).eq('instancia_teste_aquecimento', false);
 
     if (!insts?.length) {
       return new Response(JSON.stringify({ success: false, error: 'nenhuma instância ativa' }), {
