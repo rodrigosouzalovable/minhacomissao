@@ -98,6 +98,31 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+type Oferta = { preco: number; quantidade: number | null };
+
+// VirtualSMS atualmente retorna { cost, count }; outros provedores compatíveis
+// ainda usam o formato legado { preco: quantidade }.
+const ofertasDisponiveis = (dadosServico: unknown): Oferta[] => {
+  if (!dadosServico || typeof dadosServico !== "object") return [];
+  const registro = dadosServico as Record<string, unknown>;
+  const custoAtual = num(registro.cost ?? registro.price);
+  const quantidadeAtual = num(registro.count ?? registro.quantity);
+
+  if (custoAtual !== null && custoAtual > 0 && (quantidadeAtual === null || quantidadeAtual > 0)) {
+    return [{ preco: custoAtual, quantidade: quantidadeAtual }];
+  }
+
+  const ofertas: Oferta[] = [];
+  for (const [precoBruto, quantidadeBruta] of Object.entries(registro)) {
+    const preco = Number(precoBruto);
+    const quantidade = Number(quantidadeBruta);
+    if (Number.isFinite(preco) && preco > 0 && (!Number.isFinite(quantidade) || quantidade > 0)) {
+      ofertas.push({ preco, quantidade: Number.isFinite(quantidade) ? quantidade : null });
+    }
+  }
+  return ofertas;
+};
+
 const webhookUrl = () => {
   const ref = Deno.env.get("SUPABASE_URL")?.replace(/\/+$/, "") || "";
   return `${ref}/functions/v1/virtualsms-webhook`;
@@ -221,22 +246,17 @@ serve(async (req) => {
       if (!servico) return json({ error: "Informe o serviço." }, 400);
       const { dados } = await api(provider, "getPrices", { service: servico, country: pais });
 
-      // Extrai o menor custo disponível do formato { pais: { servico: { custo: qtd } } }
+      // Aceita tanto { cost, count } quanto o formato legado { preco: quantidade }.
       let menor: number | null = null;
-      const varrer = (obj: any) => {
-        if (!obj || typeof obj !== "object") return;
-        for (const [k, v] of Object.entries(obj)) {
-          if (v && typeof v === "object") varrer(v);
-          else {
-            const preco = Number(k);
-            const qtd = Number(v);
-            if (Number.isFinite(preco) && preco > 0 && (!Number.isFinite(qtd) || qtd > 0)) {
-              if (menor === null || preco < menor) menor = preco;
-            }
+      if (dados && typeof dados === "object") {
+        for (const dadosPais of Object.values(dados as Record<string, unknown>)) {
+          if (!dadosPais || typeof dadosPais !== "object") continue;
+          const dadosServico = (dadosPais as Record<string, unknown>)[servico];
+          for (const oferta of ofertasDisponiveis(dadosServico)) {
+            if (menor === null || oferta.preco < menor) menor = oferta.preco;
           }
         }
-      };
-      varrer(dados);
+      }
 
       return json({ ok: true, precos: dados ?? {}, menor_preco: menor, moeda: cfgProv.moeda });
     }
@@ -256,21 +276,27 @@ serve(async (req) => {
           const dadosServico = (dadosPais as Record<string, unknown>)[servico];
           if (!dadosServico || typeof dadosServico !== "object") continue;
 
-          for (const [precoBruto, quantidadeBruta] of Object.entries(dadosServico as Record<string, unknown>)) {
-            const preco = Number(precoBruto);
-            const quantidade = Number(quantidadeBruta);
-            if (!Number.isFinite(preco) || preco <= 0 || !Number.isFinite(quantidade) || quantidade <= 0) continue;
-            if (Number.isFinite(teto) && teto > 0 && preco > teto) continue;
-            if (!vencedor || preco < vencedor.preco) vencedor = { pais: paisId, preco };
+          for (const oferta of ofertasDisponiveis(dadosServico)) {
+            if (Number.isFinite(teto) && teto > 0 && oferta.preco > teto) continue;
+            if (!vencedor || oferta.preco < vencedor.preco) {
+              vencedor = { pais: paisId, preco: oferta.preco };
+            }
           }
         }
       }
 
       if (!vencedor) {
-        return json({ error: "Nenhum país internacional possui número disponível dentro do teto configurado." }, 404);
+        return json({
+          ok: true,
+          disponivel: false,
+          pais: null,
+          menor_preco: null,
+          moeda: cfgProv.moeda,
+          mensagem: "Nenhum país internacional possui número disponível dentro do teto configurado.",
+        });
       }
 
-      return json({ ok: true, pais: vencedor.pais, menor_preco: vencedor.preco, moeda: cfgProv.moeda });
+      return json({ ok: true, disponivel: true, pais: vencedor.pais, menor_preco: vencedor.preco, moeda: cfgProv.moeda });
     }
 
     if (action === "comprar") {
