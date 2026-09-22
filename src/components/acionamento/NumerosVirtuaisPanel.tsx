@@ -200,7 +200,8 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
       ? { action: 'melhor_pais', provider, servico, max_preco: novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : undefined }
       : { action: 'precos', provider, servico, pais }),
     enabled: abaAtiva && !!servico && (tipoNumero === 'brasil' || paisAleatorio || pais !== '73'),
-    staleTime: 5 * 60 * 1000,
+    // O estoque muda rapidamente; uma cotação antiga pode acabar antes da compra.
+    staleTime: 15_000,
     refetchOnWindowFocus: false,
     retry: false,
   });
@@ -291,10 +292,10 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
 
   const comprar = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const paisCompra = paisAleatorio && tipoNumero === 'internacional' ? String(precoQuery.data?.pais || '') : pais;
       if (!paisCompra) throw new Error(precoQuery.data?.mensagem || 'Nenhum país internacional disponível dentro do teto configurado.');
-      return invoke({
+      const resultado = await invoke({
         action: 'comprar',
         provider,
         servico,
@@ -302,6 +303,10 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
         ddd: suportaDdd ? ddd : undefined,
         max_preco: novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : undefined,
       });
+      if (resultado?.ok === false || !resultado?.pedido) {
+        throw new Error(resultado?.mensagem || 'O número ficou indisponível antes da compra. Tente novamente.');
+      }
+      return resultado;
     },
     onSuccess: (res) => {
       const numero = res?.pedido ? dadosNumero(res.pedido as Pedido).exibicao : '';
@@ -309,7 +314,10 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
       qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
       qc.invalidateQueries({ queryKey: ['virtualsms-saldo'] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      qc.invalidateQueries({ queryKey: ['virtualsms-preco'] });
+    },
   });
 
   const cancelar = useMutation({

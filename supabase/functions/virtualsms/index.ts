@@ -61,6 +61,16 @@ const CODIGOS_ERRO = new Set([
   "NO_METRICS", "WRONG_ACTIVATION_ID", "RENEW_ACTIVATION_NOT_AVAILABLE", "WRONG_MAX_PRICE",
 ]);
 
+class ProviderApiError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "ProviderApiError";
+    this.code = code;
+  }
+}
+
 // Chama o handler_api do provedor. Retorna { texto, dados } — dados só quando a resposta é JSON.
 async function api(
   provider: Provider,
@@ -87,8 +97,8 @@ async function api(
   } catch { /* resposta em texto puro */ }
 
   const primeiro = texto.split(":")[0].toUpperCase();
-  if (!res.ok && !dados) throw new Error(humanizarErro(texto || `HTTP ${res.status}`, cfg.label));
-  if (CODIGOS_ERRO.has(primeiro)) throw new Error(humanizarErro(texto, cfg.label));
+  if (!res.ok && !dados) throw new ProviderApiError(primeiro || `HTTP_${res.status}`, humanizarErro(texto || `HTTP ${res.status}`, cfg.label));
+  if (CODIGOS_ERRO.has(primeiro)) throw new ProviderApiError(primeiro, humanizarErro(texto, cfg.label));
 
   return { texto, dados };
 }
@@ -324,36 +334,48 @@ serve(async (req) => {
       let numero: string | null = null;
       let custo: number | null = null;
 
-      if (provider === "sms24h" && ddd) {
-        // SMS24H aceita a escolha do DDD na compra
-        const { dados, texto } = await api(provider, "getNumber", {
-          service: servico,
-          country: pais,
-          ddd,
-          maxPrice: teto ?? undefined,
-        });
-        if (dados?.activationId || dados?.id) {
-          orderId = String(dados.activationId ?? dados.id);
-          numero = dados.phoneNumber ? String(dados.phoneNumber) : (dados.number ? String(dados.number) : null);
-          custo = num(dados.activationCost ?? dados.cost);
-        } else {
-          // Formato texto: ACCESS_NUMBER:id:numero
-          const partes = texto.split(":");
-          if (partes[0]?.toUpperCase() === "ACCESS_NUMBER") {
-            orderId = partes[1] ?? "";
-            numero = partes[2] ?? null;
+      try {
+        if (provider === "sms24h" && ddd) {
+          // SMS24H aceita a escolha do DDD na compra
+          const { dados, texto } = await api(provider, "getNumber", {
+            service: servico,
+            country: pais,
+            ddd,
+            maxPrice: teto ?? undefined,
+          });
+          if (dados?.activationId || dados?.id) {
+            orderId = String(dados.activationId ?? dados.id);
+            numero = dados.phoneNumber ? String(dados.phoneNumber) : (dados.number ? String(dados.number) : null);
+            custo = num(dados.activationCost ?? dados.cost);
+          } else {
+            // Formato texto: ACCESS_NUMBER:id:numero
+            const partes = texto.split(":");
+            if (partes[0]?.toUpperCase() === "ACCESS_NUMBER") {
+              orderId = partes[1] ?? "";
+              numero = partes[2] ?? null;
+            }
           }
+        } else {
+          const { dados } = await api(provider, "getNumberV2", {
+            service: servico,
+            country: pais,
+            maxPrice: teto ?? undefined,
+            operator: body?.operadora ? String(body.operadora) : undefined,
+          });
+          orderId = String(dados?.activationId ?? "");
+          numero = dados?.phoneNumber ? String(dados.phoneNumber) : null;
+          custo = num(dados?.activationCost);
         }
-      } else {
-        const { dados } = await api(provider, "getNumberV2", {
-          service: servico,
-          country: pais,
-          maxPrice: teto ?? undefined,
-          operator: body?.operadora ? String(body.operadora) : undefined,
-        });
-        orderId = String(dados?.activationId ?? "");
-        numero = dados?.phoneNumber ? String(dados.phoneNumber) : null;
-        custo = num(dados?.activationCost);
+      } catch (e) {
+        if (e instanceof ProviderApiError && e.code === "NO_NUMBERS") {
+          return json({
+            ok: false,
+            disponivel: false,
+            motivo: "estoque_alterado",
+            mensagem: "Esse número acabou de ficar indisponível no fornecedor. A oferta foi atualizada; tente comprar novamente.",
+          });
+        }
+        throw e;
       }
 
       if (!orderId) return json({ error: "O provedor não retornou o identificador da ativação." }, 502);
