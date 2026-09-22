@@ -617,7 +617,7 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
       .order("criado_em", { ascending: false }),
     sb
       .from("meta_whatsapp_instances")
-      .select("id,user_id,nome,display_phone,ativo,saude_status,bm:meta_business_managers(nome)")
+      .select("id,user_id,nome,display_phone,ativo,saude_status,phone_number_id,access_token,bm:meta_business_managers(nome)")
       .eq("provider", "meta")
       .eq("instancia_teste_aquecimento", true)
       .order("criado_em", { ascending: false }),
@@ -652,7 +652,9 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
 
   for (const instance of metaTests || []) {
     const healthStatus = String(instance.saude_status || "").toUpperCase();
-    const connected = instance.ativo === true && healthStatus === "CONNECTED";
+    const explicitlyDisconnected = ["DISCONNECTED", "OFFLINE", "DISABLED", "DELETED"].includes(healthStatus);
+    const configured = Boolean(instance.phone_number_id && instance.access_token);
+    const connected = instance.ativo === true && configured && !explicitlyDisconnected;
     const bmRelation = Array.isArray(instance.bm) ? instance.bm[0] : instance.bm;
     safeRows.push({
       id: instance.id,
@@ -675,7 +677,7 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
 async function listMetaTestInstances(requesterId: string) {
   const { data, error } = await getSupabaseAdmin()
     .from("meta_whatsapp_instances")
-    .select("id,user_id,nome,display_phone,ativo,saude_status,bm:meta_business_managers(nome)")
+    .select("id,user_id,nome,display_phone,ativo,saude_status,phone_number_id,access_token,bm:meta_business_managers(nome)")
     .eq("provider", "meta")
     .eq("instancia_teste_aquecimento", true)
     .order("criado_em", { ascending: false });
@@ -684,6 +686,8 @@ async function listMetaTestInstances(requesterId: string) {
 
   const instances = (data || []).map((instance) => {
     const healthStatus = String(instance.saude_status || "").toUpperCase();
+    const explicitlyDisconnected = ["DISCONNECTED", "OFFLINE", "DISABLED", "DELETED"].includes(healthStatus);
+    const configured = Boolean(instance.phone_number_id && instance.access_token);
     const bmRelation = Array.isArray(instance.bm) ? instance.bm[0] : instance.bm;
     return {
       id: instance.id,
@@ -691,7 +695,7 @@ async function listMetaTestInstances(requesterId: string) {
       nome: instance.nome,
       telefone: getMetaTestPhone(instance.display_phone, instance.nome),
       ativo: instance.ativo,
-      connected: instance.ativo === true && healthStatus === "CONNECTED",
+      connected: instance.ativo === true && configured && !explicitlyDisconnected,
       status: healthStatus || "unknown",
       bm_nome: bmRelation?.nome || null,
       source: "meta_teste",
