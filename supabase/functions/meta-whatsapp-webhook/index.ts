@@ -650,7 +650,7 @@ serve(async (req) => {
                   .from('meta_aquecimento_destino_log')
                   .select('id, enviado_em, lead_id, nicho, cidade')
                   .eq('instancia_id', inst.id)
-                  .eq('fonte', 'lead')
+                  .in('fonte', ['lead', 'auto_respondedor'])
                   .like('destino_telefone', `%${sufixoResp}`)
                   .is('respondeu_em', null)
                   .order('enviado_em', { ascending: false })
