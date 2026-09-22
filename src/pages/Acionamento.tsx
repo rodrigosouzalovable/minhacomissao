@@ -258,6 +258,8 @@ export default function Acionamento() {
   const [instances, setInstances] = useState<WhatsAppInstanceRow[]>([]);
   const [notificationInstanceIds, setNotificationInstanceIds] = useState<Set<string>>(new Set());
   const [savingNotificationInstanceId, setSavingNotificationInstanceId] = useState<string | null>(null);
+  const [certificateVerifierIds, setCertificateVerifierIds] = useState<Set<string>>(new Set());
+  const [savingCertificateVerifierId, setSavingCertificateVerifierId] = useState<string | null>(null);
   const [filtroInstancia, setFiltroInstancia] = useState('');
   const [editingInstance, setEditingInstance] = useState<InstanceFormData | null>(null);
 
@@ -420,6 +422,16 @@ export default function Acionamento() {
       setNotificationInstanceIds(new Set((data || []).map((row) => row.instancia_id)));
     };
     loadNotificationInstances();
+  }, [user, isOwnerAdmin]);
+
+  useEffect(() => {
+    if (!user || !isOwnerAdmin) return;
+    const loadCertificateVerifiers = async () => {
+      const { data, error } = await supabase.from('certificado_uazapi_verificadoras').select('instancia_id').eq('ativa', true);
+      if (error) { toast.error('Não foi possível carregar as verificadoras do Certificado Digital'); return; }
+      setCertificateVerifierIds(new Set((data || []).map((row) => row.instancia_id)));
+    };
+    loadCertificateVerifiers();
   }, [user, isOwnerAdmin]);
 
   // Fetch UAZAPI instances from database
@@ -1885,6 +1897,18 @@ export default function Acionamento() {
     toast.success(ativa ? 'Número definido como responsável pelas notificações pessoais' : 'Número removido das notificações pessoais');
   };
 
+  const handleToggleCertificateVerifier = async (id: string, ativa: boolean) => {
+    if (!isOwnerAdmin) return;
+    setSavingCertificateVerifierId(id);
+    const { error } = await supabase.rpc('definir_certificado_uazapi_verificadora', { p_instancia_id: id, p_ativa: ativa });
+    setSavingCertificateVerifierId(null);
+    if (error) { toast.error(`Erro ao alterar verificadora: ${error.message}`); return; }
+    setCertificateVerifierIds((current) => {
+      const next = new Set(current); if (ativa) next.add(id); else next.delete(id); return next;
+    });
+    toast.success(ativa ? 'Instância adicionada à verificação do Certificado Digital' : 'Instância removida da verificação do Certificado Digital');
+  };
+
   const [ativandoTodas, setAtivandoTodas] = useState(false);
   const handleAtivarTodasInstancias = async () => {
     if (!isOwnerAdmin) return;
@@ -2510,6 +2534,11 @@ export default function Acionamento() {
                                         Notificações
                                       </Badge>
                                     )}
+                                    {isOwnerAdmin && certificateVerifierIds.has(inst.id) && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-secondary text-secondary gap-1">
+                                        <Search className="h-3 w-3" />Verificadora
+                                      </Badge>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-2">
                                     {inst.telefone ? (
@@ -2633,6 +2662,14 @@ export default function Acionamento() {
                                         onCheckedChange={(checked) => handleToggleNotificationInstance(inst.id, checked)}
                                         className="scale-75"
                                       />
+                                    )}
+                                  </div>
+                                )}
+                                {isOwnerAdmin && (
+                                  <div className="flex items-center gap-1.5 self-end">
+                                    <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`certificado-verifica-${inst.id}`}>Verificar Certificado</Label>
+                                    {savingCertificateVerifierId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : (
+                                      <Switch id={`certificado-verifica-${inst.id}`} checked={certificateVerifierIds.has(inst.id)} onCheckedChange={(checked) => handleToggleCertificateVerifier(inst.id, checked)} className="scale-75" />
                                     )}
                                   </div>
                                 )}

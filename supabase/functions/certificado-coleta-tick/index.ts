@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: cfg, error: cfgError } = await service
       .from("certificado_config")
-      .select("id, motor_ativo, ufs, cnaes, janelas_dias, somente_mei, somente_celular")
+      .select("id, motor_ativo, ufs, cnaes, janelas_dias, somente_mei, somente_celular, prospeccao_ativa")
       .limit(1)
       .maybeSingle();
     if (cfgError) throw cfgError;

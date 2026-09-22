@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Validar o primeiro ciclo real do piloto Certificado Digital com BM, template aprovado e 50 envios/dia
 - [x] Verify and address monitoring findings 1–12
 - [x] Deploy changed functions and validate targeted flows
 - [x] Resolve the 12 supplied findings with verified code and database evidence
@@ -9,6 +10,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Criar estrutura do piloto Certificado Digital, seleção de BM/template, pool geral e verificadoras UAZAPI explícitas
 - [x] Restringir todo aquecimento automático à BM Greensoul durante o piloto e pausar trilhas abertas nas demais BMs
 - [x] Implantar e validar o piloto de escala 2K→10K da BM Greensoul com rampa 450→550→650 e freios automáticos
 - [x] Corrigir trava permanente ACCOUNT_VIOLATION:SPAM e liberar somente números confirmados como saudáveis pela Meta
