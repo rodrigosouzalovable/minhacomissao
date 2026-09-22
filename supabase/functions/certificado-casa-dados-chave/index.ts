@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
         encontrados: resultado.total,
         mapeados: resultado.leads.length,
         com_telefone: resultado.leads.filter((lead) => lead.telefones.length > 0).length,
+        estrutura: resultado.estrutura,
       });
     }
 
