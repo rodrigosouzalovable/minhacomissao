@@ -323,6 +323,13 @@
       "when": 1790027764770,
       "tag": "0045_add_meta_bm_pilot_unique_7d_metric",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790071706837,
+      "tag": "0046_certificado_prospeccao_piloto",
+      "breakpoints": true
     }
   ]
 }

@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Activity, Download, FileKey2, Loader2, MapPin, Phone, Play, RefreshCw, Search, Settings2, Users } from "lucide-react";
+import { Activity, Download, FileKey2, Loader2, MapPin, Phone, Play, RefreshCw, Search, Settings2, Send, ShieldCheck, Users } from "lucide-react";
 import { exportarParaExcel } from "@/lib/exportExcel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const UFS = ["GO", "SP", "RS", "RJ", "SC", "DF"];
 const CNAES_PADRAO = ["6911701", "7020400", "8630504", "7490104", "4712100", "6319400", "7319002", "8630503", "8112500", "4120400", "6201501", "9602501", "4772500", "4751201", "4781400", "4530703", "6204000"];
@@ -22,10 +23,10 @@ type Lead = {
   telefones: string[]; telefone_principal: string | null; email: string | null;
   cnae: string | null; cnae_descricao: string | null; uf: string | null; municipio: string | null;
   porte: string | null; mei: boolean | null; data_abertura: string | null; dias_desde_abertura: number | null;
-  situacao: string; created_at: string;
+  situacao: string; whatsapp_status: string; created_at: string;
 };
 
-type Config = { id: string; motor_ativo: boolean; ufs: string[]; cnaes: string[]; janelas_dias: number[]; somente_mei: boolean; somente_celular: boolean; ultima_execucao: string | null; ultimo_status: string | null; total_coletado: number };
+type Config = { id: string; motor_ativo: boolean; ufs: string[]; cnaes: string[]; janelas_dias: number[]; somente_mei: boolean; somente_celular: boolean; ultima_execucao: string | null; ultimo_status: string | null; total_coletado: number; prospeccao_ativa: boolean; meta_bm_id: string | null; template_nome: string | null; template_idioma: string; limite_diario: number; prospeccao_pausada_motivo: string | null };
 
 type Log = { id: string; janela: number | null; data_referencia: string | null; encontrados: number; novos: number; duplicados: number; sem_telefone: number; erro: string | null; manual: boolean; created_at: string };
 
@@ -55,6 +56,7 @@ export default function CertificadoDigital() {
   const [novoCnae, setNovoCnae] = useState("");
   const [novaUf, setNovaUf] = useState("GO");
   const [pagina, setPagina] = useState(0);
+  const [telefoneTeste, setTelefoneTeste] = useState("");
   const porPagina = 25;
 
   const { data: config } = useQuery({
@@ -87,6 +89,28 @@ export default function CertificadoDigital() {
     staleTime: 60_000,
   });
 
+  const { data: bms = [] } = useQuery({ queryKey: ["certificado-bms"], queryFn: async () => {
+    const { data, error } = await supabase.from("meta_business_managers").select("id,nome,business_id").eq("ativo", true).order("nome");
+    if (error) throw error; return data ?? [];
+  }, staleTime: 60_000 });
+  const { data: templates = [] } = useQuery({ queryKey: ["certificado-templates-mestre"], queryFn: async () => {
+    const { data, error } = await supabase.from("meta_templates_mestre").select("id,nome,idioma,categoria,corpo").order("nome");
+    if (error) throw error; return data ?? [];
+  }, staleTime: 60_000 });
+  const { data: metaInstancias = [] } = useQuery({ queryKey: ["certificado-meta-instancias", config?.meta_bm_id], enabled: !!config?.meta_bm_id, queryFn: async () => {
+    const { data, error } = await supabase.from("meta_whatsapp_instances").select("id,nome,display_phone,estado_pool,pool_fora_manual,saude_status,saude_quality,ativo").eq("meta_bm_id", config?.meta_bm_id ?? "").eq("provider", "meta").eq("ativo", true).order("nome");
+    if (error) throw error; return data ?? [];
+  }, staleTime: 30_000 });
+  const { data: templateStatus = [] } = useQuery({ queryKey: ["certificado-template-status", config?.meta_bm_id, config?.template_nome, config?.template_idioma, metaInstancias.map((i) => i.id).join(",")], enabled: !!config?.template_nome && metaInstancias.length > 0, queryFn: async () => {
+    const { data, error } = await supabase.from("meta_whatsapp_templates").select("instancia_id,status,sincronizado_em").in("instancia_id", metaInstancias.map((i) => i.id)).eq("nome_template", config?.template_nome ?? "").eq("idioma", config?.template_idioma ?? "pt_BR");
+    if (error) throw error; return data ?? [];
+  }, staleTime: 30_000 });
+  const { data: enviosHoje = 0 } = useQuery({ queryKey: ["certificado-envios-hoje", config?.meta_bm_id], enabled: !!config?.meta_bm_id, queryFn: async () => {
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const { count, error } = await supabase.from("certificado_prospeccao_envios").select("id", { count: "exact", head: true }).eq("bm_id", config?.meta_bm_id ?? "").gte("reservado_em", hoje.toISOString()).in("status", ["reservado","enviado","entregue","lido","respondido"]);
+    if (error) throw error; return count ?? 0;
+  }, staleTime: 30_000 });
+
   const salvarConfig = useMutation({
     mutationFn: async (patch: Partial<Config>) => {
       if (!config?.id) throw new Error("Configuração não encontrada");
@@ -107,6 +131,21 @@ export default function CertificadoDigital() {
     onSuccess: (data) => { toast.success(`${data?.resultado?.novos ?? 0} novo(s) lead(s) encontrado(s)`); qc.invalidateQueries({ queryKey: ["certificado-leads"] }); qc.invalidateQueries({ queryKey: ["certificado-logs"] }); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha na busca"),
   });
+
+  const verificarWhatsApp = useMutation({ mutationFn: async () => {
+    const { data, error } = await supabase.functions.invoke("certificado-verificar-whatsapp", { body: { limite: 2000 } });
+    if (error) throw error; if (data?.error) throw new Error(data.error); return data;
+  }, onSuccess: (data) => { toast.success(`${data.com_whatsapp} com WhatsApp; ${data.sem_whatsapp} sem WhatsApp`); qc.invalidateQueries({ queryKey: ["certificado-leads"] }); }, onError: (e) => toast.error(e instanceof Error ? e.message : "Falha na verificação") });
+  const processar = useMutation({ mutationFn: async (body: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke("certificado-prospeccao-processar", { body });
+    if (error) throw error; if (data?.error) throw new Error(data.error); return data;
+  }, onSuccess: (data) => { toast.success(data.simulacao ? `${data.elegiveis} contato(s) apto(s) nesta simulação` : data.resultado ? "Mensagem de teste processada" : `${data.enviados ?? 0} mensagem(ns) enviada(s)`); qc.invalidateQueries({ queryKey: ["certificado-envios-hoje"] }); qc.invalidateQueries({ queryKey: ["certificado-leads"] }); }, onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao processar") });
+  const alterarPool = async (instancia: typeof metaInstancias[number], ativar: boolean) => {
+    if (!confirm(`${ativar ? "Ativar" : "Desativar"} o pool geral de ${instancia.nome}? Isso também afeta campanhas e aquecimento.`)) return;
+    const nome = ativar ? "ativar_meta_instancia_pool" : "retirar_meta_instancia_pool_manual";
+    const { error } = await supabase.rpc(nome, { p_instancia_id: instancia.id });
+    if (error) toast.error(error.message); else { toast.success(`Pool ${ativar ? "ativado" : "desativado"}`); qc.invalidateQueries({ queryKey: ["certificado-meta-instancias"] }); }
+  };
 
   const leadsFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -137,6 +176,9 @@ export default function CertificadoDigital() {
           <Button variant="outline" onClick={() => { qc.invalidateQueries({ queryKey: ["certificado-leads"] }); qc.invalidateQueries({ queryKey: ["certificado-config"] }); }}><RefreshCw className="mr-2 h-4 w-4" />Atualizar</Button>
         </div>
 
+        <Tabs defaultValue="coleta" className="space-y-6">
+          <TabsList><TabsTrigger value="coleta">Coleta</TabsTrigger><TabsTrigger value="prospeccao">Prospecção</TabsTrigger></TabsList>
+          <TabsContent value="coleta" className="space-y-6">
         <Card className="border-primary/30">
           <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4"><div className="rounded-full bg-primary/10 p-3"><Activity className="h-6 w-6 text-primary" /></div><div><p className="font-semibold">Motor de coleta diária</p><p className="text-sm text-muted-foreground">{config?.motor_ativo ? "Ativo — a próxima coleta automática seguirá as janelas configuradas." : "Desligado — nenhuma consulta automática será realizada."}</p></div></div>
@@ -169,6 +211,16 @@ export default function CertificadoDigital() {
         </CardContent></Card>
 
         <Card><CardHeader><CardTitle>Histórico de coletas</CardTitle></CardHeader><CardContent><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Quando</TableHead><TableHead>Janela</TableHead><TableHead>Encontrados</TableHead><TableHead>Novos</TableHead><TableHead>Duplicados</TableHead><TableHead>Resultado</TableHead></TableRow></TableHeader><TableBody>{logs.slice(0, 20).map((log) => <TableRow key={log.id}><TableCell>{new Date(log.created_at).toLocaleString("pt-BR")}</TableCell><TableCell>D+{log.janela ?? "—"}</TableCell><TableCell>{log.encontrados}</TableCell><TableCell>{log.novos}</TableCell><TableCell>{log.duplicados}</TableCell><TableCell>{log.erro ? <Badge variant="destructive">Erro</Badge> : <Badge variant="secondary">OK</Badge>}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="prospeccao" className="space-y-6">
+            <Card className="border-primary/30"><CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between"><div><p className="font-semibold">Piloto de prospecção</p><p className="text-sm text-muted-foreground">Limite agregado de 50 mensagens por dia. Domingos permanecem bloqueados.</p></div><div className="flex items-center gap-3"><Badge variant={config?.prospeccao_ativa ? "default" : "outline"}>{config?.prospeccao_ativa ? "ATIVO" : "PAUSADO"}</Badge><Switch checked={config?.prospeccao_ativa ?? false} onCheckedChange={(checked) => salvarConfig.mutate({ prospeccao_ativa: checked })} disabled={!config?.meta_bm_id || !config?.template_nome || salvarConfig.isPending} /></div></CardContent></Card>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card><CardHeader><CardTitle>BM piloto e template</CardTitle></CardHeader><CardContent className="space-y-4"><div><Label>BM piloto</Label><Select value={config?.meta_bm_id ?? ""} onValueChange={(value) => salvarConfig.mutate({ meta_bm_id: value, prospeccao_ativa: false })}><SelectTrigger className="mt-1"><SelectValue placeholder="Selecione uma BM" /></SelectTrigger><SelectContent>{bms.map((bm) => <SelectItem key={bm.id} value={bm.id}>{bm.nome}</SelectItem>)}</SelectContent></Select></div><div><Label>Template</Label><Select value={config?.template_nome ?? ""} onValueChange={(value) => { const t = templates.find((item) => item.nome === value); salvarConfig.mutate({ template_nome: value, template_idioma: t?.idioma ?? "pt_BR", prospeccao_ativa: false }); }}><SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o template" /></SelectTrigger><SelectContent>{templates.map((t) => <SelectItem key={t.id} value={t.nome}>{t.nome} · {t.categoria}</SelectItem>)}</SelectContent></Select></div><div className="rounded-md border p-3 text-sm"><div className="flex justify-between"><span>Enviados hoje</span><strong>{enviosHoje} / {config?.limite_diario ?? 50}</strong></div><div className="mt-2 flex justify-between"><span>Contatos com WhatsApp</span><strong>{leads.filter((l) => l.whatsapp_status === "com_whatsapp" && l.situacao === "novo").length}</strong></div></div></CardContent></Card>
+              <Card><CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" />Preparação</CardTitle></CardHeader><CardContent className="space-y-3"><Button variant="outline" className="w-full justify-start" onClick={() => verificarWhatsApp.mutate()} disabled={verificarWhatsApp.isPending}>{verificarWhatsApp.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Verificar números agora</Button><Button variant="outline" className="w-full justify-start" onClick={() => processar.mutate({ simulacao: true })} disabled={processar.isPending}><Activity className="mr-2 h-4 w-4" />Simular próximo envio</Button><div className="flex gap-2"><Input value={telefoneTeste} onChange={(e) => setTelefoneTeste(e.target.value)} placeholder="Telefone para teste" /><Button variant="outline" onClick={() => processar.mutate({ modo_teste: true, telefone_teste: telefoneTeste })} disabled={processar.isPending || telefoneTeste.replace(/\D/g, "").length < 10}><Send className="mr-2 h-4 w-4" />Testar</Button></div><Button className="w-full" onClick={() => processar.mutate({})} disabled={processar.isPending || !config?.prospeccao_ativa}><Play className="mr-2 h-4 w-4" />Processar agora</Button></CardContent></Card>
+            </div>
+            <Card><CardHeader><CardTitle>Instâncias da BM e aprovação do template</CardTitle></CardHeader><CardContent><p className="mb-4 text-xs text-muted-foreground">Este controle altera o pool geral da BM e pode impactar campanhas e aquecimento.</p><div className="space-y-2">{metaInstancias.length === 0 ? <p className="text-sm text-muted-foreground">Selecione uma BM para visualizar as instâncias.</p> : metaInstancias.map((inst) => { const status = templateStatus.find((t) => t.instancia_id === inst.id)?.status ?? "ausente"; const noPool = inst.estado_pool === "ativo" && !inst.pool_fora_manual; return <div key={inst.id} className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{inst.nome}</p><p className="text-xs text-muted-foreground">{inst.display_phone || "Sem telefone"} · {inst.saude_status || "Sem status"} · {inst.saude_quality || "Qualidade desconhecida"}</p></div><div className="flex items-center gap-2"><Badge variant={status === "approved" ? "default" : status === "ausente" ? "outline" : "destructive"}>{status === "approved" ? "Template aprovado" : status === "ausente" ? "Template ausente" : status}</Badge><Label className="text-xs">Pool geral</Label><Switch checked={noPool} onCheckedChange={(checked) => alterarPool(inst, checked)} /></div></div>; })}</div></CardContent></Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </AppLayout>
   );
