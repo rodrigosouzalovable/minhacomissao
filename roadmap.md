@@ -10,6 +10,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Eliminar timeout de 150s do Certificado Digital com coleta limitada e verificação paralela suficiente para 50 envios
 - [x] Tentar automaticamente até cinco países internacionais mais baratos quando o primeiro ficar sem estoque
 - [x] Corrigir o IAGO no TESTE META para responder sempre na caixa AQUECIMENTO com mensagens variadas e sem bloqueio por atendente de outra caixa
 - [x] Adicionar país internacional mais barato, DDI correto e nova compra durante cancelamento de número banido

@@ -24,8 +24,8 @@ export async function verificarLeadsCertificado(service: any, limite = 1000): Pr
     .select("instancia_id, instancia:user_whatsapp_instances(id,nome,server_url,instance_token,ativo)").eq("ativa", true);
   if (error) throw error;
   const candidatas = (selecionadas ?? []).map((row: any) => row.instancia).filter((i: any) => i?.ativo && i?.server_url && i?.instance_token);
-  const instancias: any[] = [];
-  for (const instancia of candidatas) if (await conectada(instancia)) instancias.push(instancia);
+  const estados = await Promise.all(candidatas.map(async (instancia: any) => ({ instancia, ativa: await conectada(instancia) })));
+  const instancias = estados.filter((item) => item.ativa).map((item) => item.instancia);
   if (!instancias.length) return { verificados: 0, com_whatsapp: 0, sem_whatsapp: 0, erros: 0, instancias_validadoras: [] };
 
   const { data: leads, error: leadsError } = await service.from("certificado_leads").select("id,telefone_principal")
@@ -34,13 +34,12 @@ export async function verificarLeadsCertificado(service: any, limite = 1000): Pr
   if (leadsError) throw leadsError;
   const lotes: any[][] = [];
   for (let i = 0; i < (leads ?? []).length; i += 15) lotes.push((leads ?? []).slice(i, i + 15));
-  let rr = 0, comWhatsapp = 0, semWhatsapp = 0, erros = 0;
-  for (const lote of lotes) {
-    let concluido = false;
-    for (let tentativa = 0; tentativa < instancias.length; tentativa++) {
-      const instancia = instancias[(rr + tentativa) % instancias.length];
+  let comWhatsapp = 0, semWhatsapp = 0, erros = 0;
+  const resultados = await Promise.all(lotes.map(async (lote, indiceLote) => {
+    for (let tentativa = 0; tentativa < Math.min(instancias.length, 2); tentativa++) {
+      const instancia = instancias[(indiceLote + tentativa) % instancias.length];
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 45_000);
+      const timeout = setTimeout(() => controller.abort(), 25_000);
       try {
         const response = await fetch(`${String(instancia.server_url).replace(/\/+$/, "")}/chat/check`, {
           method: "POST", headers: { "Content-Type": "application/json", token: String(instancia.instance_token) },
@@ -59,14 +58,24 @@ export async function verificarLeadsCertificado(service: any, limite = 1000): Pr
         const checkedAt = new Date().toISOString();
         if (idsCom.length) await service.from("certificado_leads").update({ whatsapp_status: "com_whatsapp", whatsapp_verificado_em: checkedAt, whatsapp_instancia_id: instancia.id }).in("id", idsCom);
         if (idsSem.length) await service.from("certificado_leads").update({ whatsapp_status: "sem_whatsapp", whatsapp_verificado_em: checkedAt, whatsapp_instancia_id: instancia.id }).in("id", idsSem);
-        comWhatsapp += idsCom.length; semWhatsapp += idsSem.length; rr = (rr + tentativa + 1) % instancias.length; concluido = true; break;
+        return { idsCom, idsSem, instanciaId: instancia.id, erro: false };
       } catch { /* tenta outra instância */ } finally { clearTimeout(timeout); }
     }
-    if (!concluido) {
-      const ids = lote.map((lead) => lead.id);
-      await service.from("certificado_leads").update({ whatsapp_status: "erro_temporario" }).in("id", ids);
+    return { idsCom: [], idsSem: [], idsErro: lote.map((lead) => lead.id), instanciaId: null, erro: true };
+  }));
+
+  for (const resultado of resultados) {
+    if (resultado.erro) {
+      const ids = resultado.idsErro ?? [];
+      if (ids.length) await service.from("certificado_leads").update({ whatsapp_status: "erro_temporario" }).in("id", ids);
       erros += ids.length;
+      continue;
     }
+    const checkedAt = new Date().toISOString();
+    if (resultado.idsCom.length) await service.from("certificado_leads").update({ whatsapp_status: "com_whatsapp", whatsapp_verificado_em: checkedAt, whatsapp_instancia_id: resultado.instanciaId }).in("id", resultado.idsCom);
+    if (resultado.idsSem.length) await service.from("certificado_leads").update({ whatsapp_status: "sem_whatsapp", whatsapp_verificado_em: checkedAt, whatsapp_instancia_id: resultado.instanciaId }).in("id", resultado.idsSem);
+    comWhatsapp += resultado.idsCom.length;
+    semWhatsapp += resultado.idsSem.length;
   }
   return { verificados: comWhatsapp + semWhatsapp, com_whatsapp: comWhatsapp, sem_whatsapp: semWhatsapp, erros, instancias_validadoras: instancias.map((i) => i.nome).filter(Boolean) };
 }

@@ -44,10 +44,17 @@ Deno.serve(async (req) => {
     let resumoColeta: Record<string, unknown> | null = null;
     let resumoVerificacao: Record<string, unknown> | null = null;
     if (completo && cfg.motor_ativo) {
+      const inicioProcessamento = Date.now();
+      const LIMITE_COLETA_MS = 65_000;
       const janelas = [...new Set((cfg.janelas_dias ?? []).map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n <= 30).sort((a, b) => a - b);
       const resultados = [];
       for (const janela of janelas) {
-        const resultado = await coletarJanela(service, cfg, janela, true);
+        if (Date.now() - inicioProcessamento >= LIMITE_COLETA_MS) break;
+        const resultado = await coletarJanela(service, cfg, janela, true, {
+          maxPaginas: 2,
+          maxTentativas: 2,
+          timeoutMs: 20_000,
+        });
         resultados.push(resultado);
         if (resultado.erro_temporario) break;
       }
@@ -59,6 +66,7 @@ Deno.serve(async (req) => {
         janelas_falha: falhas.length,
         encontrados: sucessos.reduce((total, resultado) => total + resultado.encontrados, 0),
         novos: sucessos.reduce((total, resultado) => total + resultado.novos, 0),
+        janelas_pendentes: Math.max(0, janelas.length - resultados.length),
       };
       if (resultados.length > 0 && sucessos.length === 0) {
         const primeiroErro = falhas[0]?.erro ?? "A coleta não pôde ser concluída.";
@@ -68,7 +76,9 @@ Deno.serve(async (req) => {
         }, falhas.some((resultado) => resultado.erro_temporario) ? 503 : 400);
       }
 
-      const verificacao = await verificarLeadsCertificado(service, 2000);
+      // Para uma campanha de 50/dia, 75 candidatos dão margem para números sem WhatsApp
+      // sem fazer o clique aguardar a verificação de milhares de registros.
+      const verificacao = await verificarLeadsCertificado(service, 75);
       resumoVerificacao = verificacao;
       const { count: pendentes } = await service.from("certificado_leads")
         .select("id", { count: "exact", head: true })
