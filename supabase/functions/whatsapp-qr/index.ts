@@ -617,7 +617,7 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
       .order("criado_em", { ascending: false }),
     sb
       .from("meta_whatsapp_instances")
-      .select("id,user_id,nome,display_phone,ativo,saude_status")
+      .select("id,user_id,nome,display_phone,ativo,saude_status,bm:meta_business_managers(nome)")
       .eq("provider", "meta")
       .eq("instancia_teste_aquecimento", true)
       .order("criado_em", { ascending: false }),
@@ -651,7 +651,9 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
   }
 
   for (const instance of metaTests || []) {
-    const connected = instance.ativo === true && String(instance.saude_status || "").toUpperCase() === "CONNECTED";
+    const healthStatus = String(instance.saude_status || "").toUpperCase();
+    const connected = instance.ativo === true && healthStatus === "CONNECTED";
+    const bmRelation = Array.isArray(instance.bm) ? instance.bm[0] : instance.bm;
     safeRows.push({
       id: instance.id,
       user_id: instance.user_id,
@@ -659,7 +661,8 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
       telefone: getMetaTestPhone(instance.display_phone, instance.nome),
       ativo: instance.ativo,
       connected,
-      status: instance.saude_status || "unknown",
+      status: healthStatus || "unknown",
+      bm_nome: bmRelation?.nome || null,
       source: "meta_teste",
       is_own: instance.user_id === requesterId,
       can_edit: false,
@@ -672,25 +675,30 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
 async function listMetaTestInstances(requesterId: string) {
   const { data, error } = await getSupabaseAdmin()
     .from("meta_whatsapp_instances")
-    .select("id,user_id,nome,display_phone,ativo,saude_status")
+    .select("id,user_id,nome,display_phone,ativo,saude_status,bm:meta_business_managers(nome)")
     .eq("provider", "meta")
     .eq("instancia_teste_aquecimento", true)
     .order("criado_em", { ascending: false });
 
   if (error) return json({ ok: false, error: "Não foi possível carregar as instâncias Meta de teste" }, 500);
 
-  const instances = (data || []).map((instance) => ({
-    id: instance.id,
-    user_id: instance.user_id,
-    nome: instance.nome,
-    telefone: getMetaTestPhone(instance.display_phone, instance.nome),
-    ativo: instance.ativo,
-    connected: instance.ativo === true && String(instance.saude_status || "").toUpperCase() === "CONNECTED",
-    status: instance.saude_status || "unknown",
-    source: "meta_teste",
-    is_own: instance.user_id === requesterId,
-    can_edit: false,
-  }));
+  const instances = (data || []).map((instance) => {
+    const healthStatus = String(instance.saude_status || "").toUpperCase();
+    const bmRelation = Array.isArray(instance.bm) ? instance.bm[0] : instance.bm;
+    return {
+      id: instance.id,
+      user_id: instance.user_id,
+      nome: instance.nome,
+      telefone: getMetaTestPhone(instance.display_phone, instance.nome),
+      ativo: instance.ativo,
+      connected: instance.ativo === true && healthStatus === "CONNECTED",
+      status: healthStatus || "unknown",
+      bm_nome: bmRelation?.nome || null,
+      source: "meta_teste",
+      is_own: instance.user_id === requesterId,
+      can_edit: false,
+    };
+  });
 
   return json({ ok: true, instances });
 }
