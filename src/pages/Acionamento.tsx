@@ -205,6 +205,12 @@ function formatarTelefoneBR(v?: string | null): string {
   return `(${ddd}) ${meio}-${fim}`;
 }
 
+function formatarTelefoneInstancia(v?: string | null, source?: 'uazapi' | 'meta_teste'): string {
+  const digits = String(v || '').replace(/\D/g, '');
+  if (source === 'meta_teste' && !digits.startsWith('55')) return digits ? `+${digits}` : '—';
+  return formatarTelefoneBR(v);
+}
+
 
 function SortableInstanceCard({ id, children, canDrag = true }: { id: string; children: React.ReactNode; canDrag?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !canDrag });
@@ -440,15 +446,40 @@ export default function Acionamento() {
   useEffect(() => {
     if (!user) return;
     const fetchInstances = async () => {
-      const { data } = await supabase
-        .from('user_whatsapp_instances' as any)
-        .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
-        .match(isOwnerAdmin ? {} : { user_id: user.id })
-        .order('ordem' as any, { ascending: true })
-        .order('criado_em', { ascending: false });
-      if (data) {
-        setInstances(data as any);
+      const [uazapiResult, metaResult] = await Promise.all([
+        supabase
+          .from('user_whatsapp_instances' as any)
+          .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
+          .match(isOwnerAdmin ? {} : { user_id: user.id })
+          .order('ordem' as any, { ascending: true })
+          .order('criado_em', { ascending: false }),
+        supabase.functions.invoke('whatsapp-qr', { body: { action: 'list-meta-test-instances' } }),
+      ]);
+      const uazapiRows = ((uazapiResult.data || []) as WhatsAppInstanceRow[]).map((row) => ({ ...row, source: 'uazapi' as const }));
+      const metaRows = metaResult.data?.ok
+        ? ((metaResult.data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean }>).map((row) => ({
+            id: row.id,
+            user_id: row.user_id,
+            nome: row.nome || 'Sem nome',
+            telefone: row.telefone,
+            server_url: '',
+            instance_token: '',
+            ativo: row.ativo,
+            apenas_lembretes: false,
+            robo: false,
+            ia_responde: false,
+            shared_read_only: true,
+            source: 'meta_teste' as const,
+          }))
+        : [];
+      if (metaResult.data?.ok) {
+        const metaStatus: Record<string, 'connected' | 'disconnected'> = {};
+        (metaResult.data.instances || []).forEach((row: { id: string; connected: boolean }) => {
+          metaStatus[row.id] = row.connected ? 'connected' : 'disconnected';
+        });
+        setConnectionStatus((current) => ({ ...current, ...metaStatus }));
       }
+      setInstances([...uazapiRows, ...metaRows]);
     };
     fetchInstances();
   }, [user, isOwnerAdmin]);
@@ -2552,7 +2583,7 @@ export default function Acionamento() {
                                   <div className="flex items-center gap-2">
                                     {inst.telefone ? (
                                       <span className="text-[11px] font-medium text-foreground shrink-0">
-                                        {formatarTelefoneBR(inst.telefone)}
+                                        {formatarTelefoneInstancia(inst.telefone, inst.source)}
                                       </span>
                                     ) : (
                                       <span className="text-[11px] text-muted-foreground/70 italic shrink-0">

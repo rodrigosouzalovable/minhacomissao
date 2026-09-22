@@ -82,6 +82,9 @@ Deno.serve(async (req) => {
     if (action === "list-instances-status") {
       return await listInstancesStatus(requester.id, access.isAdmin && requester.id === OWNER_ADMIN_ID);
     }
+    if (action === "list-meta-test-instances") {
+      return await listMetaTestInstances(requester.id);
+    }
 
     if (userId && userId !== requester.id) return json({ error: "Acesso negado para outro usuário" }, 403);
     const authenticatedUserId = requester.id;
@@ -657,6 +660,32 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
   }
 
   return json({ ok: true, instances: safeRows });
+}
+
+async function listMetaTestInstances(requesterId: string) {
+  const { data, error } = await getSupabaseAdmin()
+    .from("meta_whatsapp_instances")
+    .select("id,user_id,nome,display_phone,ativo,saude_status")
+    .eq("provider", "meta")
+    .eq("instancia_teste_aquecimento", true)
+    .order("criado_em", { ascending: false });
+
+  if (error) return json({ ok: false, error: "Não foi possível carregar as instâncias Meta de teste" }, 500);
+
+  const instances = (data || []).map((instance) => ({
+    id: instance.id,
+    user_id: instance.user_id,
+    nome: instance.nome,
+    telefone: normalizeInstancePhone(instance.display_phone),
+    ativo: instance.ativo,
+    connected: instance.ativo === true && String(instance.saude_status || "").toUpperCase() === "CONNECTED",
+    status: instance.saude_status || "unknown",
+    source: "meta_teste",
+    is_own: instance.user_id === requesterId,
+    can_edit: false,
+  }));
+
+  return json({ ok: true, instances });
 }
 
 // ── SETUP WEBHOOK ──
