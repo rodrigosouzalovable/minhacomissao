@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { coletarJanela } from "../_shared/certificado-ingest.ts";
+import { verificarLeadsCertificado } from "../_shared/certificado-whatsapp.ts";
 
 function resposta(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -35,13 +36,23 @@ Deno.serve(async (req) => {
     }
 
     const falhas = resultados.filter((r) => r.erro).length;
+    const verificacao = await verificarLeadsCertificado(service, 2000);
     await service.from("certificado_config").update({
       ultima_execucao: new Date().toISOString(),
       ultimo_status: falhas ? `Concluído com ${falhas} erro(s)` : "Concluído",
       total_coletado: resultados.reduce((sum, r) => sum + r.novos, 0),
     }).eq("id", cfg.id);
 
-    return resposta({ success: falhas === 0, resultados });
+    let prospeccao = null;
+    if (cfg.prospeccao_ativa) {
+      const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/certificado-prospeccao-processar`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      prospeccao = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+    }
+    return resposta({ success: falhas === 0, resultados, verificacao, prospeccao });
   } catch (error) {
     console.error("certificado-coleta-tick", error);
     return resposta({ error: error instanceof Error ? error.message : "Falha na coleta automática" }, 500);
