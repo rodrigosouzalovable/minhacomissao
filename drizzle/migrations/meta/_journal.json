@@ -337,6 +337,13 @@
       "when": 1790080971556,
       "tag": "0047_certificado_templates_ativos",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790084312087,
+      "tag": "0048_certificado_campanha_clara",
+      "breakpoints": true
     }
   ]
 }
