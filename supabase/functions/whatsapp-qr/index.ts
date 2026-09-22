@@ -128,6 +128,13 @@ function normalizeInstancePhone(value: unknown): string | null {
   return digits;
 }
 
+function getMetaTestPhone(displayPhone: unknown, name: unknown): string | null {
+  const saved = normalizeInstancePhone(displayPhone);
+  if (saved) return saved;
+  const suffix = String(name || "").match(/(\+?\d[\d\s().-]{9,}\d)\s*$/)?.[1];
+  return normalizeInstancePhone(suffix);
+}
+
 async function persistInstancePhone(instanceId: string, value: unknown): Promise<string | null> {
   const phone = normalizeInstancePhone(value);
   if (!phone) return null;
@@ -649,7 +656,7 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
       id: instance.id,
       user_id: instance.user_id,
       nome: instance.nome,
-      telefone: normalizeInstancePhone(instance.display_phone),
+      telefone: getMetaTestPhone(instance.display_phone, instance.nome),
       ativo: instance.ativo,
       connected,
       status: instance.saude_status || "unknown",
@@ -676,7 +683,7 @@ async function listMetaTestInstances(requesterId: string) {
     id: instance.id,
     user_id: instance.user_id,
     nome: instance.nome,
-    telefone: normalizeInstancePhone(instance.display_phone),
+    telefone: getMetaTestPhone(instance.display_phone, instance.nome),
     ativo: instance.ativo,
     connected: instance.ativo === true && String(instance.saude_status || "").toUpperCase() === "CONNECTED",
     status: instance.saude_status || "unknown",
