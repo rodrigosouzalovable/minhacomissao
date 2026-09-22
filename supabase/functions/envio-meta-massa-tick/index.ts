@@ -840,21 +840,6 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       erro: null,
     }).eq('id', pend.id);
 
-    const certificadoEnvioId = typeof varsPend.certificado_envio_id === 'string' ? varsPend.certificado_envio_id : null;
-    const certificadoLeadId = typeof varsPend.certificado_lead_id === 'string' ? varsPend.certificado_lead_id : null;
-    if (certificadoEnvioId) {
-      await supabase.from('certificado_prospeccao_envios').update({
-        instancia_id: instId,
-        status: ok ? 'enviado' : 'falha',
-        wa_message_id: ok ? waIdOk : null,
-        erro: ok ? null : erroMsg,
-        enviado_em: ok ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      }).eq('id', certificadoEnvioId);
-      if (ok && certificadoLeadId) {
-        await supabase.from('certificado_leads').update({ situacao: 'enviado', updated_at: new Date().toISOString() }).eq('id', certificadoLeadId);
-      }
-    }
     await supabase.from('envio_meta_job').update({
       proximo_em: retomaEm,
       status_motivo: `Aguardando liberação temporária da Meta até ${retomaEm}`,
@@ -987,6 +972,22 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
           criado_em: new Date().toISOString(),
         }, { onConflict: 'telefone_sufixo' });
       }
+    }
+  }
+
+  const certificadoEnvioId = typeof varsPend.certificado_envio_id === 'string' ? varsPend.certificado_envio_id : null;
+  const certificadoLeadId = typeof varsPend.certificado_lead_id === 'string' ? varsPend.certificado_lead_id : null;
+  if (certificadoEnvioId && !podeReenfileirar) {
+    await supabase.from('certificado_prospeccao_envios').update({
+      instancia_id: instId,
+      status: ok ? 'enviado' : 'falha',
+      wa_message_id: ok ? waIdOk : null,
+      erro: ok ? null : erroMsg,
+      enviado_em: ok ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', certificadoEnvioId);
+    if (ok && certificadoLeadId) {
+      await supabase.from('certificado_leads').update({ situacao: 'enviado', updated_at: new Date().toISOString() }).eq('id', certificadoLeadId);
     }
   }
 

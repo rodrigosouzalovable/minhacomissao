@@ -1472,7 +1472,7 @@ serve(async (req) => {
           }
 
           // ===== Atendimento automático com IA (caixa "IA" + atendente IAGO) =====
-          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao && !imagemSemLeitura && !pediuBloqueio && !_leadAquecimento) {
+          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao && (!imagemSemLeitura || _folderIdContato === FOLDER_CERTIFICADO) && !pediuBloqueio && !_leadAquecimento) {
 
 
             const iaTask = (async () => {

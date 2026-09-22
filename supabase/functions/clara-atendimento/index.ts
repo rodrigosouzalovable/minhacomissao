@@ -47,7 +47,13 @@ Deno.serve(async (req) => {
     const digits = texto.replace(/\D/g, "");
     if (digits.length >= 14) contexto.cnpj = true;
     if (/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(texto)) contexto.email = true;
-    if (["imagem", "documento"].includes(tipo) || /\bcnh\b/i.test(texto)) contexto.cnh = true;
+    const imagemDescricao = normalizar(String(body?.imagem_contexto?.descricao ?? ""));
+    if (tipo === "documento" || /\b(cnh|carteira (nacional )?de habilitacao)\b/.test(normalizar(texto)) || /\b(cnh|carteira (nacional )?de habilitacao)\b/.test(imagemDescricao)) contexto.cnh = true;
+    if (tipo === "imagem" && !contexto.cnh && !body?.imagem_contexto) {
+      await etiquetarAguardandoHumano(service, contatoId);
+      await service.from("clara_conversa_estado").update({ contexto, etapa: "aguardando_humano", aguardando_humano: true, updated_at: new Date().toISOString() }).eq("id", estado.id);
+      return json({ success: true, etapa: "aguardando_humano", motivo: "imagem não identificada" });
+    }
     const agora = new Date().toISOString();
 
     if (contexto.cnpj && contexto.email && contexto.cnh) {
