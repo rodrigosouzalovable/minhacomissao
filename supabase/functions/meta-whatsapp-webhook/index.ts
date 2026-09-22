@@ -1438,7 +1438,7 @@ serve(async (req) => {
               console.error('[MetaWebhook] exceção na leitura da imagem', e?.message || e);
             }
 
-            if (imagemSemLeitura) {
+            if (imagemSemLeitura && _folderIdContato !== FOLDER_AQUECIMENTO) {
               // Sem entender a imagem o IAGO não responde: humano precisa olhar.
               await etiquetarAguardandoHumano(supabase, contatoIdFinal);
             }
@@ -1496,7 +1496,10 @@ serve(async (req) => {
           }
 
           // ===== Atendimento automático com IA (caixa "IA" + atendente IAGO) =====
-          if (!isEcho && contatoIdFinal && !msgError && !audioSemTranscricao && (!imagemSemLeitura || _folderIdContato === FOLDER_CERTIFICADO) && !pediuBloqueio && !_leadAquecimento) {
+          if (!isEcho && contatoIdFinal && !msgError
+            && (!audioSemTranscricao || _folderIdContato === FOLDER_AQUECIMENTO)
+            && (!imagemSemLeitura || _folderIdContato === FOLDER_CERTIFICADO || _folderIdContato === FOLDER_AQUECIMENTO)
+            && !pediuBloqueio && !_leadAquecimento) {
 
 
             const iaTask = (async () => {
