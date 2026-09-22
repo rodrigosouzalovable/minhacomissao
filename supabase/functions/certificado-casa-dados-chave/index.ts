@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { CasaDosDadosError, cifrarChaveCasaDosDados, validarChaveCasaDosDados } from "../_shared/casa-dos-dados.ts";
+import { CasaDosDadosError, cifrarChaveCasaDosDados, resolverChaveCasaDosDados, validarChaveCasaDosDados } from "../_shared/casa-dos-dados.ts";
 
 const headers = { ...corsHeaders, "Content-Type": "application/json" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
@@ -41,6 +41,12 @@ Deno.serve(async (req) => {
         sufixo: atual?.sufixo ?? null,
         updated_at: atual?.updated_at ?? null,
       });
+    }
+
+    if (action === "validar") {
+      const chaveAtual = await resolverChaveCasaDosDados(service);
+      const validacao = await validarChaveCasaDosDados(chaveAtual);
+      return json({ success: true, saldo_total: validacao.saldoTotal });
     }
 
     if (action === "remover") {
