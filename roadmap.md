@@ -12,6 +12,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Corrigir contagem, status conectado e exportação das instâncias Teste Meta ativas e configuradas
 - [x] Exibir a BM vinculada e diferenciar status não verificado nas instâncias Teste Meta da aba UAZAPI
 - [x] Programar experimento Certificado Digital D+5 a D+30 com 50 contatos por dia útil e comparativo por faixa
 - [x] Exibir instâncias de teste Meta na aba UAZAPI como somente leitura e incluí-las na exportação de conectados
