@@ -10,6 +10,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Adicionar templates habilitáveis no Certificado Digital e filtrar automaticamente as BMs com aprovação
 - [x] Criar estrutura do piloto Certificado Digital, seleção de BM/template, pool geral e verificadoras UAZAPI explícitas
 - [x] Restringir todo aquecimento automático à BM Greensoul durante o piloto e pausar trilhas abertas nas demais BMs
 - [x] Implantar e validar o piloto de escala 2K→10K da BM Greensoul com rampa 450→550→650 e freios automáticos

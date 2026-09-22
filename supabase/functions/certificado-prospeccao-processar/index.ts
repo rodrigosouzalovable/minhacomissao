@@ -26,6 +26,12 @@ Deno.serve(async (req) => {
     const { data: cfg, error: cfgError } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
     if (cfgError) throw cfgError;
     if (!cfg?.meta_bm_id || !cfg?.template_nome) return json({ error: "Selecione a BM e o template" }, 409);
+    const { data: mestre, error: mestreError } = await service.from("meta_templates_mestre").select("id").eq("nome", cfg.template_nome).eq("idioma", cfg.template_idioma).maybeSingle();
+    if (mestreError) throw mestreError;
+    if (!mestre) return json({ error: "Template selecionado não foi encontrado" }, 409);
+    const { data: disponibilidade, error: disponibilidadeError } = await service.from("certificado_prospeccao_templates").select("ativo").eq("template_mestre_id", mestre.id).maybeSingle();
+    if (disponibilidadeError) throw disponibilidadeError;
+    if (disponibilidade?.ativo === false) return json({ error: "Template inabilitado no Certificado Digital" }, 409);
     if (!cfg.prospeccao_ativa && !simulacao && !modoTeste) return json({ error: "Piloto desativado" }, 409);
     const { data: instancias } = await service.from("meta_whatsapp_instances").select("id,nome,user_id,display_phone,saude_status,saude_quality,saude_ban_info,estado_pool,pool_fora_manual,pausa_automatica_ate,ativo")
       .eq("meta_bm_id", cfg.meta_bm_id).eq("provider", "meta").eq("ativo", true);
