@@ -9,6 +9,13 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const agoraBrt = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
 const diaBrt = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const nomeCampanha = () => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(new Date());
+const VALOR_CERTIFICADO = "R$ 129,90";
+
+function formatarDataAbertura(data: string | null | undefined): string {
+  const iso = String(data ?? "").slice(0, 10);
+  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return partes ? `${partes[3]}/${partes[2]}/${partes[1]}` : "";
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -159,7 +166,7 @@ Deno.serve(async (req) => {
       return json({ success: response.ok, resultado: await response.json().catch(() => ({})), instancia: instancia.nome });
     }
 
-    const { data: leads, error: leadsError } = await service.from("certificado_leads").select("id,cnpj,razao_social,nome_fantasia,telefone_principal").eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null).order("created_at", { ascending: true }).limit(restante);
+    const { data: leads, error: leadsError } = await service.from("certificado_leads").select("id,cnpj,razao_social,nome_fantasia,telefone_principal,data_abertura").eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null).order("created_at", { ascending: true }).limit(restante);
     if (leadsError) throw leadsError;
     if (simulacao) return json({ success: true, simulacao: true, elegiveis: leads?.length ?? 0, limite_restante: restante, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone })) });
     if (!leads?.length) return json({
@@ -199,10 +206,22 @@ Deno.serve(async (req) => {
       return json({ success: true, skipped: true, motivo: "Os contatos elegíveis já pertencem a outra campanha" });
     }
     await service.from("envio_meta_job").update({ total: reservas.length }).eq("id", job.id);
-    const itens = reservas.map(({ lead, reserva, ordem }) => ({
-      job_id: job.id, ordem, telefone: lead.telefone_principal, nome: lead.nome_fantasia || lead.razao_social || "cliente", cpf: lead.cnpj,
-      status: "pendente", vars: { certificado_lead_id: lead.id, certificado_envio_id: reserva.id }, wa_validado: "sim",
-    }));
+    const itens = reservas.map(({ lead, reserva, ordem }) => {
+      const nome = lead.nome_fantasia || lead.razao_social || "cliente";
+      return {
+        job_id: job.id, ordem, telefone: lead.telefone_principal, nome, cpf: lead.cnpj,
+        status: "pendente",
+        vars: {
+          "1": nome,
+          "2": String(lead.cnpj ?? "").replace(/\D/g, "").padStart(14, "0"),
+          "3": formatarDataAbertura(lead.data_abertura),
+          "4": VALOR_CERTIFICADO,
+          certificado_lead_id: lead.id,
+          certificado_envio_id: reserva.id,
+        },
+        wa_validado: "sim",
+      };
+    });
     const { data: itensCriados, error: itensError } = await service.from("envio_meta_job_item").insert(itens).select("id,vars");
     if (itensError) throw itensError;
     for (const item of itensCriados ?? []) {
