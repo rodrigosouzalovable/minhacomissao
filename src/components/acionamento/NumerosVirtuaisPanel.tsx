@@ -538,7 +538,10 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
               type="single"
               value={tipoNumero}
               onValueChange={(value) => {
-                if (value === 'brasil' || value === 'internacional') setTipoNumero(value);
+                if (value === 'brasil' || value === 'internacional') {
+                  setTipoNumero(value);
+                  if (value === 'brasil') setPaisAleatorio(false);
+                }
               }}
               className="w-fit rounded-md border p-1"
             >
@@ -582,11 +585,23 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           ) : (
             <div className="space-y-1">
               <Label className="text-xs">País internacional</Label>
-              <Select value={pais === '73' ? '' : pais} onValueChange={setPais} disabled={!paisesInternacionais.length}>
+              <Select
+                value={paisAleatorio ? '__mais_barato__' : pais === '73' ? '' : pais}
+                onValueChange={(value) => {
+                  if (value === '__mais_barato__') {
+                    setPaisAleatorio(true);
+                    return;
+                  }
+                  setPaisAleatorio(false);
+                  setPais(value);
+                }}
+                disabled={!paisesInternacionais.length}
+              >
                 <SelectTrigger className="h-9 w-52">
                   <SelectValue placeholder={paisesQuery.isLoading ? 'Carregando países...' : 'Selecione um país'} />
                 </SelectTrigger>
                 <SelectContent className="max-h-72">
+                  <SelectItem value="__mais_barato__">País aleatório — mais barato</SelectItem>
                   {paisesInternacionais.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
                   ))}
@@ -632,7 +647,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           <Button
             size="sm"
             onClick={() => comprar.mutate()}
-            disabled={comprar.isPending || bloqueado || !!pedidoAtivo || (tipoNumero === 'internacional' && pais === '73')}
+            disabled={comprar.isPending || bloqueado || !!pedidoAtivo || (tipoNumero === 'internacional' && !paisAleatorio && pais === '73') || (paisAleatorio && (precoQuery.isFetching || !precoQuery.data?.pais))}
             title={bloqueado ? 'Limite mensal atingido' : pedidoAtivo ? 'Finalize ou cancele o pedido atual' : undefined}
           >
             {comprar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-1" />}
@@ -646,7 +661,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
           <Badge variant="outline" className="text-[10px]">
-            {tipoNumero === 'brasil' ? 'Brasil' : paisSelecionado?.nome || 'País não selecionado'}
+            {tipoNumero === 'brasil' ? 'Brasil' : paisAleatorio ? 'País aleatório — mais barato' : paisSelecionado?.nome || 'País não selecionado'}
           </Badge>
           {precoQuery.isFetching ? (
             <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Consultando disponibilidade...</span>
@@ -663,10 +678,36 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
             ? ' O SMS24H permite escolher o DDD do número.'
             : tipoNumero === 'brasil'
               ? ' A VirtualSMS não permite escolher o DDD — use o SMS24H para isso.'
-              : ' Números internacionais não possuem seleção de DDD brasileiro.'}
+               : paisAleatorio
+                 ? ' O país será escolhido automaticamente pelo menor preço disponível dentro do teto.'
+                 : ' Números internacionais não possuem seleção de DDD brasileiro.'}
         </p>
 
-
+        {cancelamentosPendentes.length > 0 && (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Cancelamento pendente</Label>
+            {cancelamentosPendentes.map((p) => {
+              const numero = dadosNumero(p);
+              const segundos = segundosParaCancelar(p);
+              const nomePais = paises.find((item) => item.id === p.pais)?.nome || 'Internacional';
+              return (
+                <div key={p.id} className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Ban className="h-4 w-4 text-destructive" />
+                    <strong className="text-sm">{nomePais}</strong>
+                    <Badge variant="destructive" className="text-[10px]">Banido</Badge>
+                    <span className="font-mono text-xs">{numero.exibicao}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {segundos > 0
+                      ? `Cancelamento automático quando o fornecedor liberar, em ${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}. Você já pode comprar outro número.`
+                      : 'Solicitando o cancelamento automático ao fornecedor...'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Pedido ativo / último código */}
         {(pedidoAtivo || ultimoRecebido) && (() => {
@@ -717,15 +758,6 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
                 </p>
               )}
 
-              {p.banido_em && p.status === 'aguardando' && !p.codigo && (
-                <p className="text-xs text-destructive flex items-center gap-1">
-                  <Ban className="h-3 w-3" />
-                  {p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0
-                    ? `Banido — cancelamento automático quando liberar (em ${Math.floor(segParaCancelar / 60)}:${String(segParaCancelar % 60).padStart(2, '0')})`
-                    : 'Banido — cancelando automaticamente...'}
-                </p>
-              )}
-
               <div className="flex gap-2">
                 {p.numero && onConectar && (
                   <Button size="sm" variant="secondary" onClick={() => onConectar(`+${numero.completo}`)}>
@@ -737,12 +769,12 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
                     size="sm"
                     variant="ghost"
                     onClick={() => cancelar.mutate(p)}
-                    disabled={cancelar.isPending || (p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0)}
-                    title={segParaCancelar > 0 ? 'O provedor só permite cancelar 5 minutos após a compra' : undefined}
+                    disabled={cancelar.isPending || segundosParaCancelar(p) > 0}
+                    title={segundosParaCancelar(p) > 0 ? 'O provedor só permite cancelar 5 minutos após a compra' : undefined}
                   >
                     <X className="h-3.5 w-3.5 mr-1" />
-                    {p.order_id === pedidoAtivo?.order_id && segParaCancelar > 0
-                      ? `Cancelar em ${Math.floor(segParaCancelar / 60)}:${String(segParaCancelar % 60).padStart(2, '0')}`
+                    {segundosParaCancelar(p) > 0
+                      ? `Cancelar em ${Math.floor(segundosParaCancelar(p) / 60)}:${String(segundosParaCancelar(p) % 60).padStart(2, '0')}`
                       : 'Cancelar pedido'}
                   </Button>
                 )}
