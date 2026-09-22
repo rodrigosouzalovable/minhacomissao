@@ -488,7 +488,7 @@ export function AquecimentoMetaTab() {
                       <div className="grid gap-2 border-t pt-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
                         <span><strong>Situação:</strong> {String(piloto.status).replace(/_/g, " ")}</span>
                         <span><strong>Etapa:</strong> {piloto.etapa}/3</span>
-                         <span><strong>Tier oficial:</strong> {bm.tier || "—"}</span>
+                          <span><strong>{bm.sincronizadoEm ? "Tier oficial" : "Tier cadastrado"}:</strong> {bm.tier || "—"}</span>
                          <span><strong>Sincronizado:</strong> {bm.sincronizadoEm ? new Date(bm.sincronizadoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "aguardando"}</span>
                          <span><strong>Tentados únicos 7d:</strong> {tentados7d}</span>
                          <span><strong>Entregues únicos 7d:</strong> {unicos7d}</span>

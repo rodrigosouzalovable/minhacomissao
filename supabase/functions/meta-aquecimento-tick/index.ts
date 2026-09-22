@@ -484,10 +484,6 @@ Deno.serve(async (req) => {
           // Falha não gasta o lead: ele volta para a fila.
           if (envio.ok) await marcarLeadUsado(supabase, leadId, 'enviado');
           else await devolverLead(supabase, leadId);
-        } else if (leadId && fonte === 'auto_respondedor' && envio.ok) {
-          // O log por telefone é a fonte de verdade da carência de sete dias.
-          // Não altera a data de detecção do robô nem devolve o lead em falhas.
-          await marcarLeadUsado(supabase, leadId, 'reenvio_auto_respondedor');
         }
 
         // Conversa do lead fica na caixa AQUECIMENTO, com a mensagem real enviada.
