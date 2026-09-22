@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: cfg, error: cfgError } = await service
       .from("certificado_config")
-      .select("id, motor_ativo, ufs, cnaes, janelas_dias, somente_mei, somente_celular")
+      .select("id, motor_ativo, ufs, cnaes, janelas_dias, somente_mei, somente_celular, limite_diario")
       .limit(1)
       .maybeSingle();
     if (cfgError) throw cfgError;
@@ -25,6 +25,33 @@ Deno.serve(async (req) => {
     // A coleta automática nunca consome a API enquanto o motor estiver desligado.
     if (!cfg?.motor_ativo) {
       return resposta({ success: true, skipped: true, message: "Motor desligado" });
+    }
+
+    const limiteDiario = Math.max(1, Number(cfg.limite_diario ?? 50));
+    const { count: confirmados, error: confirmadosError } = await service.from("certificado_leads")
+      .select("id", { count: "exact", head: true })
+      .eq("situacao", "novo").eq("whatsapp_status", "com_whatsapp").not("telefone_principal", "is", null);
+    if (confirmadosError) throw confirmadosError;
+    if (Number(confirmados ?? 0) >= limiteDiario) {
+      await service.from("certificado_config").update({
+        ultima_execucao: new Date().toISOString(),
+        ultimo_status: `Coleta economizada: ${confirmados} contatos locais confirmados`,
+      }).eq("id", cfg.id);
+      return resposta({ success: true, skipped: true, motivo: "Estoque local confirmado suficiente", confirmados, limite_diario: limiteDiario });
+    }
+
+    const { count: pendentes, error: pendentesError } = await service.from("certificado_leads")
+      .select("id", { count: "exact", head: true })
+      .eq("situacao", "novo").in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"]).not("telefone_principal", "is", null);
+    if (pendentesError) throw pendentesError;
+    if (Number(pendentes ?? 0) > 0) {
+      const faltam = Math.max(1, limiteDiario - Number(confirmados ?? 0));
+      const verificacao = await verificarLeadsCertificado(service, Math.min(faltam, Number(pendentes)));
+      await service.from("certificado_config").update({
+        ultima_execucao: new Date().toISOString(),
+        ultimo_status: `Coleta economizada: estoque local verificado para ${limiteDiario} envios`,
+      }).eq("id", cfg.id);
+      return resposta({ success: true, skipped: true, motivo: "Estoque local pendente priorizado", verificacao, limite_diario: limiteDiario });
     }
 
     const janelas = [...new Set((cfg.janelas_dias ?? []).map(Number))]
@@ -36,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     const falhas = resultados.filter((r) => r.erro).length;
-    const verificacao = await verificarLeadsCertificado(service, 2000);
+    const verificacao = await verificarLeadsCertificado(service, limiteDiario);
     await service.from("certificado_config").update({
       ultima_execucao: new Date().toISOString(),
       ultimo_status: falhas ? `Concluído com ${falhas} erro(s)` : "Concluído",

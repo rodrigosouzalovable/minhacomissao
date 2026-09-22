@@ -41,50 +41,92 @@ Deno.serve(async (req) => {
     if (!cfg?.meta_bm_id || !cfg?.template_nome) return json({ error: "Selecione a BM e o template" }, 409);
     if (!cfg.prospeccao_ativa && !simulacao && !modoTeste) return json({ error: "Piloto desativado" }, 409);
 
+    const inicioDia = `${diaBrt()}T03:00:00.000Z`;
+    let restante = Number(cfg.limite_diario ?? 50);
+    if (!modoTeste) {
+      const { data: jobExistente } = await service.from("envio_meta_job").select("id,status,total,enviados,erros").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+      if (jobExistente && !simulacao) return json({ success: true, skipped: true, motivo: "A campanha do Certificado Digital de hoje já foi criada", job_id: jobExistente.id, total: jobExistente.total });
+
+      const { count } = await service.from("certificado_prospeccao_envios").select("id", { count: "exact", head: true }).eq("bm_id", cfg.meta_bm_id).gte("reservado_em", inicioDia).in("status", ["reservado","enviado","entregue","lido","respondido"]);
+      restante = Math.max(0, Number(cfg.limite_diario ?? 50) - Number(count ?? 0));
+      if (!restante) return json({ success: true, skipped: true, motivo: "Limite diário atingido" });
+    }
+
     let resumoColeta: Record<string, unknown> | null = null;
     let resumoVerificacao: Record<string, unknown> | null = null;
     if (completo && cfg.motor_ativo) {
-      const inicioProcessamento = Date.now();
-      const LIMITE_COLETA_MS = 45_000;
-      const janelas = [...new Set((cfg.janelas_dias ?? []).map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n <= 30).sort((a, b) => a - b);
-      const resultados = [];
-      for (const janela of janelas) {
-        if (Date.now() - inicioProcessamento >= LIMITE_COLETA_MS) break;
-        const resultado = await coletarJanela(service, cfg, janela, true, {
-          maxPaginas: 1,
-          maxTentativas: 1,
-          timeoutMs: 15_000,
-        });
-        resultados.push(resultado);
-        if (resultado.erro_temporario) break;
-      }
-      const falhas = resultados.filter((resultado) => !!resultado.erro);
-      const sucessos = resultados.filter((resultado) => !resultado.erro);
-      resumoColeta = {
-        janelas: resultados.length,
-        janelas_sucesso: sucessos.length,
-        janelas_falha: falhas.length,
-        encontrados: sucessos.reduce((total, resultado) => total + resultado.encontrados, 0),
-        novos: sucessos.reduce((total, resultado) => total + resultado.novos, 0),
-        janelas_pendentes: Math.max(0, janelas.length - resultados.length),
+      const contarConfirmados = async () => {
+        const { count, error } = await service.from("certificado_leads")
+          .select("id", { count: "exact", head: true })
+          .eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null);
+        if (error) throw error;
+        return Number(count ?? 0);
       };
-      if (resultados.length > 0 && sucessos.length === 0) {
-        const primeiroErro = falhas[0]?.erro ?? "A coleta não pôde ser concluída.";
-        return json({
-          error: `${primeiroErro} Nenhuma campanha foi criada.`,
-          coleta: resumoColeta,
-        }, falhas.some((resultado) => resultado.erro_temporario) ? 503 : 400);
+      const contarPendentes = async () => {
+        const { count, error } = await service.from("certificado_leads")
+          .select("id", { count: "exact", head: true })
+          .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
+          .eq("situacao", "novo").not("telefone_principal", "is", null);
+        if (error) throw error;
+        return Number(count ?? 0);
+      };
+
+      let confirmados = await contarConfirmados();
+      let pendentes = await contarPendentes();
+      resumoColeta = { pulada: true, motivo: "Estoque local suficiente", encontrados: 0, novos: 0, janelas: 0, janelas_sucesso: 0, janelas_falha: 0, janelas_pendentes: 0 };
+
+      if (confirmados < restante && pendentes > 0) {
+        const verificacao = await verificarLeadsCertificado(service, Math.min(restante - confirmados, pendentes));
+        resumoVerificacao = verificacao;
+        confirmados = await contarConfirmados();
+        pendentes = await contarPendentes();
+        if (verificacao.instancias_validadoras.length === 0) {
+          return json({ error: "Nenhuma instância UAZAPI selecionada está conectada para verificar os números. Nenhuma campanha foi criada.", coleta: resumoColeta }, 409);
+        }
       }
 
-      // Para uma campanha de 50/dia, 75 candidatos dão margem para números sem WhatsApp
-      // sem fazer o clique aguardar a verificação de milhares de registros.
-      const verificacao = await verificarLeadsCertificado(service, 75);
-      resumoVerificacao = verificacao;
-      const { count: pendentes } = await service.from("certificado_leads")
+      // A Casa dos Dados só é consultada quando todo o estoque local foi esgotado
+      // e ainda faltam contatos para completar o limite diário.
+      if (confirmados < restante && pendentes === 0) {
+        const inicioProcessamento = Date.now();
+        const LIMITE_COLETA_MS = 45_000;
+        const janelas = [...new Set((cfg.janelas_dias ?? []).map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n <= 30).sort((a, b) => a - b);
+        const resultados = [];
+        for (const janela of janelas) {
+          if (Date.now() - inicioProcessamento >= LIMITE_COLETA_MS || confirmados >= restante) break;
+          const resultado = await coletarJanela(service, cfg, janela, true, { maxPaginas: 1, maxTentativas: 1, timeoutMs: 15_000 });
+          resultados.push(resultado);
+          if (resultado.erro_temporario) break;
+          const faltam = Math.max(0, restante - confirmados);
+          if (faltam > 0 && resultado.novos > 0) {
+            resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos));
+            confirmados = await contarConfirmados();
+            pendentes = await contarPendentes();
+          }
+        }
+        const falhas = resultados.filter((resultado) => !!resultado.erro);
+        const sucessos = resultados.filter((resultado) => !resultado.erro);
+        resumoColeta = {
+          pulada: false, janelas: resultados.length, janelas_sucesso: sucessos.length, janelas_falha: falhas.length,
+          encontrados: sucessos.reduce((total, resultado) => total + resultado.encontrados, 0),
+          novos: sucessos.reduce((total, resultado) => total + resultado.novos, 0),
+          janelas_pendentes: Math.max(0, janelas.length - resultados.length),
+        };
+        if (resultados.length > 0 && sucessos.length === 0) {
+          const primeiroErro = falhas[0]?.erro ?? "A coleta não pôde ser concluída.";
+          return json({ error: `${primeiroErro} Nenhuma campanha foi criada.`, coleta: resumoColeta }, falhas.some((resultado) => resultado.erro_temporario) ? 503 : 400);
+        }
+      }
+
+      if (confirmados < restante && pendentes > 0 && !resumoVerificacao) {
+        const verificacao = await verificarLeadsCertificado(service, Math.min(restante - confirmados, pendentes));
+        resumoVerificacao = verificacao;
+      }
+      const { count: aindaPendentes } = await service.from("certificado_leads")
         .select("id", { count: "exact", head: true })
         .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
         .not("telefone_principal", "is", null);
-      if ((pendentes ?? 0) > 0 && verificacao.instancias_validadoras.length === 0) {
+      if ((aindaPendentes ?? 0) > 0 && resumoVerificacao && (resumoVerificacao as any).instancias_validadoras.length === 0) {
         return json({
           error: "Nenhuma instância UAZAPI selecionada está conectada para verificar os números. Nenhuma campanha foi criada.",
           coleta: resumoColeta,
@@ -117,13 +159,6 @@ Deno.serve(async (req) => {
       return json({ success: response.ok, resultado: await response.json().catch(() => ({})), instancia: instancia.nome });
     }
 
-    const inicioDia = `${diaBrt()}T03:00:00.000Z`;
-    const { data: jobExistente } = await service.from("envio_meta_job").select("id,status,total,enviados,erros").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
-    if (jobExistente && !simulacao) return json({ success: true, skipped: true, motivo: "A campanha do Certificado Digital de hoje já foi criada", job_id: jobExistente.id, total: jobExistente.total });
-
-    const { count } = await service.from("certificado_prospeccao_envios").select("id", { count: "exact", head: true }).eq("bm_id", cfg.meta_bm_id).gte("reservado_em", inicioDia).in("status", ["reservado","enviado","entregue","lido","respondido"]);
-    const restante = Math.max(0, Number(cfg.limite_diario ?? 50) - Number(count ?? 0));
-    if (!restante) return json({ success: true, skipped: true, motivo: "Limite diário atingido" });
     const { data: leads, error: leadsError } = await service.from("certificado_leads").select("id,cnpj,razao_social,nome_fantasia,telefone_principal").eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null).order("created_at", { ascending: true }).limit(restante);
     if (leadsError) throw leadsError;
     if (simulacao) return json({ success: true, simulacao: true, elegiveis: leads?.length ?? 0, limite_restante: restante, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone })) });
@@ -135,6 +170,10 @@ Deno.serve(async (req) => {
       verificacao: resumoVerificacao,
       parcial: Number((resumoColeta as any)?.janelas_falha ?? 0) > 0,
     });
+
+    // Revalida imediatamente antes da criação para reduzir o risco de cliques concorrentes.
+    const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+    if (jobCriadoEnquantoProcessava) return json({ success: true, skipped: true, motivo: "A campanha do Certificado Digital de hoje já foi criada", job_id: jobCriadoEnquantoProcessava.id, total: jobCriadoEnquantoProcessava.total });
 
     const principal: any = porInstancia.get(participantes[0].id);
     const templateIdByInstance = Object.fromEntries(participantes.map((i: any) => [i.id, (porInstancia.get(i.id) as any).id]));
