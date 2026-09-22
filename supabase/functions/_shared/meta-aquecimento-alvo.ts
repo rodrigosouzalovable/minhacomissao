@@ -12,6 +12,7 @@ export interface DestinoAquecimento {
   id: string;
   nome: string | null;
   telefone: string;
+  tipo: "uazapi" | "meta_teste";
 }
 
 function conexaoUazapiAtiva(data: any): boolean {
@@ -23,7 +24,10 @@ function conexaoUazapiAtiva(data: any): boolean {
 }
 
 /** Números UAZAPI conectados em tempo real e vinculados às pastas de aquecimento. */
-export async function destinosAquecimento(supabase: any): Promise<DestinoAquecimento[]> {
+export async function destinosAquecimento(
+  supabase: any,
+  options: { incluirMetaTeste?: boolean } = {},
+): Promise<DestinoAquecimento[]> {
   const { data: folders } = await supabase
     .from("meta_inbox_folders")
     .select("id, nome")
@@ -41,15 +45,13 @@ export async function destinosAquecimento(supabase: any): Promise<DestinoAquecim
 
   const espelhos = data || [];
   const uazapiIds = espelhos.map((d: any) => d.uazapi_instance_id).filter(Boolean);
-  if (uazapiIds.length === 0) return [];
-
-  const { data: conexoes } = await supabase
+  const { data: conexoes } = uazapiIds.length > 0 ? await supabase
     .from("user_whatsapp_instances")
     .select("id, ativo, server_url, instance_token")
     .in("id", uazapiIds)
     .eq("ativo", true)
     .not("server_url", "is", null)
-    .not("instance_token", "is", null);
+    .not("instance_token", "is", null) : { data: [] };
 
   const online = new Set<string>();
   await Promise.all((conexoes || []).map(async (inst: any) => {
@@ -70,14 +72,37 @@ export async function destinosAquecimento(supabase: any): Promise<DestinoAquecim
     }
   }));
 
-  return espelhos
+  const destinosUazapi = espelhos
     .filter((d: any) => online.has(String(d.uazapi_instance_id)))
     .map((d: any) => ({
       id: d.id,
       nome: d.nome,
       telefone: String(d.display_phone || "").replace(/\D/g, ""),
+      tipo: "uazapi" as const,
     }))
     .filter((d: DestinoAquecimento) => d.telefone.length >= 10);
+
+  if (!options.incluirMetaTeste) return destinosUazapi;
+
+  const { data: testes } = await supabase
+    .from("meta_whatsapp_instances")
+    .select("id, nome, display_phone, saude_status, ativo, instancia_teste_aquecimento, teste_aquecimento_ultimo_erro")
+    .eq("provider", "meta")
+    .eq("ativo", true)
+    .eq("instancia_teste_aquecimento", true)
+    .is("teste_aquecimento_ultimo_erro", null);
+
+  const destinosTeste = (testes || [])
+    .filter((d: any) => !d.saude_status || String(d.saude_status).toUpperCase() === "CONNECTED")
+    .map((d: any) => ({
+      id: d.id,
+      nome: d.nome,
+      telefone: String(d.display_phone || "").replace(/\D/g, ""),
+      tipo: "meta_teste" as const,
+    }))
+    .filter((d: DestinoAquecimento) => d.telefone.length >= 10);
+
+  return [...destinosUazapi, ...destinosTeste];
 }
 
 export interface TemplateAquecimento {

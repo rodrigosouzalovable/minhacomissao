@@ -6956,6 +6956,7 @@ export type Database = {
           folder_padrao_id: string | null
           green_contado_dia: string | null
           id: string
+          instancia_teste_aquecimento: boolean
           messaging_limit_manual: string | null
           messaging_limit_source: string | null
           messaging_limit_synced_at: string | null
@@ -7005,6 +7006,9 @@ export type Database = {
           templates_auto_status: string | null
           templates_resync_pendente: boolean
           tenant_id: string
+          teste_aquecimento_ativado_em: string | null
+          teste_aquecimento_ultimo_erro: string | null
+          teste_aquecimento_validado_em: string | null
           teto_escada: number | null
           throughput_level: string | null
           tier_diario: number
@@ -7037,6 +7041,7 @@ export type Database = {
           folder_padrao_id?: string | null
           green_contado_dia?: string | null
           id?: string
+          instancia_teste_aquecimento?: boolean
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
           messaging_limit_synced_at?: string | null
@@ -7086,6 +7091,9 @@ export type Database = {
           templates_auto_status?: string | null
           templates_resync_pendente?: boolean
           tenant_id?: string
+          teste_aquecimento_ativado_em?: string | null
+          teste_aquecimento_ultimo_erro?: string | null
+          teste_aquecimento_validado_em?: string | null
           teto_escada?: number | null
           throughput_level?: string | null
           tier_diario?: number
@@ -7118,6 +7126,7 @@ export type Database = {
           folder_padrao_id?: string | null
           green_contado_dia?: string | null
           id?: string
+          instancia_teste_aquecimento?: boolean
           messaging_limit_manual?: string | null
           messaging_limit_source?: string | null
           messaging_limit_synced_at?: string | null
@@ -7167,6 +7176,9 @@ export type Database = {
           templates_auto_status?: string | null
           templates_resync_pendente?: boolean
           tenant_id?: string
+          teste_aquecimento_ativado_em?: string | null
+          teste_aquecimento_ultimo_erro?: string | null
+          teste_aquecimento_validado_em?: string | null
           teto_escada?: number | null
           throughput_level?: string | null
           tier_diario?: number
@@ -10967,6 +10979,7 @@ export type Database = {
           folder_padrao_id: string | null
           green_contado_dia: string | null
           id: string
+          instancia_teste_aquecimento: boolean
           messaging_limit_manual: string | null
           messaging_limit_source: string | null
           messaging_limit_synced_at: string | null
@@ -11016,6 +11029,9 @@ export type Database = {
           templates_auto_status: string | null
           templates_resync_pendente: boolean
           tenant_id: string
+          teste_aquecimento_ativado_em: string | null
+          teste_aquecimento_ultimo_erro: string | null
+          teste_aquecimento_validado_em: string | null
           teto_escada: number | null
           throughput_level: string | null
           tier_diario: number
@@ -11867,6 +11883,7 @@ export type Database = {
           folder_padrao_id: string | null
           green_contado_dia: string | null
           id: string
+          instancia_teste_aquecimento: boolean
           messaging_limit_manual: string | null
           messaging_limit_source: string | null
           messaging_limit_synced_at: string | null
@@ -11916,6 +11933,9 @@ export type Database = {
           templates_auto_status: string | null
           templates_resync_pendente: boolean
           tenant_id: string
+          teste_aquecimento_ativado_em: string | null
+          teste_aquecimento_ultimo_erro: string | null
+          teste_aquecimento_validado_em: string | null
           teto_escada: number | null
           throughput_level: string | null
           tier_diario: number
@@ -11964,6 +11984,7 @@ export type Database = {
           folder_padrao_id: string | null
           green_contado_dia: string | null
           id: string
+          instancia_teste_aquecimento: boolean
           messaging_limit_manual: string | null
           messaging_limit_source: string | null
           messaging_limit_synced_at: string | null
@@ -12013,6 +12034,9 @@ export type Database = {
           templates_auto_status: string | null
           templates_resync_pendente: boolean
           tenant_id: string
+          teste_aquecimento_ativado_em: string | null
+          teste_aquecimento_ultimo_erro: string | null
+          teste_aquecimento_validado_em: string | null
           teto_escada: number | null
           throughput_level: string | null
           tier_diario: number

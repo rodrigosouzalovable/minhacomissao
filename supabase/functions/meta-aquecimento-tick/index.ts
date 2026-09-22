@@ -103,9 +103,10 @@ Deno.serve(async (req) => {
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_status, saude_quality, saude_tier, saude_ban_info, tier_diario, estado_pool, pool_fora_manual, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider')
+      .select('id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_status, saude_quality, saude_tier, saude_ban_info, tier_diario, estado_pool, pool_fora_manual, pausa_automatica_ate, quarentena_ate, recuperacao_ativa, recuperacao_proximo_envio_em, ativo, provider, instancia_teste_aquecimento')
       .eq('ativo', true)
       .eq('provider', 'meta')
+      .eq('instancia_teste_aquecimento', false)
       .eq('aquecimento_meta_ativo', true)
       .eq('meta_bm_id', GREEN_SOUL_BM_ID);
 
@@ -148,7 +149,7 @@ Deno.serve(async (req) => {
     const recente = await taxaRespostaRecenteLeads(supabase, 30);
     const corrigirRota = recente.envios >= 10 && recente.taxa < TAXA_MINIMA_LEADS;
 
-    const destinos = await destinosAquecimento(supabase);
+    const destinos = await destinosAquecimento(supabase, { incluirMetaTeste: true });
 
     // Trilha planejada do dia
     const { data: trilhas } = await supabase
@@ -361,7 +362,7 @@ Deno.serve(async (req) => {
           .sort((a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime())[0];
 
         // ===== Escolha da fonte respeitando o mix planejado =====
-        const feitosUazapi = meus.filter((l: any) => l.fonte === 'uazapi').length;
+        const feitosUazapi = meus.filter((l: any) => l.fonte === 'uazapi' || l.fonte === 'meta_teste').length;
         const pctUazapiAtual = meus.length > 0 ? (feitosUazapi / meus.length) * 100 : 0;
         const querUazapi = meus.length === 0 ? mixUazapi > 0 : pctUazapiAtual < mixUazapi;
 
@@ -371,7 +372,7 @@ Deno.serve(async (req) => {
           (usoDestinoUazapi.get(d.id) || 0) < maxPorDestino && d.id !== ultimo?.destino_instancia_id
         );
 
-        let fonte: 'uazapi' | 'lead' | null = null;
+        let fonte: 'uazapi' | 'meta_teste' | 'lead' | null = null;
         if (querUazapi && destinosUazapiOk.length > 0) fonte = 'uazapi';
         else if (mixUazapi < 100 && leadsDisponiveis.length > 0) fonte = 'lead';
         else if (destinosUazapiOk.length > 0) fonte = 'uazapi';
@@ -410,6 +411,7 @@ Deno.serve(async (req) => {
 
         if (fonte === 'uazapi') {
           const d = destinosUazapiOk[Math.floor(Math.random() * destinosUazapiOk.length)];
+          fonte = d.tipo;
           telefone = d.telefone;
           nomeDestino = d.nome;
           destinoInstanciaId = d.id;
@@ -496,6 +498,19 @@ Deno.serve(async (req) => {
         if (!envio.ok && fonte === 'uazapi' && destinoInstanciaId &&
             String(envio.erro || '').includes('131026')) {
           destinosUazapiInvalidos.add(destinoInstanciaId);
+        }
+        if (!envio.ok && fonte === 'meta_teste' && destinoInstanciaId) {
+          destinosUazapiInvalidos.add(destinoInstanciaId);
+          await supabase.from('meta_whatsapp_instances').update({
+            teste_aquecimento_ultimo_erro: String(envio.erro || 'A Meta recusou o destinatário de teste').slice(0, 500),
+            teste_aquecimento_validado_em: new Date().toISOString(),
+          }).eq('id', destinoInstanciaId).eq('instancia_teste_aquecimento', true);
+        }
+        if (envio.ok && fonte === 'meta_teste' && destinoInstanciaId) {
+          await supabase.from('meta_whatsapp_instances').update({
+            teste_aquecimento_ultimo_erro: null,
+            teste_aquecimento_validado_em: new Date().toISOString(),
+          }).eq('id', destinoInstanciaId).eq('instancia_teste_aquecimento', true);
         }
 
         resultados.push({

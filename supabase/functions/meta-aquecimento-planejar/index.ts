@@ -52,9 +52,10 @@ Deno.serve(async (req) => {
 
     const { data: insts } = await supabase
       .from('meta_whatsapp_instances')
-      .select('id, nome, display_phone, meta_bm_id, saude_status, saude_quality, saude_tier, saude_ban_info, tier_diario, dias_green_consecutivos, estado_pool, pool_fora_manual, recuperacao_ativa, quarentena_ate, pausa_automatica_ate, ativo, provider, phone_number_id, access_token, data_ativacao_api')
+      .select('id, nome, display_phone, meta_bm_id, saude_status, saude_quality, saude_tier, saude_ban_info, tier_diario, dias_green_consecutivos, estado_pool, pool_fora_manual, recuperacao_ativa, quarentena_ate, pausa_automatica_ate, ativo, provider, phone_number_id, access_token, data_ativacao_api, instancia_teste_aquecimento')
       .eq('ativo', true)
       .eq('provider', 'meta')
+      .eq('instancia_teste_aquecimento', false)
       .eq('aquecimento_meta_ativo', true)
       .eq('meta_bm_id', GREEN_SOUL_BM_ID)
       .limit(200);

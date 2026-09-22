@@ -528,9 +528,10 @@ Deno.serve(async (req) => {
 
       const { data: insts } = await supabase
         .from('meta_whatsapp_instances')
-        .select('id, nome, display_phone, ativo, provider, saude_quality, estado_pool, recuperacao_ativa, tier_diario')
+        .select('id, nome, display_phone, ativo, provider, saude_quality, estado_pool, recuperacao_ativa, tier_diario, instancia_teste_aquecimento')
         .eq('ativo', true)
-        .eq('provider', 'meta');
+        .eq('provider', 'meta')
+        .eq('instancia_teste_aquecimento', false);
 
       const { data: freios } = await supabase
         .from('meta_instance_freio_diario')
