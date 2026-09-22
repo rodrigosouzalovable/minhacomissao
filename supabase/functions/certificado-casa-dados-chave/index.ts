@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { CasaDosDadosError, cifrarChaveCasaDosDados, resolverChaveCasaDosDados, validarChaveCasaDosDados } from "../_shared/casa-dos-dados.ts";
+import { buscarCasaDosDados, CasaDosDadosError, cifrarChaveCasaDosDados, resolverChaveCasaDosDados, validarChaveCasaDosDados } from "../_shared/casa-dos-dados.ts";
 
 const headers = { ...corsHeaders, "Content-Type": "application/json" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
@@ -47,6 +47,18 @@ Deno.serve(async (req) => {
       const chaveAtual = await resolverChaveCasaDosDados(service);
       const validacao = await validarChaveCasaDosDados(chaveAtual);
       return json({ success: true, saldo_total: validacao.saldoTotal });
+    }
+
+    if (action === "diagnostico") {
+      const chaveAtual = await resolverChaveCasaDosDados(service);
+      const hoje = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(new Date());
+      const resultado = await buscarCasaDosDados({
+        ufs: ["GO"], cnaes: [], dataInicio: hoje, dataFim: hoje,
+        somenteMei: false, somenteCelular: true, pagina: 1, limite: 1,
+      }, chaveAtual);
+      return json({ success: true, consulta_ok: true, encontrados: resultado.total });
     }
 
     if (action === "remover") {
