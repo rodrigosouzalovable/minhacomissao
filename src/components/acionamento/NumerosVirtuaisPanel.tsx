@@ -300,6 +300,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
         provider,
         servico,
         pais: paisCompra,
+        pais_aleatorio: paisAleatorio && tipoNumero === 'internacional',
         ddd: suportaDdd ? ddd : undefined,
         max_preco: novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : undefined,
       });

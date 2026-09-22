@@ -109,6 +109,7 @@ const num = (v: unknown): number | null => {
 };
 
 type Oferta = { preco: number; quantidade: number | null };
+type OfertaPais = { pais: string; preco: number };
 
 // VirtualSMS atualmente retorna { cost, count }; outros provedores compatíveis
 // ainda usam o formato legado { preco: quantidade }.
@@ -131,6 +132,26 @@ const ofertasDisponiveis = (dadosServico: unknown): Oferta[] => {
     }
   }
   return ofertas;
+};
+
+const paisesMaisBaratos = (
+  dados: unknown,
+  servico: string,
+  teto: number | null,
+  limite = 5,
+): OfertaPais[] => {
+  if (!dados || typeof dados !== "object") return [];
+  const candidatos: OfertaPais[] = [];
+  for (const [paisId, dadosPais] of Object.entries(dados as Record<string, unknown>)) {
+    if (paisId === "73" || !dadosPais || typeof dadosPais !== "object") continue;
+    const ofertas = ofertasDisponiveis((dadosPais as Record<string, unknown>)[servico]);
+    const menor = ofertas.reduce<number | null>((atual, oferta) => {
+      if (teto !== null && oferta.preco > teto) return atual;
+      return atual === null || oferta.preco < atual ? oferta.preco : atual;
+    }, null);
+    if (menor !== null) candidatos.push({ pais: paisId, preco: menor });
+  }
+  return candidatos.sort((a, b) => a.preco - b.preco).slice(0, limite);
 };
 
 const webhookUrl = () => {
@@ -278,22 +299,9 @@ serve(async (req) => {
 
       // Uma única consulta consolidada: { pais: { servico: { preco: quantidade } } }
       const { dados } = await api(provider, "getPrices", { service: servico });
-      let vencedor: { pais: string; preco: number } | null = null;
-
-      if (dados && typeof dados === "object") {
-        for (const [paisId, dadosPais] of Object.entries(dados)) {
-          if (paisId === "73" || !dadosPais || typeof dadosPais !== "object") continue;
-          const dadosServico = (dadosPais as Record<string, unknown>)[servico];
-          if (!dadosServico || typeof dadosServico !== "object") continue;
-
-          for (const oferta of ofertasDisponiveis(dadosServico)) {
-            if (Number.isFinite(teto) && teto > 0 && oferta.preco > teto) continue;
-            if (!vencedor || oferta.preco < vencedor.preco) {
-              vencedor = { pais: paisId, preco: oferta.preco };
-            }
-          }
-        }
-      }
+      const tetoValido = Number.isFinite(teto) && teto > 0 ? teto : null;
+      const candidatos = paisesMaisBaratos(dados, servico, tetoValido, 5);
+      const vencedor = candidatos[0] ?? null;
 
       if (!vencedor) {
         return json({
@@ -306,14 +314,22 @@ serve(async (req) => {
         });
       }
 
-      return json({ ok: true, disponivel: true, pais: vencedor.pais, menor_preco: vencedor.preco, moeda: cfgProv.moeda });
+      return json({
+        ok: true,
+        disponivel: true,
+        pais: vencedor.pais,
+        menor_preco: vencedor.preco,
+        moeda: cfgProv.moeda,
+        candidatos: candidatos.map((item) => item.pais),
+      });
     }
 
     if (action === "comprar") {
       const servico = String(body?.servico || "").trim();
-      const pais = body?.pais !== undefined && body?.pais !== null && String(body.pais) !== ""
+      let pais = body?.pais !== undefined && body?.pais !== null && String(body.pais) !== ""
         ? String(body.pais)
         : "73"; // Brasil por padrão
+      const paisAleatorio = body?.pais_aleatorio === true && provider === "virtualsms";
       const ddd = body?.ddd ? String(body.ddd).replace(/\D/g, "") : "";
       if (!servico) return json({ error: "Informe o serviço (ex.: wa)." }, 400);
 
@@ -354,6 +370,50 @@ serve(async (req) => {
               orderId = partes[1] ?? "";
               numero = partes[2] ?? null;
             }
+          }
+        } else if (paisAleatorio) {
+          const { dados: precos } = await api(provider, "getPrices", { service: servico });
+          const candidatos = paisesMaisBaratos(precos, servico, teto, 5);
+          if (!candidatos.length) {
+            return json({
+              ok: false,
+              disponivel: false,
+              motivo: "sem_estoque_no_teto",
+              mensagem: "Nenhum país internacional possui número disponível dentro do teto configurado.",
+            });
+          }
+
+          const tentados: string[] = [];
+          for (const candidato of candidatos) {
+            tentados.push(candidato.pais);
+            try {
+              const { dados } = await api(provider, "getNumberV2", {
+                service: servico,
+                country: candidato.pais,
+                maxPrice: teto ?? undefined,
+                operator: body?.operadora ? String(body.operadora) : undefined,
+              });
+              const id = String(dados?.activationId ?? "");
+              if (!id) throw new Error("O provedor não retornou o identificador da ativação.");
+              orderId = id;
+              pais = candidato.pais;
+              numero = dados?.phoneNumber ? String(dados.phoneNumber) : null;
+              custo = num(dados?.activationCost);
+              break;
+            } catch (e) {
+              if (e instanceof ProviderApiError && e.code === "NO_NUMBERS") continue;
+              throw e;
+            }
+          }
+
+          if (!orderId) {
+            return json({
+              ok: false,
+              disponivel: false,
+              motivo: "estoque_alterado",
+              paises_tentados: tentados.length,
+              mensagem: `Os ${tentados.length} países mais baratos ficaram sem estoque durante a compra. A lista foi atualizada; tente novamente em instantes.`,
+            });
           }
         } else {
           const { dados } = await api(provider, "getNumberV2", {

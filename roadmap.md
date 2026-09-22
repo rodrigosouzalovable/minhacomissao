@@ -10,6 +10,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Tentar automaticamente até cinco países internacionais mais baratos quando o primeiro ficar sem estoque
 - [x] Corrigir o IAGO no TESTE META para responder sempre na caixa AQUECIMENTO com mensagens variadas e sem bloqueio por atendente de outra caixa
 - [x] Adicionar país internacional mais barato, DDI correto e nova compra durante cancelamento de número banido
 - [x] Adicionar instância de teste Meta como destino isolado da caixa AQUECIMENTO, fora de campanhas, cobrança e tier
