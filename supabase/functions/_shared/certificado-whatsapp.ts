@@ -55,10 +55,7 @@ export async function verificarLeadsCertificado(service: any, limite = 1000): Pr
           const existe = item.isInWhatsapp === true || item.exists === true || item.numberExists === true || item.onWhatsapp === true;
           (existe ? idsCom : idsSem).push(lead.id);
         });
-        const checkedAt = new Date().toISOString();
-        if (idsCom.length) await service.from("certificado_leads").update({ whatsapp_status: "com_whatsapp", whatsapp_verificado_em: checkedAt, whatsapp_instancia_id: instancia.id }).in("id", idsCom);
-        if (idsSem.length) await service.from("certificado_leads").update({ whatsapp_status: "sem_whatsapp", whatsapp_verificado_em: checkedAt, whatsapp_instancia_id: instancia.id }).in("id", idsSem);
-        return { idsCom, idsSem, instanciaId: instancia.id, erro: false };
+        return { idsCom, idsSem, idsErro: [] as string[], instanciaId: instancia.id, erro: false };
       } catch { /* tenta outra instância */ } finally { clearTimeout(timeout); }
     }
     return { idsCom: [], idsSem: [], idsErro: lote.map((lead) => lead.id), instanciaId: null, erro: true };
