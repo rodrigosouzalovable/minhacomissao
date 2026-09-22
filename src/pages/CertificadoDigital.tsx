@@ -170,7 +170,7 @@ export default function CertificadoDigital() {
     if (error) throw error; return count ?? 0;
   }, staleTime: 30_000 });
   const { data: metricasExperimento = [] } = useQuery({ queryKey: ["certificado-metricas-experimento"], queryFn: async () => {
-    const { data, error } = await supabase.from("certificado_prospeccao_envios").select("status,certificado_leads!inner(dias_desde_abertura)").in("status", ["enviado", "entregue", "lido", "respondido"]).limit(5000);
+    const { data, error } = await supabase.from("certificado_prospeccao_envios").select("status,certificado_leads!inner(dias_desde_abertura)").gte("reservado_em", "2026-09-23T03:00:00.000Z").in("status", ["enviado", "entregue", "lido", "respondido"]).limit(5000);
     if (error) throw error;
     return JANELAS_EXPERIMENTO.map((janela) => {
       const itens = (data ?? []).filter((item) => Number((item as any).certificado_leads?.dias_desde_abertura) === janela);

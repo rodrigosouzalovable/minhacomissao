@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
 
       // A Casa dos Dados só é consultada quando todo o estoque local foi esgotado
       // e ainda faltam contatos para completar o limite diário.
-      if (confirmados < restante && pendentes === 0) {
+      if (confirmados < restante) {
         const inicioProcessamento = Date.now();
         const LIMITE_COLETA_MS = 45_000;
         const janelas = janelaExperimento === null ? [] : [janelaExperimento];
