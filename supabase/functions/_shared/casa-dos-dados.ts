@@ -254,7 +254,6 @@ export async function validarChaveCasaDosDados(apiKey: string): Promise<{ saldoT
 export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: string): Promise<{
   leads: LeadBruto[];
   total: number;
-  estrutura?: string[];
 }> {
   const apiKey = chaveInformada ?? Deno.env.get("CASA_DOS_DADOS_API_KEY");
   if (!apiKey) throw new Error("Chave API da Casa dos Dados não configurada");
@@ -327,5 +326,5 @@ export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: st
     .map(mapear)
     .filter((l): l is LeadBruto => !!l);
 
-  return { leads, total, estrutura: Array.isArray(lista) && lista[0] && typeof lista[0] === "object" ? Object.keys(lista[0]) : [] };
+  return { leads, total };
 }
