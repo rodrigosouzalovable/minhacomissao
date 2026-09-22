@@ -599,13 +599,22 @@ async function probeInstanceStatus(instance: any) {
 
 async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
   const sb = getSupabaseAdmin();
-  const { data, error } = await sb
-    .from("user_whatsapp_instances")
-    .select("id,user_id,nome,telefone,server_url,instance_token,ativo")
-    .order("ordem", { ascending: true })
-    .order("criado_em", { ascending: false });
+  const [{ data, error }, { data: metaTests, error: metaTestsError }] = await Promise.all([
+    sb
+      .from("user_whatsapp_instances")
+      .select("id,user_id,nome,telefone,server_url,instance_token,ativo")
+      .order("ordem", { ascending: true })
+      .order("criado_em", { ascending: false }),
+    sb
+      .from("meta_whatsapp_instances")
+      .select("id,user_id,nome,display_phone,ativo,saude_status")
+      .eq("provider", "meta")
+      .eq("instancia_teste_aquecimento", true)
+      .order("criado_em", { ascending: false }),
+  ]);
 
   if (error) return json({ ok: false, error: "Não foi possível carregar as instâncias" }, 500);
+  if (metaTestsError) return json({ ok: false, error: "Não foi possível carregar as instâncias Meta de teste" }, 500);
 
   const instances = data || [];
   const safeRows: Array<Record<string, unknown>> = [];
@@ -623,11 +632,28 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
         ativo: instance.ativo,
         connected: state.connected,
         status: state.status,
+        source: "uazapi",
         is_own: instance.user_id === requesterId,
         can_edit: isOwnerAdmin || instance.user_id === requesterId,
       };
     }));
     safeRows.push(...checked);
+  }
+
+  for (const instance of metaTests || []) {
+    const connected = instance.ativo === true && String(instance.saude_status || "").toUpperCase() === "CONNECTED";
+    safeRows.push({
+      id: instance.id,
+      user_id: instance.user_id,
+      nome: instance.nome,
+      telefone: normalizeInstancePhone(instance.display_phone),
+      ativo: instance.ativo,
+      connected,
+      status: instance.saude_status || "unknown",
+      source: "meta_teste",
+      is_own: instance.user_id === requesterId,
+      can_edit: false,
+    });
   }
 
   return json({ ok: true, instances: safeRows });
