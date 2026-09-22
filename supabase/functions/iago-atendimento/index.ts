@@ -1000,6 +1000,29 @@ async function gerarResposta(args: {
     imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento,
   } = args;
 
+  const textoNormalizado = String(texto || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const perguntaSobreCredoresAtendidos = /\bume\b|\bnovo mundo\b/.test(textoNormalizado)
+    && /\b(tambem|trabalha|trabalham|atende|atendem|representa|representam|debitos|dividas|credor|credores)\b/.test(textoNormalizado);
+  if (perguntaSobreCredoresAtendidos) {
+    return {
+      mensagens: [
+        cpfIdentificado
+          ? 'Sim. Trabalhamos com débitos da UME e da Novo Mundo. Vou considerar o credor confirmado na consulta do seu CPF para seguir com o atendimento.'
+          : 'Sim. Trabalhamos com débitos da UME e da Novo Mundo. Para confirmar a qual deles o seu débito pertence, preciso consultar seu CPF.',
+      ],
+      escalar: false,
+      motivo: '',
+      escolha: '',
+      pagamento_hoje: '',
+      data_pagamento: '',
+    };
+  }
+
 
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
@@ -1131,10 +1154,14 @@ async function gerarResposta(args: {
 
 
     credorFinal
-      ? `CREDOR: esta negociação é referente ao credor "${credorFinal}". Quando o cliente perguntar de qual débito/empresa se trata, informe exatamente "${credorFinal}". Nunca cite outro credor.`
+      ? [
+          `CREDOR DESTA NEGOCIAÇÃO: esta conversa está vinculada a "${credorFinal}". Quando o cliente perguntar especificamente a qual credor pertence ESTE débito, informe exatamente "${credorFinal}".`,
+          'ABRANGÊNCIA DA EMPRESA: nossa equipe trabalha com débitos da UME e da Novo Mundo. Se o cliente perguntar se também atendemos, trabalhamos ou representamos uma dessas empresas, confirme que trabalhamos com AS DUAS: UME e Novo Mundo.',
+          'Nunca diga que atendemos exclusivamente, somente ou apenas um desses dois credores. Não confunda a abrangência da empresa com o credor específico do débito consultado pelo CPF.',
+        ].join('\n')
       : credorAmbiguo
-        ? 'CREDOR: o credor desta conversa ainda não está definido. É PROIBIDO afirmar ou adivinhar o nome do credor/empresa. Se o cliente perguntar de qual débito se trata, peça o CPF para confirmar no sistema (e, se ainda não der para confirmar, escale para um humano).'
-        : '',
+        ? 'CREDOR DESTA NEGOCIAÇÃO: o credor deste débito ainda não está definido. Informe que nossa equipe trabalha com débitos da UME e da Novo Mundo, mas peça o CPF para confirmar a qual deles o débito do cliente pertence (e, se ainda não der para confirmar, escale para um humano).'
+        : 'ABRANGÊNCIA DA EMPRESA: nossa equipe trabalha com débitos da UME e da Novo Mundo. Nunca diga que atendemos exclusivamente, somente ou apenas um desses dois credores. Para confirmar o credor de um débito específico, consulte o CPF.',
 
 
     'Você NUNCA fecha ou registra acordo.',
