@@ -145,6 +145,14 @@ function extrairTelefones(item: Record<string, any>): string[] {
       else if (t && typeof t === "object") push(`${t.ddd ?? ""}${t.numero ?? t.telefone ?? ""}`);
     }
   }
+  if (Array.isArray(item.contato_telefonico)) {
+    for (const t of item.contato_telefonico) {
+      if (typeof t === "string") push(t);
+      else if (t && typeof t === "object") push(`${t.ddd ?? ""}${t.numero ?? t.telefone ?? ""}`);
+    }
+  } else if (item.contato_telefonico && typeof item.contato_telefonico === "object") {
+    push(`${item.contato_telefonico.ddd ?? ""}${item.contato_telefonico.numero ?? item.contato_telefonico.telefone ?? ""}`);
+  }
   push(item.telefone);
   push(item.telefone_1);
   push(item.telefone_2);
@@ -181,7 +189,7 @@ function mapear(item: Record<string, any>): LeadBruto | null {
   const porte = typeof porteObj === "object" ? porteObj?.descricao ?? porteObj?.codigo ?? null : porteObj;
   const meiRaw = item.mei?.optante ?? item.mei ?? item.opcao_pelo_mei ?? item.simei ?? null;
   const endereco = item.endereco ?? {};
-  const emails = item.emails ?? item.contatos?.emails;
+  const emails = item.emails ?? item.contatos?.emails ?? item.contato_email;
   const email = item.email ?? (Array.isArray(emails) ? emails[0]?.email ?? emails[0] : null);
 
   return {
