@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { etiquetarAguardandoHumano, ehPedidoBloqueioContato, suprimirDestinatario } from '../_shared/iago.ts';
 import { resolverAtendenteChamada } from '../_shared/meta-call-atendente.ts';
-import { classificarRespostaAutomatica } from '../_shared/resposta-automatica.ts';
+import { classificarRespostaAquecimento } from '../_shared/resposta-automatica.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -666,7 +666,23 @@ serve(async (req) => {
                     segundos_para_resposta: segs,
                   }).eq('id', aqLog.id);
 
-                  const classificacao = classificarRespostaAutomatica(texto, segs);
+                  const classificacaoResposta = classificarRespostaAquecimento(texto, segs);
+                  const classificacao = classificacaoResposta.automatica;
+                  await supabase.from('meta_aquecimento_destino_log').update({
+                    resposta_classificacao: classificacaoResposta.tipo,
+                    resposta_texto: String(texto || '').slice(0, 500),
+                  }).eq('id', aqLog.id);
+                  if (classificacaoResposta.tipo === 'numero_errado' || classificacaoResposta.tipo === 'optout') {
+                    await supabase.from('meta_destinatario_supressao').upsert({
+                      telefone_sufixo: sufixoResp,
+                      telefone: String(outroLado || '').replace(/\D/g, ''),
+                      motivo: classificacaoResposta.tipo === 'optout' ? 'optout_aquecimento' : 'numero_errado_aquecimento',
+                      instancia_id: inst.id,
+                      contato_nome: nomeContato || null,
+                      origem_texto: String(texto || '').slice(0, 300),
+                      atualizado_em: agora.toISOString(),
+                    }, { onConflict: 'telefone_sufixo' });
+                  }
                   if (classificacao.automatica) {
                     let nomeLead: string | null = nomeContato || null;
                     if (aqLog.lead_id) {
