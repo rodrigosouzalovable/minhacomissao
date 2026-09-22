@@ -1115,12 +1115,20 @@ export type Database = {
           hora_execucao: number
           id: string
           janelas_dias: number[]
+          limite_diario: number
+          meta_bm_id: string | null
           motor_ativo: boolean
+          prospeccao_ativa: boolean
+          prospeccao_pausada_motivo: string | null
+          prospeccao_ultima_execucao: string | null
           somente_celular: boolean
           somente_mei: boolean
+          template_idioma: string
+          template_nome: string | null
           total_coletado: number
           ufs: string[]
           ultima_execucao: string | null
+          ultimo_rr_indice: number
           ultimo_status: string | null
           updated_at: string
         }
@@ -1130,12 +1138,20 @@ export type Database = {
           hora_execucao?: number
           id?: string
           janelas_dias?: number[]
+          limite_diario?: number
+          meta_bm_id?: string | null
           motor_ativo?: boolean
+          prospeccao_ativa?: boolean
+          prospeccao_pausada_motivo?: string | null
+          prospeccao_ultima_execucao?: string | null
           somente_celular?: boolean
           somente_mei?: boolean
+          template_idioma?: string
+          template_nome?: string | null
           total_coletado?: number
           ufs?: string[]
           ultima_execucao?: string | null
+          ultimo_rr_indice?: number
           ultimo_status?: string | null
           updated_at?: string
         }
@@ -1145,16 +1161,32 @@ export type Database = {
           hora_execucao?: number
           id?: string
           janelas_dias?: number[]
+          limite_diario?: number
+          meta_bm_id?: string | null
           motor_ativo?: boolean
+          prospeccao_ativa?: boolean
+          prospeccao_pausada_motivo?: string | null
+          prospeccao_ultima_execucao?: string | null
           somente_celular?: boolean
           somente_mei?: boolean
+          template_idioma?: string
+          template_nome?: string | null
           total_coletado?: number
           ufs?: string[]
           ultima_execucao?: string | null
+          ultimo_rr_indice?: number
           ultimo_status?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "certificado_config_meta_bm_id_fkey"
+            columns: ["meta_bm_id"]
+            isOneToOne: false
+            referencedRelation: "meta_business_managers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       certificado_leads: {
         Row: {
@@ -1178,6 +1210,9 @@ export type Database = {
           telefones: Json
           uf: string | null
           updated_at: string
+          whatsapp_instancia_id: string | null
+          whatsapp_status: string
+          whatsapp_verificado_em: string | null
         }
         Insert: {
           cnae?: string | null
@@ -1200,6 +1235,9 @@ export type Database = {
           telefones?: Json
           uf?: string | null
           updated_at?: string
+          whatsapp_instancia_id?: string | null
+          whatsapp_status?: string
+          whatsapp_verificado_em?: string | null
         }
         Update: {
           cnae?: string | null
@@ -1222,8 +1260,118 @@ export type Database = {
           telefones?: Json
           uf?: string | null
           updated_at?: string
+          whatsapp_instancia_id?: string | null
+          whatsapp_status?: string
+          whatsapp_verificado_em?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "certificado_leads_whatsapp_instancia_id_fkey"
+            columns: ["whatsapp_instancia_id"]
+            isOneToOne: false
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      certificado_prospeccao_envios: {
+        Row: {
+          bm_id: string
+          enviado_em: string | null
+          erro: string | null
+          id: string
+          instancia_id: string | null
+          lead_id: string
+          reservado_em: string
+          status: string
+          template_idioma: string
+          template_nome: string
+          updated_at: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          bm_id: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          instancia_id?: string | null
+          lead_id: string
+          reservado_em?: string
+          status?: string
+          template_idioma?: string
+          template_nome: string
+          updated_at?: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          bm_id?: string
+          enviado_em?: string | null
+          erro?: string | null
+          id?: string
+          instancia_id?: string | null
+          lead_id?: string
+          reservado_em?: string
+          status?: string
+          template_idioma?: string
+          template_nome?: string
+          updated_at?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificado_prospeccao_envios_bm_id_fkey"
+            columns: ["bm_id"]
+            isOneToOne: false
+            referencedRelation: "meta_business_managers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificado_prospeccao_envios_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificado_prospeccao_envios_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "certificado_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      certificado_uazapi_verificadoras: {
+        Row: {
+          ativa: boolean
+          created_at: string
+          instancia_id: string
+          selecionada_por: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativa?: boolean
+          created_at?: string
+          instancia_id: string
+          selecionada_por?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativa?: boolean
+          created_at?: string
+          instancia_id?: string
+          selecionada_por?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificado_uazapi_verificadoras_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: true
+            referencedRelation: "user_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chat_ia_mensagens: {
         Row: {
@@ -10843,6 +10991,10 @@ export type Database = {
       cpf_has_acordo: { Args: { p_cpf: string }; Returns: boolean }
       cpf_normalize: { Args: { cpf_input: string }; Returns: string }
       cpf_ultimo_acordo_quebrado: { Args: { p_cpf: string }; Returns: boolean }
+      definir_certificado_uazapi_verificadora: {
+        Args: { p_ativa: boolean; p_instancia_id: string }
+        Returns: undefined
+      }
       definir_instancia_notificacao_uazapi: {
         Args: { p_ativa: boolean; p_instancia_id: string }
         Returns: boolean
