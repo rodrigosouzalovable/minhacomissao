@@ -82,6 +82,9 @@ Deno.serve(async (req) => {
     if (action === "list-instances-status") {
       return await listInstancesStatus(requester.id, access.isAdmin && requester.id === OWNER_ADMIN_ID);
     }
+    if (action === "list-meta-test-instances") {
+      return await listMetaTestInstances(requester.id);
+    }
 
     if (userId && userId !== requester.id) return json({ error: "Acesso negado para outro usuário" }, 403);
     const authenticatedUserId = requester.id;
@@ -123,6 +126,13 @@ function normalizeInstancePhone(value: unknown): string | null {
   const digits = String(value ?? "").replace(/\D/g, "");
   if (digits.length < 10 || digits.length > 15) return null;
   return digits;
+}
+
+function getMetaTestPhone(displayPhone: unknown, name: unknown): string | null {
+  const saved = normalizeInstancePhone(displayPhone);
+  if (saved) return saved;
+  const suffix = String(name || "").match(/(\+?\d[\d\s().-]{9,}\d)\s*$/)?.[1];
+  return normalizeInstancePhone(suffix);
 }
 
 async function persistInstancePhone(instanceId: string, value: unknown): Promise<string | null> {
@@ -599,13 +609,22 @@ async function probeInstanceStatus(instance: any) {
 
 async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
   const sb = getSupabaseAdmin();
-  const { data, error } = await sb
-    .from("user_whatsapp_instances")
-    .select("id,user_id,nome,telefone,server_url,instance_token,ativo")
-    .order("ordem", { ascending: true })
-    .order("criado_em", { ascending: false });
+  const [{ data, error }, { data: metaTests, error: metaTestsError }] = await Promise.all([
+    sb
+      .from("user_whatsapp_instances")
+      .select("id,user_id,nome,telefone,server_url,instance_token,ativo")
+      .order("ordem", { ascending: true })
+      .order("criado_em", { ascending: false }),
+    sb
+      .from("meta_whatsapp_instances")
+      .select("id,user_id,nome,display_phone,ativo,saude_status")
+      .eq("provider", "meta")
+      .eq("instancia_teste_aquecimento", true)
+      .order("criado_em", { ascending: false }),
+  ]);
 
   if (error) return json({ ok: false, error: "Não foi possível carregar as instâncias" }, 500);
+  if (metaTestsError) return json({ ok: false, error: "Não foi possível carregar as instâncias Meta de teste" }, 500);
 
   const instances = data || [];
   const safeRows: Array<Record<string, unknown>> = [];
@@ -623,6 +642,7 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
         ativo: instance.ativo,
         connected: state.connected,
         status: state.status,
+        source: "uazapi",
         is_own: instance.user_id === requesterId,
         can_edit: isOwnerAdmin || instance.user_id === requesterId,
       };
@@ -630,7 +650,49 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
     safeRows.push(...checked);
   }
 
+  for (const instance of metaTests || []) {
+    const connected = instance.ativo === true && String(instance.saude_status || "").toUpperCase() === "CONNECTED";
+    safeRows.push({
+      id: instance.id,
+      user_id: instance.user_id,
+      nome: instance.nome,
+      telefone: getMetaTestPhone(instance.display_phone, instance.nome),
+      ativo: instance.ativo,
+      connected,
+      status: instance.saude_status || "unknown",
+      source: "meta_teste",
+      is_own: instance.user_id === requesterId,
+      can_edit: false,
+    });
+  }
+
   return json({ ok: true, instances: safeRows });
+}
+
+async function listMetaTestInstances(requesterId: string) {
+  const { data, error } = await getSupabaseAdmin()
+    .from("meta_whatsapp_instances")
+    .select("id,user_id,nome,display_phone,ativo,saude_status")
+    .eq("provider", "meta")
+    .eq("instancia_teste_aquecimento", true)
+    .order("criado_em", { ascending: false });
+
+  if (error) return json({ ok: false, error: "Não foi possível carregar as instâncias Meta de teste" }, 500);
+
+  const instances = (data || []).map((instance) => ({
+    id: instance.id,
+    user_id: instance.user_id,
+    nome: instance.nome,
+    telefone: getMetaTestPhone(instance.display_phone, instance.nome),
+    ativo: instance.ativo,
+    connected: instance.ativo === true && String(instance.saude_status || "").toUpperCase() === "CONNECTED",
+    status: instance.saude_status || "unknown",
+    source: "meta_teste",
+    is_own: instance.user_id === requesterId,
+    can_edit: false,
+  }));
+
+  return json({ ok: true, instances });
 }
 
 // ── SETUP WEBHOOK ──

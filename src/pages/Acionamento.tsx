@@ -189,6 +189,7 @@ interface WhatsAppInstanceRow {
   proxy_enabled?: boolean;
   proxy_host?: string | null;
   shared_read_only?: boolean;
+  source?: 'uazapi' | 'meta_teste';
 }
 
 // Formata dígitos em (DD) 9NNNN-NNNN
@@ -202,6 +203,12 @@ function formatarTelefoneBR(v?: string | null): string {
   const meio = resto.length > 8 ? resto.slice(0, 5) : resto.slice(0, 4);
   const fim = resto.length > 8 ? resto.slice(5) : resto.slice(4);
   return `(${ddd}) ${meio}-${fim}`;
+}
+
+function formatarTelefoneInstancia(v?: string | null, source?: 'uazapi' | 'meta_teste'): string {
+  const digits = String(v || '').replace(/\D/g, '');
+  if (source === 'meta_teste' && !digits.startsWith('55')) return digits ? `+${digits}` : '—';
+  return formatarTelefoneBR(v);
 }
 
 
@@ -439,15 +446,40 @@ export default function Acionamento() {
   useEffect(() => {
     if (!user) return;
     const fetchInstances = async () => {
-      const { data } = await supabase
-        .from('user_whatsapp_instances' as any)
-        .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
-        .match(isOwnerAdmin ? {} : { user_id: user.id })
-        .order('ordem' as any, { ascending: true })
-        .order('criado_em', { ascending: false });
-      if (data) {
-        setInstances(data as any);
+      const [uazapiResult, metaResult] = await Promise.all([
+        supabase
+          .from('user_whatsapp_instances' as any)
+          .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
+          .match(isOwnerAdmin ? {} : { user_id: user.id })
+          .order('ordem' as any, { ascending: true })
+          .order('criado_em', { ascending: false }),
+        supabase.functions.invoke('whatsapp-qr', { body: { action: 'list-meta-test-instances' } }),
+      ]);
+      const uazapiRows = ((uazapiResult.data || []) as unknown as WhatsAppInstanceRow[]).map((row) => ({ ...row, source: 'uazapi' as const }));
+      const metaRows = metaResult.data?.ok
+        ? ((metaResult.data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean }>).map((row) => ({
+            id: row.id,
+            user_id: row.user_id,
+            nome: row.nome || 'Sem nome',
+            telefone: row.telefone,
+            server_url: '',
+            instance_token: '',
+            ativo: row.ativo,
+            apenas_lembretes: false,
+            robo: false,
+            ia_responde: false,
+            shared_read_only: true,
+            source: 'meta_teste' as const,
+          }))
+        : [];
+      if (metaResult.data?.ok) {
+        const metaStatus: Record<string, 'connected' | 'disconnected'> = {};
+        (metaResult.data.instances || []).forEach((row: { id: string; connected: boolean }) => {
+          metaStatus[row.id] = row.connected ? 'connected' : 'disconnected';
+        });
+        setConnectionStatus((current) => ({ ...current, ...metaStatus }));
       }
+      setInstances([...uazapiRows, ...metaRows]);
     };
     fetchInstances();
   }, [user, isOwnerAdmin]);
@@ -547,17 +579,17 @@ export default function Acionamento() {
       });
       if (error || !data?.ok) throw error || new Error(data?.error || 'Falha ao verificar conexões');
 
-      const checked = (data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean; is_own: boolean; can_edit: boolean }>;
+      const checked = (data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean; is_own: boolean; can_edit: boolean; source?: 'uazapi' | 'meta_teste' }>;
       const nextStatus: Record<string, 'connected' | 'disconnected'> = {};
       checked.forEach((row) => { nextStatus[row.id] = row.connected ? 'connected' : 'disconnected'; });
       setConnectionStatus(nextStatus);
       setInstances((current) => {
         const localById = new Map(current.map((instance) => [instance.id, instance]));
         return checked
-          .filter((row) => row.connected || row.is_own || isOwnerAdmin)
+          .filter((row) => row.source === 'meta_teste' || row.connected || row.is_own || isOwnerAdmin)
           .map((row) => {
             const local = localById.get(row.id);
-            if (local) return { ...local, telefone: row.telefone || local.telefone };
+            if (local) return { ...local, telefone: row.telefone || local.telefone, source: row.source || local.source };
             return {
               id: row.id,
               user_id: row.user_id,
@@ -570,11 +602,12 @@ export default function Acionamento() {
               robo: false,
               ia_responde: false,
               shared_read_only: !row.can_edit,
+              source: row.source || 'uazapi',
             };
           });
       });
       toast.success(`${checked.filter((row) => row.connected).length} instância(s) conectada(s) encontrada(s)`);
-      return checked.map((row) => ({ id: row.id, connected: row.connected, telefone: row.telefone }));
+      return checked.map((row) => ({ id: row.id, connected: row.connected, telefone: row.telefone, source: row.source }));
     } catch (error: any) {
       toast.error(error?.message || 'Não foi possível verificar as conexões');
       return [];
@@ -585,7 +618,7 @@ export default function Acionamento() {
 
 
   const disconnectedInstances = useMemo(() => 
-    instances.filter(i => i.ativo && connectionStatus[i.id] === 'disconnected'),
+    instances.filter(i => i.source !== 'meta_teste' && i.ativo && connectionStatus[i.id] === 'disconnected'),
     [instances, connectionStatus]
   );
 
@@ -2052,9 +2085,9 @@ export default function Acionamento() {
   const handleExportarNumeros = async () => {
     if (!user) return;
     let statusMap: Record<string, boolean> = {};
-    let exportRows: Array<{ id: string; telefone?: string | null }> = instances;
-    const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
-    if (!jaTemAlgumStatus) {
+    let exportRows: Array<{ id: string; telefone?: string | null; source?: 'uazapi' | 'meta_teste' }> = instances;
+    const precisaVerificarStatus = instances.some(i => !connectionStatus[i.id]);
+    if (precisaVerificarStatus) {
       toast.info('Verificando conexões antes de exportar...');
       const results = await checkInstanceConnections(instances);
       results.forEach(r => { statusMap[r.id] = r.connected; });
@@ -2470,8 +2503,9 @@ export default function Acionamento() {
                       {instancesFiltradas.map((inst) => {
 
                         const status = connectionStatus[inst.id];
+                        const isMetaTest = inst.source === 'meta_teste';
                         return (
-                          <SortableInstanceCard key={inst.id} id={inst.id} canDrag={isOwnerAdmin}>
+                          <SortableInstanceCard key={inst.id} id={inst.id} canDrag={isOwnerAdmin && !isMetaTest}>
                             <div className={`flex items-center gap-3 rounded-md border px-3 py-2 ${inst.ativo ? '' : 'opacity-50'}`}>
                               <div className="flex items-center gap-2 min-w-0 flex-1">
                                 {inst.whatsapp_profile_photo_url ? (
@@ -2489,6 +2523,11 @@ export default function Acionamento() {
                                         {inst.ativo ? 'Ativo' : 'Inativo'}
                                       </Badge>
                                     )}
+                                    {isMetaTest && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-primary text-primary">
+                                        Teste Meta
+                                      </Badge>
+                                    )}
                                     {status === 'connected' && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
                                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
@@ -2504,22 +2543,22 @@ export default function Acionamento() {
                                     {status === 'checking' && (
                                       <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                     )}
-                                    {isOwnerAdmin && inst.apenas_lembretes && (
+                                    {isOwnerAdmin && !isMetaTest && inst.apenas_lembretes && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-amber-500 text-amber-600">
                                         Só Lembretes
                                       </Badge>
                                     )}
-                                    {isOwnerAdmin && inst.robo && (
+                                    {isOwnerAdmin && !isMetaTest && inst.robo && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-blue-500 text-blue-600">
                                         Robô
                                       </Badge>
                                     )}
-                                    {isOwnerAdmin && inst.ia_responde && (
+                                    {isOwnerAdmin && !isMetaTest && inst.ia_responde && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-green-500 text-green-600">
                                         IA Responde
                                       </Badge>
                                     )}
-                                    {isOwnerAdmin && inst.proxy_enabled && (
+                                    {isOwnerAdmin && !isMetaTest && inst.proxy_enabled && (
                                       <Badge
                                         variant="outline"
                                         className="text-[10px] px-1.5 py-0 shrink-0 border-purple-500 text-purple-600 gap-1"
@@ -2529,13 +2568,13 @@ export default function Acionamento() {
                                         Proxy
                                       </Badge>
                                     )}
-                                    {isOwnerAdmin && notificationInstanceIds.has(inst.id) && (
+                                    {isOwnerAdmin && !isMetaTest && notificationInstanceIds.has(inst.id) && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-primary text-primary gap-1">
                                         <BellRing className="h-3 w-3" />
                                         Notificações
                                       </Badge>
                                     )}
-                                    {isOwnerAdmin && certificateVerifierIds.has(inst.id) && (
+                                    {isOwnerAdmin && !isMetaTest && certificateVerifierIds.has(inst.id) && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-secondary text-secondary gap-1">
                                         <Search className="h-3 w-3" />Verificadora
                                       </Badge>
@@ -2544,21 +2583,21 @@ export default function Acionamento() {
                                   <div className="flex items-center gap-2">
                                     {inst.telefone ? (
                                       <span className="text-[11px] font-medium text-foreground shrink-0">
-                                        {formatarTelefoneBR(inst.telefone)}
+                                        {formatarTelefoneInstancia(inst.telefone, inst.source)}
                                       </span>
                                     ) : (
                                       <span className="text-[11px] text-muted-foreground/70 italic shrink-0">
                                         Número não cadastrado
                                       </span>
                                     )}
-                                    {isOwnerAdmin && <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>}
+                                    {isOwnerAdmin && !isMetaTest && <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>}
                                   </div>
 
                                 </div>
                               </div>
                               <div className="flex flex-col gap-1 shrink-0">
                                 <div className="flex items-center gap-1">
-                                  {isOwnerAdmin && (
+                                  {isOwnerAdmin && !isMetaTest && (
                                     <>
                                       <Switch
                                         checked={inst.ativo}
@@ -2578,7 +2617,7 @@ export default function Acionamento() {
                                       </Button>
                                     </>
                                   )}
-                                  {(isOwnerAdmin || inst.user_id === user?.id) && (
+                                  {!isMetaTest && (isOwnerAdmin || inst.user_id === user?.id) && (
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -2600,7 +2639,7 @@ export default function Acionamento() {
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
                                   )}
-                                  {isOwnerAdmin && (
+                                  {isOwnerAdmin && !isMetaTest && (
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -2612,7 +2651,7 @@ export default function Acionamento() {
                                     </Button>
                                   )}
                                 </div>
-                                {isOwnerAdmin && inst.ativo && (
+                                {isOwnerAdmin && !isMetaTest && inst.ativo && (
                                   <div className="flex flex-col gap-1 items-end">
                                     <div className="flex items-center gap-1.5">
                                       <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`lembretes-only-${inst.id}`}>
@@ -2649,7 +2688,7 @@ export default function Acionamento() {
                                     </div>
                                   </div>
                                 )}
-                                {isOwnerAdmin && (
+                                {isOwnerAdmin && !isMetaTest && (
                                   <div className="flex items-center gap-1.5 self-end">
                                     <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`notificacoes-${inst.id}`}>
                                       Notificações pessoais
@@ -2666,7 +2705,7 @@ export default function Acionamento() {
                                     )}
                                   </div>
                                 )}
-                                {isOwnerAdmin && (
+                                {isOwnerAdmin && !isMetaTest && (
                                   <div className="flex items-center gap-1.5 self-end">
                                     <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`certificado-verifica-${inst.id}`}>Verificar Certificado</Label>
                                     {savingCertificateVerifierId === inst.id ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : (
