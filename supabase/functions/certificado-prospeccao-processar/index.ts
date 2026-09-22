@@ -45,15 +45,15 @@ Deno.serve(async (req) => {
     let resumoVerificacao: Record<string, unknown> | null = null;
     if (completo && cfg.motor_ativo) {
       const inicioProcessamento = Date.now();
-      const LIMITE_COLETA_MS = 65_000;
+      const LIMITE_COLETA_MS = 45_000;
       const janelas = [...new Set((cfg.janelas_dias ?? []).map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n <= 30).sort((a, b) => a - b);
       const resultados = [];
       for (const janela of janelas) {
         if (Date.now() - inicioProcessamento >= LIMITE_COLETA_MS) break;
         const resultado = await coletarJanela(service, cfg, janela, true, {
-          maxPaginas: 2,
-          maxTentativas: 2,
-          timeoutMs: 20_000,
+          maxPaginas: 1,
+          maxTentativas: 1,
+          timeoutMs: 15_000,
         });
         resultados.push(resultado);
         if (resultado.erro_temporario) break;
