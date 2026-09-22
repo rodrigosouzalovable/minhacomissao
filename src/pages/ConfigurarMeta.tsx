@@ -79,6 +79,9 @@ type Instancia = {
   instancia_teste_aquecimento?: boolean | null;
   teste_aquecimento_validado_em?: string | null;
   teste_aquecimento_ultimo_erro?: string | null;
+  recuperacao_ativa?: boolean | null;
+  pool_fora_manual?: boolean | null;
+  estado_pool?: string | null;
 };
 
 

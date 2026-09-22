@@ -499,6 +499,19 @@ Deno.serve(async (req) => {
             String(envio.erro || '').includes('131026')) {
           destinosUazapiInvalidos.add(destinoInstanciaId);
         }
+        if (!envio.ok && fonte === 'meta_teste' && destinoInstanciaId) {
+          destinosUazapiInvalidos.add(destinoInstanciaId);
+          await supabase.from('meta_whatsapp_instances').update({
+            teste_aquecimento_ultimo_erro: String(envio.erro || 'A Meta recusou o destinatário de teste').slice(0, 500),
+            teste_aquecimento_validado_em: new Date().toISOString(),
+          }).eq('id', destinoInstanciaId).eq('instancia_teste_aquecimento', true);
+        }
+        if (envio.ok && fonte === 'meta_teste' && destinoInstanciaId) {
+          await supabase.from('meta_whatsapp_instances').update({
+            teste_aquecimento_ultimo_erro: null,
+            teste_aquecimento_validado_em: new Date().toISOString(),
+          }).eq('id', destinoInstanciaId).eq('instancia_teste_aquecimento', true);
+        }
 
         resultados.push({
           instancia: inst.nome || inst.display_phone,

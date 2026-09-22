@@ -90,8 +90,8 @@ Deno.serve(async (req) => {
     if (disponibilidade?.ativo === false) return json({ error: "Template inabilitado no Certificado Digital" }, 409);
 
     const { data: instancias } = await service.from("meta_whatsapp_instances")
-      .select("id,nome,user_id,display_phone,saude_status,saude_quality,saude_ban_info,estado_pool,pool_fora_manual,pausa_automatica_ate,ativo")
-      .eq("meta_bm_id", cfg.meta_bm_id).eq("provider", "meta").eq("ativo", true);
+      .select("id,nome,user_id,display_phone,saude_status,saude_quality,saude_ban_info,estado_pool,pool_fora_manual,pausa_automatica_ate,ativo,instancia_teste_aquecimento")
+      .eq("meta_bm_id", cfg.meta_bm_id).eq("provider", "meta").eq("ativo", true).eq("instancia_teste_aquecimento", false);
     const agora = new Date();
     const aptas = (instancias ?? []).filter((i: any) => i.estado_pool === "ativo" && i.pool_fora_manual !== true && String(i.saude_status ?? "").toUpperCase() === "CONNECTED" && !i.saude_ban_info && (!i.pausa_automatica_ate || new Date(i.pausa_automatica_ate) <= agora));
     const { data: templates } = aptas.length ? await service.from("meta_whatsapp_templates").select("id,instancia_id,nome_template,idioma,status").in("instancia_id", aptas.map((i: any) => i.id)).eq("nome_template", cfg.template_nome).eq("idioma", cfg.template_idioma).eq("status", "approved") : { data: [] };

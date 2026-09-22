@@ -10,6 +10,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 const FOLDER_CERTIFICADO = '9267b296-24e6-425d-9f0e-0e4114c782d9';
+const FOLDER_AQUECIMENTO = '4f7a52c0-9c86-4b80-8867-4ade7a6df441';
 
 // Mapeia status da Meta -> status interno do app
 function mapStatusMeta(s: string): string {
@@ -374,7 +375,7 @@ serve(async (req) => {
         if (!phoneNumberId) continue;
 
         const { data: inst } = await supabase
-          .from('meta_whatsapp_instances').select('id, user_id, display_phone, access_token, nome, meta_verified_name, phone_number_id, meta_bm_id, business_id')
+          .from('meta_whatsapp_instances').select('id, user_id, display_phone, access_token, nome, meta_verified_name, phone_number_id, meta_bm_id, business_id, instancia_teste_aquecimento, folder_padrao_id')
           .eq('phone_number_id', phoneNumberId).maybeSingle();
         if (!inst) continue;
 
@@ -736,6 +737,7 @@ serve(async (req) => {
               ultima_mensagem_em: tsMsg,
               atualizado_em: new Date().toISOString(),
             };
+            if (inst.instancia_teste_aquecimento === true) upd.folder_id = FOLDER_AQUECIMENTO;
             // Correlaciona BSUID/username/telefone quando chega dado novo
             if (msgBsuid && !existenteFinal.bsuid) upd.bsuid = msgBsuid;
             if (usernameContato && !existenteFinal.whatsapp_username) upd.whatsapp_username = usernameContato;
@@ -768,8 +770,30 @@ serve(async (req) => {
               ultima_msg_entrada_em: isEcho ? null : tsMsg,
               ultima_interacao_em: isEcho ? null : tsMsg,
               nao_lido: isEcho ? 0 : 1,
+              folder_id: inst.instancia_teste_aquecimento === true ? FOLDER_AQUECIMENTO : (inst.folder_padrao_id || null),
             } as any).select('id').maybeSingle();
             contatoIdFinal = (inseridoContato as any)?.id ?? null;
+          }
+
+          // O sandbox oficial marcado como destino pertence sempre à caixa
+          // AQUECIMENTO e é atendido exclusivamente pelo IAGO.
+          if (!isEcho && contatoIdFinal && inst.instancia_teste_aquecimento === true) {
+            await supabase.from('meta_whatsapp_contatos')
+              .update({ folder_id: FOLDER_AQUECIMENTO, origem_aquecimento: 'meta_teste' })
+              .eq('id', contatoIdFinal);
+            const { data: etiquetaIago } = await supabase
+              .from('meta_whatsapp_etiquetas')
+              .select('id')
+              .ilike('nome', 'Atendente: Iago%')
+              .limit(1)
+              .maybeSingle();
+            if (etiquetaIago?.id) {
+              await supabase.from('meta_whatsapp_contato_etiquetas').upsert({
+                contato_id: contatoIdFinal,
+                etiqueta_id: etiquetaIago.id,
+                origem: 'meta_teste_aquecimento',
+              }, { onConflict: 'contato_id,etiqueta_id' });
+            }
           }
 
           if (!isEcho && !msgError && sufixo.length === 8) {
