@@ -1,6 +1,7 @@
-// Cliente da API da Casa dos Dados (v2 public search) para o módulo Certificado Digital.
+// Cliente da API oficial v5 da Casa dos Dados para o módulo Certificado Digital.
 
-const BASE = "https://api.casadosdados.com.br/v2/public/cnpj/search";
+const BASE = "https://api.casadosdados.com.br/v5/cnpj/pesquisa?tipo_resultado=completo";
+const SALDO = "https://api.casadosdados.com.br/v5/saldo";
 const MAX_TENTATIVAS = 3;
 const TIMEOUT_MS = 30_000;
 
@@ -132,6 +133,18 @@ function extrairTelefones(item: Record<string, any>): string[] {
       else if (t && typeof t === "object") push(`${t.ddd ?? ""}${t.numero ?? t.telefone ?? ""}`);
     }
   }
+  if (Array.isArray(item.contatos?.telefones)) {
+    for (const t of item.contatos.telefones) {
+      if (typeof t === "string") push(t);
+      else if (t && typeof t === "object") push(`${t.ddd ?? ""}${t.numero ?? t.telefone ?? ""}`);
+    }
+  }
+  if (Array.isArray(item.telefones_comerciais)) {
+    for (const t of item.telefones_comerciais) {
+      if (typeof t === "string") push(t);
+      else if (t && typeof t === "object") push(`${t.ddd ?? ""}${t.numero ?? t.telefone ?? ""}`);
+    }
+  }
   push(item.telefone);
   push(item.telefone_1);
   push(item.telefone_2);
@@ -150,7 +163,7 @@ function mapear(item: Record<string, any>): LeadBruto | null {
   const cnpj = apenasDigitos(item.cnpj ?? item.cnpj_raiz ?? item.numero_cnpj);
   if (cnpj.length !== 14) return null;
 
-  const cnaeObj = item.cnae_fiscal ?? item.atividade_principal ?? item.cnae_principal;
+  const cnaeObj = item.cnae_fiscal ?? item.atividade_principal ?? item.cnae_principal ?? item.codigo_atividade_principal;
   let cnae: string | null = null;
   let cnaeDesc: string | null = null;
   if (typeof cnaeObj === "string" || typeof cnaeObj === "number") {
@@ -164,23 +177,70 @@ function mapear(item: Record<string, any>): LeadBruto | null {
   }
   cnaeDesc = cnaeDesc ?? item.cnae_fiscal_descricao ?? item.atividade_principal_descricao ?? null;
 
-  const porte = item.porte ?? item.porte_empresa ?? null;
-  const meiRaw = item.mei ?? item.opcao_pelo_mei ?? item.simei ?? null;
+  const porteObj = item.porte ?? item.porte_empresa ?? null;
+  const porte = typeof porteObj === "object" ? porteObj?.descricao ?? porteObj?.codigo ?? null : porteObj;
+  const meiRaw = item.mei?.optante ?? item.mei ?? item.opcao_pelo_mei ?? item.simei ?? null;
+  const endereco = item.endereco ?? {};
+  const emails = item.emails ?? item.contatos?.emails;
+  const email = item.email ?? (Array.isArray(emails) ? emails[0]?.email ?? emails[0] : null);
 
   return {
     cnpj,
     razao_social: item.razao_social ?? item.nome ?? null,
     nome_fantasia: item.nome_fantasia ?? item.fantasia ?? null,
     telefones: extrairTelefones(item),
-    email: (item.email ?? null) || null,
+    email: email ? String(email) : null,
     cnae,
     cnae_descricao: cnaeDesc,
-    uf: item.uf ?? item.estado ?? null,
-    municipio: item.municipio ?? item.cidade ?? null,
+    uf: item.uf ?? item.estado ?? endereco.uf ?? null,
+    municipio: item.municipio ?? item.cidade ?? endereco.municipio ?? null,
     porte: porte ? String(porte) : null,
     mei: typeof meiRaw === "boolean" ? meiRaw : meiRaw === "SIM" ? true : meiRaw === "NAO" ? false : null,
     data_abertura: item.data_abertura ?? item.data_inicio_atividade ?? null,
   };
+}
+
+function mensagemErro(status: number) {
+  if (status === 401) return "A chave da Casa dos Dados é inválida ou foi revogada. Cadastre uma chave válida.";
+  if (status === 403) return "A chave foi reconhecida, mas não possui saldo ou acesso à pesquisa avançada da Casa dos Dados.";
+  if (status === 400 || status === 422) return "A Casa dos Dados rejeitou os filtros da consulta. Revise a configuração da coleta.";
+  if (status === 408) return "A Casa dos Dados demorou para responder. Tente novamente em alguns minutos.";
+  if (status === 429) return "O limite de consultas da Casa dos Dados foi atingido. Aguarde a liberação do acesso.";
+  return "A Casa dos Dados está temporariamente indisponível. Tente novamente em alguns minutos.";
+}
+
+async function requisitar(url: string, apiKey: string, init: RequestInit = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      ...init,
+      headers: { "Content-Type": "application/json", "api-key": apiKey, ...(init.headers ?? {}) },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** Confirma autenticação e informa o saldo sem consumir uma pesquisa avançada. */
+export async function validarChaveCasaDosDados(apiKey: string): Promise<{ saldoTotal: number | null }> {
+  try {
+    const resp = await requisitar(SALDO, apiKey, { method: "GET" });
+    if (!resp.ok) {
+      const temporario = resp.status === 408 || resp.status === 429 || resp.status >= 500;
+      throw new CasaDosDadosError(mensagemErro(resp.status), resp.status, temporario);
+    }
+    const payload = await resp.json().catch(() => null);
+    if (!payload || typeof payload !== "object") {
+      throw new CasaDosDadosError("A Casa dos Dados retornou uma resposta inválida ao validar a chave.", null, true);
+    }
+    const saldo = Number((payload as Record<string, unknown>).saldo_total);
+    return { saldoTotal: Number.isFinite(saldo) ? saldo : null };
+  } catch (error) {
+    if (error instanceof CasaDosDadosError) throw error;
+    throw new CasaDosDadosError("Não foi possível validar a chave na Casa dos Dados.", null, true);
+  }
 }
 
 export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: string): Promise<{
@@ -192,33 +252,21 @@ export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: st
   if (!apiKey) throw new Error("Chave API da Casa dos Dados não configurada");
 
   const body = {
-    query: {
-      termo: [] as string[],
-      atividade_principal: filtro.cnaes,
-      natureza_juridica: [] as string[],
-      uf: filtro.ufs,
-      municipio: [] as string[],
-      bairro: [] as string[],
-      situacao_cadastral: "ATIVA",
-      cep: [] as string[],
-      ddd: [] as string[],
-    },
-    range_query: {
-      data_abertura: { lte: filtro.dataFim, gte: filtro.dataInicio },
-    },
-    extras: {
-      somente_mei: !!filtro.somenteMei,
-      excluir_mei: false,
-      com_email: false,
-      incluir_atividade_secundaria: false,
-      com_contato_telefonico: true,
+    codigo_atividade_principal: filtro.cnaes,
+    incluir_atividade_secundaria: false,
+    situacao_cadastral: ["ATIVA"],
+    uf: filtro.ufs.map((uf) => uf.toLowerCase()),
+    data_abertura: { inicio: filtro.dataInicio, fim: filtro.dataFim },
+    ...(filtro.somenteMei ? { mei: { optante: true, excluir_optante: false } } : {}),
+    mais_filtros: {
+      com_telefone: true,
       somente_fixo: false,
       somente_celular: !!filtro.somenteCelular,
       somente_matriz: false,
       somente_filial: false,
     },
-    page: filtro.pagina ?? 1,
-    limit: Math.min(filtro.limite ?? 100, 1000),
+    pagina: filtro.pagina ?? 1,
+    limite: Math.min(filtro.limite ?? 100, 1000),
   };
 
   let texto = "";
@@ -228,12 +276,8 @@ export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: st
     try {
       const resp = await fetch(BASE, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "api-key": apiKey,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
+        headers: { "Content-Type": "application/json", "api-key": apiKey },
+        body: JSON.stringify(body), signal: controller.signal,
       });
       texto = await resp.text();
       if (resp.ok) break;
@@ -241,9 +285,7 @@ export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: st
       const temporario = resp.status === 408 || resp.status === 429 || resp.status >= 500;
       if (!temporario || tentativa === MAX_TENTATIVAS) {
         throw new CasaDosDadosError(
-          temporario
-            ? "A Casa dos Dados está temporariamente indisponível. Tente novamente em alguns minutos."
-            : `A Casa dos Dados recusou a consulta (HTTP ${resp.status}). Verifique a configuração da integração.`,
+          mensagemErro(resp.status),
           resp.status,
           temporario,
         );
@@ -270,8 +312,8 @@ export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: st
     throw new CasaDosDadosError("A Casa dos Dados retornou uma resposta inválida.", null, true);
   }
 
-  const lista: any[] = json?.data?.cnpj ?? json?.data ?? json?.cnpj ?? json?.result ?? [];
-  const total = Number(json?.data?.count ?? json?.count ?? json?.total ?? lista.length) || lista.length;
+  const lista: any[] = json?.cnpjs ?? json?.data?.cnpjs ?? json?.data?.cnpj ?? json?.data ?? json?.cnpj ?? json?.result ?? [];
+  const total = Number(json?.total ?? json?.data?.total ?? json?.data?.count ?? json?.count ?? lista.length) || lista.length;
 
   const leads = (Array.isArray(lista) ? lista : [])
     .map(mapear)

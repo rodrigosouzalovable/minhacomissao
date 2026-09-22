@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { buscarCasaDosDados, cifrarChaveCasaDosDados } from "../_shared/casa-dos-dados.ts";
+import { CasaDosDadosError, cifrarChaveCasaDosDados, validarChaveCasaDosDados } from "../_shared/casa-dos-dados.ts";
 
 const headers = { ...corsHeaders, "Content-Type": "application/json" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
@@ -55,15 +55,12 @@ Deno.serve(async (req) => {
       return json({ error: "Informe uma chave válida, sem espaços, entre 20 e 200 caracteres" }, 400);
     }
 
+    let validacao: { saldoTotal: number | null };
     try {
-      await buscarCasaDosDados({
-        ufs: ["GO"], cnaes: [], dataInicio: "1900-01-01", dataFim: "1900-01-01",
-        somenteMei: false, somenteCelular: false, pagina: 1, limite: 1,
-      }, chave);
+      validacao = await validarChaveCasaDosDados(chave);
     } catch (error) {
-      const status = error instanceof Error && "status" in error ? Number((error as { status?: number }).status) : null;
-      if (status === 401 || status === 403) return json({ error: "A Casa dos Dados recusou esta chave. Confira e tente novamente." }, 400);
-      if (status !== 408 && status !== 429 && (!status || status < 500)) throw error;
+      const status = error instanceof CasaDosDadosError && error.status && error.status < 500 ? 400 : 503;
+      return json({ error: error instanceof Error ? error.message : "Não foi possível validar a chave" }, status);
     }
 
     const protegida = await cifrarChaveCasaDosDados(chave);
@@ -76,7 +73,7 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     });
     if (error) throw error;
-    return json({ success: true, sufixo: chave.slice(-4) });
+    return json({ success: true, sufixo: chave.slice(-4), saldo_total: validacao.saldoTotal });
   } catch (error) {
     console.error("certificado-casa-dados-chave", error);
     return json({ error: error instanceof Error ? error.message : "Falha ao configurar a chave" }, 500);
