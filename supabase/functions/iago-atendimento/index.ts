@@ -1017,6 +1017,29 @@ async function gerarResposta(args: {
     imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento,
   } = args;
 
+  const textoNormalizado = String(texto || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const perguntaSobreCredoresAtendidos = /\bume\b|\bnovo mundo\b/.test(textoNormalizado)
+    && /\b(tambem|trabalha|trabalham|atende|atendem|representa|representam|debitos|dividas|credor|credores)\b/.test(textoNormalizado);
+  if (perguntaSobreCredoresAtendidos) {
+    return {
+      mensagens: [
+        cpfIdentificado
+          ? 'Sim. Trabalhamos com débitos da UME e da Novo Mundo. Vou considerar o credor confirmado na consulta do seu CPF para seguir com o atendimento.'
+          : 'Sim. Trabalhamos com débitos da UME e da Novo Mundo. Para confirmar a qual deles o seu débito pertence, preciso consultar seu CPF.',
+      ],
+      escalar: false,
+      motivo: '',
+      escolha: '',
+      pagamento_hoje: '',
+      data_pagamento: '',
+    };
+  }
+
 
 
   const instrucoes = blocoConhecimento(itens, 'instrucao');
