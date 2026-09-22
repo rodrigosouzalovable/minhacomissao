@@ -308,7 +308,8 @@ serve(async (req) => {
         }, 400);
       }
 
-      const dddDetectado = ddd || (numero && numero.startsWith("55") ? numero.slice(2, 4) : null);
+      numero = numero ? numero.replace(/\D/g, "") : null;
+      const dddDetectado = ddd || (numero && pais === "73" && numero.startsWith("55") ? numero.slice(2, 4) : null);
 
       const { data: pedido, error: insErr } = await admin
         .from("virtualsms_pedidos")
