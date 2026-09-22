@@ -217,10 +217,10 @@ export default function CertificadoDigital() {
     }
     if (data?.error) throw new Error(data.error); return data;
   }, onSuccess: (data) => {
-    const coleta = data.coleta as { novos?: number; janelas_falha?: number } | undefined;
+    const coleta = data.coleta as { novos?: number; janelas_falha?: number; janelas_pendentes?: number } | undefined;
     const verificacao = data.verificacao as { com_whatsapp?: number } | undefined;
     const detalhes = coleta
-      ? `${coleta.novos ?? 0} lead(s) novo(s), ${verificacao?.com_whatsapp ?? 0} WhatsApp(s) confirmado(s)`
+      ? `${coleta.novos ?? 0} lead(s) novo(s), ${verificacao?.com_whatsapp ?? 0} WhatsApp(s) confirmado(s)${(coleta.janelas_pendentes ?? 0) > 0 ? `, ${coleta.janelas_pendentes} janela(s) ficam para o próximo ciclo` : ""}`
       : null;
     const mensagem = data.simulacao
       ? `${data.elegiveis} contato(s) apto(s) nesta simulação`

@@ -28,6 +28,8 @@ export interface CasaFiltro {
   somenteCelular?: boolean;
   pagina?: number;
   limite?: number;
+  maxTentativas?: number;
+  timeoutMs?: number;
 }
 
 function bytesParaBase64(bytes: Uint8Array) {
@@ -277,9 +279,11 @@ export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: st
   };
 
   let texto = "";
-  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+  const maxTentativas = Math.min(Math.max(filtro.maxTentativas ?? MAX_TENTATIVAS, 1), MAX_TENTATIVAS);
+  const timeoutMs = Math.min(Math.max(filtro.timeoutMs ?? TIMEOUT_MS, 5_000), TIMEOUT_MS);
+  for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const resp = await fetch(BASE, {
         method: "POST",
@@ -290,7 +294,7 @@ export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: st
       if (resp.ok) break;
 
       const temporario = resp.status === 408 || resp.status === 429 || resp.status >= 500;
-      if (!temporario || tentativa === MAX_TENTATIVAS) {
+      if (!temporario || tentativa === maxTentativas) {
         throw new CasaDosDadosError(
           mensagemErro(resp.status),
           resp.status,
@@ -299,7 +303,7 @@ export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: st
       }
     } catch (error) {
       if (error instanceof CasaDosDadosError) throw error;
-      if (tentativa === MAX_TENTATIVAS) {
+      if (tentativa === maxTentativas) {
         throw new CasaDosDadosError(
           "Não foi possível conectar à Casa dos Dados após novas tentativas.",
           null,

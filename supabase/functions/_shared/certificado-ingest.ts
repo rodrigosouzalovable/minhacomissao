@@ -39,6 +39,7 @@ export async function coletarJanela(
   cfg: ConfigCert,
   janela: number,
   manual: boolean,
+  opcoes: { maxPaginas?: number; maxTentativas?: number; timeoutMs?: number } = {},
 ): Promise<ResultadoJanela> {
   const dataRef = dataBRT(janela);
   const res: ResultadoJanela = {
@@ -54,7 +55,8 @@ export async function coletarJanela(
     const apiKey = await resolverChaveCasaDosDados(supabase);
     const brutos: LeadBruto[] = [];
     const limite = 100;
-    for (let pagina = 1; pagina <= 10; pagina++) {
+    const maxPaginas = Math.min(Math.max(opcoes.maxPaginas ?? 10, 1), 10);
+    for (let pagina = 1; pagina <= maxPaginas; pagina++) {
       const { leads, total } = await buscarCasaDosDados({
         ufs: cfg.ufs,
         cnaes: cfg.cnaes,
@@ -64,6 +66,8 @@ export async function coletarJanela(
         somenteCelular: cfg.somente_celular,
         pagina,
         limite,
+        maxTentativas: opcoes.maxTentativas,
+        timeoutMs: opcoes.timeoutMs,
       }, apiKey);
       brutos.push(...leads);
       if (leads.length < limite || brutos.length >= total) break;
