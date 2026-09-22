@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Validar amanhã às 09h a campanha Certificado Digital D+5 com até 50 contatos exclusivos
 - [ ] Validar a entrega completa dos contatos restantes da campanha corrigida do Certificado Digital
 - [ ] Validar a entrega completa dos 50 envios do primeiro ciclo real do piloto Certificado Digital
 - [x] Verify and address monitoring findings 1–12
@@ -11,6 +12,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Programar experimento Certificado Digital D+5 a D+30 com 50 contatos por dia útil e comparativo por faixa
 - [x] Exibir instâncias de teste Meta na aba UAZAPI como somente leitura e incluí-las na exportação de conectados
 - [x] Corrigir data de abertura e valor de R$ 129,90 no template do Certificado Digital e carregar a campanha no painel normal
 - [x] Priorizar o estoque local do Certificado Digital e impedir consumo da Casa dos Dados enquanto houver contatos para 50 envios
