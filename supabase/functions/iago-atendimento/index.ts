@@ -723,23 +723,6 @@ Deno.serve(async (req) => {
           .slice(0, 3)
       : [];
 
-    // A empresa atende as duas carteiras. Quando o cliente pergunta sobre a
-    // abrangência do atendimento, não deixe o credor desta conversa virar uma
-    // afirmação de exclusividade sobre a empresa inteira.
-    const perguntaSobreCredoresAtendidos = (() => {
-      const t = normalizarTexto(textoAtual);
-      const citaCredor = /\bume\b|\bnovo mundo\b/.test(t);
-      const perguntaAbrangencia = /\b(tambem|trabalha|trabalham|atende|atendem|representa|representam|debitos|dividas|credor|credores)\b/.test(t);
-      return citaCredor && perguntaAbrangencia;
-    })();
-    if (perguntaSobreCredoresAtendidos) {
-      mensagens = [
-        cpfIdentificado
-          ? 'Sim. Trabalhamos com débitos da UME e da Novo Mundo. Vou considerar o credor confirmado na consulta do seu CPF para seguir com o atendimento.'
-          : 'Sim. Trabalhamos com débitos da UME e da Novo Mundo. Para confirmar a qual deles o seu débito pertence, preciso consultar seu CPF.',
-      ];
-    }
-
     // ===== Escolha da forma de pagamento => confirmar a DATA antes de chamar humano =====
     let escalar = modoAquecimento ? false : !!resultado?.escalar;
     const escalouPorDuvida = modoAquecimento ? false : !!resultado?.escalar;
