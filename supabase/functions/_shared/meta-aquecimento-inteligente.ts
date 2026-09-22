@@ -76,10 +76,12 @@ export async function autoRespondedoresParaAquecimento(
   supabase: any,
   limite = 50,
 ): Promise<LeadAquecimento[]> {
+  const carenciaSeteDias = new Date(Date.now() - 7 * 86400000).toISOString();
   const { data } = await supabase
     .from("meta_aquecimento_auto_respondedores")
     .select("lead_id, nome, telefone_normalizado, nicho, cidade, confianca")
     .gte("confianca", 80)
+    .lt("ultima_deteccao_em", carenciaSeteDias)
     .order("confianca", { ascending: false })
     .order("ultima_deteccao_em", { ascending: true })
     .limit(Math.min(200, Math.max(limite * 4, 40)));

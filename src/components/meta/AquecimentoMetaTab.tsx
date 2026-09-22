@@ -120,8 +120,8 @@ export function AquecimentoMetaTab() {
     },
   });
 
-  const { data: logs7d } = useQuery({
-    queryKey: ["aq-logs-7d", dia],
+  const { data: logs30d } = useQuery({
+    queryKey: ["aq-logs-30d", dia],
     staleTime: 300_000,
     queryFn: async () => {
       const todos: any[] = [];
@@ -129,7 +129,7 @@ export function AquecimentoMetaTab() {
         const { data, error } = await supabase
           .from("meta_aquecimento_destino_log")
           .select("id, dia, instancia_id, destino_telefone, fonte, status, entregue_em, lido_em, respondeu_em, resposta_classificacao")
-          .gte("dia", diasAtrasBrt(6))
+          .gte("dia", diasAtrasBrt(29))
           .order("enviado_em", { ascending: false })
           .range(inicio, inicio + 999);
         if (error) throw error;
@@ -434,7 +434,8 @@ export function AquecimentoMetaTab() {
                 const ultimo = historico[0];
                 const idsBm = new Set((trilhas ?? []).filter((t: any) => String(t.instancia?.meta_bm_id || `sem-bm:${t.instancia_id}`) === bm.id).map((t: any) => t.instancia_id));
                 const logsBmHoje = (logs ?? []).filter((l: any) => idsBm.has(l.instancia_id));
-                const logsBm7d = (logs7d ?? []).filter((l: any) => idsBm.has(l.instancia_id));
+                 const logsBm30d = (logs30d ?? []).filter((l: any) => idsBm.has(l.instancia_id));
+                 const logsBm7d = logsBm30d.filter((l: any) => l.dia >= diasAtrasBrt(6));
                 const chaveTelefone = (l: any) => String(l.destino_telefone || "").replace(/\D/g, "").slice(-8);
                 const tentados7d = new Set(logsBm7d.map(chaveTelefone).filter(Boolean)).size;
                 const unicos7d = new Set(logsBm7d.filter((l: any) => l.entregue_em || l.lido_em || l.respondeu_em).map(chaveTelefone).filter(Boolean)).size;
@@ -449,8 +450,9 @@ export function AquecimentoMetaTab() {
                 const entreguesHoje = new Set(logsBmHoje.filter((l: any) => l.entregue_em).map((l: any) => String(l.destino_telefone || "").replace(/\D/g, "").slice(-8))).size;
                 const respostasHoje = logsBmHoje.filter((l: any) => l.respondeu_em).length;
                 const falhasHoje = logsBmHoje.filter((l: any) => l.status === "falha").length;
-                const referencia = bm.tier < 2000 ? 2000 : Math.ceil(bm.tier / 2);
-                const distancia = Math.max(0, referencia - unicos7d);
+                 const unicos30d = new Set(logsBm30d.filter((l: any) => l.entregue_em || l.lido_em || l.respondeu_em).map(chaveTelefone).filter(Boolean)).size;
+                 const referencia = bm.tier < 2000 ? 2000 : Math.ceil(bm.tier / 2);
+                 const distancia = Math.max(0, referencia - unicos30d);
                 const entregaPct = tentados7d > 0 ? (unicos7d / tentados7d) * 100 : 0;
                 const falhaPct = logsBm7d.length > 0 ? (falhas7d / logsBm7d.length) * 100 : 0;
                 const negativaPct = respostas7d > 0 ? (negativas7d / respostas7d) * 100 : 0;
@@ -492,7 +494,8 @@ export function AquecimentoMetaTab() {
                          <span><strong>Entregues únicos 7d:</strong> {unicos7d}</span>
                          <span><strong>Lidos únicos 7d:</strong> {lidos7d}</span>
                          <span><strong>Respostas únicas 7d:</strong> {respostas7d}</span>
-                         <span><strong>Distância operacional:</strong> {distancia}</span>
+                          <span><strong>Entregues únicos 30d:</strong> {unicos30d}</span>
+                          <span><strong>Distância operacional 30d:</strong> {distancia}</span>
                         <span><strong>Entregues hoje:</strong> {entreguesHoje}</span>
                         <span><strong>Respostas hoje:</strong> {respostasHoje}</span>
                         <span><strong>Falhas hoje:</strong> {falhasHoje}</span>
