@@ -178,11 +178,13 @@ Deno.serve(async (req) => {
         semTrilhaPorBm.set(chave, grupo);
       }
       const alvoNovo = new Map<string, number>();
+      const metaPorBm = new Map<string, number>();
       for (const [bmId, grupo] of semTrilhaPorBm) {
         const membrosBm = (elegiveis as any[]).filter((i) => String(i.meta_bm_id || i.id) === bmId);
         const tierBm = Math.max(...membrosBm.map((i) => tierAtual(i)));
-         const piloto = avaliacaoPilotos.get(bmId);
-         const metaBm = piloto ? piloto.meta : tierBm <= 250 ? 150 : 450;
+        const piloto = avaliacaoPilotos.get(bmId);
+        const metaBm = piloto ? piloto.meta : tierBm <= 250 ? 150 : 450;
+        metaPorBm.set(bmId, metaBm);
         const jaPlanejado = membrosBm.reduce((s, i) => s + Number(trilhaMap.get(i.id)?.alvo_unicos_dia || 0), 0);
         const restante = Math.max(0, metaBm - jaPlanejado);
         const base = Math.floor(restante / grupo.length);
@@ -193,7 +195,9 @@ Deno.serve(async (req) => {
         const tier = tierAtual(i);
         const intensivo = tier < 10000;
         const alvo = alvoNovo.get(i.id) ?? 0;
-        const piloto = avaliacaoPilotos.get(String(i.meta_bm_id || i.id));
+        const bmId = String(i.meta_bm_id || i.id);
+        const piloto = avaliacaoPilotos.get(bmId);
+        const metaBm = metaPorBm.get(bmId) ?? alvo;
         return {
           instancia_id: i.id,
           dia,
@@ -201,9 +205,9 @@ Deno.serve(async (req) => {
           tier_alvo: proximoTier(tier),
           alvo_unicos_dia: alvo,
           modo_intensivo: intensivo,
-           mix_uazapi_pct: piloto ? 100 - Number(pilotos.get(String(i.meta_bm_id))?.mix_leads_pct || 90) : intensivo ? 10 : 20,
-           mix_leads_pct: piloto ? Number(pilotos.get(String(i.meta_bm_id))?.mix_leads_pct || 90) : intensivo ? 90 : 80,
-           decisao_ia: { fonte: piloto ? 'piloto_bm' : 'tick_meta_por_bm', meta_bm: metaBm, piloto_etapa: piloto?.etapa ?? null },
+          mix_uazapi_pct: piloto ? 100 - Number(pilotos.get(String(i.meta_bm_id))?.mix_leads_pct || 90) : intensivo ? 10 : 20,
+          mix_leads_pct: piloto ? Number(pilotos.get(String(i.meta_bm_id))?.mix_leads_pct || 90) : intensivo ? 90 : 80,
+          decisao_ia: { fonte: piloto ? 'piloto_bm' : 'tick_meta_por_bm', meta_bm: metaBm, piloto_etapa: piloto?.etapa ?? null },
           status: alvo > 0 ? 'ativa' : 'concluida',
           motivo: alvo > 0 ? null : 'meta_bm_ja_distribuida',
           atualizado_em: new Date().toISOString(),

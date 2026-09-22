@@ -1053,25 +1053,6 @@ async function gerarResposta(args: {
     return { mensagens: [], escalar: false, motivo: 'fallback de aquecimento' };
   }
 
-  const perguntaSobreCredoresAtendidos = /\bume\b|\bnovo mundo\b/.test(textoNormalizado)
-    && /\b(tambem|trabalha|trabalham|atende|atendem|representa|representam|debitos|dividas|credor|credores)\b/.test(textoNormalizado);
-  if (perguntaSobreCredoresAtendidos) {
-    return {
-      mensagens: [
-        cpfIdentificado
-          ? 'Sim. Trabalhamos com débitos da UME e da Novo Mundo. Vou considerar o credor confirmado na consulta do seu CPF para seguir com o atendimento.'
-          : 'Sim. Trabalhamos com débitos da UME e da Novo Mundo. Para confirmar a qual deles o seu débito pertence, preciso consultar seu CPF.',
-      ],
-      escalar: false,
-      motivo: '',
-      escolha: '',
-      pagamento_hoje: '',
-      data_pagamento: '',
-    };
-  }
-
-
-
   const instrucoes = blocoConhecimento(itens, 'instrucao');
   const qa = itens.filter((i) => i.tipo === 'qa').map((i) => `P: ${i.gatilho}\nR: ${i.conteudo}`).join('\n\n');
   const proibidos = blocoConhecimento(itens, 'proibido');
