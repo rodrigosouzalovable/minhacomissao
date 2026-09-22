@@ -1069,6 +1069,33 @@ export type Database = {
           },
         ]
       }
+      certificado_casa_dados_credencial: {
+        Row: {
+          chave_cifrada: string
+          id: number
+          iv: string
+          sufixo: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          chave_cifrada: string
+          id?: number
+          iv: string
+          sufixo: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          chave_cifrada?: string
+          id?: number
+          iv?: string
+          sufixo?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       certificado_coleta_log: {
         Row: {
           created_at: string

@@ -351,6 +351,13 @@
       "when": 1790084373407,
       "tag": "0049_agendar_certificado_09h_dias_uteis",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790089706632,
+      "tag": "0050_certificado_casa_dados_credencial_segura",
+      "breakpoints": true
     }
   ]
 }
