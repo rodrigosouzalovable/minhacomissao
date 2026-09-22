@@ -179,7 +179,26 @@ export default function CertificadoDigital() {
   const processar = useMutation({ mutationFn: async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("certificado-prospeccao-processar", { body });
     if (error) throw error; if (data?.error) throw new Error(data.error); return data;
-  }, onSuccess: (data) => { toast.success(data.simulacao ? `${data.elegiveis} contato(s) apto(s) nesta simulação` : data.resultado ? "Mensagem de teste processada" : data.job_id ? `Campanha iniciada com ${data.total ?? 0} contato(s)` : data.motivo ?? "Processamento concluído"); qc.invalidateQueries({ queryKey: ["certificado-envios-hoje"] }); qc.invalidateQueries({ queryKey: ["certificado-leads"] }); qc.invalidateQueries({ queryKey: ["envio-meta-jobs"] }); }, onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao processar") });
+  }, onSuccess: (data) => {
+    const coleta = data.coleta as { novos?: number; janelas_falha?: number } | undefined;
+    const verificacao = data.verificacao as { com_whatsapp?: number } | undefined;
+    const detalhes = coleta
+      ? `${coleta.novos ?? 0} lead(s) novo(s), ${verificacao?.com_whatsapp ?? 0} WhatsApp(s) confirmado(s)`
+      : null;
+    const mensagem = data.simulacao
+      ? `${data.elegiveis} contato(s) apto(s) nesta simulação`
+      : data.resultado
+        ? "Mensagem de teste processada"
+        : data.job_id
+          ? `Campanha iniciada com ${data.total ?? 0} contato(s)${detalhes ? ` — ${detalhes}` : ""}`
+          : `${data.motivo ?? "Processamento concluído"}${detalhes ? ` — ${detalhes}` : ""}`;
+    if (data.parcial || (coleta?.janelas_falha ?? 0) > 0) toast.warning(mensagem);
+    else toast.success(mensagem);
+    qc.invalidateQueries({ queryKey: ["certificado-envios-hoje"] });
+    qc.invalidateQueries({ queryKey: ["certificado-leads"] });
+    qc.invalidateQueries({ queryKey: ["certificado-logs"] });
+    qc.invalidateQueries({ queryKey: ["envio-meta-jobs"] });
+  }, onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao processar") });
   const alterarPool = async (instancia: typeof metaInstancias[number], ativar: boolean) => {
     if (!confirm(`${ativar ? "Ativar" : "Desativar"} o pool geral de ${instancia.nome}? Isso também afeta campanhas e aquecimento.`)) return;
     const nome = ativar ? "ativar_meta_instancia_pool" : "retirar_meta_instancia_pool_manual";
