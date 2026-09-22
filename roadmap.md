@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Adicionar país internacional mais barato, DDI correto e nova compra durante cancelamento de número banido
 - [ ] Validar com um remetente autorizado o primeiro recebimento e a resposta do IAGO no número de teste Meta
 - [ ] Validar o primeiro ciclo real do piloto Certificado Digital com BM, template aprovado e 50 envios/dia
 - [x] Verify and address monitoring findings 1–12

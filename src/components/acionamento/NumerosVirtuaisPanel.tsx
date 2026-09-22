@@ -131,6 +131,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const [servico, setServico] = useState('wa');
   const [tipoNumero, setTipoNumero] = useState<'brasil' | 'internacional'>('brasil');
   const [pais, setPais] = useState('73');
+  const [paisAleatorio, setPaisAleatorio] = useState(false);
   const [ddd, setDdd] = useState('62');
   const [novoLimite, setNovoLimite] = useState('');
   const [novoTeto, setNovoTeto] = useState('');
@@ -186,17 +187,19 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
       return;
     }
 
-    if (pais === '73' || !paises.some((item) => item.id === pais)) {
+    if (!paisAleatorio && (pais === '73' || !paises.some((item) => item.id === pais))) {
       const primeiroInternacional = paisesInternacionais[0];
       if (primeiroInternacional) setPais(primeiroInternacional.id);
     }
-  }, [pais, paises, paisesInternacionais, tipoNumero]);
+  }, [pais, paisAleatorio, paises, paisesInternacionais, tipoNumero]);
 
   // Preço mínimo disponível — mostra a variação antes de comprar
   const precoQuery = useQuery({
-    queryKey: ['virtualsms-preco', provider, servico, pais],
-    queryFn: () => invoke({ action: 'precos', provider, servico, pais }),
-    enabled: abaAtiva && !!servico && (tipoNumero === 'brasil' || pais !== '73'),
+    queryKey: ['virtualsms-preco', provider, servico, pais, paisAleatorio],
+    queryFn: () => invoke(paisAleatorio && tipoNumero === 'internacional'
+      ? { action: 'melhor_pais', provider, servico, max_preco: novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : undefined }
+      : { action: 'precos', provider, servico, pais }),
+    enabled: abaAtiva && !!servico && (tipoNumero === 'brasil' || paisAleatorio || pais !== '73'),
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -222,11 +225,17 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   // Pedido ativo = aguardando e ainda dentro da janela de 20 min
   const pedidoAtivo = useMemo(() => {
     return pedidos.find((p) => {
-      if (p.status !== 'aguardando') return false;
+      if (p.status !== 'aguardando' || p.banido_em) return false;
       const limite = p.expira_em ? new Date(p.expira_em).getTime() : new Date(p.created_at).getTime() + 20 * 60 * 1000;
       return limite > Date.now();
     }) || null;
   }, [pedidos]);
+
+  const cancelamentosPendentes = useMemo(() => pedidos.filter((p) => {
+    if (p.status !== 'aguardando' || !p.banido_em || p.codigo) return false;
+    const limite = p.expira_em ? new Date(p.expira_em).getTime() : new Date(p.created_at).getTime() + 20 * 60 * 1000;
+    return limite > Date.now();
+  }), [pedidos]);
 
   const ultimoRecebido = pedidos.find((p) => p.status === 'recebido' && p.codigo);
   const webhookAtivo = !!webhookQuery.data?.ultimo_evento_em;
@@ -234,13 +243,11 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   // Relógio para liberar o cancelamento (provedor só aceita após 5 min da compra)
   const [agora, setAgora] = useState(Date.now());
   useEffect(() => {
-    if (!pedidoAtivo) return;
+    if (!pedidoAtivo && cancelamentosPendentes.length === 0) return;
     const t = setInterval(() => setAgora(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [pedidoAtivo]);
-  const segParaCancelar = pedidoAtivo
-    ? Math.max(0, Math.ceil((new Date(pedidoAtivo.created_at).getTime() + 5 * 60 * 1000 - agora) / 1000))
-    : 0;
+  }, [pedidoAtivo, cancelamentosPendentes.length]);
+  const segundosParaCancelar = (p: Pedido) => Math.max(0, Math.ceil((new Date(p.created_at).getTime() + 5 * 60 * 1000 - agora) / 1000));
 
 
   // Realtime: com o webhook configurado, o código chega por push (sem consultar o provedor)
@@ -266,10 +273,11 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   useQuery({
     queryKey: ['virtualsms-status', pedidoAtivo?.order_id],
     queryFn: async () => {
+      if (!pedidoAtivo) return null;
       const res = await invoke({
         action: 'status',
-        provider: pedidoAtivo!.provider || 'virtualsms',
-        order_id: pedidoAtivo!.order_id,
+        provider: pedidoAtivo.provider || 'virtualsms',
+        order_id: pedidoAtivo.order_id,
       });
       qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
       if (res?.codigo) toast.success(`Código recebido: ${res.codigo}`);
@@ -283,15 +291,18 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
 
   const comprar = useMutation({
-    mutationFn: () =>
-      invoke({
+    mutationFn: () => {
+      const paisCompra = paisAleatorio && tipoNumero === 'internacional' ? String(precoQuery.data?.pais || '') : pais;
+      if (!paisCompra) throw new Error('Nenhum país internacional disponível dentro do teto configurado.');
+      return invoke({
         action: 'comprar',
         provider,
         servico,
-        pais,
+        pais: paisCompra,
         ddd: suportaDdd ? ddd : undefined,
         max_preco: novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : undefined,
-      }),
+      });
+    },
     onSuccess: (res) => {
       const numero = res?.pedido ? dadosNumero(res.pedido as Pedido).exibicao : '';
       toast.success(numero ? `Número comprado: ${numero}` : 'Número comprado');
@@ -323,19 +334,16 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   });
 
   // Cancelamento automático: pedido ativo marcado como banido é cancelado assim que o provedor libera (5 min)
-  const autoCanceladoRef = useRef<string | null>(null);
+  const autoCanceladoRef = useRef(new Set<string>());
   useEffect(() => {
-    if (!pedidoAtivo) return;
-    if (!pedidoAtivo.banido_em) return;
-    if (pedidoAtivo.codigo) return;
-    if (pedidoAtivo.status !== 'aguardando') return;
-    if (segParaCancelar > 0) return;
-    if (autoCanceladoRef.current === pedidoAtivo.order_id) return;
-    autoCanceladoRef.current = pedidoAtivo.order_id;
-    toast.info('Número banido — solicitando o cancelamento automático...');
-    cancelar.mutate(pedidoAtivo);
+    for (const pendente of cancelamentosPendentes) {
+      if (segundosParaCancelar(pendente) > 0 || autoCanceladoRef.current.has(pendente.order_id)) continue;
+      autoCanceladoRef.current.add(pendente.order_id);
+      toast.info('Número banido — solicitando o cancelamento automático...');
+      cancelar.mutate(pendente);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pedidoAtivo, segParaCancelar]);
+  }, [agora, cancelamentosPendentes]);
 
   const salvarLimite = useMutation({
     mutationFn: () => invoke({ action: 'salvar_limite', limite_mensal_usd: Number(novoLimite.replace(',', '.')) }),
