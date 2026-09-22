@@ -2086,8 +2086,8 @@ export default function Acionamento() {
     if (!user) return;
     let statusMap: Record<string, boolean> = {};
     let exportRows: Array<{ id: string; telefone?: string | null; source?: 'uazapi' | 'meta_teste' }> = instances;
-    const jaTemAlgumStatus = instances.some(i => connectionStatus[i.id]);
-    if (!jaTemAlgumStatus) {
+    const precisaVerificarStatus = instances.some(i => !connectionStatus[i.id]);
+    if (precisaVerificarStatus) {
       toast.info('Verificando conexões antes de exportar...');
       const results = await checkInstanceConnections(instances);
       results.forEach(r => { statusMap[r.id] = r.connected; });
