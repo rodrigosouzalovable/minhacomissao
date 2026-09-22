@@ -798,16 +798,20 @@ export default function Acordos() {
     async function loadAcordos() {
       if (!user) return;
       try {
-        // Carregar TODOS os acordos do sistema (somente leitura para acordos de outros)
-        const {
-          data: acordosData,
-          error: acordosError
-        } = await supabase.from('acordos').select('*').order('criado_em', {
-          ascending: false
-        });
-        if (acordosError) throw acordosError;
-
-        const todosAcordos = acordosData || [];
+        // Carregar todos os acordos em páginas para não perder registros após o limite de 1.000 linhas.
+        const PAGE_SIZE = 1000;
+        let todosAcordos: Acordo[] = [];
+        for (let inicio = 0; ; inicio += PAGE_SIZE) {
+          const { data: pagina, error: acordosError } = await supabase
+            .from('acordos')
+            .select('*')
+            .order('criado_em', { ascending: false })
+            .range(inicio, inicio + PAGE_SIZE - 1);
+          if (acordosError) throw acordosError;
+          const registros = (pagina || []) as Acordo[];
+          todosAcordos = todosAcordos.concat(registros);
+          if (registros.length < PAGE_SIZE) break;
+        }
         setAcordos(todosAcordos);
 
         // Carregar nomes dos usuários que lançaram acordos (para badge "Lançado por")
@@ -837,9 +841,10 @@ export default function Acordos() {
         const vencidasMap = new Map<string, string>();
         const proximasMap = new Map<string, string>();
 
-        if (idsAcordos.length > 0) {
+        const FLAGS_CHUNK = 500;
+        for (let i = 0; i < idsAcordos.length; i += FLAGS_CHUNK) {
           const { data: flagsData, error: flagsError } = await supabase
-            .rpc('get_acordo_status_flags', { p_acordo_ids: idsAcordos });
+            .rpc('get_acordo_status_flags', { p_acordo_ids: idsAcordos.slice(i, i + FLAGS_CHUNK) });
           if (flagsError) throw flagsError;
 
           (flagsData || []).forEach((row: any) => {
@@ -867,7 +872,7 @@ export default function Acordos() {
         
         // Acordos com status 'quebrado' já são quebra de acordo
         const idsComQuebra = new Set<string>();
-        (acordosData || []).forEach(a => {
+        todosAcordos.forEach(a => {
           if (a.status === 'quebrado') {
             idsComQuebra.add(a.id);
           }
@@ -875,7 +880,7 @@ export default function Acordos() {
         
         // Resumo de parcelas agregado no banco, restrito aos acordos já carregados nesta tela.
         // Substitui a antiga varredura paginada da tabela inteira de pagamentos.
-        const acordoIdsCarregados = (acordosData || []).map((a: any) => a.id);
+        const acordoIdsCarregados = todosAcordos.map(a => a.id);
         let resumo: any[] = [];
         let quebraError: any = null;
         if (acordoIdsCarregados.length > 0) {
@@ -1376,15 +1381,23 @@ export default function Acordos() {
               Pagos ({acordosPagos.length})
             </TabsTrigger>
             <TabsTrigger value="proximas">
-              Próximas ao Vencimento ({acordosProximos.length})
+              Vencem em até 3 dias ({acordosProximos.length})
             </TabsTrigger>
             <TabsTrigger value="acordos_realizados">
-              Acordos Realizados ({acordosRealizados.length})
+              Sem pagamento ({acordosRealizados.length})
             </TabsTrigger>
             <TabsTrigger value="vencidos">
-              Vencidas ({acordosVencidos.length})
+              Após pagamento ({acordosVencidos.length})
             </TabsTrigger>
           </TabsList>
+
+          {(abaAtiva === 'acordos_realizados' || abaAtiva === 'vencidos') && (
+            <p className="mb-4 text-sm text-muted-foreground">
+              {abaAtiva === 'vencidos'
+                ? 'Acordos com pelo menos uma parcela paga e uma nova parcela vencida.'
+                : 'Acordos com parcela vencida, mas sem nenhum pagamento registrado.'}
+            </p>
+          )}
 
           <TabsContent value="negociados">
             {acordosNegociados.length > 0 ? <div className="grid gap-4">
@@ -1425,7 +1438,7 @@ export default function Acordos() {
             />
             {acordosRealizados.length > 0 ? <div className="grid gap-4">
                 {acordosRealizados.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} isAdmin={isAdmin} ultimaParcelaPaga={ultimaParcelaPagaPorAcordo.get(acordo.id)} canEdit={isAdmin || acordo.user_id === user?.id} canDelete={isAdmin || (acordo.user_id === user?.id && !ultimaParcelaPagaPorAcordo.has(acordo.id))} lancadoPor={acordo.user_id !== user?.id ? profilesMap.get(acordo.user_id) : null} />)}
-              </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo realizado sem pagamentos" />}
+              </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo com parcela vencida e sem pagamento" />}
           </TabsContent>
 
           <TabsContent value="vencidos">
@@ -1440,7 +1453,7 @@ export default function Acordos() {
             />
             {acordosVencidos.length > 0 ? <div className="grid gap-4">
                 {acordosVencidos.map(acordo => <AcordoCard key={acordo.id} acordo={acordo} onDelete={() => setAcordoParaExcluir(acordo)} onEnviarWhatsApp={handleEnviarWhatsApp} enviandoWhatsApp={enviandoWhatsApp} getStatusVariant={getStatusVariant} getStatusLabel={getStatusLabel} isQuebraAcordo={acordosComQuebraAcordo.has(acordo.id)} envioStatus={statusMap[acordo.id]} cpfDuplicadoOutros={getCpfDuplicadoOutros(acordo)} onToggleBoletoEnviado={handleToggleBoletoEnviado} togglingBoleto={togglingBoletoId === acordo.id} isAdmin={isAdmin} ultimaParcelaPaga={ultimaParcelaPagaPorAcordo.get(acordo.id)} canEdit={isAdmin || acordo.user_id === user?.id} canDelete={isAdmin || (acordo.user_id === user?.id && !ultimaParcelaPagaPorAcordo.has(acordo.id))} lancadoPor={acordo.user_id !== user?.id ? profilesMap.get(acordo.user_id) : null} />)}
-              </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhuma parcela vencida encontrada" />}
+              </div> : <EmptyState search={search} statusFilter={statusFilter} message="Nenhum acordo com pagamento anterior e nova parcela vencida" />}
           </TabsContent>
         </Tabs>
       </div>
