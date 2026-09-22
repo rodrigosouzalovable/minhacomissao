@@ -58,7 +58,13 @@ Deno.serve(async (req) => {
         ufs: ["GO"], cnaes: [], dataInicio: hoje, dataFim: hoje,
         somenteMei: false, somenteCelular: true, pagina: 1, limite: 1,
       }, chaveAtual);
-      return json({ success: true, consulta_ok: true, encontrados: resultado.total });
+      return json({
+        success: true,
+        consulta_ok: true,
+        encontrados: resultado.total,
+        mapeados: resultado.leads.length,
+        com_telefone: resultado.leads.filter((lead) => lead.telefones.length > 0).length,
+      });
     }
 
     if (action === "remover") {
