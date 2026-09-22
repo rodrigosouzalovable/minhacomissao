@@ -67,7 +67,7 @@ export async function coletarJanela(
       }, apiKey);
       brutos.push(...leads);
       if (leads.length < limite || brutos.length >= total) break;
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 1_200));
     }
 
     res.encontrados = brutos.length;

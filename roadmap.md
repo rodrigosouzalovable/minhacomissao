@@ -10,6 +10,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Migrar a coleta da Casa dos Dados da rota pública v2 para a API oficial v5 e validar a chave pelo saldo
 - [x] Adicionar cadastro administrativo protegido da chave API da Casa dos Dados e utilizá-la em todas as coletas
 - [x] Corrigir o botão do Certificado Digital para repetir falhas temporárias, informar indisponibilidade da Casa dos Dados e iniciar a campanha somente após coleta e verificação
 - [x] Implantar campanha persistente do Certificado Digital às 09h em dias úteis e atendimento da Clara na caixa CERTIFICADO

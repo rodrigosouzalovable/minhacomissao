@@ -61,10 +61,11 @@ Deno.serve(async (req) => {
         novos: sucessos.reduce((total, resultado) => total + resultado.novos, 0),
       };
       if (resultados.length > 0 && sucessos.length === 0) {
+        const primeiroErro = falhas[0]?.erro ?? "A coleta não pôde ser concluída.";
         return json({
-          error: "A Casa dos Dados está temporariamente indisponível. Nenhuma campanha foi criada. Tente novamente em alguns minutos.",
+          error: `${primeiroErro} Nenhuma campanha foi criada.`,
           coleta: resumoColeta,
-        }, 503);
+        }, falhas.some((resultado) => resultado.erro_temporario) ? 503 : 400);
       }
 
       const verificacao = await verificarLeadsCertificado(service, 2000);
