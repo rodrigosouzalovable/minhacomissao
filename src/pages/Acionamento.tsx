@@ -190,6 +190,8 @@ interface WhatsAppInstanceRow {
   proxy_host?: string | null;
   shared_read_only?: boolean;
   source?: 'uazapi' | 'meta_teste';
+  bm_nome?: string | null;
+  meta_status?: string | null;
 }
 
 // Formata dígitos em (DD) 9NNNN-NNNN
@@ -273,7 +275,7 @@ export default function Acionamento() {
 
   const [savingInstance, setSavingInstance] = useState(false);
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({});
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'unknown' | 'checking'>>({});
   const [checkingConnections, setCheckingConnections] = useState(false);
 
   // WhatsApp profile editing state
@@ -457,7 +459,7 @@ export default function Acionamento() {
       ]);
       const uazapiRows = ((uazapiResult.data || []) as unknown as WhatsAppInstanceRow[]).map((row) => ({ ...row, source: 'uazapi' as const }));
       const metaRows = metaResult.data?.ok
-        ? ((metaResult.data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean }>).map((row) => ({
+        ? ((metaResult.data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean; status?: string | null; bm_nome?: string | null }>).map((row) => ({
             id: row.id,
             user_id: row.user_id,
             nome: row.nome || 'Sem nome',
@@ -470,12 +472,15 @@ export default function Acionamento() {
             ia_responde: false,
             shared_read_only: true,
             source: 'meta_teste' as const,
+            bm_nome: row.bm_nome,
+            meta_status: row.status,
           }))
         : [];
       if (metaResult.data?.ok) {
-        const metaStatus: Record<string, 'connected' | 'disconnected'> = {};
-        (metaResult.data.instances || []).forEach((row: { id: string; connected: boolean }) => {
-          metaStatus[row.id] = row.connected ? 'connected' : 'disconnected';
+        const metaStatus: Record<string, 'connected' | 'disconnected' | 'unknown'> = {};
+        (metaResult.data.instances || []).forEach((row: { id: string; connected: boolean; status?: string | null }) => {
+          const rawStatus = String(row.status || '').toUpperCase();
+          metaStatus[row.id] = row.connected ? 'connected' : rawStatus && rawStatus !== 'UNKNOWN' ? 'disconnected' : 'unknown';
         });
         setConnectionStatus((current) => ({ ...current, ...metaStatus }));
       }
@@ -579,9 +584,12 @@ export default function Acionamento() {
       });
       if (error || !data?.ok) throw error || new Error(data?.error || 'Falha ao verificar conexões');
 
-      const checked = (data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean; is_own: boolean; can_edit: boolean; source?: 'uazapi' | 'meta_teste' }>;
-      const nextStatus: Record<string, 'connected' | 'disconnected'> = {};
-      checked.forEach((row) => { nextStatus[row.id] = row.connected ? 'connected' : 'disconnected'; });
+      const checked = (data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean; status?: string | null; bm_nome?: string | null; is_own: boolean; can_edit: boolean; source?: 'uazapi' | 'meta_teste' }>;
+      const nextStatus: Record<string, 'connected' | 'disconnected' | 'unknown'> = {};
+      checked.forEach((row) => {
+        const rawStatus = String(row.status || '').toUpperCase();
+        nextStatus[row.id] = row.connected ? 'connected' : row.source === 'meta_teste' && (!rawStatus || rawStatus === 'UNKNOWN') ? 'unknown' : 'disconnected';
+      });
       setConnectionStatus(nextStatus);
       setInstances((current) => {
         const localById = new Map(current.map((instance) => [instance.id, instance]));
@@ -589,7 +597,7 @@ export default function Acionamento() {
           .filter((row) => row.source === 'meta_teste' || row.connected || row.is_own || isOwnerAdmin)
           .map((row) => {
             const local = localById.get(row.id);
-            if (local) return { ...local, telefone: row.telefone || local.telefone, source: row.source || local.source };
+            if (local) return { ...local, telefone: row.telefone || local.telefone, source: row.source || local.source, bm_nome: row.bm_nome ?? local.bm_nome, meta_status: row.status ?? local.meta_status };
             return {
               id: row.id,
               user_id: row.user_id,
@@ -603,6 +611,8 @@ export default function Acionamento() {
               ia_responde: false,
               shared_read_only: !row.can_edit,
               source: row.source || 'uazapi',
+              bm_nome: row.bm_nome,
+              meta_status: row.status,
             };
           });
       });
@@ -2540,6 +2550,11 @@ export default function Acionamento() {
                                         Desconectado
                                       </Badge>
                                     )}
+                                    {isMetaTest && status === 'unknown' && (
+                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                                        Não verificada
+                                      </Badge>
+                                    )}
                                     {status === 'checking' && (
                                       <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                     )}
@@ -2592,6 +2607,11 @@ export default function Acionamento() {
                                     )}
                                     {isOwnerAdmin && !isMetaTest && <p className="text-[11px] text-muted-foreground truncate">{inst.server_url}</p>}
                                   </div>
+                                  {isMetaTest && (
+                                    <p className="text-[11px] text-muted-foreground truncate">
+                                      BM: {inst.bm_nome || 'não vinculada'}
+                                    </p>
+                                  )}
 
                                 </div>
                               </div>
