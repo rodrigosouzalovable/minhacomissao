@@ -64,6 +64,34 @@ const PAISES_FALLBACK = [
   { id: '39', nome: 'Argentina' },
 ];
 
+const CODIGOS_DDI = new Set([
+  '1', '7', '20', '27', '30', '31', '32', '33', '34', '36', '39', '40', '41', '43', '44', '45', '46', '47', '48', '49',
+  '51', '52', '53', '54', '55', '56', '57', '58', '60', '61', '62', '63', '64', '65', '66', '81', '82', '84', '86', '90',
+  '91', '92', '93', '94', '95', '98', '211', '212', '213', '216', '218', '220', '221', '222', '223', '224', '225',
+  '226', '227', '228', '229', '230', '231', '232', '233', '234', '235', '236', '237', '238', '239', '240',
+  '241', '242', '243', '244', '245', '246', '248', '249', '250', '251', '252', '253', '254', '255', '256',
+  '257', '258', '260', '261', '262', '263', '264', '265', '266', '267', '268', '269', '290', '291', '297',
+  '298', '299', '350', '351', '352', '353', '354', '355', '356', '357', '358', '359', '370', '371', '372',
+  '373', '374', '375', '376', '377', '378', '379', '380', '381', '382', '383', '385', '386', '387', '389',
+  '420', '421', '423', '500', '501', '502', '503', '504', '505', '506', '507', '508', '509', '590', '591',
+  '592', '593', '594', '595', '596', '597', '598', '599', '670', '672', '673', '674', '675', '676',
+  '677', '678', '679', '680', '681', '682', '683', '685', '686', '687', '688', '689', '690', '691',
+  '692', '850', '852', '853', '855', '856', '880', '886', '960', '961', '962', '963', '964', '965',
+  '966', '967', '968', '970', '971', '972', '973', '974', '975', '976', '977', '992', '993', '994',
+  '995', '996', '998',
+]);
+
+const dadosNumero = (pedido: Pedido) => {
+  const completo = String(pedido.numero || '').replace(/\D/g, '');
+  if (!completo) return { completo: '', ddi: '', exibicao: 'Número não informado' };
+  const ddi = pedido.pais === '73'
+    ? '55'
+    : [3, 2, 1].map((tamanho) => completo.slice(0, tamanho)).find((codigo) => CODIGOS_DDI.has(codigo)) || '';
+  const nacional = ddi && completo.startsWith(ddi) ? completo.slice(ddi.length) : completo;
+  const exibicao = ddi ? `+${ddi} ${nacional}` : `+${completo}`;
+  return { completo, ddi, exibicao };
+};
+
 const statusLabel: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   aguardando: { label: 'Aguardando SMS', variant: 'outline' },
   recebido: { label: 'Código recebido', variant: 'default' },
@@ -265,7 +293,8 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
         max_preco: novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : undefined,
       }),
     onSuccess: (res) => {
-      toast.success(res?.pedido?.numero ? `Número comprado: ${res.pedido.numero}` : 'Número comprado');
+      const numero = res?.pedido ? dadosNumero(res.pedido as Pedido).exibicao : '';
+      toast.success(numero ? `Número comprado: ${numero}` : 'Número comprado');
       qc.invalidateQueries({ queryKey: ['virtualsms-pedidos'] });
       qc.invalidateQueries({ queryKey: ['virtualsms-saldo'] });
     },
@@ -635,18 +664,34 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
         {(pedidoAtivo || ultimoRecebido) && (() => {
           const p = pedidoAtivo || ultimoRecebido!;
           const st = statusLabel[p.status] || { label: p.status, variant: 'outline' as const };
+          const numero = dadosNumero(p);
+          const nomePais = paises.find((item) => item.id === p.pais)?.nome || (p.pais === '73' ? 'Brasil' : 'Internacional');
           return (
             <div className="rounded-md border p-3 space-y-2 bg-muted/30">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono font-semibold">{p.numero || 'Número não informado'}</span>
-                {p.numero && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copiar(p.numero!)}>
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                )}
+                <span className="font-medium">{nomePais}</span>
                 <Badge variant={st.variant} className="text-[10px]">{st.label}</Badge>
-                <span className="text-xs text-muted-foreground">{p.servico}{p.pais ? ` · ${p.pais}` : ''} · {usd(p.custo)}</span>
+                <span className="text-xs text-muted-foreground">{p.servico} · {usd(p.custo)}</span>
               </div>
+
+              {numero.completo && (
+                <div className="grid gap-2 sm:grid-cols-[minmax(90px,auto)_1fr]">
+                  <div className="rounded-md border bg-background p-2">
+                    <span className="block text-[10px] text-muted-foreground">DDI</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="font-mono">{numero.ddi ? `+${numero.ddi}` : 'Não identificado'}</strong>
+                      {numero.ddi && <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copiar(numero.ddi)} title="Copiar DDI"><Copy className="h-3.5 w-3.5" /></Button>}
+                    </div>
+                  </div>
+                  <div className="rounded-md border bg-background p-2">
+                    <span className="block text-[10px] text-muted-foreground">Número completo para WhatsApp</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="font-mono">{numero.exibicao}</strong>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copiar(numero.completo)} title="Copiar número completo"><Copy className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {p.codigo ? (
                 <div className="flex items-center gap-2">
@@ -675,7 +720,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
               <div className="flex gap-2">
                 {p.numero && onConectar && (
-                  <Button size="sm" variant="secondary" onClick={() => onConectar(p.numero!)}>
+                  <Button size="sm" variant="secondary" onClick={() => onConectar(`+${numero.completo}`)}>
                     Conectar na UAZAPI
                   </Button>
                 )}
@@ -707,10 +752,12 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
               {pedidos.map((p) => {
                 const st = statusLabel[p.status] || { label: p.status, variant: 'outline' as const };
                 const prov = PROVEDORES.find((x) => x.id === (p.provider || 'virtualsms'));
+                const numero = dadosNumero(p);
+                const nomePais = paises.find((item) => item.id === p.pais)?.nome || (p.pais === '73' ? 'Brasil' : 'Internacional');
                 return (
                   <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
-                    <span className="font-mono">{p.numero || '—'}</span>
-                    {p.ddd && <span className="text-muted-foreground">DDD {p.ddd}</span>}
+                    <span className="font-mono">{numero.exibicao}</span>
+                    <span className="text-muted-foreground">{nomePais}{numero.ddi ? ` · DDI +${numero.ddi}` : ''}</span>
                     <span className="text-muted-foreground">{p.servico}</span>
                     <span className="text-muted-foreground">{p.provider === 'sms24h' ? 'SMS24H' : 'VirtualSMS'}</span>
                     {p.codigo && <code className="font-mono font-semibold">{p.codigo}</code>}

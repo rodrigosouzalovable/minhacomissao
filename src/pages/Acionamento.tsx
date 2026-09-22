@@ -78,6 +78,7 @@ const normalizePhoneForWhatsApp = (phone: string): string => {
 const normalizePairingPhone = (phone: string): string => {
   const clean = phone.replace(/\D/g, '');
   if (!clean) return '';
+  if (phone.trim().startsWith('+')) return clean;
   return clean.startsWith('55') ? clean : `55${clean}`;
 };
 
@@ -2420,7 +2421,7 @@ export default function Acionamento() {
                             const limpo = String(numero).replace(/\D/g, '');
                             setEditingInstance({ nome: '', telefone: limpo, server_url: 'https://certificadoracnpj.uazapi.com', instance_token: '' });
                             setConnectMethod('code');
-                            setPairingPhone(limpo);
+                            setPairingPhone(String(numero).trim().startsWith('+') ? `+${limpo}` : limpo);
                             setQrStep('idle');
                             setQrImage(null);
                             setPairingCode(null);
