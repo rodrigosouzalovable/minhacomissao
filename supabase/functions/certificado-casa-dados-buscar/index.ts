@@ -49,6 +49,9 @@ Deno.serve(async (req) => {
     }
 
     const resultado = await coletarJanela(service, cfg, janela, true);
+    if (resultado.erro) {
+      return resposta({ error: resultado.erro, resultado }, 502);
+    }
     return resposta({ success: !resultado.erro, resultado });
   } catch (error) {
     console.error("certificado-casa-dados-buscar", error);

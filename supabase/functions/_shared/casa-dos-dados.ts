@@ -1,6 +1,22 @@
 // Cliente da API da Casa dos Dados (v2 public search) para o módulo Certificado Digital.
 
 const BASE = "https://api.casadosdados.com.br/v2/public/cnpj/search";
+const MAX_TENTATIVAS = 3;
+const TIMEOUT_MS = 30_000;
+
+export class CasaDosDadosError extends Error {
+  status: number | null;
+  temporario: boolean;
+
+  constructor(message: string, status: number | null, temporario: boolean) {
+    super(message);
+    this.name = "CasaDosDadosError";
+    this.status = status;
+    this.temporario = temporario;
+  }
+}
+
+const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export interface CasaFiltro {
   ufs: string[];
@@ -153,25 +169,53 @@ export async function buscarCasaDosDados(filtro: CasaFiltro): Promise<{
     limit: Math.min(filtro.limite ?? 100, 1000),
   };
 
-  const resp = await fetch(BASE, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": apiKey,
-    },
-    body: JSON.stringify(body),
-  });
+  let texto = "";
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const resp = await fetch(BASE, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": apiKey,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      texto = await resp.text();
+      if (resp.ok) break;
 
-  const texto = await resp.text();
-  if (!resp.ok) {
-    throw new Error(`Casa dos Dados ${resp.status}: ${texto.slice(0, 400)}`);
+      const temporario = resp.status === 408 || resp.status === 429 || resp.status >= 500;
+      if (!temporario || tentativa === MAX_TENTATIVAS) {
+        throw new CasaDosDadosError(
+          temporario
+            ? "A Casa dos Dados está temporariamente indisponível. Tente novamente em alguns minutos."
+            : `A Casa dos Dados recusou a consulta (HTTP ${resp.status}). Verifique a configuração da integração.`,
+          resp.status,
+          temporario,
+        );
+      }
+    } catch (error) {
+      if (error instanceof CasaDosDadosError) throw error;
+      if (tentativa === MAX_TENTATIVAS) {
+        throw new CasaDosDadosError(
+          "Não foi possível conectar à Casa dos Dados após novas tentativas.",
+          null,
+          true,
+        );
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+    await esperar(tentativa === 1 ? 1_000 : 2_500);
   }
 
   let json: any;
   try {
     json = JSON.parse(texto);
   } catch {
-    throw new Error(`Resposta inválida da Casa dos Dados: ${texto.slice(0, 200)}`);
+    throw new CasaDosDadosError("A Casa dos Dados retornou uma resposta inválida.", null, true);
   }
 
   const lista: any[] = json?.data?.cnpj ?? json?.data ?? json?.cnpj ?? json?.result ?? [];

@@ -41,10 +41,46 @@ Deno.serve(async (req) => {
     if (!cfg?.meta_bm_id || !cfg?.template_nome) return json({ error: "Selecione a BM e o template" }, 409);
     if (!cfg.prospeccao_ativa && !simulacao && !modoTeste) return json({ error: "Piloto desativado" }, 409);
 
+    let resumoColeta: Record<string, unknown> | null = null;
+    let resumoVerificacao: Record<string, unknown> | null = null;
     if (completo && cfg.motor_ativo) {
       const janelas = [...new Set((cfg.janelas_dias ?? []).map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n <= 30).sort((a, b) => a - b);
-      for (const janela of janelas) await coletarJanela(service, cfg, janela, true);
-      await verificarLeadsCertificado(service, 2000);
+      const resultados = [];
+      for (const janela of janelas) {
+        const resultado = await coletarJanela(service, cfg, janela, true);
+        resultados.push(resultado);
+        if (resultado.erro_temporario) break;
+      }
+      const falhas = resultados.filter((resultado) => !!resultado.erro);
+      const sucessos = resultados.filter((resultado) => !resultado.erro);
+      resumoColeta = {
+        janelas: resultados.length,
+        janelas_sucesso: sucessos.length,
+        janelas_falha: falhas.length,
+        encontrados: sucessos.reduce((total, resultado) => total + resultado.encontrados, 0),
+        novos: sucessos.reduce((total, resultado) => total + resultado.novos, 0),
+      };
+      if (resultados.length > 0 && sucessos.length === 0) {
+        return json({
+          error: "A Casa dos Dados está temporariamente indisponível. Nenhuma campanha foi criada. Tente novamente em alguns minutos.",
+          coleta: resumoColeta,
+        }, 503);
+      }
+
+      const verificacao = await verificarLeadsCertificado(service, 2000);
+      resumoVerificacao = verificacao;
+      const { count: pendentes } = await service.from("certificado_leads")
+        .select("id", { count: "exact", head: true })
+        .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
+        .not("telefone_principal", "is", null);
+      if ((pendentes ?? 0) > 0 && verificacao.instancias_validadoras.length === 0) {
+        return json({
+          error: "Nenhuma instância UAZAPI selecionada está conectada para verificar os números. Nenhuma campanha foi criada.",
+          coleta: resumoColeta,
+        }, 409);
+      }
+    } else if (completo) {
+      return json({ error: "A coleta está desligada. Ative a coleta antes de iniciar o processamento e os envios." }, 409);
     }
 
     const { data: mestre } = await service.from("meta_templates_mestre").select("id").eq("nome", cfg.template_nome).eq("idioma", cfg.template_idioma).maybeSingle();
@@ -80,7 +116,14 @@ Deno.serve(async (req) => {
     const { data: leads, error: leadsError } = await service.from("certificado_leads").select("id,cnpj,razao_social,nome_fantasia,telefone_principal").eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null).order("created_at", { ascending: true }).limit(restante);
     if (leadsError) throw leadsError;
     if (simulacao) return json({ success: true, simulacao: true, elegiveis: leads?.length ?? 0, limite_restante: restante, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone })) });
-    if (!leads?.length) return json({ success: true, skipped: true, motivo: "Nenhum contato com WhatsApp está elegível" });
+    if (!leads?.length) return json({
+      success: true,
+      skipped: true,
+      motivo: "A coleta terminou, mas nenhum contato com WhatsApp ficou elegível para envio.",
+      coleta: resumoColeta,
+      verificacao: resumoVerificacao,
+      parcial: Number((resumoColeta as any)?.janelas_falha ?? 0) > 0,
+    });
 
     const principal: any = porInstancia.get(participantes[0].id);
     const templateIdByInstance = Object.fromEntries(participantes.map((i: any) => [i.id, (porInstancia.get(i.id) as any).id]));
@@ -118,7 +161,15 @@ Deno.serve(async (req) => {
     }
     await service.from("certificado_config").update({ ultimo_rr_indice: rr, prospeccao_ultima_execucao: new Date().toISOString(), prospeccao_pausada_motivo: null }).eq("id", cfg.id);
     fetch(`${url}/functions/v1/envio-meta-massa-tick`, { method: "POST", headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ job_id: job.id }) }).catch(() => {});
-    return json({ success: true, job_id: job.id, total: reservas.length, participantes: participantes.map((i: any) => i.nome) });
+    return json({
+      success: true,
+      job_id: job.id,
+      total: reservas.length,
+      participantes: participantes.map((i: any) => i.nome),
+      coleta: resumoColeta,
+      verificacao: resumoVerificacao,
+      parcial: Number((resumoColeta as any)?.janelas_falha ?? 0) > 0,
+    });
   } catch (error) {
     console.error("certificado-prospeccao-processar", error);
     return json({ error: error instanceof Error ? error.message : "Falha na prospecção" }, 500);
