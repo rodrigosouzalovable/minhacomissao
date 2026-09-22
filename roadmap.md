@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Validar o primeiro ciclo real do piloto Certificado Digital com BM, template aprovado e 50 envios/dia
+- [ ] Validar a entrega completa dos 50 envios do primeiro ciclo real do piloto Certificado Digital
 - [x] Verify and address monitoring findings 1–12
 - [x] Deploy changed functions and validate targeted flows
 - [x] Resolve the 12 supplied findings with verified code and database evidence
@@ -10,6 +10,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Priorizar o estoque local do Certificado Digital e impedir consumo da Casa dos Dados enquanto houver contatos para 50 envios
 - [x] Eliminar timeout de 150s do Certificado Digital com coleta limitada e verificação paralela suficiente para 50 envios
 - [x] Tentar automaticamente até cinco países internacionais mais baratos quando o primeiro ficar sem estoque
 - [x] Corrigir o IAGO no TESTE META para responder sempre na caixa AQUECIMENTO com mensagens variadas e sem bloqueio por atendente de outra caixa
