@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from 'sonner';
 import { Loader2, RefreshCw, ShoppingCart, Copy, X, Smartphone, Wallet, Webhook, CheckCircle2, AlertCircle, Ban } from 'lucide-react';
 
@@ -100,6 +101,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const qc = useQueryClient();
   const [provider, setProvider] = useState('virtualsms');
   const [servico, setServico] = useState('wa');
+  const [tipoNumero, setTipoNumero] = useState<'brasil' | 'internacional'>('brasil');
   const [pais, setPais] = useState('73');
   const [ddd, setDdd] = useState('62');
   const [novoLimite, setNovoLimite] = useState('');
@@ -145,6 +147,20 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
   const paises: { id: string; nome: string }[] =
     paisesQuery.data?.paises?.length ? paisesQuery.data.paises : PAISES_FALLBACK;
+  const paisesInternacionais = paises.filter((item) => item.id !== '73');
+  const paisSelecionado = paises.find((item) => item.id === pais);
+
+  useEffect(() => {
+    if (tipoNumero === 'brasil') {
+      if (pais !== '73') setPais('73');
+      return;
+    }
+
+    if (pais === '73' || !paises.some((item) => item.id === pais)) {
+      const primeiroInternacional = paisesInternacionais[0];
+      if (primeiroInternacional) setPais(primeiroInternacional.id);
+    }
+  }, [pais, paises, paisesInternacionais, tipoNumero]);
 
   // Preço mínimo disponível — mostra a variação antes de comprar
   const precoQuery = useQuery({
@@ -476,7 +492,27 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
 
 
         {/* Compra */}
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Origem do número</Label>
+            <ToggleGroup
+              type="single"
+              value={tipoNumero}
+              onValueChange={(value) => {
+                if (value === 'brasil' || value === 'internacional') setTipoNumero(value);
+              }}
+              className="w-fit rounded-md border p-1"
+            >
+              <ToggleGroupItem value="brasil" aria-label="Escolher número brasileiro" className="h-8 px-4">
+                Brasil
+              </ToggleGroupItem>
+              <ToggleGroupItem value="internacional" aria-label="Escolher número internacional" className="h-8 px-4">
+                Internacional
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
             <Label className="text-xs">Provedor</Label>
             <Select value={provider} onValueChange={setProvider}>
@@ -499,17 +535,26 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs">País</Label>
-            <Select value={pais} onValueChange={setPais}>
-              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {paises.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {tipoNumero === 'brasil' ? (
+            <div className="space-y-1">
+              <Label className="text-xs">País</Label>
+              <div className="flex h-9 w-44 items-center rounded-md border bg-muted/40 px-3 text-sm">Brasil</div>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <Label className="text-xs">País internacional</Label>
+              <Select value={pais === '73' ? '' : pais} onValueChange={setPais} disabled={!paisesInternacionais.length}>
+                <SelectTrigger className="h-9 w-52">
+                  <SelectValue placeholder={paisesQuery.isLoading ? 'Carregando países...' : 'Selecione um país'} />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {paisesInternacionais.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {suportaDdd && (
             <div className="space-y-1">
               <Label className="text-xs">DDD</Label>
@@ -557,16 +602,29 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           {bloqueado && (
             <span className="text-xs text-destructive">Limite mensal atingido — aumente o limite para comprar.</span>
           )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <Badge variant="outline" className="text-[10px]">
+            {tipoNumero === 'brasil' ? 'Brasil' : paisSelecionado?.nome || 'País não selecionado'}
+          </Badge>
+          {precoQuery.isFetching ? (
+            <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Consultando disponibilidade...</span>
+          ) : menorPreco != null ? (
+            <span>Disponível agora a partir de <strong className="text-foreground">{moeda(menorPreco)}</strong>.</span>
+          ) : (
+            <span>Nenhum preço disponível para esta seleção neste momento.</span>
+          )}
         </div>
 
         <p className="text-[11px] text-muted-foreground">
-          {menorPreco != null
-            ? <>Menor preço disponível agora: <strong>{moeda(menorPreco)}</strong>. </>
-            : ''}
           O preço do provedor é dinâmico — a compra é bloqueada acima do teto de <strong>{provInfo.moeda} {(novoTeto.trim() ? Number(novoTeto.replace(',', '.')) : tetoAtual).toFixed(2)}</strong>.
-          {provInfo.ddd
+          {tipoNumero === 'brasil' && provInfo.ddd
             ? ' O SMS24H permite escolher o DDD do número.'
-            : ' A VirtualSMS não permite escolher o DDD — use o SMS24H para isso.'}
+            : tipoNumero === 'brasil'
+              ? ' A VirtualSMS não permite escolher o DDD — use o SMS24H para isso.'
+              : ' Números internacionais não possuem seleção de DDD brasileiro.'}
         </p>
 
 
