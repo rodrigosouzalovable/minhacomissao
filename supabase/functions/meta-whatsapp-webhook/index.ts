@@ -775,7 +775,7 @@ serve(async (req) => {
           if (!isEcho && !msgError && sufixo.length === 8) {
             const { data: envioCert } = await supabase.from('certificado_prospeccao_envios')
               .select('id').eq('instancia_id', inst.id).in('status', ['enviado','entregue','lido'])
-              .order('enviado_em', { ascending: false }).limit(20);
+              .order('enviado_em', { ascending: false }).limit(100);
             if (envioCert?.length) {
               const ids = envioCert.map((r: any) => r.id);
               const { data: comTelefone } = await supabase.from('certificado_prospeccao_envios')
@@ -1605,7 +1605,7 @@ serve(async (req) => {
           if (status === 'delivered') certPatch.status = 'entregue';
           if (status === 'read') certPatch.status = 'lido';
           if (status === 'failed') { certPatch.status = 'falha'; certPatch.erro = (errTitle ? String(errTitle) : 'falha') + (errCode ? ` (#${errCode})` : ''); }
-          if (status !== 'sent') await supabase.from('certificado_prospeccao_envios').update(certPatch).eq('wa_message_id', waId);
+          if (status !== 'sent') await supabase.from('certificado_prospeccao_envios').update(certPatch).eq('wa_message_id', waId).neq('status', 'respondido');
 
           // Aprendizado do aquecimento: entrega/leitura/falha por wamid
           try {
