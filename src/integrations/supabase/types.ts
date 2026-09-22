@@ -1341,6 +1341,38 @@ export type Database = {
           },
         ]
       }
+      certificado_prospeccao_templates: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          template_mestre_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          template_mestre_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          template_mestre_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificado_prospeccao_templates_template_mestre_id_fkey"
+            columns: ["template_mestre_id"]
+            isOneToOne: true
+            referencedRelation: "meta_templates_mestre"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       certificado_uazapi_verificadoras: {
         Row: {
           ativa: boolean
