@@ -2159,25 +2159,7 @@ export default function ConfigurarMeta() {
               </div>
             )}
 
-            {isAdmin && (
-              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
-                <div>
-                  <Label>Instância de teste da Meta — usar como destino do aquecimento</Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Vincula esta instância à caixa AQUECIMENTO e a mantém fora de todos os envios comerciais.
-                  </p>
-                  {editInst?.teste_aquecimento_ultimo_erro && (
-                    <p className="text-xs text-destructive mt-1">Última validação: {editInst.teste_aquecimento_ultimo_erro}</p>
-                  )}
-                </div>
-                <Switch
-                  checked={editForm.instancia_teste_aquecimento}
-                  onCheckedChange={(v) => setEditForm({ ...editForm, instancia_teste_aquecimento: v, aquecimento_meta_ativo: v ? false : editForm.aquecimento_meta_ativo })}
-                />
-              </div>
-            )}
-
-            {isAdmin && !editForm.instancia_teste_aquecimento && (
+            {isAdmin && !form.instancia_teste_aquecimento && (
               <div className="flex items-start justify-between gap-3 rounded-md border p-3">
                 <div>
                   <Label>Copiar templates aprovados automaticamente</Label>
@@ -2259,6 +2241,24 @@ export default function ConfigurarMeta() {
             </div>
 
             {isAdmin && (
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <Label>Instância de teste da Meta — usar como destino do aquecimento</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Vincula esta instância à caixa AQUECIMENTO e a mantém fora de todos os envios comerciais.
+                  </p>
+                  {editInst?.teste_aquecimento_ultimo_erro && (
+                    <p className="text-xs text-destructive mt-1">Última validação: {editInst.teste_aquecimento_ultimo_erro}</p>
+                  )}
+                </div>
+                <Switch
+                  checked={editForm.instancia_teste_aquecimento}
+                  onCheckedChange={(v) => setEditForm({ ...editForm, instancia_teste_aquecimento: v, aquecimento_meta_ativo: v ? false : editForm.aquecimento_meta_ativo })}
+                />
+              </div>
+            )}
+
+            {isAdmin && !editForm.instancia_teste_aquecimento && (
               <div className="flex items-start justify-between gap-3 rounded-md border p-3">
                 <div>
                   <Label>Número de nova BM — entrar no aquecimento de tier</Label>
