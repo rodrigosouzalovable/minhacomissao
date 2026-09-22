@@ -178,7 +178,12 @@ export default function CertificadoDigital() {
   }, onSuccess: (data) => { toast.success(`${data.com_whatsapp} com WhatsApp; ${data.sem_whatsapp} sem WhatsApp`); qc.invalidateQueries({ queryKey: ["certificado-leads"] }); }, onError: (e) => toast.error(e instanceof Error ? e.message : "Falha na verificação") });
   const processar = useMutation({ mutationFn: async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("certificado-prospeccao-processar", { body });
-    if (error) throw error; if (data?.error) throw new Error(data.error); return data;
+    if (error) {
+      const context = (error as { context?: { json?: () => Promise<{ error?: string }> } }).context;
+      const payload = context?.json ? await context.json().catch(() => null) : null;
+      throw new Error(payload?.error ?? error.message);
+    }
+    if (data?.error) throw new Error(data.error); return data;
   }, onSuccess: (data) => {
     const coleta = data.coleta as { novos?: number; janelas_falha?: number } | undefined;
     const verificacao = data.verificacao as { com_whatsapp?: number } | undefined;

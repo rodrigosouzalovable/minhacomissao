@@ -1,5 +1,5 @@
 // Lógica compartilhada de coleta/gravação de leads do Certificado Digital.
-import { buscarCasaDosDados, ehCelular, type LeadBruto } from "./casa-dos-dados.ts";
+import { buscarCasaDosDados, CasaDosDadosError, ehCelular, type LeadBruto } from "./casa-dos-dados.ts";
 
 export interface ConfigCert {
   id: string;
@@ -19,6 +19,7 @@ export interface ResultadoJanela {
   duplicados: number;
   sem_telefone: number;
   erro?: string;
+  erro_temporario?: boolean;
 }
 
 /** Data (yyyy-mm-dd) de "hoje menos N dias" no fuso de São Paulo. */
@@ -141,6 +142,7 @@ export async function coletarJanela(
     }
   } catch (e) {
     res.erro = e instanceof Error ? e.message : String(e);
+    res.erro_temporario = e instanceof CasaDosDadosError && e.temporario;
   }
 
   await registrarLog(supabase, res, manual);

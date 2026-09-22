@@ -46,7 +46,11 @@ Deno.serve(async (req) => {
     if (completo && cfg.motor_ativo) {
       const janelas = [...new Set((cfg.janelas_dias ?? []).map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n <= 30).sort((a, b) => a - b);
       const resultados = [];
-      for (const janela of janelas) resultados.push(await coletarJanela(service, cfg, janela, true));
+      for (const janela of janelas) {
+        const resultado = await coletarJanela(service, cfg, janela, true);
+        resultados.push(resultado);
+        if (resultado.erro_temporario) break;
+      }
       const falhas = resultados.filter((resultado) => !!resultado.erro);
       const sucessos = resultados.filter((resultado) => !resultado.erro);
       resumoColeta = {
@@ -56,7 +60,7 @@ Deno.serve(async (req) => {
         encontrados: sucessos.reduce((total, resultado) => total + resultado.encontrados, 0),
         novos: sucessos.reduce((total, resultado) => total + resultado.novos, 0),
       };
-      if (resultados.length > 0 && falhas.length === resultados.length) {
+      if (resultados.length > 0 && sucessos.length === 0) {
         return json({
           error: "A Casa dos Dados está temporariamente indisponível. Nenhuma campanha foi criada. Tente novamente em alguns minutos.",
           coleta: resumoColeta,
