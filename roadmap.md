@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Implantar campanha persistente do Certificado Digital às 09h em dias úteis e atendimento da Clara na caixa CERTIFICADO
 - [ ] Validar o primeiro ciclo real do piloto Certificado Digital com BM, template aprovado e 50 envios/dia
 - [x] Verify and address monitoring findings 1–12
 - [x] Deploy changed functions and validate targeted flows

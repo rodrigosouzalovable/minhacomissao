@@ -9,6 +9,7 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+const FOLDER_CERTIFICADO = '9267b296-24e6-425d-9f0e-0e4114c782d9';
 
 // Mapeia status da Meta -> status interno do app
 function mapStatusMeta(s: string): string {
@@ -771,6 +772,19 @@ serve(async (req) => {
             contatoIdFinal = (inseridoContato as any)?.id ?? null;
           }
 
+          if (!isEcho && !msgError && sufixo.length === 8) {
+            const { data: envioCert } = await supabase.from('certificado_prospeccao_envios')
+              .select('id').eq('instancia_id', inst.id).in('status', ['enviado','entregue','lido'])
+              .order('enviado_em', { ascending: false }).limit(20);
+            if (envioCert?.length) {
+              const ids = envioCert.map((r: any) => r.id);
+              const { data: comTelefone } = await supabase.from('certificado_prospeccao_envios')
+                .select('id,certificado_leads!inner(telefone_principal)').in('id', ids);
+              const correspondente = (comTelefone || []).find((r: any) => String(r.certificado_leads?.telefone_principal || '').replace(/\D/g, '').endsWith(sufixo));
+              if (correspondente) await supabase.from('certificado_prospeccao_envios').update({ status: 'respondido', respondido_em: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', correspondente.id);
+            }
+          }
+
           // ===== Etiqueta do atendente =====
           // 1) Se o telefone bate (últimos 8 dígitos, tolera "9" móvel) com algum acordo,
           //    aplica a etiqueta "Atendente: <nome>" do usuário que lançou o acordo (LOCKED — só admin remove).
@@ -1486,6 +1500,17 @@ serve(async (req) => {
               } catch (e: any) {
                 console.error('[MetaWebhook] IAGO exceção', e?.message || e);
               }
+              if (_folderIdContato === FOLDER_CERTIFICADO) {
+                try {
+                  const { data, error } = await supabase.functions.invoke('clara-atendimento', {
+                    body: { contato_id: contatoIdFinal, texto: textoParaIA, entrada_id: m.id, tipo_conteudo: tipo, imagem_contexto: imagemContexto },
+                  });
+                  if (error) console.error('[MetaWebhook] CLARA erro', error.message);
+                  else console.log('[MetaWebhook] CLARA', JSON.stringify(data || {}));
+                } catch (e: any) {
+                  console.error('[MetaWebhook] CLARA exceção', e?.message || e);
+                }
+              }
             })();
             // Garante execução mesmo depois de responder à Meta (evita abort no shutdown do isolate)
             try {
@@ -1575,6 +1600,12 @@ serve(async (req) => {
           await supabase.from('meta_whatsapp_envios_log')
             .update(updateLog)
             .eq('wa_message_id', waId);
+
+          const certPatch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+          if (status === 'delivered') certPatch.status = 'entregue';
+          if (status === 'read') certPatch.status = 'lido';
+          if (status === 'failed') { certPatch.status = 'falha'; certPatch.erro = (errTitle ? String(errTitle) : 'falha') + (errCode ? ` (#${errCode})` : ''); }
+          if (status !== 'sent') await supabase.from('certificado_prospeccao_envios').update(certPatch).eq('wa_message_id', waId);
 
           // Aprendizado do aquecimento: entrega/leitura/falha por wamid
           try {
