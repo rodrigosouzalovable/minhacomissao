@@ -372,6 +372,13 @@
       "when": 1790095392579,
       "tag": "0052_secure_meta_test_mode_on_insert",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1790116673492,
+      "tag": "0053_greensoul_pilot_quality_metrics",
+      "breakpoints": true
     }
   ]
 }

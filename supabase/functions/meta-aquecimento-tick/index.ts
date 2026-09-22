@@ -34,6 +34,7 @@ import {
   registrarConversaLead,
   registrarGasto,
   taxaRespostaRecenteLeads,
+  autoRespondedoresParaAquecimento,
 } from '../_shared/meta-aquecimento-inteligente.ts';
 import { notificarNumeros } from '../_shared/notificar-numeros.ts';
 import { avaliarPiloto, carregarPilotosAtivos, dataBrtDiasAtras, GREEN_SOUL_BM_ID, telefoneChave } from '../_shared/meta-bm-escalada-piloto.ts';
@@ -264,6 +265,10 @@ Deno.serve(async (req) => {
     );
     const limiteLeads = Math.min(600, Math.max(60, Math.ceil(alvoTotalDia / 2)));
     let leadsDisponiveis = await leadsParaAquecimento(supabase, limiteLeads);
+    let autoRespondedores = await autoRespondedoresParaAquecimento(
+      supabase,
+      Math.max(20, Math.ceil(alvoTotalDia * 0.1)),
+    );
 
     // Rodadas restantes na janela do dia (para dimensionar o lote da rodada).
     const spNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
@@ -372,9 +377,20 @@ Deno.serve(async (req) => {
           (usoDestinoUazapi.get(d.id) || 0) < maxPorDestino && d.id !== ultimo?.destino_instancia_id
         );
 
-        let fonte: 'uazapi' | 'meta_teste' | 'lead' | null = null;
-        if (querUazapi && destinosUazapiOk.length > 0) fonte = 'uazapi';
+        const fontesBmHoje = logsHoje.filter((l: any) =>
+          l.status !== 'falha' && (insts || []).some((i: any) =>
+            i.id === l.instancia_id && String(i.meta_bm_id || i.id) === bmId
+          )
+        );
+        const autoHoje = fontesBmHoje.filter((l: any) => l.fonte === 'auto_respondedor').length;
+        const tetoAutoHoje = Math.max(1, Math.floor(alvoDia * 0.1));
+        const podeUsarAuto = autoHoje < tetoAutoHoje && autoRespondedores.length > 0;
+
+        let fonte: 'uazapi' | 'meta_teste' | 'lead' | 'auto_respondedor' | null = null;
+        if (podeUsarAuto && fontesBmHoje.length > 0 && fontesBmHoje.length % 10 === 0) fonte = 'auto_respondedor';
+        else if (querUazapi && destinosUazapiOk.length > 0) fonte = 'uazapi';
         else if (mixUazapi < 100 && leadsDisponiveis.length > 0) fonte = 'lead';
+        else if (podeUsarAuto) fonte = 'auto_respondedor';
         else if (destinosUazapiOk.length > 0) fonte = 'uazapi';
         else if (leadsDisponiveis.length > 0) fonte = 'lead';
 
@@ -385,13 +401,13 @@ Deno.serve(async (req) => {
 
         // Leads do Google Maps usam apenas templates UTILITY marcados como
         // "usar em leads"; sem template elegível, o envio ao lead é pulado.
-        const tpl = fonte === 'lead'
+        const tpl = fonte === 'lead' || fonte === 'auto_respondedor'
           ? await escolherTemplateLead(supabase, inst)
           : await escolherTemplateAprovado(inst, cfg?.aquecimento_template_utility);
         if (!tpl) {
           resultados.push({
             instancia: inst.nome,
-            erro: fonte === 'lead' ? 'sem_template_lead' : 'sem_template_aprovado',
+            erro: fonte === 'lead' || fonte === 'auto_respondedor' ? 'sem_template_lead' : 'sem_template_aprovado',
           });
           break;
         }
@@ -416,9 +432,10 @@ Deno.serve(async (req) => {
           nomeDestino = d.nome;
           destinoInstanciaId = d.id;
         } else {
-           let lead = leadsDisponiveis.shift();
+           const fila = fonte === 'auto_respondedor' ? autoRespondedores : leadsDisponiveis;
+           let lead = fila.shift();
            while (lead && avaliacaoPiloto && destinosUsados7dPorBm.get(bmId)?.has(telefoneChave(lead.telefone))) {
-             lead = leadsDisponiveis.shift();
+              lead = fila.shift();
            }
            if (!lead) {
              resultados.push({ instancia: inst.nome, skipped: 'sem_lead_unico_7d' });
@@ -463,14 +480,14 @@ Deno.serve(async (req) => {
           });
         }
 
-        if (leadId) {
+        if (leadId && fonte === 'lead') {
           // Falha não gasta o lead: ele volta para a fila.
           if (envio.ok) await marcarLeadUsado(supabase, leadId, 'enviado');
           else await devolverLead(supabase, leadId);
         }
 
         // Conversa do lead fica na caixa AQUECIMENTO, com a mensagem real enviada.
-        if (fonte === 'lead' && envio.ok) {
+        if ((fonte === 'lead' || fonte === 'auto_respondedor') && envio.ok) {
           await registrarConversaLead(
             supabase, inst, telefone, nomeDestino, tpl.name, envio.wamid,
             renderTemplateBody(tpl, nomeDestino),

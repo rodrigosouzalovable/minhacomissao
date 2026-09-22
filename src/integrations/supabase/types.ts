@@ -4267,6 +4267,8 @@ export type Database = {
           lido_em: string | null
           nicho: string | null
           respondeu_em: string | null
+          resposta_classificacao: string | null
+          resposta_texto: string | null
           segundos_para_resposta: number | null
           status: string
           template: string | null
@@ -4289,6 +4291,8 @@ export type Database = {
           lido_em?: string | null
           nicho?: string | null
           respondeu_em?: string | null
+          resposta_classificacao?: string | null
+          resposta_texto?: string | null
           segundos_para_resposta?: number | null
           status?: string
           template?: string | null
@@ -4311,6 +4315,8 @@ export type Database = {
           lido_em?: string | null
           nicho?: string | null
           respondeu_em?: string | null
+          resposta_classificacao?: string | null
+          resposta_texto?: string | null
           segundos_para_resposta?: number | null
           status?: string
           template?: string | null

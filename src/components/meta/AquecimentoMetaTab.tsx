@@ -25,6 +25,12 @@ function hojeBrt() {
   return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function diasAtrasBrt(dias: number) {
+  const data = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  data.setUTCDate(data.getUTCDate() - dias);
+  return data.toISOString().slice(0, 10);
+}
+
 export function AquecimentoMetaTab() {
   const qc = useQueryClient();
   const dia = hojeBrt();
@@ -38,7 +44,7 @@ export function AquecimentoMetaTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meta_aquecimento_trilha")
-        .select("*, instancia:meta_whatsapp_instances(nome, display_phone, saude_quality, saude_tier, tier_diario, meta_bm_id, estado_pool, pausa_automatica_motivo, bm:meta_business_managers(nome))")
+        .select("*, instancia:meta_whatsapp_instances(nome, display_phone, saude_quality, saude_tier, tier_diario, messaging_limit_synced_at, meta_bm_id, estado_pool, pausa_automatica_motivo, bm:meta_business_managers(nome, tier_diario))")
         .eq("dia", dia);
       if (error) throw error;
       return data ?? [];
@@ -114,13 +120,33 @@ export function AquecimentoMetaTab() {
     },
   });
 
+  const { data: logs30d } = useQuery({
+    queryKey: ["aq-logs-30d", dia],
+    staleTime: 300_000,
+    queryFn: async () => {
+      const todos: any[] = [];
+      for (let inicio = 0; ; inicio += 1000) {
+        const { data, error } = await supabase
+          .from("meta_aquecimento_destino_log")
+          .select("id, dia, instancia_id, destino_telefone, fonte, status, entregue_em, lido_em, respondeu_em, resposta_classificacao")
+          .gte("dia", diasAtrasBrt(29))
+          .order("enviado_em", { ascending: false })
+          .range(inicio, inicio + 999);
+        if (error) throw error;
+        todos.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return todos;
+    },
+  });
+
   const { data: selecionadas } = useQuery({
     queryKey: ["aq-selecao"],
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, saude_quality, saude_tier, tier_diario, aquecimento_meta_ativo, meta_bm_id, estado_pool, pausa_automatica_motivo, bm:meta_business_managers(nome)")
+        .select("id, nome, display_phone, saude_quality, saude_tier, tier_diario, messaging_limit_synced_at, aquecimento_meta_ativo, meta_bm_id, estado_pool, pausa_automatica_motivo, bm:meta_business_managers(nome, tier_diario)")
         .eq("provider", "meta")
         .eq("ativo", true)
         .order("nome", { ascending: true });
@@ -264,7 +290,9 @@ export function AquecimentoMetaTab() {
       const metaOperacional = Number(t.tier_atual || inst?.tier_diario || 0) <= 250 ? 25 : 450;
       atual.alvo = Math.max(atual.alvo, metaOperacional);
       atual.numeros += 1;
-      atual.tier = Math.max(atual.tier, Number(t.tier_atual || inst?.tier_diario || 0));
+       atual.tier = Math.max(atual.tier, Number(inst?.bm?.tier_diario || t.tier_atual || inst?.tier_diario || 0));
+       const sincronizado = inst?.messaging_limit_synced_at ? new Date(inst.messaging_limit_synced_at).getTime() : 0;
+       if (sincronizado > Number(atual.sincronizadoEm || 0)) atual.sincronizadoEm = sincronizado;
       atual.qualidades.add(String(inst?.saude_quality || "UNKNOWN"));
       if (inst?.estado_pool === "restrita" || inst?.pausa_automatica_motivo) {
         atual.bloqueios.add(String(inst?.pausa_automatica_motivo || inst?.estado_pool));
@@ -404,12 +432,42 @@ export function AquecimentoMetaTab() {
                 const piloto = (pilotos ?? []).find((p: any) => String(p.bm_id) === bm.id);
                 const historico = (historicoPilotos ?? []).filter((h: any) => String(h.bm_id) === bm.id);
                 const ultimo = historico[0];
-                const unicos7d = Number(ultimo?.unicos_entregues_7d || 0);
                 const idsBm = new Set((trilhas ?? []).filter((t: any) => String(t.instancia?.meta_bm_id || `sem-bm:${t.instancia_id}`) === bm.id).map((t: any) => t.instancia_id));
                 const logsBmHoje = (logs ?? []).filter((l: any) => idsBm.has(l.instancia_id));
+                 const logsBm30d = (logs30d ?? []).filter((l: any) => idsBm.has(l.instancia_id));
+                 const logsBm7d = logsBm30d.filter((l: any) => l.dia >= diasAtrasBrt(6));
+                const chaveTelefone = (l: any) => String(l.destino_telefone || "").replace(/\D/g, "").slice(-8);
+                const tentados7d = new Set(logsBm7d.map(chaveTelefone).filter(Boolean)).size;
+                const unicos7d = new Set(logsBm7d.filter((l: any) => l.entregue_em || l.lido_em || l.respondeu_em).map(chaveTelefone).filter(Boolean)).size;
+                const lidos7d = new Set(logsBm7d.filter((l: any) => l.lido_em).map(chaveTelefone).filter(Boolean)).size;
+                const respostas7d = new Set(logsBm7d.filter((l: any) => l.respondeu_em).map(chaveTelefone).filter(Boolean)).size;
+                const automaticas7d = logsBm7d.filter((l: any) => l.resposta_classificacao === "automatica").length;
+                const positivas7d = logsBm7d.filter((l: any) => l.resposta_classificacao === "positiva").length;
+                const negativas7d = logsBm7d.filter((l: any) => ["negativa", "numero_errado", "optout"].includes(l.resposta_classificacao)).length;
+                const falhas7d = logsBm7d.filter((l: any) => l.status === "falha").length;
+                const leadsNovos7d = logsBm7d.filter((l: any) => l.fonte === "lead").length;
+                const reaproveitados7d = logsBm7d.filter((l: any) => l.fonte === "auto_respondedor").length;
                 const entreguesHoje = new Set(logsBmHoje.filter((l: any) => l.entregue_em).map((l: any) => String(l.destino_telefone || "").replace(/\D/g, "").slice(-8))).size;
                 const respostasHoje = logsBmHoje.filter((l: any) => l.respondeu_em).length;
                 const falhasHoje = logsBmHoje.filter((l: any) => l.status === "falha").length;
+                 const unicos30d = new Set(logsBm30d.filter((l: any) => l.entregue_em || l.lido_em || l.respondeu_em).map(chaveTelefone).filter(Boolean)).size;
+                 const referencia = bm.tier < 2000 ? 2000 : Math.ceil(bm.tier / 2);
+                 const distancia = Math.max(0, referencia - unicos30d);
+                const entregaPct = tentados7d > 0 ? (unicos7d / tentados7d) * 100 : 0;
+                const falhaPct = logsBm7d.length > 0 ? (falhas7d / logsBm7d.length) * 100 : 0;
+                const negativaPct = respostas7d > 0 ? (negativas7d / respostas7d) * 100 : 0;
+                const qualidadeOk = [...bm.qualidades].every((q) => q === "GREEN");
+                const recomendacao = !qualidadeOk || bloqueada
+                  ? "Pausar — qualidade ou restrição exige revisão"
+                  : falhaPct > 5 || negativaPct >= 10
+                    ? "Pausar — falhas ou respostas negativas acima do limite"
+                    : falhaPct >= 3 || entregaPct < 95
+                      ? "Reduzir 30% — desempenho abaixo da faixa segura"
+                      : feitos >= bm.alvo && distancia > 0
+                        ? "Avançar na próxima etapa — indicadores saudáveis"
+                        : distancia === 0
+                          ? "Manter GREEN e aguardar a confirmação da Meta"
+                          : "Manter a meta atual até completar o dia saudável";
                 return (
                   <div key={bm.nome} className="rounded-md border p-3 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -430,14 +488,30 @@ export function AquecimentoMetaTab() {
                       <div className="grid gap-2 border-t pt-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
                         <span><strong>Situação:</strong> {String(piloto.status).replace(/_/g, " ")}</span>
                         <span><strong>Etapa:</strong> {piloto.etapa}/3</span>
-                        <span><strong>Entregues únicos 7d:</strong> {unicos7d}</span>
-                        <span><strong>Distância operacional:</strong> {Math.max(0, 1000 - unicos7d)}</span>
+                          <span><strong>{bm.sincronizadoEm ? "Tier oficial" : "Tier cadastrado"}:</strong> {bm.tier || "—"}</span>
+                         <span><strong>Sincronizado:</strong> {bm.sincronizadoEm ? new Date(bm.sincronizadoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "aguardando"}</span>
+                         <span><strong>Tentados únicos 7d:</strong> {tentados7d}</span>
+                         <span><strong>Entregues únicos 7d:</strong> {unicos7d}</span>
+                         <span><strong>Lidos únicos 7d:</strong> {lidos7d}</span>
+                         <span><strong>Respostas únicas 7d:</strong> {respostas7d}</span>
+                          <span><strong>Entregues únicos 30d:</strong> {unicos30d}</span>
+                          <span><strong>Distância operacional 30d:</strong> {distancia}</span>
                         <span><strong>Entregues hoje:</strong> {entreguesHoje}</span>
                         <span><strong>Respostas hoje:</strong> {respostasHoje}</span>
                         <span><strong>Falhas hoje:</strong> {falhasHoje}</span>
                         <span><strong>Qualidade:</strong> {ultimo?.qualidade || [...bm.qualidades].join(", ")}</span>
+                         <span><strong>Novos leads 7d:</strong> {leadsNovos7d}</span>
+                         <span><strong>Reaproveitados 7d:</strong> {reaproveitados7d}</span>
+                         <span><strong>Automáticas:</strong> {automaticas7d}</span>
+                         <span><strong>Positivas:</strong> {positivas7d}</span>
+                         <span><strong>Negativas/retiradas:</strong> {negativas7d}</span>
                       </div>
                     )}
+                     {piloto && (
+                       <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
+                         <strong>Recomendação do dia:</strong> {recomendacao}
+                       </div>
+                     )}
                     {bloqueada && <p className="text-xs text-destructive">{[...bm.bloqueios].join(" · ")}</p>}
                   </div>
                 );
@@ -465,6 +539,9 @@ export function AquecimentoMetaTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            O piloto reaproveita no máximo 10% da meta diária, somente após 7 dias, com confiança mínima de 80% e sem bloqueio ou pedido de retirada.
+          </p>
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input

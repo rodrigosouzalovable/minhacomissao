@@ -48,6 +48,11 @@ Deno.serve(async (req) => {
 
     const permitidas = await idsInstanciasPermitidas(req, supabase);
     const instancias = filtrarInstancias(instanciasRaw as any[], permitidas);
+    const bmIds = [...new Set((instancias || []).map((inst: any) => inst.meta_bm_id).filter(Boolean))];
+    const { data: bms } = bmIds.length > 0
+      ? await supabase.from('meta_business_managers').select('id, business_id').in('id', bmIds)
+      : { data: [] };
+    const businessIdPorBm = new Map((bms || []).map((bm: any) => [String(bm.id), String(bm.business_id || '')]));
 
     const results: any[] = [];
     // Processa as instâncias em paralelo com concorrência limitada (evita 504).
@@ -144,6 +149,22 @@ Deno.serve(async (req) => {
           inst.access_token,
         );
         if (phoneHealth.ok) r.phone_health = phoneHealth.data?.health_status || null;
+
+        const businessId = String(inst.business_id || businessIdPorBm.get(String(inst.meta_bm_id)) || '');
+        if (businessId) {
+          const businessResp = await fetchJson(
+            `${GRAPH}/${businessId}?fields=whatsapp_business_manager_messaging_limit`,
+            inst.access_token,
+          );
+          if (businessResp.ok) {
+            r.whatsapp_business_manager_messaging_limit = businessResp.data?.whatsapp_business_manager_messaging_limit || null;
+            if (r.whatsapp_business_manager_messaging_limit) {
+              r.messaging_limit_tier = r.whatsapp_business_manager_messaging_limit;
+            }
+          } else {
+            r.business_limit_error = businessResp.data?.error?.message || `HTTP ${businessResp.status}`;
+          }
+        }
 
         // Restrição real de envio da Meta: can_send_message = BLOCKED/LIMITED
         // (na raiz ou em qualquer entidade: número, WABA, business, app).
@@ -530,6 +551,21 @@ Deno.serve(async (req) => {
 
 
         await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
+        if (inst.meta_bm_id && r.whatsapp_business_manager_messaging_limit) {
+          const tierTexto = String(r.whatsapp_business_manager_messaging_limit).toUpperCase();
+          const matchTier = tierTexto.match(/(\d+(?:[.,]\d+)?)\s*([KM])?/);
+          if (matchTier) {
+            const numero = Number(matchTier[1].replace(',', '.'));
+            const multiplicador = matchTier[2] === 'M' ? 1_000_000 : matchTier[2] === 'K' ? 1_000 : 1;
+            const tierOficial = numero * multiplicador;
+            if (Number.isFinite(tierOficial) && tierOficial > 0) {
+              await supabase.from('meta_business_managers').update({
+                tier_diario: tierOficial,
+                atualizado_em: new Date().toISOString(),
+              }).eq('id', inst.meta_bm_id).eq('tier_manual', false);
+            }
+          }
+        }
 
         if (entrouPorVarredura) {
           r.reaquecimento_religado = true;
