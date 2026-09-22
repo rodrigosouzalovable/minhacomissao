@@ -135,6 +135,21 @@ function getMetaTestPhone(displayPhone: unknown, name: unknown): string | null {
   return normalizeInstancePhone(suffix);
 }
 
+function getMetaTestConnection(instance: {
+  ativo?: boolean | null;
+  saude_status?: string | null;
+  phone_number_id?: string | null;
+  access_token?: string | null;
+}) {
+  const healthStatus = String(instance.saude_status || "").toUpperCase();
+  const explicitlyDisconnected = ["DISCONNECTED", "OFFLINE", "DISABLED", "DELETED"].includes(healthStatus);
+  const configured = Boolean(instance.phone_number_id && instance.access_token);
+  return {
+    connected: instance.ativo === true && configured && !explicitlyDisconnected,
+    status: healthStatus || "unknown",
+  };
+}
+
 async function persistInstancePhone(instanceId: string, value: unknown): Promise<string | null> {
   const phone = normalizeInstancePhone(value);
   if (!phone) return null;
@@ -651,10 +666,7 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
   }
 
   for (const instance of metaTests || []) {
-    const healthStatus = String(instance.saude_status || "").toUpperCase();
-    const explicitlyDisconnected = ["DISCONNECTED", "OFFLINE", "DISABLED", "DELETED"].includes(healthStatus);
-    const configured = Boolean(instance.phone_number_id && instance.access_token);
-    const connected = instance.ativo === true && configured && !explicitlyDisconnected;
+    const connection = getMetaTestConnection(instance);
     const bmRelation = Array.isArray(instance.bm) ? instance.bm[0] : instance.bm;
     safeRows.push({
       id: instance.id,
@@ -662,8 +674,8 @@ async function listInstancesStatus(requesterId: string, isOwnerAdmin: boolean) {
       nome: instance.nome,
       telefone: getMetaTestPhone(instance.display_phone, instance.nome),
       ativo: instance.ativo,
-      connected,
-      status: healthStatus || "unknown",
+      connected: connection.connected,
+      status: connection.status,
       bm_nome: bmRelation?.nome || null,
       source: "meta_teste",
       is_own: instance.user_id === requesterId,
@@ -685,9 +697,7 @@ async function listMetaTestInstances(requesterId: string) {
   if (error) return json({ ok: false, error: "Não foi possível carregar as instâncias Meta de teste" }, 500);
 
   const instances = (data || []).map((instance) => {
-    const healthStatus = String(instance.saude_status || "").toUpperCase();
-    const explicitlyDisconnected = ["DISCONNECTED", "OFFLINE", "DISABLED", "DELETED"].includes(healthStatus);
-    const configured = Boolean(instance.phone_number_id && instance.access_token);
+    const connection = getMetaTestConnection(instance);
     const bmRelation = Array.isArray(instance.bm) ? instance.bm[0] : instance.bm;
     return {
       id: instance.id,
@@ -695,8 +705,8 @@ async function listMetaTestInstances(requesterId: string) {
       nome: instance.nome,
       telefone: getMetaTestPhone(instance.display_phone, instance.nome),
       ativo: instance.ativo,
-      connected: instance.ativo === true && configured && !explicitlyDisconnected,
-      status: healthStatus || "unknown",
+      connected: connection.connected,
+      status: connection.status,
       bm_nome: bmRelation?.nome || null,
       source: "meta_teste",
       is_own: instance.user_id === requesterId,
