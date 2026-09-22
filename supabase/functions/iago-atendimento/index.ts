@@ -95,7 +95,9 @@ Deno.serve(async (req) => {
     modoAquecimento = String((contato as any).folder_id || '') === FOLDER_AQUECIMENTO_INBOX;
 
 
-    const atende = await iagoAtendeCaixa(supabase, iago.id, (contato as any).folder_id ?? null);
+    // AQUECIMENTO é sempre do IAGO. A associação da conversa continua sendo
+    // validada pela etiqueta abaixo, mas uma configuração geral de caixa não a silencia.
+    const atende = modoAquecimento || await iagoAtendeCaixa(supabase, iago.id, (contato as any).folder_id ?? null);
     if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
 
     // ===== Credor da conversa: cabeçalho da conversa > credor único ativo da caixa =====
@@ -829,11 +831,16 @@ Deno.serve(async (req) => {
     if (modoAquecimento && !mensagens.length) {
       const pn = primeiroNome(nomeCliente);
       const genericas = [
-        `Entendi${pn ? `, ${pn}` : ''}! Me conta um pouco mais, por favor.`,
-        'Certo! Pode me explicar melhor pra eu te ajudar?',
-        `Obrigado pela resposta${pn ? `, ${pn}` : ''}! Como posso te ajudar?`,
+        `Entendi${pn ? `, ${pn}` : ''}. E como estão as coisas por aí?`,
+        'Certo, me conta mais um pouco sobre isso.',
+        'Pode falar, estou acompanhando por aqui.',
+        'Ah, entendi. O que você acha disso?',
+        'Faz sentido. Como foi isso para você?',
+        'Estou por aqui. Quer continuar me contando?',
       ];
-      mensagens = [genericas[Math.floor(Math.random() * genericas.length)]];
+      const disponiveis = genericas.filter((m) => !saidasRecentes.includes(normalizarTexto(m)));
+      const pool = disponiveis.length ? disponiveis : genericas;
+      mensagens = [pool[Math.floor(Math.random() * pool.length)]];
     }
 
 
@@ -1006,6 +1013,46 @@ async function gerarResposta(args: {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+
+  if (modoAquecimento) {
+    const conversaAquecimento = historico.length
+      ? historico.map((m) => `${m.direcao === 'entrada' ? 'PESSOA' : 'VOCÊ'}: ${String(m.conteudo || '').slice(0, 400)}`).join('\n')
+      : '(primeira mensagem)';
+    const systemAquecimento = [
+      `Você é ${cfg.persona_nome || 'Iago'} conversando informalmente pelo WhatsApp.`,
+      'Esta conversa serve apenas para interação natural de aquecimento. Não é atendimento comercial nem cobrança.',
+      'É proibido pedir CPF, documento, pagamento, falar de dívida, proposta, credor, sistema, IA, robô ou transferir para atendente.',
+      'Responda sempre ao conteúdo exato da última mensagem, como uma pessoa real. Não invente contexto.',
+      'Use uma ou duas frases curtas e no máximo uma pergunta leve. Emoji é opcional e não deve aparecer sempre.',
+      'Varie abertura, palavras, ritmo e estrutura. Não repita saudação, pergunta, nome, emoji ou bordão presente nas suas últimas respostas.',
+      'Se a mensagem for apenas uma saudação, cumprimente brevemente e puxe um assunto cotidiano leve sem pedir dados pessoais.',
+      'Se a mídia não puder ser compreendida, peça em uma frase curta para a pessoa explicar por texto.',
+      'Nunca deixe de responder e use sempre escalar=false.',
+      'Responda SOMENTE com JSON válido: {"mensagens":["texto"],"escalar":false,"motivo":""}',
+    ].join('\n');
+    const userAquecimento = [
+      `HISTÓRICO RECENTE:\n${conversaAquecimento}`,
+      '',
+      `ÚLTIMA MENSAGEM DA PESSOA:\n${texto}`,
+      '',
+      'Escreva agora uma resposta nova, contextual e diferente das respostas anteriores.',
+    ].join('\n');
+
+    try {
+      const out = await chamarIA(systemAquecimento, userAquecimento);
+      const parsed = extrairJson(out);
+      const respostas = Array.isArray(parsed?.mensagens)
+        ? parsed.mensagens.map((m: any) => String(m).trim()).filter(Boolean).slice(0, 2)
+        : [];
+      if (respostas.length) return { mensagens: respostas, escalar: false, motivo: '' };
+      const txt = String(out || '').trim();
+      if (txt) return { mensagens: [txt.slice(0, 500)], escalar: false, motivo: '' };
+    } catch (e: any) {
+      console.error('[IAGO] falha na conversa de aquecimento', e?.message || e);
+    }
+    return { mensagens: [], escalar: false, motivo: 'fallback de aquecimento' };
+  }
+
   const perguntaSobreCredoresAtendidos = /\bume\b|\bnovo mundo\b/.test(textoNormalizado)
     && /\b(tambem|trabalha|trabalham|atende|atendem|representa|representam|debitos|dividas|credor|credores)\b/.test(textoNormalizado);
   if (perguntaSobreCredoresAtendidos) {
@@ -1177,7 +1224,13 @@ async function gerarResposta(args: {
         ? `ETAPA ATUAL: você já perguntou que dia ele consegue pagar${escolhaAnterior ? ` (opção escolhida: ${escolhaAnterior})` : ''}. Interprete a data informada.`
         : '',
     modoAquecimento
-      ? 'MODO AQUECIMENTO: é PROIBIDO escalar (use SEMPRE escalar=false), prometer transferência, dizer que vai chamar outro atendente ou deixar a mensagem sem resposta. Responda SEMPRE de forma curta, educada e natural, e mantenha a conversa fluindo com uma pergunta leve.'
+      ? [
+          'MODO AQUECIMENTO: é PROIBIDO escalar (use SEMPRE escalar=false), prometer transferência, dizer que vai chamar outro atendente ou deixar a mensagem sem resposta.',
+          'Aqui você conversa como uma pessoa real em um papo informal, não como atendente de cobrança. Responda ao conteúdo exato da última mensagem e mantenha o assunto fluindo.',
+          'Cada resposta deve soar diferente das suas mensagens anteriores: varie abertura, vocabulário, ritmo e estrutura. Não repita saudação, pergunta, emoji, nome da pessoa ou bordão usado no HISTÓRICO RECENTE.',
+          'Alterne naturalmente entre comentário, concordância, curiosidade, pequena observação e pergunta leve. Nem toda resposta precisa começar com “entendi”, “certo” ou “oi”.',
+          'Use 1 ou 2 frases curtas. Faça no máximo uma pergunta por resposta e use emoji apenas ocasionalmente.',
+        ].join('\n')
       : 'Escale para humano (escalar=true) quando: a data do pagamento estiver definida (ou fora do mês); o cliente pedir algo fora do que foi ensinado; reclamar/ameaçar processo; tocar em assunto proibido; ou você não tiver certeza da resposta correta.',
     '',
     instrucoes ? `INSTRUÇÕES DO ADMINISTRADOR:\n${instrucoes}` : '',

@@ -393,18 +393,10 @@ export async function temAtendenteHumanoNoTelefone(
     const folderId = contexto.folderId ?? (c as any)?.folder_id ?? null;
     let provider = contexto.provider ?? null;
 
-    // AQUECIMENTO usa conversas espelhadas da UAZAPI. O mesmo telefone pode existir
-    // em outra caixa oficial com atendente humano, mas isso não deve calar o IAGO aqui.
+    // AQUECIMENTO é uma conversa isolada. O mesmo telefone pode existir em outra
+    // caixa com atendente humano, mas isso nunca deve calar o IAGO aqui.
     if (folderId === FOLDER_AQUECIMENTO_INBOX) {
-      if (!provider && (c as any)?.instancia_id) {
-        const { data: inst } = await supabase
-          .from('meta_whatsapp_instances')
-          .select('provider')
-          .eq('id', (c as any).instancia_id)
-          .maybeSingle();
-        provider = (inst as any)?.provider ?? null;
-      }
-      if (String(provider || '').toLowerCase() === 'uazapi') return null;
+      return null;
     }
 
     const tel = String((c as any)?.telefone || '').replace(/\D/g, '');
