@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Validar a entrega completa dos contatos restantes da campanha corrigida do Certificado Digital
 - [ ] Validar a entrega completa dos 50 envios do primeiro ciclo real do piloto Certificado Digital
 - [x] Verify and address monitoring findings 1–12
 - [x] Deploy changed functions and validate targeted flows
@@ -10,6 +11,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Corrigir data de abertura e valor de R$ 129,90 no template do Certificado Digital e carregar a campanha no painel normal
 - [x] Priorizar o estoque local do Certificado Digital e impedir consumo da Casa dos Dados enquanto houver contatos para 50 envios
 - [x] Eliminar timeout de 150s do Certificado Digital com coleta limitada e verificação paralela suficiente para 50 envios
 - [x] Tentar automaticamente até cinco países internacionais mais baratos quando o primeiro ficar sem estoque

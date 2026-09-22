@@ -15,6 +15,7 @@ import { Activity, Download, FileKey2, KeyRound, Loader2, MapPin, Phone, Play, R
 import { exportarParaExcel } from "@/lib/exportExcel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CertificadoTemplatesCard, type CertificadoTemplate } from "@/components/certificado/CertificadoTemplatesCard";
+import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 
 const UFS = ["GO", "SP", "RS", "RJ", "SC", "DF"];
 const CNAES_PADRAO = ["6911701", "7020400", "8630504", "7490104", "4712100", "6319400", "7319002", "8630503", "8112500", "4120400", "6201501", "9602501", "4772500", "4751201", "4781400", "4530703", "6204000"];
@@ -50,6 +51,7 @@ function dataExibicao(data: string | null) {
 
 export default function CertificadoDigital() {
   const qc = useQueryClient();
+  const { ensureJobLoaded, refreshStatus } = useEnvioMetaSending();
   const [busca, setBusca] = useState("");
   const [ufFiltro, setUfFiltro] = useState("todas");
   const [janelaFiltro, setJanelaFiltro] = useState("todas");
@@ -216,7 +218,7 @@ export default function CertificadoDigital() {
       throw new Error(payload?.error ?? error.message);
     }
     if (data?.error) throw new Error(data.error); return data;
-  }, onSuccess: (data) => {
+  }, onSuccess: async (data) => {
     const coleta = data.coleta as { novos?: number; janelas_falha?: number; janelas_pendentes?: number } | undefined;
     const verificacao = data.verificacao as { com_whatsapp?: number } | undefined;
     const detalhes = coleta
@@ -235,6 +237,8 @@ export default function CertificadoDigital() {
     qc.invalidateQueries({ queryKey: ["certificado-leads"] });
     qc.invalidateQueries({ queryKey: ["certificado-logs"] });
     qc.invalidateQueries({ queryKey: ["envio-meta-jobs"] });
+    if (typeof data.job_id === "string" && data.job_id) await ensureJobLoaded(data.job_id);
+    await refreshStatus();
   }, onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao processar") });
   const alterarPool = async (instancia: typeof metaInstancias[number], ativar: boolean) => {
     if (!confirm(`${ativar ? "Ativar" : "Desativar"} o pool geral de ${instancia.nome}? Isso também afeta campanhas e aquecimento.`)) return;
