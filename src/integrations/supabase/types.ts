@@ -1277,12 +1277,17 @@ export type Database = {
       certificado_prospeccao_envios: {
         Row: {
           bm_id: string
+          entregue_em: string | null
           enviado_em: string | null
           erro: string | null
           id: string
           instancia_id: string | null
+          job_id: string | null
+          job_item_id: string | null
           lead_id: string
+          lido_em: string | null
           reservado_em: string
+          respondido_em: string | null
           status: string
           template_idioma: string
           template_nome: string
@@ -1291,12 +1296,17 @@ export type Database = {
         }
         Insert: {
           bm_id: string
+          entregue_em?: string | null
           enviado_em?: string | null
           erro?: string | null
           id?: string
           instancia_id?: string | null
+          job_id?: string | null
+          job_item_id?: string | null
           lead_id: string
+          lido_em?: string | null
           reservado_em?: string
+          respondido_em?: string | null
           status?: string
           template_idioma?: string
           template_nome: string
@@ -1305,12 +1315,17 @@ export type Database = {
         }
         Update: {
           bm_id?: string
+          entregue_em?: string | null
           enviado_em?: string | null
           erro?: string | null
           id?: string
           instancia_id?: string | null
+          job_id?: string | null
+          job_item_id?: string | null
           lead_id?: string
+          lido_em?: string | null
           reservado_em?: string
+          respondido_em?: string | null
           status?: string
           template_idioma?: string
           template_nome?: string
@@ -1330,6 +1345,20 @@ export type Database = {
             columns: ["instancia_id"]
             isOneToOne: false
             referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificado_prospeccao_envios_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "envio_meta_job"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificado_prospeccao_envios_job_item_id_fkey"
+            columns: ["job_item_id"]
+            isOneToOne: false
+            referencedRelation: "envio_meta_job_item"
             referencedColumns: ["id"]
           },
           {
@@ -1545,6 +1574,97 @@ export type Database = {
           template?: string
         }
         Relationships: []
+      }
+      clara_config: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          folder_id: string
+          id: number
+          mensagem_agendar: string
+          mensagem_documentos: string
+          mensagem_recebido: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          folder_id: string
+          id?: number
+          mensagem_agendar: string
+          mensagem_documentos: string
+          mensagem_recebido?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          folder_id?: string
+          id?: number
+          mensagem_agendar?: string
+          mensagem_documentos?: string
+          mensagem_recebido?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clara_config_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clara_conversa_estado: {
+        Row: {
+          aguardando_humano: boolean
+          contato_id: string
+          contexto: Json
+          created_at: string
+          etapa: string
+          id: string
+          optout: boolean
+          telefone: string
+          ultima_resposta_em: string | null
+          updated_at: string
+        }
+        Insert: {
+          aguardando_humano?: boolean
+          contato_id: string
+          contexto?: Json
+          created_at?: string
+          etapa?: string
+          id?: string
+          optout?: boolean
+          telefone?: string
+          ultima_resposta_em?: string | null
+          updated_at?: string
+        }
+        Update: {
+          aguardando_humano?: boolean
+          contato_id?: string
+          contexto?: Json
+          created_at?: string
+          etapa?: string
+          id?: string
+          optout?: boolean
+          telefone?: string
+          ultima_resposta_em?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clara_conversa_estado_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: true
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cloudflare_config: {
         Row: {

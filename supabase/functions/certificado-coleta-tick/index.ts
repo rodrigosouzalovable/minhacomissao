@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     const service = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: cfg, error: cfgError } = await service
       .from("certificado_config")
-      .select("id, motor_ativo, ufs, cnaes, janelas_dias, somente_mei, somente_celular, prospeccao_ativa")
+      .select("id, motor_ativo, ufs, cnaes, janelas_dias, somente_mei, somente_celular")
       .limit(1)
       .maybeSingle();
     if (cfgError) throw cfgError;
@@ -43,16 +43,7 @@ Deno.serve(async (req) => {
       total_coletado: resultados.reduce((sum, r) => sum + r.novos, 0),
     }).eq("id", cfg.id);
 
-    let prospeccao = null;
-    if (cfg.prospeccao_ativa) {
-      const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/certificado-prospeccao-processar`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
-        body: "{}",
-      });
-      prospeccao = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-    }
-    return resposta({ success: falhas === 0, resultados, verificacao, prospeccao });
+    return resposta({ success: falhas === 0, resultados, verificacao });
   } catch (error) {
     console.error("certificado-coleta-tick", error);
     return resposta({ error: error instanceof Error ? error.message : "Falha na coleta automática" }, 500);

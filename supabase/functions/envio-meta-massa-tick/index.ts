@@ -789,7 +789,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
-      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, credor: (pend as any).credor ?? job.credor ?? null, liberacao_total_parceiro: job.user_id === THIAGO_NOGUEIRA_USER_ID }),
+      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, atendente_nome: job.folder_id === '9267b296-24e6-425d-9f0e-0e4114c782d9' ? 'Clara Ribeiro de Souza' : undefined, credor: (pend as any).credor ?? job.credor ?? null, liberacao_total_parceiro: job.user_id === THIAGO_NOGUEIRA_USER_ID }),
     }).then((r) => r.json());
 
     if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused || sendResp?.bm_quota_blocked) {
@@ -839,6 +839,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       instancia_nome: null,
       erro: null,
     }).eq('id', pend.id);
+
     await supabase.from('envio_meta_job').update({
       proximo_em: retomaEm,
       status_motivo: `Aguardando liberação temporária da Meta até ${retomaEm}`,
@@ -971,6 +972,22 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
           criado_em: new Date().toISOString(),
         }, { onConflict: 'telefone_sufixo' });
       }
+    }
+  }
+
+  const certificadoEnvioId = typeof varsPend.certificado_envio_id === 'string' ? varsPend.certificado_envio_id : null;
+  const certificadoLeadId = typeof varsPend.certificado_lead_id === 'string' ? varsPend.certificado_lead_id : null;
+  if (certificadoEnvioId && !podeReenfileirar) {
+    await supabase.from('certificado_prospeccao_envios').update({
+      instancia_id: instId,
+      status: ok ? 'enviado' : 'falha',
+      wa_message_id: ok ? waIdOk : null,
+      erro: ok ? null : erroMsg,
+      enviado_em: ok ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', certificadoEnvioId);
+    if (ok && certificadoLeadId) {
+      await supabase.from('certificado_leads').update({ situacao: 'enviado', updated_at: new Date().toISOString() }).eq('id', certificadoLeadId);
     }
   }
 
