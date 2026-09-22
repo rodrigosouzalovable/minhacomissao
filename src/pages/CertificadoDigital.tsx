@@ -32,6 +32,10 @@ type Config = { id: string; motor_ativo: boolean; ufs: string[]; cnaes: string[]
 
 type Log = { id: string; janela: number | null; data_referencia: string | null; encontrados: number; novos: number; duplicados: number; sem_telefone: number; erro: string | null; manual: boolean; created_at: string };
 type ChaveStatus = { configurada: boolean; origem: "painel" | "ambiente" | null; sufixo: string | null; updated_at: string | null };
+type MetricaExperimento = { janela: number; enviados: number; entregues: number; lidos: number; respondidos: number };
+
+const JANELAS_EXPERIMENTO = [5, 10, 15, 20, 25, 30];
+const DATAS_EXPERIMENTO = ["23/09", "24/09", "25/09", "28/09", "29/09", "30/09"];
 
 function telefoneExibicao(tel: string | null) {
   if (!tel) return "—";
@@ -165,6 +169,20 @@ export default function CertificadoDigital() {
     const { count, error } = await supabase.from("certificado_prospeccao_envios").select("id", { count: "exact", head: true }).eq("bm_id", config?.meta_bm_id ?? "").gte("reservado_em", hoje.toISOString()).in("status", ["reservado","enviado","entregue","lido","respondido"]);
     if (error) throw error; return count ?? 0;
   }, staleTime: 30_000 });
+  const { data: metricasExperimento = [] } = useQuery({ queryKey: ["certificado-metricas-experimento"], queryFn: async () => {
+    const { data, error } = await supabase.from("certificado_prospeccao_envios").select("status,certificado_leads!inner(dias_desde_abertura)").in("status", ["enviado", "entregue", "lido", "respondido"]).limit(5000);
+    if (error) throw error;
+    return JANELAS_EXPERIMENTO.map((janela) => {
+      const itens = (data ?? []).filter((item) => Number((item as any).certificado_leads?.dias_desde_abertura) === janela);
+      return {
+        janela,
+        enviados: itens.length,
+        entregues: itens.filter((item) => ["entregue", "lido", "respondido"].includes(item.status)).length,
+        lidos: itens.filter((item) => ["lido", "respondido"].includes(item.status)).length,
+        respondidos: itens.filter((item) => item.status === "respondido").length,
+      } as MetricaExperimento;
+    });
+  }, staleTime: 30_000 });
 
   const salvarConfig = useMutation({
     mutationFn: async (patch: Partial<Config>) => {
@@ -236,6 +254,7 @@ export default function CertificadoDigital() {
     qc.invalidateQueries({ queryKey: ["certificado-envios-hoje"] });
     qc.invalidateQueries({ queryKey: ["certificado-leads"] });
     qc.invalidateQueries({ queryKey: ["certificado-logs"] });
+    qc.invalidateQueries({ queryKey: ["certificado-metricas-experimento"] });
     qc.invalidateQueries({ queryKey: ["envio-meta-jobs"] });
     if (typeof data.job_id === "string" && data.job_id) await ensureJobLoaded(data.job_id);
     await refreshStatus();
@@ -346,6 +365,7 @@ export default function CertificadoDigital() {
           </TabsContent>
           <TabsContent value="prospeccao" className="space-y-6">
              <Card className="border-primary/30"><CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between"><div><p className="font-semibold">Piloto de prospecção</p><p className="text-sm text-muted-foreground">Até 50 mensagens por dia, de segunda a sexta, com início automático às 09h.</p></div><div className="flex items-center gap-3"><Badge variant={config?.prospeccao_ativa ? "default" : "outline"}>{config?.prospeccao_ativa ? "ATIVO" : "PAUSADO"}</Badge><Switch checked={config?.prospeccao_ativa ?? false} onCheckedChange={(checked) => salvarConfig.mutate({ prospeccao_ativa: checked })} disabled={!config?.meta_bm_id || !config?.template_nome || salvarConfig.isPending} /></div></CardContent></Card>
+             <Card><CardHeader><CardTitle>Experimento por idade do CNPJ</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">50 contatos por dia útil, sem misturar datas. A sequência encerra automaticamente após D+30.</p><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Etapa</TableHead><TableHead>Envio</TableHead><TableHead>Enviados</TableHead><TableHead>Entregues</TableHead><TableHead>Lidos</TableHead><TableHead>Respostas</TableHead><TableHead>Taxa</TableHead></TableRow></TableHeader><TableBody>{metricasExperimento.map((metrica, indice) => <TableRow key={metrica.janela}><TableCell><Badge variant={indice === 0 ? "default" : "outline"}>D+{metrica.janela}</Badge></TableCell><TableCell>{DATAS_EXPERIMENTO[indice]}</TableCell><TableCell>{metrica.enviados}</TableCell><TableCell>{metrica.entregues}</TableCell><TableCell>{metrica.lidos}</TableCell><TableCell>{metrica.respondidos}</TableCell><TableCell>{metrica.enviados > 0 ? `${((metrica.respondidos / metrica.enviados) * 100).toFixed(1)}%` : "—"}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card>
             <div className="grid gap-4 lg:grid-cols-2">
               <Card><CardHeader><CardTitle>Template e BM piloto</CardTitle></CardHeader><CardContent className="space-y-4"><div><Label>Template para envio</Label><Select value={templateSelecionado?.id ?? ""} onValueChange={(value) => { const template = templatesHabilitados.find((item) => item.id === value); if (template) salvarConfig.mutate({ template_nome: template.nome, template_idioma: template.idioma, meta_bm_id: null, prospeccao_ativa: false }); }}><SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um template habilitado" /></SelectTrigger><SelectContent>{templatesHabilitados.map((template) => <SelectItem key={template.id} value={template.id}>{template.nome} · {template.categoria}</SelectItem>)}</SelectContent></Select></div><div><div className="flex items-center justify-between"><Label>BM aprovada</Label>{verificandoBms && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}</div><Select value={config?.meta_bm_id ?? ""} onValueChange={(value) => salvarConfig.mutate({ meta_bm_id: value, prospeccao_ativa: false })} disabled={!templateSelecionado || bmsCompativeis.length === 0}><SelectTrigger className="mt-1"><SelectValue placeholder={!templateSelecionado ? "Selecione primeiro o template" : bmsCompativeis.length === 0 ? "Nenhuma BM com aprovação" : "Escolha uma BM aprovada"} /></SelectTrigger><SelectContent>{bmsCompativeis.map((bm) => <SelectItem key={bm.id} value={bm.id}>{bm.nome} · {bm.quantidade} instância(s)</SelectItem>)}</SelectContent></Select>{templateSelecionado && !verificandoBms && bmsCompativeis.length === 0 && <p className="mt-2 text-xs text-destructive">Este template não está aprovado em nenhuma BM ativa.</p>}{config?.meta_bm_id && (() => { const bm = bmsCompativeis.find((item) => item.id === config.meta_bm_id); return bm ? <p className="mt-2 text-xs text-muted-foreground">{bm.quantidade} instância(s) aprovada(s) · sincronizado {bm.ultimaSincronizacao ? new Date(bm.ultimaSincronizacao).toLocaleString("pt-BR") : "sem data"}</p> : null; })()}</div><div className="rounded-md border p-3 text-sm"><div className="flex justify-between"><span>Enviados hoje</span><strong>{enviosHoje} / {config?.limite_diario ?? 50}</strong></div><div className="mt-2 flex justify-between"><span>Contatos com WhatsApp</span><strong>{leads.filter((l) => l.whatsapp_status === "com_whatsapp" && l.situacao === "novo").length}</strong></div></div></CardContent></Card>
                <Card><CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" />Preparação</CardTitle></CardHeader><CardContent className="space-y-3"><Button variant="outline" className="w-full justify-start" onClick={() => verificarWhatsApp.mutate()} disabled={verificarWhatsApp.isPending}>{verificarWhatsApp.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}Verificar números agora</Button><Button variant="outline" className="w-full justify-start" onClick={() => processar.mutate({ simulacao: true })} disabled={processar.isPending}><Activity className="mr-2 h-4 w-4" />Simular próximo envio</Button><div className="flex gap-2"><Input value={telefoneTeste} onChange={(e) => setTelefoneTeste(e.target.value)} placeholder="Telefone para teste" /><Button variant="outline" onClick={() => processar.mutate({ modo_teste: true, telefone_teste: telefoneTeste })} disabled={processar.isPending || telefoneTeste.replace(/\D/g, "").length < 10}><Send className="mr-2 h-4 w-4" />Testar</Button></div><Button className="w-full" onClick={() => processar.mutate({ iniciar_completo: true })} disabled={processar.isPending || !config?.prospeccao_ativa}>{processar.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}Iniciar processamento e envios</Button></CardContent></Card>
