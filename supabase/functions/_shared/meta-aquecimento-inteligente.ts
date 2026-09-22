@@ -72,6 +72,44 @@ export interface LeadAquecimento {
   nunca_usado?: boolean;
 }
 
+export async function autoRespondedoresParaAquecimento(
+  supabase: any,
+  limite = 50,
+): Promise<LeadAquecimento[]> {
+  const { data } = await supabase
+    .from("meta_aquecimento_auto_respondedores")
+    .select("lead_id, nome, telefone_normalizado, nicho, cidade, confianca")
+    .gte("confianca", 80)
+    .order("confianca", { ascending: false })
+    .order("ultima_deteccao_em", { ascending: true })
+    .limit(Math.min(200, Math.max(limite * 4, 40)));
+
+  const candidatos = ((data || []) as any[])
+    .filter((item) => item.lead_id)
+    .map((item) => ({
+      id: String(item.lead_id),
+      nome: item.nome || null,
+      telefone: String(item.telefone_normalizado || "").replace(/\D/g, ""),
+      nicho: item.nicho || null,
+      cidade: item.cidade || null,
+      respondedor: true,
+      nunca_usado: false,
+    }))
+    .filter((item) => item.telefone.length >= 10);
+
+  if (candidatos.length === 0) return [];
+  const sufixos = [...new Set(candidatos.map((item) => item.telefone.slice(-8)))];
+  const { data: supressoes } = await supabase
+    .from("meta_destinatario_supressao")
+    .select("telefone_sufixo")
+    .in("telefone_sufixo", sufixos.slice(0, 500));
+  const suprimidos = new Set((supressoes || []).map((item: any) => String(item.telefone_sufixo)));
+
+  return candidatos
+    .filter((item) => !suprimidos.has(item.telefone.slice(-8)))
+    .slice(0, limite);
+}
+
 
 function cidadeDoEndereco(endereco?: string | null): string {
   const partes = String(endereco || "").split(",").map((p) => p.trim()).filter(Boolean);
@@ -248,7 +286,7 @@ export async function marcarLeadUsado(
 
 /** Tier corrente do número, na melhor informação disponível. */
 export function tierAtual(inst: any): number {
-  const bruto = String(inst?.saude_tier || "").toUpperCase();
+  const bruto = String(inst?.whatsapp_business_manager_messaging_limit || inst?.saude_tier || "").toUpperCase();
   const m = bruto.match(/(\d+(?:[.,]\d+)?)\s*([KM])?/);
   if (m) {
     const numero = Number(m[1].replace(",", "."));
@@ -268,7 +306,7 @@ export function alvoDiarioPorTier(tier: number, alvoAdaptativo: number): number 
 }
 
 export function proximoTier(atual: number): number {
-  if (atual < 1000) return 1000;
+  if (atual < 2000) return 2000;
   if (atual < 10000) return 10000;
   if (atual < 100000) return 100000;
   return atual;

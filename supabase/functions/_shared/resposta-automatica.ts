@@ -4,6 +4,14 @@ export type ClassificacaoRespostaAutomatica = {
   motivo: string;
 };
 
+export type TipoRespostaAquecimento =
+  | "automatica"
+  | "positiva"
+  | "negativa"
+  | "numero_errado"
+  | "optout"
+  | "humana_neutra";
+
 const normalizar = (valor: unknown) => String(valor || "")
   .toLowerCase()
   .normalize("NFD")
@@ -66,4 +74,27 @@ export function classificarRespostaAutomatica(
     confianca,
     motivo: sinais.join("; ") || "sem sinais suficientes",
   };
+}
+
+export function classificarRespostaAquecimento(
+  texto: unknown,
+  segundosParaResposta?: number | null,
+): { tipo: TipoRespostaAquecimento; automatica: ClassificacaoRespostaAutomatica } {
+  const automatica = classificarRespostaAutomatica(texto, segundosParaResposta);
+  if (automatica.automatica) return { tipo: "automatica", automatica };
+
+  const t = normalizar(texto);
+  if (/\b(numero errado|pessoa errada|nao conheco|nao sou|nao e daqui|nao pertence)\b/.test(t)) {
+    return { tipo: "numero_errado", automatica };
+  }
+  if (/\b(pare de mandar|nao mande mais|nao me envie|remova meu numero|retire meu numero|sair|descadastrar|bloquear)\b/.test(t)) {
+    return { tipo: "optout", automatica };
+  }
+  if (/\b(nao tenho interesse|sem interesse|nao quero|agora nao|nao preciso|dispenso|recuso)\b/.test(t)) {
+    return { tipo: "negativa", automatica };
+  }
+  if (/\b(tenho interesse|me interessa|quero saber|pode explicar|mande mais|mais informacoes|como funciona|qual o valor|gostaria)\b/.test(t)) {
+    return { tipo: "positiva", automatica };
+  }
+  return { tipo: "humana_neutra", automatica };
 }
