@@ -29,6 +29,58 @@ export interface CasaFiltro {
   limite?: number;
 }
 
+function bytesParaBase64(bytes: Uint8Array) {
+  let binario = "";
+  for (const byte of bytes) binario += String.fromCharCode(byte);
+  return btoa(binario);
+}
+
+function base64ParaBytes(valor: string) {
+  const binario = atob(valor);
+  return Uint8Array.from(binario, (char) => char.charCodeAt(0));
+}
+
+async function chaveCriptografica() {
+  const segredo = Deno.env.get("CASA_DADOS_ENCRYPTION_KEY");
+  if (!segredo) throw new Error("Proteção da chave da Casa dos Dados não configurada");
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(segredo));
+  return crypto.subtle.importKey("raw", hash, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+
+export async function cifrarChaveCasaDosDados(chave: string) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cifrada = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    await chaveCriptografica(),
+    new TextEncoder().encode(chave),
+  );
+  return { chaveCifrada: bytesParaBase64(new Uint8Array(cifrada)), iv: bytesParaBase64(iv) };
+}
+
+export async function resolverChaveCasaDosDados(service: any): Promise<string> {
+  const { data, error } = await service
+    .from("certificado_casa_dados_credencial")
+    .select("chave_cifrada,iv")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) throw new Error("Não foi possível acessar a chave da Casa dos Dados");
+  if (!data) {
+    const fallback = Deno.env.get("CASA_DOS_DADOS_API_KEY");
+    if (!fallback) throw new Error("Cadastre a chave API da Casa dos Dados no início da aba Coleta");
+    return fallback;
+  }
+  try {
+    const aberta = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64ParaBytes(data.iv) },
+      await chaveCriptografica(),
+      base64ParaBytes(data.chave_cifrada),
+    );
+    return new TextDecoder().decode(aberta);
+  } catch {
+    throw new Error("A chave cadastrada da Casa dos Dados não pôde ser lida. Cadastre-a novamente.");
+  }
+}
+
 export interface LeadBruto {
   cnpj: string;
   razao_social: string | null;
@@ -131,13 +183,13 @@ function mapear(item: Record<string, any>): LeadBruto | null {
   };
 }
 
-export async function buscarCasaDosDados(filtro: CasaFiltro): Promise<{
+export async function buscarCasaDosDados(filtro: CasaFiltro, chaveInformada?: string): Promise<{
   leads: LeadBruto[];
   total: number;
   raw?: unknown;
 }> {
-  const apiKey = Deno.env.get("CASA_DOS_DADOS_API_KEY");
-  if (!apiKey) throw new Error("CASA_DOS_DADOS_API_KEY não configurada");
+  const apiKey = chaveInformada ?? Deno.env.get("CASA_DOS_DADOS_API_KEY");
+  if (!apiKey) throw new Error("Chave API da Casa dos Dados não configurada");
 
   const body = {
     query: {

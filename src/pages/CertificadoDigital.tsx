@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Activity, Download, FileKey2, Loader2, MapPin, Phone, Play, RefreshCw, Search, Settings2, Send, ShieldCheck, Users } from "lucide-react";
+import { Activity, Download, FileKey2, KeyRound, Loader2, MapPin, Phone, Play, RefreshCw, Search, Settings2, Send, ShieldCheck, Trash2, Users } from "lucide-react";
 import { exportarParaExcel } from "@/lib/exportExcel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CertificadoTemplatesCard, type CertificadoTemplate } from "@/components/certificado/CertificadoTemplatesCard";
@@ -30,6 +30,7 @@ type Lead = {
 type Config = { id: string; motor_ativo: boolean; ufs: string[]; cnaes: string[]; janelas_dias: number[]; somente_mei: boolean; somente_celular: boolean; ultima_execucao: string | null; ultimo_status: string | null; total_coletado: number; prospeccao_ativa: boolean; meta_bm_id: string | null; template_nome: string | null; template_idioma: string; limite_diario: number; prospeccao_pausada_motivo: string | null };
 
 type Log = { id: string; janela: number | null; data_referencia: string | null; encontrados: number; novos: number; duplicados: number; sem_telefone: number; erro: string | null; manual: boolean; created_at: string };
+type ChaveStatus = { configurada: boolean; origem: "painel" | "ambiente" | null; sufixo: string | null; updated_at: string | null };
 
 function telefoneExibicao(tel: string | null) {
   if (!tel) return "—";
@@ -59,6 +60,7 @@ export default function CertificadoDigital() {
   const [pagina, setPagina] = useState(0);
   const [telefoneTeste, setTelefoneTeste] = useState("");
   const [savingTemplateId, setSavingTemplateId] = useState<string | null>(null);
+  const [chaveCasaDados, setChaveCasaDados] = useState("");
   const porPagina = 25;
 
   const { data: config } = useQuery({
@@ -67,6 +69,17 @@ export default function CertificadoDigital() {
       const { data, error } = await supabase.from("certificado_config" as any).select("*").limit(1).maybeSingle();
       if (error) throw error;
       return data as unknown as Config | null;
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: chaveStatus, isLoading: carregandoChave } = useQuery({
+    queryKey: ["certificado-casa-dados-chave"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("certificado-casa-dados-chave", { body: { action: "status" } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data as ChaveStatus;
     },
     staleTime: 60_000,
   });
@@ -159,6 +172,25 @@ export default function CertificadoDigital() {
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["certificado-config"] }); toast.success("Configuração salva"); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível salvar"),
+  });
+
+  const gerenciarChave = useMutation({
+    mutationFn: async ({ action, chave }: { action: "salvar" | "remover"; chave?: string }) => {
+      const { data, error } = await supabase.functions.invoke("certificado-casa-dados-chave", { body: { action, chave } });
+      if (error) {
+        const context = (error as { context?: { json?: () => Promise<{ error?: string }> } }).context;
+        const payload = context?.json ? await context.json().catch(() => null) : null;
+        throw new Error(payload?.error ?? error.message);
+      }
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data, variables) => {
+      setChaveCasaDados("");
+      qc.invalidateQueries({ queryKey: ["certificado-casa-dados-chave"] });
+      toast.success(variables.action === "salvar" ? "Chave validada e salva com segurança" : data?.fallback ? "Chave removida; a configuração anterior continuará sendo usada" : "Chave removida");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Não foi possível configurar a chave"),
   });
 
   const buscarManual = useMutation({
@@ -259,6 +291,22 @@ export default function CertificadoDigital() {
         <Tabs defaultValue="coleta" className="space-y-6">
           <TabsList><TabsTrigger value="coleta">Coleta</TabsTrigger><TabsTrigger value="prospeccao">Prospecção</TabsTrigger></TabsList>
           <TabsContent value="coleta" className="space-y-6">
+        <Card className="border-primary/30">
+          <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" />Chave API da Casa dos Dados</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {carregandoChave ? <Loader2 className="h-4 w-4 animate-spin" /> : <Badge variant={chaveStatus?.configurada ? "default" : "destructive"}>{chaveStatus?.configurada ? "CONFIGURADA" : "NÃO CONFIGURADA"}</Badge>}
+              {chaveStatus?.origem === "painel" && <span className="text-sm text-muted-foreground">Final •••• {chaveStatus.sufixo}{chaveStatus.updated_at ? ` · atualizada em ${new Date(chaveStatus.updated_at).toLocaleString("pt-BR")}` : ""}</span>}
+              {chaveStatus?.origem === "ambiente" && <span className="text-sm text-muted-foreground">Configuração anterior ativa</span>}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input type="password" autoComplete="new-password" maxLength={200} value={chaveCasaDados} onChange={(event) => setChaveCasaDados(event.target.value)} placeholder={chaveStatus?.configurada ? "Digite uma nova chave para substituir" : "Cole a chave API"} aria-label="Chave API da Casa dos Dados" />
+              <Button onClick={() => gerenciarChave.mutate({ action: "salvar", chave: chaveCasaDados.trim() })} disabled={gerenciarChave.isPending || chaveCasaDados.trim().length < 20}>{gerenciarChave.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Testar e salvar</Button>
+              {chaveStatus?.origem === "painel" && <Button variant="outline" size="icon" title="Remover chave cadastrada" aria-label="Remover chave cadastrada" onClick={() => { if (confirm("Remover a chave cadastrada da Casa dos Dados?")) gerenciarChave.mutate({ action: "remover" }); }} disabled={gerenciarChave.isPending}><Trash2 className="h-4 w-4" /></Button>}
+            </div>
+            <p className="text-xs text-muted-foreground">A chave é validada antes de ser salva e permanece oculta após o cadastro.</p>
+          </CardContent>
+        </Card>
         <Card className="border-primary/30">
           <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4"><div className="rounded-full bg-primary/10 p-3"><Activity className="h-6 w-6 text-primary" /></div><div><p className="font-semibold">Motor de coleta diária</p><p className="text-sm text-muted-foreground">{config?.motor_ativo ? "Ativo — a próxima coleta automática seguirá as janelas configuradas." : "Desligado — nenhuma consulta automática será realizada."}</p></div></div>

@@ -1,5 +1,5 @@
 // Lógica compartilhada de coleta/gravação de leads do Certificado Digital.
-import { buscarCasaDosDados, CasaDosDadosError, ehCelular, type LeadBruto } from "./casa-dos-dados.ts";
+import { buscarCasaDosDados, CasaDosDadosError, ehCelular, resolverChaveCasaDosDados, type LeadBruto } from "./casa-dos-dados.ts";
 
 export interface ConfigCert {
   id: string;
@@ -51,6 +51,7 @@ export async function coletarJanela(
   };
 
   try {
+    const apiKey = await resolverChaveCasaDosDados(supabase);
     const brutos: LeadBruto[] = [];
     const limite = 100;
     for (let pagina = 1; pagina <= 10; pagina++) {
@@ -63,7 +64,7 @@ export async function coletarJanela(
         somenteCelular: cfg.somente_celular,
         pagina,
         limite,
-      });
+      }, apiKey);
       brutos.push(...leads);
       if (leads.length < limite || brutos.length >= total) break;
       await new Promise((r) => setTimeout(r, 400));
