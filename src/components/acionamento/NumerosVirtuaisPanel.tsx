@@ -145,9 +145,11 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
     retry: false,
   });
 
-  const paises: { id: string; nome: string }[] =
-    paisesQuery.data?.paises?.length ? paisesQuery.data.paises : PAISES_FALLBACK;
-  const paisesInternacionais = paises.filter((item) => item.id !== '73');
+  const paises: { id: string; nome: string }[] = useMemo(
+    () => paisesQuery.data?.paises?.length ? paisesQuery.data.paises : PAISES_FALLBACK,
+    [paisesQuery.data?.paises],
+  );
+  const paisesInternacionais = useMemo(() => paises.filter((item) => item.id !== '73'), [paises]);
   const paisSelecionado = paises.find((item) => item.id === pais);
 
   useEffect(() => {
@@ -166,7 +168,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
   const precoQuery = useQuery({
     queryKey: ['virtualsms-preco', provider, servico, pais],
     queryFn: () => invoke({ action: 'precos', provider, servico, pais }),
-    enabled: abaAtiva && !!servico,
+    enabled: abaAtiva && !!servico && (tipoNumero === 'brasil' || pais !== '73'),
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -593,7 +595,7 @@ export function NumerosVirtuaisPanel({ onConectar }: Props) {
           <Button
             size="sm"
             onClick={() => comprar.mutate()}
-            disabled={comprar.isPending || bloqueado || !!pedidoAtivo}
+            disabled={comprar.isPending || bloqueado || !!pedidoAtivo || (tipoNumero === 'internacional' && pais === '73')}
             title={bloqueado ? 'Limite mensal atingido' : pedidoAtivo ? 'Finalize ou cancele o pedido atual' : undefined}
           >
             {comprar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-1" />}
