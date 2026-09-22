@@ -48,6 +48,11 @@ Deno.serve(async (req) => {
 
     const permitidas = await idsInstanciasPermitidas(req, supabase);
     const instancias = filtrarInstancias(instanciasRaw as any[], permitidas);
+    const bmIds = [...new Set((instancias || []).map((inst: any) => inst.meta_bm_id).filter(Boolean))];
+    const { data: bms } = bmIds.length > 0
+      ? await supabase.from('meta_business_managers').select('id, business_id').in('id', bmIds)
+      : { data: [] };
+    const businessIdPorBm = new Map((bms || []).map((bm: any) => [String(bm.id), String(bm.business_id || '')]));
 
     const results: any[] = [];
     // Processa as instâncias em paralelo com concorrência limitada (evita 504).
@@ -145,9 +150,10 @@ Deno.serve(async (req) => {
         );
         if (phoneHealth.ok) r.phone_health = phoneHealth.data?.health_status || null;
 
-        if (inst.business_id) {
+        const businessId = String(inst.business_id || businessIdPorBm.get(String(inst.meta_bm_id)) || '');
+        if (businessId) {
           const businessResp = await fetchJson(
-            `${GRAPH}/${inst.business_id}?fields=whatsapp_business_manager_messaging_limit`,
+            `${GRAPH}/${businessId}?fields=whatsapp_business_manager_messaging_limit`,
             inst.access_token,
           );
           if (businessResp.ok) {
