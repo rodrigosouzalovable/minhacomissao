@@ -455,7 +455,7 @@ export default function Acionamento() {
           .order('criado_em', { ascending: false }),
         supabase.functions.invoke('whatsapp-qr', { body: { action: 'list-meta-test-instances' } }),
       ]);
-      const uazapiRows = ((uazapiResult.data || []) as WhatsAppInstanceRow[]).map((row) => ({ ...row, source: 'uazapi' as const }));
+      const uazapiRows = ((uazapiResult.data || []) as unknown as WhatsAppInstanceRow[]).map((row) => ({ ...row, source: 'uazapi' as const }));
       const metaRows = metaResult.data?.ok
         ? ((metaResult.data.instances || []) as Array<{ id: string; user_id: string; nome: string | null; telefone: string | null; ativo: boolean; connected: boolean }>).map((row) => ({
             id: row.id,

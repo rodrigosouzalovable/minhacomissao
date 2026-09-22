@@ -11,6 +11,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Exibir instâncias de teste Meta na aba UAZAPI como somente leitura e incluí-las na exportação de conectados
 - [x] Corrigir data de abertura e valor de R$ 129,90 no template do Certificado Digital e carregar a campanha no painel normal
 - [x] Priorizar o estoque local do Certificado Digital e impedir consumo da Casa dos Dados enquanto houver contatos para 50 envios
 - [x] Eliminar timeout de 150s do Certificado Digital com coleta limitada e verificação paralela suficiente para 50 envios
