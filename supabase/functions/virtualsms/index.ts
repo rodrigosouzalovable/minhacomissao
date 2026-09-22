@@ -241,6 +241,38 @@ serve(async (req) => {
       return json({ ok: true, precos: dados ?? {}, menor_preco: menor, moeda: cfgProv.moeda });
     }
 
+    if (action === "melhor_pais") {
+      const servico = String(body?.servico || "").trim();
+      const teto = Number(body?.max_preco);
+      if (!servico) return json({ error: "Informe o serviço." }, 400);
+
+      // Uma única consulta consolidada: { pais: { servico: { preco: quantidade } } }
+      const { dados } = await api(provider, "getPrices", { service: servico });
+      let vencedor: { pais: string; preco: number } | null = null;
+
+      if (dados && typeof dados === "object") {
+        for (const [paisId, dadosPais] of Object.entries(dados)) {
+          if (paisId === "73" || !dadosPais || typeof dadosPais !== "object") continue;
+          const dadosServico = (dadosPais as Record<string, unknown>)[servico];
+          if (!dadosServico || typeof dadosServico !== "object") continue;
+
+          for (const [precoBruto, quantidadeBruta] of Object.entries(dadosServico as Record<string, unknown>)) {
+            const preco = Number(precoBruto);
+            const quantidade = Number(quantidadeBruta);
+            if (!Number.isFinite(preco) || preco <= 0 || !Number.isFinite(quantidade) || quantidade <= 0) continue;
+            if (Number.isFinite(teto) && teto > 0 && preco > teto) continue;
+            if (!vencedor || preco < vencedor.preco) vencedor = { pais: paisId, preco };
+          }
+        }
+      }
+
+      if (!vencedor) {
+        return json({ error: "Nenhum país internacional possui número disponível dentro do teto configurado." }, 404);
+      }
+
+      return json({ ok: true, pais: vencedor.pais, menor_preco: vencedor.preco, moeda: cfgProv.moeda });
+    }
+
     if (action === "comprar") {
       const servico = String(body?.servico || "").trim();
       const pais = body?.pais !== undefined && body?.pais !== null && String(body.pais) !== ""

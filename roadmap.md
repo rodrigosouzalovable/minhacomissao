@@ -11,6 +11,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Adicionar país internacional mais barato, DDI correto e nova compra durante cancelamento de número banido
 - [x] Adicionar instância de teste Meta como destino isolado da caixa AQUECIMENTO, fora de campanhas, cobrança e tier
 - [x] Migrar a coleta da Casa dos Dados da rota pública v2 para a API oficial v5 e validar a chave pelo saldo
 - [x] Adicionar cadastro administrativo protegido da chave API da Casa dos Dados e utilizá-la em todas as coletas
