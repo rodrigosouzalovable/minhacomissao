@@ -13,6 +13,8 @@ function renderBodyWithVars(
   text: string,
   fallback: string = DEFAULT_SAMPLE,
   sampleValues?: string[],
+  sampleVariables?: Record<string, string>,
+  preserveEmptyPlaceholders = false,
 ) {
   const parts: (string | JSX.Element)[] = [];
   const regex = /\{\{\s*([a-zA-Z_0-9]+)\s*\}\}/g;
@@ -23,9 +25,12 @@ function renderBodyWithVars(
     if (m.index > last) parts.push(text.slice(last, m.index));
     const key = m[1];
     const idx = Number(key);
-    let value = fallback;
+    let value = sampleVariables?.[key]?.trim() || fallback;
     if (!Number.isNaN(idx) && sampleValues && sampleValues[idx - 1]?.trim()) {
       value = sampleValues[idx - 1];
+    }
+    if (preserveEmptyPlaceholders && !sampleVariables?.[key]?.trim() && (Number.isNaN(idx) || !sampleValues?.[idx - 1]?.trim())) {
+      value = m[0];
     }
     parts.push(
       <span
@@ -47,11 +52,19 @@ export default function TemplateWhatsAppPreview({
   imageUrlOverride,
   sampleName,
   sampleValues,
+  sampleVariables,
+  headerSampleValues,
+  headerSampleVariables,
+  preserveEmptyPlaceholders = false,
 }: {
   template: Template;
   imageUrlOverride?: string;
   sampleName?: string;
   sampleValues?: string[];
+  sampleVariables?: Record<string, string>;
+  headerSampleValues?: string[];
+  headerSampleVariables?: Record<string, string>;
+  preserveEmptyPlaceholders?: boolean;
 }) {
   const sample = (sampleName && sampleName.trim()) || DEFAULT_SAMPLE;
 
@@ -98,7 +111,9 @@ export default function TemplateWhatsAppPreview({
           </div>
         )}
         {headerFormat === "TEXT" && headerText && (
-          <div className="px-3 pt-2 font-bold text-sm">{renderBodyWithVars(headerText, sample, sampleValues)}</div>
+          <div className="px-3 pt-2 font-bold text-sm">
+            {renderBodyWithVars(headerText, sample, headerSampleValues, headerSampleVariables, preserveEmptyPlaceholders)}
+          </div>
         )}
         {(headerFormat === "VIDEO" || headerFormat === "DOCUMENT") && (
           <div className="bg-zinc-300 aspect-video flex items-center justify-center text-xs text-zinc-700">
@@ -107,7 +122,7 @@ export default function TemplateWhatsAppPreview({
         )}
 
         <div className="px-3 py-2 text-sm whitespace-pre-wrap leading-snug">
-          {renderBodyWithVars(body?.text || template.body_text || "", sample, sampleValues)}
+          {renderBodyWithVars(body?.text || template.body_text || "", sample, sampleValues, sampleVariables, preserveEmptyPlaceholders)}
 
         </div>
 
