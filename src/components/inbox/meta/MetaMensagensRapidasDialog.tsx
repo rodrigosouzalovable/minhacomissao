@@ -58,23 +58,25 @@ export function MetaMensagensRapidasDialog({ open, onOpenChange, onChange }: Pro
 
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) limpar(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Mensagens rápidas Meta</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <Input placeholder="Título (ex: Saudação)" value={titulo} onChange={e => setTitulo(e.target.value)} />
-          <Textarea placeholder="Conteúdo (texto livre — só envia dentro da janela 24h)"
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-md min-w-0 flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b px-5 py-4 pr-12">
+          <DialogTitle>Mensagens rápidas Meta</DialogTitle>
+        </DialogHeader>
+        <div className="min-w-0 flex-1 space-y-3 overflow-y-auto p-5">
+          <Input className="min-w-0" placeholder="Título (ex: Saudação)" value={titulo} onChange={e => setTitulo(e.target.value)} />
+          <Textarea className="min-w-0 resize-y" placeholder="Conteúdo (texto livre — só envia dentro da janela 24h)"
             value={conteudo} onChange={e => setConteudo(e.target.value)} rows={3} />
-          <div className="flex gap-2">
-            <Button onClick={salvar} disabled={!titulo.trim() || !conteudo.trim()} className="flex-1">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+            <Button onClick={salvar} disabled={!titulo.trim() || !conteudo.trim()} className="min-w-0 flex-1">
               <Plus className="h-4 w-4 mr-1" /> {editandoId ? 'Salvar' : 'Adicionar'}
             </Button>
-            {editandoId && <Button variant="outline" onClick={limpar}>Cancelar</Button>}
+            {editandoId && <Button className="shrink-0" variant="outline" onClick={limpar}>Cancelar</Button>}
           </div>
           {lista.length > 0 && (
-            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+            <div className="min-w-0 space-y-1.5">
               {lista.map(m => (
-                <div key={m.id} className="flex items-center justify-between gap-2 p-2 rounded-md bg-accent/30">
-                  <div className="min-w-0">
+                <div key={m.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md bg-accent/30 p-2">
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="text-sm font-medium truncate">{m.titulo}</div>
                     <div className="text-xs text-muted-foreground truncate">{m.conteudo}</div>
                   </div>
