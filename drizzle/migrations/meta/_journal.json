@@ -400,6 +400,13 @@
       "when": 1790200039908,
       "tag": "0056_exclude_meta_test_instances_from_commercial_picker",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1790205032488,
+      "tag": "0057_allow_meta_partners_own_template_media",
+      "breakpoints": true
     }
   ]
 }
