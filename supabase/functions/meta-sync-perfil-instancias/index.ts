@@ -30,6 +30,10 @@ function metaError(resp: { status: number; data: any }) {
   };
 }
 
+function isProfileOnlyLock(code: number | null, message: string) {
+  return code === 131031 || /business account locked/i.test(message);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -133,9 +137,12 @@ Deno.serve(async (req) => {
           r.perfil_error = erro.message;
           r.perfil_error_code = erro.code;
           r.perfil_sem_permissao = erro.permission_denied;
-          r.perfil_orientacao = erro.permission_denied
-            ? 'A Meta não autorizou acessar foto e sobre desta conta. Reconecte a BM/WABA com permissão whatsapp_business_management.'
-            : null;
+          r.perfil_bloqueio_parcial = isProfileOnlyLock(erro.code, erro.message);
+          r.perfil_orientacao = r.perfil_bloqueio_parcial
+            ? 'O número e o nome oficial estão acessíveis. A Meta recusou somente a leitura de foto e sobre; os dados já salvos foram preservados.'
+            : erro.permission_denied
+              ? 'A Meta não autorizou acessar foto e sobre desta conta. Reconecte a BM/WABA com permissão whatsapp_business_management.'
+              : null;
         }
 
         await supabase.from('meta_whatsapp_instances').update(patch).eq('id', inst.id);

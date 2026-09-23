@@ -163,10 +163,10 @@ export default function ConfigurarMeta() {
       return next;
     });
   const instanciasFiltradas = (() => {
-    if (bmSel.size === 0) return instancias;
-    return instancias.filter((i) =>
+    const filtradas = bmSel.size === 0 ? instancias : instancias.filter((i) =>
       (i.meta_bm_id && bmSel.has(i.meta_bm_id)) || (!i.meta_bm_id && bmSel.has("__none__"))
     );
+    return [...filtradas].sort((a, b) => Number(!!a.instancia_teste_aquecimento) - Number(!!b.instancia_teste_aquecimento));
   })();
 
 
@@ -689,7 +689,7 @@ export default function ConfigurarMeta() {
       .from("meta_whatsapp_instances")
       .insert({
         user_id: user.id,
-        nome: form.nome,
+        nome: form.instancia_teste_aquecimento ? `TESTE ${form.nome.replace(/^TESTE\s+/i, "").trim()}` : form.nome,
         phone_number_id: form.phone_number_id.trim(),
         waba_id: form.waba_id.trim(),
         access_token: form.access_token.trim(),
@@ -714,29 +714,28 @@ export default function ConfigurarMeta() {
     setForm(FORM_VAZIO);
     carregar();
 
-    // Auto-inscrever webhook para começar a receber mensagens
+    // Configura automaticamente webhook, chamadas, perfil e diagnóstico inicial.
     if (novaInst?.id) {
-      const toastId = toast.loading("Inscrevendo webhook na Meta...");
+      const toastId = toast.loading("Configurando a nova instância na Meta...");
       try {
-        const { data: sub } = await supabase.functions.invoke("meta-subscribe-waba", {
-          body: { instancia_id: novaInst.id },
-        });
+        const [subResult, callResult, profileResult, healthResult] = await Promise.all([
+          supabase.functions.invoke("meta-subscribe-waba", { body: { instancia_id: novaInst.id } }),
+          supabase.functions.invoke("meta-call-settings", { body: { instancia_id: novaInst.id, ativar: true } }),
+          supabase.functions.invoke("meta-sync-perfil-instancias", { body: { instancia_id: novaInst.id } }),
+          supabase.functions.invoke("check-meta-instance-health", { body: { instancia_id: novaInst.id } }),
+        ]);
+        const sub = subResult.data;
         const r = sub?.resultados?.[0];
+        const setupOk = r?.subscribe_ok && callResult.data?.ok && profileResult.data?.success && healthResult.data?.success;
         if (r?.subscribe_ok) {
-          toast.success("Webhook inscrito — mensagens recebidas passarão a aparecer no Inbox", { id: toastId });
           await marcarWebhookReinscrito(novaInst.id, r?.webhook_url);
-        } else {
-
-          const raw = r?.subscribe_raw?.error?.message || "";
-          toast.error(
-            "Instância salva, mas o webhook não foi inscrito. " + humanizarErroSubscribe(raw) +
-            " Use o botão \"Reinscrever webhook\" no card após corrigir.",
-            { id: toastId, duration: 12000 },
-          );
         }
+        if (setupOk) toast.success("Instância salva, perfil sincronizado, chamadas ligadas e webhook verificado", { id: toastId });
+        else toast.warning("Instância salva. Uma configuração automática precisa de revisão no card.", { id: toastId, duration: 10000 });
       } catch (e: any) {
-        toast.error("Falha ao inscrever webhook: " + (e?.message || e), { id: toastId });
+        toast.warning("Instância salva, mas a configuração automática ficou incompleta: " + (e?.message || e), { id: toastId });
       }
+      await carregar();
     }
 
     if (novaInst?.id && isAdmin && form.templates_auto_copiar) {
@@ -994,7 +993,12 @@ export default function ConfigurarMeta() {
       });
       if (error) throw error;
       const r = (data as any)?.results?.[0] || {};
-      if (r.nome_atualizado && r.perfil_sem_permissao) {
+      if (r.nome_atualizado && r.perfil_bloqueio_parcial) {
+        toast.warning("Nome oficial atualizado. A Meta recusou somente a leitura de foto e sobre.", {
+          description: "O número continua conectado e os dados de perfil já salvos foram preservados.",
+          duration: 8000,
+        });
+      } else if (r.nome_atualizado && r.perfil_sem_permissao) {
         toast.warning("Nome oficial atualizado. A Meta não autorizou acessar foto e sobre desta conta.", {
           description: "Reconecte a BM/WABA com a permissão de gerenciamento do WhatsApp Business.",
           duration: 8000,
@@ -1542,8 +1546,19 @@ export default function ConfigurarMeta() {
             </CardContent></Card>
           ) : (
             <div className="space-y-3">
-              {instanciasFiltradas.map((inst) => (
-                <Card key={inst.id}>
+              {instanciasFiltradas.map((inst, index) => (
+                <div key={inst.id} className="space-y-3">
+                {(index === 0 || !!instanciasFiltradas[index - 1]?.instancia_teste_aquecimento !== !!inst.instancia_teste_aquecimento) && (
+                  <div className="pt-2">
+                    <h3 className="text-sm font-semibold">{inst.instancia_teste_aquecimento ? "Números de teste" : "Números de clientes"}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {inst.instancia_teste_aquecimento
+                        ? "Usados somente na caixa AQUECIMENTO; nunca entram em campanhas, cobrança ou evolução de tier."
+                        : "Números reais disponíveis para atendimento e mensagens aos clientes."}
+                    </p>
+                  </div>
+                )}
+                <Card>
                   <CardContent className="p-4">
                     <div className="flex flex-col gap-3">
                       {/* Header: nome + badges à esquerda, botões de ação à direita */}
@@ -1916,9 +1931,7 @@ export default function ConfigurarMeta() {
                     </div>
                   </CardContent>
                 </Card>
-
-
-
+                </div>
               ))}
             </div>
           )}

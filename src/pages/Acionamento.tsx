@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -277,6 +277,9 @@ export default function Acionamento() {
   const [testingInstanceId, setTestingInstanceId] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'unknown' | 'checking'>>({});
   const [checkingConnections, setCheckingConnections] = useState(false);
+  const [metaTestDialogOpen, setMetaTestDialogOpen] = useState(false);
+  const [savingMetaTest, setSavingMetaTest] = useState(false);
+  const [metaTestForm, setMetaTestForm] = useState({ nome: '', phone_number_id: '', waba_id: '', access_token: '' });
 
   // WhatsApp profile editing state
   const [profileName, setProfileName] = useState('');
@@ -2129,6 +2132,32 @@ export default function Acionamento() {
     toast.success(`${numeros.length} número(s) conectado(s) exportado(s)`);
   };
 
+  const handleCreateMetaTest = async () => {
+    if (!metaTestForm.nome.trim() || !metaTestForm.phone_number_id.trim() || !metaTestForm.waba_id.trim() || !metaTestForm.access_token.trim()) {
+      toast.error('Preencha todos os campos da instância de teste');
+      return;
+    }
+    setSavingMetaTest(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('whatsapp-qr', {
+        body: { action: 'create-meta-test-instance', ...metaTestForm },
+      });
+      if (error || !data?.ok) throw new Error(data?.error || error?.message || 'Não foi possível cadastrar');
+      const setup = data.setup || {};
+      const completos = [setup.webhook, setup.chamadas, setup.perfil, setup.diagnostico].filter(Boolean).length;
+      toast.success(completos === 4
+        ? 'Instância de teste criada e configurada automaticamente'
+        : `Instância criada; ${4 - completos} verificação(ões) precisam de revisão`);
+      setMetaTestForm({ nome: '', phone_number_id: '', waba_id: '', access_token: '' });
+      setMetaTestDialogOpen(false);
+      await checkInstanceConnections(instances);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível cadastrar a instância de teste');
+    } finally {
+      setSavingMetaTest(false);
+    }
+  };
+
 
   return (
     <AppLayout>
@@ -2204,6 +2233,9 @@ export default function Acionamento() {
                     >
                       {qrLoading && connectMethod === 'qr' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <QrCode className="h-4 w-4 mr-1" />}
                       Conectar via QR Code
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setMetaTestDialogOpen(true)}>
+                      <Plus className="h-4 w-4 mr-1" /> Teste Meta
                     </Button>
                     {isOwnerAdmin && (
                       <>
@@ -2873,6 +2905,43 @@ export default function Acionamento() {
           open={lembreteMensagensOpen}
           onOpenChange={setLembreteMensagensOpen}
         />
+
+        <Dialog open={metaTestDialogOpen} onOpenChange={setMetaTestDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Nova instância de teste da Meta</DialogTitle>
+            </DialogHeader>
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Uso exclusivo para aquecimento</AlertTitle>
+              <AlertDescription>O sistema adiciona “TESTE” ao nome e mantém este número fora de campanhas, cobrança e evolução de tier.</AlertDescription>
+            </Alert>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2"><Label>Nome para identificar</Label><Input value={metaTestForm.nome} onChange={(e) => setMetaTestForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Loja Centro" /></div>
+              <div><Label>Phone Number ID</Label><Input inputMode="numeric" value={metaTestForm.phone_number_id} onChange={(e) => setMetaTestForm((f) => ({ ...f, phone_number_id: e.target.value.replace(/\D/g, '') }))} /></div>
+              <div><Label>WABA ID</Label><Input inputMode="numeric" value={metaTestForm.waba_id} onChange={(e) => setMetaTestForm((f) => ({ ...f, waba_id: e.target.value.replace(/\D/g, '') }))} /></div>
+              <div className="sm:col-span-2"><Label>Access Token permanente</Label><Input type="password" value={metaTestForm.access_token} onChange={(e) => setMetaTestForm((f) => ({ ...f, access_token: e.target.value.trim() }))} placeholder="O token não será exibido depois de salvar" /></div>
+            </div>
+            <div className="rounded-md border p-4 space-y-2">
+              <p className="text-sm font-semibold">Onde encontrar os dados</p>
+              <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
+                <li>Abra sua conta empresarial da Meta e entre no Gerenciador do WhatsApp.</li>
+                <li>Em Números de telefone, abra o número de teste e copie o Phone Number ID.</li>
+                <li>Na mesma tela, copie o ID da conta do WhatsApp Business (WABA ID).</li>
+                <li>Gere um token permanente com acesso a WhatsApp Business Management e Messaging.</li>
+                <li>Cole os três dados acima. O sistema valida se o número pertence à WABA antes de salvar.</li>
+              </ol>
+              <p className="text-xs text-muted-foreground">Após salvar, perfil, chamadas, webhook e conexão são verificados automaticamente.</p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setMetaTestDialogOpen(false)} disabled={savingMetaTest}>Cancelar</Button>
+              <Button onClick={handleCreateMetaTest} disabled={savingMetaTest}>
+                {savingMetaTest ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+                Criar instância de teste
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Chat History Dialog */}
         <ChatHistoryDialog

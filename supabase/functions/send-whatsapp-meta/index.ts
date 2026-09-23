@@ -559,6 +559,14 @@ Deno.serve(async (req) => {
     const { data: inst } = await supabase
       .from('meta_whatsapp_instances').select('*').eq('id', instancia_id).eq('ativo', true).maybeSingle();
     if (!inst) throw new Error('Instância Meta não encontrada/ativa');
+    if (inst.instancia_teste_aquecimento === true && !isTeste) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Esta instância é exclusiva da caixa AQUECIMENTO e não pode enviar mensagens comerciais.',
+        test_instance_blocked: true,
+        instancia_id,
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // ===== Cota da BM (janela móvel de 24h) =====
     if (!isTeste && inst.meta_bm_id && !liberarTudoThiago) {

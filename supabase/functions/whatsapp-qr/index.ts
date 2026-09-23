@@ -85,6 +85,9 @@ Deno.serve(async (req) => {
     if (action === "list-meta-test-instances") {
       return await listMetaTestInstances(requester.id);
     }
+    if (action === "create-meta-test-instance") {
+      return await createMetaTestInstance(requester.id, body);
+    }
 
     if (userId && userId !== requester.id) return json({ error: "Acesso negado para outro usuário" }, 403);
     const authenticatedUserId = requester.id;
@@ -148,6 +151,85 @@ function getMetaTestConnection(instance: {
     connected: instance.ativo === true && configured && !explicitlyDisconnected,
     status: healthStatus || "unknown",
   };
+}
+
+function validMetaId(value: unknown): value is string {
+  return typeof value === "string" && /^\d{5,30}$/.test(value.trim());
+}
+
+async function invokeInternalFunction(name: string, body: Record<string, unknown>) {
+  const base = Deno.env.get("SUPABASE_URL") || "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  try {
+    const response = await fetch(`${base}/functions/v1/${name}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(25_000),
+    });
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok && data?.success !== false && data?.ok !== false, data };
+  } catch (error) {
+    return { ok: false, data: { error: error instanceof Error ? error.message : "Falha inesperada" } };
+  }
+}
+
+async function createMetaTestInstance(userId: string, body: any) {
+  const nomeInformado = String(body?.nome || "").trim().replace(/^TESTE\s+/i, "");
+  const phoneNumberId = String(body?.phone_number_id || "").trim();
+  const wabaId = String(body?.waba_id || "").trim();
+  const accessToken = String(body?.access_token || "").trim();
+  if (nomeInformado.length < 2 || nomeInformado.length > 80) return json({ ok: false, error: "Informe um nome de 2 a 80 caracteres" }, 400);
+  if (!validMetaId(phoneNumberId) || !validMetaId(wabaId)) return json({ ok: false, error: "Phone Number ID e WABA ID devem conter somente números" }, 400);
+  if (accessToken.length < 20 || accessToken.length > 5000) return json({ ok: false, error: "Access Token inválido" }, 400);
+
+  const graph = "https://graph.facebook.com/v21.0";
+  const auth = { Authorization: `Bearer ${accessToken}` };
+  const [phoneResponse, wabaPhonesResponse] = await Promise.all([
+    fetch(`${graph}/${phoneNumberId}?fields=id,display_phone_number,verified_name,status,quality_rating,name_status`, { headers: auth }),
+    fetch(`${graph}/${wabaId}/phone_numbers?fields=id&limit=100`, { headers: auth }),
+  ]);
+  const phoneData = await phoneResponse.json().catch(() => ({}));
+  const wabaPhones = await wabaPhonesResponse.json().catch(() => ({}));
+  if (!phoneResponse.ok || phoneData?.error) return json({ ok: false, error: phoneData?.error?.message || "A Meta não validou o número" }, 400);
+  if (!wabaPhonesResponse.ok || wabaPhones?.error) return json({ ok: false, error: wabaPhones?.error?.message || "A Meta não validou a WABA" }, 400);
+  const belongsToWaba = Array.isArray(wabaPhones?.data) && wabaPhones.data.some((row: any) => String(row?.id) === phoneNumberId);
+  if (!belongsToWaba) return json({ ok: false, error: "O Phone Number ID não pertence à WABA informada" }, 400);
+
+  const sb = getSupabaseAdmin();
+  const { data: existing } = await sb.from("meta_whatsapp_instances").select("id").eq("phone_number_id", phoneNumberId).maybeSingle();
+  if (existing) return json({ ok: false, error: "Este Phone Number ID já está cadastrado" }, 409);
+
+  const { data: inserted, error } = await sb.from("meta_whatsapp_instances").insert({
+    user_id: userId,
+    nome: `TESTE ${nomeInformado}`,
+    phone_number_id: phoneNumberId,
+    waba_id: wabaId,
+    access_token: accessToken,
+    display_phone: phoneData?.display_phone_number || null,
+    ativo: true,
+    provider: "meta",
+    instancia_teste_aquecimento: true,
+    folder_padrao_id: "4f7a52c0-9c86-4b80-8867-4ade7a6df441",
+    aquecimento_meta_ativo: false,
+    recuperacao_ativa: false,
+    pool_fora_manual: true,
+    estado_pool: "fora",
+    webhook_verify_token: crypto.randomUUID().replaceAll("-", ""),
+  }).select("id,nome").single();
+  if (error || !inserted) return json({ ok: false, error: error?.message || "Não foi possível salvar a instância" }, 400);
+
+  const [webhook, calls, profile, health] = await Promise.all([
+    invokeInternalFunction("meta-subscribe-waba", { instancia_id: inserted.id }),
+    invokeInternalFunction("meta-call-settings", { instancia_id: inserted.id, ativar: true }),
+    invokeInternalFunction("meta-sync-perfil-instancias", { instancia_id: inserted.id }),
+    invokeInternalFunction("check-meta-instance-health", { instancia_id: inserted.id }),
+  ]);
+  return json({
+    ok: true,
+    instance: { id: inserted.id, nome: inserted.nome, telefone: phoneData?.display_phone_number || null },
+    setup: { webhook: webhook.ok, chamadas: calls.ok, perfil: profile.ok, diagnostico: health.ok },
+  });
 }
 
 async function persistInstancePhone(instanceId: string, value: unknown): Promise<string | null> {
