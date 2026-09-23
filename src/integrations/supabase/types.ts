@@ -8764,6 +8764,33 @@ export type Database = {
         }
         Relationships: []
       }
+      template_favoritos: {
+        Row: {
+          criado_em: string
+          id: string
+          template_idioma: string
+          template_nome: string
+          template_tipo: string
+          user_id: string
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          template_idioma?: string
+          template_nome: string
+          template_tipo: string
+          user_id: string
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          template_idioma?: string
+          template_nome?: string
+          template_tipo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tenant_members: {
         Row: {
           criado_em: string
