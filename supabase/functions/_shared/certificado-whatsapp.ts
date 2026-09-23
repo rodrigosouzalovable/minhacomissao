@@ -19,7 +19,7 @@ async function conectada(instancia: any) {
   } catch { return false; } finally { clearTimeout(timeout); }
 }
 
-export async function verificarLeadsCertificado(service: any, limite = 1000, janela?: number, dataAbertura?: string): Promise<Resultado> {
+export async function verificarLeadsCertificado(service: any, limite = 1000, janela?: number, dataAbertura?: string, preparacaoId?: string): Promise<Resultado> {
   const { data: selecionadas, error } = await service.from("certificado_uazapi_verificadoras")
     .select("instancia_id, instancia:user_whatsapp_instances(id,nome,server_url,instance_token,ativo)").eq("ativa", true);
   if (error) throw error;
@@ -32,6 +32,7 @@ export async function verificarLeadsCertificado(service: any, limite = 1000, jan
     .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"]).not("telefone_principal", "is", null);
   if (Number.isInteger(janela)) leadsQuery = leadsQuery.eq("dias_desde_abertura", janela);
   if (dataAbertura) leadsQuery = leadsQuery.eq("data_abertura", dataAbertura);
+  if (preparacaoId) leadsQuery = leadsQuery.eq("preparacao_id", preparacaoId);
   const { data: leads, error: leadsError } = await leadsQuery
     .order("created_at", { ascending: true }).limit(Math.min(Math.max(limite, 1), 2000));
   if (leadsError) throw leadsError;
