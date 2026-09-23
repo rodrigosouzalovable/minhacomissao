@@ -390,8 +390,11 @@ export default function MetaTemplates() {
   const uploadMedia = async (file: File) => {
     setUploadingMedia(true);
     try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+      if (authError || !userId) throw new Error("Sua sessão expirou. Entre novamente para enviar a imagem.");
       const ext = file.name.split(".").pop() || "bin";
-      const path = `templates/${crypto.randomUUID()}.${ext}`;
+      const path = `${userId}/templates/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage
         .from("meta-template-media")
         .upload(path, file, { contentType: file.type, upsert: false });
@@ -404,7 +407,15 @@ export default function MetaTemplates() {
       setMediaSignedUrl(signed?.signedUrl || null);
       toast.success("Mídia enviada");
     } catch (e: any) {
-      toast.error(e.message || "Falha no upload");
+      const message = String(e?.message || "");
+      const friendlyMessage = /row-level security|permission|unauthorized|forbidden/i.test(message)
+        ? "Seu acesso não permitiu enviar esta imagem. Atualize a página e tente novamente."
+        : /mime|content.?type|formato/i.test(message)
+          ? "Formato não aceito. Use JPG, PNG, WebP, MP4 ou PDF."
+          : /size|too large|payload/i.test(message)
+            ? "O arquivo excede o tamanho permitido."
+            : message || "Falha ao enviar a mídia.";
+      toast.error(friendlyMessage);
     } finally {
       setUploadingMedia(false);
     }
