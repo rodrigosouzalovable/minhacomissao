@@ -202,9 +202,28 @@ Deno.serve(async (req) => {
     const janela = janelaExperimentoHoje();
     if (janela === null) return json({ error: "Não há uma faixa de idade ativa para hoje" }, 409);
 
-    const { data: instancias } = await service.from("meta_whatsapp_instances").select("id")
+    const { data: instancias } = await service.from("meta_whatsapp_instances")
+      .select("id,estado_pool,pool_fora_manual,saude_status,saude_ban_info,pausa_automatica_ate")
       .in("id", instanciaIds).eq("meta_bm_id", cfg.meta_bm_id).eq("provider", "meta").eq("ativo", true);
     if ((instancias ?? []).length !== instanciaIds.length) return json({ error: "Uma ou mais instâncias não pertencem à BM selecionada" }, 409);
+    const agora = new Date();
+    const aptas = (instancias ?? []).filter((instancia: any) =>
+      instancia.estado_pool === "ativo"
+      && instancia.pool_fora_manual !== true
+      && String(instancia.saude_status ?? "").toUpperCase() === "CONNECTED"
+      && !instancia.saude_ban_info
+      && (!instancia.pausa_automatica_ate || new Date(instancia.pausa_automatica_ate) <= agora)
+    );
+    if (aptas.length !== instanciaIds.length) return json({ error: "Uma ou mais instâncias selecionadas não estão conectadas ou disponíveis no pool" }, 409);
+    const { data: templatesAprovados, error: templatesError } = await service.from("meta_whatsapp_templates")
+      .select("instancia_id")
+      .in("instancia_id", instanciaIds)
+      .eq("nome_template", cfg.template_nome)
+      .eq("idioma", cfg.template_idioma)
+      .eq("status", "approved");
+    if (templatesError) throw templatesError;
+    const aprovadas = new Set((templatesAprovados ?? []).map((item: any) => item.instancia_id));
+    if (instanciaIds.some((id: string) => !aprovadas.has(id))) return json({ error: "O template não está aprovado em todas as instâncias selecionadas" }, 409);
 
     const { data: criada, error: criarError } = await service.from("certificado_prospeccao_preparacoes").insert({
       solicitante_id: auth.id,
