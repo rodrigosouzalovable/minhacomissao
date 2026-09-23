@@ -35,7 +35,7 @@ export function ReabrirComTemplateDialog({
   const [templates, setTemplates] = useState<Template[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
-  const [templateName, setTemplateName] = useState('');
+  const [templateId, setTemplateId] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [nomeVar, setNomeVar] = useState('');
 
@@ -50,7 +50,7 @@ export function ReabrirComTemplateDialog({
       setCarregando(true);
       setErro('');
       setTemplates([]);
-      setTemplateName('');
+      setTemplateId('');
       const { data, error } = await supabase.from('meta_whatsapp_templates')
         .select('id, nome_template, idioma, categoria, body_text, variaveis')
         .eq('status', 'approved')
@@ -66,8 +66,8 @@ export function ReabrirComTemplateDialog({
   }, [open, instancia_id]);
 
   const selectedTemplate = useMemo(
-    () => templates.find(t => t.nome_template === templateName),
-    [templates, templateName],
+    () => templates.find(t => t.id === templateId),
+    [templates, templateId],
   );
 
   const enviar = async () => {
@@ -136,12 +136,12 @@ export function ReabrirComTemplateDialog({
             <Label className="text-xs">Template</Label>
             <TemplateFavoriteSelect
               tipo="meta"
-              value={templateName}
-              onValueChange={setTemplateName}
+              value={templateId}
+              onValueChange={setTemplateId}
               disabled={carregando || templates.length === 0}
               placeholder={placeholder}
               options={templates.map(template => ({
-                value: template.nome_template,
+                value: template.id,
                 nome: template.nome_template,
                 idioma: template.idioma,
                 descricao: template.body_text?.trim() || 'Texto do template indisponível',

@@ -105,7 +105,7 @@ export function TemplateFavoriteSelect({
                       onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                       onClick={(event) => { event.preventDefault(); event.stopPropagation(); alternarFavorito(option); }}
                     >
-                      <Star className={cn("h-4 w-4", favorito && "fill-current text-warning")} />
+                      <Star className={cn("h-4 w-4", favorito && "fill-current text-primary")} />
                     </Button>
                   </CommandItem>
                 );
