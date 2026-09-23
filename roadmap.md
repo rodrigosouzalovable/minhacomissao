@@ -1,7 +1,6 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Reformular Nova Conversa Meta com template primeiro, instâncias aprovadas, variáveis completas e prévia em tempo real
 - [x] Completar hoje a campanha Certificado Digital D+5 com até 50 números inéditos com WhatsApp
 - [ ] Validar a promoção oficial da BM Green Soul após alcançar a referência de únicos entregues com qualidade GREEN
 - [ ] Validar amanhã às 09h a campanha Certificado Digital D+5 com até 50 contatos exclusivos
@@ -15,6 +14,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Reformular Nova Conversa Meta com template primeiro, instâncias aprovadas, variáveis completas e prévia em tempo real
 - [x] Melhorar o piloto Green Soul com tier oficial da BM, respostas classificadas e reaproveitamento controlado de auto-respondedores
 - [x] Corrigir contagem, status conectado e exportação das instâncias Teste Meta ativas e configuradas
 - [x] Exibir a BM vinculada e diferenciar status não verificado nas instâncias Teste Meta da aba UAZAPI
