@@ -391,7 +391,7 @@ function AcordoCard({
                   e.preventDefault();
                   e.stopPropagation();
                   onEnviarWhatsApp(acordo);
-                }} disabled={isEnviando || !acordo.cliente_telefone} title={acordo.cliente_telefone ? "Enviar WhatsApp" : "Telefone não cadastrado"}>
+                }} disabled={isEnviando || !acordo.cliente_telefone} title={acordo.cliente_telefone ? "Enviar template Meta" : "Telefone não cadastrado"} aria-label={`Enviar template Meta para ${acordo.cliente_nome}`}>
                     {isEnviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
                   </Button>
                 )}
