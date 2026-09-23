@@ -55,17 +55,31 @@ Deno.serve(async (req) => {
     const modoTeste = body?.modo_teste === true;
     const telefoneTeste = String(body?.telefone_teste ?? "").replace(/\D/g, "");
     const completo = body?.iniciar_completo === true;
+    const manualPreparacaoId = String(body?.manual_preparacao_id ?? "").trim();
     const brt = agoraBrt();
     const diaSemana = brt.getDay();
-    if (!modoTeste && (diaSemana === 0 || diaSemana === 6)) return json({ success: true, skipped: true, motivo: "A prospecção funciona de segunda a sexta" });
-    const janelaExperimento = janelaExperimentoHoje();
-    const dataAlvoExperimento = janelaExperimento === null ? undefined : dataBRT(janelaExperimento);
+    if (!modoTeste && !manualPreparacaoId && (diaSemana === 0 || diaSemana === 6)) return json({ success: true, skipped: true, motivo: "A prospecção funciona de segunda a sexta" });
+    let janelaExperimento = janelaExperimentoHoje();
+    let dataAlvoExperimento = janelaExperimento === null ? undefined : dataBRT(janelaExperimento);
 
     const { data: cfg, error: cfgError } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
     if (cfgError) throw cfgError;
     if (!cfg?.meta_bm_id || !cfg?.template_nome) return json({ error: "Selecione a BM e o template" }, 409);
-    if (!cfg.prospeccao_ativa && !simulacao && !modoTeste) return json({ error: "Piloto desativado" }, 409);
-    if (!modoTeste && janelaExperimento === null) {
+    let preparacaoManual: any = null;
+    if (manualPreparacaoId) {
+      const { data, error } = await service.from("certificado_prospeccao_preparacoes").select("*").eq("id", manualPreparacaoId).maybeSingle();
+      if (error) throw error;
+      if (!data || data.status !== "pronta") return json({ error: "A preparação manual ainda não está pronta para criar a campanha" }, 409);
+      if (data.bm_id !== cfg.meta_bm_id || data.template_nome !== cfg.template_nome || data.template_idioma !== cfg.template_idioma) {
+        return json({ error: "O template ou a BM mudou durante a preparação. Nenhuma campanha foi criada." }, 409);
+      }
+      preparacaoManual = data;
+      userId = data.solicitante_id;
+      janelaExperimento = Number(data.janela);
+      dataAlvoExperimento = String(data.data_alvo);
+    }
+    if (!cfg.prospeccao_ativa && !simulacao && !modoTeste && !preparacaoManual) return json({ error: "Piloto desativado" }, 409);
+    if (!modoTeste && !preparacaoManual && janelaExperimento === null) {
       if (diaBrt() > "2026-09-30") {
         await service.from("certificado_config").update({ prospeccao_ativa: false, prospeccao_pausada_motivo: "Experimento D+5 a D+30 concluído" }).eq("id", cfg.id);
         return json({ success: true, skipped: true, motivo: "Experimento D+5 a D+30 concluído" });
@@ -74,9 +88,9 @@ Deno.serve(async (req) => {
     }
 
     const inicioDia = `${diaBrt()}T03:00:00.000Z`;
-    let restante = Number(cfg.limite_diario ?? 50);
+    let restante = preparacaoManual ? Number(preparacaoManual.quantidade_alvo) : Number(cfg.limite_diario ?? 50);
     let jobExistente: any = null;
-    if (!modoTeste) {
+    if (!modoTeste && !preparacaoManual) {
       const { data } = await service.from("envio_meta_job").select("id,status,total,enviados,erros").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
       jobExistente = data;
       if (jobExistente && Number(jobExistente.total ?? 0) >= Number(cfg.limite_diario ?? 50) && !simulacao) {
@@ -90,7 +104,7 @@ Deno.serve(async (req) => {
 
     let resumoColeta: Record<string, unknown> | null = null;
     let resumoVerificacao: Record<string, unknown> | null = null;
-    if (completo && cfg.motor_ativo) {
+    if (completo && cfg.motor_ativo && !preparacaoManual) {
       const metaConfirmados = Number(cfg.limite_diario ?? 50);
       const contarConfirmados = async () => {
         const { count, error } = await service.from("certificado_leads")
@@ -185,9 +199,14 @@ Deno.serve(async (req) => {
     const { data: disponibilidade } = await service.from("certificado_prospeccao_templates").select("ativo").eq("template_mestre_id", mestre.id).maybeSingle();
     if (disponibilidade?.ativo === false) return json({ error: "Template inabilitado no Certificado Digital" }, 409);
 
-    const { data: instancias } = await service.from("meta_whatsapp_instances")
+    let instanciasQuery = service.from("meta_whatsapp_instances")
       .select("id,nome,user_id,display_phone,saude_status,saude_quality,saude_ban_info,estado_pool,pool_fora_manual,pausa_automatica_ate,ativo,instancia_teste_aquecimento")
       .eq("meta_bm_id", cfg.meta_bm_id).eq("provider", "meta").eq("ativo", true).eq("instancia_teste_aquecimento", false);
+    const selecionadas = preparacaoManual
+      ? (Array.isArray(preparacaoManual.instancia_ids) ? preparacaoManual.instancia_ids.filter(Boolean) : [])
+      : (Array.isArray(cfg.prospeccao_instancia_ids) ? cfg.prospeccao_instancia_ids.filter(Boolean) : []);
+    if (selecionadas.length > 0) instanciasQuery = instanciasQuery.in("id", selecionadas);
+    const { data: instancias } = await instanciasQuery;
     const agora = new Date();
     const aptas = (instancias ?? []).filter((i: any) => i.estado_pool === "ativo" && i.pool_fora_manual !== true && String(i.saude_status ?? "").toUpperCase() === "CONNECTED" && !i.saude_ban_info && (!i.pausa_automatica_ate || new Date(i.pausa_automatica_ate) <= agora));
     const { data: templates } = aptas.length ? await service.from("meta_whatsapp_templates").select("id,instancia_id,nome_template,idioma,status").in("instancia_id", aptas.map((i: any) => i.id)).eq("nome_template", cfg.template_nome).eq("idioma", cfg.template_idioma).eq("status", "approved") : { data: [] };
@@ -205,6 +224,7 @@ Deno.serve(async (req) => {
 
     const dataAlvo = dataAlvoExperimento ?? null;
     let leadsQuery = service.from("certificado_leads").select("id,cnpj,razao_social,nome_fantasia,telefone_principal,data_abertura,dias_desde_abertura").eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null);
+    if (preparacaoManual) leadsQuery = leadsQuery.eq("preparacao_id", preparacaoManual.id);
     if (janelaExperimento !== null && dataAlvo) leadsQuery = leadsQuery.eq("dias_desde_abertura", janelaExperimento).eq("data_abertura", dataAlvo);
     const { data: leadsCandidatos, error: leadsError } = await leadsQuery.order("created_at", { ascending: true }).limit(Math.max(restante * 4, restante));
     if (leadsError) throw leadsError;
@@ -227,6 +247,15 @@ Deno.serve(async (req) => {
       sufixosJaUsados.add(sufixo);
       return true;
     }).slice(0, restante);
+    if (preparacaoManual && leads.length < restante) {
+      await service.from("certificado_prospeccao_preparacoes").update({
+        status: "falhou",
+        erro: `Somente ${leads.length} de ${restante} contatos permaneceram inéditos no momento da reserva. Nenhuma campanha foi criada.`,
+        concluido_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", preparacaoManual.id);
+      return json({ error: "Alguns contatos foram usados por outra campanha durante a preparação. Nenhuma campanha parcial foi criada." }, 409);
+    }
     if (simulacao) return json({ success: true, simulacao: true, elegiveis: leads?.length ?? 0, limite_restante: restante, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone })) });
     if (!leads?.length) return json({
       success: true,
@@ -238,8 +267,10 @@ Deno.serve(async (req) => {
     });
 
     // Revalida imediatamente antes da criação para reduzir o risco de cliques concorrentes.
-    const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total,status").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
-    if (jobCriadoEnquantoProcessava) jobExistente = jobCriadoEnquantoProcessava;
+    if (!preparacaoManual) {
+      const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total,status").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+      if (jobCriadoEnquantoProcessava) jobExistente = jobCriadoEnquantoProcessava;
+    }
 
     const principal: any = porInstancia.get(participantes[0].id);
     const templateIdByInstance = Object.fromEntries(participantes.map((i: any) => [i.id, (porInstancia.get(i.id) as any).id]));
@@ -249,7 +280,7 @@ Deno.serve(async (req) => {
         user_id: userId, status: "rodando", template_id: principal.id, template_nome: cfg.template_nome,
         template_id_by_instance: templateIdByInstance, instancia_ids: participantes.map((i: any) => i.id),
         min_seg: 30, max_seg: 90, total: leads.length, proximo_em: new Date().toISOString(),
-        nome_campanha: `Certificado Digital — D+${janelaExperimento} — ${nomeCampanha()}`, folder_id: FOLDER_CERTIFICADO,
+        nome_campanha: `Certificado Digital${preparacaoManual ? " Manual" : ""} — D+${janelaExperimento} — ${nomeCampanha()}`, folder_id: FOLDER_CERTIFICADO,
         validar_no_envio: false,
       }).select("id").single();
       if (jobError || !criado) throw jobError ?? new Error("Falha ao criar campanha");
@@ -264,6 +295,20 @@ Deno.serve(async (req) => {
       const { data: reserva, error } = await service.from("certificado_prospeccao_envios").insert({ lead_id: lead.id, bm_id: cfg.meta_bm_id, instancia_id: instancia.id, template_nome: cfg.template_nome, template_idioma: cfg.template_idioma, job_id: job.id }).select("id").maybeSingle();
       if (!error && reserva) reservas.push({ lead, reserva, ordem: ordemInicial + reservas.length });
       rr++;
+    }
+    if (preparacaoManual && reservas.length !== restante) {
+      await service.from("envio_meta_job").update({
+        status: "erro",
+        status_motivo: `Reserva incompleta: ${reservas.length} de ${restante}`,
+        concluido_em: new Date().toISOString(),
+      }).eq("id", job.id);
+      await service.from("certificado_prospeccao_preparacoes").update({
+        status: "falhou",
+        erro: "Alguns contatos foram reservados por outra campanha. Nenhum envio foi iniciado.",
+        concluido_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", preparacaoManual.id);
+      return json({ error: "Não foi possível reservar a quantidade completa. Nenhum envio foi iniciado." }, 409);
     }
     if (!reservas.length) {
       await service.from("envio_meta_job").update({ status: "erro", status_motivo: "Nenhum contato pôde ser reservado", concluido_em: new Date().toISOString() }).eq("id", job.id);
@@ -299,6 +344,14 @@ Deno.serve(async (req) => {
       if (envioId) await service.from("certificado_prospeccao_envios").update({ job_item_id: item.id }).eq("id", envioId);
     }
     await service.from("certificado_config").update({ ultimo_rr_indice: rr, prospeccao_ultima_execucao: new Date().toISOString(), prospeccao_pausada_motivo: null }).eq("id", cfg.id);
+    if (preparacaoManual) {
+      await service.from("certificado_prospeccao_preparacoes").update({
+        status: "campanha_criada",
+        job_id: job.id,
+        concluido_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", preparacaoManual.id);
+    }
     fetch(`${url}/functions/v1/envio-meta-massa-tick`, { method: "POST", headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ job_id: job.id }) }).catch(() => {});
     return json({
       success: true,
