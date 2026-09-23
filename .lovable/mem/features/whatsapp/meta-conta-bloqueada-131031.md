@@ -1,6 +1,6 @@
 ---
 name: Meta Business Account bloqueada (#131031)
-description: Erro #131031 restringe a instância no pool, avisa admin 1x/dia e libera sozinho na revalidação; qualidade RED/YELLOW nunca bloqueia resposta na janela de 24h
+description: Erro #131031 restringe somente quando confirmado em saúde/envio; isolado na consulta de foto/sobre é aviso parcial e preserva o perfil
 type: feature
 ---
 
@@ -10,3 +10,4 @@ type: feature
 - `check-meta-instance-health` faz auto-liberação: se a instância estava pausada por bloqueio real (locked/NUMERO_INACESSIVEL) e a Graph volta CONNECTED sem `ban_info`, devolve ao pool (`estado_pool='ativo'`, pausa limpa) e avisa o admin.
 - Botão "Revalidar na Meta" no card da instância força esse diagnóstico manualmente.
 - Banner do Inbox (`MetaInstanceHealthBanner`) mostra o bloqueio real com prioridade sobre o aviso de qualidade; qualidade baixa segue apenas informativa.
+- Se `#131031` ocorrer somente na consulta separada de foto/“sobre”, após nome/status terem sincronizado, tratar como falha parcial de perfil: preservar os dados existentes, não retirar do pool e não afirmar que a conta está bloqueada.
