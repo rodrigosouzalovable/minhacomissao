@@ -75,9 +75,13 @@ Deno.serve(async (req) => {
 
     const inicioDia = `${diaBrt()}T03:00:00.000Z`;
     let restante = Number(cfg.limite_diario ?? 50);
+    let jobExistente: any = null;
     if (!modoTeste) {
-      const { data: jobExistente } = await service.from("envio_meta_job").select("id,status,total,enviados,erros").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
-      if (jobExistente && !simulacao) return json({ success: true, skipped: true, motivo: "A campanha do Certificado Digital de hoje já foi criada", job_id: jobExistente.id, total: jobExistente.total });
+      const { data } = await service.from("envio_meta_job").select("id,status,total,enviados,erros").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+      jobExistente = data;
+      if (jobExistente && Number(jobExistente.total ?? 0) >= Number(cfg.limite_diario ?? 50) && !simulacao) {
+        return json({ success: true, skipped: true, motivo: "A campanha do Certificado Digital de hoje já atingiu o limite configurado", job_id: jobExistente.id, total: jobExistente.total });
+      }
 
       const { count } = await service.from("certificado_prospeccao_envios").select("id", { count: "exact", head: true }).eq("bm_id", cfg.meta_bm_id).gte("reservado_em", inicioDia).in("status", ["reservado","enviado","entregue","lido","respondido"]);
       restante = Math.max(0, Number(cfg.limite_diario ?? 50) - Number(count ?? 0));
@@ -87,6 +91,7 @@ Deno.serve(async (req) => {
     let resumoColeta: Record<string, unknown> | null = null;
     let resumoVerificacao: Record<string, unknown> | null = null;
     if (completo && cfg.motor_ativo) {
+      const metaConfirmados = Number(cfg.limite_diario ?? 50);
       const contarConfirmados = async () => {
         const { count, error } = await service.from("certificado_leads")
           .select("id", { count: "exact", head: true })
@@ -107,8 +112,8 @@ Deno.serve(async (req) => {
       let pendentes = await contarPendentes();
       resumoColeta = { pulada: true, motivo: "Estoque local suficiente", encontrados: 0, novos: 0, janelas: 0, janelas_sucesso: 0, janelas_falha: 0, janelas_pendentes: 0 };
 
-      if (confirmados < restante && pendentes > 0) {
-        const verificacao = await verificarLeadsCertificado(service, Math.min(restante - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento);
+      if (confirmados < metaConfirmados && pendentes > 0) {
+        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento);
         resumoVerificacao = verificacao;
         confirmados = await contarConfirmados();
         pendentes = await contarPendentes();
@@ -119,21 +124,25 @@ Deno.serve(async (req) => {
 
       // A Casa dos Dados só é consultada quando todo o estoque local foi esgotado
       // e ainda faltam contatos para completar o limite diário.
-      if (confirmados < restante) {
+      if (confirmados < metaConfirmados) {
         const inicioProcessamento = Date.now();
-        const LIMITE_COLETA_MS = 45_000;
+        const LIMITE_COLETA_MS = 120_000;
         const janelas = janelaExperimento === null ? [] : [janelaExperimento];
         const resultados = [];
         for (const janela of janelas) {
-          if (Date.now() - inicioProcessamento >= LIMITE_COLETA_MS || confirmados >= restante) break;
-          const resultado = await coletarJanela(service, cfg, janela, true, { maxPaginas: 1, maxTentativas: 1, timeoutMs: 15_000 });
-          resultados.push(resultado);
-          if (resultado.erro_temporario) break;
-          const faltam = Math.max(0, restante - confirmados);
-          if (faltam > 0 && resultado.novos > 0) {
-            resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), janelaExperimento ?? undefined, dataAlvoExperimento);
+          let paginaInicial = 1;
+          while (Date.now() - inicioProcessamento < LIMITE_COLETA_MS && confirmados < metaConfirmados) {
+            const resultado = await coletarJanela(service, cfg, janela, true, { maxPaginas: 10, paginaInicial, maxTentativas: 1, timeoutMs: 15_000 });
+            resultados.push(resultado);
+            if (resultado.erro || resultado.erro_temporario) break;
+            const faltam = Math.max(0, metaConfirmados - confirmados);
+            if (faltam > 0 && resultado.novos > 0) {
+              resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), janelaExperimento ?? undefined, dataAlvoExperimento);
+            }
             confirmados = await contarConfirmados();
             pendentes = await contarPendentes();
+            if (confirmados >= metaConfirmados || resultado.proxima_pagina === null) break;
+            paginaInicial = resultado.proxima_pagina;
           }
         }
         const falhas = resultados.filter((resultado) => !!resultado.erro);
@@ -142,6 +151,7 @@ Deno.serve(async (req) => {
           pulada: false, janelas: resultados.length, janelas_sucesso: sucessos.length, janelas_falha: falhas.length,
           encontrados: sucessos.reduce((total, resultado) => total + resultado.encontrados, 0),
           novos: sucessos.reduce((total, resultado) => total + resultado.novos, 0),
+          paginas_consultadas: sucessos.reduce((total, resultado) => total + resultado.paginas_consultadas, 0),
           janelas_pendentes: Math.max(0, janelas.length - resultados.length),
         };
         if (resultados.length > 0 && sucessos.length === 0) {
@@ -150,8 +160,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (confirmados < restante && pendentes > 0 && !resumoVerificacao) {
-        const verificacao = await verificarLeadsCertificado(service, Math.min(restante - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento);
+      if (confirmados < metaConfirmados && pendentes > 0 && !resumoVerificacao) {
+        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento);
         resumoVerificacao = verificacao;
       }
       const { count: aindaPendentes } = await service.from("certificado_leads")
@@ -228,33 +238,44 @@ Deno.serve(async (req) => {
     });
 
     // Revalida imediatamente antes da criação para reduzir o risco de cliques concorrentes.
-    const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
-    if (jobCriadoEnquantoProcessava) return json({ success: true, skipped: true, motivo: "A campanha do Certificado Digital de hoje já foi criada", job_id: jobCriadoEnquantoProcessava.id, total: jobCriadoEnquantoProcessava.total });
+    const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total,status").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+    if (jobCriadoEnquantoProcessava) jobExistente = jobCriadoEnquantoProcessava;
 
     const principal: any = porInstancia.get(participantes[0].id);
     const templateIdByInstance = Object.fromEntries(participantes.map((i: any) => [i.id, (porInstancia.get(i.id) as any).id]));
-    const { data: job, error: jobError } = await service.from("envio_meta_job").insert({
-      user_id: userId, status: "rodando", template_id: principal.id, template_nome: cfg.template_nome,
-      template_id_by_instance: templateIdByInstance, instancia_ids: participantes.map((i: any) => i.id),
-      min_seg: 30, max_seg: 90, total: leads.length, proximo_em: new Date().toISOString(),
-      nome_campanha: `Certificado Digital — D+${janelaExperimento} — ${nomeCampanha()}`, folder_id: FOLDER_CERTIFICADO,
-      validar_no_envio: false,
-    }).select("id").single();
-    if (jobError || !job) throw jobError ?? new Error("Falha ao criar campanha");
+    let job = jobExistente ? { id: jobExistente.id } : null;
+    if (!job) {
+      const { data: criado, error: jobError } = await service.from("envio_meta_job").insert({
+        user_id: userId, status: "rodando", template_id: principal.id, template_nome: cfg.template_nome,
+        template_id_by_instance: templateIdByInstance, instancia_ids: participantes.map((i: any) => i.id),
+        min_seg: 30, max_seg: 90, total: leads.length, proximo_em: new Date().toISOString(),
+        nome_campanha: `Certificado Digital — D+${janelaExperimento} — ${nomeCampanha()}`, folder_id: FOLDER_CERTIFICADO,
+        validar_no_envio: false,
+      }).select("id").single();
+      if (jobError || !criado) throw jobError ?? new Error("Falha ao criar campanha");
+      job = criado;
+    }
 
     let rr = Number(cfg.ultimo_rr_indice ?? 0);
     const reservas: any[] = [];
+    const ordemInicial = Number(jobExistente?.total ?? 0);
     for (const lead of leads) {
       const instancia: any = participantes[rr % participantes.length];
       const { data: reserva, error } = await service.from("certificado_prospeccao_envios").insert({ lead_id: lead.id, bm_id: cfg.meta_bm_id, instancia_id: instancia.id, template_nome: cfg.template_nome, template_idioma: cfg.template_idioma, job_id: job.id }).select("id").maybeSingle();
-      if (!error && reserva) reservas.push({ lead, reserva, ordem: reservas.length });
+      if (!error && reserva) reservas.push({ lead, reserva, ordem: ordemInicial + reservas.length });
       rr++;
     }
     if (!reservas.length) {
       await service.from("envio_meta_job").update({ status: "erro", status_motivo: "Nenhum contato pôde ser reservado", concluido_em: new Date().toISOString() }).eq("id", job.id);
       return json({ success: true, skipped: true, motivo: "Os contatos elegíveis já pertencem a outra campanha" });
     }
-    await service.from("envio_meta_job").update({ total: reservas.length }).eq("id", job.id);
+    await service.from("envio_meta_job").update({
+      total: ordemInicial + reservas.length,
+      status: "rodando",
+      status_motivo: null,
+      concluido_em: null,
+      proximo_em: new Date().toISOString(),
+    }).eq("id", job.id);
     const itens = reservas.map(({ lead, reserva, ordem }) => {
       const nome = lead.nome_fantasia || lead.razao_social || "cliente";
       return {

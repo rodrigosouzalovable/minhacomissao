@@ -18,6 +18,8 @@ export interface ResultadoJanela {
   novos: number;
   duplicados: number;
   sem_telefone: number;
+  paginas_consultadas: number;
+  proxima_pagina: number | null;
   erro?: string;
   erro_temporario?: boolean;
 }
@@ -39,7 +41,7 @@ export async function coletarJanela(
   cfg: ConfigCert,
   janela: number,
   manual: boolean,
-  opcoes: { maxPaginas?: number; maxTentativas?: number; timeoutMs?: number } = {},
+  opcoes: { maxPaginas?: number; paginaInicial?: number; maxTentativas?: number; timeoutMs?: number } = {},
 ): Promise<ResultadoJanela> {
   const dataRef = dataBRT(janela);
   const res: ResultadoJanela = {
@@ -49,6 +51,8 @@ export async function coletarJanela(
     novos: 0,
     duplicados: 0,
     sem_telefone: 0,
+    paginas_consultadas: 0,
+    proxima_pagina: null,
   };
 
   try {
@@ -56,7 +60,8 @@ export async function coletarJanela(
     const brutos: LeadBruto[] = [];
     const limite = 100;
     const maxPaginas = Math.min(Math.max(opcoes.maxPaginas ?? 10, 1), 10);
-    for (let pagina = 1; pagina <= maxPaginas; pagina++) {
+    const paginaInicial = Math.max(1, Math.floor(opcoes.paginaInicial ?? 1));
+    for (let pagina = paginaInicial; pagina < paginaInicial + maxPaginas; pagina++) {
       const { leads, total } = await buscarCasaDosDados({
         ufs: cfg.ufs,
         cnaes: cfg.cnaes,
@@ -69,8 +74,11 @@ export async function coletarJanela(
         maxTentativas: opcoes.maxTentativas,
         timeoutMs: opcoes.timeoutMs,
       }, apiKey);
+      res.paginas_consultadas++;
       brutos.push(...leads);
-      if (leads.length < limite || brutos.length >= total) break;
+      const terminou = leads.length < limite || pagina * limite >= total;
+      res.proxima_pagina = terminou ? null : pagina + 1;
+      if (terminou) break;
       await new Promise((r) => setTimeout(r, 1_200));
     }
 
