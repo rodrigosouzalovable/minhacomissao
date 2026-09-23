@@ -174,12 +174,19 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "iniciar");
 
-    if (action === "processar") {
-      if (!auth.interno) return json({ error: "Ação interna" }, 403);
+    if (action === "processar" || action === "continuar") {
+      if (action === "processar" && !auth.interno) return json({ error: "Ação interna" }, 403);
       const { data: preparacao } = await service.from("certificado_prospeccao_preparacoes").select("*").eq("id", body?.preparacao_id).maybeSingle();
       if (!preparacao) return json({ error: "Preparação não encontrada" }, 404);
+      if (action === "continuar" && preparacao.status !== "pausada") return json({ error: "Esta preparação não está aguardando continuação" }, 409);
+      if (action === "continuar") await atualizar(service, preparacao.id, { status: "pendente", erro: null, lease_ate: null });
       const { data: config } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
-      await processarLote(service, { ...preparacao, config }, Math.min(50, Math.max(1, Number(body?.profundidade ?? 50))));
+      const trabalho = processarLote(service, { ...preparacao, status: action === "continuar" ? "pendente" : preparacao.status, config }, Math.min(50, Math.max(1, Number(body?.profundidade ?? 50))));
+      if (action === "continuar") {
+        EdgeRuntime.waitUntil(trabalho);
+        return json({ success: true, retomada: true }, 202);
+      }
+      await trabalho;
       return json({ success: true });
     }
 

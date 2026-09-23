@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
         return json({ error: "O template ou a BM mudou durante a preparação. Nenhuma campanha foi criada." }, 409);
       }
       preparacaoManual = data;
+      userId = data.solicitante_id;
       janelaExperimento = Number(data.janela);
       dataAlvoExperimento = String(data.data_alvo);
     }
@@ -294,6 +295,20 @@ Deno.serve(async (req) => {
       const { data: reserva, error } = await service.from("certificado_prospeccao_envios").insert({ lead_id: lead.id, bm_id: cfg.meta_bm_id, instancia_id: instancia.id, template_nome: cfg.template_nome, template_idioma: cfg.template_idioma, job_id: job.id }).select("id").maybeSingle();
       if (!error && reserva) reservas.push({ lead, reserva, ordem: ordemInicial + reservas.length });
       rr++;
+    }
+    if (preparacaoManual && reservas.length !== restante) {
+      await service.from("envio_meta_job").update({
+        status: "erro",
+        status_motivo: `Reserva incompleta: ${reservas.length} de ${restante}`,
+        concluido_em: new Date().toISOString(),
+      }).eq("id", job.id);
+      await service.from("certificado_prospeccao_preparacoes").update({
+        status: "falhou",
+        erro: "Alguns contatos foram reservados por outra campanha. Nenhum envio foi iniciado.",
+        concluido_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", preparacaoManual.id);
+      return json({ error: "Não foi possível reservar a quantidade completa. Nenhum envio foi iniciado." }, 409);
     }
     if (!reservas.length) {
       await service.from("envio_meta_job").update({ status: "erro", status_motivo: "Nenhum contato pôde ser reservado", concluido_em: new Date().toISOString() }).eq("id", job.id);
