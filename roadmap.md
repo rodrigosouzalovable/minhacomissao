@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Adicionar busca e favoritos por usuário em todos os seletores operacionais de templates
 - [x] Criar prospecção manual do Certificado Digital por quantidade livre e instâncias Meta selecionadas
 - [x] Completar hoje a campanha Certificado Digital D+5 com até 50 números inéditos com WhatsApp
 - [ ] Validar a promoção oficial da BM Green Soul após alcançar a referência de únicos entregues com qualidade GREEN

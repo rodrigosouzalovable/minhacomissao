@@ -36,6 +36,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useBmCotas } from "@/hooks/useBmCotas";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect";
 
 const NOVO_MUNDO_3144_INSTANCE_ID = "b103ac3e-5781-47c4-8e11-24a323f5f0ee";
 
@@ -1267,63 +1268,23 @@ export default function EnvioMeta() {
                   : "Nenhum template encontrado para as instâncias selecionadas. Sincronize os templates em API Oficial Meta → Templates HSM."}
               </p>
             ) : (
-              <Select value={templateId} onValueChange={setTemplateId}>
-                <SelectTrigger className="h-10">
-                  {templateGroup ? (
-                    <div className="flex items-center gap-2 min-w-0 flex-1 text-left">
-                      <span className="truncate">{templateGroup.nome}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">({templateGroup.idioma})</span>
-                      {templateGroup.categoria && (
-                        <Badge variant={templateGroup.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 shrink-0">
-                          {templateGroup.categoria === 'MARKETING' ? 'Marketing' : templateGroup.categoria === 'UTILITY' ? 'Utilidade' : templateGroup.categoria}
-                        </Badge>
-                      )}
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
-                        {templateGroup.instanciasAprovadasIds.size}/{instanciaIds.length} inst.
-                      </Badge>
-                    </div>
-                  ) : (
-                    <SelectValue placeholder="Selecione um template" />
-                  )}
-                </SelectTrigger>
-                <SelectContent>
-                  {templateGroups.map((g) => {
-                    const total = instanciaIds.length;
-                    const ok = g.instanciasAprovadasIds.size;
-                    const full = ok === total && total > 0;
-                    const textoReal = g.sample.body_text?.trim();
-                    return (
-                      <SelectItem key={g.key} value={g.key}>
-                        <div className="flex min-w-0 max-w-full flex-col gap-1.5 py-1 pr-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span>{g.nome}</span>
-                            <span className="text-xs text-muted-foreground">({g.idioma})</span>
-                            {g.categoria && (
-                              <Badge variant={g.categoria === 'MARKETING' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
-                                {g.categoria === 'MARKETING' ? 'Marketing' : g.categoria === 'UTILITY' ? 'Utilidade' : g.categoria}
-                              </Badge>
-                            )}
-                            <Badge
-                              variant={full ? "default" : ok === 0 ? "destructive" : "secondary"}
-                              className={`text-[10px] px-1.5 py-0 ${full ? "bg-green-600" : ok > 0 && !full ? "bg-amber-500 text-white" : ""}`}
-                            >
-                              {ok}/{total} instâncias
-                            </Badge>
-                          </div>
-                          <p
-                            className={`max-w-3xl whitespace-pre-line break-words text-xs leading-5 line-clamp-3 ${
-                              textoReal ? "text-muted-foreground" : "italic text-muted-foreground"
-                            }`}
-                            title={textoReal || "Texto do template indisponível — sincronize com a Meta"}
-                          >
-                            {textoReal || "Texto do template indisponível — sincronize com a Meta"}
-                          </p>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <TemplateFavoriteSelect
+                tipo="meta"
+                value={templateId}
+                onValueChange={setTemplateId}
+                options={templateGroups.map((group) => ({
+                  value: group.key,
+                  nome: group.nome,
+                  idioma: group.idioma,
+                  descricao: group.sample.body_text?.trim() || "Texto do template indisponível — sincronize com a Meta",
+                  meta: <>
+                    {group.categoria && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{group.categoria === "UTILITY" ? "Utilidade" : group.categoria}</Badge>}
+                    <Badge variant={group.instanciasAprovadasIds.size === 0 ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
+                      {group.instanciasAprovadasIds.size}/{instanciaIds.length} instâncias
+                    </Badge>
+                  </>,
+                }))}
+              />
             )}
 
             {/* Variação de templates — só templates com a MESMA quantidade de variáveis */}

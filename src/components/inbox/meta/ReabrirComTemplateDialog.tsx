@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Send, Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 import TemplateWhatsAppPreview from '@/components/meta/TemplateWhatsAppPreview';
+import { TemplateFavoriteSelect } from '@/components/meta/TemplateFavoriteSelect';
 
 interface Template {
   id: string;
@@ -35,7 +35,7 @@ export function ReabrirComTemplateDialog({
   const [templates, setTemplates] = useState<Template[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
-  const [templateName, setTemplateName] = useState('');
+  const [templateId, setTemplateId] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [nomeVar, setNomeVar] = useState('');
 
@@ -50,7 +50,7 @@ export function ReabrirComTemplateDialog({
       setCarregando(true);
       setErro('');
       setTemplates([]);
-      setTemplateName('');
+      setTemplateId('');
       const { data, error } = await supabase.from('meta_whatsapp_templates')
         .select('id, nome_template, idioma, categoria, body_text, variaveis')
         .eq('status', 'approved')
@@ -66,8 +66,8 @@ export function ReabrirComTemplateDialog({
   }, [open, instancia_id]);
 
   const selectedTemplate = useMemo(
-    () => templates.find(t => t.nome_template === templateName),
-    [templates, templateName],
+    () => templates.find(t => t.id === templateId),
+    [templates, templateId],
   );
 
   const enviar = async () => {
@@ -134,16 +134,19 @@ export function ReabrirComTemplateDialog({
 
           <div>
             <Label className="text-xs">Template</Label>
-            <Select value={templateName} onValueChange={setTemplateName} disabled={carregando || templates.length === 0}>
-              <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
-              <SelectContent>
-                {templates.map(t => (
-                  <SelectItem key={t.id} value={t.nome_template}>
-                    {t.nome_template} · <span className="text-xs text-muted-foreground">{t.idioma}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <TemplateFavoriteSelect
+              tipo="meta"
+              value={templateId}
+              onValueChange={setTemplateId}
+              disabled={carregando || templates.length === 0}
+              placeholder={placeholder}
+              options={templates.map(template => ({
+                value: template.id,
+                nome: template.nome_template,
+                idioma: template.idioma,
+                descricao: template.body_text?.trim() || 'Texto do template indisponível',
+              }))}
+            />
           </div>
 
           {carregando && (
