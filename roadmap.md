@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Corrigir a rolagem pela roda do mouse nos seletores de templates abertos dentro de janelas
 - [x] Carregar todos os templates Meta paginados nos seletores de envio, incluindo receber_boleto
 - [x] Adicionar busca e favoritos por usuário em todos os seletores operacionais de templates
 - [x] Criar prospecção manual do Certificado Digital por quantidade livre e instâncias Meta selecionadas
