@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Send, Loader2 } from 'lucide-react';
 import TemplateWhatsAppPreview from '@/components/meta/TemplateWhatsAppPreview';
+import { TemplateFavoriteSelect } from '@/components/meta/TemplateFavoriteSelect';
 
 interface MetaInst { id: string; nome: string | null; display_phone: string | null; }
 interface Template { id: string; instancia_id: string; nome_template: string; idioma: string; categoria: string; body_text: string | null; variaveis: any; }
@@ -233,27 +234,20 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label>Template</Label>
-            <Select value={templateKey} onValueChange={setTemplateKey} disabled={carregandoTemplates || templateGroups.length === 0}>
-            <SelectTrigger>
-              <SelectValue placeholder={templatePlaceholder} />
-            </SelectTrigger>
-            <SelectContent className="max-w-[calc(100vw-2rem)] sm:w-[28rem]">
-              {templateGroups.map(group => (
-                <SelectItem key={group.key} value={group.key} className="items-start py-2">
-                  <div className="min-w-0 pr-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-medium">{group.nome}</span>
-                      <Badge variant="secondary" className="text-[10px]">{group.idioma}</Badge>
-                      <Badge variant="outline" className="text-[10px]">{group.rows.length} inst.</Badge>
-                    </div>
-                    <p className="mt-1 max-w-[24rem] whitespace-normal break-words text-xs leading-4 text-muted-foreground line-clamp-3">
-                      {group.sample.body_text?.trim() || 'Texto do template indisponível'}
-                    </p>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-            </Select>
+            <TemplateFavoriteSelect
+              tipo="meta"
+              value={templateKey}
+              onValueChange={setTemplateKey}
+              disabled={carregandoTemplates || templateGroups.length === 0}
+              placeholder={templatePlaceholder}
+              options={templateGroups.map(group => ({
+                value: group.key,
+                nome: group.nome,
+                idioma: group.idioma,
+                descricao: group.sample.body_text?.trim() || 'Texto do template indisponível',
+                meta: <Badge variant="outline" className="text-[10px]">{group.rows.length} inst.</Badge>,
+              }))}
+            />
           </div>
           {carregandoTemplates && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">

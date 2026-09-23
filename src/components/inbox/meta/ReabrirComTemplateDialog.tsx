@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Send, Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 import TemplateWhatsAppPreview from '@/components/meta/TemplateWhatsAppPreview';
+import { TemplateFavoriteSelect } from '@/components/meta/TemplateFavoriteSelect';
 
 interface Template {
   id: string;
@@ -134,16 +134,19 @@ export function ReabrirComTemplateDialog({
 
           <div>
             <Label className="text-xs">Template</Label>
-            <Select value={templateName} onValueChange={setTemplateName} disabled={carregando || templates.length === 0}>
-              <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
-              <SelectContent>
-                {templates.map(t => (
-                  <SelectItem key={t.id} value={t.nome_template}>
-                    {t.nome_template} · <span className="text-xs text-muted-foreground">{t.idioma}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <TemplateFavoriteSelect
+              tipo="meta"
+              value={templateName}
+              onValueChange={setTemplateName}
+              disabled={carregando || templates.length === 0}
+              placeholder={placeholder}
+              options={templates.map(template => ({
+                value: template.nome_template,
+                nome: template.nome_template,
+                idioma: template.idioma,
+                descricao: template.body_text?.trim() || 'Texto do template indisponível',
+              }))}
+            />
           </div>
 
           {carregando && (

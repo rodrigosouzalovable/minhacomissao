@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import BusinessManagersManager from "@/components/meta/BusinessManagersManager";
+import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect";
 
 type Categoria = "UTILITY" | "MARKETING" | "AUTHENTICATION";
 type BotaoTipo = "QUICK_REPLY" | "URL" | "PHONE_NUMBER";
@@ -943,14 +944,19 @@ export default function MetaTemplates() {
                       Modelos para números novos ({qtdMarcados})
                     </Button>
                   </div>
-                  <Select value={selMestre} onValueChange={setSelMestre}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      {mestres.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>{m.nome} ({m.categoria})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <TemplateFavoriteSelect
+                    tipo="meta"
+                    value={selMestre}
+                    onValueChange={setSelMestre}
+                    placeholder="Selecione um template mestre"
+                    options={mestres.map((m) => ({
+                      value: m.id,
+                      nome: m.nome,
+                      idioma: m.idioma,
+                      descricao: m.corpo,
+                      meta: <Badge variant="secondary" className="text-[10px]">{m.categoria}</Badge>,
+                    }))}
+                  />
 
                   {/* Lista de todos os modelos: abre cada um em janela para ver/excluir */}
                   <div className="max-h-64 overflow-y-auto rounded-md border divide-y">
