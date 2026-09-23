@@ -14,13 +14,22 @@ Deno.serve(async (req) => {
     const { data: cfg, error } = await service.from("certificado_config").select("prospeccao_ativa").limit(1).maybeSingle();
     if (error) throw error;
     if (cfg?.prospeccao_ativa !== true) return json({ success: true, skipped: true, motivo: "Piloto desativado" });
-    const response = await fetch(`${url}/functions/v1/certificado-prospeccao-processar`, {
+    const processamento = fetch(`${url}/functions/v1/certificado-prospeccao-processar`, {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ iniciar_completo: true, automatico: true }),
+    }).then(async (response) => {
+      const result = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      if (!response.ok || result?.error) {
+        console.error("certificado-prospeccao-diaria processamento", { status: response.status, result });
+      } else {
+        console.log("certificado-prospeccao-diaria processamento concluído", result);
+      }
+    }).catch((error) => {
+      console.error("certificado-prospeccao-diaria processamento", error);
     });
-    const result = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-    return json(result, response.ok ? 200 : response.status);
+    EdgeRuntime.waitUntil(processamento);
+    return json({ success: true, iniciado: true, motivo: "Processamento diário iniciado" }, 202);
   } catch (error) {
     console.error("certificado-prospeccao-diaria", error);
     return json({ error: error instanceof Error ? error.message : "Falha no início diário" }, 500);
