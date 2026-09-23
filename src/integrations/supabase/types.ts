@@ -1146,6 +1146,7 @@ export type Database = {
           meta_bm_id: string | null
           motor_ativo: boolean
           prospeccao_ativa: boolean
+          prospeccao_instancia_ids: string[]
           prospeccao_pausada_motivo: string | null
           prospeccao_ultima_execucao: string | null
           somente_celular: boolean
@@ -1169,6 +1170,7 @@ export type Database = {
           meta_bm_id?: string | null
           motor_ativo?: boolean
           prospeccao_ativa?: boolean
+          prospeccao_instancia_ids?: string[]
           prospeccao_pausada_motivo?: string | null
           prospeccao_ultima_execucao?: string | null
           somente_celular?: boolean
@@ -1192,6 +1194,7 @@ export type Database = {
           meta_bm_id?: string | null
           motor_ativo?: boolean
           prospeccao_ativa?: boolean
+          prospeccao_instancia_ids?: string[]
           prospeccao_pausada_motivo?: string | null
           prospeccao_ultima_execucao?: string | null
           somente_celular?: boolean
@@ -1231,6 +1234,7 @@ export type Database = {
           observacao: string | null
           origem_janela: number | null
           porte: string | null
+          preparacao_id: string | null
           razao_social: string | null
           situacao: string
           telefone_principal: string | null
@@ -1256,6 +1260,7 @@ export type Database = {
           observacao?: string | null
           origem_janela?: number | null
           porte?: string | null
+          preparacao_id?: string | null
           razao_social?: string | null
           situacao?: string
           telefone_principal?: string | null
@@ -1281,6 +1286,7 @@ export type Database = {
           observacao?: string | null
           origem_janela?: number | null
           porte?: string | null
+          preparacao_id?: string | null
           razao_social?: string | null
           situacao?: string
           telefone_principal?: string | null
@@ -1393,6 +1399,93 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: true
             referencedRelation: "certificado_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      certificado_prospeccao_preparacoes: {
+        Row: {
+          bm_id: string
+          cnpjs_consultados: number
+          concluido_em: string | null
+          confirmados_whatsapp: number
+          created_at: string
+          data_alvo: string
+          erro: string | null
+          id: string
+          instancia_ids: string[]
+          janela: number
+          job_id: string | null
+          leads_novos: number
+          lease_ate: string | null
+          numeros_verificados: number
+          pagina_atual: number
+          quantidade_alvo: number
+          solicitante_id: string
+          status: string
+          template_idioma: string
+          template_nome: string
+          updated_at: string
+        }
+        Insert: {
+          bm_id: string
+          cnpjs_consultados?: number
+          concluido_em?: string | null
+          confirmados_whatsapp?: number
+          created_at?: string
+          data_alvo: string
+          erro?: string | null
+          id?: string
+          instancia_ids: string[]
+          janela: number
+          job_id?: string | null
+          leads_novos?: number
+          lease_ate?: string | null
+          numeros_verificados?: number
+          pagina_atual?: number
+          quantidade_alvo: number
+          solicitante_id: string
+          status?: string
+          template_idioma?: string
+          template_nome: string
+          updated_at?: string
+        }
+        Update: {
+          bm_id?: string
+          cnpjs_consultados?: number
+          concluido_em?: string | null
+          confirmados_whatsapp?: number
+          created_at?: string
+          data_alvo?: string
+          erro?: string | null
+          id?: string
+          instancia_ids?: string[]
+          janela?: number
+          job_id?: string | null
+          leads_novos?: number
+          lease_ate?: string | null
+          numeros_verificados?: number
+          pagina_atual?: number
+          quantidade_alvo?: number
+          solicitante_id?: string
+          status?: string
+          template_idioma?: string
+          template_nome?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificado_prospeccao_preparacoes_bm_id_fkey"
+            columns: ["bm_id"]
+            isOneToOne: false
+            referencedRelation: "meta_business_managers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificado_prospeccao_preparacoes_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "envio_meta_job"
             referencedColumns: ["id"]
           },
         ]

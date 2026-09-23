@@ -379,6 +379,13 @@
       "when": 1790116673492,
       "tag": "0053_greensoul_pilot_quality_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790170425141,
+      "tag": "0054_certificado_manual_quantity_instances",
+      "breakpoints": true
     }
   ]
 }
