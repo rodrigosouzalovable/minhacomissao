@@ -99,7 +99,10 @@ function getImageMimeFromUrl(url: string): string {
 }
 
 export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaTodos, onEditar, onResponder, possivelmenteNaoEntregue }: ChatMessageProps) {
-  const tipo = msg.tipo_conteudo || 'texto';
+  const tipoOriginal = msg.tipo_conteudo || 'texto';
+  const tipo = tipoOriginal === 'sticker' || (tipoOriginal === 'texto' && msg.conteudo === '[sticker]' && msg.media_url)
+    ? 'sticker'
+    : tipoOriginal;
   const isSaida = msg.direcao === 'saida';
   const isTemp = msg.id.startsWith('temp-');
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -154,7 +157,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
   }, [showLightbox, closeLightbox]);
 
   useEffect(() => {
-    if (tipo !== 'imagem' || !mediaUrl) return;
+    if ((tipo !== 'imagem' && tipo !== 'sticker') || !mediaUrl) return;
     let cancelled = false;
     setImgLoading(true);
     setImgError(false);
@@ -322,7 +325,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       );
     };
 
-    if (tipo === 'imagem' && mediaUrl) {
+    if ((tipo === 'imagem' || tipo === 'sticker') && mediaUrl) {
       const imgNode = imgLoading ? (
         <div className="flex items-center justify-center p-4">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -331,14 +334,14 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
         <a href={mediaUrl} target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-2 p-3 rounded bg-background/30 hover:bg-background/50 transition">
           <ImageIcon className="h-5 w-5 shrink-0" />
-          <span className="text-xs underline">Abrir imagem</span>
+          <span className="text-xs underline">Abrir {tipo === 'sticker' ? 'figurinha' : 'imagem'}</span>
         </a>
       ) : (
         <div className="cursor-zoom-in" onClick={() => setShowLightbox(true)}>
           <img
             src={blobUrl}
-            alt="Imagem"
-            className="max-w-[250px] rounded-md hover:opacity-90 transition"
+            alt={tipo === 'sticker' ? 'Figurinha' : 'Imagem'}
+            className={cn(tipo === 'sticker' ? 'max-h-40 max-w-40 object-contain' : 'max-w-[250px] rounded-md', 'hover:opacity-90 transition')}
             onError={() => setImgError(true)}
           />
         </div>
@@ -346,7 +349,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       return (
         <div className="flex flex-col gap-2">
           {imgNode}
-          {msg.conteudo && (
+          {tipo !== 'sticker' && msg.conteudo && (
             <p className="whitespace-pre-wrap break-words select-text cursor-text text-sm">
               {msg.conteudo}
             </p>
@@ -442,7 +445,9 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
 
     return (
       <div className="flex flex-col">
-        <p className="whitespace-pre-wrap break-words select-text cursor-text">{msg.conteudo}</p>
+        <p className="whitespace-pre-wrap break-words select-text cursor-text">
+          {msg.conteudo === '[reaction]' ? 'Reação à mensagem' : msg.conteudo}
+        </p>
         {renderPix()}
         {renderBotoes()}
       </div>
@@ -550,10 +555,12 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       )}
       <div
         className={cn(
-          'max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm overflow-hidden break-words transition-transform',
-          isSaida
-            ? 'bg-primary text-primary-foreground rounded-br-none'
-            : 'bg-card text-card-foreground border border-border rounded-bl-none',
+          'max-w-[75%] rounded-lg text-sm overflow-hidden break-words transition-transform',
+          tipo === 'sticker'
+            ? 'bg-transparent px-1 py-1 shadow-none'
+            : isSaida
+              ? 'bg-primary px-3 py-2 text-primary-foreground rounded-br-none shadow-sm'
+              : 'bg-card px-3 py-2 text-card-foreground border border-border rounded-bl-none shadow-sm',
         )}
         style={{ transform: `translateX(${swipeDx}px)` }}
       >
@@ -567,7 +574,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
           <p
             className={cn(
               'text-[10px]',
-              isSaida ? 'text-primary-foreground/70' : 'text-muted-foreground',
+              tipo === 'sticker' ? 'text-muted-foreground' : isSaida ? 'text-primary-foreground/70' : 'text-muted-foreground',
             )}
           >
             {formatMsgTime(msg.timestamp_msg)}

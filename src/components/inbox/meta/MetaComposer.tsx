@@ -1,7 +1,8 @@
-import { memo, useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { memo, useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send } from 'lucide-react';
+import { Loader2, Send, Zap } from 'lucide-react';
+import type { MetaMsgRapida } from './MetaMensagensRapidasDialog';
 
 interface Props {
   disabled: boolean;
@@ -12,6 +13,8 @@ interface Props {
   onEscape?: () => void;
   initialText?: string;
   onInitialTextConsumed?: () => void;
+  mensagensRapidas?: MetaMsgRapida[];
+  conversationKey?: string;
 }
 
 export interface MetaComposerHandle {
@@ -22,11 +25,21 @@ export interface MetaComposerHandle {
 const LINHAS_AUTO = 4;
 
 const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComposerImpl(
-  { disabled, enviando, placeholder, onSend, onPaste, onEscape, initialText, onInitialTextConsumed },
+  { disabled, enviando, placeholder, onSend, onPaste, onEscape, initialText, onInitialTextConsumed, mensagensRapidas = [], conversationKey },
   ref,
 ) {
   const [texto, setTexto] = useState('');
+  const [atalhoSelecionado, setAtalhoSelecionado] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const termoAtalho = texto.startsWith('/') && !texto.includes('\n') ? texto.slice(1).trim().toLocaleLowerCase('pt-BR') : null;
+  const atalhosFiltrados = useMemo(() => {
+    if (termoAtalho === null) return [];
+    return mensagensRapidas.filter((item) => {
+      const busca = `${item.titulo} ${item.conteudo || ''}`.toLocaleLowerCase('pt-BR');
+      return !termoAtalho || busca.includes(termoAtalho);
+    });
+  }, [mensagensRapidas, termoAtalho]);
+  const listaAtalhosAberta = termoAtalho !== null && atalhosFiltrados.length > 0 && !disabled;
   // Altura máxima definida manualmente pelo usuário (arraste). null = automático (4 linhas)
   const tetoManualRef = useRef<number | null>(null);
 
@@ -75,6 +88,10 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
     ajustarAltura();
   }, [texto, ajustarAltura]);
 
+  useEffect(() => { setAtalhoSelecionado(0); }, [termoAtalho]);
+
+  useEffect(() => { setTexto(''); }, [conversationKey]);
+
   // Reagir a mudanças de largura (abrir/fechar painéis) e carregamento de fontes
   useEffect(() => {
     const ta = taRef.current;
@@ -101,6 +118,11 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
     const focus = () => taRef.current?.focus();
     requestAnimationFrame(focus);
     setTimeout(focus, 50);
+  }, []);
+
+  const escolherAtalho = useCallback((item: MetaMsgRapida) => {
+    setTexto(item.conteudo || '');
+    requestAnimationFrame(() => taRef.current?.focus());
   }, []);
 
   useImperativeHandle(ref, () => ({
@@ -169,7 +191,32 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
 
   return (
     <>
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="relative flex-1 min-w-0 flex flex-col">
+        {listaAtalhosAberta && (
+          <div
+            role="listbox"
+            aria-label="Respostas rápidas"
+            className="absolute bottom-full left-0 right-0 z-30 mb-2 max-h-64 overflow-y-auto overscroll-contain rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+          >
+            {atalhosFiltrados.map((item, index) => (
+              <button
+                key={item.id}
+                type="button"
+                role="option"
+                aria-selected={index === atalhoSelecionado}
+                className={`flex w-full items-start gap-2 rounded-sm px-3 py-2 text-left ${index === atalhoSelecionado ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60'}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => escolherAtalho(item)}
+              >
+                <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">/{item.titulo}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{item.conteudo}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
         <div
           role="separator"
           aria-orientation="horizontal"
@@ -188,7 +235,18 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
           value={texto}
           onChange={e => setTexto(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+            if (listaAtalhosAberta && e.key === 'ArrowDown') {
+              e.preventDefault();
+              setAtalhoSelecionado((atual) => Math.min(atual + 1, atalhosFiltrados.length - 1));
+            } else if (listaAtalhosAberta && e.key === 'ArrowUp') {
+              e.preventDefault();
+              setAtalhoSelecionado((atual) => Math.max(atual - 1, 0));
+            } else if (listaAtalhosAberta && (e.key === 'Enter' || e.key === 'Tab')) {
+              e.preventDefault();
+              const item = atalhosFiltrados[atalhoSelecionado];
+              if (item) escolherAtalho(item);
+            } else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+            else if (e.key === 'Escape' && listaAtalhosAberta) { e.preventDefault(); setTexto(''); }
             else if (e.key === 'Escape') onEscape?.();
           }}
           onPaste={onPaste}

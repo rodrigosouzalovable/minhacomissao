@@ -2626,17 +2626,6 @@ export default function InboxMeta() {
                     </Button>
                   </div>
                 )}
-                {msgRapidas.length > 0 && janelaInfo.aberta && (
-                  <div className="px-3 pt-2 flex gap-1.5 overflow-x-auto scrollbar-none">
-                    {msgRapidas.map(m => (
-                      <Button key={m.id} variant="outline" size="sm" className="shrink-0 text-xs h-7 px-2.5"
-                        disabled={enviando || enviandoArquivo}
-                        onClick={() => m.conteudo && enviar(m.conteudo)}>
-                        {m.titulo}
-                      </Button>
-                    ))}
-                  </div>
-                )}
                 {(audioRec.gravando || audioRec.transcrevendo) ? (
                   <div className="p-3 flex items-center gap-2">
                     <Button variant="ghost" size="icon"
@@ -2693,6 +2682,13 @@ export default function InboxMeta() {
                       }} />
                     <Button variant="ghost" size="icon" className="shrink-0"
                       disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
+                      onClick={() => setMsgRapidasOpen(true)}
+                      title="Respostas rápidas"
+                      aria-label="Respostas rápidas">
+                      <Zap className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="shrink-0"
+                      disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
                       onClick={() => fileInputRef.current?.click()}>
                       {enviandoArquivo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
                     </Button>
@@ -2725,6 +2721,8 @@ export default function InboxMeta() {
                       onEscape={() => respondendo && setRespondendo(null)}
                       initialText={pendingTranscricao}
                       onInitialTextConsumed={() => setPendingTranscricao('')}
+                      mensagensRapidas={msgRapidas}
+                      conversationKey={contatoAtivo.id}
                     />
                   </div>
                 )}
