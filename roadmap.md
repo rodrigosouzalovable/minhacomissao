@@ -14,6 +14,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Reformular Nova Conversa Meta com template primeiro, instâncias aprovadas, variáveis completas e prévia em tempo real
 - [x] Melhorar o piloto Green Soul com tier oficial da BM, respostas classificadas e reaproveitamento controlado de auto-respondedores
 - [x] Corrigir contagem, status conectado e exportação das instâncias Teste Meta ativas e configuradas
 - [x] Exibir a BM vinculada e diferenciar status não verificado nas instâncias Teste Meta da aba UAZAPI

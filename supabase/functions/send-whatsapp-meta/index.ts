@@ -21,6 +21,7 @@ interface ClienteData {
   atraso?: string | number;
   saldo?: number;
   vars?: Record<string, string>;
+  header_vars?: Record<string, string>;
 }
 
 const formatPrimeiroNome = (nome: string): string => {
@@ -207,7 +208,30 @@ function getHeaderFormat(template: any): string {
 }
 
 
-function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId?: string | null) {
+function buildHeaderTextParameters(template: any, cliente: ClienteData): any[] {
+  const components = getTemplateComponents(template);
+  const header = components.find((component: any) => String(component?.type || '').toUpperCase() === 'HEADER');
+  if (String(header?.format || '').toUpperCase() !== 'TEXT') return [];
+  const text = String(header?.text || '');
+  const values = cliente.header_vars || {};
+  const matches = [...text.matchAll(/\{\{\s*([a-zA-Z_0-9]+)\s*\}\}/g)];
+  const seen = new Set<string>();
+  const named = matches.some(match => !/^\d+$/.test(match[1]));
+  const parameters: any[] = [];
+  for (const match of matches) {
+    const key = match[1];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const value = String(values[key] || '').trim();
+    if (!value) throw new Error(`Variável obrigatória do cabeçalho não preenchida: {{${key}}}`);
+    parameters.push(named
+      ? { type: 'text', parameter_name: key, text: value }
+      : { type: 'text', text: value });
+  }
+  return parameters;
+}
+
+function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId: string | null | undefined, cliente: ClienteData) {
   const components: any[] = [];
   const headerFormat = getHeaderFormat(template);
 
@@ -227,6 +251,9 @@ function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId
     });
   } else if (headerFormat === 'VIDEO' || headerFormat === 'DOCUMENT') {
     throw new Error(`Template exige cabeçalho ${headerFormat}. Configure uma mídia pública antes de enviar.`);
+  } else if (headerFormat === 'TEXT') {
+    const parameters = buildHeaderTextParameters(template, cliente);
+    if (parameters.length > 0) components.push({ type: 'header', parameters });
   }
 
   if (bodyParameters.length) components.push({ type: 'body', parameters: bodyParameters });
@@ -336,7 +363,7 @@ async function sendOne(
       template: {
         name: template.nome_template,
         language: { code: template.idioma || 'pt_BR' },
-        components: buildMetaComponents(template, parameters, headerMediaId),
+        components: buildMetaComponents(template, parameters, headerMediaId, cliente),
       },
     };
 
@@ -438,6 +465,9 @@ Deno.serve(async (req) => {
       .from('meta_whatsapp_templates').select('*').eq('id', template_id).maybeSingle();
     if (!template) throw new Error('Template não encontrado');
     if (template.status !== 'approved') throw new Error('Template não aprovado pela Meta');
+    if (template.instancia_id !== instancia_id) {
+      throw new Error('Este template não está aprovado para a instância selecionada');
+    }
 
     // Fallback: se este template não tem imagem/components cadastrados, herda de
     // qualquer instância irmã (mesmo nome_template + idioma) que já tenha configurado.
