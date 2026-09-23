@@ -55,7 +55,7 @@ export function TemplateFavoriteSelect({
   }, [options, search, isFavorito]);
 
   return (
-    <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setSearch(""); }}>
+    <Popover modal open={open} onOpenChange={(next) => { setOpen(next); if (!next) setSearch(""); }}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -74,7 +74,10 @@ export function TemplateFavoriteSelect({
       <PopoverContent align="start" className="w-[min(36rem,calc(100vw-2rem))] p-0">
         <Command shouldFilter={false}>
           <CommandInput value={search} onValueChange={setSearch} placeholder={searchPlaceholder} />
-          <CommandList className="max-h-80">
+          <CommandList
+            className="max-h-80 overscroll-contain"
+            onWheelCapture={(event) => event.stopPropagation()}
+          >
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             <CommandGroup>
               {filtered.map((option) => {
