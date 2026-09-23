@@ -37,6 +37,7 @@ import { useBmCotas } from "@/hooks/useBmCotas";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect";
+import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
 
 const NOVO_MUNDO_3144_INSTANCE_ID = "b103ac3e-5781-47c4-8e11-24a323f5f0ee";
 
@@ -639,9 +640,7 @@ export default function EnvioMeta() {
     setLoading(true);
     const [i, t, u, bm, vp] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
-      supabase.from("meta_whatsapp_templates")
-        .select("*")
-        .order("nome_template"),
+      carregarTodosMetaTemplates<Template>("*"),
 
 
       (supabase as any).from("user_whatsapp_instances")
@@ -689,7 +688,7 @@ export default function EnvioMeta() {
       setInstanciaIds((prev) => prev.filter((id) => idsDisponiveis.has(id)));
     }
 
-    if (t.data) setTemplates(t.data as any);
+    setTemplates(t);
     if (u.data) setUazInstancias(u.data as any);
     setLoading(false);
   };

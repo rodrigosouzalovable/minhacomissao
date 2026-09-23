@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Send, Loader2 } from 'lucide-react';
 import TemplateWhatsAppPreview from '@/components/meta/TemplateWhatsAppPreview';
 import { TemplateFavoriteSelect } from '@/components/meta/TemplateFavoriteSelect';
+import { carregarTodosMetaTemplates } from '@/lib/carregarTodosMetaTemplates';
 
 interface MetaInst { id: string; nome: string | null; display_phone: string | null; }
 interface Template { id: string; instancia_id: string; nome_template: string; idioma: string; categoria: string; body_text: string | null; variaveis: any; }
@@ -51,19 +52,23 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
       setCarregandoTemplates(true);
       setErroTemplates('');
       setTemplates([]);
-      const { data, error } = await supabase.from('meta_whatsapp_templates')
-        .select('id, instancia_id, nome_template, idioma, categoria, body_text, variaveis')
-        .eq('status', 'approved')
-        .eq('categoria', 'UTILITY')
-        .in('instancia_id', instancias.map(i => i.id))
-        .order('nome_template');
-      if (!active) return;
-      if (error) {
-        setErroTemplates(error.message);
+      try {
+        const data = await carregarTodosMetaTemplates<Template>(
+          'id, instancia_id, nome_template, idioma, categoria, body_text, variaveis',
+          {
+            status: 'approved',
+            categoria: 'UTILITY',
+            instanciaIds: instancias.map(i => i.id),
+          },
+        );
+        if (!active) return;
+        setTemplates(data);
+      } catch (error) {
+        if (!active) return;
+        setErroTemplates(error instanceof Error ? error.message : 'Falha ao carregar templates');
         setTemplates([]);
-      } else {
-        setTemplates((data as Template[]) ?? []);
       }
+      if (!active) return;
       setCarregandoTemplates(false);
     })();
     return () => { active = false; };

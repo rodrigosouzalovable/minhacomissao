@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Send, Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 import TemplateWhatsAppPreview from '@/components/meta/TemplateWhatsAppPreview';
 import { TemplateFavoriteSelect } from '@/components/meta/TemplateFavoriteSelect';
+import { carregarTodosMetaTemplates } from '@/lib/carregarTodosMetaTemplates';
 
 interface Template {
   id: string;
@@ -51,15 +52,18 @@ export function ReabrirComTemplateDialog({
       setErro('');
       setTemplates([]);
       setTemplateId('');
-      const { data, error } = await supabase.from('meta_whatsapp_templates')
-        .select('id, nome_template, idioma, categoria, body_text, variaveis')
-        .eq('status', 'approved')
-        .eq('categoria', 'UTILITY')
-        .eq('instancia_id', instancia_id)
-        .order('nome_template');
+      try {
+        const data = await carregarTodosMetaTemplates<Template>(
+          'id, nome_template, idioma, categoria, body_text, variaveis',
+          { status: 'approved', categoria: 'UTILITY', instanciaId: instancia_id },
+        );
+        if (!active) return;
+        setTemplates(data);
+      } catch (error) {
+        if (!active) return;
+        setErro(error instanceof Error ? error.message : 'Falha ao carregar templates');
+      }
       if (!active) return;
-      if (error) setErro(error.message);
-      else setTemplates((data as Template[]) ?? []);
       setCarregando(false);
     })();
     return () => { active = false; };
