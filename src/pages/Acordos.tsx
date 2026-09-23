@@ -21,9 +21,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
 import { PlusCircle, Search, FileText, Trash2, Phone, User, Download, Clock, Send, MessageCircle, Loader2, TrendingUp, Trophy, Square, XCircle, CalendarIcon, X, CheckCircle2 } from 'lucide-react';
@@ -36,6 +33,7 @@ import { RankingMensal } from '@/components/RankingMensal';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Tables } from '@/integrations/supabase/types';
 import { formatarNumeroAcordo, gerarTermoAcordoPdf } from '@/lib/termoAcordoPdf';
+import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
 type Acordo = Tables<'acordos'>;
 
 interface WhatsAppInstance {
@@ -43,6 +41,13 @@ interface WhatsAppInstance {
   nome: string | null;
   server_url: string;
   instance_token: string;
+}
+
+interface MetaInstance {
+  id: string;
+  nome: string | null;
+  display_phone: string | null;
+  provider?: string | null;
 }
 
 interface LembreteTemplate {
@@ -630,6 +635,16 @@ export default function Acordos() {
     enabled: !!user,
   });
 
+  const { data: metaInstances } = useQuery({
+    queryKey: ['meta-instances-for-agreements', user?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_meta_whatsapp_active_instances_for_sending');
+      if (error) throw error;
+      return ((data || []) as MetaInstance[]).filter(instance => (instance.provider ?? 'meta') === 'meta');
+    },
+    enabled: !!user,
+  });
+
   // Buscar templates de lembretes do usuário
   const { data: lembreteTemplates } = useQuery({
     queryKey: ['my-lembrete-templates', user?.id],
@@ -660,10 +675,8 @@ export default function Acordos() {
   });
 
   const [whatsappDialogAcordo, setWhatsappDialogAcordo] = useState<Acordo | null>(null);
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string>('');
-  const [sendingWhatsappDialog, setSendingWhatsappDialog] = useState(false);
 
-  const handleEnviarWhatsApp = useCallback(async (acordo: Acordo) => {
+  const handleEnviarWhatsApp = useCallback((acordo: Acordo) => {
     if (!acordo.cliente_telefone) {
       toast({
         variant: 'destructive',
@@ -672,23 +685,17 @@ export default function Acordos() {
       });
       return;
     }
-    const instances = whatsappInstances || [];
+    const instances = metaInstances || [];
     if (instances.length === 0) {
       toast({
         variant: 'destructive',
-        title: 'WhatsApp não configurado',
-        description: 'Configure uma instância WhatsApp no menu de Acionamento.'
+        title: 'Meta não configurada',
+        description: 'Nenhuma instância da API Oficial Meta está disponível para envio.'
       });
       return;
     }
-    // If only 1 instance, use it directly
-    if (instances.length === 1) {
-      setSelectedInstanceId(instances[0].id);
-    } else {
-      setSelectedInstanceId('');
-    }
     setWhatsappDialogAcordo(acordo);
-  }, [toast, whatsappInstances]);
+  }, [toast, metaInstances]);
 
   const [togglingBoletoId, setTogglingBoletoId] = useState<string | null>(null);
   const handleToggleBoletoEnviado = useCallback(async (acordo: Acordo) => {
@@ -721,79 +728,6 @@ export default function Acordos() {
     }
   }, [togglingBoletoId, toast]);
 
-  const handleConfirmarEnvioWhatsApp = useCallback(async () => {
-    const acordo = whatsappDialogAcordo;
-    if (!acordo) return;
-    const instances = whatsappInstances || [];
-    const instance = instances.find(i => i.id === selectedInstanceId);
-    if (!instance) return;
-
-    setSendingWhatsappDialog(true);
-    setEnviandoWhatsApp(acordo.id);
-    try {
-      // Fetch next pending installment for this agreement
-      const { data: proximaParcela } = await supabase
-        .from('pagamentos')
-        .select('valor_parcela, data_prevista')
-        .eq('acordo_id', acordo.id)
-        .eq('status', 'pendente')
-        .order('data_prevista', { ascending: true })
-        .limit(1)
-        .single();
-
-      const valorParcela = proximaParcela?.valor_parcela || acordo.valor_parcela;
-      const dataPrevista = proximaParcela?.data_prevista || acordo.data_primeiro_pagamento;
-
-      // Determine tipo based on the tab / date
-      let tipo: 'vencido' | 'hoje' | '3_dias' = '3_dias';
-      const hoje = new Date();
-      const hojeStr = hoje.toISOString().split('T')[0];
-      if (dataPrevista < hojeStr) {
-        tipo = 'vencido';
-      } else if (dataPrevista === hojeStr) {
-        tipo = 'hoje';
-      }
-
-      const nomeOperador = profile?.nome || 'Operador';
-      const templates = lembreteTemplates || [];
-      const mensagem = gerarMensagemComTemplate(
-        acordo.cliente_nome,
-        nomeOperador,
-        valorParcela,
-        dataPrevista,
-        templates,
-        tipo
-      );
-
-      const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-        body: {
-          telefone: acordo.cliente_telefone,
-          mensagem,
-          uazapi_server_url: instance.server_url,
-          uazapi_instance_token: instance.instance_token,
-          instancia_id: instance.id,
-        },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Erro ao enviar mensagem');
-
-      toast({
-        title: 'Mensagem enviada!',
-        description: `WhatsApp enviado para ${acordo.cliente_nome}`
-      });
-      setWhatsappDialogAcordo(null);
-    } catch (error) {
-      console.error('Erro ao enviar WhatsApp:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Erro ao enviar',
-        description: 'Não foi possível enviar a mensagem via WhatsApp.'
-      });
-    } finally {
-      setEnviandoWhatsApp(null);
-      setSendingWhatsappDialog(false);
-    }
-  }, [whatsappDialogAcordo, whatsappInstances, selectedInstanceId, profile, lembreteTemplates, toast]);
   useEffect(() => {
     async function loadAcordos() {
       if (!user) return;
@@ -1482,56 +1416,15 @@ export default function Acordos() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog de seleção de instância WhatsApp */}
-      <Dialog open={!!whatsappDialogAcordo} onOpenChange={(open) => !open && setWhatsappDialogAcordo(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5 text-green-600" />
-              Enviar WhatsApp
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Enviar lembrete para <strong>{whatsappDialogAcordo?.cliente_nome}</strong>
-            </p>
-            {(whatsappInstances?.length || 0) > 1 ? (
-              <div className="space-y-2">
-                <Label>Selecione a instância WhatsApp:</Label>
-                <RadioGroup value={selectedInstanceId} onValueChange={setSelectedInstanceId}>
-                  {whatsappInstances?.map((inst) => (
-                    <div key={inst.id} className="flex items-center space-x-2 p-2 rounded-md border hover:bg-accent/50 transition-colors">
-                      <RadioGroupItem value={inst.id} id={`inst-${inst.id}`} />
-                      <Label htmlFor={`inst-${inst.id}`} className="cursor-pointer flex-1">
-                        {inst.nome || inst.server_url}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-            ) : (
-              <p className="text-sm">
-                Instância: <strong>{whatsappInstances?.[0]?.nome || whatsappInstances?.[0]?.server_url || '—'}</strong>
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setWhatsappDialogAcordo(null)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleConfirmarEnvioWhatsApp}
-              disabled={!selectedInstanceId || sendingWhatsappDialog}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {sendingWhatsappDialog ? (
-                <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Enviando...</>
-              ) : (
-                <><Send className="h-4 w-4 mr-2" /> Enviar Mensagem</>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <MetaNovaConversaDialog
+        open={!!whatsappDialogAcordo}
+        onOpenChange={(open) => { if (!open) setWhatsappDialogAcordo(null); }}
+        instancias={metaInstances || []}
+        atendenteNome={profile?.nome || undefined}
+        folderId={null}
+        initialTelefone={whatsappDialogAcordo?.cliente_telefone || ''}
+        initialNome={whatsappDialogAcordo?.cliente_nome || ''}
+        onSent={() => setWhatsappDialogAcordo(null)}
+      />
     </AppLayout>;
 }
