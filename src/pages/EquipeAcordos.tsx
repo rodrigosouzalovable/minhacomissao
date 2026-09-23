@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CopyButton } from '@/components/CopyButton';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { AcordosAbandonadosDialog } from '@/components/AcordosAbandonadosDialog';
 import { ImportarPagosDialog } from '@/components/ImportarPagosDialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
 interface AcordoComFuncionario {
   id: string;
   cliente_nome: string;
@@ -48,6 +49,13 @@ interface TeamMember {
   funcionario_id: string;
   nome: string;
   email: string;
+}
+
+interface MetaInstance {
+  id: string;
+  nome: string | null;
+  display_phone: string | null;
+  provider?: string | null;
 }
 
 export default function EquipeAcordos() {
@@ -97,6 +105,41 @@ export default function EquipeAcordos() {
   const [podeAlterarCredor, setPodeAlterarCredor] = useState(false);
   const [alteracaoCredor, setAlteracaoCredor] = useState<{ acordo: AcordoComFuncionario; novoCredor: 'ume_novo_mundo' | 'mundo_da_moda' } | null>(null);
   const [alterandoCredorId, setAlterandoCredorId] = useState<string | null>(null);
+  const [acordoParaMensagem, setAcordoParaMensagem] = useState<AcordoComFuncionario | null>(null);
+
+  const { data: profile } = useQuery({
+    queryKey: ['my-profile', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('nome').eq('id', user?.id || '').single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: metaInstances } = useQuery({
+    queryKey: ['meta-instances-for-agreements', user?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_meta_whatsapp_active_instances_for_sending');
+      if (error) throw error;
+      return ((data || []) as MetaInstance[]).filter(instance => (instance.provider ?? 'meta') === 'meta');
+    },
+    enabled: !!user,
+  });
+
+  const abrirEnvioMeta = (event: React.MouseEvent, acordo: AcordoComFuncionario) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!acordo.cliente_telefone) {
+      toast({ variant: 'destructive', title: 'Telefone não cadastrado', description: 'Este cliente não possui telefone cadastrado.' });
+      return;
+    }
+    if (!metaInstances?.length) {
+      toast({ variant: 'destructive', title: 'Meta não configurada', description: 'Nenhuma instância da API Oficial Meta está disponível para envio.' });
+      return;
+    }
+    setAcordoParaMensagem(acordo);
+  };
 
   useEffect(() => {
     if (!user) {
@@ -975,6 +1018,17 @@ export default function EquipeAcordos() {
                       </div>
                       <div className="flex flex-col sm:items-end gap-2">
                         <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/30"
+                            onClick={(event) => abrirEnvioMeta(event, acordo)}
+                            disabled={!acordo.cliente_telefone}
+                            title={acordo.cliente_telefone ? 'Enviar template Meta' : 'Telefone não cadastrado'}
+                            aria-label={`Enviar template Meta para ${acordo.cliente_nome}`}
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
                           {acordosComQuebraAcordo.has(acordo.id) && (
                             <Badge variant="destructive" className="bg-red-600 text-white font-bold">
                               QUEBRA DE ACORDO
@@ -1057,6 +1111,16 @@ export default function EquipeAcordos() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        <MetaNovaConversaDialog
+          open={!!acordoParaMensagem}
+          onOpenChange={(open) => { if (!open) setAcordoParaMensagem(null); }}
+          instancias={metaInstances || []}
+          atendenteNome={profile?.nome || undefined}
+          folderId={null}
+          initialTelefone={acordoParaMensagem?.cliente_telefone || ''}
+          initialNome={acordoParaMensagem?.cliente_nome || ''}
+          onSent={() => setAcordoParaMensagem(null)}
+        />
       </div>
     </AppLayout>
   );

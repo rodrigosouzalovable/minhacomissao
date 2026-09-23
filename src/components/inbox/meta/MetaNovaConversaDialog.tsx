@@ -26,9 +26,11 @@ interface Props {
   onSent: (instancia_id: string, telefone: string) => void;
   /** Caixa de mensagens ativa — a nova conversa nasce nela (null = Padrão) */
   folderId?: string | null;
+  initialTelefone?: string;
+  initialNome?: string;
 }
 
-export function MetaNovaConversaDialog({ open, onOpenChange, instancias, defaultInstancia, atendenteNome, onSent, folderId }: Props) {
+export function MetaNovaConversaDialog({ open, onOpenChange, instancias, defaultInstancia, atendenteNome, onSent, folderId, initialTelefone = '', initialNome = '' }: Props) {
 
   const { toast } = useToast();
   const [instId, setInstId] = useState<string>(defaultInstancia || '');
@@ -44,6 +46,8 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   useEffect(() => {
     if (!open) return;
     setInstId('');
+    setTel(initialTelefone.replace(/\D/g, ''));
+    setNome(initialNome);
     setTemplateKey('');
     setVariableValues({});
     if (instancias.length === 0) { setTemplates([]); setErroTemplates(''); return; }
@@ -72,7 +76,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
       setCarregandoTemplates(false);
     })();
     return () => { active = false; };
-  }, [open, instancias]);
+  }, [open, instancias, initialTelefone, initialNome]);
 
   const templateGroups = useMemo<TemplateGroup[]>(() => {
     const groups = new Map<string, TemplateGroup>();

@@ -18,6 +18,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Reconfigurar WhatsApp dos cards de Meus Acordos e Acordos da Equipe para templates Meta na caixa padrão
 - [x] Adicionar respostas rápidas com botão de raio e comando “/” no Inbox Meta, além de exibir figurinhas e reações
 - [x] Reformular Nova Conversa Meta com template primeiro, instâncias aprovadas, variáveis completas e prévia em tempo real
 - [x] Melhorar o piloto Green Soul com tier oficial da BM, respostas classificadas e reaproveitamento controlado de auto-respondedores
