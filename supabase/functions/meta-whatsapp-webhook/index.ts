@@ -72,6 +72,8 @@ function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_u
   if (tipo === 'audio') return { texto: '[Áudio]', tipo: 'audio', media_url: null };
   if (tipo === 'document') return { texto: m.document?.filename || '[Documento]', tipo: 'documento', media_url: null };
   if (tipo === 'video') return { texto: m.video?.caption || '[Vídeo]', tipo: 'video', media_url: null };
+  if (tipo === 'sticker') return { texto: '', tipo: 'sticker', media_url: null };
+  if (tipo === 'reaction') return { texto: m.reaction?.emoji || 'Reação removida', tipo: 'reacao', media_url: null };
   if (tipo === 'contacts') {
     const contatos = extractContatosCompartilhados(m);
     if (contatos.length) {
