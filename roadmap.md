@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Corrigir atendimento comercial da Clara e aviso exclusivo ao admin nas transferências humanas
 - [ ] Confirmar a entrega das 100 mensagens iniciais do aquecimento do Certificado, 50 por cada número apto
 - [x] Corrigir a rolagem pela roda do mouse nos seletores de templates abertos dentro de janelas
 - [x] Carregar todos os templates Meta paginados nos seletores de envio, incluindo receber_boleto
