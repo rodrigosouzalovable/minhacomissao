@@ -158,11 +158,20 @@ Deno.serve(async (req) => {
       estado = data;
     }
     if (!estado || estado.optout || estado.aguardando_humano) return json({ success: true, skipped: "atendimento automático encerrado" });
+    const entradaId = String(body?.entrada_id ?? "").trim();
+    if (!entradaId) return json({ success: false, error: "entrada_id é obrigatório" }, 400);
+    const { data: entradaReservada, error: erroReserva } = await service.rpc("clara_claim_message", {
+      p_contato_id: contatoId,
+      p_entrada_id: entradaId,
+    });
+    if (erroReserva) throw new Error(`Falha ao reservar mensagem da Clara: ${erroReserva.message}`);
+    if (entradaReservada !== true) return json({ success: true, skipped: "mensagem já processada ou em processamento" });
     if (ehOptOut(texto)) {
       const decisao: Decisao = { classificacao: "optout", resposta: "", interesse: false, transferir_humano: false, etapa: "encerrado" };
       await service.from("clara_conversa_estado").update({ optout: true, etapa: "optout", updated_at: new Date().toISOString() }).eq("id", estado.id);
       await suprimirDestinatario(service, contato.telefone, "blacklist: cliente pediu bloqueio no Certificado Digital", { instancia_id: contato.instancia_id, contato_nome: contato.nome, caixa_id: contato.folder_id, caixa_nome: "CERTIFICADO" });
       await atualizarMetrica(service, contato, decisao, texto);
+      await service.rpc("clara_finish_message", { p_contato_id: contatoId, p_entrada_id: entradaId });
       return json({ success: true, etapa: "optout" });
     }
 
@@ -197,7 +206,7 @@ Deno.serve(async (req) => {
     }
     if (decisao.resposta && !["recusa", "numero_errado", "optout"].includes(decisao.classificacao)) await enviarTexto(service, contato, decisao.resposta);
     if (decisao.transferir_humano) {
-      await escalarParaAdmin(service, contato, String(body?.entrada_id ?? ""), `Classificação: ${decisao.classificacao}. Mensagem recebida: ${texto.slice(0, 350)}`);
+      await escalarParaAdmin(service, contato, entradaId, `Classificação: ${decisao.classificacao}. Mensagem recebida: ${texto.slice(0, 350)}`);
     }
     await service.from("clara_conversa_estado").update({
       contexto,
@@ -207,6 +216,11 @@ Deno.serve(async (req) => {
       ultima_resposta_em: agora,
       updated_at: agora,
     }).eq("id", estado.id);
+    const { error: erroConclusao } = await service.rpc("clara_finish_message", {
+      p_contato_id: contatoId,
+      p_entrada_id: entradaId,
+    });
+    if (erroConclusao) console.error("[Clara] falha ao concluir mensagem", erroConclusao.message);
     return json({ success: true, classificacao: decisao.classificacao, etapa: decisao.etapa, transferido_humano: decisao.transferir_humano });
   } catch (error) {
     console.error("clara-atendimento", error);
