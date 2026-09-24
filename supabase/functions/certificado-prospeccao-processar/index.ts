@@ -9,7 +9,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const agoraBrt = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
 const diaBrt = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const nomeCampanha = () => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(new Date());
-const VALOR_CERTIFICADO = "R$ 129,90";
+const TEMPLATE_TESTE = "cnpj_atualizado_2";
 const EXPERIMENTO_INICIO = "2026-09-23";
 const EXPERIMENTO_JANELAS = [5, 10, 15, 20, 25, 30] as const;
 
@@ -64,13 +64,17 @@ Deno.serve(async (req) => {
 
     const { data: cfg, error: cfgError } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
     if (cfgError) throw cfgError;
-    if (!cfg?.meta_bm_id || !cfg?.template_nome) return json({ error: "Selecione a BM e o template" }, 409);
+    if (!cfg) return json({ error: "Configuração do Certificado Digital não encontrada" }, 409);
+    const modoCasaDados = cfg.modo_teste_casa_dados === true;
+    const templateNome = modoCasaDados ? TEMPLATE_TESTE : cfg.template_nome;
+    const templateIdioma = "pt_BR";
+    if (!templateNome) return json({ error: "Selecione o template" }, 409);
     let preparacaoManual: any = null;
     if (manualPreparacaoId) {
       const { data, error } = await service.from("certificado_prospeccao_preparacoes").select("*").eq("id", manualPreparacaoId).maybeSingle();
       if (error) throw error;
       if (!data || data.status !== "pronta") return json({ error: "A preparação manual ainda não está pronta para criar a campanha" }, 409);
-      if (data.bm_id !== cfg.meta_bm_id || data.template_nome !== cfg.template_nome || data.template_idioma !== cfg.template_idioma) {
+      if (data.template_nome !== templateNome || data.template_idioma !== templateIdioma) {
         return json({ error: "O template ou a BM mudou durante a preparação. Nenhuma campanha foi criada." }, 409);
       }
       preparacaoManual = data;
@@ -97,7 +101,7 @@ Deno.serve(async (req) => {
         return json({ success: true, skipped: true, motivo: "A campanha do Certificado Digital de hoje já atingiu o limite configurado", job_id: jobExistente.id, total: jobExistente.total });
       }
 
-      const { count } = await service.from("certificado_prospeccao_envios").select("id", { count: "exact", head: true }).eq("bm_id", cfg.meta_bm_id).gte("reservado_em", inicioDia).in("status", ["reservado","enviado","entregue","lido","respondido"]);
+      const { count } = await service.from("certificado_prospeccao_envios").select("id", { count: "exact", head: true }).eq("template_nome", templateNome).gte("reservado_em", inicioDia).in("status", ["reservado","enviado","entregue","lido","respondido"]);
       restante = Math.max(0, Number(cfg.limite_diario ?? 50) - Number(count ?? 0));
       if (!restante) return json({ success: true, skipped: true, motivo: "Limite diário atingido" });
     }
@@ -194,22 +198,27 @@ Deno.serve(async (req) => {
       return json({ error: "A coleta está desligada. Ative a coleta antes de iniciar o processamento e os envios." }, 409);
     }
 
-    const { data: mestre } = await service.from("meta_templates_mestre").select("id").eq("nome", cfg.template_nome).eq("idioma", cfg.template_idioma).maybeSingle();
+    const { data: mestre } = await service.from("meta_templates_mestre").select("id").eq("nome", templateNome).eq("idioma", templateIdioma).maybeSingle();
     if (!mestre) return json({ error: "Template selecionado não foi encontrado" }, 409);
     const { data: disponibilidade } = await service.from("certificado_prospeccao_templates").select("ativo").eq("template_mestre_id", mestre.id).maybeSingle();
     if (disponibilidade?.ativo === false) return json({ error: "Template inabilitado no Certificado Digital" }, 409);
 
     let instanciasQuery = service.from("meta_whatsapp_instances")
-      .select("id,nome,user_id,display_phone,saude_status,saude_quality,saude_ban_info,estado_pool,pool_fora_manual,pausa_automatica_ate,ativo,instancia_teste_aquecimento")
-      .eq("meta_bm_id", cfg.meta_bm_id).eq("provider", "meta").eq("ativo", true).eq("instancia_teste_aquecimento", false);
-    const selecionadas = preparacaoManual
+      .select("id,nome,user_id,display_phone,meta_bm_id,saude_status,saude_quality,saude_ban_info,estado_pool,pool_fora_manual,pausa_automatica_ate,ativo,instancia_teste_aquecimento,aquecimento_meta_ativo")
+      .eq("provider", "meta").eq("ativo", true).eq("instancia_teste_aquecimento", false);
+    if (modoCasaDados) {
+      instanciasQuery = instanciasQuery.eq("aquecimento_meta_ativo", true).not("meta_bm_id", "is", null);
+    } else if (cfg.meta_bm_id) {
+      instanciasQuery = instanciasQuery.eq("meta_bm_id", cfg.meta_bm_id);
+    }
+    const selecionadas = modoCasaDados ? [] : preparacaoManual
       ? (Array.isArray(preparacaoManual.instancia_ids) ? preparacaoManual.instancia_ids.filter(Boolean) : [])
       : (Array.isArray(cfg.prospeccao_instancia_ids) ? cfg.prospeccao_instancia_ids.filter(Boolean) : []);
     if (selecionadas.length > 0) instanciasQuery = instanciasQuery.in("id", selecionadas);
     const { data: instancias } = await instanciasQuery;
     const agora = new Date();
     const aptas = (instancias ?? []).filter((i: any) => i.estado_pool === "ativo" && i.pool_fora_manual !== true && String(i.saude_status ?? "").toUpperCase() === "CONNECTED" && !i.saude_ban_info && (!i.pausa_automatica_ate || new Date(i.pausa_automatica_ate) <= agora));
-    const { data: templates } = aptas.length ? await service.from("meta_whatsapp_templates").select("id,instancia_id,nome_template,idioma,status").in("instancia_id", aptas.map((i: any) => i.id)).eq("nome_template", cfg.template_nome).eq("idioma", cfg.template_idioma).eq("status", "approved") : { data: [] };
+    const { data: templates } = aptas.length ? await service.from("meta_whatsapp_templates").select("id,instancia_id,nome_template,idioma,status").in("instancia_id", aptas.map((i: any) => i.id)).eq("nome_template", templateNome).eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
     const porInstancia = new Map((templates ?? []).map((t: any) => [t.instancia_id, t]));
     const participantes = aptas.filter((i: any) => porInstancia.has(i.id));
     if (!participantes.length) return json({ success: true, skipped: true, motivo: "Template não aprovado em nenhuma instância apta" });
@@ -218,7 +227,7 @@ Deno.serve(async (req) => {
       if (telefoneTeste.length < 10) return json({ error: "Informe um telefone de teste válido" }, 400);
       const instancia: any = participantes[0];
       const template: any = porInstancia.get(instancia.id);
-      const response = await fetch(`${url}/functions/v1/send-whatsapp-meta`, { method: "POST", headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ template_id: template.id, instancia_id: instancia.id, cliente: { telefone: telefoneTeste, nome: "Cliente teste" }, user_id: userId, modo_teste: true, folder_id: FOLDER_CERTIFICADO, atendente_nome: "Clara Ribeiro de Souza" }) });
+      const response = await fetch(`${url}/functions/v1/send-whatsapp-meta`, { method: "POST", headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ template_id: template.id, instancia_id: instancia.id, cliente: { telefone: telefoneTeste, nome: "Empresa teste", vars: { "1": "falo com o(a) responsável por Empresa teste?" } }, user_id: userId, modo_teste: true, folder_id: FOLDER_CERTIFICADO, atendente_nome: "Clara Ribeiro de Souza" }) });
       return json({ success: response.ok, resultado: await response.json().catch(() => ({})), instancia: instancia.nome });
     }
 
@@ -277,7 +286,7 @@ Deno.serve(async (req) => {
     let job = jobExistente ? { id: jobExistente.id } : null;
     if (!job) {
       const { data: criado, error: jobError } = await service.from("envio_meta_job").insert({
-        user_id: userId, status: "rodando", template_id: principal.id, template_nome: cfg.template_nome,
+        user_id: userId, status: "rodando", template_id: principal.id, template_nome: templateNome,
         template_id_by_instance: templateIdByInstance, instancia_ids: participantes.map((i: any) => i.id),
         min_seg: 30, max_seg: 90, total: leads.length, proximo_em: new Date().toISOString(),
         nome_campanha: `Certificado Digital${preparacaoManual ? " Manual" : ""} — D+${janelaExperimento} — ${nomeCampanha()}`, folder_id: FOLDER_CERTIFICADO,
@@ -292,7 +301,7 @@ Deno.serve(async (req) => {
     const ordemInicial = Number(jobExistente?.total ?? 0);
     for (const lead of leads) {
       const instancia: any = participantes[rr % participantes.length];
-      const { data: reserva, error } = await service.from("certificado_prospeccao_envios").insert({ lead_id: lead.id, bm_id: cfg.meta_bm_id, instancia_id: instancia.id, template_nome: cfg.template_nome, template_idioma: cfg.template_idioma, job_id: job.id }).select("id").maybeSingle();
+      const { data: reserva, error } = await service.from("certificado_prospeccao_envios").insert({ lead_id: lead.id, bm_id: instancia.meta_bm_id, instancia_id: instancia.id, template_nome: templateNome, template_idioma: templateIdioma, job_id: job.id }).select("id").maybeSingle();
       if (!error && reserva) reservas.push({ lead, reserva, ordem: ordemInicial + reservas.length });
       rr++;
     }
@@ -327,10 +336,12 @@ Deno.serve(async (req) => {
         job_id: job.id, ordem, telefone: lead.telefone_principal, nome, cpf: lead.cnpj,
         status: "pendente",
         vars: {
-          "1": nome,
-          "2": String(lead.cnpj ?? "").replace(/\D/g, "").padStart(14, "0"),
-          "3": formatarDataAbertura(lead.data_abertura),
-          "4": VALOR_CERTIFICADO,
+           "1": modoCasaDados ? `falo com o(a) responsável por ${nome}?` : nome,
+           ...(modoCasaDados ? {} : {
+             "2": String(lead.cnpj ?? "").replace(/\D/g, "").padStart(14, "0"),
+             "3": formatarDataAbertura(lead.data_abertura),
+             "4": "R$ 129,90",
+           }),
           certificado_lead_id: lead.id,
           certificado_envio_id: reserva.id,
         },

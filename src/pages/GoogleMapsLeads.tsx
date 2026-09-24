@@ -772,6 +772,7 @@ export default function GoogleMapsLeads() {
         categoria={buscas?.find((b) => b.id === buscaSel)?.categoria}
         localizacao={buscas?.find((b) => b.id === buscaSel)?.localizacao}
         leads={leads ?? []}
+        captacaoAtiva={captacaoAtiva}
       />}
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
