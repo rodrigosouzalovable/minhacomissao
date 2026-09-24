@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
     const telefoneTeste = String(body?.telefone_teste ?? "").replace(/\D/g, "");
     const completo = body?.iniciar_completo === true;
     const manualPreparacaoId = String(body?.manual_preparacao_id ?? "").trim();
+    const instanciaIdsInicio = Array.isArray(body?.instancia_ids_inicio) ? [...new Set(body.instancia_ids_inicio.map(String).filter(Boolean))] : [];
     const brt = agoraBrt();
     const diaSemana = brt.getDay();
     if (!modoTeste && !manualPreparacaoId && (diaSemana === 0 || diaSemana === 6)) return json({ success: true, skipped: true, motivo: "A prospecção funciona de segunda a sexta" });
@@ -92,24 +93,31 @@ Deno.serve(async (req) => {
     }
 
     const inicioDia = `${diaBrt()}T03:00:00.000Z`;
-    let restante = preparacaoManual ? Number(preparacaoManual.quantidade_alvo) : Number(cfg.limite_diario ?? 50);
+    const cotaPorInstancia = Number(cfg.limite_diario ?? 50);
+    let restante = preparacaoManual ? Number(preparacaoManual.quantidade_alvo) : cotaPorInstancia;
     let jobExistente: any = null;
     if (!modoTeste && !preparacaoManual) {
       const { data } = await service.from("envio_meta_job").select("id,status,total,enviados,erros").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
       jobExistente = data;
-      if (jobExistente && Number(jobExistente.total ?? 0) >= Number(cfg.limite_diario ?? 50) && !simulacao) {
-        return json({ success: true, skipped: true, motivo: "A campanha do Certificado Digital de hoje já atingiu o limite configurado", job_id: jobExistente.id, total: jobExistente.total });
-      }
-
-      const { count } = await service.from("certificado_prospeccao_envios").select("id", { count: "exact", head: true }).eq("template_nome", templateNome).gte("reservado_em", inicioDia).in("status", ["reservado","enviado","entregue","lido","respondido"]);
-      restante = Math.max(0, Number(cfg.limite_diario ?? 50) - Number(count ?? 0));
-      if (!restante) return json({ success: true, skipped: true, motivo: "Limite diário atingido" });
     }
 
     let resumoColeta: Record<string, unknown> | null = null;
     let resumoVerificacao: Record<string, unknown> | null = null;
     if (completo && cfg.motor_ativo && !preparacaoManual) {
-      const metaConfirmados = Number(cfg.limite_diario ?? 50);
+      let metaConfirmados = cotaPorInstancia;
+      if (modoCasaDados) {
+        const { data: marcadas } = await service.from("meta_whatsapp_instances")
+          .select("id").eq("provider", "meta").eq("ativo", true)
+          .eq("instancia_teste_aquecimento", false).eq("aquecimento_meta_ativo", true)
+          .eq("estado_pool", "ativo").eq("pool_fora_manual", false)
+          .eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN");
+        const idsMarcadas = (marcadas ?? []).map((instancia: any) => instancia.id).filter((id: string) => instanciaIdsInicio.length === 0 || instanciaIdsInicio.includes(id));
+        const { data: aprovadas } = idsMarcadas.length ? await service.from("meta_whatsapp_templates")
+          .select("instancia_id").in("instancia_id", idsMarcadas).eq("nome_template", templateNome)
+          .eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
+        metaConfirmados = cotaPorInstancia * new Set((aprovadas ?? []).map((template: any) => template.instancia_id)).size;
+      }
+      if (metaConfirmados === 0) return json({ success: true, skipped: true, motivo: "Nenhum número marcado está apto e com o template aprovado" });
       const contarConfirmados = async () => {
         const { count, error } = await service.from("certificado_leads")
           .select("id", { count: "exact", head: true })
@@ -208,6 +216,7 @@ Deno.serve(async (req) => {
       .eq("provider", "meta").eq("ativo", true).eq("instancia_teste_aquecimento", false);
     if (modoCasaDados) {
       instanciasQuery = instanciasQuery.eq("aquecimento_meta_ativo", true).not("meta_bm_id", "is", null);
+      if (instanciaIdsInicio.length > 0) instanciasQuery = instanciasQuery.in("id", instanciaIdsInicio);
     } else if (cfg.meta_bm_id) {
       instanciasQuery = instanciasQuery.eq("meta_bm_id", cfg.meta_bm_id);
     }
@@ -217,11 +226,26 @@ Deno.serve(async (req) => {
     if (selecionadas.length > 0) instanciasQuery = instanciasQuery.in("id", selecionadas);
     const { data: instancias } = await instanciasQuery;
     const agora = new Date();
-    const aptas = (instancias ?? []).filter((i: any) => i.estado_pool === "ativo" && i.pool_fora_manual !== true && String(i.saude_status ?? "").toUpperCase() === "CONNECTED" && !i.saude_ban_info && (!i.pausa_automatica_ate || new Date(i.pausa_automatica_ate) <= agora));
+    const aptas = (instancias ?? []).filter((i: any) => i.estado_pool === "ativo" && i.pool_fora_manual !== true && String(i.saude_status ?? "").toUpperCase() === "CONNECTED" && (!modoCasaDados || String(i.saude_quality ?? "").toUpperCase() === "GREEN") && !i.saude_ban_info && (!i.pausa_automatica_ate || new Date(i.pausa_automatica_ate) <= agora));
     const { data: templates } = aptas.length ? await service.from("meta_whatsapp_templates").select("id,instancia_id,nome_template,idioma,status").in("instancia_id", aptas.map((i: any) => i.id)).eq("nome_template", templateNome).eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
     const porInstancia = new Map((templates ?? []).map((t: any) => [t.instancia_id, t]));
     const participantes = aptas.filter((i: any) => porInstancia.has(i.id));
     if (!participantes.length) return json({ success: true, skipped: true, motivo: "Template não aprovado em nenhuma instância apta" });
+
+    const cotasRestantes = new Map<string, number>();
+    if (modoCasaDados && !preparacaoManual) {
+      const { data: enviosDoDia, error: enviosDoDiaError } = await service.from("certificado_prospeccao_envios")
+        .select("instancia_id").eq("template_nome", templateNome).gte("reservado_em", inicioDia)
+        .in("status", ["reservado", "enviado", "entregue", "lido", "respondido"]);
+      if (enviosDoDiaError) throw enviosDoDiaError;
+      for (const instancia of participantes) {
+        const usados = (enviosDoDia ?? []).filter((envio: any) => envio.instancia_id === instancia.id).length;
+        const saldo = Math.max(0, cotaPorInstancia - usados);
+        if (saldo > 0) cotasRestantes.set(instancia.id, saldo);
+      }
+      restante = [...cotasRestantes.values()].reduce((total, cota) => total + cota, 0);
+      if (!restante) return json({ success: true, skipped: true, motivo: "Todos os números aptos já atingiram 50 mensagens hoje" });
+    }
 
     if (modoTeste) {
       if (telefoneTeste.length < 10) return json({ error: "Informe um telefone de teste válido" }, 400);
@@ -265,7 +289,7 @@ Deno.serve(async (req) => {
       }).eq("id", preparacaoManual.id);
       return json({ error: "Alguns contatos foram usados por outra campanha durante a preparação. Nenhuma campanha parcial foi criada." }, 409);
     }
-    if (simulacao) return json({ success: true, simulacao: true, elegiveis: leads?.length ?? 0, limite_restante: restante, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone })) });
+    if (simulacao) return json({ success: true, simulacao: true, elegiveis: leads?.length ?? 0, limite_restante: restante, cota_por_instancia: cotaPorInstancia, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone, restante: cotasRestantes.get(i.id) ?? cotaPorInstancia })) });
     if (!leads?.length) return json({
       success: true,
       skipped: true,
@@ -296,14 +320,19 @@ Deno.serve(async (req) => {
       job = criado;
     }
 
-    let rr = Number(cfg.ultimo_rr_indice ?? 0);
     const reservas: any[] = [];
     const ordemInicial = Number(jobExistente?.total ?? 0);
-    for (const lead of leads) {
-      const instancia: any = participantes[rr % participantes.length];
+    const filaInstancias = modoCasaDados && !preparacaoManual
+      ? participantes.flatMap((instancia: any) => Array.from({ length: cotasRestantes.get(instancia.id) ?? 0 }, () => instancia))
+      : leads.map((_: any, indice: number) => participantes[indice % participantes.length]);
+    for (const [indice, lead] of leads.entries()) {
+      const instancia: any = filaInstancias[indice];
+      if (!instancia) break;
       const { data: reserva, error } = await service.from("certificado_prospeccao_envios").insert({ lead_id: lead.id, bm_id: instancia.meta_bm_id, instancia_id: instancia.id, template_nome: templateNome, template_idioma: templateIdioma, job_id: job.id }).select("id").maybeSingle();
-      if (!error && reserva) reservas.push({ lead, reserva, ordem: ordemInicial + reservas.length });
-      rr++;
+      if (!error && reserva) {
+        reservas.push({ lead, reserva, instancia, ordem: ordemInicial + reservas.length });
+        await service.from("certificado_leads").update({ situacao: "reservado", updated_at: new Date().toISOString() }).eq("id", lead.id).eq("situacao", "novo");
+      }
     }
     if (preparacaoManual && reservas.length !== restante) {
       await service.from("envio_meta_job").update({
@@ -330,7 +359,7 @@ Deno.serve(async (req) => {
       concluido_em: null,
       proximo_em: new Date().toISOString(),
     }).eq("id", job.id);
-    const itens = reservas.map(({ lead, reserva, ordem }) => {
+    const itens = reservas.map(({ lead, reserva, instancia, ordem }) => {
       const nome = lead.nome_fantasia || lead.razao_social || "cliente";
       return {
         job_id: job.id, ordem, telefone: lead.telefone_principal, nome, cpf: lead.cnpj,
@@ -344,6 +373,7 @@ Deno.serve(async (req) => {
            }),
           certificado_lead_id: lead.id,
           certificado_envio_id: reserva.id,
+          certificado_instancia_id: instancia.id,
         },
         wa_validado: "sim",
       };
@@ -354,7 +384,7 @@ Deno.serve(async (req) => {
       const envioId = (item.vars as any)?.certificado_envio_id;
       if (envioId) await service.from("certificado_prospeccao_envios").update({ job_item_id: item.id }).eq("id", envioId);
     }
-    await service.from("certificado_config").update({ ultimo_rr_indice: rr, prospeccao_ultima_execucao: new Date().toISOString(), prospeccao_pausada_motivo: null }).eq("id", cfg.id);
+    await service.from("certificado_config").update({ prospeccao_ultima_execucao: new Date().toISOString(), prospeccao_pausada_motivo: null }).eq("id", cfg.id);
     if (preparacaoManual) {
       await service.from("certificado_prospeccao_preparacoes").update({
         status: "campanha_criada",
@@ -371,6 +401,7 @@ Deno.serve(async (req) => {
       janela: janelaExperimento,
       data_abertura: dataAlvo,
       participantes: participantes.map((i: any) => i.nome),
+      cotas: participantes.map((i: any) => ({ instancia_id: i.id, nome: i.nome, reservadas: reservas.filter((reserva) => reserva.instancia.id === i.id).length })),
       coleta: resumoColeta,
       verificacao: resumoVerificacao,
       parcial: Number((resumoColeta as any)?.janelas_falha ?? 0) > 0,

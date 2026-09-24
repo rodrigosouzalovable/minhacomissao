@@ -663,11 +663,13 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   // durante a campanha sai do rodízio imediatamente.
   const bloqueadasQualidade = await removerInstanciasComQuedaQualidade(job, bloqueadasRun);
 
-  const instanciaIdsDisponiveis: string[] = (job.instancia_ids || [])
+  const instanciaCertificado = typeof varsPend.certificado_instancia_id === 'string' ? varsPend.certificado_instancia_id : null;
+  const instanciasPermitidas: string[] = instanciaCertificado ? [instanciaCertificado] : (job.instancia_ids || []);
+  const instanciaIdsDisponiveis: string[] = instanciasPermitidas
     .filter((id: string) => !bloqueadasQualidade.includes(id) && !exclItem.includes(id));
   if (instanciaIdsDisponiveis.length === 0) {
     // Se sobrou instância no job mas nenhuma serve para este contato, marca só o item como erro
-    const restaNoJob = (job.instancia_ids || []).filter((id: string) => !bloqueadasQualidade.includes(id));
+    const restaNoJob = instanciasPermitidas.filter((id: string) => !bloqueadasQualidade.includes(id));
     if (restaNoJob.length > 0) {
       await supabase.from('envio_meta_job_item').update({
         status: 'erro',
