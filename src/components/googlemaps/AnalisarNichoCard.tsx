@@ -54,9 +54,10 @@ interface Props {
   localizacao?: string;
   leads: LeadSimples[];
   className?: string;
+  captacaoAtiva?: boolean;
 }
 
-export function AnalisarNichoCard({ buscaId, categoria, localizacao, leads, className }: Props) {
+export function AnalisarNichoCard({ buscaId, categoria, localizacao, leads, className, captacaoAtiva = true }: Props) {
   const qc = useQueryClient();
   const [limiteSites, setLimiteSites] = useState(8);
   const [estilo, setEstilo] = useState("moderno");
@@ -206,7 +207,7 @@ export function AnalisarNichoCard({ buscaId, categoria, localizacao, leads, clas
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={analisar} disabled={analisando || comSite.length === 0}>
+              <Button onClick={analisar} disabled={!captacaoAtiva || analisando || comSite.length === 0}>
                 {analisando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
                 {analise ? "Gerar outra versão" : "Analisar nicho"}
               </Button>

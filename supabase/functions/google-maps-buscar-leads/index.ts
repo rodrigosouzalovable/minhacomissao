@@ -187,6 +187,17 @@ Deno.serve(async (req) => {
 
 
     const body = (await req.json()) as Body;
+    const { data: poolConfig } = await supabase
+      .from("meta_envio_pool_config")
+      .select("google_maps_captacao_ativa")
+      .eq("id", 1)
+      .maybeSingle();
+    if (poolConfig?.google_maps_captacao_ativa === false) {
+      return new Response(JSON.stringify({ error: "captacao_pausada", message: "A captação de novos leads pelo Google Maps está temporariamente pausada." }), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const categoria = (body.categoria || "").trim();
     const localizacao = (body.localizacao || "").trim();
     if (!categoria || !localizacao) {

@@ -180,6 +180,16 @@ export default function GoogleMapsLeads() {
   const [verificandoWhats, setVerificandoWhats] = useState(false);
   const [erroBusca, setErroBusca] = useState<FunctionErrorPayload | null>(null);
 
+  const { data: captacaoAtiva = true } = useQuery({
+    queryKey: ["gm-captacao-ativa"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("meta_envio_pool_config").select("google_maps_captacao_ativa").eq("id", 1).maybeSingle();
+      if (error) throw error;
+      return data?.google_maps_captacao_ativa !== false;
+    },
+    staleTime: 60_000,
+  });
+
 
   const { data: limite, refetch: refetchLimite } = useQuery({
     queryKey: ["gm-limite"],
@@ -291,6 +301,10 @@ export default function GoogleMapsLeads() {
   }
 
   async function buscar() {
+    if (!captacaoAtiva) {
+      toast.warning("A captação de novos leads pelo Google Maps está temporariamente pausada.");
+      return;
+    }
     if (!categoria.trim() || !localizacao.trim()) {
       toast.error("Informe categoria e localização");
       return;
@@ -711,9 +725,9 @@ export default function GoogleMapsLeads() {
                 return `Estimativa: ${reqs} requisição${reqs > 1 ? "ões" : ""} Places (até 20 resultados cada) × ~US$ 0,032 = ~US$ ${(reqs * 0.032).toFixed(3)} (Text Search Pro). O Google cobra por requisição, não por resultado, e a franquia gratuita mensal do SKU pode zerar esse valor.`;
               })()}
             </p>
-            <Button onClick={buscar} disabled={buscando || limite?.nivel === "bloqueado"} title={limite?.nivel === "bloqueado" ? limite.mensagem : undefined}>
+            <Button onClick={buscar} disabled={!captacaoAtiva || buscando || limite?.nivel === "bloqueado"} title={!captacaoAtiva ? "Captação temporariamente pausada" : limite?.nivel === "bloqueado" ? limite.mensagem : undefined}>
               {buscando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
-              {limite?.nivel === "bloqueado" ? "Limite atingido" : "Buscar"}
+              {!captacaoAtiva ? "Captação pausada" : limite?.nivel === "bloqueado" ? "Limite atingido" : "Buscar"}
             </Button>
           </div>
         </CardContent>
