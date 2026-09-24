@@ -18,6 +18,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Preparar e pausar o piloto Casa dos Dados com template cnpj_atualizado_2, números de novas BMs e atendimento exclusivo da Clara
 - [x] Liberar parceiros Meta autorizados para enviar imagens de templates em pasta privada individual, mantendo isolamento entre usuários
 - [x] Automatizar webhook, chamadas, perfil e diagnóstico no cadastro Meta; separar clientes/testes e liberar cadastro protegido de testes na UAZAPI
 - [x] Reconfigurar WhatsApp dos cards de Meus Acordos e Acordos da Equipe para templates Meta na caixa padrão
