@@ -18,7 +18,7 @@ async function garantirAtribuicaoClara(service: any, contatoId: string) {
     .select("id").ilike("nome", "Atendente: Clara Ribeiro de Souza").limit(1).maybeSingle();
   if (!etiqueta?.id) return false;
   const { error } = await service.from("meta_whatsapp_contato_etiquetas").upsert(
-    { contato_id: contatoId, etiqueta_id: etiqueta.id, origem: "ia" },
+    { contato_id: contatoId, etiqueta_id: etiqueta.id, origem: "manual" },
     { onConflict: "contato_id,etiqueta_id", ignoreDuplicates: true },
   );
   if (error) console.error("[Clara] falha ao atribuir conversa", error.message);
