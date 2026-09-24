@@ -1144,6 +1144,7 @@ export type Database = {
           janelas_dias: number[]
           limite_diario: number
           meta_bm_id: string | null
+          modo_teste_casa_dados: boolean
           motor_ativo: boolean
           prospeccao_ativa: boolean
           prospeccao_instancia_ids: string[]
@@ -1168,6 +1169,7 @@ export type Database = {
           janelas_dias?: number[]
           limite_diario?: number
           meta_bm_id?: string | null
+          modo_teste_casa_dados?: boolean
           motor_ativo?: boolean
           prospeccao_ativa?: boolean
           prospeccao_instancia_ids?: string[]
@@ -1192,6 +1194,7 @@ export type Database = {
           janelas_dias?: number[]
           limite_diario?: number
           meta_bm_id?: string | null
+          modo_teste_casa_dados?: boolean
           motor_ativo?: boolean
           prospeccao_ativa?: boolean
           prospeccao_instancia_ids?: string[]
@@ -1315,15 +1318,19 @@ export type Database = {
           erro: string | null
           id: string
           instancia_id: string | null
+          interesse_confirmado: boolean
           job_id: string | null
           job_item_id: string | null
           lead_id: string
           lido_em: string | null
           reservado_em: string
           respondido_em: string | null
+          resposta_classificacao: string | null
+          resposta_texto: string | null
           status: string
           template_idioma: string
           template_nome: string
+          transferido_humano: boolean
           updated_at: string
           wa_message_id: string | null
         }
@@ -1334,15 +1341,19 @@ export type Database = {
           erro?: string | null
           id?: string
           instancia_id?: string | null
+          interesse_confirmado?: boolean
           job_id?: string | null
           job_item_id?: string | null
           lead_id: string
           lido_em?: string | null
           reservado_em?: string
           respondido_em?: string | null
+          resposta_classificacao?: string | null
+          resposta_texto?: string | null
           status?: string
           template_idioma?: string
           template_nome: string
+          transferido_humano?: boolean
           updated_at?: string
           wa_message_id?: string | null
         }
@@ -1353,15 +1364,19 @@ export type Database = {
           erro?: string | null
           id?: string
           instancia_id?: string | null
+          interesse_confirmado?: boolean
           job_id?: string | null
           job_item_id?: string | null
           lead_id?: string
           lido_em?: string | null
           reservado_em?: string
           respondido_em?: string | null
+          resposta_classificacao?: string | null
+          resposta_texto?: string | null
           status?: string
           template_idioma?: string
           template_nome?: string
+          transferido_humano?: boolean
           updated_at?: string
           wa_message_id?: string | null
         }
@@ -5291,6 +5306,7 @@ export type Database = {
           duracao_pausa_yellow_horas: number
           escada_retorno: Json
           freio_ativo: boolean
+          google_maps_captacao_ativa: boolean
           guardiao_ativo: boolean
           guardiao_janela_horas: number
           guardiao_min_saidas: number
@@ -5343,6 +5359,7 @@ export type Database = {
           duracao_pausa_yellow_horas?: number
           escada_retorno?: Json
           freio_ativo?: boolean
+          google_maps_captacao_ativa?: boolean
           guardiao_ativo?: boolean
           guardiao_janela_horas?: number
           guardiao_min_saidas?: number
@@ -5395,6 +5412,7 @@ export type Database = {
           duracao_pausa_yellow_horas?: number
           escada_retorno?: Json
           freio_ativo?: boolean
+          google_maps_captacao_ativa?: boolean
           guardiao_ativo?: boolean
           guardiao_janela_horas?: number
           guardiao_min_saidas?: number
