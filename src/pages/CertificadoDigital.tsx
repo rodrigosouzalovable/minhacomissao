@@ -173,8 +173,8 @@ export default function CertificadoDigital() {
     const { data, error } = await query.order("nome");
     if (error) throw error; return data ?? [];
   }, staleTime: 30_000 });
-  const { data: templateStatus = [] } = useQuery({ queryKey: ["certificado-template-status", config?.meta_bm_id, config?.template_nome, config?.template_idioma, metaInstancias.map((i) => i.id).join(",")], enabled: !!config?.template_nome && metaInstancias.length > 0, queryFn: async () => {
-    const { data, error } = await supabase.from("meta_whatsapp_templates").select("instancia_id,status,sincronizado_em").in("instancia_id", metaInstancias.map((i) => i.id)).eq("nome_template", config?.template_nome ?? "").eq("idioma", config?.template_idioma ?? "pt_BR");
+  const { data: templateStatus = [] } = useQuery({ queryKey: ["certificado-template-status", config?.meta_bm_id, templateSelecionado?.nome, templateSelecionado?.idioma, metaInstancias.map((i) => i.id).join(",")], enabled: !!templateSelecionado && metaInstancias.length > 0, queryFn: async () => {
+    const { data, error } = await supabase.from("meta_whatsapp_templates").select("instancia_id,status,sincronizado_em").in("instancia_id", metaInstancias.map((i) => i.id)).eq("nome_template", templateSelecionado?.nome ?? "").eq("idioma", templateSelecionado?.idioma ?? "pt_BR");
     if (error) throw error; return data ?? [];
   }, staleTime: 30_000 });
   const { data: enviosHoje = 0 } = useQuery({ queryKey: ["certificado-envios-hoje", config?.meta_bm_id, config?.modo_teste_casa_dados], enabled: config?.modo_teste_casa_dados === true || !!config?.meta_bm_id, queryFn: async () => {
