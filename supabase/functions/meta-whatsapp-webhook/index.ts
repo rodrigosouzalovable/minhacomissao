@@ -1526,6 +1526,18 @@ serve(async (req) => {
 
 
             const iaTask = (async () => {
+              if (_folderIdContato === FOLDER_CERTIFICADO) {
+                try {
+                  const { data, error } = await supabase.functions.invoke('clara-atendimento', {
+                    body: { contato_id: contatoIdFinal, texto: textoParaIA, entrada_id: m.id, tipo_conteudo: tipo, imagem_contexto: imagemContexto },
+                  });
+                  if (error) console.error('[MetaWebhook] CLARA erro', error.message);
+                  else console.log('[MetaWebhook] CLARA', JSON.stringify(data || {}));
+                } catch (e: any) {
+                  console.error('[MetaWebhook] CLARA exceção', e?.message || e);
+                }
+                return;
+              }
               try {
                 const { data, error } = await supabase.functions.invoke('meta-ia-atendimento', {
                   body: { contato_id: contatoIdFinal, texto: textoParaIA },
@@ -1549,17 +1561,6 @@ serve(async (req) => {
                 else console.log('[MetaWebhook] IAGO', JSON.stringify(data || {}));
               } catch (e: any) {
                 console.error('[MetaWebhook] IAGO exceção', e?.message || e);
-              }
-              if (_folderIdContato === FOLDER_CERTIFICADO) {
-                try {
-                  const { data, error } = await supabase.functions.invoke('clara-atendimento', {
-                    body: { contato_id: contatoIdFinal, texto: textoParaIA, entrada_id: m.id, tipo_conteudo: tipo, imagem_contexto: imagemContexto },
-                  });
-                  if (error) console.error('[MetaWebhook] CLARA erro', error.message);
-                  else console.log('[MetaWebhook] CLARA', JSON.stringify(data || {}));
-                } catch (e: any) {
-                  console.error('[MetaWebhook] CLARA exceção', e?.message || e);
-                }
               }
             })();
             // Garante execução mesmo depois de responder à Meta (evita abort no shutdown do isolate)

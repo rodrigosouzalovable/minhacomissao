@@ -7,6 +7,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   status,
   headers: { ...corsHeaders, "Content-Type": "application/json" },
 });
+const TEMPLATE_TESTE = "cnpj_atualizado_2";
 
 const diaBrt = () => new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
@@ -198,14 +199,18 @@ Deno.serve(async (req) => {
     const { data: cfg, error: cfgError } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
     if (cfgError) throw cfgError;
     if (!cfg?.motor_ativo) return json({ error: "Ative a coleta antes de iniciar" }, 409);
-    if (!cfg.meta_bm_id || !cfg.template_nome) return json({ error: "Selecione o template e a BM" }, 409);
+    const modoCasaDados = cfg.modo_teste_casa_dados === true;
+    const templateNome = modoCasaDados ? TEMPLATE_TESTE : cfg.template_nome;
+    const templateIdioma = "pt_BR";
+    if (!templateNome) return json({ error: "Selecione o template" }, 409);
     const janela = janelaExperimentoHoje();
     if (janela === null) return json({ error: "Não há uma faixa de idade ativa para hoje" }, 409);
 
     const { data: instancias } = await service.from("meta_whatsapp_instances")
-      .select("id,estado_pool,pool_fora_manual,saude_status,saude_ban_info,pausa_automatica_ate")
-      .in("id", instanciaIds).eq("meta_bm_id", cfg.meta_bm_id).eq("provider", "meta").eq("ativo", true);
-    if ((instancias ?? []).length !== instanciaIds.length) return json({ error: "Uma ou mais instâncias não pertencem à BM selecionada" }, 409);
+      .select("id,meta_bm_id,aquecimento_meta_ativo,estado_pool,pool_fora_manual,saude_status,saude_ban_info,pausa_automatica_ate")
+      .in("id", instanciaIds).eq("provider", "meta").eq("ativo", true).eq("instancia_teste_aquecimento", false);
+    if ((instancias ?? []).length !== instanciaIds.length) return json({ error: "Uma ou mais instâncias não estão disponíveis" }, 409);
+    if (modoCasaDados && (instancias ?? []).some((instancia: any) => instancia.aquecimento_meta_ativo !== true)) return json({ error: "Use somente números marcados para aquecimento de nova BM" }, 409);
     const agora = new Date();
     const aptas = (instancias ?? []).filter((instancia: any) =>
       instancia.estado_pool === "ativo"
@@ -218,8 +223,8 @@ Deno.serve(async (req) => {
     const { data: templatesAprovados, error: templatesError } = await service.from("meta_whatsapp_templates")
       .select("instancia_id")
       .in("instancia_id", instanciaIds)
-      .eq("nome_template", cfg.template_nome)
-      .eq("idioma", cfg.template_idioma)
+      .eq("nome_template", templateNome)
+      .eq("idioma", templateIdioma)
       .eq("status", "approved");
     if (templatesError) throw templatesError;
     const aprovadas = new Set((templatesAprovados ?? []).map((item: any) => item.instancia_id));
@@ -230,9 +235,9 @@ Deno.serve(async (req) => {
       quantidade_alvo: quantidade,
       janela,
       data_alvo: dataBRT(janela),
-      bm_id: cfg.meta_bm_id,
-      template_nome: cfg.template_nome,
-      template_idioma: cfg.template_idioma,
+      bm_id: (instancias?.[0] as any)?.meta_bm_id,
+      template_nome: templateNome,
+      template_idioma: templateIdioma,
       instancia_ids: instanciaIds,
     }).select("*").single();
     if (criarError) {
