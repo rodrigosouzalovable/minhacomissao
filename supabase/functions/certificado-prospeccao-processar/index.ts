@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
     let restante = preparacaoManual ? Number(preparacaoManual.quantidade_alvo) : cotaPorInstancia;
     let jobExistente: any = null;
     if (!modoTeste && !preparacaoManual) {
-      const { data } = await service.from("envio_meta_job").select("id,status,total,enviados,erros").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+      const { data } = await service.from("envio_meta_job").select("id,status,total,enviados,erros,instancia_ids,template_id_by_instance").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
       jobExistente = data;
     }
 
@@ -301,7 +301,7 @@ Deno.serve(async (req) => {
 
     // Revalida imediatamente antes da criação para reduzir o risco de cliques concorrentes.
     if (!preparacaoManual) {
-      const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total,status").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+      const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total,status,instancia_ids,template_id_by_instance").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
       if (jobCriadoEnquantoProcessava) jobExistente = jobCriadoEnquantoProcessava;
     }
 
@@ -318,6 +318,16 @@ Deno.serve(async (req) => {
       }).select("id").single();
       if (jobError || !criado) throw jobError ?? new Error("Falha ao criar campanha");
       job = criado;
+    } else {
+      const idsAnteriores = Array.isArray(jobExistente?.instancia_ids) ? jobExistente.instancia_ids : [];
+      const mapaAnterior = jobExistente?.template_id_by_instance && typeof jobExistente.template_id_by_instance === "object" ? jobExistente.template_id_by_instance : {};
+      const { error: jobInstanciasError } = await service.from("envio_meta_job").update({
+        instancia_ids: [...new Set([...idsAnteriores, ...participantes.map((i: any) => i.id)])],
+        template_id_by_instance: { ...mapaAnterior, ...templateIdByInstance },
+        instancias_bloqueadas_run: [],
+        falhas_por_instancia_run: {},
+      }).eq("id", job.id);
+      if (jobInstanciasError) throw jobInstanciasError;
     }
 
     const reservas: any[] = [];
