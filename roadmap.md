@@ -19,6 +19,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Corrigir atendimento comercial da Clara e aviso exclusivo ao admin nas transferências humanas
 - [x] Alterar o aquecimento do Certificado para 50 mensagens diárias por número marcado e apto
 - [x] Preparar e pausar o piloto Casa dos Dados com template cnpj_atualizado_2, números de novas BMs e atendimento exclusivo da Clara
 - [x] Liberar parceiros Meta autorizados para enviar imagens de templates em pasta privada individual, mantendo isolamento entre usuários
