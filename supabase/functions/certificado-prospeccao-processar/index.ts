@@ -325,13 +325,31 @@ Deno.serve(async (req) => {
     const filaInstancias = modoCasaDados && !preparacaoManual
       ? participantes.flatMap((instancia: any) => Array.from({ length: cotasRestantes.get(instancia.id) ?? 0 }, () => instancia))
       : leads.map((_: any, indice: number) => participantes[indice % participantes.length]);
-    for (const [indice, lead] of leads.entries()) {
+    const candidatosReserva = leads.flatMap((lead: any, indice: number) => {
       const instancia: any = filaInstancias[indice];
-      if (!instancia) break;
-      const { data: reserva, error } = await service.from("certificado_prospeccao_envios").insert({ lead_id: lead.id, bm_id: instancia.meta_bm_id, instancia_id: instancia.id, template_nome: templateNome, template_idioma: templateIdioma, job_id: job.id }).select("id").maybeSingle();
-      if (!error && reserva) {
-        reservas.push({ lead, reserva, instancia, ordem: ordemInicial + reservas.length });
-        await service.from("certificado_leads").update({ situacao: "reservado", updated_at: new Date().toISOString() }).eq("id", lead.id).eq("situacao", "novo");
+      if (!instancia) return [];
+      return [{
+        id: crypto.randomUUID(),
+        lead_id: lead.id,
+        bm_id: instancia.meta_bm_id,
+        instancia_id: instancia.id,
+        template_nome: templateNome,
+        template_idioma: templateIdioma,
+        job_id: job.id,
+        lead,
+        instancia,
+      }];
+    });
+    const CHUNK_RESERVA = 250;
+    for (let inicio = 0; inicio < candidatosReserva.length; inicio += CHUNK_RESERVA) {
+      const lote = candidatosReserva.slice(inicio, inicio + CHUNK_RESERVA);
+      const { data: criadas, error } = await service.from("certificado_prospeccao_envios").insert(lote.map(({ lead: _lead, instancia: _instancia, ...row }: any) => row)).select("id,lead_id");
+      if (error) throw error;
+      const idsCriados = new Set((criadas ?? []).map((reserva: any) => reserva.id));
+      for (const candidato of lote) {
+        if (idsCriados.has(candidato.id)) {
+          reservas.push({ lead: candidato.lead, reserva: { id: candidato.id }, instancia: candidato.instancia, ordem: ordemInicial + reservas.length });
+        }
       }
     }
     if (preparacaoManual && reservas.length !== restante) {
@@ -362,7 +380,7 @@ Deno.serve(async (req) => {
     const itens = reservas.map(({ lead, reserva, instancia, ordem }) => {
       const nome = lead.nome_fantasia || lead.razao_social || "cliente";
       return {
-        job_id: job.id, ordem, telefone: lead.telefone_principal, nome, cpf: lead.cnpj,
+        id: crypto.randomUUID(), job_id: job.id, ordem, telefone: lead.telefone_principal, nome, cpf: lead.cnpj,
         status: "pendente",
         vars: {
            "1": modoCasaDados ? `falo com o(a) responsável por ${nome}?` : nome,
@@ -378,11 +396,45 @@ Deno.serve(async (req) => {
         wa_validado: "sim",
       };
     });
-    const { data: itensCriados, error: itensError } = await service.from("envio_meta_job_item").insert(itens).select("id,vars");
-    if (itensError) throw itensError;
-    for (const item of itensCriados ?? []) {
-      const envioId = (item.vars as any)?.certificado_envio_id;
-      if (envioId) await service.from("certificado_prospeccao_envios").update({ job_item_id: item.id }).eq("id", envioId);
+    try {
+      for (let inicio = 0; inicio < itens.length; inicio += CHUNK_RESERVA) {
+        const lote = itens.slice(inicio, inicio + CHUNK_RESERVA);
+        const { error: itensError } = await service.from("envio_meta_job_item").insert(lote);
+        if (itensError) throw itensError;
+      }
+      for (let inicio = 0; inicio < itens.length; inicio += CHUNK_RESERVA) {
+        const lote = itens.slice(inicio, inicio + CHUNK_RESERVA);
+        const vinculos = lote.map((item: any) => {
+          const reserva = reservas.find((r: any) => r.reserva.id === item.vars.certificado_envio_id);
+          return {
+            id: item.vars.certificado_envio_id,
+            lead_id: reserva.lead.id,
+            bm_id: reserva.instancia.meta_bm_id,
+            instancia_id: reserva.instancia.id,
+            template_nome: templateNome,
+            template_idioma: templateIdioma,
+            job_id: job.id,
+            job_item_id: item.id,
+          };
+        });
+        const { error: vinculoError } = await service.from("certificado_prospeccao_envios").upsert(vinculos, { onConflict: "id" });
+        if (vinculoError) throw vinculoError;
+      }
+      const leadIds = reservas.map((reserva: any) => reserva.lead.id);
+      for (let inicio = 0; inicio < leadIds.length; inicio += CHUNK_RESERVA) {
+        const { error: leadsReservaError } = await service.from("certificado_leads").update({ situacao: "reservado", updated_at: new Date().toISOString() }).in("id", leadIds.slice(inicio, inicio + CHUNK_RESERVA)).eq("situacao", "novo");
+        if (leadsReservaError) throw leadsReservaError;
+      }
+    } catch (erroFila) {
+      const reservaIds = reservas.map((reserva: any) => reserva.reserva.id);
+      const itemIds = itens.map((item: any) => item.id);
+      for (let inicio = 0; inicio < itemIds.length; inicio += CHUNK_RESERVA) {
+        await service.from("envio_meta_job_item").delete().in("id", itemIds.slice(inicio, inicio + CHUNK_RESERVA));
+      }
+      for (let inicio = 0; inicio < reservaIds.length; inicio += CHUNK_RESERVA) {
+        await service.from("certificado_prospeccao_envios").delete().in("id", reservaIds.slice(inicio, inicio + CHUNK_RESERVA)).eq("status", "reservado");
+      }
+      throw erroFila;
     }
     await service.from("certificado_config").update({ prospeccao_ultima_execucao: new Date().toISOString(), prospeccao_pausada_motivo: null }).eq("id", cfg.id);
     if (preparacaoManual) {
