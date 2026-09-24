@@ -70,6 +70,14 @@ Deno.serve(async (req) => {
     if (!cfg?.aquecimento_ativo && !forcar) {
       return json({ ok: true, skipped: 'aquecimento_desativado' });
     }
+    const { data: certificadoCfg } = await supabase
+      .from('certificado_config')
+      .select('modo_teste_casa_dados')
+      .limit(1)
+      .maybeSingle();
+    if (certificadoCfg?.modo_teste_casa_dados === true && !forcar) {
+      return json({ ok: true, skipped: 'aquecimento_redirecionado_certificado' });
+    }
 
     const dia = hojeBrt();
     const agoraBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
@@ -78,7 +86,7 @@ Deno.serve(async (req) => {
 
     // Das 07h às 07h50, o cron já existente trabalha apenas na formação do
     // estoque. Depois, continua repondo durante a janela normal sem cron extra.
-    if (!domingo && horaBrt >= 7 && horaBrt < 19) {
+    if (cfg?.google_maps_captacao_ativa !== false && !domingo && horaBrt >= 7 && horaBrt < 19) {
       try {
         await supabase.functions.invoke('google-maps-leads-abastecer', { body: { dia } });
       } catch (err) {

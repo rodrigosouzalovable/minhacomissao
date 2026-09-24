@@ -2,7 +2,7 @@
 
 ## Resultado esperado
 
-Substituir temporariamente a entrada de novos leads do Google Maps por leads da Casa dos Dados, mantendo os dados antigos intactos. O teste usará a **BM já configurada no Certificado Digital**, 50 contatos por dia útil, a sequência **D+5, D+10, D+15, D+20, D+25 e D+30**, a caixa **CERTIFICADO** e atendimento da **CLARA**.
+Substituir temporariamente a entrada de novos leads do Google Maps por leads da Casa dos Dados, mantendo os dados antigos intactos. O teste usará exclusivamente números que tenham o template aprovado e a marca **“Número de nova BM — entrar no aquecimento de tier”**, com 50 contatos por dia útil, a sequência **D+5, D+10, D+15, D+20, D+25 e D+30**, a caixa **CERTIFICADO** e atendimento da **CLARA**.
 
 ## 1. Pausar a captação do Google Maps
 
@@ -27,13 +27,14 @@ Substituir temporariamente a entrada de novos leads do Google Maps por leads da 
 - Como o texto aprovado é `Olá {{1}} informamos que o processo de emissão do seu CNPJ foi atualizado.`, a mensagem enviada ficará:
   - **“Olá falo com o(a) responsável por NOME DA EMPRESA? informamos que o processo de emissão do seu CNPJ foi atualizado.”**
 - Usar primeiro o nome fantasia; quando não existir, usar a razão social. Não enviar CNPJ, data de abertura ou valor neste template.
-- Validar novamente a aprovação do template em cada número antes do envio. A BM escolhida já possui cinco números sincronizados com aprovação; o sistema ainda confirmará saúde, conexão e disponibilidade no momento do disparo.
-- Distribuir os 50 contatos em rodízio entre os números aptos, com intervalo aleatório de 30 a 90 segundos, sem domingos e sem ultrapassar o limite diário agregado.
+- Selecionar automaticamente somente números que tenham simultaneamente o template `cnpj_atualizado_2` aprovado e a marca **“Número de nova BM — entrar no aquecimento de tier”**, sem depender de uma BM fixa.
+- Confirmar saúde, conexão, disponibilidade e aprovação do template em cada número imediatamente antes do disparo.
+- Distribuir os 50 contatos em rodízio entre esses números aptos, com intervalo aleatório de 30 a 90 segundos, sem domingos e sem ultrapassar o limite diário agregado.
 - Criar a campanha na caixa **CERTIFICADO**, com os controles normais de pausar, retomar, cancelar e acompanhar detalhes.
 
 ## 4. CLARA como vendedora de certificados digitais
 
-- Fazer a CLARA analisar a mensagem recebida e o histórico completo da conversa antes de responder.
+- Fazer a CLARA analisar cada mensagem recebida e o histórico completo da conversa com IA antes de responder; esta chamada por resposta foi autorizada para o piloto.
 - Dar a ela um roteiro comercial profissional focado em certificado digital, sem inventar preços, prazos, descontos ou condições não cadastradas.
 - Diferenciar interesse, dúvida, objeção, recusa, número errado, pedido para não receber mensagens, intenção de agendar e envio de documentos.
 - Corrigir respostas negativas como “não quero” para que nunca sejam interpretadas como aceite.
@@ -51,7 +52,7 @@ Substituir temporariamente a entrada de novos leads do Google Maps por leads da 
 
 ## 6. Controles e segurança
 
-- Adicionar na área do Certificado Digital um estado claro do teste: ativo/pausado, faixa atual, meta diária, estoque elegível, template e BM utilizados.
+- Adicionar na área do Certificado Digital um estado claro do teste: ativo/pausado, faixa atual, meta diária, estoque elegível, template e números marcados utilizados.
 - Impedir campanhas duplicadas por cliques repetidos ou execuções simultâneas.
 - Somente administradores poderão alterar a fonte, ativar/pausar o teste ou trocar sua configuração.
 - Manter todas as conversas e respostas na caixa CERTIFICADO, atribuídas à CLARA.
@@ -59,6 +60,7 @@ Substituir temporariamente a entrada de novos leads do Google Maps por leads da 
 ## Detalhes técnicos
 
 - Reaproveitar o agendamento e a fila existentes; **não criar novo cron, polling ou canal em tempo real**.
+- Aplicar a seleção por marca e aprovação do template no servidor, impedindo que números fora do grupo entrem no rodízio.
 - Acrescentar configurações reversíveis para a pausa do Google Maps e o modo de teste Casa dos Dados.
 - Adaptar a criação dos itens da campanha ao número real de variáveis do template, removendo o preenchimento fixo atual de CNPJ, data e valor.
 - Fortalecer o vínculo entre envio, lead do Certificado e conversa para classificar respostas e gerar métricas por faixa.

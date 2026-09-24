@@ -126,6 +126,15 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  const { data: poolConfig } = await supabase
+    .from("meta_envio_pool_config")
+    .select("google_maps_captacao_ativa")
+    .eq("id", 1)
+    .maybeSingle();
+  if (poolConfig?.google_maps_captacao_ativa === false) {
+    return json({ ok: true, skipped: "captacao_google_maps_pausada" });
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
     const dia = String(body?.dia || hojeBrt());

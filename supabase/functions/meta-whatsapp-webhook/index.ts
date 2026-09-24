@@ -823,7 +823,12 @@ serve(async (req) => {
               const { data: comTelefone } = await supabase.from('certificado_prospeccao_envios')
                 .select('id,certificado_leads!inner(telefone_principal)').in('id', ids);
               const correspondente = (comTelefone || []).find((r: any) => String(r.certificado_leads?.telefone_principal || '').replace(/\D/g, '').endsWith(sufixo));
-              if (correspondente) await supabase.from('certificado_prospeccao_envios').update({ status: 'respondido', respondido_em: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', correspondente.id);
+              if (correspondente) await supabase.from('certificado_prospeccao_envios').update({
+                status: 'respondido',
+                respondido_em: new Date().toISOString(),
+                resposta_texto: String(texto || '').slice(0, 1000),
+                updated_at: new Date().toISOString(),
+              }).eq('id', correspondente.id);
             }
           }
 
