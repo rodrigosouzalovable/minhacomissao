@@ -329,7 +329,10 @@ Deno.serve(async (req) => {
       const instancia: any = filaInstancias[indice];
       if (!instancia) break;
       const { data: reserva, error } = await service.from("certificado_prospeccao_envios").insert({ lead_id: lead.id, bm_id: instancia.meta_bm_id, instancia_id: instancia.id, template_nome: templateNome, template_idioma: templateIdioma, job_id: job.id }).select("id").maybeSingle();
-      if (!error && reserva) reservas.push({ lead, reserva, instancia, ordem: ordemInicial + reservas.length });
+      if (!error && reserva) {
+        reservas.push({ lead, reserva, instancia, ordem: ordemInicial + reservas.length });
+        await service.from("certificado_leads").update({ situacao: "reservado", updated_at: new Date().toISOString() }).eq("id", lead.id).eq("situacao", "novo");
+      }
     }
     if (preparacaoManual && reservas.length !== restante) {
       await service.from("envio_meta_job").update({
