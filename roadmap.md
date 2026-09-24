@@ -1,7 +1,8 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Confirmar a entrega das 100 mensagens iniciais do aquecimento do Certificado, 50 por cada número apto
+- [ ] Concluir e confirmar o novo lote de até 750 mensagens do Certificado, 50 por cada uma das 15 instâncias GREEN
+- [x] Confirmar a entrega das 100 mensagens iniciais do aquecimento do Certificado, 50 por cada número apto
 - [x] Corrigir a rolagem pela roda do mouse nos seletores de templates abertos dentro de janelas
 - [x] Carregar todos os templates Meta paginados nos seletores de envio, incluindo receber_boleto
 - [x] Adicionar busca e favoritos por usuário em todos os seletores operacionais de templates
