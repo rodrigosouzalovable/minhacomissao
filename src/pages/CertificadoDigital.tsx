@@ -177,6 +177,8 @@ export default function CertificadoDigital() {
     const { data, error } = await supabase.from("meta_whatsapp_templates").select("instancia_id,status,sincronizado_em").in("instancia_id", metaInstancias.map((i) => i.id)).eq("nome_template", templateSelecionado?.nome ?? "").eq("idioma", templateSelecionado?.idioma ?? "pt_BR");
     if (error) throw error; return data ?? [];
   }, staleTime: 30_000 });
+  const instanciasAptas = metaInstancias.filter((inst) => inst.estado_pool === "ativo" && !inst.pool_fora_manual && String(inst.saude_status ?? "").toUpperCase() === "CONNECTED" && String(inst.saude_quality ?? "").toUpperCase() === "GREEN" && templateStatus.some((item) => item.instancia_id === inst.id && item.status === "approved"));
+  const metaDiaria = instanciasAptas.length * (config?.limite_diario ?? 50);
   const { data: enviosHoje = 0 } = useQuery({ queryKey: ["certificado-envios-hoje", config?.meta_bm_id, config?.modo_teste_casa_dados], enabled: config?.modo_teste_casa_dados === true || !!config?.meta_bm_id, queryFn: async () => {
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     let query = supabase.from("certificado_prospeccao_envios").select("id", { count: "exact", head: true }).gte("reservado_em", hoje.toISOString()).in("status", ["reservado","enviado","entregue","lido","respondido"]);
