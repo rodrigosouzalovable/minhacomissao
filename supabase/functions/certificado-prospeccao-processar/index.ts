@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
     const telefoneTeste = String(body?.telefone_teste ?? "").replace(/\D/g, "");
     const completo = body?.iniciar_completo === true;
     const manualPreparacaoId = String(body?.manual_preparacao_id ?? "").trim();
+    const instanciaIdsInicio = Array.isArray(body?.instancia_ids_inicio) ? [...new Set(body.instancia_ids_inicio.map(String).filter(Boolean))] : [];
     const brt = agoraBrt();
     const diaSemana = brt.getDay();
     if (!modoTeste && !manualPreparacaoId && (diaSemana === 0 || diaSemana === 6)) return json({ success: true, skipped: true, motivo: "A prospecção funciona de segunda a sexta" });
@@ -110,7 +111,7 @@ Deno.serve(async (req) => {
           .eq("instancia_teste_aquecimento", false).eq("aquecimento_meta_ativo", true)
           .eq("estado_pool", "ativo").eq("pool_fora_manual", false)
           .eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN");
-        const idsMarcadas = (marcadas ?? []).map((instancia: any) => instancia.id);
+        const idsMarcadas = (marcadas ?? []).map((instancia: any) => instancia.id).filter((id: string) => instanciaIdsInicio.length === 0 || instanciaIdsInicio.includes(id));
         const { data: aprovadas } = idsMarcadas.length ? await service.from("meta_whatsapp_templates")
           .select("instancia_id").in("instancia_id", idsMarcadas).eq("nome_template", templateNome)
           .eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
@@ -215,6 +216,7 @@ Deno.serve(async (req) => {
       .eq("provider", "meta").eq("ativo", true).eq("instancia_teste_aquecimento", false);
     if (modoCasaDados) {
       instanciasQuery = instanciasQuery.eq("aquecimento_meta_ativo", true).not("meta_bm_id", "is", null);
+      if (instanciaIdsInicio.length > 0) instanciasQuery = instanciasQuery.in("id", instanciaIdsInicio);
     } else if (cfg.meta_bm_id) {
       instanciasQuery = instanciasQuery.eq("meta_bm_id", cfg.meta_bm_id);
     }
