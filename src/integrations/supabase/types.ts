@@ -11256,6 +11256,14 @@ export type Database = {
         Args: { p_force?: boolean; p_lock_minutes?: number }
         Returns: boolean
       }
+      clara_claim_message: {
+        Args: { p_contato_id: string; p_entrada_id: string }
+        Returns: boolean
+      }
+      clara_finish_message: {
+        Args: { p_contato_id: string; p_entrada_id: string }
+        Returns: undefined
+      }
       comite_carteira_nm_agregar: { Args: never; Returns: Json }
       comite_carteira_nm_intocados: {
         Args: { p_limit?: number }
