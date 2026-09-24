@@ -407,6 +407,13 @@
       "when": 1790205032488,
       "tag": "0057_allow_meta_partners_own_template_media",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790248986264,
+      "tag": "0058_fix_ativar_meta_instancia_pool_ambiguous_value",
+      "breakpoints": true
     }
   ]
 }
