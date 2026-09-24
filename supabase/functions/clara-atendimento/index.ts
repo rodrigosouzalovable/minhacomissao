@@ -31,12 +31,16 @@ async function escalarParaAdmin(service: any, contato: any, entradaId: string, m
   const mensagem = `A Clara precisa de auxílio humano na caixa CERTIFICADO.\n\nCliente: ${contato.nome || "Não identificado"}\nTelefone: ${telefone || "Não informado"}\nMotivo: ${motivo || "Atendimento encaminhado pela Clara"}`;
   const chaveIdempotencia = `clara:${contato.id}:${entradaId || "sem-entrada"}`;
   try {
-    await service.from("admin_notificacoes_log").upsert({
-      tipo: "clara_humano_painel",
-      chave_idempotencia: chaveIdempotencia,
-      mensagem,
-      status: "interno",
-    }, { onConflict: "chave_idempotencia", ignoreDuplicates: true });
+    const { data: existente } = await service.from("admin_notificacoes_log")
+      .select("id").eq("chave_idempotencia", chaveIdempotencia).limit(1).maybeSingle();
+    if (!existente?.id) {
+      await service.from("admin_notificacoes_log").insert({
+        tipo: "clara_humano_painel",
+        chave_idempotencia: chaveIdempotencia,
+        mensagem,
+        status: "interno",
+      });
+    }
   } catch (error) {
     console.error("[Clara] falha ao registrar aviso interno", error);
   }
