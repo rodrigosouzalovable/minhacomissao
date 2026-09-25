@@ -47,6 +47,7 @@ interface Mestre {
   criado_em: string;
   injetar_em_novos?: boolean;
   usar_em_leads?: boolean;
+  reclassificado_marketing?: boolean;
 
 
 }
@@ -635,7 +636,7 @@ export default function MetaTemplates() {
         <div>
           <h1 className="text-2xl font-bold">Templates Meta (em lote)</h1>
           <p className="text-sm text-muted-foreground">
-            Crie um template uma vez e aplique em todas as {instAtivas.length} instâncias ativas.
+            Crie modelos de utilidade ou marketing e envie para aprovação da Meta nas instâncias selecionadas.
           </p>
         </div>
 
@@ -678,9 +679,9 @@ export default function MetaTemplates() {
                         <SelectContent>
                           <SelectItem value="UTILITY">UTILITY</SelectItem>
                           <SelectItem value="MARKETING">MARKETING</SelectItem>
-                          <SelectItem value="AUTHENTICATION">AUTHENTICATION</SelectItem>
                         </SelectContent>
                       </Select>
+                      {categoria === "MARKETING" && <p className="text-xs text-muted-foreground mt-1">A aprovação não libera disparos: o bloqueio de custos de marketing permanece ativo.</p>}
                     </div>
                     <div>
                       <Label>Idioma</Label>
@@ -995,7 +996,7 @@ export default function MetaTemplates() {
                               <Zap className="w-3 h-3 mr-1" /> nº novos
                             </Badge>
                           )}
-                          <label
+                           {m.categoria === "UTILITY" && !m.reclassificado_marketing && <label
                             className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
                             title="Usar este modelo nas mensagens de aquecimento para leads do Google Maps"
                           >
@@ -1004,7 +1005,7 @@ export default function MetaTemplates() {
                               onCheckedChange={(v) => alternarLeads(m.id, v === true)}
                             />
                             leads
-                          </label>
+                           </label>}
                           <Button size="icon" variant="ghost" onClick={() => setMestreDialog(m.id)} title="Ver template">
                             <Eye className="w-4 h-4" />
                           </Button>
@@ -1148,7 +1149,9 @@ export default function MetaTemplates() {
                 <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-muted-foreground space-y-1">
                   <p className="font-medium text-foreground">Fluxo recomendado (evita rejeição em massa)</p>
                   <p>1. Envie o <b>piloto</b> para 1 número. 2. Aguarde a aprovação da Meta. 3. Clique em <b>Replicar nas demais</b> — só as instâncias ainda não aprovadas recebem.</p>
-                  <p><b>Tier 250:</b> somente utilidade, no máximo 2 templates por número/dia, inclusive em envios manuais. Tier 2 mil permanece sem essa limitação.</p>
+                  <p><b>Tier 250:</b> no máximo 2 submissões de templates por número/dia, inclusive em envios manuais.</p>
+                  <p>Aprovar um template MARKETING não libera disparos a clientes; o bloqueio de custos permanece ativo.</p>
+                  {mestres.find((m) => m.id === selMestre)?.reclassificado_marketing && <p className="text-destructive">Este modelo foi reclassificado pela Meta como MARKETING. Se foi criado como UTILITY, cadastre outro na categoria correta para reenviar.</p>}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -1168,7 +1171,7 @@ export default function MetaTemplates() {
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                     Replicar nas demais
                   </Button>
-                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0}>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0 || mestres.find((m) => m.id === selMestre)?.categoria === "MARKETING"}>
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar para todas agora ({selInst.size})
                   </Button>
@@ -1221,7 +1224,7 @@ export default function MetaTemplates() {
                   <CardHeader className="flex-row items-center justify-between space-y-0">
                     <div>
                       <CardTitle className="text-base">{m.nome}</CardTitle>
-                      <p className="text-xs text-muted-foreground">{m.categoria} · {m.idioma}</p>
+                      <p className="text-xs text-muted-foreground">{m.categoria} · {m.idioma}{m.reclassificado_marketing && m.categoria !== "MARKETING" ? " · Reclassificado como MARKETING pela Meta" : ""}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       {c.APPROVED ? <Badge className={STATUS_COLORS.APPROVED}>APPROVED {c.APPROVED}</Badge> : null}
@@ -1338,7 +1341,7 @@ export default function MetaTemplates() {
                     />
                   </div>
 
-                  <div className="flex items-center gap-2 rounded-md border p-3">
+                  {m.categoria === "UTILITY" && !m.reclassificado_marketing && <div className="flex items-center gap-2 rounded-md border p-3">
                     <Checkbox
                       checked={!!m.injetar_em_novos}
                       onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
@@ -1349,7 +1352,7 @@ export default function MetaTemplates() {
                         Aplicado sozinho em cada número novo, um por vez com 2–5 min de intervalo.
                       </p>
                     </div>
-                  </div>
+                  </div>}
 
                   <div className="flex flex-wrap gap-2">
                     <Button
