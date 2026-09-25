@@ -86,6 +86,17 @@ Deno.serve(async (req) => {
           out.subscriptions.data.some((app: any) =>
             (app?.whatsapp_business_api_data?.override_callback_uri || app?.whatsapp_business_api_data?.link) === webhookUrl
           );
+        if (out.callback_confirmado) {
+          const { error: saveError } = await supabase.from('meta_whatsapp_instances').update({
+            webhook_reinscrito_em: new Date().toISOString(),
+            webhook_callback_url: webhookUrl,
+            webhook_saude_status: 'reinscrito',
+            webhook_saude_verificado_em: new Date().toISOString(),
+            webhook_ultimo_erro: null,
+            webhook_perda_suspeita: null,
+          }).eq('id', inst.id);
+          if (saveError) throw saveError;
+        }
       } catch (e: any) {
         out.error = e?.message || String(e);
         out.subscribe_ok = false;
