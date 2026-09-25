@@ -8561,6 +8561,7 @@ export type Database = {
           data_primeiro_pagamento: string | null
           data_retorno: string
           id: string
+          meta_contato_id: string | null
           numero_parcelas: number | null
           observacao: string | null
           status: string
@@ -8579,6 +8580,7 @@ export type Database = {
           data_primeiro_pagamento?: string | null
           data_retorno: string
           id?: string
+          meta_contato_id?: string | null
           numero_parcelas?: number | null
           observacao?: string | null
           status?: string
@@ -8597,6 +8599,7 @@ export type Database = {
           data_primeiro_pagamento?: string | null
           data_retorno?: string
           id?: string
+          meta_contato_id?: string | null
           numero_parcelas?: number | null
           observacao?: string | null
           status?: string
@@ -8606,7 +8609,15 @@ export type Database = {
           valor_total?: number | null
           whatsapp_enviado_em?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "retornos_meta_contato_id_fkey"
+            columns: ["meta_contato_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sites_gerados: {
         Row: {

@@ -1,0 +1,2 @@
+ALTER TABLE public.retornos ADD COLUMN meta_contato_id uuid REFERENCES public.meta_whatsapp_contatos(id) ON DELETE SET NULL;
+COMMENT ON COLUMN public.retornos.meta_contato_id IS 'Conversa Meta Oficial onde o retorno foi agendado; nulo para retornos anteriores ou de outras origens.';

@@ -435,6 +435,13 @@
       "when": 1790338182445,
       "tag": "0061_certificado_sufixos_usados_por_candidatos",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790338644248,
+      "tag": "0062_add_meta_conversation_reference_to_retornos",
+      "breakpoints": true
     }
   ]
 }
