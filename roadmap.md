@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Em aberto
+- [x] Corrigir DDI internacional e classificação das recusas #131026 nas campanhas do Thiago sem punir as instâncias
+- [ ] Validar números reais de teste antes de retomar os lotes do Thiago (os destinos +1 555 atuais não têm entrega confirmada; nenhuma retomada automática)
 - [x] Liberar usuários para alterar somente o credor dos próprios acordos e excluir parcelas em massa sem selecionar as pagas
 - [x] Corrigir abertura de retorno: link direto de conversas vinculadas e detalhes destacados para lembretes antigos sem conversa
 - [x] Converter espaços do nome do Template Meta em underline e permitir envio direto para todos os números selecionados, inclusive MARKETING, sem piloto obrigatório

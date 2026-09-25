@@ -123,7 +123,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       if (j.status !== 'rodando' && j.status !== 'pausado') return;
       const backend = (j.enviados || 0) + (j.erros || 0) + ((j as any).sem_whatsapp || 0);
       const det = getDetalhesJob(jobId);
-      const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0);
+      const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0) + (det?.semWhatsapp?.length || 0);
       // Só recarrega a 1ª página enquanto a lista ainda não estourou o limite de 200.
       // Depois disso o usuário controla via "Carregar mais" / "Atualizar".
       if (cached < 200 && backend !== cached) recarregarItensJob(jobId);
@@ -994,7 +994,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           <details className="rounded-md border bg-card" open={openEnviados} onToggle={(e) => setOpenEnviados((e.currentTarget as HTMLDetailsElement).open)}>
             <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium flex items-center justify-between min-h-[36px]">
               <span className="text-green-700 dark:text-green-400">
-                Enviados <span className="text-muted-foreground font-normal">({job.enviados})</span>
+                Aceitos pela Meta <span className="text-muted-foreground font-normal">({job.enviados})</span>
               </span>
 
               {detalhes.enviados.length > 0 && (
@@ -1015,7 +1015,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                     <span>{e.telefone}</span>
                     {(e.tentativas || 0) > 0 && (
                       <Badge variant="outline" className="h-5 text-[10px] text-green-700 dark:text-green-300">
-                        Entregue após nova tentativa ({(e.tentativas || 0) + 1}ª)
+                        Aceito após nova tentativa ({(e.tentativas || 0) + 1}ª)
                       </Badge>
                     )}
                   </div>

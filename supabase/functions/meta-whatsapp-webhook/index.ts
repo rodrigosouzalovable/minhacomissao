@@ -1766,6 +1766,44 @@ serve(async (req) => {
                 .maybeSingle();
 
               if (item && item.status !== 'pendente' && item.status !== 'processando') {
+                // #131026 é recusa permanente do DESTINO. Não reenfileirar em outra
+                // instância nem contar entre as falhas consecutivas do remetente.
+                // O filtro por status torna callbacks duplicados idempotentes.
+                const destinoInalcancavel = errCode === 131026 ||
+                  /message undeliverable/i.test(String(errTitle || ''));
+                if (destinoInalcancavel) {
+                  const { data: finalizado, error: erroFinalizar } = await supabase
+                    .from('envio_meta_job_item')
+                    .update({
+                      status: 'sem_whatsapp',
+                      erro: `${errTitle || 'Message undeliverable'} (#${errCode || 131026})`,
+                      processado_em: new Date().toISOString(),
+                    })
+                    .eq('id', item.id).eq('status', 'enviado')
+                    .select('id').maybeSingle();
+                  if (!erroFinalizar && finalizado) {
+                    const { data: jobDestino } = await supabase.from('envio_meta_job')
+                      .select('enviados, sem_whatsapp, falhas_por_instancia_run, instancias_bloqueadas_run, status')
+                      .eq('id', item.job_id).maybeSingle();
+                    if (jobDestino) {
+                      const falhasMap = { ...(jobDestino.falhas_por_instancia_run || {}) } as Record<string, any>;
+                      const motivo = String(falhasMap[`mot:${inst.id}`] || '');
+                      const bloqueadas = Array.isArray(jobDestino.instancias_bloqueadas_run)
+                        ? jobDestino.instancias_bloqueadas_run.filter((id: string) => id !== inst.id || !/message undeliverable|#131026/i.test(motivo)) : [];
+                      // Não reativar campanhas pausadas: apenas corrigir a classificação.
+                      if (/message undeliverable|#131026/i.test(motivo)) {
+                        delete falhasMap[`mot:${inst.id}`];
+                        delete falhasMap[`dlv:${inst.id}`];
+                      }
+                      await supabase.from('envio_meta_job').update({
+                        enviados: Math.max(0, Number(jobDestino.enviados || 0) - 1),
+                        sem_whatsapp: Number(jobDestino.sem_whatsapp || 0) + 1,
+                        falhas_por_instancia_run: falhasMap,
+                        instancias_bloqueadas_run: bloqueadas,
+                      }).eq('id', item.job_id);
+                    }
+                  }
+                } else {
                 const tentativasAtual = Number(item.tentativas || 0);
                 if (tentativasAtual < MAX_TENTATIVAS_ITEM) {
                   const { data: job } = await supabase
@@ -1873,6 +1911,7 @@ serve(async (req) => {
                       console.log('[MetaWebhook] item reenfileirado para retry:', item.id, 'tentativa', tentativasAtual + 1);
                     }
                   }
+                }
                 }
               }
             } catch (e) {

@@ -7,6 +7,7 @@ import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
 import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
 import { THIAGO_NOGUEIRA_USER_ID, instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
+import { telefoneMeta } from '../_shared/meta-destinatario.ts';
 
 
 const corsHeaders = {
@@ -76,8 +77,9 @@ function resolveVar(field: string, c: ClienteData): string {
 }
 
 function formatTelefone(tel: string): string {
-  const d = tel.replace(/\D/g, '');
-  return d.startsWith('55') ? d : `55${d}`;
+  const normalized = telefoneMeta(tel);
+  if (!normalized) throw new Error('Telefone inválido: informe o DDI com + para números internacionais.');
+  return normalized;
 }
 
 function resolveNamedVar(name: string, c: ClienteData): string {
@@ -446,6 +448,11 @@ Deno.serve(async (req) => {
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!telefoneMeta(cliente.telefone)) {
+      return new Response(JSON.stringify({ success: false, error: 'Telefone inválido: informe o DDI com + para números internacionais.' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
