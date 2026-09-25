@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
       .eq("aquecimento_qualidade_permitido", true)
       .eq("recuperacao_ativa", true);
     if (instanciaId) q = q.eq("id", instanciaId);
-    const { data: insts, error: instError } = await q;
+    const { data: insts, error: instError } = await q.order("recuperacao_proximo_envio_em", { ascending: true, nullsFirst: true });
     if (instError) throw instError;
 
     if (!insts?.length) return json({ ok: true, skipped: "nenhuma_em_recuperacao" });
@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
       if (processadas >= MAX_INSTANCIAS_POR_RUN) break;
       if (inst.partner_client_id || String(inst.saude_status).toUpperCase() !== "CONNECTED" ||
           !["YELLOW", "RED"].includes(String(inst.saude_quality).toUpperCase()) ||
-          inst.saude_ban_info && Object.keys(inst.saude_ban_info).length > 0 ||
+          (inst.saude_ban_info && Object.keys(inst.saude_ban_info).length > 0) ||
           /account_violation|payment|pagamento|ban|blocked|restri[cç]/i.test(String(inst.pausa_automatica_motivo || ""))) {
         resultados.push({ instancia: inst.nome, skip: "remetente_inapto" });
         continue;
