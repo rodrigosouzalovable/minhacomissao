@@ -299,7 +299,7 @@ serve(async (req) => {
     if (instancias.length === 0) {
       return new Response(
         JSON.stringify({ success: false, error: "Nenhum número autorizado e elegível para este envio." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -384,7 +384,7 @@ serve(async (req) => {
         .from("meta_business_managers").select("id, app_id, padrao, ativo").eq("ativo", true);
       if (bms) {
         for (const b of bms) {
-          bmAppIdCache.set(b.id, b.app_id);
+          if (b.app_id) bmAppIdCache.set(b.id, b.app_id);
           if (b.padrao) defaultAppId = b.app_id;
         }
       }
@@ -469,14 +469,14 @@ serve(async (req) => {
           // Obter header_handle específico deste app/instância quando for mídia
           let headerHandle: string | null = null;
           if (precisaMidia && mediaBytes) {
-            const appIdInst = (inst as any).meta_bm_id ? bmAppIdCache.get((inst as any).meta_bm_id) : null;
-              // Nunca usar o App padrão de outra BM em números de parceiros.
+            const appIdInst = inst.meta_bm_id ? bmAppIdCache.get(inst.meta_bm_id) : null;
+            // Nunca usar o App padrão de outra BM em números de parceiros.
             const candidatos = Array.from(
-                new Set([appIdInst, ...(donoParceiro.has(inst.id) ? [] : [defaultAppId])].filter(Boolean) as string[]),
+              new Set([appIdInst, ...(donoParceiro.has(inst.id) ? [] : [defaultAppId])].filter(Boolean) as string[]),
             );
             if (candidatos.length === 0) {
               throw new Error(
-                  "Associe este número à sua Business Manager com App ID autorizado para enviar template com imagem.",
+                "Associe este número à sua Business Manager com App ID autorizado para enviar template com imagem.",
               );
             }
             // reaproveita handle já obtido nesta instância (cache)
