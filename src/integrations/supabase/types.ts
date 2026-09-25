@@ -7084,6 +7084,7 @@ export type Database = {
           meta_profile_pic_url: string | null
           meta_verified_name: string | null
           nome: string
+          observacao: string | null
           partner_client_id: string | null
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
@@ -7169,6 +7170,7 @@ export type Database = {
           meta_profile_pic_url?: string | null
           meta_verified_name?: string | null
           nome: string
+          observacao?: string | null
           partner_client_id?: string | null
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
@@ -7254,6 +7256,7 @@ export type Database = {
           meta_profile_pic_url?: string | null
           meta_verified_name?: string | null
           nome?: string
+          observacao?: string | null
           partner_client_id?: string | null
           pausa_automatica_ate?: string | null
           pausa_automatica_motivo?: string | null
@@ -11145,6 +11148,7 @@ export type Database = {
           meta_profile_pic_url: string | null
           meta_verified_name: string | null
           nome: string
+          observacao: string | null
           partner_client_id: string | null
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
@@ -12063,6 +12067,7 @@ export type Database = {
           meta_profile_pic_url: string | null
           meta_verified_name: string | null
           nome: string
+          observacao: string | null
           partner_client_id: string | null
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
@@ -12164,6 +12169,7 @@ export type Database = {
           meta_profile_pic_url: string | null
           meta_verified_name: string | null
           nome: string
+          observacao: string | null
           partner_client_id: string | null
           pausa_automatica_ate: string | null
           pausa_automatica_motivo: string | null
