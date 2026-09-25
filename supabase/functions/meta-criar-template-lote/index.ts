@@ -247,6 +247,12 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+    if (categoria === "MARKETING" && !apenas_falhas && modo !== "piloto" && modo !== "replicar") {
+      return new Response(
+        JSON.stringify({ success: false, error: "Para modelos MARKETING, envie primeiro um piloto e aguarde a aprovação da Meta antes de replicar." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Quando é reenvio de falhas, a lista sai dos registros que realmente falharam
     let idsFalhas: string[] | null = null;

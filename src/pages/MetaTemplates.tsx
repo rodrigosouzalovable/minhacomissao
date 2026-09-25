@@ -1171,7 +1171,7 @@ export default function MetaTemplates() {
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                     Replicar nas demais
                   </Button>
-                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0}>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0 || mestres.find((m) => m.id === selMestre)?.categoria === "MARKETING"}>
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar para todas agora ({selInst.size})
                   </Button>
