@@ -168,10 +168,14 @@ Deno.serve(async (req) => {
     if (entradaReservada !== true) return json({ success: true, skipped: "mensagem já processada ou em processamento" });
     if (ehOptOut(texto)) {
       const decisao: Decisao = { classificacao: "optout", resposta: "", interesse: false, transferir_humano: false, etapa: "encerrado" };
-      await service.from("clara_conversa_estado").update({ optout: true, etapa: "optout", updated_at: new Date().toISOString() }).eq("id", estado.id);
       await suprimirDestinatario(service, contato.telefone, "blacklist: cliente pediu bloqueio no Certificado Digital", { instancia_id: contato.instancia_id, contato_nome: contato.nome, caixa_id: contato.folder_id, caixa_nome: "CERTIFICADO" });
       await atualizarMetrica(service, contato, decisao, texto);
-      await service.rpc("clara_finish_message", { p_contato_id: contatoId, p_entrada_id: entradaId });
+      const { data: concluido, error: erroConclusao } = await service.rpc("clara_complete_message", {
+        p_contato_id: contatoId, p_entrada_id: entradaId, p_contexto: estado.contexto || {},
+        p_etapa: "optout", p_optout: true, p_aguardando_humano: false,
+        p_ultima_resposta_em: new Date().toISOString(),
+      });
+      if (erroConclusao || !concluido) throw new Error(`Falha ao concluir mensagem da Clara: ${erroConclusao?.message || "reserva expirada"}`);
       return json({ success: true, etapa: "optout" });
     }
 
@@ -208,19 +212,12 @@ Deno.serve(async (req) => {
     if (decisao.transferir_humano) {
       await escalarParaAdmin(service, contato, entradaId, `Classificação: ${decisao.classificacao}. Mensagem recebida: ${texto.slice(0, 350)}`);
     }
-    await service.from("clara_conversa_estado").update({
-      contexto,
-      etapa: decisao.etapa,
-      optout: decisao.classificacao === "optout",
-      aguardando_humano: decisao.transferir_humano,
-      ultima_resposta_em: agora,
-      updated_at: agora,
-    }).eq("id", estado.id);
-    const { error: erroConclusao } = await service.rpc("clara_finish_message", {
-      p_contato_id: contatoId,
-      p_entrada_id: entradaId,
+    const { data: concluido, error: erroConclusao } = await service.rpc("clara_complete_message", {
+      p_contato_id: contatoId, p_entrada_id: entradaId, p_contexto: contexto,
+      p_etapa: decisao.etapa, p_optout: decisao.classificacao === "optout",
+      p_aguardando_humano: decisao.transferir_humano, p_ultima_resposta_em: agora,
     });
-    if (erroConclusao) console.error("[Clara] falha ao concluir mensagem", erroConclusao.message);
+    if (erroConclusao || !concluido) throw new Error(`Falha ao concluir mensagem da Clara: ${erroConclusao?.message || "reserva expirada"}`);
     return json({ success: true, classificacao: decisao.classificacao, etapa: decisao.etapa, transferido_humano: decisao.transferir_humano });
   } catch (error) {
     console.error("clara-atendimento", error);
