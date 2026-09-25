@@ -228,6 +228,13 @@ type Ctx = {
 
 const EnvioMetaSendingContext = createContext<Ctx | null>(null);
 
+// Context identity must not change underneath an existing provider during HMR.
+// Otherwise a refreshed consumer reads the new context while the mounted provider
+// still serves the old one, leaving the entire screen blank until a hard refresh.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => window.location.reload());
+}
+
 const EMPTY_DETALHES: EnvioDetalhes = { enviados: [], erros: [], tentandoNovamente: [], semWhatsapp: [], erroValidacao: [] };
 const EMPTY_RESUMO: DeliveryResumo = { aceito: 0, entregue: 0, lida: 0, falhou: 0, aguardando: 0 };
 const LOCAL_EXTRAS_KEY = "envio_meta_extras_multi_v1"; // { [jobId]: { semWhatsapp, erroValidacao } }
