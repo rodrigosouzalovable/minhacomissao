@@ -1,7 +1,6 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Reduzir consultas com timeout na Inbox Meta após validar plano de índices, permissões e atualização da lista (aguarda aprovação do plano)
 - [ ] Verificar que o novo lote de teste Meta do Thiago preserva +1 sem retomar campanhas canceladas; conferir entrega real em destino apto
 - [ ] Confirmar com o Thiago a submissão real de template por seus números (sem disparar mensagens) e, para mídia sem acesso ao App padrão, vincular a BM/App dele
 - [x] Corrigir DDI internacional e classificação das recusas #131026 nas campanhas do Thiago sem punir as instâncias
@@ -33,6 +32,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Indexar vínculos por etiqueta e conversas Meta não lidas; agrupar atualização da Inbox para reduzir leituras redundantes
 - [x] Corrigir finalização atômica das mensagens da Clara e respostas de erro do envio Meta sem disparos de teste
 - [x] Corrigir a importação dos testes internacionais sem DDI 55 e impedir que a verificação UAZAPI classifique destinos internacionais como sem WhatsApp
 - [x] Permitir envio de templates do parceiro somente às suas instâncias vinculadas e adicionar observação editável nas instâncias Meta, visível no Envio Meta
