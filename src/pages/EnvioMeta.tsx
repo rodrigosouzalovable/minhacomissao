@@ -128,7 +128,7 @@ function normalizeTelKey(t: string): string {
   if (input.startsWith("+") || input.startsWith("00")) return input.startsWith("00") ? d.slice(2) : d;
   // Meta test numbers exported without '+': +1 555 is already country-coded.
   if (/^1555\d{7}$/.test(d)) return d;
-  if (d.startsWith("55") && d.length >= 12) return d;
+  if (d.startsWith("55") && (d.length === 12 || d.length === 13)) return d;
   if (d.length === 10 || d.length === 11) return "55" + d;
   return d;
 }
@@ -1028,7 +1028,8 @@ export default function EnvioMeta() {
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
     const ambiguous = recipientsDedup.filter((c) => {
       const raw = c.telefone.replace(/\D/g, "");
-      return raw.length < 10 || raw.length > 15 || (!c.telefone.startsWith("+") && !raw.startsWith("55") && !/^1555\d{7}$/.test(raw) && raw.length !== 10 && raw.length !== 11);
+      const final = normalizeTelKey(c.telefone);
+      return !/^[1-9]\d{7,14}$/.test(final) || (!c.telefone.startsWith("+") && !raw.startsWith("55") && !/^1555\d{7}$/.test(raw) && raw.length !== 10 && raw.length !== 11);
     });
     if (ambiguous.length) return toast.error(`Confira o DDI de ${ambiguous.length} número(s): ${ambiguous[0].telefone}`);
 
