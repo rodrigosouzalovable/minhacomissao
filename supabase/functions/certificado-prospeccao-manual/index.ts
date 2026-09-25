@@ -179,16 +179,20 @@ Deno.serve(async (req) => {
       if (action === "processar" && !auth.interno) return json({ error: "Ação interna" }, 403);
       const { data: preparacao } = await service.from("certificado_prospeccao_preparacoes").select("*").eq("id", body?.preparacao_id).maybeSingle();
       if (!preparacao) return json({ error: "Preparação não encontrada" }, 404);
-      if (action === "continuar" && preparacao.status !== "pausada") return json({ error: "Esta preparação não está aguardando continuação" }, 409);
+      const leaseExpirou = preparacao.status === "processando" && (!preparacao.lease_ate || new Date(preparacao.lease_ate) <= new Date());
+      if (action === "continuar" && preparacao.status !== "pausada" && !leaseExpirou) return json({ error: "Esta preparação não está aguardando continuação" }, 409);
       if (action === "continuar") await atualizar(service, preparacao.id, { status: "pendente", erro: null, lease_ate: null });
       const { data: config } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
-      const trabalho = processarLote(service, { ...preparacao, status: action === "continuar" ? "pendente" : preparacao.status, config }, Math.min(50, Math.max(1, Number(body?.profundidade ?? 50))));
-      if (action === "continuar") {
-        EdgeRuntime.waitUntil(trabalho);
-        return json({ success: true, retomada: true }, 202);
-      }
-      await trabalho;
-      return json({ success: true });
+      const trabalho = processarLote(service, { ...preparacao, status: action === "continuar" ? "pendente" : preparacao.status, config }, Math.min(50, Math.max(1, Number(body?.profundidade ?? 50))))
+        .catch(async (error) => {
+          console.error("Falha na preparação", error);
+          await atualizar(service, preparacao.id, {
+            status: "pausada", lease_ate: null,
+            erro: error instanceof Error ? error.message : "Falha temporária na preparação. Continue para retomar.",
+          });
+        });
+      EdgeRuntime.waitUntil(trabalho);
+      return json({ success: true, retomada: action === "continuar" }, 202);
     }
 
     const quantidade = Number(body?.quantidade);
