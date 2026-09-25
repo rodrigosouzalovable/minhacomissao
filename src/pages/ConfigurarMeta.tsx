@@ -854,20 +854,6 @@ export default function ConfigurarMeta() {
     return msg ? `Detalhe da Meta: ${msg}` : "Verifique WABA ID e Access Token.";
   };
 
-  const marcarWebhookReinscrito = async (instId: string, callbackUrl?: string | null) => {
-    await supabase
-      .from("meta_whatsapp_instances")
-      .update({
-        webhook_saude_status: "reinscrito",
-        webhook_saude_verificado_em: new Date().toISOString(),
-        webhook_ultimo_erro: null,
-        webhook_perda_suspeita: null,
-        ...(callbackUrl ? { webhook_callback_url: callbackUrl } : {}),
-      })
-      .eq("id", instId);
-    carregar();
-  };
-
   const reinscreverWebhook = async (inst: Instancia) => {
     setReinscrevendo(inst.id);
     const toastId = toast.loading(`Inscrevendo webhook em ${inst.nome}...`);
@@ -878,8 +864,18 @@ export default function ConfigurarMeta() {
       if (error) throw error;
       const r = data?.resultados?.[0];
       if (r?.subscribe_ok) {
-        toast.success("Webhook inscrito — mensagens recebidas passarão a aparecer no Inbox", { id: toastId });
-        await marcarWebhookReinscrito(inst.id, r?.webhook_url);
+        const { data: check, error: checkError } = await supabase.functions.invoke("meta-webhook-health", {
+          body: { instancia_id: inst.id },
+        });
+        const resultado = check?.resultados?.[0];
+        if (checkError || !resultado || resultado.status === "inconclusiva") {
+          toast.warning("Reinscrição solicitada; a confirmação da Meta está indisponível. Verifique novamente em alguns minutos.", { id: toastId });
+        } else if (resultado.status === "erro") {
+          toast.error("A Meta ainda não confirmou o webhook. Confira o diagnóstico desta instância.", { id: toastId });
+        } else {
+          toast.success("Webhook confirmado pela Meta", { id: toastId });
+        }
+        carregar();
       } else {
         const raw = r?.subscribe_raw?.error?.message || "";
         toast.error(humanizarErroSubscribe(raw), { id: toastId, duration: 15000 });
@@ -931,8 +927,9 @@ export default function ConfigurarMeta() {
       const rei = res.filter((r) => r.status === "reinscrito").length;
       const errC = res.filter((r) => r.status === "erro").length;
       const perda = res.filter((r) => r.status === "perda_suspeita").length;
+      const inconclusivas = res.filter((r) => r.status === "inconclusiva").length;
       toast.success(
-        `Verificação concluída — ${okC} OK · ${rei} reinscritas · ${perda} com perda suspeita · ${errC} com erro`,
+        `Verificação concluída — ${okC} OK · ${rei} reinscritas · ${perda} com perda suspeita · ${errC} com erro · ${inconclusivas} inconclusivas`,
         { id: toastId, duration: 12000 },
       );
       // Recarrega para atualizar badges
@@ -1674,6 +1671,7 @@ export default function ConfigurarMeta() {
                               ok: { label: "Webhook OK", cls: "border-green-500/50 text-green-600", title: "Webhook inscrito no callback correto" },
                               reinscrito: { label: "Webhook reinscrito", cls: "border-blue-500/50 text-blue-600", title: "O sistema detectou callback incorreto e reinscreveu automaticamente" },
                               perda_suspeita: { label: "⚠ Possível perda", cls: "border-amber-500/60 text-amber-700 bg-amber-50", title: `Meta contou mais conversas iniciadas hoje do que chegaram ao Inbox. ${inst.webhook_perda_suspeita ? JSON.stringify(inst.webhook_perda_suspeita) : ""}` },
+                              inconclusiva: { label: "Verificação inconclusiva", cls: "border-amber-500/60 text-amber-700", title: "A Meta não respondeu à checagem. A inscrição anterior não foi confirmada nem descartada." },
                               erro: { label: "Webhook com erro", cls: "border-red-500/60 text-red-600 bg-red-50", title: inst.webhook_ultimo_erro || "Erro ao verificar webhook" },
                             };
                             const m = map[s] || { label: s, cls: "", title: "" };
