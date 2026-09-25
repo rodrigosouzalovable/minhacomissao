@@ -1,5 +1,6 @@
 # Decisões técnicas
 
+- A saúde do webhook Meta distingue indisponibilidade da consulta de inscrição incorreta confirmada; só alerta após tentativa de recuperação e confirmação, para evitar avisos falsos por timeout.
 - Edições de valor e vencimento de parcelas pendentes do próprio acordo são atômicas por RPC com verificação do dono e recálculo do total; gatilhos impedem mudanças diretas de campos restritos e de acordos alheios, preservando a edição administrativa.
 
 - Leituras da Inbox Meta acionadas por eventos devem ser agrupadas e evitadas com a aba oculta; filtros por etiqueta e contagens de não lidas usam índices específicos para evitar consultas repetidas de alto custo.
