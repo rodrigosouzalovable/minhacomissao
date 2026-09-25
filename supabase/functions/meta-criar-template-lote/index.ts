@@ -213,7 +213,11 @@ serve(async (req) => {
 
   try {
     const { mestre_id, instancia_ids, apenas_falhas, modo } = await req.json();
-    if (!mestre_id) throw new Error("mestre_id obrigatório");
+    if (typeof mestre_id !== "string" || !/^[0-9a-f-]{36}$/i.test(mestre_id) ||
+        (instancia_ids !== undefined && (!Array.isArray(instancia_ids) || instancia_ids.length > 500 || instancia_ids.some((id: unknown) => typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)))) ||
+        (modo !== undefined && !["piloto", "replicar"].includes(modo))) {
+      return new Response(JSON.stringify({ success: false, error: "Dados de envio inválidos." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -221,16 +225,23 @@ serve(async (req) => {
     );
 
     const authHeader = req.headers.get("Authorization");
+    const bearer = authHeader?.match(/^Bearer (.+)$/i)?.[1];
+    const serviceCall = !!bearer && bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     let usuario_id: string | null = null;
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: userData } = await supabase.auth.getUser(token);
+    if (bearer && !serviceCall) {
+      const { data: userData } = await supabase.auth.getUser(bearer);
       usuario_id = userData?.user?.id ?? null;
     }
+    if (!usuario_id && !serviceCall) return new Response(JSON.stringify({ success: false, error: "Sessão inválida." }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const { data: adminRole, error: roleError } = serviceCall ? { data: null, error: null } : await supabase
+      .from("user_roles").select("role").eq("user_id", usuario_id).eq("role", "admin").maybeSingle();
+    if (roleError) throw roleError;
+    const isAdmin = serviceCall || !!adminRole;
 
     const { data: mestre, error: me } = await supabase
       .from("meta_templates_mestre").select("*").eq("id", mestre_id).maybeSingle();
     if (me || !mestre) throw new Error("Template mestre não encontrado");
+    if (!isAdmin && mestre.criado_por !== usuario_id) return new Response(JSON.stringify({ success: false, error: "Este template não pertence à sua conta." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     // ===== Pré-voo: bloqueia submissões que a Meta rejeitaria com certeza =====
     const categoria = String(mestre.categoria || "").toUpperCase();
@@ -277,14 +288,17 @@ serve(async (req) => {
     const { data: instanciasRaw, error: ie } = await query;
     if (ie || !instanciasRaw) throw new Error("Falha ao carregar instâncias");
 
-    // Nunca tocar em números de parceiros
-    const { data: parceirosRows } = await supabase
-      .from("meta_instance_parceiros").select("instancia_id");
-    const idsParceiros = new Set(((parceirosRows as any[]) || []).map((r) => r.instancia_id));
-    let instancias = instanciasRaw.filter((i: any) => !idsParceiros.has(i.id));
+    const { data: parceirosRows, error: partnerError } = await supabase
+      .from("meta_instance_parceiros").select("instancia_id, user_id");
+    if (partnerError) throw partnerError;
+    const donoParceiro = new Map(((parceirosRows as any[]) || []).map((r) => [r.instancia_id, r.user_id]));
+    let instancias = instanciasRaw.filter((i: any) => isAdmin ? !donoParceiro.has(i.id) : donoParceiro.get(i.id) === usuario_id);
+    if (Array.isArray(instancia_ids) && instancia_ids.length > 0 && !apenas_falhas && !isAdmin && instancias.length !== new Set(instancia_ids).size) {
+      return new Response(JSON.stringify({ success: false, error: "Seleção contém número sem permissão. Atualize a lista." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     if (instancias.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, elegiveis: 0, sucessos: 0, falhas: 0, mensagem: "Nenhuma instância elegível." }),
+        JSON.stringify({ success: false, error: "Nenhum número autorizado e elegível para este envio." }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -415,8 +429,9 @@ serve(async (req) => {
         erro: null,
       }));
       if (preRows.length > 0) {
-        await supabase.from("meta_templates_instancia")
+        const { error: preError } = await supabase.from("meta_templates_instancia")
           .upsert(preRows, { onConflict: "template_mestre_id,instancia_id" });
+        if (preError) throw new Error(`Não foi possível registrar o envio: ${preError.message}`);
       }
     }
 
@@ -455,14 +470,13 @@ serve(async (req) => {
           let headerHandle: string | null = null;
           if (precisaMidia && mediaBytes) {
             const appIdInst = (inst as any).meta_bm_id ? bmAppIdCache.get((inst as any).meta_bm_id) : null;
-            // Tenta o App da BM da instância e, se ele estiver sem acesso à
-            // Resumable Upload API, cai para o App da BM padrão.
+              // Nunca usar o App padrão de outra BM em números de parceiros.
             const candidatos = Array.from(
-              new Set([appIdInst, defaultAppId].filter(Boolean) as string[]),
+                new Set([appIdInst, ...(donoParceiro.has(inst.id) ? [] : [defaultAppId])].filter(Boolean) as string[]),
             );
             if (candidatos.length === 0) {
               throw new Error(
-                "Nenhuma Business Manager (App ID) configurada. Cadastre em Meta Templates → Business Managers.",
+                  "Associe este número à sua Business Manager com App ID autorizado para enviar template com imagem.",
               );
             }
             // reaproveita handle já obtido nesta instância (cache)
