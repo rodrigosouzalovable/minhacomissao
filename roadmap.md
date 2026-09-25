@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Completar 50 envios diários por cada instância GREEN/UNKNOWN apta do Certificado, isolando números restritos sem interromper as demais
 - [ ] Acompanhar o lote retomado do Certificado (117 contatos, 12 instâncias) até confirmar entregas reais; o primeiro envio foi aceito pela Meta, não necessariamente entregue
 - [ ] Verificar que o novo lote de teste Meta do Thiago preserva +1 sem retomar campanhas canceladas; conferir entrega real em destino apto
 - [ ] Confirmar com o Thiago a submissão real de template por seus números (sem disparar mensagens) e, para mídia sem acesso ao App padrão, vincular a BM/App dele
