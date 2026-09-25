@@ -477,6 +477,13 @@
       "when": 1790353917952,
       "tag": "0067_certificado_retentativa_historico_sem_duplicar",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1790358825926,
+      "tag": "0068_owner_agreement_installment_edit_guard",
+      "breakpoints": true
     }
   ]
 }
