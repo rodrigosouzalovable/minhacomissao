@@ -15,6 +15,7 @@ import { Check, Clock, Loader2 } from 'lucide-react';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  metaContatoId: string;
   clienteNome: string;
   clienteTelefone: string;
   clienteCpf?: string | null;
@@ -37,7 +38,7 @@ function hojeISO() {
 
 const suffix8 = (v?: string | null) => String(v || '').replace(/\D/g, '').slice(-8);
 
-export function AgendarRetornoDialog({ open, onOpenChange, clienteNome, clienteTelefone, clienteCpf }: Props) {
+export function AgendarRetornoDialog({ open, onOpenChange, metaContatoId, clienteNome, clienteTelefone, clienteCpf }: Props) {
   const { user } = useAuth();
   const [nome, setNome] = useState(clienteNome);
   const [data, setData] = useState(hojeISO());
@@ -83,6 +84,7 @@ export function AgendarRetornoDialog({ open, onOpenChange, clienteNome, clienteT
     setSaving(true);
     const { error } = await supabase.from('retornos').insert({
       user_id: user.id,
+      meta_contato_id: metaContatoId,
       cliente_nome: nome.trim(),
       cliente_cpf: String(clienteCpf || '').replace(/\D/g, ''),
       cliente_telefone: clienteTelefone || '',
