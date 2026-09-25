@@ -1,16 +1,14 @@
-# Abrir a conversa original pelo lembrete de retorno
+# Liberar cadastro e submissão de templates MARKETING à Meta
 
 ## Resultado esperado
-- No aviso “Retorno Agendado!”, incluir **Abrir conversa** ao lado das ações existentes.
-- Ao clicar, fechar o aviso e abrir diretamente a conversa da Inbox Meta Oficial em que o retorno foi agendado, na caixa e no número da instância corretos, sem marcar o retorno como concluído.
+- Na área Templates Meta, permitir criar modelos MARKETING e enviá-los para aprovação, primeiro em uma instância piloto e depois nas demais instâncias escolhidas após aprovação.
+- Mostrar claramente que aprovação de template não é autorização para disparar mensagens; a trava de custo para envios MARKETING permanece ativa.
 
-## Como implementar
-- Associar cada novo retorno agendado na Inbox ao identificador da conversa Meta original. Preservar os dados atuais do retorno e o funcionamento dos botões “Entendido” e “Marcar como concluído”.
-- Usar o link direto já aceito pela Inbox (`contato`) para selecionar a conversa exata e sua caixa, inclusive quando ela não está entre as primeiras conversas carregadas.
-- Para lembretes antigos, que só guardam telefone e não identificam a conversa, procurar uma correspondência acessível ao usuário: abrir somente quando houver uma única conversa correspondente; se houver várias instâncias/conversas possíveis, não escolher arbitrariamente — informar que não foi possível identificar a conversa original.
-- Tratar conversa excluída ou sem acesso com aviso claro; não alterar a situação do retorno nem transferir a conversa de caixa.
+## Escopo
+- Ajustar a validação da submissão em lote para aceitar MARKETING, mantendo exemplos obrigatórios, checagens de conteúdo, seleção de instâncias, aprovação do piloto e limite de dois templates/dia nas contas tier 250.
+- Manter AUTHENTICATION fora desse fluxo, bem como as exclusões específicas de aquecimento, onboarding automático e campanhas em massa. Não alterar a configuração atual que bloqueia envios de mensagens MARKETING nem iniciar envios.
+- Atualizar o texto de orientação da área de templates para diferenciar submissão à Meta de disparo a clientes; indicar quando o modelo estiver reclassificado pela Meta.
 
 ## Detalhes técnicos e validação
-- Adicionar referência opcional à conversa em `retornos` com migração segura para os registros existentes, mantendo as permissões já aplicadas.
-- Passar o ID do contato selecionado ao agendamento, lê-lo no aviso e navegar para a Inbox pelo ID; manter um fallback restrito a correspondência única para dados antigos.
-- Conferir o fluxo com conversa existente em outra caixa, mais de uma conversa para o mesmo telefone, retorno antigo sem vínculo e fechamento do aviso; verificar erros da aplicação sem disparar mensagens.
+- Em `meta-criar-template-lote`, aceitar somente UTILITY ou MARKETING e impedir que `ignorar_validacao` contorne a checagem da categoria. Preservar a categoria enviada no pedido à Meta e os registros de status/rejeição por instância.
+- Conferir os fluxos piloto, replicação, falhas e tier 250; confirmar que o bloqueio de custos e os filtros de UTILITY em Nova Conversa e automações continuam intactos. Validar sem submeter templates reais nem enviar mensagens.
