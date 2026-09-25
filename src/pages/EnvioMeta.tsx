@@ -471,7 +471,11 @@ export default function EnvioMeta() {
       const { data, error } = await supabase.functions.invoke("uazapi-validar-numeros", {
         body: { numbers: numeros },
       });
-      if (error) throw error;
+       if (error) {
+         const response = 'context' in error ? (error as { context?: Response }).context : undefined;
+         const details = response ? await response.clone().json().catch(() => null) : null;
+         throw new Error(details?.error || error.message);
+       }
       if (data?.sem_validadores) {
         toast.error(data?.error || "Nenhum número UAZAPI conectado para validar");
         return;

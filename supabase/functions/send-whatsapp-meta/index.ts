@@ -443,7 +443,12 @@ async function sendOne(
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
-    const requestBody = await req.json();
+    const requestBody = await req.json().catch(() => null);
+    if (!requestBody || typeof requestBody !== 'object') {
+      return new Response(JSON.stringify({ success: false, error: 'Dados do envio inválidos. Revise a mensagem e tente novamente.' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const { template_id, instancia_id, cliente: clienteRaw, user_id, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro } = requestBody;
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (!template_id || !instancia_id || !cliente?.telefone) {

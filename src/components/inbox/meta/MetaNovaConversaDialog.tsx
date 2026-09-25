@@ -167,7 +167,11 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
         },
       });
 
-      if (error) throw new Error(error.message);
+       if (error) {
+         const response = 'context' in error ? (error as { context?: Response }).context : undefined;
+         const details = response ? await response.clone().json().catch(() => null) : null;
+         throw new Error(details?.error || error.message);
+       }
 
       // Instância bloqueada/pausada/restrita (síncrono)
       if (!data?.success && (data?.instance_restricted || data?.pool_blocked || data?.pool_paused)) {
