@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,7 +57,6 @@ export default function EditarAcordo() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { isAdmin, loading: loadingRole } = useUserRole();
-  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -262,7 +260,7 @@ export default function EditarAcordo() {
         .update(updatePayload)
         .eq('id', id);
 
-      if (!isAdmin && !acordosCompartilhados) {
+      if (!isAdmin) {
         updateQuery = updateQuery.eq('user_id', user.id);
       }
 
