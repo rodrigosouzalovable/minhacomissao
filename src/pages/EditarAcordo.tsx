@@ -69,6 +69,8 @@ export default function EditarAcordo() {
   const [operadorOriginal, setOperadorOriginal] = useState('');
   const [empresaOriginal, setEmpresaOriginal] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
   const [operadores, setOperadores] = useState<Array<{ user_id: string; nome: string | null }>>([]);
+  const [parcelasOriginais, setParcelasOriginais] = useState<Array<{ id: string; numero_parcela: number; status: string; valor_parcela: number; data_prevista: string }>>([]);
+  const [parcelasEditadas, setParcelasEditadas] = useState<Record<string, { valor: string; data: string }>>({});
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -103,7 +105,7 @@ export default function EditarAcordo() {
           .select('*')
           .eq('id', id);
 
-        if (!isAdmin && !acordosCompartilhados) {
+        if (!isAdmin) {
           query = query.eq('user_id', user.id);
         }
 
@@ -114,13 +116,16 @@ export default function EditarAcordo() {
         // Verificar se há parcelas pagas
         const { data: pagamentos, error: pagError } = await supabase
           .from('pagamentos')
-          .select('status')
-          .eq('acordo_id', id);
+          .select('id, numero_parcela, status, valor_parcela, data_prevista')
+          .eq('acordo_id', id)
+          .order('numero_parcela');
 
         if (pagError) throw pagError;
 
         const temPagas = pagamentos?.some(p => p.status === 'pago') || false;
         setHasParcelasPagas(temPagas);
+        setParcelasOriginais(pagamentos || []);
+        setParcelasEditadas({});
 
         const empresaCarregada = (acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda') || 'ume_novo_mundo';
         setEmpresa(empresaCarregada);
@@ -175,20 +180,33 @@ export default function EditarAcordo() {
 
     try {
       if (!isAdmin) {
-        if (empresa === empresaOriginal) {
+        const alteradas = parcelasOriginais.filter((p) => {
+          const draft = parcelasEditadas[p.id];
+          return draft && (Number(draft.valor.replace(',', '.')) !== Number(p.valor_parcela) || draft.data !== p.data_prevista);
+        }).map((p) => ({ id: p.id, valor: Number(parcelasEditadas[p.id].valor.replace(',', '.')), data: parcelasEditadas[p.id].data }));
+        if (alteradas.some((p) => !Number.isFinite(p.valor) || p.valor <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(p.data))) {
+          throw new Error('Confira o valor e a data das parcelas.');
+        }
+        const telefone = form.clienteTelefone.trim();
+        if (telefone.length > 15) throw new Error('Telefone inválido.');
+        if (empresa === empresaOriginal && alteradas.length === 0 && telefone === telefoneOriginal) {
           navigate(`/acordos/${id}`);
           return;
         }
-
-        const { error } = await supabase.rpc('alterar_credor_acordo', {
-          p_acordo_id: id,
-          p_novo_credor: empresa,
-        });
-        if (error) throw error;
+        if (alteradas.length || telefone !== telefoneOriginal) {
+          const { error } = await supabase.rpc('editar_acordo_proprio', {
+            p_acordo_id: id, p_telefone: telefone || null, p_parcelas: alteradas,
+          });
+          if (error) throw error;
+        }
+        if (empresa !== empresaOriginal) {
+          const { error } = await supabase.rpc('alterar_credor_acordo', { p_acordo_id: id, p_novo_credor: empresa });
+          if (error) throw error;
+        }
 
         toast({
-          title: 'Credor atualizado!',
-          description: 'O credor do acordo foi alterado com sucesso.',
+          title: 'Acordo atualizado!',
+          description: 'As alterações foram salvas.',
         });
         navigate(`/acordos/${id}`);
         return;
@@ -318,7 +336,7 @@ export default function EditarAcordo() {
         toast({
           variant: 'destructive',
           title: 'Erro ao atualizar acordo',
-          description: 'Tente novamente mais tarde.',
+          description: err instanceof Error ? err.message : 'Tente novamente mais tarde.',
         });
       }
     } finally {
@@ -350,7 +368,7 @@ export default function EditarAcordo() {
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Você pode alterar somente o credor deste acordo. As demais informações permanecem protegidas.
+              Você pode alterar credor, telefone, valor e vencimento das parcelas pendentes deste acordo.
             </AlertDescription>
           </Alert>
         )}
@@ -392,7 +410,7 @@ export default function EditarAcordo() {
                       }
                     }}
                     maxLength={14}
-                    disabled={!isAdmin}
+                    disabled={false}
                     required
                     className={cpfError ? 'border-destructive' : ''}
                   />
@@ -460,6 +478,19 @@ export default function EditarAcordo() {
             </CardContent>
 
           </Card>
+
+          {!isAdmin && <Card>
+            <CardHeader><CardTitle>Parcelas pendentes</CardTitle><CardDescription>Altere apenas as parcelas necessárias. O total do contrato será atualizado.</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              {parcelasOriginais.map((parcela) => (
+                <div key={parcela.id} className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr] items-end border-b pb-3 last:border-0">
+                  <div className="text-sm font-medium">Parcela {parcela.numero_parcela}{parcela.status === 'pago' ? ' · Paga' : ''}</div>
+                  <div className="space-y-1"><Label htmlFor={`valor-${parcela.id}`}>Valor (R$)</Label><Input id={`valor-${parcela.id}`} inputMode="decimal" type="number" step="0.01" min="0.01" disabled={parcela.status !== 'pendente'} value={parcelasEditadas[parcela.id]?.valor ?? String(parcela.valor_parcela)} onChange={(e) => setParcelasEditadas((prev) => ({ ...prev, [parcela.id]: { valor: e.target.value, data: prev[parcela.id]?.data ?? parcela.data_prevista } }))} /></div>
+                  <div className="space-y-1"><Label htmlFor={`data-${parcela.id}`}>Vencimento</Label><Input id={`data-${parcela.id}`} type="date" disabled={parcela.status !== 'pendente'} value={parcelasEditadas[parcela.id]?.data ?? parcela.data_prevista} onChange={(e) => setParcelasEditadas((prev) => ({ ...prev, [parcela.id]: { valor: prev[parcela.id]?.valor ?? String(parcela.valor_parcela), data: e.target.value } }))} /></div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>}
 
           {isAdmin && <Card>
             <CardHeader>
@@ -618,9 +649,9 @@ export default function EditarAcordo() {
             <Button
               type="submit"
               className="flex-1"
-              disabled={isLoading || (isAdmin && (!calculo || !isCpfCompleto(form.clienteCpf))) || (!isAdmin && empresa === empresaOriginal)}
+              disabled={isLoading || (isAdmin && (!calculo || !isCpfCompleto(form.clienteCpf)))}
             >
-              {isLoading ? 'Salvando...' : isAdmin ? 'Salvar Alterações' : 'Salvar Credor'}
+              {isLoading ? 'Salvando...' : 'Salvar Alterações'}
             </Button>
           </div>
         </form>
