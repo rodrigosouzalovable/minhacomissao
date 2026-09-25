@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Liberar submissão de templates MARKETING para aprovação da Meta sem liberar disparos
 - [x] Substituir “Marcar como concluído” por “Abrir Conversa” no aviso de retorno da Inbox Meta e abrir a conversa original sem concluir o lembrete
 - [ ] Validar o endereço da API 3C Plus e a sincronização autenticada com o fornecedor (o endereço .com.br informado não resolve; o .com responde 404 para a rota consultada)
 - [ ] Validar a retomada real da preparação e o processamento do Certificado após revisão da recusa Meta #131031, mantendo a prospecção pausada

@@ -89,14 +89,6 @@ function validarMestre(mestre: any): string[] {
     );
   }
 
-  // Só subimos modelos de utilidade.
-  if (String(mestre.categoria || "").toUpperCase() !== "UTILITY") {
-    erros.push("Somente modelos de UTILIDADE podem ser enviados para a Meta.");
-  }
-  if (mestre.reclassificado_marketing === true) {
-    erros.push("A Meta reclassificou esse modelo como MARKETING; ele não é mais enviado.");
-  }
-
   if (numeradas.length > 0) {
     const vals = (ex.body_text?.[0] as string[]) || [];
     if (vals.length < numeradas.length || vals.some((v: string) => !String(v || "").trim())) {
@@ -220,7 +212,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { mestre_id, instancia_ids, apenas_falhas, modo, ignorar_validacao } = await req.json();
+    const { mestre_id, instancia_ids, apenas_falhas, modo } = await req.json();
     if (!mestre_id) throw new Error("mestre_id obrigatório");
 
     const supabase = createClient(
@@ -241,14 +233,19 @@ serve(async (req) => {
     if (me || !mestre) throw new Error("Template mestre não encontrado");
 
     // ===== Pré-voo: bloqueia submissões que a Meta rejeitaria com certeza =====
-    if (ignorar_validacao !== true) {
-      const problemas = validarMestre(mestre);
-      if (problemas.length > 0) {
-        return new Response(
-          JSON.stringify({ success: false, error: problemas.join(" "), validacao: problemas }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+    const categoria = String(mestre.categoria || "").toUpperCase();
+    const problemas = validarMestre(mestre);
+    if (!(["UTILITY", "MARKETING"].includes(categoria))) {
+      problemas.push("Somente modelos de UTILIDADE ou MARKETING podem ser enviados por esta área.");
+    }
+    if (mestre.reclassificado_marketing === true && categoria !== "MARKETING") {
+      problemas.push("A Meta reclassificou este modelo de UTILIDADE como MARKETING. Cadastre um novo modelo na categoria MARKETING antes de reenviar.");
+    }
+    if (problemas.length > 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: problemas.join(" "), validacao: problemas }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Quando é reenvio de falhas, a lista sai dos registros que realmente falharam
@@ -511,7 +508,7 @@ serve(async (req) => {
           const payload = {
             name: mestre.nome,
             language: mestre.idioma || "pt_BR",
-            category: mestre.categoria,
+            category: categoria,
             components,
           };
 
