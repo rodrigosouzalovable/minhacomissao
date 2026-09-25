@@ -329,7 +329,9 @@ Deno.serve(async (req) => {
     const reservas: any[] = [];
     const ordemInicial = Number(jobExistente?.total ?? 0);
     const filaInstancias = modoCasaDados && !preparacaoManual
-      ? participantes.flatMap((instancia: any) => Array.from({ length: cotasRestantes.get(instancia.id) ?? 0 }, () => instancia))
+      ? Array.from({ length: Math.max(0, ...cotasRestantes.values()) }, (_, rodada) =>
+          participantes.filter((instancia: any) => (cotasRestantes.get(instancia.id) ?? 0) > rodada)
+        ).flat()
       : leads.map((_: any, indice: number) => participantes[indice % participantes.length]);
     const candidatosReserva = leads.flatMap((lead: any, indice: number) => {
       const instancia: any = filaInstancias[indice];
