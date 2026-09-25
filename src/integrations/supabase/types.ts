@@ -11248,6 +11248,10 @@ export type Database = {
         Args: { _folder: string; _uid: string }
         Returns: boolean
       }
+      certificado_sufixos_usados_por_candidatos: {
+        Args: { p_sufixos: string[] }
+        Returns: string[]
+      }
       chatbot_append_buffer: {
         Args: { p_telefone: string; p_texto: string; p_timestamp: string }
         Returns: undefined
