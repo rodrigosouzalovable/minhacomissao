@@ -58,8 +58,9 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const body = await req.json().catch(() => ({}));
-    const targetId: string | undefined = body?.instancia_id;
-    const forceNotify: boolean = !!body?.notify;
+    const targetId: string | undefined = typeof body?.instancia_id === 'string' && /^[0-9a-f-]{36}$/i.test(body.instancia_id) ? body.instancia_id : undefined;
+    if (body?.instancia_id !== undefined && !targetId) return new Response(JSON.stringify({ success: false, error: 'Instância inválida' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const forceNotify: boolean = body?.notify === true;
     const manualReinscricao = !!targetId && body?.manual_reinscricao === true;
 
     const tokenResolver = await criarTokenResolver(supabase);
@@ -104,8 +105,8 @@ Deno.serve(async (req) => {
           out.callback_url = current.url;
           out.subscribed = current.subscribed;
 
-        // 2) Reinscreve se ausente ou apontando para outro serviço.
-        if (!current.valid) {
+          // 2) Reinscreve se ausente ou apontando para outro serviço.
+          if (!current.valid) {
           const verifyToken = tokenResolver.paraInstancia(inst.id);
           if (!verifyToken) {
             status = 'erro';
@@ -144,9 +145,9 @@ Deno.serve(async (req) => {
               }
             }
           }
-        } else if (manualReinscricao) {
-          status = 'reinscrito';
-        }
+          } else if (manualReinscricao) {
+            status = 'reinscrito';
+          }
         }
 
         // 3) Compara conversas user_initiated de hoje vs. inbound em DB.
@@ -184,7 +185,7 @@ Deno.serve(async (req) => {
             // analytics é opcional; não invalida o health check.
           }
         }
-      } catch (e: any) {
+       } catch (e: any) {
          status = "inconclusiva";
         erro = e?.message?.slice(0, 200) || String(e).slice(0, 200);
       }
@@ -200,7 +201,7 @@ Deno.serve(async (req) => {
           webhook_saude_verificado_em: new Date().toISOString(),
           webhook_ultimo_erro: erro,
           ...(status === 'reinscrito' ? { webhook_reinscrito_em: new Date().toISOString() } : {}),
-           ...(out.callback_url !== undefined ? { webhook_callback_url: out.callback_url } : {}),
+          ...(out.callback_url !== undefined ? { webhook_callback_url: out.callback_url } : {}),
           webhook_perda_suspeita: perda,
         })
         .eq("id", inst.id);
