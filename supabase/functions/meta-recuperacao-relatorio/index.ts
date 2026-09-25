@@ -84,26 +84,27 @@ Deno.serve(async (req) => {
     const destinosEnviados = new Map<string, Set<string>>();
     for (const log of logs || []) {
       if (log.status !== 'enviado') continue;
-      const chave = suf8(log.destino_telefone);
-      if (!chave) continue;
-      const set = destinosEnviados.get(log.instancia_id) ?? new Set<string>();
-      set.add(chave);
-      destinosEnviados.set(log.instancia_id, set);
+      if (!log.destino_instancia_id) continue;
+      const set = destinosEnviados.get(log.destino_instancia_id) ?? new Set<string>();
+      set.add(log.instancia_id);
+      destinosEnviados.set(log.destino_instancia_id, set);
     }
 
     const inicioDia = new Date(`${dia}T00:00:00-03:00`).toISOString();
+    const remetentePorTelefone = new Map((insts || []).map((i: any) => [suf8(i.display_phone), i.id]));
     const { data: msgs } = await supabase
       .from('meta_whatsapp_mensagens')
       .select('instancia_id, telefone, direcao')
-      .in('instancia_id', insts.map((i: any) => i.id))
+      .in('instancia_id', [...destinosEnviados.keys()])
       .eq('direcao', 'entrada')
       .gte('criado_em', inicioDia)
       .limit(20000);
 
     const respostas = new Map<string, number>();
     (msgs || []).forEach((m: any) => {
-      if (!destinosEnviados.get(m.instancia_id)?.has(suf8(m.telefone))) return;
-      respostas.set(m.instancia_id, (respostas.get(m.instancia_id) || 0) + 1);
+      const remetente = remetentePorTelefone.get(suf8(m.telefone));
+      if (!remetente || !destinosEnviados.get(m.instancia_id)?.has(remetente)) return;
+      respostas.set(remetente, (respostas.get(remetente) || 0) + 1);
     });
 
     let totalEnv = 0;
