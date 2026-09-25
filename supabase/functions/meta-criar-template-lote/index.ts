@@ -215,7 +215,8 @@ serve(async (req) => {
     const { mestre_id, instancia_ids, apenas_falhas, modo } = await req.json();
     if (typeof mestre_id !== "string" || !/^[0-9a-f-]{36}$/i.test(mestre_id) ||
         (instancia_ids !== undefined && (!Array.isArray(instancia_ids) || instancia_ids.length > 500 || instancia_ids.some((id: unknown) => typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)))) ||
-        (modo !== undefined && !["piloto", "replicar"].includes(modo))) {
+        (modo !== undefined && !["piloto", "replicar"].includes(modo)) ||
+        (apenas_falhas !== undefined && typeof apenas_falhas !== "boolean")) {
       return new Response(JSON.stringify({ success: false, error: "Dados de envio inválidos." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -431,7 +432,10 @@ serve(async (req) => {
       if (preRows.length > 0) {
         const { error: preError } = await supabase.from("meta_templates_instancia")
           .upsert(preRows, { onConflict: "template_mestre_id,instancia_id" });
-        if (preError) throw new Error(`Não foi possível registrar o envio: ${preError.message}`);
+        if (preError) {
+          await Promise.all(instancias.map((inst) => finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", preError.message)));
+          throw new Error(`Não foi possível registrar o envio: ${preError.message}`);
+        }
       }
     }
 
@@ -470,9 +474,9 @@ serve(async (req) => {
           let headerHandle: string | null = null;
           if (precisaMidia && mediaBytes) {
             const appIdInst = inst.meta_bm_id ? bmAppIdCache.get(inst.meta_bm_id) : null;
-            // Nunca usar o App padrão de outra BM em números de parceiros.
+            // O App padrão só serve como alternativa quando o token deste número tiver acesso real.
             const candidatos = Array.from(
-              new Set([appIdInst, ...(donoParceiro.has(inst.id) ? [] : [defaultAppId])].filter(Boolean) as string[]),
+              new Set([appIdInst, defaultAppId].filter(Boolean) as string[]),
             );
             if (candidatos.length === 0) {
               throw new Error(
