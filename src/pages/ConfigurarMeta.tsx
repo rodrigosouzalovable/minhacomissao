@@ -732,7 +732,7 @@ export default function ConfigurarMeta() {
         const r = sub?.resultados?.[0];
         const setupOk = r?.subscribe_ok && callResult.data?.ok && profileResult.data?.success && healthResult.data?.success;
         const webhookCheck = r?.subscribe_ok
-          ? await supabase.functions.invoke("meta-webhook-health", { body: { instancia_id: novaInst.id, manual_reinscricao: true } })
+          ? await supabase.functions.invoke("meta-webhook-health", { body: { instancia_id: novaInst.id } })
           : null;
         const webhookConfirmed = !webhookCheck?.error && ["ok", "reinscrito"].includes(webhookCheck?.data?.resultados?.[0]?.status);
         if (setupOk && webhookConfirmed) toast.success("Instância salva, perfil sincronizado, chamadas ligadas e webhook verificado", { id: toastId });
@@ -866,7 +866,7 @@ export default function ConfigurarMeta() {
       const r = data?.resultados?.[0];
       if (r?.subscribe_ok) {
         const { data: check, error: checkError } = await supabase.functions.invoke("meta-webhook-health", {
-          body: { instancia_id: inst.id, manual_reinscricao: true },
+          body: { instancia_id: inst.id },
         });
         const resultado = check?.resultados?.[0];
         if (checkError || !resultado || resultado.status === "inconclusiva") {
@@ -1184,7 +1184,7 @@ export default function ConfigurarMeta() {
       const okList = (data?.resultados || []).filter((r: any) => r.subscribe_ok && r.callback_confirmado);
       const okCount = okList.length;
       const total = (data?.resultados || []).length;
-      const checks = await Promise.all(okList.map((r: any) => supabase.functions.invoke("meta-webhook-health", { body: { instancia_id: r.id, manual_reinscricao: true } })));
+      const checks = await Promise.all(okList.map((r: any) => supabase.functions.invoke("meta-webhook-health", { body: { instancia_id: r.id } })));
       const confirmedCount = checks.filter((c) => !c.error && ["ok", "reinscrito"].includes(c.data?.resultados?.[0]?.status)).length;
       if (confirmedCount === total) toast.success(`${confirmedCount}/${total} WABAs com callback confirmado pela Meta`);
       else toast.warning(`${confirmedCount}/${total} confirmadas pela Meta; ${okCount - confirmedCount} aguardam confirmação — veja detalhes abaixo`);

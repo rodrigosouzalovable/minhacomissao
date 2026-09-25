@@ -61,7 +61,6 @@ Deno.serve(async (req) => {
     const targetId: string | undefined = typeof body?.instancia_id === 'string' && /^[0-9a-f-]{36}$/i.test(body.instancia_id) ? body.instancia_id : undefined;
     if (body?.instancia_id !== undefined && !targetId) return new Response(JSON.stringify({ success: false, error: 'Instância inválida' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     const forceNotify: boolean = body?.notify === true;
-    const manualReinscricao = !!targetId && body?.manual_reinscricao === true;
 
     const tokenResolver = await criarTokenResolver(supabase);
 
@@ -145,8 +144,6 @@ Deno.serve(async (req) => {
               }
             }
           }
-          } else if (manualReinscricao) {
-            status = 'reinscrito';
           }
         }
 
