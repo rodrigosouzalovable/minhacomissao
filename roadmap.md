@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Liberar usuários para alterar somente o credor dos próprios acordos e excluir parcelas em massa sem selecionar as pagas
 - [x] Corrigir abertura de retorno: link direto de conversas vinculadas e detalhes destacados para lembretes antigos sem conversa
 - [x] Converter espaços do nome do Template Meta em underline e permitir envio direto para todos os números selecionados, inclusive MARKETING, sem piloto obrigatório
 - [x] Liberar submissão de templates MARKETING para aprovação da Meta sem liberar disparos

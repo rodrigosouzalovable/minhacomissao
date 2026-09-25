@@ -964,7 +964,9 @@ export default function AcordoDetalhe() {
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      const elegiveis = pagamentos.filter(podeExcluirParcela).map(p => p.id);
+                      const elegiveis = pagamentos
+                        .filter(p => p.status !== 'pago' && podeExcluirParcela(p))
+                        .map(p => p.id);
                       setSelecionadas(prev =>
                         prev.size === elegiveis.length ? new Set() : new Set(elegiveis)
                       );
@@ -992,7 +994,7 @@ export default function AcordoDetalhe() {
                         <AlertDialogDescription>
                           Tem certeza que deseja excluir as parcelas{' '}
                           {pagamentos
-                            .filter(p => selecionadas.has(p.id))
+                            .filter(p => selecionadas.has(p.id) && p.status !== 'pago' && podeExcluirParcela(p))
                             .map(p => p.numero_parcela)
                             .join(', ')}
                           ? Esta ação não pode ser desfeita.
