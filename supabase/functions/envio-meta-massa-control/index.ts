@@ -721,8 +721,17 @@ Deno.serve(async (req) => {
 
       // Só remove jobs concluídos/cancelados
       if (!['concluido', 'cancelado', 'erro'].includes(job.status)) {
-        return new Response(JSON.stringify({ success: false, error: 'só é possível limpar jobs finalizados' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        // Conflito de estado é esperado quando o worker retomou a campanha entre
+        // a renderização e o clique. Não devolve erro HTTP para não acionar a
+        // sobreposição de erro da prévia; o cliente atualiza o status real.
+        return new Response(JSON.stringify({
+          success: false,
+          skipped: true,
+          reason: 'job_nao_finalizado',
+          status: job.status,
+          error: 'A campanha ainda está em andamento e não pode ser limpa.',
+        }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       await supabase.from('envio_meta_job').delete().eq('id', jobId);

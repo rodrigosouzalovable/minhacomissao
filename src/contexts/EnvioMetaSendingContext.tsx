@@ -1090,16 +1090,41 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
 
   const limparJob = useCallback(async (jobId: string) => {
-    const j = jobs.find((x) => x.id === jobId);
-    if (!j) return;
-    if (["rodando", "pausado"].includes(j.status)) {
+    const estadosFinais: CampanhaJob["status"][] = ["concluido", "cancelado", "erro"];
+    // O worker pode retomar um job entre a última atualização da tela e o clique.
+    // Confirma o estado atual antes de pedir a exclusão.
+    const { data: atual, error: statusError } = await (supabase as any)
+      .from("envio_meta_job")
+      .select("status")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (statusError) {
+      toast.error("Não foi possível confirmar o estado da campanha");
+      return;
+    }
+    if (!atual) {
+      await carregarJobs();
+      return;
+    }
+    if (!estadosFinais.includes(atual.status as CampanhaJob["status"])) {
       toast.error("Não é possível limpar enquanto a campanha está em andamento");
+      await carregarJobs();
       return;
     }
     try {
       const { data, error } = await invokeControle(jobId, "limpar");
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Falha");
+      if (error) {
+        let detalhe = error.message || "Falha ao limpar a campanha";
+        const response = "context" in error ? (error as { context?: Response }).context : undefined;
+        const body = response ? await response.clone().json().catch(() => null) : null;
+        if (body?.error) detalhe = body.error;
+        throw new Error(detalhe);
+      }
+      if (!data?.success) {
+        toast.info(data?.error || "A campanha ainda não pode ser limpa");
+        await carregarJobs();
+        return;
+      }
       setExtras((prev) => {
         const next = { ...prev };
         delete next[jobId];
@@ -1113,7 +1138,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     } catch (e: any) {
       toast.error("Erro: " + (e?.message || e));
     }
-  }, [jobs, lastStartedId, carregarJobs, invokeControle]);
+  }, [lastStartedId, carregarJobs, invokeControle]);
 
   // ============ Legacy single-job derivations ============
   const currentJob: CampanhaJob | null = useMemo(() => {
