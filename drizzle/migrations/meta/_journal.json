@@ -498,6 +498,13 @@
       "when": 1790359023311,
       "tag": "0070_protect_paid_installment_dates",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1790361572991,
+      "tag": "0071_track_meta_webhook_repair_time",
+      "breakpoints": true
     }
   ]
 }
