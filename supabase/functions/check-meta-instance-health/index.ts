@@ -275,6 +275,13 @@ Deno.serve(async (req) => {
             ? null
             : (r.error || r.lista_error || 'Meta não retornou a classificação de qualidade'),
         };
+        // O telefone é devolvido pela Graph para o ID consultado: só essa fonte
+        // permite completar testes antigos cujo cadastro não guardou o número.
+        const telefoneGraph = String(r.raw?.display_phone_number || '').replace(/\D/g, '');
+        if (phoneResp.ok && telefoneGraph.length >= 10 && telefoneGraph.length <= 15 &&
+            (!inst.display_phone || String(inst.display_phone).replace(/\D/g, '').length < 10)) {
+          updatePayload.display_phone = r.raw.display_phone_number;
+        }
 
 
 
@@ -361,7 +368,9 @@ Deno.serve(async (req) => {
           updatePayload.green_contado_dia = null;
 
           // Aquecimento automático só nos números próprios (parceiro Meta não usa).
-          if (recupAuto && inst.aquecimento_qualidade_permitido !== false) {
+           if (recupAuto && inst.aquecimento_qualidade_permitido === true &&
+               inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
+               String(r.status).toUpperCase() === 'CONNECTED' && !r.ban_info && !restritoMeta && !pausaViolacaoConta) {
             // Já estava em recuperação e piorou → reduz o volume em vez de subir.
             const piorou = inst.recuperacao_ativa === true;
             updatePayload.recuperacao_ativa = true;
@@ -385,6 +394,8 @@ Deno.serve(async (req) => {
           inst.recuperacao_ativa !== true &&
           inst.qualidade_liberada_manual !== true &&
           inst.aquecimento_qualidade_permitido !== false &&
+           inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
+           String(r.status).toUpperCase() === 'CONNECTED' && !r.ban_info && !restritoMeta &&
           recupAuto
         ) {
           entrouPorVarredura = true;
@@ -467,7 +478,7 @@ Deno.serve(async (req) => {
               ? `Quarentena até ${new Date(updatePayload.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (fora das campanhas; segue atendendo conversas recebidas).\n`
               : '') +
             (updatePayload.recuperacao_ativa
-              ? `🔥 Aquecimento automático ligado: ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia para os números UAZAPI da caixa AQUECIMENTO (09h–19h, intervalos de 20–40 min). Nada a fazer da sua parte.\n`
+               ? `🔥 Recuperação ligada: até ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia para UAZAPI e testes Meta aptos da caixa AQUECIMENTO (09h–19h, intervalos de 20–40 min).\n`
               : `ℹ️ Aquecimento automático não está liberado para este número.\n`) +
             `Volta com teto de ${escada[0] ?? 20}/dia e sobe em escada se ficar GREEN.\n` +
             `${linhaPrevisao(qual, 0, diasGreenAlta)}`;

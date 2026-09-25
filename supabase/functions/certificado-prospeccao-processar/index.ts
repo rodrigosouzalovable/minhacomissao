@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { coletarJanela, dataBRT } from "../_shared/certificado-ingest.ts";
 import { verificarLeadsCertificado } from "../_shared/certificado-whatsapp.ts";
+import { CNAES_PILOTO, etapaPiloto } from "../_shared/certificado-experimento.ts";
 
 const FOLDER_CERTIFICADO = "9267b296-24e6-425d-9f0e-0e4114c782d9";
 const CLARA_ID = "d318692e-dc9a-4895-aa67-e21368a9de04";
@@ -10,23 +11,6 @@ const agoraBrt = () => new Date(new Date().toLocaleString("en-US", { timeZone: "
 const diaBrt = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const nomeCampanha = () => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(new Date());
 const TEMPLATE_TESTE = "cnpj_atualizado_2";
-const EXPERIMENTO_INICIO = "2026-09-23";
-const EXPERIMENTO_JANELAS = [5, 10, 15, 20, 25, 30] as const;
-
-function janelaExperimentoHoje(): number | null {
-  const hoje = diaBrt();
-  if (hoje < EXPERIMENTO_INICIO) return null;
-  const cursor = new Date(`${EXPERIMENTO_INICIO}T12:00:00Z`);
-  const fim = new Date(`${hoje}T12:00:00Z`);
-  let diasUteis = 0;
-  while (cursor < fim) {
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-    const dia = cursor.getUTCDay();
-    if (dia !== 0 && dia !== 6) diasUteis++;
-  }
-  return EXPERIMENTO_JANELAS[diasUteis] ?? null;
-}
-
 function formatarDataAbertura(data: string | null | undefined): string {
   const iso = String(data ?? "").slice(0, 10);
   const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
@@ -60,7 +44,7 @@ Deno.serve(async (req) => {
     const brt = agoraBrt();
     const diaSemana = brt.getDay();
     if (!modoTeste && !manualPreparacaoId && (diaSemana === 0 || diaSemana === 6)) return json({ success: true, skipped: true, motivo: "A prospecção funciona de segunda a sexta" });
-    let janelaExperimento = janelaExperimentoHoje();
+    let janelaExperimento = etapaPiloto(diaBrt())?.janela ?? null;
     let dataAlvoExperimento = janelaExperimento === null ? undefined : dataBRT(janelaExperimento);
 
     const { data: cfg, error: cfgError } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
@@ -85,11 +69,11 @@ Deno.serve(async (req) => {
     }
     if (!cfg.prospeccao_ativa && !simulacao && !modoTeste && !preparacaoManual) return json({ error: "Piloto desativado" }, 409);
     if (!modoTeste && !preparacaoManual && janelaExperimento === null) {
-      if (diaBrt() > "2026-09-30") {
+       if (etapaPiloto(diaBrt()) === null && diaBrt() >= "2026-09-23") {
         await service.from("certificado_config").update({ prospeccao_ativa: false, prospeccao_pausada_motivo: "Experimento D+5 a D+30 concluído" }).eq("id", cfg.id);
         return json({ success: true, skipped: true, motivo: "Experimento D+5 a D+30 concluído" });
       }
-      return json({ success: true, skipped: true, motivo: "O experimento começa amanhã com CNPJs D+5" });
+       return json({ success: true, skipped: true, motivo: "O experimento ainda não começou" });
     }
 
     const inicioDia = `${diaBrt()}T03:00:00.000Z`;
@@ -121,7 +105,7 @@ Deno.serve(async (req) => {
       const contarConfirmados = async () => {
         const { count, error } = await service.from("certificado_leads")
           .select("id", { count: "exact", head: true })
-          .eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").eq("dias_desde_abertura", janelaExperimento).eq("data_abertura", dataAlvoExperimento).not("telefone_principal", "is", null);
+           .eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").in("cnae", CNAES_PILOTO).eq("data_abertura", dataAlvoExperimento).not("telefone_principal", "is", null);
         if (error) throw error;
         return Number(count ?? 0);
       };
@@ -129,7 +113,7 @@ Deno.serve(async (req) => {
         const { count, error } = await service.from("certificado_leads")
           .select("id", { count: "exact", head: true })
           .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
-          .eq("situacao", "novo").eq("dias_desde_abertura", janelaExperimento).eq("data_abertura", dataAlvoExperimento).not("telefone_principal", "is", null);
+           .eq("situacao", "novo").in("cnae", CNAES_PILOTO).eq("data_abertura", dataAlvoExperimento).not("telefone_principal", "is", null);
         if (error) throw error;
         return Number(count ?? 0);
       };
@@ -139,7 +123,7 @@ Deno.serve(async (req) => {
       resumoColeta = { pulada: true, motivo: "Estoque local suficiente", encontrados: 0, novos: 0, janelas: 0, janelas_sucesso: 0, janelas_falha: 0, janelas_pendentes: 0 };
 
       if (confirmados < metaConfirmados && pendentes > 0) {
-        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento);
+        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
         resumoVerificacao = verificacao;
         confirmados = await contarConfirmados();
         pendentes = await contarPendentes();
@@ -158,12 +142,12 @@ Deno.serve(async (req) => {
         for (const janela of janelas) {
           let paginaInicial = 1;
           while (Date.now() - inicioProcessamento < LIMITE_COLETA_MS && confirmados < metaConfirmados) {
-            const resultado = await coletarJanela(service, cfg, janela, true, { maxPaginas: 10, paginaInicial, maxTentativas: 1, timeoutMs: 15_000 });
+            const resultado = await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, true, { maxPaginas: 3, paginaInicial, maxTentativas: 1, timeoutMs: 15_000 });
             resultados.push(resultado);
             if (resultado.erro || resultado.erro_temporario) break;
             const faltam = Math.max(0, metaConfirmados - confirmados);
             if (faltam > 0 && resultado.novos > 0) {
-              resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), janelaExperimento ?? undefined, dataAlvoExperimento);
+               resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
             }
             confirmados = await contarConfirmados();
             pendentes = await contarPendentes();
@@ -187,13 +171,13 @@ Deno.serve(async (req) => {
       }
 
       if (confirmados < metaConfirmados && pendentes > 0 && !resumoVerificacao) {
-        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento);
+         const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
         resumoVerificacao = verificacao;
       }
       const { count: aindaPendentes } = await service.from("certificado_leads")
         .select("id", { count: "exact", head: true })
         .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
-        .eq("dias_desde_abertura", janelaExperimento)
+         .in("cnae", CNAES_PILOTO)
         .eq("data_abertura", dataAlvoExperimento)
         .not("telefone_principal", "is", null);
       if ((aindaPendentes ?? 0) > 0 && resumoVerificacao && (resumoVerificacao as any).instancias_validadoras.length === 0) {
@@ -256,9 +240,10 @@ Deno.serve(async (req) => {
     }
 
     const dataAlvo = dataAlvoExperimento ?? null;
-    let leadsQuery = service.from("certificado_leads").select("id,cnpj,razao_social,nome_fantasia,telefone_principal,data_abertura,dias_desde_abertura").eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null);
+    let leadsQuery = service.from("certificado_leads").select("id,cnpj,razao_social,nome_fantasia,telefone_principal,data_abertura,dias_desde_abertura,cnae").eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null);
+    if (modoCasaDados && !preparacaoManual) leadsQuery = leadsQuery.in("cnae", CNAES_PILOTO);
     if (preparacaoManual) leadsQuery = leadsQuery.eq("preparacao_id", preparacaoManual.id);
-    if (janelaExperimento !== null && dataAlvo) leadsQuery = leadsQuery.eq("dias_desde_abertura", janelaExperimento).eq("data_abertura", dataAlvo);
+    if (janelaExperimento !== null && dataAlvo) leadsQuery = leadsQuery.eq("data_abertura", dataAlvo);
     const { data: leadsCandidatos, error: leadsError } = await leadsQuery.order("created_at", { ascending: true }).limit(Math.max(restante * 4, restante));
     if (leadsError) throw leadsError;
     const sufixosJaUsados = new Set<string>();
@@ -273,13 +258,24 @@ Deno.serve(async (req) => {
       }
       if ((usados ?? []).length < 1000) break;
     }
-    const leads = (leadsCandidatos ?? []).filter((lead: any) => {
+    const candidatosIneditos = (leadsCandidatos ?? []).filter((lead: any) => {
       const telefone = String(lead.telefone_principal ?? "").replace(/\D/g, "");
       const sufixo = telefone.slice(-8);
       if (!sufixo || sufixosJaUsados.has(sufixo)) return false;
       sufixosJaUsados.add(sufixo);
       return true;
-    }).slice(0, restante);
+    });
+    // Distribuição equilibrada sem deixar um nicho volumoso ocupar toda a cota.
+    const porCnae = new Map(CNAES_PILOTO.map((cnae) => [cnae, candidatosIneditos.filter((lead: any) => lead.cnae === cnae)]));
+    const leads: any[] = [];
+    if (modoCasaDados && !preparacaoManual) {
+      while (leads.length < restante && [...porCnae.values()].some((lista) => lista.length)) {
+        for (const cnae of CNAES_PILOTO) {
+          const proximo = porCnae.get(cnae)?.shift();
+          if (proximo && leads.length < restante) leads.push(proximo);
+        }
+      }
+    } else leads.push(...candidatosIneditos.slice(0, restante));
     if (preparacaoManual && leads.length < restante) {
       await service.from("certificado_prospeccao_preparacoes").update({
         status: "falhou",

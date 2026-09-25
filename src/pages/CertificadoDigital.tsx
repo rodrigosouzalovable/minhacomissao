@@ -35,15 +35,19 @@ type Config = { id: string; motor_ativo: boolean; ufs: string[]; cnaes: string[]
 
 type Log = { id: string; janela: number | null; data_referencia: string | null; encontrados: number; novos: number; duplicados: number; sem_telefone: number; erro: string | null; manual: boolean; created_at: string };
 type ChaveStatus = { configurada: boolean; origem: "painel" | "ambiente" | null; sufixo: string | null; updated_at: string | null };
-type MetricaExperimento = { janela: number; enviados: number; entregues: number; lidos: number; respondidos: number; interessados: number; recusas: number; numerosErrados: number; optouts: number; transferencias: number };
+type MetricaExperimento = { cnae: string; janela: number; coletados: number; validos: number; enviados: number; entregues: number; respondidos: number; interessados: number; recusas: number; numerosErrados: number; optouts: number; transferencias: number };
 type Preparacao = { id: string; quantidade_alvo: number; status: string; cnpjs_consultados: number; leads_novos: number; numeros_verificados: number; confirmados_whatsapp: number; erro: string | null; job_id: string | null; created_at: string };
 
 const JANELAS_EXPERIMENTO = [5, 10, 15, 20, 25, 30];
-const DATAS_EXPERIMENTO = ["23/09", "24/09", "25/09", "28/09", "29/09", "30/09"];
+const NICHOS = [{ cnae: "8650003", nome: "Psicologia" }, { cnae: "8630504", nome: "Odontologia" }, { cnae: "6920601", nome: "Contabilidade" }, { cnae: "7020400", nome: "Consultoria" }];
 
 function indiceExperimentoHoje() {
   const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  return ["2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28", "2026-09-29", "2026-09-30"].indexOf(hoje);
+  const inicio = new Date("2026-09-23T12:00:00Z");
+  const fim = new Date(`${hoje}T12:00:00Z`);
+  let uteis = 0;
+  while (inicio < fim) { inicio.setUTCDate(inicio.getUTCDate() + 1); if (![0, 6].includes(inicio.getUTCDay())) uteis++; }
+  return uteis < 24 ? uteis % JANELAS_EXPERIMENTO.length : -1;
 }
 
 function telefoneExibicao(tel: string | null) {
@@ -197,15 +201,31 @@ export default function CertificadoDigital() {
     staleTime: 2_000,
   });
   const { data: metricasExperimento = [] } = useQuery({ queryKey: ["certificado-metricas-experimento"], queryFn: async () => {
-    const { data, error } = await supabase.from("certificado_prospeccao_envios").select("status,resposta_classificacao,interesse_confirmado,transferido_humano,certificado_leads!inner(dias_desde_abertura)").eq("template_nome", "cnpj_atualizado_2").limit(5000);
-    if (error) throw error;
-    return JANELAS_EXPERIMENTO.map((janela) => {
-      const itens = (data ?? []).filter((item) => Number((item as any).certificado_leads?.dias_desde_abertura) === janela);
+    const envios: any[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase.from("certificado_prospeccao_envios").select("status,reservado_em,resposta_classificacao,interesse_confirmado,transferido_humano,certificado_leads!inner(cnae,data_abertura)").eq("template_nome", "cnpj_atualizado_2").range(offset, offset + 999);
+      if (error) throw error;
+      envios.push(...(data ?? []));
+      if ((data ?? []).length < 1000) break;
+    }
+    const contagens: { cnae: string | null; dias_desde_abertura: number | null; whatsapp_status: string }[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase.from("certificado_leads").select("cnae,dias_desde_abertura,whatsapp_status").in("cnae", NICHOS.map((n) => n.cnae)).in("dias_desde_abertura", JANELAS_EXPERIMENTO).range(offset, offset + 999);
+      if (error) throw error;
+      contagens.push(...(data ?? []));
+      if ((data ?? []).length < 1000) break;
+    }
+    return NICHOS.flatMap(({ cnae }) => JANELAS_EXPERIMENTO.map((janela) => {
+      const itens = envios.filter((item) => {
+        const dataAbertura = String(item.certificado_leads?.data_abertura ?? "").slice(0, 10);
+        const reservaBrt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.reservado_em));
+        return item.certificado_leads?.cnae === cnae && dataAbertura && Math.round((Date.parse(`${reservaBrt}T12:00:00Z`) - Date.parse(`${dataAbertura}T12:00:00Z`)) / 86400000) === janela;
+      });
+      const captados = contagens.filter((lead) => lead.cnae === cnae && lead.dias_desde_abertura === janela);
       return {
-        janela,
-        enviados: itens.length,
+        cnae, janela, coletados: captados.length, validos: captados.filter((lead) => lead.whatsapp_status === "com_whatsapp").length,
+        enviados: itens.filter((item) => item.status !== "reservado").length,
         entregues: itens.filter((item) => ["entregue", "lido", "respondido"].includes(item.status)).length,
-        lidos: itens.filter((item) => ["lido", "respondido"].includes(item.status)).length,
         respondidos: itens.filter((item) => item.status === "respondido").length,
         interessados: itens.filter((item) => item.interesse_confirmado).length,
         recusas: itens.filter((item) => item.resposta_classificacao === "recusa").length,
@@ -213,7 +233,7 @@ export default function CertificadoDigital() {
         optouts: itens.filter((item) => item.resposta_classificacao === "optout").length,
         transferencias: itens.filter((item) => item.transferido_humano).length,
       } as MetricaExperimento;
-    });
+    }));
   }, staleTime: 30_000 });
 
   const salvarConfig = useMutation({
@@ -431,7 +451,7 @@ export default function CertificadoDigital() {
           </TabsContent>
           <TabsContent value="prospeccao" className="space-y-6">
               <Card className="border-primary/30"><CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between"><div><p className="font-semibold">Piloto Casa dos Dados</p><p className="text-sm text-muted-foreground">50 mensagens por número apto a cada dia útil, com intervalos de 30 a 90 segundos e atendimento pela Clara.</p></div><div className="flex items-center gap-3"><Badge variant={config?.prospeccao_ativa ? "default" : "outline"}>{config?.prospeccao_ativa ? "ATIVO" : "PREPARADO E PAUSADO"}</Badge><Switch checked={config?.prospeccao_ativa ?? false} onCheckedChange={(checked) => salvarConfig.mutate({ prospeccao_ativa: checked })} disabled={!templateSelecionado || instanciasAptas.length === 0 || salvarConfig.isPending} /></div></CardContent></Card>
-              <Card><CardHeader><CardTitle>Experimento por idade do CNPJ</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">50 contatos por número apto, sem misturar datas. A sequência encerra automaticamente após D+30.</p><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Etapa</TableHead><TableHead>Enviados</TableHead><TableHead>Entregues</TableHead><TableHead>Respostas</TableHead><TableHead>Interessados</TableHead><TableHead>Recusas</TableHead><TableHead>Errados</TableHead><TableHead>Opt-outs</TableHead><TableHead>Humano</TableHead><TableHead>Taxa resposta</TableHead><TableHead>Taxa interesse</TableHead></TableRow></TableHeader><TableBody>{metricasExperimento.map((metrica, indice) => <TableRow key={metrica.janela}><TableCell><Badge variant={indice === etapaAtual || (etapaAtual < 0 && indice === 0) ? "default" : "outline"}>D+{metrica.janela}</Badge></TableCell><TableCell>{metrica.enviados}</TableCell><TableCell>{metrica.entregues}</TableCell><TableCell>{metrica.respondidos}</TableCell><TableCell>{metrica.interessados}</TableCell><TableCell>{metrica.recusas}</TableCell><TableCell>{metrica.numerosErrados}</TableCell><TableCell>{metrica.optouts}</TableCell><TableCell>{metrica.transferencias}</TableCell><TableCell>{metrica.entregues > 0 ? `${((metrica.respondidos / metrica.entregues) * 100).toFixed(1)}%` : "—"}</TableCell><TableCell>{metrica.entregues > 0 ? `${((metrica.interessados / metrica.entregues) * 100).toFixed(1)}%` : "—"}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card>
+              <Card><CardHeader><CardTitle>Resultados por atividade e idade do CNPJ</CardTitle></CardHeader><CardContent className="space-y-4"><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Atividade</TableHead><TableHead>Faixa</TableHead><TableHead>Captados</TableHead><TableHead>WhatsApps</TableHead><TableHead>Enviados</TableHead><TableHead>Entregues</TableHead><TableHead>Respostas</TableHead><TableHead>Interessados</TableHead><TableHead>Recusas</TableHead><TableHead>Errados</TableHead><TableHead>Opt-outs</TableHead><TableHead>Humano</TableHead><TableHead>Taxa resposta</TableHead><TableHead>Taxa interesse</TableHead></TableRow></TableHeader><TableBody>{metricasExperimento.map((metrica) => <TableRow key={`${metrica.cnae}-${metrica.janela}`}><TableCell>{NICHOS.find((n) => n.cnae === metrica.cnae)?.nome}</TableCell><TableCell><Badge variant={JANELAS_EXPERIMENTO[etapaAtual] === metrica.janela ? "default" : "outline"}>D+{metrica.janela}</Badge></TableCell><TableCell>{metrica.coletados}</TableCell><TableCell>{metrica.validos}</TableCell><TableCell>{metrica.enviados}</TableCell><TableCell>{metrica.entregues}</TableCell><TableCell>{metrica.respondidos}</TableCell><TableCell>{metrica.interessados}</TableCell><TableCell>{metrica.recusas}</TableCell><TableCell>{metrica.numerosErrados}</TableCell><TableCell>{metrica.optouts}</TableCell><TableCell>{metrica.transferencias}</TableCell><TableCell>{metrica.entregues >= 20 ? `${((metrica.respondidos / metrica.entregues) * 100).toFixed(1)}%` : "—"}</TableCell><TableCell>{metrica.entregues >= 20 ? `${((metrica.interessados / metrica.entregues) * 100).toFixed(1)}%` : "—"}</TableCell></TableRow>)}</TableBody></Table></div><p className="text-xs text-muted-foreground">Taxas exibidas a partir de 20 entregas por grupo.</p></CardContent></Card>
             <div className="grid gap-4 lg:grid-cols-2">
                <Card><CardHeader><CardTitle>Template e números participantes</CardTitle></CardHeader><CardContent className="space-y-4"><div className="rounded-md border p-3"><Label>Template fixo</Label><p className="mt-1 font-medium">cnpj_atualizado_2</p><p className="mt-1 text-xs text-muted-foreground">Olá falo com o(a) responsável por NOME DA EMPRESA? informamos que o processo de emissão do seu CNPJ foi atualizado.</p></div><div><Label>Números de novas BMs com template aprovado</Label><div className="mt-2 space-y-2">{metaInstancias.filter((inst) => templateStatus.some((item) => item.instancia_id === inst.id && item.status === "approved")).map((inst) => { const apta = instanciasAptas.some((item) => item.id === inst.id); return <div key={inst.id} className="flex items-start justify-between gap-3 rounded-md border p-3"><span className="min-w-0"><span className="block font-medium">{inst.nome}</span><span className="block text-xs text-muted-foreground">{inst.display_phone || "Sem telefone"} · {inst.saude_status || "Sem status"} · {inst.saude_quality || "Qualidade desconhecida"}</span></span><Badge variant={apta ? "default" : "outline"}>{apta ? "50 por dia" : "Indisponível"}</Badge></div>; })}{metaInstancias.length === 0 && <p className="text-sm text-muted-foreground">Nenhum número está marcado para aquecimento de nova BM.</p>}{metaInstancias.length > 0 && !metaInstancias.some((inst) => templateStatus.some((item) => item.instancia_id === inst.id && item.status === "approved")) && <p className="text-sm text-muted-foreground">O template ainda não está aprovado nos números marcados.</p>}</div></div><div className="rounded-md border p-3 text-sm"><div className="flex justify-between"><span>Enviados hoje</span><strong>{enviosHoje} / {metaDiaria}</strong></div><div className="mt-2 flex justify-between"><span>Números aptos</span><strong>{instanciasAptas.length} de {metaInstancias.length}</strong></div><div className="mt-2 flex justify-between"><span>Cota individual</span><strong>{config?.limite_diario ?? 50} por número</strong></div></div></CardContent></Card>
                 <Card><CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" />Preparação</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm text-muted-foreground">O piloto está preparado e pausado. A simulação pode ser usada sem disparar mensagens.</p><Button variant="outline" className="w-full justify-start" onClick={() => processar.mutate({ simulacao: true })} disabled={processar.isPending}><Activity className="mr-2 h-4 w-4" />Simular próximo envio</Button><div className="flex gap-2"><Input value={telefoneTeste} onChange={(e) => setTelefoneTeste(e.target.value)} placeholder="Telefone para teste" disabled={!config?.prospeccao_ativa} /><Button variant="outline" onClick={() => processar.mutate({ modo_teste: true, telefone_teste: telefoneTeste })} disabled={!config?.prospeccao_ativa || processar.isPending || telefoneTeste.replace(/\D/g, "").length < 10}><Send className="mr-2 h-4 w-4" />Testar</Button></div><p className="text-xs text-muted-foreground">Os disparos e a preparação manual permanecem bloqueados enquanto o piloto estiver pausado.</p></CardContent></Card>
