@@ -901,7 +901,12 @@ export default function InboxMeta() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const agendarRefetch = () => {
       if (timer) return; // agrupa rajadas de eventos em uma única leitura
-      timer = setTimeout(() => { timer = null; fetchContatos(); }, 1500);
+      // Atualizações em lote não devem reler até 20 páginas de etiquetas a cada mensagem.
+      // Ao voltar para a aba, visibilitychange reconcilia a lista imediatamente.
+      timer = setTimeout(() => {
+        timer = null;
+        if (document.visibilityState === 'visible') fetchContatos();
+      }, 15000);
     };
     const contatosFilter = currentFolderId ? { filter: `folder_id=eq.${currentFolderId}` } : {};
     const channel = supabase
