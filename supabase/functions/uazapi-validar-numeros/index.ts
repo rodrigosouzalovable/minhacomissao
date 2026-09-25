@@ -2,6 +2,7 @@
 // Distribui os lotes em paralelo entre as instâncias conectadas, o que permite
 // validar listas grandes (milhares) sem depender de um único número.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { telefoneMeta } from '../_shared/meta-destinatario.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,8 +22,7 @@ const REQUEST_TIMEOUT_MS = 45_000;
 const MAX_RETRIES = 1;
 
 function formatPhone(phone: string): string {
-  const clean = String(phone || '').replace(/\D/g, '');
-  return clean.startsWith('55') ? clean : `55${clean}`;
+  return telefoneMeta(phone) || '';
 }
 
 type Inst = { id: string; nome: string; server_url: string; instance_token: string };
@@ -77,6 +77,19 @@ Deno.serve(async (req) => {
     if (!Array.isArray(numbers) || numbers.length === 0) {
       return json({ error: 'numbers array é obrigatório' }, 400);
     }
+    // UAZAPI checks here are for Brazilian numbers. A negative check of an
+    // international Meta test number must never remove it from a Meta campaign.
+    const international = numbers.filter((n: string) => {
+      const normalized = formatPhone(n);
+      return !normalized || !normalized.startsWith('55');
+    });
+    const nacionais = numbers.filter((n: string) => {
+      const normalized = formatPhone(n);
+      return normalized && normalized.startsWith('55');
+    });
+    if (nacionais.length === 0) {
+      return json({ valid: [], invalid: [], errors: international, total: numbers.length, total_valid: 0, total_invalid: 0, total_errors: international.length });
+    }
 
     const { data: instRows, error: instErr } = await supabase
       .from('user_whatsapp_instances')
@@ -101,16 +114,16 @@ Deno.serve(async (req) => {
       return json({ error: 'Nenhuma instância UAZAPI conectada no momento', valid: [], invalid: [], errors: numbers, sem_validadores: true });
     }
 
-    const formatted = numbers.map((n: string) => formatPhone(n));
+    const formatted = nacionais.map((n: string) => formatPhone(n));
     type B = { batch: string[]; original: string[]; index: number };
     const batches: B[] = [];
     for (let i = 0; i < formatted.length; i += BATCH_SIZE) {
-      batches.push({ batch: formatted.slice(i, i + BATCH_SIZE), original: numbers.slice(i, i + BATCH_SIZE), index: batches.length + 1 });
+      batches.push({ batch: formatted.slice(i, i + BATCH_SIZE), original: nacionais.slice(i, i + BATCH_SIZE), index: batches.length + 1 });
     }
 
     const valid: string[] = [];
     const invalid: string[] = [];
-    const errors: string[] = [];
+    const errors: string[] = [...international];
 
     // Uma "worker" por instância conectada, consumindo a fila de lotes.
     let cursor = 0;

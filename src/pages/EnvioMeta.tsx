@@ -122,8 +122,12 @@ type ClienteRow = {
 };
 
 function normalizeTelKey(t: string): string {
-  const d = String(t || "").replace(/\D+/g, "");
+  const input = String(t || "").trim();
+  const d = input.replace(/\D+/g, "");
   if (!d) return "";
+  if (input.startsWith("+") || input.startsWith("00")) return input.startsWith("00") ? d.slice(2) : d;
+  // Meta test numbers exported without '+': +1 555 is already country-coded.
+  if (/^1555\d{7}$/.test(d)) return d;
   if (d.startsWith("55") && d.length >= 12) return d;
   if (d.length === 10 || d.length === 11) return "55" + d;
   return d;
@@ -1022,6 +1026,11 @@ export default function EnvioMeta() {
     }
     const recipientsDedup = parseRecipients(dedup.texto, isentosDedup);
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
+    const ambiguous = recipientsDedup.filter((c) => {
+      const raw = c.telefone.replace(/\D/g, "");
+      return raw.length < 10 || raw.length > 15 || (!c.telefone.startsWith("+") && !raw.startsWith("55") && !/^1555\d{7}$/.test(raw) && raw.length !== 10 && raw.length !== 11);
+    });
+    if (ambiguous.length) return toast.error(`Confira o DDI de ${ambiguous.length} número(s): ${ambiguous[0].telefone}`);
 
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
@@ -1049,7 +1058,7 @@ export default function EnvioMeta() {
         ? `Agendar ${tplLinha} para iniciar em ${new Date(agendarParaISO).toLocaleString("pt-BR")}`
         : `Disparar ${tplLinha}`;
       if (!confirm(
-        `${bloco}${acaoLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?` +
+        `${bloco}${acaoLinha} para ${recipientsDedup.length} contatos em ${instanciasComCota.length} instância(s), com ${delayLinha}?\nPrimeiro destino final: ${normalizeTelKey(recipientsDedup[0].telefone)}` +
         (validarNoEnvio ? `\n\n🔎 A checagem de WhatsApp será feita durante o envio pelos números UAZAPI conectados.` : "") +
         (dedup.duplicados > 0 ? `\n\n🔁 ${dedup.duplicados} duplicado(s) já foram removidos.` : "")
       )) return;
