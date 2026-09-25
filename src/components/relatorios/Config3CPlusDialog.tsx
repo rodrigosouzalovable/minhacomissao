@@ -30,7 +30,7 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cfgId, setCfgId] = useState<string | null>(null);
-  const [baseUrl, setBaseUrl] = useState('https://app.3c.fluxoti.com.br/api/v1');
+  const [baseUrl, setBaseUrl] = useState('https://app.3c.fluxoti.com/api/v1');
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
   const [selecionadas, setSelecionadas] = useState<number[]>([]);
   const [quals, setQuals] = useState<Qual[]>([]);
@@ -229,7 +229,7 @@ export function Config3CPlusDialog({ onDone }: { onDone?: () => void }) {
 
               <Label>Endereço da API</Label>
               <div className="flex gap-2">
-                <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://app.3c.fluxoti.com.br/api/v1" />
+                <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://app.3c.fluxoti.com/api/v1" />
                 <Button onClick={testar} disabled={loading}>
                   <PlugZap className="h-4 w-4 mr-2" /> Testar conexão
                 </Button>
