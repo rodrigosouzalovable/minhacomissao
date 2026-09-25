@@ -69,11 +69,7 @@ Deno.serve(async (req) => {
     }
     if (!cfg.prospeccao_ativa && !simulacao && !modoTeste) return json({ error: "Piloto desativado" }, 409);
     if (!modoTeste && !preparacaoManual && janelaExperimento === null) {
-       if (etapaPiloto(diaBrt()) === null && diaBrt() >= "2026-09-23") {
-        await service.from("certificado_config").update({ prospeccao_ativa: false, prospeccao_pausada_motivo: "Experimento D+5 a D+30 concluído" }).eq("id", cfg.id);
-        return json({ success: true, skipped: true, motivo: "Experimento D+5 a D+30 concluído" });
-      }
-       return json({ success: true, skipped: true, motivo: "O experimento ainda não começou" });
+      return json({ success: true, skipped: true, motivo: "O experimento ainda não começou" });
     }
 
     const inicioDia = `${diaBrt()}T03:00:00.000Z`;
