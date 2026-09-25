@@ -731,6 +731,28 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       return { advanced: false, waitMs };
     }
     if (blocked === 'sem_disponivel') {
+      if (instanciaCertificado) {
+        const motivo = pickResp?.error || 'Instância reservada indisponível; nenhum envio confirmado';
+        await supabase.from('envio_meta_job_item').update({
+          status: 'erro',
+          erro: motivo,
+          processado_em: new Date().toISOString(),
+        }).eq('id', pend.id).eq('status', 'pendente');
+        if (typeof varsPend.certificado_envio_id === 'string') {
+          await supabase.from('certificado_prospeccao_envios').update({
+            status: 'falha',
+            erro: motivo,
+            updated_at: new Date().toISOString(),
+          }).eq('id', varsPend.certificado_envio_id).eq('status', 'reservado');
+        }
+        await supabase.rpc('envio_meta_job_bump', {
+          _job_id: job.id,
+          _enviados_inc: 0,
+          _erros_inc: 1,
+          _proximo_em: new Date(Date.now() + 1_000).toISOString(),
+        });
+        return { advanced: true, delayMs: 1_000 };
+      }
       await encerrarJobSemDisponibilidade(job, pickResp?.error || 'Nenhuma instância disponível para envio');
       return { advanced: false, stop: true };
     }
