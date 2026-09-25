@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,6 +13,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Bell, User, Phone, FileText, CalendarClock, MessageSquare } from 'lucide-react';
+import { CopyButton } from '@/components/CopyButton';
 import successSound from '@/assets/success-sound.mp3';
 
 interface RetornoAlerta {
@@ -31,6 +31,7 @@ export function RetornoAlertChecker() {
   const navigate = useNavigate();
   const [fila, setFila] = useState<RetornoAlerta[]>([]);
   const [abrindo, setAbrindo] = useState(false);
+  const [avisoAbertura, setAvisoAbertura] = useState('');
   const notifiedIds = useRef<Set<string>>(new Set());
 
   const alertaRetorno = fila[0] ?? null;
@@ -93,33 +94,32 @@ export function RetornoAlertChecker() {
     };
   }, [user, checkRetornos]);
 
-  const fechar = () => setFila((prev) => prev.slice(1));
+  const fechar = () => { setAvisoAbertura(''); setFila((prev) => prev.slice(1)); };
+
+  const verRetorno = () => {
+    if (!alertaRetorno) return;
+    const id = alertaRetorno.id;
+    fechar();
+    navigate(`/retornos?retorno=${encodeURIComponent(id)}`);
+  };
 
   const abrirConversa = async () => {
     if (!alertaRetorno || abrindo) return;
     setAbrindo(true);
     try {
-      let contatoId = alertaRetorno.meta_contato_id;
-      // Retornos antigos não registravam a conversa: só aceitar um telefone inequívoco.
-      if (!contatoId) {
-        const sufixo = alertaRetorno.cliente_telefone.replace(/\D/g, '').slice(-8);
-        if (sufixo.length !== 8) {
-          toast.error('Este retorno antigo não identifica a conversa de origem.');
-          return;
-        }
-        const { data, error } = await supabase.from('meta_whatsapp_contatos')
-          .select('id').like('telefone', `%${sufixo}`).limit(2);
-        if (error) throw error;
-        if (data?.length !== 1) {
-          toast.error(data?.length ? 'Há mais de uma conversa para este telefone; não é possível identificar a origem.' : 'Conversa não encontrada na Inbox Meta.');
-          return;
-        }
-        contatoId = data[0].id;
+      const contatoId = alertaRetorno.meta_contato_id;
+      if (!contatoId) return verRetorno();
+      const { data, error } = await supabase.from('meta_whatsapp_contatos')
+        .select('id').eq('id', contatoId).maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        setAvisoAbertura('A conversa vinculada não está mais disponível ou você não tem acesso a esta caixa. Consulte os detalhes em Ver retorno.');
+        return;
       }
       fechar();
       navigate(`/admin/inbox-meta?contato=${encodeURIComponent(contatoId)}`);
     } catch {
-      toast.error('Não foi possível localizar a conversa. Tente novamente.');
+      setAvisoAbertura('Falha de conexão ao verificar a conversa. Tente novamente ou consulte Ver retorno.');
     } finally {
       setAbrindo(false);
     }
@@ -163,6 +163,7 @@ export function RetornoAlertChecker() {
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-3 w-3 text-muted-foreground" />
                   <span>{alertaRetorno?.cliente_telefone}</span>
+                  {alertaRetorno?.cliente_telefone && <CopyButton value={alertaRetorno.cliente_telefone} label="Telefone" />}
                 </div>
                 {alertaRetorno?.observacao && (
                   <p className="text-sm text-muted-foreground mt-2 border-t pt-2">
@@ -170,6 +171,10 @@ export function RetornoAlertChecker() {
                   </p>
                 )}
               </div>
+              {!alertaRetorno?.meta_contato_id && (
+                <p className="text-sm text-muted-foreground">Este retorno não registra uma conversa de origem. Consulte os detalhes em Ver retorno.</p>
+              )}
+              {avisoAbertura && <p role="alert" className="text-sm text-destructive">{avisoAbertura}</p>}
               {fila.length > 1 && (
                 <p className="text-xs text-muted-foreground">
                   +{fila.length - 1} outro(s) retorno(s) aguardando.
@@ -180,9 +185,12 @@ export function RetornoAlertChecker() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={fechar}>Entendido</AlertDialogCancel>
-          <AlertDialogAction onClick={(event) => { event.preventDefault(); void abrirConversa(); }} disabled={abrindo}>
-            <MessageSquare className="mr-2 h-4 w-4" />Abrir Conversa
+          <AlertDialogAction onClick={(event) => { event.preventDefault(); if (alertaRetorno?.meta_contato_id) void abrirConversa(); else verRetorno(); }} disabled={abrindo}>
+            <MessageSquare className="mr-2 h-4 w-4" />{alertaRetorno?.meta_contato_id ? 'Abrir Conversa' : 'Ver retorno'}
           </AlertDialogAction>
+          {alertaRetorno?.meta_contato_id && avisoAbertura && (
+            <AlertDialogAction onClick={(event) => { event.preventDefault(); verRetorno(); }} className="bg-secondary text-secondary-foreground hover:bg-secondary/80">Ver retorno</AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

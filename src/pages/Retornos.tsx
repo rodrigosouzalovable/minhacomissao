@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { ArrowLeft, Mic, MicOff, Trash2, Check, Calendar, User, Phone, FileText, Loader2, Plus, MessageCircle, DollarSign, Hash, CalendarDays, UserCircle, CheckCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -128,6 +128,9 @@ export default function Retornos() {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const retornoDestacado = searchParams.get('retorno');
+  const destaqueAplicado = useRef<string | null>(null);
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [retornos, setRetornos] = useState<Retorno[]>([]);
@@ -233,6 +236,20 @@ export default function Retornos() {
   const retornosFiltrados = funcionarioFilter === 'todos'
     ? retornos
     : retornos.filter(r => r.user_id === funcionarioFilter);
+
+  useEffect(() => {
+    if (!retornoDestacado || loadingRetornos || destaqueAplicado.current === retornoDestacado) return;
+    if (retornos.some(r => r.id === retornoDestacado)) {
+      setFuncionarioFilter('todos');
+      destaqueAplicado.current = retornoDestacado;
+      const timer = window.setTimeout(() => document.getElementById(`retorno-${retornoDestacado}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+      return () => window.clearTimeout(timer);
+    }
+    toast({ variant: 'destructive', title: 'Retorno não disponível', description: 'Este retorno foi removido ou você não tem acesso a ele.' });
+    const next = new URLSearchParams(searchParams);
+    next.delete('retorno');
+    setSearchParams(next, { replace: true });
+  }, [retornoDestacado, loadingRetornos, retornos, searchParams, setSearchParams, toast]);
 
   const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
@@ -878,7 +895,7 @@ export default function Retornos() {
           ) : (
             <div className="grid gap-4">
               {retornosFiltrados.map((retorno) => (
-                <Card key={retorno.id} className={retorno.status === 'concluido' ? 'opacity-60' : ''}>
+                <Card id={`retorno-${retorno.id}`} key={retorno.id} className={`${retorno.status === 'concluido' ? 'opacity-60' : ''} ${retornoDestacado === retorno.id ? 'ring-2 ring-primary' : ''}`}>
                   <CardContent className="pt-6">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                       <div className="space-y-2 flex-1">
