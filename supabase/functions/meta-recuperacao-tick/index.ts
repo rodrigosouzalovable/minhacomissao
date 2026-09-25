@@ -91,8 +91,8 @@ Deno.serve(async (req) => {
 
     const dia = hojeBrt();
     const maxPorDestino = Math.max(1, Number(cfg?.recuperacao_max_por_destino_dia ?? 2));
-    const intMin = Math.max(1200, Number(cfg?.recuperacao_intervalo_min_seg ?? 1200));
-    const intMax = Math.max(intMin, 2400);
+    const intMin = Math.min(2400, Math.max(1200, Number(cfg?.recuperacao_intervalo_min_seg ?? 1200)));
+    const intMax = Math.min(2400, Math.max(intMin, Number(cfg?.recuperacao_intervalo_max_seg ?? 2400)));
     const msgsMin = Math.min(20, Math.max(1, Number(cfg?.recuperacao_msgs_min_dia ?? 10)));
     const msgsMax = Math.min(20, Math.max(msgsMin, Number(cfg?.recuperacao_msgs_max_dia ?? 20)));
 
@@ -163,6 +163,7 @@ Deno.serve(async (req) => {
       const destino = rodada[Math.floor(Math.random() * rodada.length)];
       if (simulacao) {
         resultados.push({ instancia: inst.nome, destino: destino.tipo, metaDia, enviados_hoje: meus.length, simulado: true });
+        usoDestino.set(destino.telefone.slice(-8), (usoDestino.get(destino.telefone.slice(-8)) || 0) + 1);
         processadas++;
         continue;
       }
