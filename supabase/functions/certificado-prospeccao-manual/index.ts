@@ -183,6 +183,7 @@ Deno.serve(async (req) => {
       if (action === "continuar" && preparacao.status !== "pausada" && !leaseExpirou) return json({ error: "Esta preparação não está aguardando continuação" }, 409);
       if (action === "continuar") await atualizar(service, preparacao.id, { status: "pendente", erro: null, lease_ate: null });
       const { data: config } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
+      if (!config?.prospeccao_ativa) return json({ error: "A prospecção está pausada; nenhuma preparação será retomada" }, 409);
       const trabalho = processarLote(service, { ...preparacao, status: action === "continuar" ? "pendente" : preparacao.status, config }, Math.min(50, Math.max(1, Number(body?.profundidade ?? 50))))
         .catch(async (error) => {
           console.error("Falha na preparação", error);
@@ -203,6 +204,7 @@ Deno.serve(async (req) => {
     const { data: cfg, error: cfgError } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
     if (cfgError) throw cfgError;
     if (!cfg?.motor_ativo) return json({ error: "Ative a coleta antes de iniciar" }, 409);
+    if (!cfg.prospeccao_ativa) return json({ error: "A prospecção está pausada; nenhuma preparação será iniciada" }, 409);
     const modoCasaDados = cfg.modo_teste_casa_dados === true;
     const templateNome = modoCasaDados ? TEMPLATE_TESTE : cfg.template_nome;
     const templateIdioma = "pt_BR";
