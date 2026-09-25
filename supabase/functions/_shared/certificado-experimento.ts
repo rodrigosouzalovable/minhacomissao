@@ -11,7 +11,7 @@ export function etapaPiloto(hoje: string): { janela: number; ciclo: number } | n
     cursor.setUTCDate(cursor.getUTCDate() + 1);
     if (![0, 6].includes(cursor.getUTCDay())) diasUteis++;
   }
-  // Quatro passagens por cada faixa permitem observar todos os segmentos.
-  if (diasUteis >= JANELAS_PILOTO.length * 4) return null;
+  // Repete a sequência em dias úteis; o piloto não deve desligar sozinho após
+  // quatro passagens se a prospecção diária continua habilitada.
   return { janela: JANELAS_PILOTO[diasUteis % JANELAS_PILOTO.length], ciclo: Math.floor(diasUteis / JANELAS_PILOTO.length) };
 }

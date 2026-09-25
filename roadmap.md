@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Acompanhar o lote retomado do Certificado (117 contatos, 12 instâncias) até confirmar entregas reais; o primeiro envio foi aceito pela Meta, não necessariamente entregue
 - [ ] Verificar que o novo lote de teste Meta do Thiago preserva +1 sem retomar campanhas canceladas; conferir entrega real em destino apto
 - [ ] Confirmar com o Thiago a submissão real de template por seus números (sem disparar mensagens) e, para mídia sem acesso ao App padrão, vincular a BM/App dele
 - [x] Corrigir DDI internacional e classificação das recusas #131026 nas campanhas do Thiago sem punir as instâncias
@@ -11,7 +12,7 @@
 - [x] Liberar submissão de templates MARKETING para aprovação da Meta sem liberar disparos
 - [x] Substituir “Marcar como concluído” por “Abrir Conversa” no aviso de retorno da Inbox Meta e abrir a conversa original sem concluir o lembrete
 - [ ] Validar o endereço da API 3C Plus e a sincronização autenticada com o fornecedor (o endereço .com.br informado não resolve; o .com responde 404 para a rota consultada)
-- [ ] Validar a retomada real da preparação e o processamento do Certificado após revisão da recusa Meta #131031, mantendo a prospecção pausada
+- [x] Validar a retomada do processamento do Certificado após isolar o número com recusa #131031; prospecção reativada somente em dias úteis
 - [ ] Acompanhar primeiro ciclo do piloto Casa dos Dados por quatro CNAEs e confirmar respostas reais da recuperação Meta/UAZAPI (aguarda destinatários elegíveis e janela de envio)
 - [ ] Concluir e confirmar o novo lote de até 750 mensagens do Certificado, 50 por cada uma das 15 instâncias GREEN
 - [x] Confirmar a entrega das 100 mensagens iniciais do aquecimento do Certificado, 50 por cada número apto
@@ -32,6 +33,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Reativar prospecção do Certificado em dias úteis, isolar a instância recusada #131031, preservar histórico e permitir nova tentativa somente após falha sem envio confirmado
 - [x] Indexar vínculos por etiqueta e conversas Meta não lidas; agrupar atualização da Inbox para reduzir leituras redundantes
 - [x] Corrigir finalização atômica das mensagens da Clara e respostas de erro do envio Meta sem disparos de teste
 - [x] Corrigir a importação dos testes internacionais sem DDI 55 e impedir que a verificação UAZAPI classifique destinos internacionais como sem WhatsApp

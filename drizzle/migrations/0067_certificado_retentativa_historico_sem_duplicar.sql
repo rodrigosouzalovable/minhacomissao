@@ -1,0 +1,3 @@
+ALTER TABLE public.certificado_prospeccao_envios DROP CONSTRAINT certificado_prospeccao_envios_lead_id_key;
+CREATE UNIQUE INDEX certificado_prospeccao_lead_ativo_unico ON public.certificado_prospeccao_envios (lead_id) WHERE status IN ('reservado','enviado','entregue','lido','respondido');
+COMMENT ON INDEX public.certificado_prospeccao_lead_ativo_unico IS 'Preserva o histórico de falhas, mas impede reservas ou envios simultâneos para o mesmo lead.';

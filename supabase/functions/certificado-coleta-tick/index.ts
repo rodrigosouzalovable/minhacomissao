@@ -29,6 +29,9 @@ Deno.serve(async (req) => {
     }
 
     const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    if ([0, 6].includes(new Date(`${hoje}T12:00:00Z`).getUTCDay())) {
+      return resposta({ success: true, skipped: true, motivo: "Coleta limitada a dias úteis" });
+    }
     const etapa = etapaPiloto(hoje);
     if (!etapa) return resposta({ success: true, skipped: true, motivo: "Fora do calendário do piloto" });
     const filtro = (query: any) => query.in("cnae", CNAES_PILOTO).eq("dias_desde_abertura", etapa.janela).eq("data_abertura", new Date(new Date(`${hoje}T12:00:00Z`).getTime() - etapa.janela * 86400000).toISOString().slice(0, 10));
