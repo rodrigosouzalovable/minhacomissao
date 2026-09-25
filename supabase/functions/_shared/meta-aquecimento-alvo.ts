@@ -93,7 +93,7 @@ export async function destinosAquecimento(
     .is("teste_aquecimento_ultimo_erro", null);
 
   const destinosTeste = (testes || [])
-    .filter((d: any) => !d.saude_status || String(d.saude_status).toUpperCase() === "CONNECTED")
+    .filter((d: any) => String(d.saude_status).toUpperCase() === "CONNECTED")
     .map((d: any) => ({
       id: d.id,
       nome: d.nome,
@@ -102,7 +102,8 @@ export async function destinosAquecimento(
     }))
     .filter((d: DestinoAquecimento) => d.telefone.length >= 10);
 
-  return [...destinosUazapi, ...destinosTeste];
+  // O mesmo telefone pode estar cadastrado nas duas fontes; nunca contá-lo duas vezes.
+  return [...new Map([...destinosUazapi, ...destinosTeste].map((d) => [d.telefone.slice(-8), d])).values()];
 }
 
 export interface TemplateAquecimento {

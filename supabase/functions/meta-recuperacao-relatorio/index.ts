@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       .eq('dia', dia)
       .limit(5000);
 
-    const destinos = await destinosAquecimento(supabase);
+    const destinos = await destinosAquecimento(supabase, { incluirMetaTeste: true });
     const sufDestinos = new Set(destinos.map((d) => suf8(d.telefone)));
 
     const inicioDia = new Date(`${dia}T00:00:00-03:00`).toISOString();
@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
       `📈 *Aquecimento de qualidade — ${hora}*\n\n` +
       `${linhas.join('\n')}\n\n` +
       `Total do dia: ${totalEnv} enviadas · ${totalResp} respostas recebidas\n` +
-      `As mensagens vão para os números UAZAPI da caixa AQUECIMENTO (09h–19h, 20–40 min entre envios) e o IAGO responde todas, gerando entrada real.\n` +
+      `Destinos disponíveis: ${destinos.filter(d => d.tipo === 'uazapi').length} UAZAPI e ${destinos.filter(d => d.tipo === 'meta_teste').length} testes Meta na caixa AQUECIMENTO. Envios 09h–19h, intervalos de 20–40 min; a melhora para GREEN depende da Meta.\n` +
       `Enquanto estiverem em recuperação, esses números ficam fora das campanhas.`;
 
     await notificarAdmin(supabase, {

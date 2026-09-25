@@ -20,7 +20,6 @@ import {
   hojeBrt,
   sorteio,
 } from "../_shared/meta-aquecimento-alvo.ts";
-import { GREEN_SOUL_BM_ID } from "../_shared/meta-bm-escalada-piloto.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,39 +44,40 @@ Deno.serve(async (req) => {
   try {
 
     const body = await req.json().catch(() => ({}));
-    const forcar = body?.forcar === true; // teste manual ignora janela
+    const forcar = body?.forcar === true; // teste manual ignora janela, nunca elegibilidade
+    const simulacao = body?.simulacao === true;
     const instanciaId: string | undefined = body?.instancia_id;
 
     const { data: cfg } = await supabase
       .from("meta_envio_pool_config").select("*").eq("id", 1).maybeSingle();
 
-    if (cfg?.recuperacao_auto === false && !forcar) {
+    if (cfg?.recuperacao_auto === false && !forcar && !simulacao) {
       return json({ ok: true, skipped: "recuperacao_desativada" });
     }
 
     const hIni = Number(String(cfg?.horario_inicio || "09:00").split(":")[0]) || 9;
     const hFim = Number(String(cfg?.horario_fim || "19:00").split(":")[0]) || 19;
     const janela = dentroJanelaAquecimento(Math.max(9, hIni), Math.min(19, hFim));
-    if (!janela.ok && !forcar) return json({ ok: true, skipped: janela.motivo });
+    if (!janela.ok && !forcar && !simulacao) return json({ ok: true, skipped: janela.motivo });
 
     let q = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, recuperacao_ativa, recuperacao_desde, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, dias_green_consecutivos, quarentena_ate, ativo, provider, instancia_teste_aquecimento")
+      .select("id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, saude_status, saude_ban_info, pausa_automatica_motivo, partner_client_id, recuperacao_ativa, recuperacao_desde, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, dias_green_consecutivos, quarentena_ate, ativo, provider, instancia_teste_aquecimento")
       .eq("ativo", true)
       .eq("provider", "meta")
       .eq("instancia_teste_aquecimento", false)
-      .eq("meta_bm_id", GREEN_SOUL_BM_ID)
       // Só os números próprios: parceiros Meta não usam o aquecimento de qualidade.
       .eq("aquecimento_qualidade_permitido", true)
       .eq("recuperacao_ativa", true);
     if (instanciaId) q = q.eq("id", instanciaId);
-    const { data: insts } = await q;
+    const { data: insts, error: instError } = await q;
+    if (instError) throw instError;
 
     if (!insts?.length) return json({ ok: true, skipped: "nenhuma_em_recuperacao" });
 
-    const destinos = await destinosAquecimento(supabase);
+    const destinos = await destinosAquecimento(supabase, { incluirMetaTeste: true });
     if (destinos.length === 0) {
-      return json({ ok: false, error: "nenhum número UAZAPI na pasta AQUECIMENTO" });
+      return json({ ok: true, skipped: "nenhum destino conectado na caixa AQUECIMENTO" });
     }
 
     const dia = hojeBrt();
@@ -90,13 +90,14 @@ Deno.serve(async (req) => {
     // Uso dos destinos hoje (limite por destino é global, não por emissor)
     const { data: logsHoje } = await supabase
       .from("meta_recuperacao_log")
-      .select("instancia_id, destino_instancia_id, enviado_em, status")
+      .select("instancia_id, destino_instancia_id, destino_telefone, enviado_em, status")
       .eq("dia", dia)
       .limit(5000);
     const usoDestino = new Map<string, number>();
     (logsHoje || []).forEach((l: any) => {
-      if (l.status !== "enviado" || !l.destino_instancia_id) return;
-      usoDestino.set(l.destino_instancia_id, (usoDestino.get(l.destino_instancia_id) || 0) + 1);
+      if (l.status !== "enviado") return;
+      const chave = String(l.destino_telefone || "").replace(/\D/g, "").slice(-8) || l.destino_instancia_id;
+      if (chave) usoDestino.set(chave, (usoDestino.get(chave) || 0) + 1);
     });
 
     const resultados: any[] = [];
@@ -104,9 +105,16 @@ Deno.serve(async (req) => {
 
     for (const inst of insts as any[]) {
       if (processadas >= MAX_INSTANCIAS_POR_RUN) break;
+      if (inst.partner_client_id || String(inst.saude_status).toUpperCase() !== "CONNECTED" ||
+          !["YELLOW", "RED"].includes(String(inst.saude_quality).toUpperCase()) ||
+          inst.saude_ban_info && Object.keys(inst.saude_ban_info).length > 0 ||
+          /account_violation|payment|pagamento|ban|blocked|restri[cç]/i.test(String(inst.pausa_automatica_motivo || ""))) {
+        resultados.push({ instancia: inst.nome, skip: "remetente_inapto" });
+        continue;
+      }
 
       // Intervalo entre mensagens do mesmo número
-      if (!forcar && inst.recuperacao_proximo_envio_em &&
+      if (!forcar && !simulacao && inst.recuperacao_proximo_envio_em &&
           new Date(inst.recuperacao_proximo_envio_em) > new Date()) {
         resultados.push({ instancia: inst.nome, skip: "aguardando_intervalo" });
         continue;
@@ -116,7 +124,7 @@ Deno.serve(async (req) => {
       let metaDia = Number(inst.recuperacao_msgs_meta_dia || 0);
       if (!metaDia) {
         metaDia = sorteio(msgsMin, msgsMax);
-        await supabase.from("meta_whatsapp_instances")
+        if (!simulacao) await supabase.from("meta_whatsapp_instances")
           .update({ recuperacao_msgs_meta_dia: metaDia }).eq("id", inst.id);
       }
 
@@ -131,14 +139,24 @@ Deno.serve(async (req) => {
       // Destino: rodízio, respeita limite por destino e evita repetir o último
       const ultimo = meus
         .sort((a: any, b: any) => new Date(b.enviado_em).getTime() - new Date(a.enviado_em).getTime())[0];
+      const ultimoTelefone = String(ultimo?.destino_telefone || "").replace(/\D/g, "").slice(-8);
+      const telefoneProprio = String(inst.display_phone || "").replace(/\D/g, "").slice(-8);
       const elegiveis = destinos.filter((d) =>
-        (usoDestino.get(d.id) || 0) < maxPorDestino && d.id !== ultimo?.destino_instancia_id
+        (usoDestino.get(d.telefone.slice(-8)) || 0) < Math.min(2, maxPorDestino) &&
+        d.telefone.slice(-8) !== ultimoTelefone && d.telefone.slice(-8) !== telefoneProprio && d.id !== inst.id
       );
       if (elegiveis.length === 0) {
         resultados.push({ instancia: inst.nome, skip: "sem_destino_disponivel" });
         continue;
       }
-      const destino = elegiveis[Math.floor(Math.random() * elegiveis.length)];
+      const menorUso = Math.min(...elegiveis.map((d) => usoDestino.get(d.telefone.slice(-8)) || 0));
+      const rodada = elegiveis.filter((d) => (usoDestino.get(d.telefone.slice(-8)) || 0) === menorUso);
+      const destino = rodada[Math.floor(Math.random() * rodada.length)];
+      if (simulacao) {
+        resultados.push({ instancia: inst.nome, destino: destino.tipo, metaDia, enviados_hoje: meus.length, simulado: true });
+        processadas++;
+        continue;
+      }
 
       const tpl = await escolherTemplateAprovado(inst, cfg?.aquecimento_template_utility);
       if (!tpl) {
@@ -179,7 +197,7 @@ Deno.serve(async (req) => {
 
       await supabase.from("meta_whatsapp_instances").update(patch).eq("id", inst.id);
 
-      if (envio.ok) usoDestino.set(destino.id, (usoDestino.get(destino.id) || 0) + 1);
+      if (envio.ok) usoDestino.set(destino.telefone.slice(-8), (usoDestino.get(destino.telefone.slice(-8)) || 0) + 1);
 
       // ===== Avisos no WhatsApp: início do aquecimento do dia e meta concluída =====
       const enviadosAgora = meus.length + (envio.ok ? 1 : 0);
@@ -203,7 +221,7 @@ Deno.serve(async (req) => {
               `${await linhaBmInstancia(supabase, inst)}\n` +
               `Qualidade atual: ${String(inst.saude_quality || "UNKNOWN").toUpperCase()} · dia ${diasEmRecup} de recuperação\n` +
               `Meta de hoje: ${metaDia} mensagens (intervalos de 20–40 min, 09h–19h)\n` +
-              `Destino: números UAZAPI da caixa AQUECIMENTO — o IAGO responde tudo, gerando entrada real\n` +
+              `Destino: números conectados UAZAPI ou testes Meta da caixa AQUECIMENTO\n` +
               (inst.quarentena_ate
                 ? `Fora das campanhas até ${new Date(inst.quarentena_ate).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}\n`
                 : "") +
