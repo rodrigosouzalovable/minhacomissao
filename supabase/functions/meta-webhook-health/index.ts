@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
       // Notifica só UMA vez por mudança de estado (evita aviso de hora em hora).
       const statusAnterior = (inst as any).webhook_saude_status ?? null;
       const mudouEstado = statusAnterior !== status;
-      const problema = status === "erro" || status === "perda_suspeita";
+      const problema = status === "erro" && out.subscribed === false || status === "perda_suspeita";
        if (problema && (mudouEstado || forceNotify)) {
 
         let corpo: string;
