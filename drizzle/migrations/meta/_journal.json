@@ -428,6 +428,13 @@
       "when": 1790268289211,
       "tag": "0060_clara_atomic_message_deduplication",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790338182445,
+      "tag": "0061_certificado_sufixos_usados_por_candidatos",
+      "breakpoints": true
     }
   ]
 }

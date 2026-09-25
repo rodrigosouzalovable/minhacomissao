@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Validar o endereço da API 3C Plus e a sincronização autenticada com o fornecedor (o endereço .com.br informado não resolve; o .com responde 404 para a rota consultada)
+- [ ] Validar a retomada real da preparação e o processamento do Certificado após revisão da recusa Meta #131031, mantendo a prospecção pausada
 - [ ] Acompanhar primeiro ciclo do piloto Casa dos Dados por quatro CNAEs e confirmar respostas reais da recuperação Meta/UAZAPI (aguarda destinatários elegíveis e janela de envio)
 - [ ] Concluir e confirmar o novo lote de até 750 mensagens do Certificado, 50 por cada uma das 15 instâncias GREEN
 - [x] Confirmar a entrega das 100 mensagens iniciais do aquecimento do Certificado, 50 por cada número apto

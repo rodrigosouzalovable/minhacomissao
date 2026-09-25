@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
       janelaExperimento = Number(data.janela);
       dataAlvoExperimento = String(data.data_alvo);
     }
-    if (!cfg.prospeccao_ativa && !simulacao && !modoTeste && !preparacaoManual) return json({ error: "Piloto desativado" }, 409);
+    if (!cfg.prospeccao_ativa && !simulacao && !modoTeste) return json({ error: "Piloto desativado" }, 409);
     if (!modoTeste && !preparacaoManual && janelaExperimento === null) {
        if (etapaPiloto(diaBrt()) === null && diaBrt() >= "2026-09-23") {
         await service.from("certificado_config").update({ prospeccao_ativa: false, prospeccao_pausada_motivo: "Experimento D+5 a D+30 concluído" }).eq("id", cfg.id);
@@ -136,13 +136,15 @@ Deno.serve(async (req) => {
       // e ainda faltam contatos para completar o limite diário.
       if (confirmados < metaConfirmados) {
         const inicioProcessamento = Date.now();
-        const LIMITE_COLETA_MS = 120_000;
+        // A coleta divide a mesma requisição com a verificação e a reserva;
+        // não pode consumir sozinha todo o tempo da função.
+        const LIMITE_COLETA_MS = 25_000;
         const janelas = janelaExperimento === null ? [] : [janelaExperimento];
         const resultados = [];
         for (const janela of janelas) {
           let paginaInicial = 1;
           while (Date.now() - inicioProcessamento < LIMITE_COLETA_MS && confirmados < metaConfirmados) {
-            const resultado = await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, true, { maxPaginas: 3, paginaInicial, maxTentativas: 1, timeoutMs: 15_000 });
+            const resultado = await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, true, { maxPaginas: 1, paginaInicial, maxTentativas: 1, timeoutMs: 10_000 });
             resultados.push(resultado);
             if (resultado.erro || resultado.erro_temporario) break;
             const faltam = Math.max(0, metaConfirmados - confirmados);
@@ -218,17 +220,27 @@ Deno.serve(async (req) => {
 
     const cotasRestantes = new Map<string, number>();
     if (modoCasaDados && !preparacaoManual) {
-      const { data: enviosDoDia, error: enviosDoDiaError } = await service.from("certificado_prospeccao_envios")
-        .select("instancia_id").eq("template_nome", templateNome).gte("reservado_em", inicioDia)
-        .in("status", ["reservado", "enviado", "entregue", "lido", "respondido"]);
-      if (enviosDoDiaError) throw enviosDoDiaError;
-      for (const instancia of participantes) {
-        const usados = (enviosDoDia ?? []).filter((envio: any) => envio.instancia_id === instancia.id).length;
+      const contagens = await Promise.all(participantes.map(async (instancia: any) => {
+        const { count, error } = await service.from("certificado_prospeccao_envios")
+          .select("id", { count: "exact", head: true }).eq("instancia_id", instancia.id)
+          .gte("reservado_em", inicioDia)
+          .in("status", ["reservado", "enviado", "entregue", "lido", "respondido"]);
+        if (error) throw error;
+        return { instancia, usados: Number(count ?? 0) };
+      }));
+      for (const { instancia, usados } of contagens) {
         const saldo = Math.max(0, cotaPorInstancia - usados);
         if (saldo > 0) cotasRestantes.set(instancia.id, saldo);
       }
       restante = [...cotasRestantes.values()].reduce((total, cota) => total + cota, 0);
       if (!restante) return json({ success: true, skipped: true, motivo: "Todos os números aptos já atingiram 50 mensagens hoje" });
+    } else if (!preparacaoManual && !modoTeste) {
+      const { count, error } = await service.from("certificado_prospeccao_envios")
+        .select("id", { count: "exact", head: true }).gte("reservado_em", inicioDia)
+        .in("status", ["reservado", "enviado", "entregue", "lido", "respondido"]);
+      if (error) throw error;
+      restante = Math.max(0, cotaPorInstancia - Number(count ?? 0));
+      if (!restante) return json({ success: true, skipped: true, motivo: "Limite diário de envios do Certificado atingido" });
     }
 
     if (modoTeste) {
@@ -246,17 +258,16 @@ Deno.serve(async (req) => {
     if (janelaExperimento !== null && dataAlvo) leadsQuery = leadsQuery.eq("data_abertura", dataAlvo);
     const { data: leadsCandidatos, error: leadsError } = await leadsQuery.order("created_at", { ascending: true }).limit(Math.max(restante * 4, restante));
     if (leadsError) throw leadsError;
+    const sufixosCandidatos = [...new Set((leadsCandidatos ?? []).map((lead: any) =>
+      String(lead.telefone_principal ?? "").replace(/\D/g, "").slice(-8)
+    ).filter((sufixo: string) => sufixo.length === 8))];
     const sufixosJaUsados = new Set<string>();
-    for (let inicio = 0; ; inicio += 1000) {
-      const { data: usados, error: usadosError } = await service.from("certificado_prospeccao_envios")
-        .select("certificado_leads!inner(telefone_principal)").in("status", ["reservado", "enviado", "entregue", "lido", "respondido"])
-        .range(inicio, inicio + 999);
+    for (let inicio = 0; inicio < sufixosCandidatos.length; inicio += 500) {
+      const { data: usados, error: usadosError } = await service.rpc("certificado_sufixos_usados_por_candidatos", {
+        p_sufixos: sufixosCandidatos.slice(inicio, inicio + 500),
+      });
       if (usadosError) throw usadosError;
-      for (const envio of usados ?? []) {
-        const telefone = String((envio as any).certificado_leads?.telefone_principal ?? "").replace(/\D/g, "");
-        if (telefone.length >= 8) sufixosJaUsados.add(telefone.slice(-8));
-      }
-      if ((usados ?? []).length < 1000) break;
+      for (const sufixo of usados ?? []) sufixosJaUsados.add(sufixo);
     }
     const candidatosIneditos = (leadsCandidatos ?? []).filter((lead: any) => {
       const telefone = String(lead.telefone_principal ?? "").replace(/\D/g, "");
