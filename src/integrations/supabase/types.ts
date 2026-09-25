@@ -11279,6 +11279,18 @@ export type Database = {
         Args: { p_contato_id: string; p_entrada_id: string }
         Returns: boolean
       }
+      clara_complete_message: {
+        Args: {
+          p_aguardando_humano: boolean
+          p_contato_id: string
+          p_contexto: Json
+          p_entrada_id: string
+          p_etapa: string
+          p_optout: boolean
+          p_ultima_resposta_em: string
+        }
+        Returns: boolean
+      }
       clara_finish_message: {
         Args: { p_contato_id: string; p_entrada_id: string }
         Returns: undefined
