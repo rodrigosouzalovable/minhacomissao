@@ -19,10 +19,11 @@ function graphFetch(url: string, init: RequestInit = {}) {
   return fetch(url, { ...init, signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS) });
 }
 
-function callbackFrom(data: any, expected: string): { url: string | null; valid: boolean; subscribed: boolean } {
+function callbackFrom(data: any, expected: string): { url: string | null; valid: boolean; subscribed: boolean; visible: boolean } {
   const apps = Array.isArray(data?.data) ? data.data : [];
-  const urls = apps.map((app: any) => app?.whatsapp_business_api_data?.override_callback_uri || app?.whatsapp_business_api_data?.link || null);
-  return { url: urls.find((url: string | null) => url === expected) || urls[0] || null, valid: urls.includes(expected), subscribed: apps.length > 0 };
+  // "link" é a página pública do app Meta, NÃO o endereço de callback.
+  const urls = apps.map((app: any) => app?.whatsapp_business_api_data?.override_callback_uri || null).filter(Boolean);
+  return { url: urls.find((url: string | null) => url === expected) || urls[0] || null, valid: urls.includes(expected), subscribed: apps.length > 0, visible: urls.length > 0 };
 }
 
 async function subscriptionStatus(wabaId: string, auth: Record<string, string>, expected: string) {
@@ -105,7 +106,7 @@ Deno.serve(async (req) => {
           out.subscribed = current.subscribed;
 
           // 2) Reinscreve se ausente ou apontando para outro serviço.
-          if (!current.valid) {
+        if (!current.subscribed || (current.visible && !current.valid)) {
           const verifyToken = tokenResolver.paraInstancia(inst.id);
           if (!verifyToken) {
             status = 'erro';
@@ -136,13 +137,17 @@ Deno.serve(async (req) => {
               const confirmed = await subscriptionStatus(inst.waba_id, auth, webhookUrl);
               if (confirmed.kind === 'confirmed') {
                 out.callback_url = confirmed.url;
-                status = confirmed.valid ? 'reinscrito' : 'erro';
-                if (!confirmed.valid) erro = 'Inscrição ainda ausente ou incorreta após tentativa de reinscrição';
+                status = confirmed.valid ? 'reinscrito' : confirmed.subscribed && !confirmed.visible ? 'inconclusiva' : 'erro';
+                if (status === 'erro') erro = 'Inscrição ainda ausente ou incorreta após tentativa de reinscrição';
+                if (status === 'inconclusiva') erro = 'A Meta confirmou a inscrição, mas não informou o endereço do callback';
               } else {
                 status = confirmed.kind;
                 erro = confirmed.error;
               }
             }
+          } else if (!current.visible) {
+            status = 'inconclusiva';
+            erro = 'A Meta confirmou a inscrição, mas não informou o endereço do callback';
           }
           }
         }

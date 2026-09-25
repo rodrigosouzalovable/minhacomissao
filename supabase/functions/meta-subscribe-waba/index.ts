@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
         out.subscriptions = await listRes.json();
         out.callback_confirmado = out.subscribe_ok && listRes.ok && Array.isArray(out.subscriptions?.data) &&
           out.subscriptions.data.some((app: any) =>
-            (app?.whatsapp_business_api_data?.override_callback_uri || app?.whatsapp_business_api_data?.link) === webhookUrl
+            app?.whatsapp_business_api_data?.override_callback_uri === webhookUrl
           );
         if (out.callback_confirmado) {
           const { error: saveError } = await supabase.from('meta_whatsapp_instances').update({
