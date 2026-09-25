@@ -428,7 +428,9 @@ export default function AcordoDetalhe() {
           p_parcelas: [{ id: pagamentoId, valor: novoValor, data: parcela.data_prevista }],
         });
         if (error) throw error;
-        await fetchAcordo();
+        const novoTotal = Math.round(pagamentos.reduce((sum, p) => sum + (p.id === pagamentoId ? novoValor : Number(p.valor_parcela)), 0) * 100) / 100;
+        setPagamentos(prev => prev.map(p => p.id === pagamentoId ? { ...p, valor_parcela: novoValor } : p));
+        setAcordo(prev => prev ? { ...prev, valor_total: novoTotal } : prev);
         setEditandoValorParcela(null);
         setNovoValorParcela('');
         toast({ title: 'Parcela atualizada!' });
