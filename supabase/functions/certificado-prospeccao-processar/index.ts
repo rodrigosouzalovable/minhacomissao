@@ -136,13 +136,15 @@ Deno.serve(async (req) => {
       // e ainda faltam contatos para completar o limite diário.
       if (confirmados < metaConfirmados) {
         const inicioProcessamento = Date.now();
-        const LIMITE_COLETA_MS = 120_000;
+        // A coleta divide a mesma requisição com a verificação e a reserva;
+        // não pode consumir sozinha todo o tempo da função.
+        const LIMITE_COLETA_MS = 25_000;
         const janelas = janelaExperimento === null ? [] : [janelaExperimento];
         const resultados = [];
         for (const janela of janelas) {
           let paginaInicial = 1;
           while (Date.now() - inicioProcessamento < LIMITE_COLETA_MS && confirmados < metaConfirmados) {
-            const resultado = await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, true, { maxPaginas: 3, paginaInicial, maxTentativas: 1, timeoutMs: 15_000 });
+            const resultado = await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, true, { maxPaginas: 1, paginaInicial, maxTentativas: 1, timeoutMs: 10_000 });
             resultados.push(resultado);
             if (resultado.erro || resultado.erro_temporario) break;
             const faltam = Math.max(0, metaConfirmados - confirmados);
