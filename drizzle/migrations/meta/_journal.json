@@ -484,6 +484,13 @@
       "when": 1790358825926,
       "tag": "0068_owner_agreement_installment_edit_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1790358930724,
+      "tag": "0069_tighten_agreement_owner_edit_allowlist",
+      "breakpoints": true
     }
   ]
 }
