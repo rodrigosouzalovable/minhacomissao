@@ -68,6 +68,7 @@ export default function EditarAcordo() {
   const [operadorId, setOperadorId] = useState('');
   const [operadorOriginal, setOperadorOriginal] = useState('');
   const [empresaOriginal, setEmpresaOriginal] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  const [telefoneOriginal, setTelefoneOriginal] = useState('');
   const [operadores, setOperadores] = useState<Array<{ user_id: string; nome: string | null }>>([]);
   const [parcelasOriginais, setParcelasOriginais] = useState<Array<{ id: string; numero_parcela: number; status: string; valor_parcela: number; data_prevista: string }>>([]);
   const [parcelasEditadas, setParcelasEditadas] = useState<Record<string, { valor: string; data: string }>>({});
@@ -130,6 +131,7 @@ export default function EditarAcordo() {
         const empresaCarregada = (acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda') || 'ume_novo_mundo';
         setEmpresa(empresaCarregada);
         setEmpresaOriginal(empresaCarregada);
+        setTelefoneOriginal(acordo.cliente_telefone || '');
         setOperadorId(acordo.user_id || '');
         setOperadorOriginal(acordo.user_id || '');
 
@@ -410,7 +412,7 @@ export default function EditarAcordo() {
                       }
                     }}
                     maxLength={14}
-                    disabled={false}
+                    disabled={!isAdmin}
                     required
                     className={cpfError ? 'border-destructive' : ''}
                   />
@@ -427,7 +429,7 @@ export default function EditarAcordo() {
                     value={form.clienteTelefone}
                     onChange={(e) => setForm({ ...form, clienteTelefone: formatPhone(e.target.value) })}
                     maxLength={15}
-                    disabled={!isAdmin}
+                    disabled={false}
                   />
                 </div>
               </div>
