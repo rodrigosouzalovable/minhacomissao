@@ -92,13 +92,13 @@ Deno.serve(async (req) => {
 
     const inicioDia = new Date(`${dia}T00:00:00-03:00`).toISOString();
     const remetentePorTelefone = new Map((insts || []).map((i: any) => [suf8(i.display_phone), i.id]));
-    const { data: msgs } = await supabase
+    const { data: msgs } = destinosEnviados.size ? await supabase
       .from('meta_whatsapp_mensagens')
       .select('instancia_id, telefone, direcao')
       .in('instancia_id', [...destinosEnviados.keys()])
       .eq('direcao', 'entrada')
       .gte('criado_em', inicioDia)
-      .limit(20000);
+      .limit(20000) : { data: [] };
 
     const respostas = new Map<string, number>();
     (msgs || []).forEach((m: any) => {
