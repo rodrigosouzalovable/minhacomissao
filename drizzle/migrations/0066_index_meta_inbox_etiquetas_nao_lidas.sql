@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS idx_meta_contato_etiquetas_etiqueta_contato ON public.meta_whatsapp_contato_etiquetas (etiqueta_id, contato_id);
+CREATE INDEX IF NOT EXISTS idx_meta_contatos_nao_lidos_instancia ON public.meta_whatsapp_contatos (instancia_id) WHERE arquivado = false AND nao_lido > 0;
