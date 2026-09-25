@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Confirmar com o Thiago a submissão real de template por seus números (sem disparar mensagens) e, para mídia sem acesso ao App padrão, vincular a BM/App dele
 - [x] Corrigir DDI internacional e classificação das recusas #131026 nas campanhas do Thiago sem punir as instâncias
 - [ ] Validar números reais de teste antes de retomar os lotes do Thiago (os destinos +1 555 atuais não têm entrega confirmada; nenhuma retomada automática)
 - [x] Liberar usuários para alterar somente o credor dos próprios acordos e excluir parcelas em massa sem selecionar as pagas
@@ -30,6 +31,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Permitir envio de templates do parceiro somente às suas instâncias vinculadas e adicionar observação editável nas instâncias Meta, visível no Envio Meta
 - [x] Impedir respostas duplicadas e simultâneas da Clara na caixa CERTIFICADO
 - [x] Corrigir atendimento comercial da Clara e aviso exclusivo ao admin nas transferências humanas
 - [x] Alterar o aquecimento do Certificado para 50 mensagens diárias por número marcado e apto

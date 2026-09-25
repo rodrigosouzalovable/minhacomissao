@@ -481,8 +481,9 @@ export default function MetaTemplates() {
     });
     setEnviando(false);
     if (error) { toast.error(error.message); return; }
+    if ((data as any)?.success === false) { toast.error((data as any)?.error || "Falha ao reenviar"); return; }
     if ((data as any)?.elegiveis === 0) { toast.info((data as any)?.mensagem || "Nenhuma falha para reenviar."); return; }
-    toast.success(`Reenviado: ${(data as any)?.sucessos ?? 0} ok, ${(data as any)?.falhas ?? 0} falhas`);
+    toast.info((data as any)?.message || `Reenvio iniciado em ${(data as any)?.total || 0} número(s). Confira o resultado por instância em Status.`);
     carregar();
   };
 

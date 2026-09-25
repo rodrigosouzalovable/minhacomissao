@@ -1,0 +1,2 @@
+ALTER TABLE public.meta_whatsapp_instances ADD COLUMN IF NOT EXISTS observacao text;
+COMMENT ON COLUMN public.meta_whatsapp_instances.observacao IS 'Observação livre da instância, exibida na API Oficial Meta e Envio Meta.';

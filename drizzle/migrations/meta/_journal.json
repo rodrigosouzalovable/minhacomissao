@@ -449,6 +449,13 @@
       "when": 1790343938547,
       "tag": "0063_allow_agreement_owner_change_creditor",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1790346942740,
+      "tag": "0064_meta_instance_observacoes",
+      "breakpoints": true
     }
   ]
 }
