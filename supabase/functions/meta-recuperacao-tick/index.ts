@@ -1,7 +1,7 @@
 // Recuperação automática de qualidade dos números Meta (cron a cada 10 min).
 // Números marcados com recuperacao_ativa (queda para YELLOW/RED) enviam, sozinhos,
-// um volume baixo de mensagens para os números UAZAPI da pasta AQUECIMENTO, que o
-// IAGO responde automaticamente — gerando entrada real e leitura.
+// um volume baixo de mensagens para UAZAPI e testes Meta aptos da caixa
+// AQUECIMENTO, atendidos pelo IAGO. Não substitui a avaliação da Meta.
 //
 // Limites obrigatórios (anti-ban e anti-storm):
 //  - 09h–19h BRT, nunca domingo
@@ -35,18 +35,27 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  // Carona: avança a fila de cópia gradual de templates dos números novos
-  // (sem cron próprio). Não bloqueia esta execução.
-  try {
-    supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} });
-  } catch (_) { /* segue */ }
-
   try {
 
     const body = await req.json().catch(() => ({}));
     const forcar = body?.forcar === true; // teste manual ignora janela, nunca elegibilidade
     const simulacao = body?.simulacao === true;
     const instanciaId: string | undefined = body?.instancia_id;
+    if (simulacao || forcar || instanciaId) {
+      const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+      if (bearer !== Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+        const { data: auth } = await supabase.auth.getUser(bearer);
+        if (!auth.user?.id) return json({ error: "Não autorizado" }, 401);
+        const { data: admin } = await supabase.rpc("has_role", { _user_id: auth.user.id, _role: "admin" });
+        if (admin !== true) return json({ error: "Apenas administradores podem testar a recuperação" }, 403);
+      }
+    }
+
+    // A simulação não pode acionar nem mesmo trabalhos auxiliares.
+    if (!simulacao) {
+      try { await supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} }); }
+      catch (error) { console.error("Cópia de templates indisponível:", error); }
+    }
 
     const { data: cfg } = await supabase
       .from("meta_envio_pool_config").select("*").eq("id", 1).maybeSingle();
@@ -82,10 +91,10 @@ Deno.serve(async (req) => {
 
     const dia = hojeBrt();
     const maxPorDestino = Math.max(1, Number(cfg?.recuperacao_max_por_destino_dia ?? 2));
-    const intMin = Math.max(60, Number(cfg?.recuperacao_intervalo_min_seg ?? 1200));
-    const intMax = Math.max(intMin, Number(cfg?.recuperacao_intervalo_max_seg ?? 2400));
-    const msgsMin = Math.max(1, Number(cfg?.recuperacao_msgs_min_dia ?? 10));
-    const msgsMax = Math.max(msgsMin, Number(cfg?.recuperacao_msgs_max_dia ?? 20));
+    const intMin = Math.min(2400, Math.max(1200, Number(cfg?.recuperacao_intervalo_min_seg ?? 1200)));
+    const intMax = Math.min(2400, Math.max(intMin, Number(cfg?.recuperacao_intervalo_max_seg ?? 2400)));
+    const msgsMin = Math.min(20, Math.max(1, Number(cfg?.recuperacao_msgs_min_dia ?? 10)));
+    const msgsMax = Math.min(20, Math.max(msgsMin, Number(cfg?.recuperacao_msgs_max_dia ?? 20)));
 
     // Uso dos destinos hoje (limite por destino é global, não por emissor)
     const { data: logsHoje } = await supabase
@@ -114,14 +123,14 @@ Deno.serve(async (req) => {
       }
 
       // Intervalo entre mensagens do mesmo número
-      if (!forcar && !simulacao && inst.recuperacao_proximo_envio_em &&
+      if (!simulacao && inst.recuperacao_proximo_envio_em &&
           new Date(inst.recuperacao_proximo_envio_em) > new Date()) {
         resultados.push({ instancia: inst.nome, skip: "aguardando_intervalo" });
         continue;
       }
 
       // Meta do dia (sorteada 1x por dia)
-      let metaDia = Number(inst.recuperacao_msgs_meta_dia || 0);
+      let metaDia = Math.min(20, Number(inst.recuperacao_msgs_meta_dia || 0));
       if (!metaDia) {
         metaDia = sorteio(msgsMin, msgsMax);
         if (!simulacao) await supabase.from("meta_whatsapp_instances")
@@ -154,6 +163,7 @@ Deno.serve(async (req) => {
       const destino = rodada[Math.floor(Math.random() * rodada.length)];
       if (simulacao) {
         resultados.push({ instancia: inst.nome, destino: destino.tipo, metaDia, enviados_hoje: meus.length, simulado: true });
+        usoDestino.set(destino.telefone.slice(-8), (usoDestino.get(destino.telefone.slice(-8)) || 0) + 1);
         processadas++;
         continue;
       }

@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     }
 
     const inicioDia = `${diaBrt()}T03:00:00.000Z`;
-    const cotaPorInstancia = Number(cfg.limite_diario ?? 50);
+    const cotaPorInstancia = modoCasaDados ? 50 : Number(cfg.limite_diario ?? 50);
     let restante = preparacaoManual ? Number(preparacaoManual.quantidade_alvo) : cotaPorInstancia;
     let jobExistente: any = null;
     if (!modoTeste && !preparacaoManual) {
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
 
     let resumoColeta: Record<string, unknown> | null = null;
     let resumoVerificacao: Record<string, unknown> | null = null;
-    if (completo && cfg.motor_ativo && !preparacaoManual) {
+    if (completo && cfg.motor_ativo && !preparacaoManual && !simulacao) {
       let metaConfirmados = cotaPorInstancia;
       if (modoCasaDados) {
         const { data: marcadas } = await service.from("meta_whatsapp_instances")

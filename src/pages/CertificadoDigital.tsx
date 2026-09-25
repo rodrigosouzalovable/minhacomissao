@@ -224,7 +224,7 @@ export default function CertificadoDigital() {
       const captados = contagens.filter((lead) => lead.cnae === cnae && lead.dias_desde_abertura === janela);
       return {
         cnae, janela, coletados: captados.length, validos: captados.filter((lead) => lead.whatsapp_status === "com_whatsapp").length,
-        enviados: itens.filter((item) => item.status !== "reservado").length,
+        enviados: itens.filter((item) => ["enviado", "entregue", "lido", "respondido"].includes(item.status)).length,
         entregues: itens.filter((item) => ["entregue", "lido", "respondido"].includes(item.status)).length,
         respondidos: itens.filter((item) => item.status === "respondido").length,
         interessados: itens.filter((item) => item.interesse_confirmado).length,
