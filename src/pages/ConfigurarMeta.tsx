@@ -731,10 +731,11 @@ export default function ConfigurarMeta() {
         const sub = subResult.data;
         const r = sub?.resultados?.[0];
         const setupOk = r?.subscribe_ok && callResult.data?.ok && profileResult.data?.success && healthResult.data?.success;
-        if (r?.subscribe_ok) {
-          await marcarWebhookReinscrito(novaInst.id, r?.webhook_url);
-        }
-        if (setupOk) toast.success("Instância salva, perfil sincronizado, chamadas ligadas e webhook verificado", { id: toastId });
+        const webhookCheck = r?.subscribe_ok
+          ? await supabase.functions.invoke("meta-webhook-health", { body: { instancia_id: novaInst.id, manual_reinscricao: true } })
+          : null;
+        const webhookConfirmed = !webhookCheck?.error && ["ok", "reinscrito"].includes(webhookCheck?.data?.resultados?.[0]?.status);
+        if (setupOk && webhookConfirmed) toast.success("Instância salva, perfil sincronizado, chamadas ligadas e webhook verificado", { id: toastId });
         else toast.warning("Instância salva. Uma configuração automática precisa de revisão no card.", { id: toastId, duration: 10000 });
       } catch (e: any) {
         toast.warning("Instância salva, mas a configuração automática ficou incompleta: " + (e?.message || e), { id: toastId });
@@ -1183,11 +1184,11 @@ export default function ConfigurarMeta() {
       const okList = (data?.resultados || []).filter((r: any) => r.subscribe_ok && r.callback_confirmado);
       const okCount = okList.length;
       const total = (data?.resultados || []).length;
-      for (const r of okList) {
-        await marcarWebhookReinscrito(r.id, r.webhook_url);
-      }
-      if (okCount === total) toast.success(`${okCount}/${total} WABAs assinadas e callback confirmado`);
-      else toast.error(`${okCount}/${total} com callback confirmado — veja detalhes abaixo`);
+      const checks = await Promise.all(okList.map((r: any) => supabase.functions.invoke("meta-webhook-health", { body: { instancia_id: r.id, manual_reinscricao: true } })));
+      const confirmedCount = checks.filter((c) => !c.error && ["ok", "reinscrito"].includes(c.data?.resultados?.[0]?.status)).length;
+      if (confirmedCount === total) toast.success(`${confirmedCount}/${total} WABAs com callback confirmado pela Meta`);
+      else toast.warning(`${confirmedCount}/${total} confirmadas pela Meta; ${okCount - confirmedCount} aguardam confirmação — veja detalhes abaixo`);
+      carregar();
 
     } catch (e: any) {
       toast.error("Erro: " + e.message);
