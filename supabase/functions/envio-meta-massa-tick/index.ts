@@ -5,6 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
 import { esperaAteJanela } from '../_shared/metaJanelaEnvio.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
+import { telefoneMeta } from '../_shared/meta-destinatario.ts';
 
 
 const corsHeaders = {
@@ -526,7 +527,6 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
 // Sem WhatsApp -> item marcado como 'sem_whatsapp' (não é enviado, não é erro).
 // Erro de validação / nenhuma UAZAPI conectada -> segue o envio normalmente.
 const VAL_LOTE = 100;
-const so8 = (t: string) => String(t || '').replace(/\D/g, '').slice(-8);
 
 // Guarda de concorrência: uma validação por job de cada vez (a validação roda em
 // segundo plano, sem travar a fila de envio).
@@ -567,15 +567,15 @@ async function validarLotePendentes(job: any): Promise<void> {
       return;
     }
 
-    const invalidos = new Set((data.invalid || []).map((t: string) => so8(t)));
-    const validos = new Set((data.valid || []).map((t: string) => so8(t)));
+    const invalidos = new Set((data.invalid || []).map((t: string) => telefoneMeta(t)).filter(Boolean));
+    const validos = new Set((data.valid || []).map((t: string) => telefoneMeta(t)).filter(Boolean));
 
     const idsSem: string[] = [];
     const idsOk: string[] = [];
     const idsErro: string[] = [];
     for (const it of itens as any[]) {
-      const k = so8(it.telefone);
-      if (invalidos.has(k)) idsSem.push(it.id);
+      const k = telefoneMeta(it.telefone);
+      if (k?.startsWith('55') && invalidos.has(k)) idsSem.push(it.id);
       else if (validos.has(k)) idsOk.push(it.id);
       else idsErro.push(it.id);
     }

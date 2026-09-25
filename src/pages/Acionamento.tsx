@@ -2114,6 +2114,8 @@ export default function Acionamento() {
         .filter(i => statusMap[i.id])
         .map(i => {
           const d = (i.telefone || '').replace(/\D/g, '');
+          // A coluna de testes Meta deve manter o DDI, inclusive no Excel.
+          if (i.source === 'meta_teste') return d ? `+${d}` : '';
           return d.startsWith('55') && d.length >= 12 ? d.slice(2) : d;
         })
         .filter(n => n.length >= 10)

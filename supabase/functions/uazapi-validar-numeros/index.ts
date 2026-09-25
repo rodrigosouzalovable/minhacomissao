@@ -2,6 +2,7 @@
 // Distribui os lotes em paralelo entre as instâncias conectadas, o que permite
 // validar listas grandes (milhares) sem depender de um único número.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { telefoneMeta } from '../_shared/meta-destinatario.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,8 +22,7 @@ const REQUEST_TIMEOUT_MS = 45_000;
 const MAX_RETRIES = 1;
 
 function formatPhone(phone: string): string {
-  const clean = String(phone || '').replace(/\D/g, '');
-  return clean.startsWith('55') ? clean : `55${clean}`;
+  return telefoneMeta(phone) || '';
 }
 
 type Inst = { id: string; nome: string; server_url: string; instance_token: string };
@@ -77,6 +77,11 @@ Deno.serve(async (req) => {
     if (!Array.isArray(numbers) || numbers.length === 0) {
       return json({ error: 'numbers array é obrigatório' }, 400);
     }
+    const verificaveis = numbers.filter((n: string) => !!formatPhone(n));
+    const semFormato = numbers.filter((n: string) => !formatPhone(n));
+    if (verificaveis.length === 0) {
+      return json({ valid: [], invalid: [], errors: semFormato, total: numbers.length, total_valid: 0, total_invalid: 0, total_errors: semFormato.length });
+    }
 
     const { data: instRows, error: instErr } = await supabase
       .from('user_whatsapp_instances')
@@ -101,16 +106,16 @@ Deno.serve(async (req) => {
       return json({ error: 'Nenhuma instância UAZAPI conectada no momento', valid: [], invalid: [], errors: numbers, sem_validadores: true });
     }
 
-    const formatted = numbers.map((n: string) => formatPhone(n));
+    const formatted = verificaveis.map((n: string) => formatPhone(n));
     type B = { batch: string[]; original: string[]; index: number };
     const batches: B[] = [];
     for (let i = 0; i < formatted.length; i += BATCH_SIZE) {
-      batches.push({ batch: formatted.slice(i, i + BATCH_SIZE), original: numbers.slice(i, i + BATCH_SIZE), index: batches.length + 1 });
+      batches.push({ batch: formatted.slice(i, i + BATCH_SIZE), original: verificaveis.slice(i, i + BATCH_SIZE), index: batches.length + 1 });
     }
 
     const valid: string[] = [];
     const invalid: string[] = [];
-    const errors: string[] = [];
+    const errors: string[] = [...semFormato];
 
     // Uma "worker" por instância conectada, consumindo a fila de lotes.
     let cursor = 0;
@@ -130,7 +135,9 @@ Deno.serve(async (req) => {
         arr.forEach((item: any, idx: number) => {
           const has = item?.isInWhatsapp === true || item?.exists === true || item?.numberExists === true || item?.onWhatsapp === true;
           const original = b.original[idx] ?? b.batch[idx];
-          (has ? valid : invalid).push(original);
+          // A UAZAPI pode não reconhecer destinos Meta internacionais mesmo
+          // quando o DDI está certo: não afirmar "Sem WhatsApp" nesse caso.
+          (has ? valid : b.batch[idx]?.startsWith('55') ? invalid : errors).push(original);
         });
       }
     };
