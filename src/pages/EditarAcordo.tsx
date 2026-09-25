@@ -67,6 +67,7 @@ export default function EditarAcordo() {
   const [cpfError, setCpfError] = useState('');
   const [operadorId, setOperadorId] = useState('');
   const [operadorOriginal, setOperadorOriginal] = useState('');
+  const [empresaOriginal, setEmpresaOriginal] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
   const [operadores, setOperadores] = useState<Array<{ user_id: string; nome: string | null }>>([]);
 
   useEffect(() => {
@@ -121,7 +122,9 @@ export default function EditarAcordo() {
         const temPagas = pagamentos?.some(p => p.status === 'pago') || false;
         setHasParcelasPagas(temPagas);
 
-        setEmpresa((acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda') || 'ume_novo_mundo');
+        const empresaCarregada = (acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda') || 'ume_novo_mundo';
+        setEmpresa(empresaCarregada);
+        setEmpresaOriginal(empresaCarregada);
         setOperadorId(acordo.user_id || '');
         setOperadorOriginal(acordo.user_id || '');
 
@@ -166,11 +169,33 @@ export default function EditarAcordo() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !calculo || !id) return;
+    if (!user || !id) return;
     
     setIsLoading(true);
 
     try {
+      if (!isAdmin) {
+        if (empresa === empresaOriginal) {
+          navigate(`/acordos/${id}`);
+          return;
+        }
+
+        const { error } = await supabase.rpc('alterar_credor_acordo', {
+          p_acordo_id: id,
+          p_novo_credor: empresa,
+        });
+        if (error) throw error;
+
+        toast({
+          title: 'Credor atualizado!',
+          description: 'O credor do acordo foi alterado com sucesso.',
+        });
+        navigate(`/acordos/${id}`);
+        return;
+      }
+
+      if (!calculo) return;
+
       const validated = acordoSchema.parse({
         clienteNome: form.clienteNome.trim(),
         clienteCpf: form.clienteCpf.trim() || undefined,
@@ -185,7 +210,6 @@ export default function EditarAcordo() {
       // Atualizar acordo
       // Admin pode atualizar qualquer acordo
       const updatePayload: any = {
-        empresa: empresa,
         cliente_nome: validated.clienteNome,
         cliente_cpf: validated.clienteCpf || null,
         cliente_telefone: validated.clienteTelefone || null,
@@ -200,6 +224,13 @@ export default function EditarAcordo() {
       };
       // Admin: reativar acordo se estava quebrado/cancelado
       if (isAdmin) {
+        if (empresa !== empresaOriginal) {
+          const { error: credorError } = await supabase.rpc('alterar_credor_acordo', {
+            p_acordo_id: id,
+            p_novo_credor: empresa,
+          });
+          if (credorError) throw credorError;
+        }
         updatePayload.status = 'ativo';
         if (operadorId && operadorId !== operadorOriginal) {
           updatePayload.user_id = operadorId;
@@ -315,11 +346,11 @@ export default function EditarAcordo() {
           <h1 className="text-2xl font-bold">Editar Acordo</h1>
         </div>
 
-        {hasParcelasPagas && !isAdmin && (
-          <Alert variant="destructive">
+        {!isAdmin && (
+          <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Este acordo possui parcelas já pagas. Os campos financeiros (valor, parcelas, dias em atraso e data do 1º pagamento) não podem ser alterados.
+              Você pode alterar somente o credor deste acordo. As demais informações permanecem protegidas.
             </AlertDescription>
           </Alert>
         )}
@@ -338,6 +369,7 @@ export default function EditarAcordo() {
                   placeholder="Nome completo do cliente"
                   value={form.clienteNome}
                   onChange={(e) => setForm({ ...form, clienteNome: e.target.value })}
+                  disabled={!isAdmin}
                   required
                 />
               </div>
@@ -360,6 +392,7 @@ export default function EditarAcordo() {
                       }
                     }}
                     maxLength={14}
+                    disabled={!isAdmin}
                     required
                     className={cpfError ? 'border-destructive' : ''}
                   />
@@ -376,6 +409,7 @@ export default function EditarAcordo() {
                     value={form.clienteTelefone}
                     onChange={(e) => setForm({ ...form, clienteTelefone: formatPhone(e.target.value) })}
                     maxLength={15}
+                    disabled={!isAdmin}
                   />
                 </div>
               </div>
@@ -427,7 +461,7 @@ export default function EditarAcordo() {
 
           </Card>
 
-          <Card>
+          {isAdmin && <Card>
             <CardHeader>
               <CardTitle>Dados do Acordo</CardTitle>
               <CardDescription>
@@ -510,7 +544,7 @@ export default function EditarAcordo() {
               </div>
 
             </CardContent>
-          </Card>
+          </Card>}
 
           {/* Preview do cálculo */}
           {calculo && isAdmin && (
@@ -584,9 +618,9 @@ export default function EditarAcordo() {
             <Button
               type="submit"
               className="flex-1"
-              disabled={isLoading || !calculo || !isCpfCompleto(form.clienteCpf)}
+              disabled={isLoading || (isAdmin && (!calculo || !isCpfCompleto(form.clienteCpf))) || (!isAdmin && empresa === empresaOriginal)}
             >
-              {isLoading ? 'Salvando...' : 'Salvar Alterações'}
+              {isLoading ? 'Salvando...' : isAdmin ? 'Salvar Alterações' : 'Salvar Credor'}
             </Button>
           </div>
         </form>
