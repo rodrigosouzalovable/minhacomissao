@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { coletarJanela } from "../_shared/certificado-ingest.ts";
 import { verificarLeadsCertificado } from "../_shared/certificado-whatsapp.ts";
+import { CNAES_PILOTO, etapaPiloto } from "../_shared/certificado-experimento.ts";
 
 function resposta(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -27,10 +28,15 @@ Deno.serve(async (req) => {
       return resposta({ success: true, skipped: true, message: "Motor desligado" });
     }
 
+    const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const etapa = etapaPiloto(hoje);
+    if (!etapa) return resposta({ success: true, skipped: true, motivo: "Fora do calendário do piloto" });
+    const filtro = (query: any) => query.in("cnae", CNAES_PILOTO).eq("dias_desde_abertura", etapa.janela).eq("data_abertura", new Date(new Date(`${hoje}T12:00:00Z`).getTime() - etapa.janela * 86400000).toISOString().slice(0, 10));
+
     const limiteDiario = Math.max(1, Number(cfg.limite_diario ?? 50));
-    const { count: confirmados, error: confirmadosError } = await service.from("certificado_leads")
+    const { count: confirmados, error: confirmadosError } = await filtro(service.from("certificado_leads")
       .select("id", { count: "exact", head: true })
-      .eq("situacao", "novo").eq("whatsapp_status", "com_whatsapp").not("telefone_principal", "is", null);
+      .eq("situacao", "novo").eq("whatsapp_status", "com_whatsapp").not("telefone_principal", "is", null));
     if (confirmadosError) throw confirmadosError;
     if (Number(confirmados ?? 0) >= limiteDiario) {
       await service.from("certificado_config").update({
@@ -40,13 +46,13 @@ Deno.serve(async (req) => {
       return resposta({ success: true, skipped: true, motivo: "Estoque local confirmado suficiente", confirmados, limite_diario: limiteDiario });
     }
 
-    const { count: pendentes, error: pendentesError } = await service.from("certificado_leads")
+    const { count: pendentes, error: pendentesError } = await filtro(service.from("certificado_leads")
       .select("id", { count: "exact", head: true })
-      .eq("situacao", "novo").in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"]).not("telefone_principal", "is", null);
+      .eq("situacao", "novo").in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"]).not("telefone_principal", "is", null));
     if (pendentesError) throw pendentesError;
     if (Number(pendentes ?? 0) > 0) {
       const faltam = Math.max(1, limiteDiario - Number(confirmados ?? 0));
-      const verificacao = await verificarLeadsCertificado(service, Math.min(faltam, Number(pendentes)));
+      const verificacao = await verificarLeadsCertificado(service, Math.min(faltam, Number(pendentes)), etapa.janela, new Date(new Date(`${hoje}T12:00:00Z`).getTime() - etapa.janela * 86400000).toISOString().slice(0, 10), undefined, CNAES_PILOTO);
       await service.from("certificado_config").update({
         ultima_execucao: new Date().toISOString(),
         ultimo_status: `Coleta economizada: estoque local verificado para ${limiteDiario} envios`,
@@ -54,16 +60,14 @@ Deno.serve(async (req) => {
       return resposta({ success: true, skipped: true, motivo: "Estoque local pendente priorizado", verificacao, limite_diario: limiteDiario });
     }
 
-    const janelas = [...new Set((cfg.janelas_dias ?? []).map(Number))]
-      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 30)
-      .sort((a, b) => a - b);
+    const janelas = [etapa.janela];
     const resultados = [];
     for (const janela of janelas) {
-      resultados.push(await coletarJanela(service, cfg, janela, false));
+      resultados.push(await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, false, { maxPaginas: 3 }));
     }
 
     const falhas = resultados.filter((r) => r.erro).length;
-    const verificacao = await verificarLeadsCertificado(service, limiteDiario);
+    const verificacao = await verificarLeadsCertificado(service, limiteDiario, etapa.janela, new Date(new Date(`${hoje}T12:00:00Z`).getTime() - etapa.janela * 86400000).toISOString().slice(0, 10), undefined, CNAES_PILOTO);
     await service.from("certificado_config").update({
       ultima_execucao: new Date().toISOString(),
       ultimo_status: falhas ? `Concluído com ${falhas} erro(s)` : "Concluído",
