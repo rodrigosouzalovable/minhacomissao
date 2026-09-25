@@ -689,6 +689,10 @@ export default function InboxMeta() {
         setBusca('');
         setBuscaDebounced('');
         setFiltroInstancia('todas');
+        setFiltroEtiqueta(new Set());
+        setFiltroLeitura('todas');
+        setFiltroJanela24h(false);
+        setFiltroQualifs(new Set());
         setCurrentFolderId((data as any).folder_id ?? null);
         setAbaAtiva((data as any).arquivado ? 'arquivados' : 'conversas');
         setContatoAtivo(data as any);
