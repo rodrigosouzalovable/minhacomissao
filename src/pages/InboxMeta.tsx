@@ -648,6 +648,7 @@ export default function InboxMeta() {
   // Paginação da lista de conversas: lote inicial leve + "carregar mais"
   const PAGE_CONTATOS = 300;
   const contatoIdsRef = useRef<string[]>([]);
+  const contatoLinkDiretoRef = useRef<MetaContato | null>(null);
   const [limiteContatos, setLimiteContatos] = useState(PAGE_CONTATOS);
 
   const [carregandoMais, setCarregandoMais] = useState(false);
@@ -685,6 +686,7 @@ export default function InboxMeta() {
       const { data } = await q.maybeSingle();
       if (cancelado) return;
       if (data) {
+        contatoLinkDiretoRef.current = data as MetaContato;
         setModoMeusClientes(false);
         setBusca('');
         setBuscaDebounced('');
@@ -696,8 +698,9 @@ export default function InboxMeta() {
         setCurrentFolderId((data as any).folder_id ?? null);
         setAbaAtiva((data as any).arquivado ? 'arquivados' : 'conversas');
         setContatoAtivo(data as any);
+        setContatos(prev => prev.some(c => c.id === data.id) ? prev : [data as MetaContato, ...prev]);
       } else {
-        toast({ title: 'Conversa não encontrada', description: 'O contato pode estar em outra caixa de mensagens.' });
+        toast({ title: 'Conversa indisponível', description: 'A conversa foi removida ou você não tem acesso a esta caixa.' });
       }
 
       const limpos = new URLSearchParams(location.search);
@@ -863,6 +866,12 @@ export default function InboxMeta() {
       }
     }
 
+    // Um link direto pode apontar para uma conversa antiga fora da primeira página.
+    const vinculado = contatoLinkDiretoRef.current;
+    if (vinculado && vinculado.folder_id === currentFolderId && vinculado.arquivado === (abaAtiva === 'arquivados') &&
+        (filtroInstancia === 'todas' || filtroInstancia === vinculado.instancia_id) && !combinados.some(c => c.id === vinculado.id)) {
+      combinados = [vinculado, ...combinados];
+    }
     setContatos(combinados);
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista

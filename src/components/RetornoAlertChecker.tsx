@@ -189,7 +189,7 @@ export function RetornoAlertChecker() {
             <MessageSquare className="mr-2 h-4 w-4" />{alertaRetorno?.meta_contato_id ? 'Abrir Conversa' : 'Ver retorno'}
           </AlertDialogAction>
           {alertaRetorno?.meta_contato_id && avisoAbertura && (
-            <AlertDialogAction onClick={(event) => { event.preventDefault(); verRetorno(); }} variant="secondary">Ver retorno</AlertDialogAction>
+            <AlertDialogAction onClick={(event) => { event.preventDefault(); verRetorno(); }} className="bg-secondary text-secondary-foreground hover:bg-secondary/80">Ver retorno</AlertDialogAction>
           )}
         </AlertDialogFooter>
       </AlertDialogContent>
