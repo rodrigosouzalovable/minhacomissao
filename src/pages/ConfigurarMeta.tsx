@@ -67,6 +67,7 @@ type Instancia = {
   messaging_limit_source?: string | null;
   messaging_limit_synced_at?: string | null;
   meta_bm_id?: string | null;
+  observacao?: string | null;
   webhook_saude_status?: string | null;
   webhook_saude_verificado_em?: string | null;
   webhook_ultimo_erro?: string | null;
@@ -152,6 +153,9 @@ export default function ConfigurarMeta() {
   }, [cotas]);
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
+  const [editObservacaoId, setEditObservacaoId] = useState<string | null>(null);
+  const [observacaoTexto, setObservacaoTexto] = useState("");
+  const [salvandoObservacao, setSalvandoObservacao] = useState(false);
   const [verificandoWebhooks, setVerificandoWebhooks] = useState(false);
 
   // Filtro de Business Managers (usado dentro da aba Instâncias)
@@ -1082,6 +1086,19 @@ export default function ConfigurarMeta() {
     carregar();
   };
 
+  const salvarObservacao = async (inst: Instancia, texto: string) => {
+    const valor = texto.trim();
+    if (valor.length > 500) { toast.error("A observação deve ter até 500 caracteres."); return; }
+    setSalvandoObservacao(true);
+    const { data, error } = await supabase.from("meta_whatsapp_instances")
+      .update({ observacao: valor || null }).eq("id", inst.id).select("id,observacao").maybeSingle();
+    setSalvandoObservacao(false);
+    if (error || !data) { toast.error(error?.message || "Sem permissão para alterar esta instância."); return; }
+    setInstancias((lista) => lista.map((item) => item.id === inst.id ? { ...item, observacao: data.observacao } : item));
+    setEditObservacaoId(null);
+    toast.success(valor ? "Observação salva" : "Observação apagada");
+  };
+
   const salvarDisplayPhone = async (inst: Instancia) => {
     const digits = editPhoneValue.replace(/\D+/g, "");
     if (digits.length < 10) { toast.error("Número inválido (mín. 10 dígitos)"); return; }
@@ -1810,6 +1827,22 @@ export default function ConfigurarMeta() {
                         {bms.length === 0 && (
                           <span className="text-[10px] text-muted-foreground">Cadastre BMs em "Business Managers" para vincular</span>
                         )}
+                        <div className="w-full sm:w-auto sm:ml-auto sm:min-w-[260px] sm:max-w-[400px]">
+                          <span className="font-semibold">Observação:</span>
+                          {editObservacaoId === inst.id ? (
+                            <div className="flex items-center gap-1 mt-1">
+                              <Input aria-label={`Observação de ${inst.nome}`} maxLength={500} value={observacaoTexto} onChange={(e) => setObservacaoTexto(e.target.value)} placeholder="Adicionar observação" className="h-8 text-xs" />
+                              <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" disabled={salvandoObservacao} onClick={() => salvarObservacao(inst, observacaoTexto)} title="Salvar observação"><CheckCircle2 className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => setEditObservacaoId(null)} title="Cancelar"><X className="h-4 w-4" /></Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-1 mt-1">
+                              <span className="text-muted-foreground break-words min-w-0 flex-1">{inst.observacao || "Nenhuma observação"}</span>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title="Editar observação" onClick={() => { setEditObservacaoId(inst.id); setObservacaoTexto(inst.observacao || ""); }}><Pencil className="h-3.5 w-3.5" /></Button>
+                              {inst.observacao && <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title="Apagar observação" disabled={salvandoObservacao} onClick={() => salvarObservacao(inst, "")}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                            </div>
+                          )}
+                        </div>
                         {(() => {
                           const c = cotaDaBm(inst.meta_bm_id);
                           if (!c) return null;

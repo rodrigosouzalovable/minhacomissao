@@ -78,6 +78,7 @@ type Instancia = {
   meta_profile_about?: string | null;
   meta_perfil_sync_em?: string | null;
   meta_bm_id?: string | null;
+  observacao?: string | null;
   pool_fora_manual?: boolean;
   pool_fora_manual_em?: string | null;
   pausa_automatica_motivo?: string | null;
@@ -1684,6 +1685,7 @@ export default function EnvioMeta() {
                           ? ` • ${cotaBm.tier_ilimitado ? `${cotaBm.enviados_24h} enviadas (BM ilimitada)` : `${cotaBm.enviados_24h}/${cotaBm.tier_diario} da BM em 24h`}`
                           : " • sem cota de BM"}
                       </div>
+                      {i.observacao && <div className="text-xs text-muted-foreground break-words mt-1">Observação: {i.observacao}</div>}
                       {(i.saude_status || i.saude_quality) && (
                         <div className="flex flex-wrap gap-1 mt-1 items-center">
                           <SaudeBadgeStatus status={i.saude_status} />
