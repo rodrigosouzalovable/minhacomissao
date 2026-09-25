@@ -983,8 +983,13 @@ Deno.serve(async (req) => {
     }
 
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err instanceof Error ? err.message : 'Erro' }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const message = err instanceof Error ? err.message : 'Falha inesperada no envio';
+    // Erros de configuração/entrada acontecem antes da chamada à Meta e não são
+    // falhas transitórias: devolvê-los como resultado de negócio evita 500 opaco.
+    const expected = /^(Template não encontrado|Template não aprovado pela Meta|Este template não está aprovado para a instância selecionada|Instância Meta não encontrada\/ativa|Telefone inválido:|Variável obrigatória do cabeçalho não preenchida:|Template exige cabeçalho |Template ".*" exige header IMAGE)/.test(message);
+    console.error('[send-whatsapp-meta] falha', { kind: expected ? 'validation' : 'unexpected', message });
+    return new Response(JSON.stringify({ success: false, error: expected ? message : 'Falha inesperada no envio. Verifique o status da instância e tente novamente.', retryable: !expected }), {
+      status: expected ? 200 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
