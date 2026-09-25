@@ -2771,6 +2771,7 @@ export default function InboxMeta() {
         <AgendarRetornoDialog
           open={agendarRetornoOpen}
           onOpenChange={setAgendarRetornoOpen}
+          metaContatoId={contatoAtivo.id}
           clienteNome={contatoAtivo.nome || (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : 'Contato')}
           clienteTelefone={contatoAtivo.telefone || ''}
           clienteCpf={cpfDoContato}

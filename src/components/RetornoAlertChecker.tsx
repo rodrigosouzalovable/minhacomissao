@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,11 +13,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Bell, User, Phone, FileText, CalendarClock } from 'lucide-react';
+import { Bell, User, Phone, FileText, CalendarClock, MessageSquare } from 'lucide-react';
 import successSound from '@/assets/success-sound.mp3';
 
 interface RetornoAlerta {
   id: string;
+  meta_contato_id: string | null;
   cliente_nome: string;
   cliente_cpf: string;
   cliente_telefone: string;
@@ -25,7 +28,9 @@ interface RetornoAlerta {
 
 export function RetornoAlertChecker() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [fila, setFila] = useState<RetornoAlerta[]>([]);
+  const [abrindo, setAbrindo] = useState(false);
   const notifiedIds = useRef<Set<string>>(new Set());
 
   const alertaRetorno = fila[0] ?? null;
@@ -40,7 +45,7 @@ export function RetornoAlertChecker() {
 
     const { data, error } = await supabase
       .from('retornos')
-      .select('id, cliente_nome, cliente_cpf, cliente_telefone, observacao, data_retorno')
+      .select('id, meta_contato_id, cliente_nome, cliente_cpf, cliente_telefone, observacao, data_retorno')
       .eq('user_id', user.id)
       .eq('status', 'pendente')
       .lte('data_retorno', in2Min.toISOString())
@@ -90,10 +95,34 @@ export function RetornoAlertChecker() {
 
   const fechar = () => setFila((prev) => prev.slice(1));
 
-  const concluir = async () => {
-    if (!alertaRetorno) return;
-    await supabase.from('retornos').update({ status: 'concluido' }).eq('id', alertaRetorno.id);
-    fechar();
+  const abrirConversa = async () => {
+    if (!alertaRetorno || abrindo) return;
+    setAbrindo(true);
+    try {
+      let contatoId = alertaRetorno.meta_contato_id;
+      // Retornos antigos não registravam a conversa: só aceitar um telefone inequívoco.
+      if (!contatoId) {
+        const sufixo = alertaRetorno.cliente_telefone.replace(/\D/g, '').slice(-8);
+        if (sufixo.length !== 8) {
+          toast.error('Este retorno antigo não identifica a conversa de origem.');
+          return;
+        }
+        const { data, error } = await supabase.from('meta_whatsapp_contatos')
+          .select('id').like('telefone', `%${sufixo}`).limit(2);
+        if (error) throw error;
+        if (data?.length !== 1) {
+          toast.error(data?.length ? 'Há mais de uma conversa para este telefone; não é possível identificar a origem.' : 'Conversa não encontrada na Inbox Meta.');
+          return;
+        }
+        contatoId = data[0].id;
+      }
+      fechar();
+      navigate(`/admin/inbox-meta?contato=${encodeURIComponent(contatoId)}`);
+    } catch {
+      toast.error('Não foi possível localizar a conversa. Tente novamente.');
+    } finally {
+      setAbrindo(false);
+    }
   };
 
   return (
@@ -151,7 +180,9 @@ export function RetornoAlertChecker() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={fechar}>Entendido</AlertDialogCancel>
-          <AlertDialogAction onClick={concluir}>Marcar como concluído</AlertDialogAction>
+          <AlertDialogAction onClick={(event) => { event.preventDefault(); void abrirConversa(); }} disabled={abrindo}>
+            <MessageSquare className="mr-2 h-4 w-4" />Abrir Conversa
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

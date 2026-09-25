@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Substituir “Marcar como concluído” por “Abrir Conversa” no aviso de retorno da Inbox Meta e abrir a conversa original sem concluir o lembrete
+- [x] Substituir “Marcar como concluído” por “Abrir Conversa” no aviso de retorno da Inbox Meta e abrir a conversa original sem concluir o lembrete
 - [ ] Validar o endereço da API 3C Plus e a sincronização autenticada com o fornecedor (o endereço .com.br informado não resolve; o .com responde 404 para a rota consultada)
 - [ ] Validar a retomada real da preparação e o processamento do Certificado após revisão da recusa Meta #131031, mantendo a prospecção pausada
 - [ ] Acompanhar primeiro ciclo do piloto Casa dos Dados por quatro CNAEs e confirmar respostas reais da recuperação Meta/UAZAPI (aguarda destinatários elegíveis e janela de envio)
