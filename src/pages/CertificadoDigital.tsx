@@ -203,7 +203,7 @@ export default function CertificadoDigital() {
   const { data: metricasExperimento = [] } = useQuery({ queryKey: ["certificado-metricas-experimento"], queryFn: async () => {
     const envios: any[] = [];
     for (let offset = 0; ; offset += 1000) {
-      const { data, error } = await supabase.from("certificado_prospeccao_envios").select("status,resposta_classificacao,interesse_confirmado,transferido_humano,certificado_leads!inner(cnae,dias_desde_abertura)").eq("template_nome", "cnpj_atualizado_2").range(offset, offset + 999);
+      const { data, error } = await supabase.from("certificado_prospeccao_envios").select("status,reservado_em,resposta_classificacao,interesse_confirmado,transferido_humano,certificado_leads!inner(cnae,data_abertura)").eq("template_nome", "cnpj_atualizado_2").range(offset, offset + 999);
       if (error) throw error;
       envios.push(...(data ?? []));
       if ((data ?? []).length < 1000) break;
@@ -216,7 +216,11 @@ export default function CertificadoDigital() {
       if ((data ?? []).length < 1000) break;
     }
     return NICHOS.flatMap(({ cnae }) => JANELAS_EXPERIMENTO.map((janela) => {
-      const itens = envios.filter((item) => item.certificado_leads?.cnae === cnae && Number(item.certificado_leads?.dias_desde_abertura) === janela);
+      const itens = envios.filter((item) => {
+        const dataAbertura = String(item.certificado_leads?.data_abertura ?? "").slice(0, 10);
+        const reservaBrt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.reservado_em));
+        return item.certificado_leads?.cnae === cnae && dataAbertura && Math.round((Date.parse(`${reservaBrt}T12:00:00Z`) - Date.parse(`${dataAbertura}T12:00:00Z`)) / 86400000) === janela;
+      });
       const captados = contagens.filter((lead) => lead.cnae === cnae && lead.dias_desde_abertura === janela);
       return {
         cnae, janela, coletados: captados.length, validos: captados.filter((lead) => lead.whatsapp_status === "com_whatsapp").length,
