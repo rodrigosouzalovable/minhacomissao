@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { calcularJanelaEnvio } from '../_shared/metaJanelaEnvio.ts';
 import { instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
+import { telefoneMeta } from '../_shared/meta-destinatario.ts';
 
 
 const corsHeaders = {
@@ -91,6 +92,12 @@ Deno.serve(async (req) => {
     if (clientes.length === 0) {
       console.error('[iniciar] recusado 400: nenhum cliente recebido');
       return new Response(JSON.stringify({ success: false, error: 'ao menos 1 cliente' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const telefoneInvalido = clientes.find((c) => !telefoneMeta(c?.telefone));
+    if (telefoneInvalido) {
+      return new Response(JSON.stringify({ success: false, error: `Telefone inválido: ${String(telefoneInvalido.telefone).slice(0, 30)}. Para números internacionais, informe o DDI com +.` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -539,7 +546,7 @@ Deno.serve(async (req) => {
         return {
           job_id: job.id,
           ordem: globalIdx,
-          telefone: c.telefone,
+          telefone: telefoneMeta(c.telefone),
           nome: c.nome ?? null,
           cpf: c.cpf ?? null,
           atraso: c.atraso ?? null,
