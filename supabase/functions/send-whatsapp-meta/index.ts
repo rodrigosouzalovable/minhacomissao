@@ -443,7 +443,6 @@ Deno.serve(async (req) => {
   try {
     const requestBody = await req.json();
     const { template_id, instancia_id, cliente: clienteRaw, user_id, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro } = requestBody;
-    const folderFoiInformado = Object.prototype.hasOwnProperty.call(requestBody, 'folder_id');
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
@@ -769,7 +768,9 @@ Deno.serve(async (req) => {
             // Novo envio reativa a conversa na lista principal
             arquivado: false,
           };
-          if (folderFoiInformado) updContato.folder_id = folder_id ?? null;
+          // A caixa Padrão (null) é o destino de novos contatos, não uma ordem para
+          // retirar uma conversa já existente de sua caixa atual.
+          if (folder_id) updContato.folder_id = folder_id;
           // Só preenche o CPF quando vier da planilha; nunca sobrescreve com vazio.
           if (cpfValido) updContato.cpf = cpfValido;
           if (credor === 'novo_mundo' || credor === 'ume') updContato.credor = credor;

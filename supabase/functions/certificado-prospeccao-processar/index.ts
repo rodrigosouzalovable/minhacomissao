@@ -229,6 +229,13 @@ Deno.serve(async (req) => {
       }
       restante = [...cotasRestantes.values()].reduce((total, cota) => total + cota, 0);
       if (!restante) return json({ success: true, skipped: true, motivo: "Todos os números aptos já atingiram 50 mensagens hoje" });
+    } else if (!preparacaoManual && !modoTeste) {
+      const { count, error } = await service.from("certificado_prospeccao_envios")
+        .select("id", { count: "exact", head: true }).gte("reservado_em", inicioDia)
+        .in("status", ["reservado", "enviado", "entregue", "lido", "respondido"]);
+      if (error) throw error;
+      restante = Math.max(0, cotaPorInstancia - Number(count ?? 0));
+      if (!restante) return json({ success: true, skipped: true, motivo: "Limite diário de envios do Certificado atingido" });
     }
 
     if (modoTeste) {
