@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
       janelaExperimento = Number(data.janela);
       dataAlvoExperimento = String(data.data_alvo);
     }
-    if (!cfg.prospeccao_ativa && !simulacao && !modoTeste && !preparacaoManual) return json({ error: "Piloto desativado" }, 409);
+    if (!cfg.prospeccao_ativa && !simulacao && !modoTeste) return json({ error: "Piloto desativado" }, 409);
     if (!modoTeste && !preparacaoManual && janelaExperimento === null) {
        if (etapaPiloto(diaBrt()) === null && diaBrt() >= "2026-09-23") {
         await service.from("certificado_config").update({ prospeccao_ativa: false, prospeccao_pausada_motivo: "Experimento D+5 a D+30 concluído" }).eq("id", cfg.id);
