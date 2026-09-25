@@ -2,7 +2,7 @@
 
 ## Diagnóstico confirmado
 - A instância de teste cadastrada como **+1 555-976-4577** está registrada com o telefone internacional completo. No lote mais recente **Aquecer -6427** do Thiago, criado hoje às 14:46 UTC, o destinatário correspondente foi gravado como **5515559764577** e terminou em “Sem WhatsApp”; em lotes anteriores, o mesmo destino foi gravado corretamente como **15559764577**.
-- O envio de templates já possui uma regra que preserva `1555…`, mas há outras etapas que ainda alteram o número: a tela transforma telefones de 11 dígitos sem `+` em brasileiros, e a verificação UAZAPI acrescenta `55` a qualquer número que não o tenha. A exportação dos números conectados entrega apenas dígitos, o que torna importante reconhecer esses testes também sem o sinal `+`.
+- O envio de templates já possui uma regra que preserva `1555…`, mas há outras etapas que ainda alteram o número: `EnvioMeta` acrescenta `55` a qualquer número de 11 dígitos sem `+`, antes de criar o lote; a etapa seguinte aceita o número já alterado como brasileiro. A verificação UAZAPI também acrescenta `55` a qualquer número que não o tenha. A exportação dos números conectados entrega apenas dígitos, o que torna importante reconhecer esses testes também sem o sinal `+`.
 - O erro anterior **#131026** significa que a Meta não confirmou a entrega. Corrigir o DDI não garante que números de teste `+1 555…` possam receber mensagens reais.
 
 ## Correção proposta
