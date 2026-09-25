@@ -181,8 +181,7 @@ Deno.serve(async (req) => {
       const { count: aindaPendentes } = await service.from("certificado_leads")
         .select("id", { count: "exact", head: true })
         .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
-         .in("cnae", CNAES_PILOTO).eq("dias_desde_abertura", janelaExperimento)
-        .eq("data_abertura", dataAlvoExperimento)
+        .in("cnae", CNAES_PILOTO)
         .not("telefone_principal", "is", null);
       if ((aindaPendentes ?? 0) > 0 && resumoVerificacao && (resumoVerificacao as any).instancias_validadoras.length === 0) {
         return json({
