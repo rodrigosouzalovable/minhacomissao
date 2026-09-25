@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Corrigir abertura de retorno: link direto de conversas vinculadas e detalhes destacados para lembretes antigos sem conversa
 - [x] Converter espaços do nome do Template Meta em underline e permitir envio direto para todos os números selecionados, inclusive MARKETING, sem piloto obrigatório
 - [x] Liberar submissão de templates MARKETING para aprovação da Meta sem liberar disparos
 - [x] Substituir “Marcar como concluído” por “Abrir Conversa” no aviso de retorno da Inbox Meta e abrir a conversa original sem concluir o lembrete
