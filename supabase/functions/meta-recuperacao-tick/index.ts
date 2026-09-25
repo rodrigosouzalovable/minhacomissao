@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
       }
 
       // Intervalo entre mensagens do mesmo número
-      if (!forcar && !simulacao && inst.recuperacao_proximo_envio_em &&
+      if (!simulacao && inst.recuperacao_proximo_envio_em &&
           new Date(inst.recuperacao_proximo_envio_em) > new Date()) {
         resultados.push({ instancia: inst.nome, skip: "aguardando_intervalo" });
         continue;

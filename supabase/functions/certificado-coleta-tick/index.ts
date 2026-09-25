@@ -33,7 +33,13 @@ Deno.serve(async (req) => {
     if (!etapa) return resposta({ success: true, skipped: true, motivo: "Fora do calendário do piloto" });
     const filtro = (query: any) => query.in("cnae", CNAES_PILOTO).eq("data_abertura", new Date(new Date(`${hoje}T12:00:00Z`).getTime() - etapa.janela * 86400000).toISOString().slice(0, 10));
 
-    const limiteDiario = Math.max(1, Number(cfg.limite_diario ?? 50));
+    const { count: marcadas } = await service.from("meta_whatsapp_instances")
+      .select("id", { count: "exact", head: true }).eq("provider", "meta").eq("ativo", true)
+      .eq("instancia_teste_aquecimento", false).eq("aquecimento_meta_ativo", true)
+      .eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN")
+      .eq("estado_pool", "ativo").eq("pool_fora_manual", false);
+    const limiteDiario = Math.min(2500, Math.max(1, Number(marcadas ?? 0) * 50));
+    if (!marcadas) return resposta({ success: true, skipped: true, motivo: "Nenhuma instância GREEN apta para o piloto" });
     const { count: confirmados, error: confirmadosError } = await filtro(service.from("certificado_leads")
       .select("id", { count: "exact", head: true })
       .eq("situacao", "novo").eq("whatsapp_status", "com_whatsapp").not("telefone_principal", "is", null));
