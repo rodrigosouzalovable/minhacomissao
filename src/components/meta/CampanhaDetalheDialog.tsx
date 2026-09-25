@@ -196,6 +196,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const paginacao = getPaginacaoJob(job.id);
 
   const ativa = job.status === "rodando" || job.status === "pausado";
+  const finalizada = ["concluido", "cancelado", "erro"].includes(job.status);
   const pausado = job.status === "pausado";
   const semWhatsApp = Number((job as any).sem_whatsapp || 0);
   const totalProcessado = job.enviados + job.erros + semWhatsApp;
@@ -979,7 +980,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 <Repeat className="h-3.5 w-3.5 mr-1.5" /> {reenviandoErros ? "Devolvendo…" : `Tentar novamente (${job.erros})`}
               </Button>
             )}
-            {!ativa && (
+            {finalizada && (
               <Button size="sm" variant="outline" onClick={() => limparJob(job.id)}>
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Limpar
               </Button>
