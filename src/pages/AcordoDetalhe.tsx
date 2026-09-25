@@ -61,7 +61,7 @@ export default function AcordoDetalhe() {
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
-  const canEdit = isOwner || isAdmin || (acordosCompartilhados && acordo?.user_id === concedidoPor);
+  const canEdit = isOwner || isAdmin;
   // Permissão granular para marcar/desmarcar parcelas como pagas em qualquer acordo
   const canMarcarPago = isAdmin || (canEdit && podeMarcarPagoGlobal);
 
@@ -419,6 +419,23 @@ export default function AcordoDetalhe() {
       return;
     }
     try {
+      if (isOwner && !isAdmin) {
+        const parcela = pagamentos.find(p => p.id === pagamentoId);
+        if (!parcela || parcela.status !== 'pendente') throw new Error('Só é possível alterar parcelas pendentes.');
+        const { error } = await supabase.rpc('editar_acordo_proprio', {
+          p_acordo_id: acordo.id,
+          p_telefone: acordo.cliente_telefone,
+          p_parcelas: [{ id: pagamentoId, valor: novoValor, data: parcela.data_prevista }],
+        });
+        if (error) throw error;
+        const novoTotal = Math.round(pagamentos.reduce((sum, p) => sum + (p.id === pagamentoId ? novoValor : Number(p.valor_parcela)), 0) * 100) / 100;
+        setPagamentos(prev => prev.map(p => p.id === pagamentoId ? { ...p, valor_parcela: novoValor } : p));
+        setAcordo(prev => prev ? { ...prev, valor_total: novoTotal } : prev);
+        setEditandoValorParcela(null);
+        setNovoValorParcela('');
+        toast({ title: 'Parcela atualizada!' });
+        return;
+      }
       const { error: errParcela } = await supabase
         .from('pagamentos')
         .update({ valor_parcela: novoValor })
@@ -478,6 +495,20 @@ export default function AcordoDetalhe() {
 
   const atualizarDataVencimento = async (pagamentoId: string, novaData: string) => {
     try {
+      if (isOwner && !isAdmin && acordo) {
+        const parcela = pagamentos.find(p => p.id === pagamentoId);
+        if (!parcela || parcela.status !== 'pendente') throw new Error('Só é possível alterar parcelas pendentes.');
+        const { error } = await supabase.rpc('editar_acordo_proprio', {
+          p_acordo_id: acordo.id, p_telefone: acordo.cliente_telefone,
+          p_parcelas: [{ id: pagamentoId, valor: parcela.valor_parcela, data: novaData }],
+        });
+        if (error) throw error;
+        setPagamentos(prev => prev.map(p => p.id === pagamentoId ? { ...p, data_prevista: novaData } : p));
+        setEditandoDataVencimento(null);
+        setNovaDataVencimento('');
+        toast({ title: 'Vencimento atualizado!' });
+        return;
+      }
       const { error } = await supabase
         .from('pagamentos')
         .update({ data_prevista: novaData })
@@ -709,14 +740,14 @@ export default function AcordoDetalhe() {
                     </>
                   )}
                 </Button>
-                <Button
+                {(isAdmin || isOwner) && <Button
                   variant="outline"
                   size="sm"
                   onClick={() => navigate(`/acordos/${acordo.id}/editar`)}
                 >
                   <Pencil className="h-4 w-4 mr-1" />
                   Editar
-                </Button>
+                </Button>}
               </>
             )}
             {isAdmin && acordo.status !== 'ativo' && (
@@ -1070,7 +1101,7 @@ export default function AcordoDetalhe() {
                         ) : (
                           <span className="flex items-center gap-1">
                             <span>Vencimento: {formatarData(pagamento.data_prevista)}</span>
-                            {canEdit && (
+                             {(isAdmin || (isOwner && pagamento.status === 'pendente')) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1120,7 +1151,7 @@ export default function AcordoDetalhe() {
                             ) : (
                               <span className="flex items-center gap-1">
                                 <span>Pago em: {formatarData(pagamento.data_paga)}</span>
-                                {canEdit && (
+                                 {isAdmin && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -1142,7 +1173,7 @@ export default function AcordoDetalhe() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      {isAdmin && editandoValorParcela === pagamento.id ? (
+                      {(isAdmin || (isOwner && pagamento.status === 'pendente')) && editandoValorParcela === pagamento.id ? (
                         <div className="flex items-center gap-1 justify-end">
                           <span className="text-sm text-muted-foreground">R$</span>
                           <Input
@@ -1175,7 +1206,7 @@ export default function AcordoDetalhe() {
                       ) : (
                         <p className="font-medium flex items-center gap-1 justify-end">
                           {formatarMoeda(pagamento.valor_parcela)}
-                          {isAdmin && (
+                          {(isAdmin || (isOwner && pagamento.status === 'pendente')) && (
                             <Button
                               variant="ghost"
                               size="sm"

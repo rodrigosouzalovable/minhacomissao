@@ -11386,6 +11386,40 @@ export type Database = {
         Args: { p_importacao_id: string }
         Returns: Json
       }
+      editar_acordo_proprio: {
+        Args: { p_acordo_id: string; p_parcelas?: Json; p_telefone: string }
+        Returns: {
+          atualizado_em: string
+          boleto_enviado: boolean
+          cliente_cpf: string | null
+          cliente_nome: string
+          cliente_telefone: string | null
+          comissao_total: number
+          criado_em: string
+          data_primeiro_pagamento: string
+          dias_atraso: number
+          duplicado_verificado: boolean
+          empresa: string
+          id: string
+          instancia_negociacao_id: string | null
+          observacoes: string | null
+          parcelas: number
+          percentual_comissao: number
+          status: string
+          user_id: string
+          valor_parcela: number
+          valor_total: number
+          whatsapp_opt_in: boolean
+          whatsapp_opt_in_em: string | null
+          whatsapp_opt_in_origem: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "acordos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       enfileirar_notificacao_admin: {
         Args: {
           p_chave_idempotencia: string
