@@ -1,7 +1,8 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Acompanhar o lote retomado do Certificado (117 contatos, 12 instâncias) até confirmar entregas reais; o primeiro envio foi aceito pela Meta, não necessariamente entregue
+- [x] Reservar até 50 envios diários por cada instância GREEN/UNKNOWN apta do Certificado, usando somente janelas D+5 a D+30 e isolando números restritos
+- [ ] Acompanhar o lote retomado do Certificado (578 contatos, 15 instâncias) até confirmar as entregas reais; 17 já foram entregues e 560 seguem reservados
 - [ ] Verificar que o novo lote de teste Meta do Thiago preserva +1 sem retomar campanhas canceladas; conferir entrega real em destino apto
 - [ ] Confirmar com o Thiago a submissão real de template por seus números (sem disparar mensagens) e, para mídia sem acesso ao App padrão, vincular a BM/App dele
 - [x] Corrigir DDI internacional e classificação das recusas #131026 nas campanhas do Thiago sem punir as instâncias
@@ -14,7 +15,7 @@
 - [ ] Validar o endereço da API 3C Plus e a sincronização autenticada com o fornecedor (o endereço .com.br informado não resolve; o .com responde 404 para a rota consultada)
 - [x] Validar a retomada do processamento do Certificado após isolar o número com recusa #131031; prospecção reativada somente em dias úteis
 - [ ] Acompanhar primeiro ciclo do piloto Casa dos Dados por quatro CNAEs e confirmar respostas reais da recuperação Meta/UAZAPI (aguarda destinatários elegíveis e janela de envio)
-- [ ] Concluir e confirmar o novo lote de até 750 mensagens do Certificado, 50 por cada uma das 15 instâncias GREEN
+- [ ] Concluir e confirmar o novo lote de até 750 mensagens do Certificado, 50 por cada uma das 15 instâncias GREEN/UNKNOWN aptas
 - [x] Confirmar a entrega das 100 mensagens iniciais do aquecimento do Certificado, 50 por cada número apto
 - [x] Corrigir a rolagem pela roda do mouse nos seletores de templates abertos dentro de janelas
 - [x] Carregar todos os templates Meta paginados nos seletores de envio, incluindo receber_boleto

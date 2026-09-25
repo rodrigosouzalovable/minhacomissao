@@ -3,6 +3,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { coletarJanela, dataBRT } from "../_shared/certificado-ingest.ts";
 import { verificarLeadsCertificado } from "../_shared/certificado-whatsapp.ts";
 import { CNAES_PILOTO, etapaPiloto } from "../_shared/certificado-experimento.ts";
+import { JANELAS_PILOTO } from "../_shared/certificado-experimento.ts";
 
 const FOLDER_CERTIFICADO = "9267b296-24e6-425d-9f0e-0e4114c782d9";
 const CLARA_ID = "d318692e-dc9a-4895-aa67-e21368a9de04";
@@ -87,11 +88,15 @@ Deno.serve(async (req) => {
       let metaConfirmados = cotaPorInstancia;
       if (modoCasaDados) {
         const { data: marcadas } = await service.from("meta_whatsapp_instances")
-          .select("id").eq("provider", "meta").eq("ativo", true)
-          .eq("instancia_teste_aquecimento", false).eq("aquecimento_meta_ativo", true)
+          .select("id,saude_quality").eq("provider", "meta").eq("ativo", true)
+          .eq("instancia_teste_aquecimento", false)
           .eq("estado_pool", "ativo").eq("pool_fora_manual", false)
-          .eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN");
-        const idsMarcadas = (marcadas ?? []).map((instancia: any) => instancia.id).filter((id: string) => instanciaIdsInicio.length === 0 || instanciaIdsInicio.includes(id));
+          .eq("saude_status", "CONNECTED").not("meta_bm_id", "is", null);
+        const aptasQualidade = (marcadas ?? []).filter((instancia: any) => {
+          const qualidade = String(instancia.saude_quality ?? "UNKNOWN").toUpperCase();
+          return qualidade === "GREEN" || qualidade === "UNKNOWN" || qualidade === "";
+        });
+        const idsMarcadas = aptasQualidade.map((instancia: any) => instancia.id).filter((id: string) => instanciaIdsInicio.length === 0 || instanciaIdsInicio.includes(id));
         const { data: aprovadas } = idsMarcadas.length ? await service.from("meta_whatsapp_templates")
           .select("instancia_id").in("instancia_id", idsMarcadas).eq("nome_template", templateNome)
           .eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
@@ -101,7 +106,7 @@ Deno.serve(async (req) => {
       const contarConfirmados = async () => {
         const { count, error } = await service.from("certificado_leads")
           .select("id", { count: "exact", head: true })
-            .eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").in("cnae", CNAES_PILOTO).eq("dias_desde_abertura", janelaExperimento).eq("data_abertura", dataAlvoExperimento).not("telefone_principal", "is", null);
+            .eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").in("cnae", CNAES_PILOTO).in("dias_desde_abertura", JANELAS_PILOTO).not("telefone_principal", "is", null);
         if (error) throw error;
         return Number(count ?? 0);
       };
@@ -109,7 +114,7 @@ Deno.serve(async (req) => {
         const { count, error } = await service.from("certificado_leads")
           .select("id", { count: "exact", head: true })
           .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
-            .eq("situacao", "novo").in("cnae", CNAES_PILOTO).eq("dias_desde_abertura", janelaExperimento).eq("data_abertura", dataAlvoExperimento).not("telefone_principal", "is", null);
+            .eq("situacao", "novo").in("cnae", CNAES_PILOTO).in("dias_desde_abertura", JANELAS_PILOTO).not("telefone_principal", "is", null);
         if (error) throw error;
         return Number(count ?? 0);
       };
@@ -119,7 +124,7 @@ Deno.serve(async (req) => {
       resumoColeta = { pulada: true, motivo: "Estoque local suficiente", encontrados: 0, novos: 0, janelas: 0, janelas_sucesso: 0, janelas_falha: 0, janelas_pendentes: 0 };
 
       if (confirmados < metaConfirmados && pendentes > 0) {
-        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
+        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), undefined, undefined, undefined, CNAES_PILOTO, JANELAS_PILOTO);
         resumoVerificacao = verificacao;
         confirmados = await contarConfirmados();
         pendentes = await contarPendentes();
@@ -135,7 +140,9 @@ Deno.serve(async (req) => {
         // A coleta divide a mesma requisição com a verificação e a reserva;
         // não pode consumir sozinha todo o tempo da função.
         const LIMITE_COLETA_MS = 25_000;
-        const janelas = janelaExperimento === null ? [] : [janelaExperimento];
+        const janelas = janelaExperimento === null
+          ? []
+          : [janelaExperimento, ...[5, 10, 15, 20, 25, 30].filter((janela) => janela !== janelaExperimento)];
         const resultados = [];
         for (const janela of janelas) {
           let paginaInicial = 1;
@@ -145,7 +152,7 @@ Deno.serve(async (req) => {
             if (resultado.erro || resultado.erro_temporario) break;
             const faltam = Math.max(0, metaConfirmados - confirmados);
             if (faltam > 0 && resultado.novos > 0) {
-               resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), janelaExperimento ?? undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
+               resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), undefined, undefined, undefined, CNAES_PILOTO, JANELAS_PILOTO);
             }
             confirmados = await contarConfirmados();
             pendentes = await contarPendentes();
@@ -169,14 +176,14 @@ Deno.serve(async (req) => {
       }
 
       if (confirmados < metaConfirmados && pendentes > 0 && !resumoVerificacao) {
-          const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
+          const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), undefined, undefined, undefined, CNAES_PILOTO, JANELAS_PILOTO);
         resumoVerificacao = verificacao;
       }
       const { count: aindaPendentes } = await service.from("certificado_leads")
         .select("id", { count: "exact", head: true })
         .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
-         .in("cnae", CNAES_PILOTO).eq("dias_desde_abertura", janelaExperimento)
-        .eq("data_abertura", dataAlvoExperimento)
+        .in("cnae", CNAES_PILOTO)
+        .in("dias_desde_abertura", JANELAS_PILOTO)
         .not("telefone_principal", "is", null);
       if ((aindaPendentes ?? 0) > 0 && resumoVerificacao && (resumoVerificacao as any).instancias_validadoras.length === 0) {
         return json({
@@ -197,7 +204,7 @@ Deno.serve(async (req) => {
       .select("id,nome,user_id,display_phone,meta_bm_id,saude_status,saude_quality,saude_ban_info,estado_pool,pool_fora_manual,pausa_automatica_ate,ativo,instancia_teste_aquecimento,aquecimento_meta_ativo")
       .eq("provider", "meta").eq("ativo", true).eq("instancia_teste_aquecimento", false);
     if (modoCasaDados) {
-      instanciasQuery = instanciasQuery.eq("aquecimento_meta_ativo", true).not("meta_bm_id", "is", null);
+      instanciasQuery = instanciasQuery.not("meta_bm_id", "is", null);
       if (instanciaIdsInicio.length > 0) instanciasQuery = instanciasQuery.in("id", instanciaIdsInicio);
     } else if (cfg.meta_bm_id) {
       instanciasQuery = instanciasQuery.eq("meta_bm_id", cfg.meta_bm_id);
@@ -208,7 +215,11 @@ Deno.serve(async (req) => {
     if (selecionadas.length > 0) instanciasQuery = instanciasQuery.in("id", selecionadas);
     const { data: instancias } = await instanciasQuery;
     const agora = new Date();
-    const aptas = (instancias ?? []).filter((i: any) => i.estado_pool === "ativo" && i.pool_fora_manual !== true && String(i.saude_status ?? "").toUpperCase() === "CONNECTED" && (!modoCasaDados || String(i.saude_quality ?? "").toUpperCase() === "GREEN") && !i.saude_ban_info && (!i.pausa_automatica_ate || new Date(i.pausa_automatica_ate) <= agora));
+    const aptas = (instancias ?? []).filter((i: any) => {
+      const qualidade = String(i.saude_quality ?? "UNKNOWN").toUpperCase();
+      const qualidadeApta = qualidade === "GREEN" || qualidade === "UNKNOWN" || qualidade === "";
+      return i.estado_pool === "ativo" && i.pool_fora_manual !== true && String(i.saude_status ?? "").toUpperCase() === "CONNECTED" && (!modoCasaDados || qualidadeApta) && !i.saude_ban_info && (!i.pausa_automatica_ate || new Date(i.pausa_automatica_ate) <= agora);
+    });
     const { data: templates } = aptas.length ? await service.from("meta_whatsapp_templates").select("id,instancia_id,nome_template,idioma,status").in("instancia_id", aptas.map((i: any) => i.id)).eq("nome_template", templateNome).eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
     const porInstancia = new Map((templates ?? []).map((t: any) => [t.instancia_id, t]));
     const participantes = aptas.filter((i: any) => porInstancia.has(i.id));
@@ -249,9 +260,9 @@ Deno.serve(async (req) => {
 
     const dataAlvo = dataAlvoExperimento ?? null;
     let leadsQuery = service.from("certificado_leads").select("id,cnpj,razao_social,nome_fantasia,telefone_principal,data_abertura,dias_desde_abertura,cnae").eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null);
-    if (modoCasaDados && !preparacaoManual) leadsQuery = leadsQuery.in("cnae", CNAES_PILOTO).eq("dias_desde_abertura", janelaExperimento);
+    if (modoCasaDados && !preparacaoManual) leadsQuery = leadsQuery.in("cnae", CNAES_PILOTO).in("dias_desde_abertura", JANELAS_PILOTO);
     if (preparacaoManual) leadsQuery = leadsQuery.eq("preparacao_id", preparacaoManual.id);
-    if (janelaExperimento !== null && dataAlvo) leadsQuery = leadsQuery.eq("data_abertura", dataAlvo);
+    if (!modoCasaDados && janelaExperimento !== null && dataAlvo) leadsQuery = leadsQuery.eq("data_abertura", dataAlvo);
     const { data: leadsCandidatos, error: leadsError } = await leadsQuery.order("created_at", { ascending: true }).limit(Math.max(restante * 4, restante));
     if (leadsError) throw leadsError;
     const sufixosCandidatos = [...new Set((leadsCandidatos ?? []).map((lead: any) =>
