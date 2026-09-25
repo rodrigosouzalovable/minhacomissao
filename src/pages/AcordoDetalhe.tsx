@@ -495,6 +495,20 @@ export default function AcordoDetalhe() {
 
   const atualizarDataVencimento = async (pagamentoId: string, novaData: string) => {
     try {
+      if (isOwner && !isAdmin && acordo) {
+        const parcela = pagamentos.find(p => p.id === pagamentoId);
+        if (!parcela || parcela.status !== 'pendente') throw new Error('Só é possível alterar parcelas pendentes.');
+        const { error } = await supabase.rpc('editar_acordo_proprio', {
+          p_acordo_id: acordo.id, p_telefone: acordo.cliente_telefone,
+          p_parcelas: [{ id: pagamentoId, valor: parcela.valor_parcela, data: novaData }],
+        });
+        if (error) throw error;
+        setPagamentos(prev => prev.map(p => p.id === pagamentoId ? { ...p, data_prevista: novaData } : p));
+        setEditandoDataVencimento(null);
+        setNovaDataVencimento('');
+        toast({ title: 'Vencimento atualizado!' });
+        return;
+      }
       const { error } = await supabase
         .from('pagamentos')
         .update({ data_prevista: novaData })
@@ -1087,7 +1101,7 @@ export default function AcordoDetalhe() {
                         ) : (
                           <span className="flex items-center gap-1">
                             <span>Vencimento: {formatarData(pagamento.data_prevista)}</span>
-                            {canEdit && (
+                             {(isAdmin || (isOwner && pagamento.status === 'pendente')) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1137,7 +1151,7 @@ export default function AcordoDetalhe() {
                             ) : (
                               <span className="flex items-center gap-1">
                                 <span>Pago em: {formatarData(pagamento.data_paga)}</span>
-                                {canEdit && (
+                                 {isAdmin && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
