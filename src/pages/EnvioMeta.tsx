@@ -162,7 +162,7 @@ function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
     if (seen.has(key) && !isentos?.has(telSuffix8(telefone))) continue;
     seen.add(key);
     rows.push({
-      telefone,
+      telefone: key,
       nome,
       cpf,
       atraso: parts[3] || "",
