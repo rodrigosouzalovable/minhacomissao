@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Retomar a prospecção do Certificado em dias úteis sem incluir a instância recusada #131031; validar o primeiro ciclo e as entregas reais
 - [ ] Verificar que o novo lote de teste Meta do Thiago preserva +1 sem retomar campanhas canceladas; conferir entrega real em destino apto
 - [ ] Confirmar com o Thiago a submissão real de template por seus números (sem disparar mensagens) e, para mídia sem acesso ao App padrão, vincular a BM/App dele
 - [x] Corrigir DDI internacional e classificação das recusas #131026 nas campanhas do Thiago sem punir as instâncias

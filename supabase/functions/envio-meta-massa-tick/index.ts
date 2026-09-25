@@ -668,6 +668,24 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   const instanciaIdsDisponiveis: string[] = instanciasPermitidas
     .filter((id: string) => !bloqueadasQualidade.includes(id) && !exclItem.includes(id));
   if (instanciaIdsDisponiveis.length === 0) {
+    if (instanciaCertificado) {
+      // Cada reserva do Certificado pertence a um único número. Uma recusa deste
+      // número não deve encerrar as reservas dos outros números do mesmo job.
+      const motivo = 'Instância reservada indisponível ou recusada pela Meta; nenhum envio confirmado';
+      await supabase.from('envio_meta_job_item').update({
+        status: 'erro', erro: motivo, processado_em: new Date().toISOString(),
+      }).eq('id', pend.id).eq('status', 'pendente');
+      if (typeof varsPend.certificado_envio_id === 'string') {
+        await supabase.from('certificado_prospeccao_envios').update({
+          status: 'falha', erro: motivo, updated_at: new Date().toISOString(),
+        }).eq('id', varsPend.certificado_envio_id).eq('status', 'reservado');
+      }
+      await supabase.rpc('envio_meta_job_bump', {
+        _job_id: job.id, _enviados_inc: 0, _erros_inc: 1,
+        _proximo_em: new Date(Date.now() + 1_000).toISOString(),
+      });
+      return { advanced: true, delayMs: 1_000 };
+    }
     // Se sobrou instância no job mas nenhuma serve para este contato, marca só o item como erro
     const restaNoJob = instanciasPermitidas.filter((id: string) => !bloqueadasQualidade.includes(id));
     if (restaNoJob.length > 0) {
@@ -890,7 +908,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     ...bloqueadasRunAtual,
     ...Object.keys(falhasMap),
   ]);
-  const todasFalharamSemSucesso = job.user_id !== THIAGO_NOGUEIRA_USER_ID &&
+  const todasFalharamSemSucesso = !instanciaCertificado && job.user_id !== THIAGO_NOGUEIRA_USER_ID &&
     !ok &&
     (job.enviados || 0) === 0 &&
     todasInstancias.length > 0 &&
@@ -918,7 +936,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   // Retry por item: em QUALQUER falha, se ainda houver outra instância
   // disponível e não estourou o teto, devolve pra fila pra outra instância tentar
   const proximasTentativas = tentativasAtual + (ok ? 0 : 1);
-  const podeReenfileirar = !ok && !erroDoDestinatario && proximasTentativas < MAX_TENTATIVAS_ITEM && restantesDisponiveis.length > 0;
+  const podeReenfileirar = !instanciaCertificado && !ok && !erroDoDestinatario && proximasTentativas < MAX_TENTATIVAS_ITEM && restantesDisponiveis.length > 0;
 
 
   if (podeReenfileirar) {
@@ -1014,7 +1032,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   await supabase.from('envio_meta_job').update(updateJob).eq('id', job.id);
 
   // Se todas as instâncias foram bloqueadas → encerra o job
-  if (job.user_id !== THIAGO_NOGUEIRA_USER_ID && restantesDisponiveis.length === 0 && bloqueadasRunAtual.length > 0) {
+  if (!instanciaCertificado && job.user_id !== THIAGO_NOGUEIRA_USER_ID && restantesDisponiveis.length === 0 && bloqueadasRunAtual.length > 0) {
     await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas foram ignoradas por falhas consecutivas');
     return { advanced: false, stop: true };
   }
