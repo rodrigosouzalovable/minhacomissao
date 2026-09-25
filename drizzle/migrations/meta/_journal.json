@@ -470,6 +470,13 @@
       "when": 1790352230283,
       "tag": "0066_index_meta_inbox_etiquetas_nao_lidas",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790353917952,
+      "tag": "0067_certificado_retentativa_historico_sem_duplicar",
+      "breakpoints": true
     }
   ]
 }

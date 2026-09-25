@@ -1412,7 +1412,7 @@ export type Database = {
           {
             foreignKeyName: "certificado_prospeccao_envios_lead_id_fkey"
             columns: ["lead_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "certificado_leads"
             referencedColumns: ["id"]
           },
