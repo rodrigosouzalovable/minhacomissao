@@ -865,7 +865,7 @@ export default function ConfigurarMeta() {
       const r = data?.resultados?.[0];
       if (r?.subscribe_ok) {
         const { data: check, error: checkError } = await supabase.functions.invoke("meta-webhook-health", {
-          body: { instancia_id: inst.id },
+          body: { instancia_id: inst.id, manual_reinscricao: true },
         });
         const resultado = check?.resultados?.[0];
         if (checkError || !resultado || resultado.status === "inconclusiva") {
@@ -1669,7 +1669,7 @@ export default function ConfigurarMeta() {
                             if (!s) return null;
                             const map: Record<string, { label: string; cls: string; title: string }> = {
                               ok: { label: "Webhook OK", cls: "border-green-500/50 text-green-600", title: "Webhook inscrito no callback correto" },
-                              reinscrito: { label: "Webhook reinscrito", cls: "border-blue-500/50 text-blue-600", title: "O sistema detectou callback incorreto e reinscreveu automaticamente" },
+                              reinscrito: { label: "Webhook reinscrito", cls: "border-blue-500/50 text-blue-600", title: "Inscrição do webhook confirmada após reinscrição" },
                               perda_suspeita: { label: "⚠ Possível perda", cls: "border-amber-500/60 text-amber-700 bg-amber-50", title: `Meta contou mais conversas iniciadas hoje do que chegaram ao Inbox. ${inst.webhook_perda_suspeita ? JSON.stringify(inst.webhook_perda_suspeita) : ""}` },
                               inconclusiva: { label: "Verificação inconclusiva", cls: "border-amber-500/60 text-amber-700", title: "A Meta não respondeu à checagem. A inscrição anterior não foi confirmada nem descartada." },
                               erro: { label: "Webhook com erro", cls: "border-red-500/60 text-red-600 bg-red-50", title: inst.webhook_ultimo_erro || "Erro ao verificar webhook" },
