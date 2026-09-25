@@ -150,6 +150,7 @@ Deno.serve(async (req) => {
           status = 'inconclusiva';
           erro = 'A Meta confirmou a inscrição, mas não informou o endereço do callback';
         }
+        }
 
         // 3) Compara conversas user_initiated de hoje vs. inbound em DB.
         if (status === 'ok') {
