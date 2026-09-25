@@ -451,6 +451,11 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    if (!telefoneMeta(cliente.telefone)) {
+      return new Response(JSON.stringify({ success: false, error: 'Telefone inválido: informe o DDI com + para números internacionais.' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const isTeste = modo_teste === true;
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);

@@ -86,11 +86,12 @@ export async function destinosAquecimento(
 
   const { data: testes } = await supabase
     .from("meta_whatsapp_instances")
-    .select("id, nome, display_phone, saude_status, ativo, instancia_teste_aquecimento, teste_aquecimento_ultimo_erro")
+    .select("id, nome, display_phone, saude_status, ativo, instancia_teste_aquecimento, teste_aquecimento_ultimo_erro, teste_aquecimento_validado_em")
     .eq("provider", "meta")
     .eq("ativo", true)
     .eq("instancia_teste_aquecimento", true)
-    .is("teste_aquecimento_ultimo_erro", null);
+    .is("teste_aquecimento_ultimo_erro", null)
+    .not("teste_aquecimento_validado_em", "is", null);
 
   const destinosTeste = (testes || [])
     .filter((d: any) => String(d.saude_status).toUpperCase() === "CONNECTED")

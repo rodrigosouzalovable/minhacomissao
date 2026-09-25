@@ -918,7 +918,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   // Retry por item: em QUALQUER falha, se ainda houver outra instância
   // disponível e não estourou o teto, devolve pra fila pra outra instância tentar
   const proximasTentativas = tentativasAtual + (ok ? 0 : 1);
-  const podeReenfileirar = !ok && proximasTentativas < MAX_TENTATIVAS_ITEM && restantesDisponiveis.length > 0;
+  const podeReenfileirar = !ok && !erroDoDestinatario && proximasTentativas < MAX_TENTATIVAS_ITEM && restantesDisponiveis.length > 0;
 
 
   if (podeReenfileirar) {

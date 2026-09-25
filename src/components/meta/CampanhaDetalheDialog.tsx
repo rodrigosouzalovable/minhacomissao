@@ -123,7 +123,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
       if (j.status !== 'rodando' && j.status !== 'pausado') return;
       const backend = (j.enviados || 0) + (j.erros || 0) + ((j as any).sem_whatsapp || 0);
       const det = getDetalhesJob(jobId);
-      const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0);
+      const cached = (det?.enviados?.length || 0) + (det?.erros?.length || 0) + (det?.semWhatsapp?.length || 0);
       // Só recarrega a 1ª página enquanto a lista ainda não estourou o limite de 200.
       // Depois disso o usuário controla via "Carregar mais" / "Atualizar".
       if (cached < 200 && backend !== cached) recarregarItensJob(jobId);

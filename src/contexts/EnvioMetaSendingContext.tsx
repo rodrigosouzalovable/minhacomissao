@@ -472,7 +472,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       .from("envio_meta_job_item")
       .select("telefone,status,instancia_nome,erro,processado_em,wa_message_id,tentativas")
       .eq("job_id", jobId)
-      .in("status", ["enviado", "erro"])
+      .in("status", ["enviado", "erro", "sem_whatsapp"])
       .order("processado_em", { ascending: false })
       .range(offset, offset + PAGINA_ITENS - 1);
     const itensProcessados = error ? [] : (data || []);
@@ -593,7 +593,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         .from("envio_meta_job_item")
         .select("telefone,status,instancia_nome,erro,processado_em,wa_message_id,tentativas")
         .eq("job_id", jobId)
-        .in("status", ["enviado", "erro"])
+        .in("status", ["enviado", "erro", "sem_whatsapp"])
         .order("processado_em", { ascending: false })
         .range(offset, offset + PAGINA - 1);
       if (error) break;
