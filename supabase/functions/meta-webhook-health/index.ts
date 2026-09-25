@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
       let status: "ok" | "reinscrito" | "erro" | "perda_suspeita" | "inconclusiva" = "ok";
       let erro: string | null = null;
       let perda: any = null;
+      let falhaConfirmada = false;
 
       try {
         const auth = { Authorization: `Bearer ${inst.access_token}` };
@@ -101,6 +102,7 @@ Deno.serve(async (req) => {
         if (current.kind !== 'confirmed') {
           status = current.kind;
           erro = current.error;
+          falhaConfirmada = current.kind === 'erro';
         } else {
           out.callback_url = current.url;
           out.subscribed = current.subscribed;
@@ -111,6 +113,7 @@ Deno.serve(async (req) => {
           if (!verifyToken) {
             status = 'erro';
             erro = 'Verify Token não configurado para esta instância';
+            falhaConfirmada = true;
           } else {
             const params = new URLSearchParams();
             params.set("override_callback_uri", webhookUrl);
@@ -129,6 +132,7 @@ Deno.serve(async (req) => {
               if (!okSub && subRes.status < 500 && subRes.status !== 429 && subRes.status !== 408) {
                 status = "erro";
                 erro = `Falha ao reinscrever: ${JSON.stringify(subData).slice(0, 200)}`;
+                falhaConfirmada = true;
               }
             } catch (_) {
               // A solicitação pode ter sido aplicada mesmo se a resposta expirou.
@@ -139,6 +143,7 @@ Deno.serve(async (req) => {
                 out.callback_url = confirmed.url;
                 status = confirmed.valid ? 'reinscrito' : confirmed.subscribed && !confirmed.visible ? 'inconclusiva' : 'erro';
                 if (status === 'erro') erro = 'Inscrição ainda ausente ou incorreta após tentativa de reinscrição';
+                if (status === 'erro') falhaConfirmada = true;
                 if (status === 'inconclusiva') erro = 'A Meta confirmou a inscrição, mas não informou o endereço do callback';
               } else {
                 status = confirmed.kind;
@@ -211,7 +216,7 @@ Deno.serve(async (req) => {
       // Notifica só UMA vez por mudança de estado (evita aviso de hora em hora).
       const statusAnterior = (inst as any).webhook_saude_status ?? null;
       const mudouEstado = statusAnterior !== status;
-      const problema = status === "erro" && out.subscribed === false || status === "perda_suspeita";
+      const problema = (status === "erro" && falhaConfirmada) || status === "perda_suspeita";
        if (problema && (mudouEstado || forceNotify)) {
 
         let corpo: string;
