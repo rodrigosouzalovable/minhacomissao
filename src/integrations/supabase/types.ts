@@ -7136,6 +7136,7 @@ export type Database = {
           waba_id: string | null
           webhook_callback_url: string | null
           webhook_perda_suspeita: Json | null
+          webhook_reinscrito_em: string | null
           webhook_saude_status: string | null
           webhook_saude_verificado_em: string | null
           webhook_ultimo_erro: string | null
@@ -7222,6 +7223,7 @@ export type Database = {
           waba_id?: string | null
           webhook_callback_url?: string | null
           webhook_perda_suspeita?: Json | null
+          webhook_reinscrito_em?: string | null
           webhook_saude_status?: string | null
           webhook_saude_verificado_em?: string | null
           webhook_ultimo_erro?: string | null
@@ -7308,6 +7310,7 @@ export type Database = {
           waba_id?: string | null
           webhook_callback_url?: string | null
           webhook_perda_suspeita?: Json | null
+          webhook_reinscrito_em?: string | null
           webhook_saude_status?: string | null
           webhook_saude_verificado_em?: string | null
           webhook_ultimo_erro?: string | null
@@ -11200,6 +11203,7 @@ export type Database = {
           waba_id: string | null
           webhook_callback_url: string | null
           webhook_perda_suspeita: Json | null
+          webhook_reinscrito_em: string | null
           webhook_saude_status: string | null
           webhook_saude_verificado_em: string | null
           webhook_ultimo_erro: string | null
@@ -12165,6 +12169,7 @@ export type Database = {
           waba_id: string | null
           webhook_callback_url: string | null
           webhook_perda_suspeita: Json | null
+          webhook_reinscrito_em: string | null
           webhook_saude_status: string | null
           webhook_saude_verificado_em: string | null
           webhook_ultimo_erro: string | null
@@ -12267,6 +12272,7 @@ export type Database = {
           waba_id: string | null
           webhook_callback_url: string | null
           webhook_perda_suspeita: Json | null
+          webhook_reinscrito_em: string | null
           webhook_saude_status: string | null
           webhook_saude_verificado_em: string | null
           webhook_ultimo_erro: string | null

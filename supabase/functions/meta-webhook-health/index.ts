@@ -19,6 +19,36 @@ function graphFetch(url: string, init: RequestInit = {}) {
   return fetch(url, { ...init, signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS) });
 }
 
+function callbackFrom(data: any, expected: string): { url: string | null; valid: boolean; subscribed: boolean; visible: boolean } {
+  const apps = Array.isArray(data?.data) ? data.data : [];
+  // "link" é a página pública do app Meta, NÃO o endereço de callback.
+  const urls = apps.map((app: any) => app?.whatsapp_business_api_data?.override_callback_uri || null).filter(Boolean);
+  return { url: urls.find((url: string | null) => url === expected) || urls[0] || null, valid: urls.includes(expected), subscribed: apps.length > 0, visible: urls.length > 0 };
+}
+
+async function subscriptionStatus(wabaId: string, auth: Record<string, string>, expected: string) {
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(wabaId)}/subscribed_apps?fields=whatsapp_business_api_data`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await graphFetch(url, { headers: auth });
+      const data = await res.json();
+      if (!res.ok) {
+        const message = String(data?.error?.message || `HTTP ${res.status}`).slice(0, 200);
+        if (res.status >= 500 || res.status === 429 || res.status === 408) {
+          if (attempt === 0) continue;
+          return { kind: 'inconclusiva' as const, error: message };
+        }
+        return { kind: 'erro' as const, error: `Meta recusou a consulta: ${message}` };
+      }
+      if (!Array.isArray(data?.data)) return { kind: 'inconclusiva' as const, error: 'Resposta de inscrições inválida' };
+      return { kind: 'confirmed' as const, ...callbackFrom(data, expected) };
+    } catch (e) {
+      if (attempt === 1) return { kind: 'inconclusiva' as const, error: String(e).slice(0, 200) };
+    }
+  }
+  return { kind: 'inconclusiva' as const, error: 'Consulta indisponível' };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -29,15 +59,16 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const body = await req.json().catch(() => ({}));
-    const targetId: string | undefined = body?.instancia_id;
-    const forceNotify: boolean = !!body?.notify;
+    const targetId: string | undefined = typeof body?.instancia_id === 'string' && /^[0-9a-f-]{36}$/i.test(body.instancia_id) ? body.instancia_id : undefined;
+    if (body?.instancia_id !== undefined && !targetId) return new Response(JSON.stringify({ success: false, error: 'Instância inválida' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const forceNotify: boolean = body?.notify === true;
 
     const tokenResolver = await criarTokenResolver(supabase);
 
 
     const q = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, waba_id, phone_number_id, display_phone, access_token, ativo, provider, webhook_saude_status, webhook_ultimo_erro");
+      .select("id, nome, waba_id, phone_number_id, display_phone, access_token, ativo, provider, webhook_saude_status, webhook_reinscrito_em, webhook_ultimo_erro");
     const { data: instanciasRaw, error } = targetId
       ? await q.eq("id", targetId)
       : await q.eq("ativo", true);
@@ -58,57 +89,76 @@ Deno.serve(async (req) => {
 
     const verificarInstancia = async (inst: any) => {
       const out: any = { id: inst.id, nome: inst.nome };
-      let status: "ok" | "reinscrito" | "erro" | "perda_suspeita" = "ok";
+      let status: "ok" | "reinscrito" | "erro" | "perda_suspeita" | "inconclusiva" = "ok";
       let erro: string | null = null;
       let perda: any = null;
+      let falhaConfirmada = false;
 
       try {
         const auth = { Authorization: `Bearer ${inst.access_token}` };
 
         // 1) Verifica subscribed_apps e o callback registrado.
-        const listRes = await graphFetch(
-          `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}/subscribed_apps?fields=whatsapp_business_api_data`,
-          { headers: auth },
-        );
-        const listData = await listRes.json();
-        const apps = Array.isArray(listData?.data) ? listData.data : [];
-        const cbUrl: string | null =
-          apps[0]?.whatsapp_business_api_data?.link ||
-          apps[0]?.whatsapp_business_api_data?.override_callback_uri ||
-          null;
-        const callbackOk = !!cbUrl && cbUrl.includes("/meta-whatsapp-webhook");
-        out.callback_url = cbUrl;
-        out.subscribed = apps.length > 0;
+        const current = await subscriptionStatus(inst.waba_id, auth, webhookUrl);
+        if (current.kind !== 'confirmed') {
+          status = current.kind;
+          erro = current.error;
+          falhaConfirmada = current.kind === 'erro';
+        } else {
+          out.callback_url = current.url;
+          out.subscribed = current.subscribed;
 
-        // 2) Reinscreve se ausente ou apontando para outro serviço.
-        if (!apps.length || !callbackOk) {
+          // 2) Reinscreve se ausente ou apontando para outro serviço.
+        if (!current.subscribed || (current.visible && !current.valid)) {
           const verifyToken = tokenResolver.paraInstancia(inst.id);
-          if (!verifyToken) throw new Error("Verify Token não configurado para esta instância");
-          const params = new URLSearchParams();
-          params.set("override_callback_uri", webhookUrl);
-          params.set("verify_token", verifyToken);
-
-          const subRes = await graphFetch(
-            `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}/subscribed_apps`,
-            {
-              method: "POST",
-              headers: { ...auth, "Content-Type": "application/x-www-form-urlencoded" },
-              body: params,
-            },
-          );
-          const subData = await subRes.json();
-          const okSub = subRes.ok && (subData?.success === true || !!subData?.id);
-          if (okSub) {
-            status = "reinscrito";
-            out.callback_url = webhookUrl;
+          if (!verifyToken) {
+            status = 'erro';
+            erro = 'Verify Token não configurado para esta instância';
+            falhaConfirmada = true;
           } else {
-            status = "erro";
-            erro = `Falha ao reinscrever: ${JSON.stringify(subData).slice(0, 200)}`;
+            const params = new URLSearchParams();
+            params.set("override_callback_uri", webhookUrl);
+            params.set("verify_token", verifyToken);
+            try {
+              const subRes = await graphFetch(
+                `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(inst.waba_id)}/subscribed_apps`,
+                {
+                  method: "POST",
+                  headers: { ...auth, "Content-Type": "application/x-www-form-urlencoded" },
+                  body: params,
+                },
+              );
+              const subData = await subRes.json();
+              const okSub = subRes.ok && (subData?.success === true || !!subData?.id);
+              if (!okSub && subRes.status < 500 && subRes.status !== 429 && subRes.status !== 408) {
+                status = "erro";
+                erro = `Falha ao reinscrever: ${JSON.stringify(subData).slice(0, 200)}`;
+                falhaConfirmada = true;
+              }
+            } catch (_) {
+              // A solicitação pode ter sido aplicada mesmo se a resposta expirou.
+            }
+            if (status !== 'erro') {
+              const confirmed = await subscriptionStatus(inst.waba_id, auth, webhookUrl);
+              if (confirmed.kind === 'confirmed') {
+                out.callback_url = confirmed.url;
+                status = confirmed.valid ? 'reinscrito' : confirmed.subscribed && !confirmed.visible ? 'inconclusiva' : 'erro';
+                if (status === 'erro') erro = 'Inscrição ainda ausente ou incorreta após tentativa de reinscrição';
+                if (status === 'erro') falhaConfirmada = true;
+                if (status === 'inconclusiva') erro = 'A Meta confirmou a inscrição, mas não informou o endereço do callback';
+              } else {
+                status = confirmed.kind;
+                erro = confirmed.error;
+              }
+            }
           }
+        } else if (!current.visible) {
+          status = 'inconclusiva';
+          erro = 'A Meta confirmou a inscrição, mas não informou o endereço do callback';
+        }
         }
 
         // 3) Compara conversas user_initiated de hoje vs. inbound em DB.
-        if (status !== "erro") {
+        if (status === 'ok') {
           try {
             const anRes = await graphFetch(
               `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}?fields=conversation_analytics.start(${startTs}).end(${nowTs}).granularity(DAILY).phone_numbers(["${inst.display_phone ?? ""}"]).conversation_types(["USER_INITIATED"]).dimensions(["CONVERSATION_TYPE"])`,
@@ -132,16 +182,18 @@ Deno.serve(async (req) => {
             out.inbound_db_hoje = inboundDb;
 
             // Suspeita: Meta contou pelo menos 3 conversas a mais que temos no DB.
-            if (metaConversas > 0 && metaConversas - inboundDb >= 3) {
-              status = status === "reinscrito" ? "reinscrito" : "perda_suspeita";
+             const reinscritoHoje = inst.webhook_reinscrito_em &&
+               new Date(inst.webhook_reinscrito_em).getTime() >= inicioDia.getTime();
+             if (metaConversas > 0 && metaConversas - inboundDb >= 3 && !reinscritoHoje) {
+               status = "perda_suspeita";
               perda = { meta_conversas: metaConversas, inbound_db: inboundDb, diferenca: metaConversas - inboundDb };
             }
           } catch (_) {
             // analytics é opcional; não invalida o health check.
           }
         }
-      } catch (e: any) {
-        status = "erro";
+       } catch (e: any) {
+         status = "inconclusiva";
         erro = e?.message?.slice(0, 200) || String(e).slice(0, 200);
       }
 
@@ -155,7 +207,8 @@ Deno.serve(async (req) => {
           webhook_saude_status: status,
           webhook_saude_verificado_em: new Date().toISOString(),
           webhook_ultimo_erro: erro,
-          webhook_callback_url: out.callback_url ?? null,
+          ...(status === 'reinscrito' ? { webhook_reinscrito_em: new Date().toISOString() } : {}),
+          ...(out.callback_url !== undefined ? { webhook_callback_url: out.callback_url } : {}),
           webhook_perda_suspeita: perda,
         })
         .eq("id", inst.id);
@@ -163,27 +216,13 @@ Deno.serve(async (req) => {
       // Notifica só UMA vez por mudança de estado (evita aviso de hora em hora).
       const statusAnterior = (inst as any).webhook_saude_status ?? null;
       const mudouEstado = statusAnterior !== status;
-      const problema = status === "erro" || status === "perda_suspeita";
-      if ((problema && (mudouEstado || forceNotify)) || (forceNotify && status === "reinscrito")) {
-
-        const errLower = (erro || "").toLowerCase();
-        const isTimeout =
-          errLower.includes("timed out") ||
-          errLower.includes("timeout") ||
-          errLower.includes("curl_errno = 28") ||
-          errLower.includes("#2200");
+      const problema = (status === "erro" && falhaConfirmada) || status === "perda_suspeita";
+       if (problema && (mudouEstado || forceNotify)) {
 
         let corpo: string;
         let emoji: string;
 
-        if (status === "reinscrito") {
-          emoji = "🔄";
-          corpo = [
-            "O recebimento de mensagens desta instância caiu e o sistema já religou sozinho.",
-            "",
-            "Nenhuma ação necessária — as mensagens dos clientes já estão chegando no Inbox de novo.",
-          ].join("\n");
-        } else if (status === "perda_suspeita") {
+         if (status === "perda_suspeita") {
           emoji = "⚠️";
           corpo = [
             `A Meta registrou ${perda?.meta_conversas} conversa(s) iniciada(s) por clientes hoje,`,
@@ -194,29 +233,12 @@ Deno.serve(async (req) => {
             "• Se estiver vermelho, clique em Diagnóstico → Reinscrever webhook.",
             "• Peça ao cliente para reenviar a última mensagem se algo importante sumiu.",
           ].join("\n");
-        } else if (isTimeout) {
-          emoji = "⚠️";
-          corpo = [
-            "A Meta demorou demais para responder ao nosso servidor na hora de reconectar",
-            "o recebimento de mensagens desta instância (timeout de 6 segundos).",
-            "",
-            "Isso costuma ser uma instabilidade momentânea entre a Meta e o nosso servidor.",
-            "O sistema tentará novamente sozinho na próxima verificação automática.",
-            "",
-            "O que fazer:",
-            "• Nenhuma ação imediata é necessária.",
-            "• Se receber 3+ avisos seguidos da MESMA instância em menos de 1 hora,",
-            "  abra Configurar Meta → Diagnóstico dela e clique em \"Reinscrever webhook\".",
-            "• Só se preocupe se pararem de chegar mensagens de clientes por mais de 30 minutos.",
-            "",
-            `Detalhe técnico: ${(erro || "").slice(0, 140)}`,
-          ].join("\n");
         } else {
           emoji = "🚨";
           const motivoCurto = (erro || "desconhecido").replace(/\s+/g, " ").slice(0, 160);
           corpo = [
-            "Não foi possível reconectar o recebimento de mensagens desta instância.",
-            "Enquanto isso, mensagens novas de clientes podem não aparecer no Inbox.",
+             "A Meta confirmou um problema na inscrição do webhook ou recusou a verificação/recuperação.",
+             "Mensagens novas de clientes podem não aparecer no Inbox.",
             "",
             "O que fazer:",
             "• Abra Configurar Meta, localize esta instância e clique em Diagnóstico.",
