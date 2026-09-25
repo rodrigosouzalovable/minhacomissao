@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
         );
         const subData = await subRes.json();
         out.subscribe_ok = subRes.ok && (subData?.success === true || !!subData?.id);
-        out.callback_confirmado = out.subscribe_ok;
+        out.callback_confirmado = false;
         out.subscribe_raw = subData;
 
         // 2) Listar inscrições atuais para diagnóstico visual.
@@ -82,6 +82,10 @@ Deno.serve(async (req) => {
         );
         out.subscriptions_status = listRes.status;
         out.subscriptions = await listRes.json();
+        out.callback_confirmado = out.subscribe_ok && listRes.ok && Array.isArray(out.subscriptions?.data) &&
+          out.subscriptions.data.some((app: any) =>
+            (app?.whatsapp_business_api_data?.override_callback_uri || app?.whatsapp_business_api_data?.link) === webhookUrl
+          );
       } catch (e: any) {
         out.error = e?.message || String(e);
         out.subscribe_ok = false;
