@@ -845,6 +845,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     const enviados: EnvioItem[] = [];
     const erros: EnvioItem[] = [];
     const tentandoNovamente: EnvioItem[] = [];
+    const semWhatsappPersistidos: string[] = [];
     for (const it of its) {
       const ts = it.processado_em ? new Date(it.processado_em).getTime() : Date.now();
       const key = String(it.wa_message_id || "");
@@ -858,6 +859,8 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           deliveryStatus: dlv?.status,
           deliveryErro: dlv?.erro,
         });
+      } else if (it.status === "sem_whatsapp") {
+        semWhatsappPersistidos.push(it.telefone);
       } else if (it.status === "erro") {
         if (isRateLimitErro(it.erro)) continue;
         erros.push({ telefone: it.telefone, instancia: it.instancia_nome || undefined, erro: it.erro || undefined, ts, tentativas: Number(it.tentativas || 0) });
@@ -866,7 +869,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       }
     }
     const ex = extras[jobId] || { semWhatsapp: [], erroValidacao: [] };
-    return { enviados, erros, tentandoNovamente, semWhatsapp: ex.semWhatsapp, erroValidacao: ex.erroValidacao };
+    return { enviados, erros, tentandoNovamente, semWhatsapp: Array.from(new Set([...ex.semWhatsapp, ...semWhatsappPersistidos])), erroValidacao: ex.erroValidacao };
   }, [itensByJob, logByJob, extras]);
 
   const getDeliveryResumoJob = useCallback((jobId: string): DeliveryResumo => {
