@@ -60,13 +60,14 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const targetId: string | undefined = body?.instancia_id;
     const forceNotify: boolean = !!body?.notify;
+    const manualReinscricao = !!targetId && body?.manual_reinscricao === true;
 
     const tokenResolver = await criarTokenResolver(supabase);
 
 
     const q = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, waba_id, phone_number_id, display_phone, access_token, ativo, provider, webhook_saude_status, webhook_saude_verificado_em, webhook_ultimo_erro");
+      .select("id, nome, waba_id, phone_number_id, display_phone, access_token, ativo, provider, webhook_saude_status, webhook_reinscrito_em, webhook_ultimo_erro");
     const { data: instanciasRaw, error } = targetId
       ? await q.eq("id", targetId)
       : await q.eq("ativo", true);
@@ -106,35 +107,45 @@ Deno.serve(async (req) => {
         // 2) Reinscreve se ausente ou apontando para outro serviço.
         if (!current.valid) {
           const verifyToken = tokenResolver.paraInstancia(inst.id);
-          if (!verifyToken) throw new Error("Verify Token não configurado para esta instância");
-          const params = new URLSearchParams();
-          params.set("override_callback_uri", webhookUrl);
-          params.set("verify_token", verifyToken);
-
-           const subRes = await graphFetch(
-            `https://graph.facebook.com/${GRAPH_VERSION}/${inst.waba_id}/subscribed_apps`,
-            {
-              method: "POST",
-              headers: { ...auth, "Content-Type": "application/x-www-form-urlencoded" },
-              body: params,
-            },
-          );
-          const subData = await subRes.json();
-          const okSub = subRes.ok && (subData?.success === true || !!subData?.id);
-           if (!okSub && subRes.status < 500 && subRes.status !== 429 && subRes.status !== 408) {
-             status = "erro";
-             erro = `Falha ao reinscrever: ${JSON.stringify(subData).slice(0, 200)}`;
-           } else {
-             const confirmed = await subscriptionStatus(inst.waba_id, auth, webhookUrl);
-             if (confirmed.kind === 'confirmed') {
-               out.callback_url = confirmed.url;
-               status = confirmed.valid ? 'reinscrito' : 'erro';
-               if (!confirmed.valid) erro = 'Inscrição ainda ausente ou incorreta após tentativa de reinscrição';
-             } else {
-               status = confirmed.kind;
-               erro = confirmed.error;
-             }
-           }
+          if (!verifyToken) {
+            status = 'erro';
+            erro = 'Verify Token não configurado para esta instância';
+          } else {
+            const params = new URLSearchParams();
+            params.set("override_callback_uri", webhookUrl);
+            params.set("verify_token", verifyToken);
+            try {
+              const subRes = await graphFetch(
+                `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(inst.waba_id)}/subscribed_apps`,
+                {
+                  method: "POST",
+                  headers: { ...auth, "Content-Type": "application/x-www-form-urlencoded" },
+                  body: params,
+                },
+              );
+              const subData = await subRes.json();
+              const okSub = subRes.ok && (subData?.success === true || !!subData?.id);
+              if (!okSub && subRes.status < 500 && subRes.status !== 429 && subRes.status !== 408) {
+                status = "erro";
+                erro = `Falha ao reinscrever: ${JSON.stringify(subData).slice(0, 200)}`;
+              }
+            } catch (_) {
+              // A solicitação pode ter sido aplicada mesmo se a resposta expirou.
+            }
+            if (status !== 'erro') {
+              const confirmed = await subscriptionStatus(inst.waba_id, auth, webhookUrl);
+              if (confirmed.kind === 'confirmed') {
+                out.callback_url = confirmed.url;
+                status = confirmed.valid ? 'reinscrito' : 'erro';
+                if (!confirmed.valid) erro = 'Inscrição ainda ausente ou incorreta após tentativa de reinscrição';
+              } else {
+                status = confirmed.kind;
+                erro = confirmed.error;
+              }
+            }
+          }
+        } else if (manualReinscricao) {
+          status = 'reinscrito';
         }
         }
 
@@ -163,8 +174,8 @@ Deno.serve(async (req) => {
             out.inbound_db_hoje = inboundDb;
 
             // Suspeita: Meta contou pelo menos 3 conversas a mais que temos no DB.
-             const reinscritoHoje = inst.webhook_saude_status === 'reinscrito' &&
-               inst.webhook_saude_verificado_em && new Date(inst.webhook_saude_verificado_em).getTime() >= inicioDia.getTime();
+             const reinscritoHoje = inst.webhook_reinscrito_em &&
+               new Date(inst.webhook_reinscrito_em).getTime() >= inicioDia.getTime();
              if (metaConversas > 0 && metaConversas - inboundDb >= 3 && !reinscritoHoje) {
                status = "perda_suspeita";
               perda = { meta_conversas: metaConversas, inbound_db: inboundDb, diferenca: metaConversas - inboundDb };
@@ -188,6 +199,7 @@ Deno.serve(async (req) => {
           webhook_saude_status: status,
           webhook_saude_verificado_em: new Date().toISOString(),
           webhook_ultimo_erro: erro,
+          ...(status === 'reinscrito' ? { webhook_reinscrito_em: new Date().toISOString() } : {}),
            ...(out.callback_url !== undefined ? { webhook_callback_url: out.callback_url } : {}),
           webhook_perda_suspeita: perda,
         })
