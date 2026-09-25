@@ -255,17 +255,16 @@ Deno.serve(async (req) => {
     if (janelaExperimento !== null && dataAlvo) leadsQuery = leadsQuery.eq("data_abertura", dataAlvo);
     const { data: leadsCandidatos, error: leadsError } = await leadsQuery.order("created_at", { ascending: true }).limit(Math.max(restante * 4, restante));
     if (leadsError) throw leadsError;
+    const sufixosCandidatos = [...new Set((leadsCandidatos ?? []).map((lead: any) =>
+      String(lead.telefone_principal ?? "").replace(/\D/g, "").slice(-8)
+    ).filter((sufixo: string) => sufixo.length === 8))];
     const sufixosJaUsados = new Set<string>();
-    for (let inicio = 0; ; inicio += 1000) {
-      const { data: usados, error: usadosError } = await service.from("certificado_prospeccao_envios")
-        .select("certificado_leads!inner(telefone_principal)").in("status", ["reservado", "enviado", "entregue", "lido", "respondido"])
-        .range(inicio, inicio + 999);
+    for (let inicio = 0; inicio < sufixosCandidatos.length; inicio += 500) {
+      const { data: usados, error: usadosError } = await service.rpc("certificado_sufixos_usados_por_candidatos", {
+        p_sufixos: sufixosCandidatos.slice(inicio, inicio + 500),
+      });
       if (usadosError) throw usadosError;
-      for (const envio of usados ?? []) {
-        const telefone = String((envio as any).certificado_leads?.telefone_principal ?? "").replace(/\D/g, "");
-        if (telefone.length >= 8) sufixosJaUsados.add(telefone.slice(-8));
-      }
-      if ((usados ?? []).length < 1000) break;
+      for (const sufixo of usados ?? []) sufixosJaUsados.add(sufixo);
     }
     const candidatosIneditos = (leadsCandidatos ?? []).filter((lead: any) => {
       const telefone = String(lead.telefone_principal ?? "").replace(/\D/g, "");
