@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
       resumoColeta = { pulada: true, motivo: "Estoque local suficiente", encontrados: 0, novos: 0, janelas: 0, janelas_sucesso: 0, janelas_falha: 0, janelas_pendentes: 0 };
 
       if (confirmados < metaConfirmados && pendentes > 0) {
-        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento);
+        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
         resumoVerificacao = verificacao;
         confirmados = await contarConfirmados();
         pendentes = await contarPendentes();
@@ -142,12 +142,12 @@ Deno.serve(async (req) => {
         for (const janela of janelas) {
           let paginaInicial = 1;
           while (Date.now() - inicioProcessamento < LIMITE_COLETA_MS && confirmados < metaConfirmados) {
-            const resultado = await coletarJanela(service, cfg, janela, true, { maxPaginas: 10, paginaInicial, maxTentativas: 1, timeoutMs: 15_000 });
+            const resultado = await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, true, { maxPaginas: 3, paginaInicial, maxTentativas: 1, timeoutMs: 15_000 });
             resultados.push(resultado);
             if (resultado.erro || resultado.erro_temporario) break;
             const faltam = Math.max(0, metaConfirmados - confirmados);
             if (faltam > 0 && resultado.novos > 0) {
-              resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), janelaExperimento ?? undefined, dataAlvoExperimento);
+               resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), janelaExperimento ?? undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
             }
             confirmados = await contarConfirmados();
             pendentes = await contarPendentes();
@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
       }
 
       if (confirmados < metaConfirmados && pendentes > 0 && !resumoVerificacao) {
-        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento);
+         const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
         resumoVerificacao = verificacao;
       }
       const { count: aindaPendentes } = await service.from("certificado_leads")
