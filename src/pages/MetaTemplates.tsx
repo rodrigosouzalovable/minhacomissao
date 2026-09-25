@@ -662,9 +662,9 @@ export default function MetaTemplates() {
                   <div className="grid md:grid-cols-3 gap-4">
                     <div>
                       <Label>Nome (slug)</Label>
-                      <Input value={nome} onChange={(e) => setNome(e.target.value.toLowerCase())}
+                      <Input value={nome} onChange={(e) => setNome(e.target.value.toLowerCase().replace(/\s/g, "_"))}
                         placeholder="boleto_vencimento_novo_mundo" />
-                      <p className="text-xs text-muted-foreground mt-1">apenas a-z, 0-9 e _</p>
+                      <p className="text-xs text-muted-foreground mt-1">Espaços viram _. Use apenas a-z, 0-9 e _.</p>
                       {nomeDuplicado && (
                         <p className="text-xs mt-1 font-medium text-amber-600 dark:text-amber-400">
                           Já existe um modelo com esse nome ({nomeDuplicado.categoria}) na aba "Aplicar em lote".
@@ -1147,8 +1147,9 @@ export default function MetaTemplates() {
                 </div>
 
                 <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-muted-foreground space-y-1">
-                  <p className="font-medium text-foreground">Fluxo recomendado (evita rejeição em massa)</p>
-                  <p>1. Envie o <b>piloto</b> para 1 número. 2. Aguarde a aprovação da Meta. 3. Clique em <b>Replicar nas demais</b> — só as instâncias ainda não aprovadas recebem.</p>
+                  <p className="font-medium text-foreground">Envio para aprovação na Meta</p>
+                  <p>Você pode enviar para todos os números selecionados agora, sem piloto. A Meta avalia cada número separadamente; se o modelo for recusado, a rejeição pode ocorrer em todos.</p>
+                  <p>Se preferir reduzir esse risco, envie um <b>piloto</b>, aguarde a aprovação e depois clique em <b>Replicar nas demais</b>.</p>
                   <p><b>Tier 250:</b> no máximo 2 submissões de templates por número/dia, inclusive em envios manuais.</p>
                   <p>Aprovar um template MARKETING não libera disparos a clientes; o bloqueio de custos permanece ativo.</p>
                   {mestres.find((m) => m.id === selMestre)?.reclassificado_marketing && <p className="text-destructive">Este modelo foi reclassificado pela Meta como MARKETING. Se foi criado como UTILITY, cadastre outro na categoria correta para reenviar.</p>}
@@ -1171,7 +1172,7 @@ export default function MetaTemplates() {
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                     Replicar nas demais
                   </Button>
-                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0 || mestres.find((m) => m.id === selMestre)?.categoria === "MARKETING"}>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0}>
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar para todas agora ({selInst.size})
                   </Button>

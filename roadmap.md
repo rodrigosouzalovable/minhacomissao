@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Converter espaços do nome do Template Meta em underline e permitir envio direto para todos os números selecionados, inclusive MARKETING, sem piloto obrigatório
 - [x] Liberar submissão de templates MARKETING para aprovação da Meta sem liberar disparos
 - [x] Substituir “Marcar como concluído” por “Abrir Conversa” no aviso de retorno da Inbox Meta e abrir a conversa original sem concluir o lembrete
 - [ ] Validar o endereço da API 3C Plus e a sincronização autenticada com o fornecedor (o endereço .com.br informado não resolve; o .com responde 404 para a rota consultada)
