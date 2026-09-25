@@ -419,6 +419,21 @@ export default function AcordoDetalhe() {
       return;
     }
     try {
+      if (isOwner && !isAdmin) {
+        const parcela = pagamentos.find(p => p.id === pagamentoId);
+        if (!parcela || parcela.status !== 'pendente') throw new Error('Só é possível alterar parcelas pendentes.');
+        const { error } = await supabase.rpc('editar_acordo_proprio', {
+          p_acordo_id: acordo.id,
+          p_telefone: acordo.cliente_telefone,
+          p_parcelas: [{ id: pagamentoId, valor: novoValor, data: parcela.data_prevista }],
+        });
+        if (error) throw error;
+        await fetchAcordo();
+        setEditandoValorParcela(null);
+        setNovoValorParcela('');
+        toast({ title: 'Parcela atualizada!' });
+        return;
+      }
       const { error: errParcela } = await supabase
         .from('pagamentos')
         .update({ valor_parcela: novoValor })
@@ -709,14 +724,14 @@ export default function AcordoDetalhe() {
                     </>
                   )}
                 </Button>
-                <Button
+                {(isAdmin || isOwner) && <Button
                   variant="outline"
                   size="sm"
                   onClick={() => navigate(`/acordos/${acordo.id}/editar`)}
                 >
                   <Pencil className="h-4 w-4 mr-1" />
                   Editar
-                </Button>
+                </Button>}
               </>
             )}
             {isAdmin && acordo.status !== 'ativo' && (
@@ -1142,7 +1157,7 @@ export default function AcordoDetalhe() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      {isAdmin && editandoValorParcela === pagamento.id ? (
+                      {(isAdmin || (isOwner && pagamento.status === 'pendente')) && editandoValorParcela === pagamento.id ? (
                         <div className="flex items-center gap-1 justify-end">
                           <span className="text-sm text-muted-foreground">R$</span>
                           <Input
@@ -1175,7 +1190,7 @@ export default function AcordoDetalhe() {
                       ) : (
                         <p className="font-medium flex items-center gap-1 justify-end">
                           {formatarMoeda(pagamento.valor_parcela)}
-                          {isAdmin && (
+                          {(isAdmin || (isOwner && pagamento.status === 'pendente')) && (
                             <Button
                               variant="ghost"
                               size="sm"
