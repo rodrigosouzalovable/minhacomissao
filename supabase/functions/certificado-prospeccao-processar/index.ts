@@ -220,12 +220,15 @@ Deno.serve(async (req) => {
 
     const cotasRestantes = new Map<string, number>();
     if (modoCasaDados && !preparacaoManual) {
-      const { data: enviosDoDia, error: enviosDoDiaError } = await service.from("certificado_prospeccao_envios")
-        .select("instancia_id").eq("template_nome", templateNome).gte("reservado_em", inicioDia)
-        .in("status", ["reservado", "enviado", "entregue", "lido", "respondido"]);
-      if (enviosDoDiaError) throw enviosDoDiaError;
-      for (const instancia of participantes) {
-        const usados = (enviosDoDia ?? []).filter((envio: any) => envio.instancia_id === instancia.id).length;
+      const contagens = await Promise.all(participantes.map(async (instancia: any) => {
+        const { count, error } = await service.from("certificado_prospeccao_envios")
+          .select("id", { count: "exact", head: true }).eq("instancia_id", instancia.id)
+          .gte("reservado_em", inicioDia)
+          .in("status", ["reservado", "enviado", "entregue", "lido", "respondido"]);
+        if (error) throw error;
+        return { instancia, usados: Number(count ?? 0) };
+      }));
+      for (const { instancia, usados } of contagens) {
         const saldo = Math.max(0, cotaPorInstancia - usados);
         if (saldo > 0) cotasRestantes.set(instancia.id, saldo);
       }
