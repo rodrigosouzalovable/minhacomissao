@@ -527,7 +527,6 @@ async function reabilitarInstanciasRecuperadas(job: any, bloqueadasRun: string[]
 // Sem WhatsApp -> item marcado como 'sem_whatsapp' (não é enviado, não é erro).
 // Erro de validação / nenhuma UAZAPI conectada -> segue o envio normalmente.
 const VAL_LOTE = 100;
-const so8 = (t: string) => String(t || '').replace(/\D/g, '').slice(-8);
 
 // Guarda de concorrência: uma validação por job de cada vez (a validação roda em
 // segundo plano, sem travar a fila de envio).
