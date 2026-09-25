@@ -456,6 +456,13 @@
       "when": 1790346942740,
       "tag": "0064_meta_instance_observacoes",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1790351849387,
+      "tag": "0065_clara_complete_message_atomically",
+      "breakpoints": true
     }
   ]
 }

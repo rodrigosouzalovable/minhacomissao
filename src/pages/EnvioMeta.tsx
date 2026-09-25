@@ -1216,7 +1216,11 @@ export default function EnvioMeta() {
       const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
         body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true, liberacao_total_parceiro: liberacaoTotalThiago },
       });
-      if (error) throw error;
+      if (error) {
+        const response = 'context' in error ? (error as { context?: Response }).context : undefined;
+        const details = response ? await response.clone().json().catch(() => null) : null;
+        throw new Error(details?.error || error.message);
+      }
       if (data?.success) {
         toast.success(`Teste enviado para ${cliente.telefone} via ${instInfo?.nome || instId} (wa_id: ${data.waId || "—"})`);
       } else {
