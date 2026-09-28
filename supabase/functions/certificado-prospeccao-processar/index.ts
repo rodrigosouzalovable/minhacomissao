@@ -123,10 +123,11 @@ Deno.serve(async (req) => {
           return (qualidade === "GREEN" || qualidade === "UNKNOWN" || qualidade === "") && !instancia.saude_ban_info && (!instancia.pausa_automatica_ate || new Date(instancia.pausa_automatica_ate) <= new Date());
         });
         const idsMarcadas = aptasQualidade.map((instancia: any) => instancia.id).filter((id: string) => instanciaIdsInicio.length === 0 || instanciaIdsInicio.includes(id));
-        const { data: aprovadas } = idsMarcadas.length ? await service.from("meta_whatsapp_templates")
-          .select("instancia_id").in("instancia_id", idsMarcadas).eq("nome_template", templateNome)
+         const { data: aprovadas } = idsMarcadas.length ? await service.from("meta_whatsapp_templates")
+           .select("instancia_id,categoria").in("instancia_id", idsMarcadas).eq("nome_template", templateNome)
           .eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
         const idsAprovadas = new Set((aprovadas ?? []).map((template: any) => template.instancia_id));
+         const custoConservador = (aprovadas ?? []).every((template: any) => String(template.categoria ?? "").toUpperCase() === "UTILITY") ? 0.04 : 0.20;
         metaConfirmados = aptasQualidade
           .filter((instancia: any) => idsAprovadas.has(instancia.id))
            .reduce((total: number, instancia: any) => total + Math.min(50, Math.max(0, Number(instancia.certificado_limite_diario ?? 50))), 0);
@@ -136,9 +137,8 @@ Deno.serve(async (req) => {
         const { data: orc, error: orcErro } = await service.from("meta_aquecimento_orcamento")
           .select("teto_reais,gasto_reais,custo_utility").eq("dia", diaBrt()).maybeSingle();
         if (orcErro) throw orcErro;
-        // Planeja conservadoramente para o teto mesmo se a categoria mudar.
         const saldo = Math.max(0, Math.min(120, Number(orc?.teto_reais ?? 120)) - Number(orc?.gasto_reais ?? 0));
-        metaConfirmados = Math.min(metaConfirmados, Math.floor(saldo / Math.max(0.20, Number(orc?.custo_utility ?? 0.04))));
+        metaConfirmados = Math.min(metaConfirmados, Math.floor(saldo / Math.max(custoConservador, Number(orc?.custo_utility ?? 0.04))));
         if (!metaConfirmados) return json({ success: true, skipped: true, motivo: "Limite diário de R$ 120 do aquecimento atingido" });
       }
       const contarConfirmados = async () => {
@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
           .select("teto_reais,gasto_reais,custo_utility").eq("dia", diaBrt()).maybeSingle();
         if (orcErro) throw orcErro;
         const saldo = Math.max(0, Math.min(120, Number(orc?.teto_reais ?? 120)) - Number(orc?.gasto_reais ?? 0));
-        restante = Math.min(restante, Math.floor(saldo / Math.max(0.20, Number(orc?.custo_utility ?? 0.04))));
+        restante = Math.min(restante, Math.floor(saldo / Math.max(0.04, Number(orc?.custo_utility ?? 0.04))));
       }
       if (!restante) return json({ success: true, skipped: true, motivo: "Todos os números aptos já atingiram suas metas de hoje" });
     } else if (!preparacaoManual && !modoTeste) {
