@@ -60,6 +60,7 @@ type Instancia = {
   saude_raw?: any;
   messaging_limit_manual?: string | null;
   aquecimento_meta_ativo?: boolean | null;
+  certificado_limite_diario?: number | null;
   templates_auto_copiar?: boolean | null;
   templates_auto_status?: string | null;
   templates_auto_pausado_ate?: string | null;
@@ -123,6 +124,9 @@ export default function ConfigurarMeta() {
   const { parceiroMeta } = useUserPermissions();
   const { isAdmin } = useUserRole();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
+  const [certificadoProgresso, setCertificadoProgresso] = useState<Record<string, { enviados: number; reservados: number; falhas: number }>>({});
+  const [certificadoMetas, setCertificadoMetas] = useState<Record<string, string>>({});
+  const [certificadoBusy, setCertificadoBusy] = useState<string | null>(null);
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -439,6 +443,43 @@ export default function ConfigurarMeta() {
       cancelado = true;
     };
   }, [isAdmin, idsAquecendo.join(",")]);
+
+  const idsInstancias = useMemo(() => instancias.map((i) => i.id), [instancias]);
+  useEffect(() => {
+    setCertificadoMetas((atuais) => {
+      const proximo = { ...atuais };
+      for (const instancia of instancias) {
+        if (proximo[instancia.id] === undefined) proximo[instancia.id] = String(instancia.certificado_limite_diario ?? 50);
+      }
+      return proximo;
+    });
+    if (!isAdmin || idsInstancias.length === 0) {
+      setCertificadoProgresso({});
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const inicioDia = new Date();
+      const partes = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(inicioDia);
+      const { data, error } = await supabase
+        .from("certificado_prospeccao_envios")
+        .select("instancia_id,status")
+        .gte("reservado_em", `${partes}T03:00:00.000Z`)
+        .in("instancia_id", idsInstancias);
+      if (cancelado || error) return;
+      const mapa: Record<string, { enviados: number; reservados: number; falhas: number }> = {};
+      for (const registro of (data as any[]) ?? []) {
+        if (!registro.instancia_id) continue;
+        const atual = mapa[registro.instancia_id] ?? { enviados: 0, reservados: 0, falhas: 0 };
+        if (["enviado", "entregue", "lido", "respondido"].includes(registro.status)) atual.enviados += 1;
+        else if (registro.status === "reservado") atual.reservados += 1;
+        else if (["erro", "falha", "cancelado"].includes(registro.status)) atual.falhas += 1;
+        mapa[registro.instancia_id] = atual;
+      }
+      setCertificadoProgresso(mapa);
+    })();
+    return () => { cancelado = true; };
+  }, [isAdmin, idsInstancias.join(",")]);
 
   // Progresso da cópia gradual de templates (somente admin, sem polling)
   const [tplProgresso, setTplProgresso] = useState<Record<string, { feitos: number; total: number }>>({});
@@ -1081,6 +1122,46 @@ export default function ConfigurarMeta() {
     const { error } = await (supabase as any).from("meta_whatsapp_instances").update({ meta_bm_id: val }).eq("id", inst.id);
     if (error) { toast.error(error.message); return; }
     toast.success("BM vinculada");
+    carregar();
+  };
+
+  const salvarAquecimentoCertificado = async (inst: Instancia, ativo: boolean) => {
+    if (!isAdmin) return;
+    const limite = Number(certificadoMetas[inst.id] ?? inst.certificado_limite_diario ?? 50);
+    if (!Number.isInteger(limite) || limite < 1 || limite > 500) {
+      toast.error("A meta deve ser um número inteiro entre 1 e 500.");
+      return;
+    }
+    setCertificadoBusy(inst.id);
+    const { error } = await supabase.from("meta_whatsapp_instances").update({
+      aquecimento_meta_ativo: ativo,
+      certificado_limite_diario: limite,
+    }).eq("id", inst.id);
+    if (error) {
+      setCertificadoBusy(null);
+      toast.error(error.message);
+      return;
+    }
+    setInstancias((lista) => lista.map((item) => item.id === inst.id
+      ? { ...item, aquecimento_meta_ativo: ativo, certificado_limite_diario: limite }
+      : item));
+    if (!ativo) {
+      setCertificadoBusy(null);
+      toast.success("Aquecimento desativado. Nenhum novo contato será reservado para este número.");
+      return;
+    }
+    const { data, error: processarError } = await supabase.functions.invoke("certificado-prospeccao-processar", {
+      body: { iniciar_completo: true, automatico: true, instancia_ids_inicio: [inst.id] },
+    });
+    setCertificadoBusy(null);
+    if (processarError) {
+      const response = "context" in processarError ? (processarError as { context?: Response }).context : undefined;
+      const details = response ? await response.clone().json().catch(() => null) : null;
+      toast.error(details?.error || processarError.message);
+      return;
+    }
+    if ((data as any)?.skipped) toast.message((data as any)?.motivo || "Nenhum contato novo precisou ser reservado.");
+    else toast.success(`${Number((data as any)?.total ?? 0)} contato(s) acrescentado(s) à campanha de hoje.`);
     carregar();
   };
 
@@ -1798,9 +1879,61 @@ export default function ConfigurarMeta() {
                           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">WABA</span>
                           <span className="text-xs font-mono truncate" title={inst.waba_id}>{inst.waba_id}</span>
                         </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Enviadas hoje</span>
-                          <span className="text-xs font-medium">{inst.enviados_hoje}</span>
+                        <div className="flex flex-col min-w-0 gap-1.5">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Aquecimento Certificado</span>
+                          {isAdmin ? (() => {
+                            const progresso = certificadoProgresso[inst.id] ?? { enviados: 0, reservados: 0, falhas: 0 };
+                            const meta = Number(certificadoMetas[inst.id] ?? inst.certificado_limite_diario ?? 50);
+                            const qualidade = String(inst.saude_quality ?? "UNKNOWN").toUpperCase();
+                            const templateAprovado = templates.some((t) => t.instancia_id === inst.id && t.nome_template === "cnpj_atualizado_2" && t.idioma === "pt_BR" && t.status.toLowerCase() === "approved");
+                            const motivo = String(inst.saude_status ?? "").toUpperCase() !== "CONNECTED"
+                              ? "Desconectada"
+                              : !["GREEN", "UNKNOWN", ""].includes(qualidade)
+                                ? `Qualidade ${qualidade}`
+                                : inst.estado_pool !== "ativo" || inst.pool_fora_manual === true
+                                  ? "Fora do pool"
+                                  : !templateAprovado ? "Template não aprovado" : null;
+                            return (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <Switch
+                                    checked={!!inst.aquecimento_meta_ativo}
+                                    disabled={certificadoBusy === inst.id}
+                                    onCheckedChange={(checked) => salvarAquecimentoCertificado(inst, checked)}
+                                    aria-label={`${inst.aquecimento_meta_ativo ? "Desativar" : "Ativar"} aquecimento do Certificado`}
+                                  />
+                                  <span className="text-xs font-semibold">
+                                    {progresso.enviados} / {Number.isFinite(meta) ? meta : 50} enviadas
+                                  </span>
+                                  {progresso.reservados > 0 && <span className="text-[10px] text-muted-foreground">+{progresso.reservados} na fila</span>}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={500}
+                                    value={certificadoMetas[inst.id] ?? String(inst.certificado_limite_diario ?? 50)}
+                                    onChange={(event) => setCertificadoMetas((atuais) => ({ ...atuais, [inst.id]: event.target.value }))}
+                                    className="h-7 w-20 text-xs"
+                                    aria-label="Meta diária do Certificado"
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-xs"
+                                    disabled={certificadoBusy === inst.id}
+                                    onClick={() => salvarAquecimentoCertificado(inst, !!inst.aquecimento_meta_ativo)}
+                                  >
+                                    {certificadoBusy === inst.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Salvar"}
+                                  </Button>
+                                </div>
+                                {inst.aquecimento_meta_ativo && motivo && <span className="text-[10px] text-destructive">Pausado: {motivo}</span>}
+                                {progresso.falhas > 0 && <span className="text-[10px] text-destructive">{progresso.falhas} falha(s) hoje</span>}
+                              </div>
+                            );
+                          })() : (
+                            <span className="text-xs text-muted-foreground">Somente administrador</span>
+                          )}
                         </div>
                       </div>
 

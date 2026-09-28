@@ -7062,6 +7062,7 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           business_id: string | null
+          certificado_limite_diario: number
           chamadas_habilitadas: boolean
           criado_em: string
           data_ativacao_api: string | null
@@ -7149,6 +7150,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null
+          certificado_limite_diario?: number
           chamadas_habilitadas?: boolean
           criado_em?: string
           data_ativacao_api?: string | null
@@ -7236,6 +7238,7 @@ export type Database = {
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null
+          certificado_limite_diario?: number
           chamadas_habilitadas?: boolean
           criado_em?: string
           data_ativacao_api?: string | null
@@ -11129,6 +11132,7 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           business_id: string | null
+          certificado_limite_diario: number
           chamadas_habilitadas: boolean
           criado_em: string
           data_ativacao_api: string | null
@@ -11266,6 +11270,21 @@ export type Database = {
       can_view_meta_contato_folder: {
         Args: { _folder: string; _uid: string }
         Returns: boolean
+      }
+      certificado_reservar_lote_instancia: {
+        Args: {
+          p_bm_id: string
+          p_candidatos: Json
+          p_instancia_id: string
+          p_job_id: string
+          p_limite: number
+          p_template_idioma: string
+          p_template_nome: string
+        }
+        Returns: {
+          id: string
+          lead_id: string
+        }[]
       }
       certificado_sufixos_usados_por_candidatos: {
         Args: { p_sufixos: string[] }
@@ -12095,6 +12114,7 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           business_id: string | null
+          certificado_limite_diario: number
           chamadas_habilitadas: boolean
           criado_em: string
           data_ativacao_api: string | null
@@ -12198,6 +12218,7 @@ export type Database = {
           ativo: boolean
           atualizado_em: string
           business_id: string | null
+          certificado_limite_diario: number
           chamadas_habilitadas: boolean
           criado_em: string
           data_ativacao_api: string | null

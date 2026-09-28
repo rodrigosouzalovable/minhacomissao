@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Exibir e controlar no card Meta a ativação, o progresso e a meta diária individual do aquecimento do Certificado
 - [x] Liberar ao dono edição de credor, telefone e valor/vencimento de parcelas pendentes dos próprios acordos, protegendo operador e acordos alheios no banco
 - [x] Reservar até 50 envios diários por cada instância GREEN/UNKNOWN apta do Certificado, usando somente janelas D+5 a D+30 e isolando números restritos
 - [ ] Acompanhar o lote retomado do Certificado (578 contatos, 15 instâncias) até confirmar as entregas reais; 17 já foram entregues e 560 seguem reservados

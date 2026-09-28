@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     }
 
     const inicioDia = `${diaBrt()}T03:00:00.000Z`;
-    const cotaPorInstancia = modoCasaDados ? 50 : Number(cfg.limite_diario ?? 50);
+    const cotaPorInstancia = Number(cfg.limite_diario ?? 50);
     let restante = preparacaoManual ? Number(preparacaoManual.quantidade_alvo) : cotaPorInstancia;
     let jobExistente: any = null;
     if (!modoTeste && !preparacaoManual) {
@@ -88,8 +88,9 @@ Deno.serve(async (req) => {
       let metaConfirmados = cotaPorInstancia;
       if (modoCasaDados) {
         const { data: marcadas } = await service.from("meta_whatsapp_instances")
-          .select("id,saude_quality").eq("provider", "meta").eq("ativo", true)
+          .select("id,saude_quality,certificado_limite_diario").eq("provider", "meta").eq("ativo", true)
           .eq("instancia_teste_aquecimento", false)
+          .eq("aquecimento_meta_ativo", true)
           .eq("estado_pool", "ativo").eq("pool_fora_manual", false)
           .eq("saude_status", "CONNECTED").not("meta_bm_id", "is", null);
         const aptasQualidade = (marcadas ?? []).filter((instancia: any) => {
@@ -100,7 +101,10 @@ Deno.serve(async (req) => {
         const { data: aprovadas } = idsMarcadas.length ? await service.from("meta_whatsapp_templates")
           .select("instancia_id").in("instancia_id", idsMarcadas).eq("nome_template", templateNome)
           .eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
-        metaConfirmados = cotaPorInstancia * new Set((aprovadas ?? []).map((template: any) => template.instancia_id)).size;
+        const idsAprovadas = new Set((aprovadas ?? []).map((template: any) => template.instancia_id));
+        metaConfirmados = aptasQualidade
+          .filter((instancia: any) => idsAprovadas.has(instancia.id))
+          .reduce((total: number, instancia: any) => total + Number(instancia.certificado_limite_diario ?? 50), 0);
       }
       if (metaConfirmados === 0) return json({ success: true, skipped: true, motivo: "Nenhum número marcado está apto e com o template aprovado" });
       const contarConfirmados = async () => {
@@ -201,10 +205,10 @@ Deno.serve(async (req) => {
     if (disponibilidade?.ativo === false) return json({ error: "Template inabilitado no Certificado Digital" }, 409);
 
     let instanciasQuery = service.from("meta_whatsapp_instances")
-      .select("id,nome,user_id,display_phone,meta_bm_id,saude_status,saude_quality,saude_ban_info,estado_pool,pool_fora_manual,pausa_automatica_ate,ativo,instancia_teste_aquecimento,aquecimento_meta_ativo")
+      .select("id,nome,user_id,display_phone,meta_bm_id,saude_status,saude_quality,saude_ban_info,estado_pool,pool_fora_manual,pausa_automatica_ate,ativo,instancia_teste_aquecimento,aquecimento_meta_ativo,certificado_limite_diario")
       .eq("provider", "meta").eq("ativo", true).eq("instancia_teste_aquecimento", false);
     if (modoCasaDados) {
-      instanciasQuery = instanciasQuery.not("meta_bm_id", "is", null);
+      instanciasQuery = instanciasQuery.not("meta_bm_id", "is", null).eq("aquecimento_meta_ativo", true);
       if (instanciaIdsInicio.length > 0) instanciasQuery = instanciasQuery.in("id", instanciaIdsInicio);
     } else if (cfg.meta_bm_id) {
       instanciasQuery = instanciasQuery.eq("meta_bm_id", cfg.meta_bm_id);
@@ -236,11 +240,12 @@ Deno.serve(async (req) => {
         return { instancia, usados: Number(count ?? 0) };
       }));
       for (const { instancia, usados } of contagens) {
-        const saldo = Math.max(0, cotaPorInstancia - usados);
+        const limiteInstancia = Number(instancia.certificado_limite_diario ?? 50);
+        const saldo = Math.max(0, limiteInstancia - usados);
         if (saldo > 0) cotasRestantes.set(instancia.id, saldo);
       }
       restante = [...cotasRestantes.values()].reduce((total, cota) => total + cota, 0);
-      if (!restante) return json({ success: true, skipped: true, motivo: "Todos os números aptos já atingiram 50 mensagens hoje" });
+      if (!restante) return json({ success: true, skipped: true, motivo: "Todos os números aptos já atingiram suas metas de hoje" });
     } else if (!preparacaoManual && !modoTeste) {
       const { count, error } = await service.from("certificado_prospeccao_envios")
         .select("id", { count: "exact", head: true }).gte("reservado_em", inicioDia)
@@ -303,7 +308,7 @@ Deno.serve(async (req) => {
       }).eq("id", preparacaoManual.id);
       return json({ error: "Alguns contatos foram usados por outra campanha durante a preparação. Nenhuma campanha parcial foi criada." }, 409);
     }
-    if (simulacao) return json({ success: true, simulacao: true, elegiveis: leads?.length ?? 0, limite_restante: restante, cota_por_instancia: cotaPorInstancia, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone, restante: cotasRestantes.get(i.id) ?? cotaPorInstancia })) });
+    if (simulacao) return json({ success: true, simulacao: true, elegiveis: leads?.length ?? 0, limite_restante: restante, cota_por_instancia: cotaPorInstancia, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone, meta: Number(i.certificado_limite_diario ?? cotaPorInstancia), restante: cotasRestantes.get(i.id) ?? Number(i.certificado_limite_diario ?? cotaPorInstancia) })) });
     if (!leads?.length) return json({
       success: true,
       skipped: true,
@@ -367,12 +372,22 @@ Deno.serve(async (req) => {
       }];
     });
     const CHUNK_RESERVA = 250;
-    for (let inicio = 0; inicio < candidatosReserva.length; inicio += CHUNK_RESERVA) {
-      const lote = candidatosReserva.slice(inicio, inicio + CHUNK_RESERVA);
-      const { data: criadas, error } = await service.from("certificado_prospeccao_envios").insert(lote.map(({ lead: _lead, instancia: _instancia, ...row }: any) => row)).select("id,lead_id");
+    for (const instancia of participantes) {
+      const candidatosInstancia = candidatosReserva.filter((candidato: any) => candidato.instancia.id === instancia.id);
+      if (!candidatosInstancia.length) continue;
+      const limiteInstancia = Number(instancia.certificado_limite_diario ?? cotaPorInstancia);
+      const { data: criadas, error } = await service.rpc("certificado_reservar_lote_instancia", {
+        p_instancia_id: instancia.id,
+        p_limite: limiteInstancia,
+        p_bm_id: instancia.meta_bm_id,
+        p_template_nome: templateNome,
+        p_template_idioma: templateIdioma,
+        p_job_id: job.id,
+        p_candidatos: candidatosInstancia.map((candidato: any) => ({ id: candidato.id, lead_id: candidato.lead_id })),
+      });
       if (error) throw error;
       const idsCriados = new Set((criadas ?? []).map((reserva: any) => reserva.id));
-      for (const candidato of lote) {
+      for (const candidato of candidatosInstancia) {
         if (idsCriados.has(candidato.id)) {
           reservas.push({ lead: candidato.lead, reserva: { id: candidato.id }, instancia: candidato.instancia, ordem: ordemInicial + reservas.length });
         }
