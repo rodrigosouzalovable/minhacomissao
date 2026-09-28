@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Executar piloto anual desta semana: até 50 novos contatos por instância marcada e apta por dia, somente CNPJs ativos da Casa dos Dados, com teto obrigatório de R$120/dia; sem Google Maps
+- [x] Executar renovação anual em dias úteis: até 50 contatos inéditos por instância marcada e apta, priorizando a data exata e ampliando até ±15 dias, das 08h às 16h, com teto obrigatório de R$120/dia; sem Google Maps
 - [x] Corrigir a aplicação automática de templates na instância SOUZA 62 8243-4364: autenticar a chamada interna, recuperar falhas de sessão e mostrar somente aprovações confirmadas
 - [x] Iniciar campanha pontual comum D+20 da Casa dos Dados com 50 contatos já verificados, sem reativar Google Maps ou alterar a renovação anual
 - [ ] Acompanhar a aprovação dos modelos submetidos à Meta na instância SOUZA 62 8243-4364; a Meta ainda não aprovou o template do Certificado nessa instância

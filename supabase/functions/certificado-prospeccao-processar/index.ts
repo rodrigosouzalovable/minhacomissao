@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { coletarJanela } from "../_shared/certificado-ingest.ts";
 import { verificarLeadsCertificado } from "../_shared/certificado-whatsapp.ts";
-import { CNAES_PILOTO, etapaCertificado } from "../_shared/certificado-experimento.ts";
+import { CNAES_PILOTO, datasRenovacaoPorPrioridade, etapaCertificado } from "../_shared/certificado-experimento.ts";
 
 const FOLDER_CERTIFICADO = "9267b296-24e6-425d-9f0e-0e4114c782d9";
 const CLARA_ID = "d318692e-dc9a-4895-aa67-e21368a9de04";
@@ -53,11 +53,13 @@ Deno.serve(async (req) => {
     let janelaExperimento = etapaAutomatica?.janela ?? null;
     let dataAlvoExperimento = etapaAutomatica?.dataAlvo;
     let tipoExperimento = etapaAutomatica?.tipo ?? "abertura_recente";
+    let datasAlvoExperimento = etapaAutomatica?.tipo === "renovacao_anual" ? datasRenovacaoPorPrioridade(diaBrt()) : (dataAlvoExperimento ? [dataAlvoExperimento] : []);
     if (pontual) {
       janelaExperimento = 20;
       const alvo = new Date(`${diaBrt()}T12:00:00Z`);
       alvo.setUTCDate(alvo.getUTCDate() - 20);
       dataAlvoExperimento = alvo.toISOString().slice(0, 10);
+      datasAlvoExperimento = [dataAlvoExperimento];
       tipoExperimento = "abertura_recente";
     }
 
@@ -80,6 +82,7 @@ Deno.serve(async (req) => {
       userId = data.solicitante_id;
       janelaExperimento = Number(data.janela);
       dataAlvoExperimento = String(data.data_alvo);
+      datasAlvoExperimento = [dataAlvoExperimento];
       tipoExperimento = "abertura_recente";
     }
     if (!cfg.prospeccao_ativa && !simulacao && !modoTeste) return json({ error: "Piloto desativado" }, 409);
@@ -144,7 +147,7 @@ Deno.serve(async (req) => {
       const contarConfirmados = async () => {
         const { count, error } = await service.from("certificado_leads")
           .select("id", { count: "exact", head: true })
-            .eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").in("cnae", CNAES_PILOTO).eq("data_abertura", dataAlvoExperimento).not("telefone_principal", "is", null);
+            .eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").in("cnae", CNAES_PILOTO).in("data_abertura", datasAlvoExperimento).not("telefone_principal", "is", null);
         if (error) throw error;
         return Number(count ?? 0);
       };
@@ -152,7 +155,7 @@ Deno.serve(async (req) => {
         const { count, error } = await service.from("certificado_leads")
           .select("id", { count: "exact", head: true })
           .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
-            .eq("situacao", "novo").in("cnae", CNAES_PILOTO).eq("data_abertura", dataAlvoExperimento).not("telefone_principal", "is", null);
+            .eq("situacao", "novo").in("cnae", CNAES_PILOTO).in("data_abertura", datasAlvoExperimento).not("telefone_principal", "is", null);
         if (error) throw error;
         return Number(count ?? 0);
       };
@@ -162,7 +165,7 @@ Deno.serve(async (req) => {
       resumoColeta = { pulada: true, motivo: "Estoque local suficiente", encontrados: 0, novos: 0, janelas: 0, janelas_sucesso: 0, janelas_falha: 0, janelas_pendentes: 0 };
 
       if (confirmados < metaConfirmados && pendentes > 0) {
-        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
+        const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), undefined, undefined, undefined, CNAES_PILOTO, undefined, datasAlvoExperimento);
         resumoVerificacao = verificacao;
         confirmados = await contarConfirmados();
         pendentes = await contarPendentes();
@@ -183,12 +186,12 @@ Deno.serve(async (req) => {
         for (const janela of janelas) {
           let paginaInicial = 1;
           while (Date.now() - inicioProcessamento < LIMITE_COLETA_MS && confirmados < metaConfirmados) {
-            const resultado = await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, true, { maxPaginas: 1, paginaInicial, maxTentativas: 1, timeoutMs: 10_000, dataReferencia: dataAlvoExperimento });
+            const resultado = await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, true, { maxPaginas: 1, paginaInicial, maxTentativas: 1, timeoutMs: 10_000, dataReferencia: datasAlvoExperimento[datasAlvoExperimento.length - 2] ?? dataAlvoExperimento, dataFim: datasAlvoExperimento[datasAlvoExperimento.length - 1] ?? dataAlvoExperimento });
             resultados.push(resultado);
             if (resultado.erro || resultado.erro_temporario) break;
             const faltam = Math.max(0, metaConfirmados - confirmados);
             if (faltam > 0 && resultado.novos > 0) {
-               resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), janelaExperimento ?? undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
+               resumoVerificacao = await verificarLeadsCertificado(service, Math.min(faltam, resultado.novos), undefined, undefined, undefined, CNAES_PILOTO, undefined, datasAlvoExperimento);
             }
             confirmados = await contarConfirmados();
             pendentes = await contarPendentes();
@@ -212,14 +215,14 @@ Deno.serve(async (req) => {
       }
 
       if (confirmados < metaConfirmados && pendentes > 0 && !resumoVerificacao) {
-          const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), janelaExperimento ?? undefined, dataAlvoExperimento, undefined, CNAES_PILOTO);
+          const verificacao = await verificarLeadsCertificado(service, Math.min(metaConfirmados - confirmados, pendentes), undefined, undefined, undefined, CNAES_PILOTO, undefined, datasAlvoExperimento);
         resumoVerificacao = verificacao;
       }
       const { count: aindaPendentes } = await service.from("certificado_leads")
         .select("id", { count: "exact", head: true })
         .in("whatsapp_status", ["pendente", "nao_verificado", "erro_temporario"])
         .in("cnae", CNAES_PILOTO)
-        .eq("data_abertura", dataAlvoExperimento)
+        .in("data_abertura", datasAlvoExperimento)
         .not("telefone_principal", "is", null);
       if ((aindaPendentes ?? 0) > 0 && resumoVerificacao && (resumoVerificacao as any).instancias_validadoras.length === 0) {
         return json({
@@ -305,11 +308,15 @@ Deno.serve(async (req) => {
 
     const dataAlvo = dataAlvoExperimento ?? null;
     let leadsQuery = service.from("certificado_leads").select("id,cnpj,razao_social,nome_fantasia,telefone_principal,data_abertura,dias_desde_abertura,cnae").eq("whatsapp_status", "com_whatsapp").eq("situacao", "novo").not("telefone_principal", "is", null);
-    if (modoCasaDados && !preparacaoManual) leadsQuery = leadsQuery.in("cnae", CNAES_PILOTO).eq("data_abertura", dataAlvo);
+    if (modoCasaDados && !preparacaoManual) leadsQuery = leadsQuery.in("cnae", CNAES_PILOTO).in("data_abertura", datasAlvoExperimento);
     if (preparacaoManual) leadsQuery = leadsQuery.eq("preparacao_id", preparacaoManual.id);
     if (!modoCasaDados && janelaExperimento !== null && dataAlvo) leadsQuery = leadsQuery.eq("data_abertura", dataAlvo);
-    const { data: leadsCandidatos, error: leadsError } = await leadsQuery.order("created_at", { ascending: true }).limit(Math.max(restante * 4, restante));
+    const { data: leadsCandidatosBrutos, error: leadsError } = await leadsQuery.order("created_at", { ascending: true }).limit(Math.max(restante * 4, restante));
     if (leadsError) throw leadsError;
+    const prioridadeData = new Map(datasAlvoExperimento.map((data, indice) => [data, indice]));
+    const leadsCandidatos = [...(leadsCandidatosBrutos ?? [])].sort((a: any, b: any) =>
+      (prioridadeData.get(String(a.data_abertura ?? "").slice(0, 10)) ?? 999) - (prioridadeData.get(String(b.data_abertura ?? "").slice(0, 10)) ?? 999)
+    );
     const sufixosCandidatos = [...new Set((leadsCandidatos ?? []).map((lead: any) =>
       String(lead.telefone_principal ?? "").replace(/\D/g, "").slice(-8)
     ).filter((sufixo: string) => sufixo.length === 8))];
@@ -374,7 +381,7 @@ Deno.serve(async (req) => {
       const { data: criado, error: jobError } = await service.from("envio_meta_job").insert({
         user_id: userId, status: "pausado", status_motivo: "PREPARANDO_DESTINATARIOS", template_id: principal.id, template_nome: templateNome,
         template_id_by_instance: templateIdByInstance, instancia_ids: participantes.map((i: any) => i.id),
-        min_seg: 30, max_seg: 90, total: 0, proximo_em: null,
+         min_seg: tipoExperimento === "renovacao_anual" ? 10 : 30, max_seg: tipoExperimento === "renovacao_anual" ? 25 : 90, total: 0, proximo_em: null,
         nome_campanha: tipoExperimento === "renovacao_anual"
           ? `Renovação Certificado — 1 ano — ${nomeCampanha()}`
           : `Certificado Digital${pontual ? " · Casa dos Dados" : preparacaoManual ? " Manual" : ""} — D+${janelaExperimento} — ${nomeCampanha()}`,
