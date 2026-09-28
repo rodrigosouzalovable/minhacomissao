@@ -727,7 +727,10 @@ export default function InboxMeta() {
       const etiquetaIds = modoMeusClientes ? (minhaEtiquetaId ? [minhaEtiquetaId] : []) : Array.from(filtroEtiqueta);
       const iniIso = mcDataIni ? new Date(new Date(mcDataIni).setHours(0, 0, 0, 0)).toISOString() : null;
       const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
-      const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), [...mcMarcadores].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso, buscaDebounced]);
+      const buscaLocal = buscaDebounced.trim();
+      const buscaInstancia = buscaLocal && instancias.some(i => norm(i.nome || '').includes(norm(buscaLocal)) || String(i.display_phone || '').replace(/\D/g, '').includes(buscaLocal.replace(/\D/g, '')) && buscaLocal.replace(/\D/g, '').length >= 4);
+      const buscaNoServidor = buscaInstancia ? '' : buscaLocal;
+      const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), [...mcMarcadores].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso, buscaNoServidor]);
       const cached = taggedPageRef.current.key === key ? taggedPageRef.current : null;
       const rows = cached ? [...cached.rows] : [];
       let exhausted = cached?.exhausted ?? false;
@@ -740,7 +743,7 @@ export default function InboxMeta() {
       while (rows.length < limiteContatos && !exhausted) {
         const { data, error } = await supabase.rpc('meta_inbox_tagged_search_page', {
           p_etiquetas: etiquetaIds, p_qualificacoes: modoMeusClientes ? Array.from(mcMarcadores) : [],
-          p_busca: buscaDebounced.trim(),
+          p_busca: buscaNoServidor,
           p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
           p_folder: currentFolderId, p_filtrar_folder: !modoMeusClientes,
           p_arquivado: abaAtiva === 'arquivados', p_filtrar_arquivado: !modoMeusClientes,
@@ -825,7 +828,7 @@ export default function InboxMeta() {
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
     void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current)]);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, instancias]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
