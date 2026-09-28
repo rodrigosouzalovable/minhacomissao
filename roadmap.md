@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Acompanhar verificação e aplicação Meta por instância; mostrar categoria real e parar lotes reclassificados
 - [x] Isolar templates Meta por proprietário e aplicar modelos marcados somente às próprias instâncias conectadas e GREEN, reutilizando a verificação diária
 - [x] Dar ao administrador da caixa AMARAL NM gestão de usuários e etiquetas isoladas, sem liberar outras caixas
 - [x] Corrigir o ciclo de renderização da Inbox fora da caixa CERTIFICADO e tornar os erros da prospecção diária do Certificado diagnosticáveis
