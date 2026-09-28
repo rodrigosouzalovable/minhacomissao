@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Dar ao administrador da caixa AMARAL NM gestão de usuários e etiquetas isoladas, sem liberar outras caixas
 - [x] Corrigir o ciclo de renderização da Inbox fora da caixa CERTIFICADO e tornar os erros da prospecção diária do Certificado diagnosticáveis
 - [x] Reduzir a demora da Inbox Meta com páginas nos filtros por etiqueta e Meus Clientes, leituras de metadados em paralelo e validação de respostas no navegador
 - [x] Registrar respostas automáticas de todos os envios Meta/UAZAPI e revisar, sem duplicação, as conversas dos últimos sete dias
