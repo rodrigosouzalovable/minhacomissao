@@ -28,7 +28,6 @@ export function useUserPermissions() {
     concedidoPor: permissions?.concedido_por ?? null,
     permiteCpfDuplicado: (permissions as any)?.permite_cpf_duplicado ?? false,
     podeExcluirAcordos: (permissions as any)?.pode_excluir_acordos ?? false,
-    podeMarcarPagoGlobal: (permissions as any)?.pode_marcar_pago_global ?? false,
     atendeInboxMeta: (permissions as any)?.atende_inbox_meta ?? true,
     parceiroMeta: (permissions as any)?.parceiro_meta ?? false,
     veCampanhas: (permissions as any)?.ve_campanhas ?? false,

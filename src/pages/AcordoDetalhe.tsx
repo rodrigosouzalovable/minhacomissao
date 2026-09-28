@@ -5,7 +5,6 @@ import { supabase } from '@/integrations/supabase/client';
 import successSound from '@/assets/success-sound.mp3';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,7 +35,6 @@ export default function AcordoDetalhe() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
-  const { acordosCompartilhados, concedidoPor, podeExcluirAcordos, podeMarcarPagoGlobal } = useUserPermissions();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [acordo, setAcordo] = useState<Acordo | null>(null);
@@ -62,8 +60,6 @@ export default function AcordoDetalhe() {
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
   const canEdit = isOwner || isAdmin;
-  // Permissão granular para marcar/desmarcar parcelas como pagas em qualquer acordo
-  const canMarcarPago = isAdmin || (canEdit && podeMarcarPagoGlobal);
 
   const baixarTermo = async () => {
     if (!acordo) return;
@@ -197,15 +193,15 @@ export default function AcordoDetalhe() {
 
   const marcarComoPago = async (pagamentoId: string) => {
     try {
-      const dataHoje = new Date().toISOString().split('T')[0];
       const pagamento = pagamentos.find(p => p.id === pagamentoId);
-      
-      const { error } = await supabase
-        .from('pagamentos')
-        .update({ status: 'pago', data_paga: dataHoje })
-        .eq('id', pagamentoId);
+      const { data, error } = await supabase.rpc('definir_pagamento_parcela_global', {
+        p_pagamento_id: pagamentoId,
+        p_pago: true,
+      });
 
       if (error) throw error;
+      const resultado = data as { data_paga?: string; status_acordo?: string } | null;
+      const dataHoje = resultado?.data_paga || new Date().toISOString().split('T')[0];
 
       // Reproduzir som de sucesso
       const audio = new Audio(successSound);
@@ -267,15 +263,8 @@ export default function AcordoDetalhe() {
         )
       );
 
-      // Verificar se todas as parcelas foram pagas
-      const todasPagas = pagamentos.every(p => p.id === pagamentoId || p.status === 'pago');
-      if (todasPagas && acordo) {
-        await supabase
-          .from('acordos')
-          .update({ status: 'concluido' })
-          .eq('id', acordo.id);
-        
-        setAcordo({ ...acordo, status: 'concluido' });
+      if (acordo && resultado?.status_acordo) {
+        setAcordo({ ...acordo, status: resultado.status_acordo });
       }
 
       toast({
@@ -294,13 +283,13 @@ export default function AcordoDetalhe() {
   const desmarcarComoPago = async (pagamentoId: string) => {
     try {
       const pagamento = pagamentos.find(p => p.id === pagamentoId);
-      
-      const { error } = await supabase
-        .from('pagamentos')
-        .update({ status: 'pendente', data_paga: null })
-        .eq('id', pagamentoId);
+      const { data, error } = await supabase.rpc('definir_pagamento_parcela_global', {
+        p_pagamento_id: pagamentoId,
+        p_pago: false,
+      });
 
       if (error) throw error;
+      const resultado = data as { status_acordo?: string } | null;
 
       // Reverter meta pessoal do funcionário no localStorage
       if (pagamento && user) {
@@ -327,14 +316,8 @@ export default function AcordoDetalhe() {
         )
       );
 
-      // Se o acordo estava concluído, voltar para ativo
-      if (acordo?.status === 'concluido') {
-        await supabase
-          .from('acordos')
-          .update({ status: 'ativo' })
-          .eq('id', acordo.id);
-        
-        setAcordo({ ...acordo, status: 'ativo' });
+      if (acordo && resultado?.status_acordo) {
+        setAcordo({ ...acordo, status: resultado.status_acordo });
       }
 
       toast({
@@ -495,24 +478,10 @@ export default function AcordoDetalhe() {
 
   const atualizarDataVencimento = async (pagamentoId: string, novaData: string) => {
     try {
-      if (isOwner && !isAdmin && acordo) {
-        const parcela = pagamentos.find(p => p.id === pagamentoId);
-        if (!parcela || parcela.status !== 'pendente') throw new Error('Só é possível alterar parcelas pendentes.');
-        const { error } = await supabase.rpc('editar_acordo_proprio', {
-          p_acordo_id: acordo.id, p_telefone: acordo.cliente_telefone,
-          p_parcelas: [{ id: pagamentoId, valor: parcela.valor_parcela, data: novaData }],
-        });
-        if (error) throw error;
-        setPagamentos(prev => prev.map(p => p.id === pagamentoId ? { ...p, data_prevista: novaData } : p));
-        setEditandoDataVencimento(null);
-        setNovaDataVencimento('');
-        toast({ title: 'Vencimento atualizado!' });
-        return;
-      }
-      const { error } = await supabase
-        .from('pagamentos')
-        .update({ data_prevista: novaData })
-        .eq('id', pagamentoId);
+      const { error } = await supabase.rpc('alterar_vencimento_parcela_global', {
+        p_pagamento_id: pagamentoId,
+        p_nova_data: novaData,
+      });
 
       if (error) throw error;
 
@@ -1101,7 +1070,7 @@ export default function AcordoDetalhe() {
                         ) : (
                           <span className="flex items-center gap-1">
                             <span>Vencimento: {formatarData(pagamento.data_prevista)}</span>
-                             {(isAdmin || (isOwner && pagamento.status === 'pendente')) && (
+                             {pagamento.status === 'pendente' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1312,7 +1281,7 @@ export default function AcordoDetalhe() {
                         <MessageCircle className="h-4 w-4" />
                       </Button>
                     )}
-                    {pagamento.status === 'pendente' && canMarcarPago && (
+                    {pagamento.status === 'pendente' && (
                       <Button
                         size="sm"
                         onClick={() => marcarComoPago(pagamento.id)}
@@ -1320,7 +1289,7 @@ export default function AcordoDetalhe() {
                         Marcar Pago
                       </Button>
                     )}
-                    {pagamento.status === 'pago' && canMarcarPago && (
+                    {pagamento.status === 'pago' && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -1330,9 +1299,6 @@ export default function AcordoDetalhe() {
                         <X className="h-4 w-4 mr-1" />
                         Desmarcar
                       </Button>
-                    )}
-                    {pagamento.status === 'pago' && !canMarcarPago && (
-                      <Badge variant="secondary">Pago</Badge>
                     )}
                   </div>
                 </div>

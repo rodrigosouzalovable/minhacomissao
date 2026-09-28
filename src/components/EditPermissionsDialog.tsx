@@ -53,7 +53,6 @@ export function EditPermissionsDialog({
   const [permiteCpfDuplicado, setPermiteCpfDuplicado] = useState(false);
   const [podeExcluirAcordos, setPodeExcluirAcordos] = useState(false);
   const [recebeConsultaCpf, setRecebeConsultaCpf] = useState(false);
-  const [podeMarcarPago, setPodeMarcarPago] = useState(false);
   const [atendeInboxMeta, setAtendeInboxMeta] = useState(false);
   const [parceiroMeta, setParceiroMeta] = useState(false);
   const [veCampanhas, setVeCampanhas] = useState(false);
@@ -153,7 +152,6 @@ export function EditPermissionsDialog({
       setPermiteCpfDuplicado((permissions as any).permite_cpf_duplicado ?? false);
       setPodeExcluirAcordos((permissions as any).pode_excluir_acordos ?? false);
       setRecebeConsultaCpf((permissions as any).recebe_consulta_cpf ?? false);
-      setPodeMarcarPago((permissions as any).pode_marcar_pago_global ?? false);
       setAtendeInboxMeta((permissions as any).atende_inbox_meta ?? false);
       setParceiroMeta((permissions as any).parceiro_meta ?? false);
       setVeCampanhas((permissions as any).ve_campanhas ?? false);
@@ -169,7 +167,6 @@ export function EditPermissionsDialog({
       setPermiteCpfDuplicado(false);
       setPodeExcluirAcordos(false);
       setRecebeConsultaCpf(false);
-      setPodeMarcarPago(false);
       setAtendeInboxMeta(false);
       setParceiroMeta(false);
       setVeCampanhas(false);
@@ -198,7 +195,6 @@ export function EditPermissionsDialog({
             permite_cpf_duplicado: permiteCpfDuplicado,
             pode_excluir_acordos: podeExcluirAcordos,
             recebe_consulta_cpf: recebeConsultaCpf,
-            pode_marcar_pago_global: podeMarcarPago,
             atende_inbox_meta: atendeInboxMeta,
             parceiro_meta: parceiroMeta,
             ve_campanhas: veCampanhas,
@@ -517,17 +513,6 @@ export function EditPermissionsDialog({
               <Switch
                 checked={recebeConsultaCpf}
                 onCheckedChange={setRecebeConsultaCpf}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <Label className="text-sm font-medium">Pode marcar parcelas como pago</Label>
-                <p className="text-xs text-muted-foreground">Se desativado, o usuário não conseguirá marcar/desmarcar parcelas de acordos como pagas. Admin sempre pode.</p>
-              </div>
-              <Switch
-                checked={podeMarcarPago}
-                onCheckedChange={setPodeMarcarPago}
               />
             </div>
 
