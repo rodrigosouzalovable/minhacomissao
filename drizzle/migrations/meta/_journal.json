@@ -596,6 +596,34 @@
       "when": 1790619417222,
       "tag": "0084_generalize_automatic_response_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1790621634209,
+      "tag": "0085_page_inbox_meta_tagged_contacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1790621882405,
+      "tag": "0086_page_inbox_meta_tagged_qualified_contacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1790622244793,
+      "tag": "0087_inbox_tagged_search_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1790622384844,
+      "tag": "0088_fix_inbox_tagged_search_text_match",
+      "breakpoints": true
     }
   ]
 }

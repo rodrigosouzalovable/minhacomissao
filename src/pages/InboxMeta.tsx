@@ -650,13 +650,16 @@ export default function InboxMeta() {
   // Paginação da lista de conversas: lote inicial leve + "carregar mais"
   const PAGE_CONTATOS = 300;
   const contatoIdsRef = useRef<string[]>([]);
+  const taggedPageRef = useRef<{ key: string; rows: MetaContato[]; exhausted: boolean }>({ key: '', rows: [], exhausted: false });
+  const contatosRequestRef = useRef(0);
+  const lastRefreshRef = useRef(0);
   const contatoLinkDiretoRef = useRef<MetaContato | null>(null);
   const [limiteContatos, setLimiteContatos] = useState(PAGE_CONTATOS);
 
   const [carregandoMais, setCarregandoMais] = useState(false);
 
   // Troca de caixa/instância/aba/busca volta ao primeiro lote
-  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim, filtroEtiqueta]);
+  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta]);
 
   // Link direto (aviso "Cliente autorizou a chamada"): abre a conversa do cliente
   const ultimoLinkDiretoRef = useRef('');
@@ -716,104 +719,52 @@ export default function InboxMeta() {
 
   const fetchContatos = useCallback(async () => {
     if (!user) return;
+    const request = ++contatosRequestRef.current;
     const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
 
-    // ===== Modo "Meus Clientes": todo o histórico com a etiqueta do usuário =====
-    if (modoMeusClientes) {
-      if (!minhaEtiquetaId) {
-        setContatos([]);
-        contatoIdsRef.current = [];
-        return;
-      }
-      const vinculos: string[] = [];
-      const PAG = 1000;
-      for (let p = 0; p < 20; p++) {
-        const { data: vs } = await supabase
-          .from('meta_whatsapp_contato_etiquetas')
-          .select('contato_id')
-          .eq('etiqueta_id', minhaEtiquetaId)
-          .range(p * PAG, p * PAG + PAG - 1);
-        const arr = ((vs as any[]) ?? []).map(v => v.contato_id).filter(Boolean);
-        vinculos.push(...arr);
-        if (arr.length < PAG) break;
-      }
-      const ids = Array.from(new Set(vinculos));
-      if (ids.length === 0) {
-        setContatos([]);
-        contatoIdsRef.current = [];
-        return;
-      }
+    // Etiquetas e Meus Clientes: paginação diretamente no banco, sem varrer todos os vínculos.
+    if (modoMeusClientes || filtroEtiqueta.size > 0) {
+      const etiquetaIds = modoMeusClientes ? (minhaEtiquetaId ? [minhaEtiquetaId] : []) : Array.from(filtroEtiqueta);
       const iniIso = mcDataIni ? new Date(new Date(mcDataIni).setHours(0, 0, 0, 0)).toISOString() : null;
       const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
-      const acumulado: MetaContato[] = [];
-      for (let i = 0; i < ids.length; i += 200) {
-        let qc = supabase.from('meta_whatsapp_contatos')
-          .select(selectCols)
-          .in('id', ids.slice(i, i + 200))
-          .order('ultima_mensagem_em', { ascending: false, nullsFirst: false });
-        if (filtroInstancia !== 'todas') qc = qc.eq('instancia_id', filtroInstancia);
-        if (iniIso) qc = qc.gte('ultima_mensagem_em', iniIso);
-        if (fimIso) qc = qc.lte('ultima_mensagem_em', fimIso);
-        const { data: parte } = await qc;
-        acumulado.push(...((parte as MetaContato[]) ?? []));
-      }
-      acumulado.sort((a, b) => {
-        const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
-        const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
-        return tb - ta;
-      });
-      const lista = acumulado.slice(0, limiteContatos);
-      setContatos(lista);
-      contatoIdsRef.current = lista.map(c => c.id);
-      fetchContatoEtiquetas(contatoIdsRef.current);
-      fetchQualifContatos(contatoIdsRef.current);
-      return;
-    }
-
-    // ===== Filtro por etiquetas: busca todo o histórico da caixa com essas etiquetas =====
-    if (filtroEtiqueta.size > 0) {
-      const etiquetaIds = Array.from(filtroEtiqueta);
-      const vinculos: string[] = [];
-      const PAG = 1000;
-      for (let p = 0; p < 20; p++) {
-        const { data: vs } = await supabase
-          .from('meta_whatsapp_contato_etiquetas')
-          .select('contato_id')
-          .in('etiqueta_id', etiquetaIds)
-          .range(p * PAG, p * PAG + PAG - 1);
-        const arr = ((vs as any[]) ?? []).map(v => v.contato_id).filter(Boolean);
-        vinculos.push(...arr);
-        if (arr.length < PAG) break;
-      }
-      const ids = Array.from(new Set(vinculos));
-      if (ids.length === 0) {
+      const buscaLocal = buscaDebounced.trim();
+      const buscaDigitos = buscaLocal.replace(/\D/g, '');
+      const buscaInstancia = buscaLocal && instancias.some(i =>
+        norm(i.nome || '').includes(norm(buscaLocal)) ||
+        (buscaDigitos.length >= 4 && String(i.display_phone || '').replace(/\D/g, '').includes(buscaDigitos)));
+      const buscaNoServidor = buscaInstancia ? '' : buscaLocal;
+      const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), [...mcMarcadores].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso, buscaNoServidor]);
+      const cached = taggedPageRef.current.key === key ? taggedPageRef.current : null;
+      const rows = cached ? [...cached.rows] : [];
+      let exhausted = cached?.exhausted ?? false;
+      if (etiquetaIds.length === 0) {
+        taggedPageRef.current = { key, rows: [], exhausted: true };
         setContatos([]);
         contatoIdsRef.current = [];
         return;
       }
-      const acumulado: MetaContato[] = [];
-      for (let i = 0; i < ids.length; i += 200) {
-        let qc = supabase.from('meta_whatsapp_contatos')
-          .select(selectCols)
-          .in('id', ids.slice(i, i + 200))
-          .eq('arquivado', abaAtiva === 'arquivados')
-          .order('ultima_mensagem_em', { ascending: false, nullsFirst: false });
-        if (filtroInstancia !== 'todas') qc = qc.eq('instancia_id', filtroInstancia);
-        if (currentFolderId === null) qc = qc.is('folder_id', null);
-        else qc = qc.eq('folder_id', currentFolderId);
-        const { data: parte } = await qc;
-        acumulado.push(...((parte as MetaContato[]) ?? []));
+      while (rows.length < limiteContatos && !exhausted) {
+        const { data, error } = await supabase.rpc('meta_inbox_tagged_search_page', {
+          p_etiquetas: etiquetaIds, p_qualificacoes: modoMeusClientes ? Array.from(mcMarcadores) : [],
+          p_busca: buscaNoServidor,
+          p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
+          p_folder: currentFolderId, p_filtrar_folder: !modoMeusClientes,
+          p_arquivado: abaAtiva === 'arquivados', p_filtrar_arquivado: !modoMeusClientes,
+          p_inicio: modoMeusClientes ? iniIso : null, p_fim: modoMeusClientes ? fimIso : null,
+          p_limit: PAGE_CONTATOS, p_offset: rows.length,
+        });
+        if (request !== contatosRequestRef.current) return;
+        if (error) { console.error('Falha ao carregar conversas por etiqueta:', error); return; }
+        const page = (data as MetaContato[]) ?? [];
+        rows.push(...page);
+        if (page.length < PAGE_CONTATOS) exhausted = true;
       }
-      acumulado.sort((a, b) => {
-        const ta = a.ultima_mensagem_em ? new Date(a.ultima_mensagem_em).getTime() : 0;
-        const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
-        return tb - ta;
-      });
-      const lista = acumulado.slice(0, limiteContatos);
+      if (request !== contatosRequestRef.current) return;
+      taggedPageRef.current = { key, rows, exhausted };
+      const lista = rows.slice(0, limiteContatos);
       setContatos(lista);
       contatoIdsRef.current = lista.map(c => c.id);
-      fetchContatoEtiquetas(contatoIdsRef.current);
-      fetchQualifContatos(contatoIdsRef.current);
+      void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current)]);
       return;
     }
 
@@ -830,6 +781,7 @@ export default function InboxMeta() {
     if (currentFolderId === null) q = q.is('folder_id', null);
     else q = q.eq('folder_id', currentFolderId);
     const { data: base } = await q;
+    if (request !== contatosRequestRef.current) return;
     let combinados: MetaContato[] = (base as MetaContato[]) ?? [];
 
     // Busca server-side: se usuário digitou algo, procura no banco inteiro
@@ -859,6 +811,7 @@ export default function InboxMeta() {
         if (currentFolderId === null) qs = qs.is('folder_id', null);
         else qs = qs.eq('folder_id', currentFolderId);
         const { data: extras } = await qs;
+        if (request !== contatosRequestRef.current) return;
         if (extras?.length) {
           const seen = new Set(combinados.map(c => c.id));
           for (const e of extras as MetaContato[]) {
@@ -877,9 +830,8 @@ export default function InboxMeta() {
     setContatos(combinados);
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
-    fetchContatoEtiquetas(contatoIdsRef.current);
-    fetchQualifContatos(contatoIdsRef.current);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, filtroEtiqueta]);
+    void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current)]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, instancias]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -892,6 +844,7 @@ export default function InboxMeta() {
     (async () => {
       if (limiteContatos > PAGE_CONTATOS) setCarregandoMais(true);
       await fetchContatos();
+      lastRefreshRef.current = Date.now();
       if (ativo) setCarregandoMais(false);
     })();
     return () => { ativo = false; };
@@ -907,7 +860,11 @@ export default function InboxMeta() {
       // Ao voltar para a aba, visibilitychange reconcilia a lista imediatamente.
       timer = setTimeout(() => {
         timer = null;
-        if (document.visibilityState === 'visible') fetchContatos();
+        if (document.visibilityState === 'visible') {
+          taggedPageRef.current = { key: '', rows: [], exhausted: false };
+          void fetchContatos();
+          lastRefreshRef.current = Date.now();
+        }
       }, 15000);
     };
     const contatosFilter = currentFolderId ? { filter: `folder_id=eq.${currentFolderId}` } : {};
@@ -917,17 +874,20 @@ export default function InboxMeta() {
         agendarRefetch();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contato_etiquetas' }, (payload) => {
+        taggedPageRef.current = { key: '', rows: [], exhausted: false };
         applyEtiquetaEvent(payload);
+        agendarRefetch();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_etiquetas' }, () => {
         fetchEtiquetas();
       })
       .subscribe();
     const onVis = () => {
-      if (!document.hidden) {
-        fetchContatos();
-        // Reconcilia etiquetas dos contatos visíveis caso algum evento tenha sido perdido
-        fetchContatoEtiquetas(contatoIdsRef.current);
+      if (!document.hidden && Date.now() - lastRefreshRef.current > 30_000) {
+        taggedPageRef.current = { key: '', rows: [], exhausted: false };
+        void fetchContatos();
+        lastRefreshRef.current = Date.now();
+        // fetchContatos reconcilia etiquetas e qualificações; não duplicar a leitura aqui.
       }
     };
     document.addEventListener('visibilitychange', onVis);
@@ -1174,20 +1134,13 @@ export default function InboxMeta() {
             (bTemDigito && bDigits.length >= 4 && instDigits.includes(bDigits));
           if (!matchTexto && !matchTel && !matchInst) return false;
         }
-        if (filtroEtiqueta.size > 0) {
-          const ids = contatoEtiquetas[c.id] || [];
-          if (!ids.some(id => filtroEtiqueta.has(id))) return false;
-        }
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
         if (filtroJanela24h) {
           if (!c.ultima_msg_entrada_em) return false;
           const fim = new Date(c.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
           if (fim - Date.now() <= 0) return false;
         }
-        if (modoMeusClientes && mcMarcadores.size > 0) {
-          const qids = qualifPorContato[c.id] ?? [];
-          if (!qids.some(id => mcMarcadores.has(id))) return false;
-        }
+        // Marcadores de Meus Clientes também já estão aplicados na consulta paginada.
         if (filtroQualifs.size > 0) {
           const qids = qualifPorContato[c.id] ?? [];
           if (!qids.some(id => filtroQualifs.has(id))) return false;
@@ -1236,16 +1189,39 @@ export default function InboxMeta() {
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
   const baixarMeusClientesExcel = useCallback(async () => {
-    if (contatosFiltrados.length === 0) {
+    if (!minhaEtiquetaId) {
       toast({ title: 'Nada para exportar', description: 'Nenhum cliente na lista atual.' });
       return;
     }
     setMcExportando(true);
     try {
       const { exportarParaExcel } = await import('@/lib/exportExcel');
+      const iniIso = mcDataIni ? new Date(new Date(mcDataIni).setHours(0, 0, 0, 0)).toISOString() : null;
+      const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
+      const todos: MetaContato[] = [];
+      for (let offset = 0; ; offset += PAGE_CONTATOS) {
+        const { data, error } = await supabase.rpc('meta_inbox_tagged_qualified_page', {
+          p_etiquetas: [minhaEtiquetaId], p_qualificacoes: Array.from(mcMarcadores),
+          p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
+          p_folder: null, p_filtrar_folder: false, p_arquivado: false, p_filtrar_arquivado: false,
+          p_inicio: iniIso, p_fim: fimIso, p_limit: PAGE_CONTATOS, p_offset: offset,
+        });
+        if (error) throw error;
+        const page = (data as MetaContato[]) ?? [];
+        todos.push(...page);
+        if (page.length < PAGE_CONTATOS) break;
+      }
+      const qualificacoesTodos: Record<string, string[]> = {};
+      for (let offset = 0; offset < todos.length; offset += 300) {
+        const { data, error } = await supabase.from('meta_contato_qualificacao')
+          .select('contato_id, qualificacao_id').in('contato_id', todos.slice(offset, offset + 300).map(c => c.id));
+        if (error) throw error;
+        for (const row of data ?? []) (qualificacoesTodos[row.contato_id] ??= []).push(row.qualificacao_id);
+      }
+      const filtrados = todos;
       const nomeCaixa = (id?: string | null) => (id ? (folders.find(f => f.id === id)?.nome || '—') : 'Padrão');
-      const linhas = contatosFiltrados.map(c => {
-        const ids = qualifPorContato[c.id] ?? [];
+      const linhas = filtrados.map(c => {
+        const ids = qualificacoesTodos[c.id] ?? [];
         const sel = ids.map(id => qualificacoes.find(x => x.id === id)).filter(Boolean) as MetaQualificacao[];
         const qs = sel.filter(q => !q.parent_id).map(p => {
           const mots = sel.filter(m => m.parent_id === p.id).map(m => m.nome);
@@ -1276,7 +1252,7 @@ export default function InboxMeta() {
     } finally {
       setMcExportando(false);
     }
-  }, [contatosFiltrados, qualificacoes, qualifPorContato, nomesCRM, folders, toast]);
+  }, [minhaEtiquetaId, mcDataIni, mcDataFim, filtroInstancia, mcMarcadores, qualificacoes, nomesCRM, folders, toast]);
 
 
 
@@ -2229,7 +2205,7 @@ export default function InboxMeta() {
                 </MetaConversaContextMenu>
               );
             })}
-            {contatos.length >= limiteContatos && (
+            {contatos.length >= limiteContatos && (!(modoMeusClientes || filtroEtiqueta.size > 0) || !taggedPageRef.current.exhausted) && (
               <div className="p-3">
                 <Button
                   variant="outline"
