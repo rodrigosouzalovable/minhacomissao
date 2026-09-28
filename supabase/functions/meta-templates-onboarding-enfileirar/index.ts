@@ -92,7 +92,9 @@ Deno.serve(async (req) => {
       const jaNoNumero = new Set<string>();
       for (const r of (aprovados as any[]) || []) {
         if (r.instancia_id === instanciaId) {
-          jaNoNumero.add(r.template_mestre_id);
+          if (["APPROVED", "PENDING", "IN_APPEAL", "ENVIADO"].includes(String(r.status || "").toUpperCase())) {
+            jaNoNumero.add(r.template_mestre_id);
+          }
           continue;
         }
         if (String(r.status || "").toUpperCase() !== "APPROVED") continue;
@@ -111,6 +113,11 @@ Deno.serve(async (req) => {
         .filter((r) => ["approved", "pending", "in_appeal", "pending_deletion"].includes(String(r.status || "").toLowerCase()))
         .map((r) => `${r.nome_template}|${r.idioma || "pt_BR"}`));
       const mestresAusentes = ((mestresValidos as any[]) || []).filter((m) => !chavesReais.has(`${m.nome}|${m.idioma || "pt_BR"}`));
+      const { data: filaAtual } = await supabase.from("meta_templates_onboarding_fila")
+        .select("template_mestre_id,status").eq("instancia_id", instanciaId);
+      const emProcessamento = new Set(((filaAtual as any[]) || [])
+        .filter((r) => ["PENDENTE", "ENVIADO", "APPROVED"].includes(String(r.status || "").toUpperCase()))
+        .map((r) => r.template_mestre_id));
 
       let candidatos: [string, number][];
       if (restricaoMestres) {
@@ -120,7 +127,7 @@ Deno.serve(async (req) => {
       } else {
         const listaAplicaveis = mestresAusentes.map((r) => r.id as string);
         candidatos = listaAplicaveis
-          .filter((id) => !jaNoNumero.has(id))
+          .filter((id) => !jaNoNumero.has(id) && !emProcessamento.has(id))
           .map((id, idx) => [id, (contagem.get(id) || 0) * 1000 + listaAplicaveis.length - idx] as [string, number])
           .sort((a, b) => b[1] - a[1]);
       }
@@ -151,7 +158,7 @@ Deno.serve(async (req) => {
 
       const { error: errIns } = await supabase
         .from("meta_templates_onboarding_fila")
-        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true });
+        .upsert(rows, { onConflict: "instancia_id,template_mestre_id" });
       if (errIns) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: errIns.message });
         continue;
