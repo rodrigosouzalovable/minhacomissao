@@ -362,7 +362,10 @@ Deno.serve(async (req) => {
     }
 
     const reservas: any[] = [];
-    const ordemInicial = Number(jobExistente?.total ?? 0);
+    const { count: itensAnteriores, error: itensAnterioresError } = await service.from("envio_meta_job_item")
+      .select("id", { count: "exact", head: true }).eq("job_id", job.id);
+    if (itensAnterioresError) throw itensAnterioresError;
+    const ordemInicial = Number(itensAnteriores ?? 0);
     const filaInstancias = modoCasaDados && !preparacaoManual
       ? Array.from({ length: Math.max(0, ...cotasRestantes.values()) }, (_, rodada) =>
           participantes.filter((instancia: any) => (cotasRestantes.get(instancia.id) ?? 0) > rodada)
@@ -473,14 +476,14 @@ Deno.serve(async (req) => {
         const { error: leadsReservaError } = await service.from("certificado_leads").update({ situacao: "reservado", updated_at: new Date().toISOString() }).in("id", leadIds.slice(inicio, inicio + CHUNK_RESERVA)).eq("situacao", "novo");
         if (leadsReservaError) throw leadsReservaError;
       }
-      const { error: iniciarError } = await service.from("envio_meta_job").update({
+      const { data: iniciado, error: iniciarError } = await service.from("envio_meta_job").update({
         total: ordemInicial + reservas.length,
         status: "rodando",
         status_motivo: null,
         concluido_em: null,
         proximo_em: new Date().toISOString(),
-      }).eq("id", job.id).eq("status", "pausado").eq("status_motivo", "PREPARANDO_DESTINATARIOS");
-      if (iniciarError) throw iniciarError;
+      }).eq("id", job.id).eq("status", "pausado").eq("status_motivo", "PREPARANDO_DESTINATARIOS").select("id").maybeSingle();
+      if (iniciarError || !iniciado) throw iniciarError ?? new Error("A campanha não pôde ser iniciada após a preparação");
     } catch (erroFila) {
       const reservaIds = reservas.map((reserva: any) => reserva.reserva.id);
       const itemIds = itens.map((item: any) => item.id);
@@ -490,6 +493,12 @@ Deno.serve(async (req) => {
       for (let inicio = 0; inicio < reservaIds.length; inicio += CHUNK_RESERVA) {
         await service.from("certificado_prospeccao_envios").delete().in("id", reservaIds.slice(inicio, inicio + CHUNK_RESERVA)).eq("status", "reservado");
       }
+      await service.from("envio_meta_job").update({
+        status: "erro",
+        status_motivo: "Falha ao preparar os destinatários da campanha",
+        concluido_em: new Date().toISOString(),
+        proximo_em: null,
+      }).eq("id", job.id).eq("status", "pausado").eq("status_motivo", "PREPARANDO_DESTINATARIOS");
       throw erroFila;
     }
     await service.from("certificado_config").update({ prospeccao_ultima_execucao: new Date().toISOString(), prospeccao_pausada_motivo: null }).eq("id", cfg.id);
