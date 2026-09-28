@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
       let metaConfirmados = cotaPorInstancia;
       if (modoCasaDados) {
         const { data: marcadas } = await service.from("meta_whatsapp_instances")
-          .select("id,saude_quality,certificado_limite_diario,saude_ban_info,pausa_automatica_ate").eq("provider", "meta").eq("ativo", true)
+           .select("id,saude_quality,certificado_limite_diario,saude_ban_info,pausa_automatica_ate").eq("provider", "meta").eq("ativo", true)
           .eq("instancia_teste_aquecimento", false)
           .eq("aquecimento_meta_ativo", true)
           .eq("estado_pool", "ativo").eq("pool_fora_manual", false)

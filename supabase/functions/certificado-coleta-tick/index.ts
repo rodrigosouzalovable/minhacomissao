@@ -37,12 +37,12 @@ Deno.serve(async (req) => {
     const filtro = (query: any) => query.in("cnae", CNAES_PILOTO).eq("data_abertura", etapa.dataAlvo);
 
     const { data: marcadas, error: instanciasError } = await service.from("meta_whatsapp_instances")
-      .select("id, certificado_limite_diario, saude_quality").eq("provider", "meta").eq("ativo", true)
+      .select("id, certificado_limite_diario, saude_quality, saude_ban_info, pausa_automatica_ate").eq("provider", "meta").eq("ativo", true)
       .eq("instancia_teste_aquecimento", false).eq("aquecimento_meta_ativo", true)
       .eq("saude_status", "CONNECTED")
       .eq("estado_pool", "ativo").eq("pool_fora_manual", false);
     if (instanciasError) throw instanciasError;
-    const saudaveis = (marcadas ?? []).filter((i: any) => ["GREEN", "UNKNOWN", ""].includes(String(i.saude_quality ?? "").toUpperCase()));
+    const saudaveis = (marcadas ?? []).filter((i: any) => ["GREEN", "UNKNOWN", ""].includes(String(i.saude_quality ?? "").toUpperCase()) && !i.saude_ban_info && (!i.pausa_automatica_ate || new Date(i.pausa_automatica_ate) <= new Date()));
     const { data: modelos, error: modelosError } = await service.from("meta_whatsapp_templates")
       .select("instancia_id").in("instancia_id", saudaveis.length ? saudaveis.map((i: any) => i.id) : ["00000000-0000-0000-0000-000000000000"])
       .eq("nome_template", "cnpj_atualizado_2").eq("idioma", "pt_BR").eq("status", "approved");
