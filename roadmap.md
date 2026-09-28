@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Em aberto
+- [ ] Validar o piloto de renovação anual de 28/09 a 02/10, com 50 novos WhatsApps por instância apta e resultados separados por CNAE
+- [ ] Confirmar em uma instância real que Templates > Aplicar templates enfileira os modelos faltantes sem duplicar os já existentes
 - [x] Exibir e controlar no card Meta a ativação, o progresso e a meta diária individual do aquecimento do Certificado
 - [x] Liberar ao dono edição de credor, telefone e valor/vencimento de parcelas pendentes dos próprios acordos, protegendo operador e acordos alheios no banco
 - [x] Reservar até 50 envios diários por cada instância GREEN/UNKNOWN apta do Certificado, usando somente janelas D+5 a D+30 e isolando números restritos

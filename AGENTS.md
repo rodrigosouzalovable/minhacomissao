@@ -5,5 +5,5 @@
 
 - Leituras da Inbox Meta acionadas por eventos devem ser agrupadas e evitadas com a aba oculta; filtros por etiqueta e contagens de não lidas usam índices específicos para evitar consultas repetidas de alto custo.
 - Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.
-- O calendário D+5 a D+30 do Certificado se repete em dias úteis enquanto a prospecção estiver ativa; a coleta não consulta a Casa dos Dados nos fins de semana para evitar consumo sem envio.
+- De 28/09/2026 a 02/10/2026, o Certificado busca a data-calendário exata de um ano antes para renovação; após o teste, não retoma D+5 a D+30 automaticamente.
 - A prospecção diária do Certificado usa a meta individual de cada instância marcada, com reserva atômica por número; exige Meta CONNECTED, qualidade GREEN/UNKNOWN e template aprovado, sem interromper as demais quando uma falha.

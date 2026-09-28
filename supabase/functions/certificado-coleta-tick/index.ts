@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { coletarJanela } from "../_shared/certificado-ingest.ts";
 import { verificarLeadsCertificado } from "../_shared/certificado-whatsapp.ts";
-import { CNAES_PILOTO, etapaPiloto } from "../_shared/certificado-experimento.ts";
+import { CNAES_PILOTO, etapaCertificado } from "../_shared/certificado-experimento.ts";
 
 function resposta(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -32,9 +32,9 @@ Deno.serve(async (req) => {
     if ([0, 6].includes(new Date(`${hoje}T12:00:00Z`).getUTCDay())) {
       return resposta({ success: true, skipped: true, motivo: "Coleta limitada a dias úteis" });
     }
-    const etapa = etapaPiloto(hoje);
+    const etapa = etapaCertificado(hoje);
     if (!etapa) return resposta({ success: true, skipped: true, motivo: "Fora do calendário do piloto" });
-    const filtro = (query: any) => query.in("cnae", CNAES_PILOTO).eq("dias_desde_abertura", etapa.janela).eq("data_abertura", new Date(new Date(`${hoje}T12:00:00Z`).getTime() - etapa.janela * 86400000).toISOString().slice(0, 10));
+    const filtro = (query: any) => query.in("cnae", CNAES_PILOTO).eq("data_abertura", etapa.dataAlvo);
 
     const { count: marcadas } = await service.from("meta_whatsapp_instances")
       .select("id", { count: "exact", head: true }).eq("provider", "meta").eq("ativo", true)
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     if (pendentesError) throw pendentesError;
     if (Number(pendentes ?? 0) > 0) {
       const faltam = Math.max(1, limiteDiario - Number(confirmados ?? 0));
-      const verificacao = await verificarLeadsCertificado(service, Math.min(faltam, Number(pendentes)), etapa.janela, new Date(new Date(`${hoje}T12:00:00Z`).getTime() - etapa.janela * 86400000).toISOString().slice(0, 10), undefined, CNAES_PILOTO);
+       const verificacao = await verificarLeadsCertificado(service, Math.min(faltam, Number(pendentes)), etapa.janela, etapa.dataAlvo, undefined, CNAES_PILOTO);
       await service.from("certificado_config").update({
         ultima_execucao: new Date().toISOString(),
         ultimo_status: `Coleta economizada: estoque local verificado para ${limiteDiario} envios`,
@@ -72,11 +72,11 @@ Deno.serve(async (req) => {
     const janelas = [etapa.janela];
     const resultados = [];
     for (const janela of janelas) {
-      resultados.push(await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, false, { maxPaginas: 3 }));
+       resultados.push(await coletarJanela(service, { ...cfg, cnaes: CNAES_PILOTO, somente_mei: false }, janela, false, { maxPaginas: 3, dataReferencia: etapa.dataAlvo }));
     }
 
     const falhas = resultados.filter((r) => r.erro).length;
-    const verificacao = await verificarLeadsCertificado(service, limiteDiario, etapa.janela, new Date(new Date(`${hoje}T12:00:00Z`).getTime() - etapa.janela * 86400000).toISOString().slice(0, 10), undefined, CNAES_PILOTO);
+    const verificacao = await verificarLeadsCertificado(service, limiteDiario, etapa.janela, etapa.dataAlvo, undefined, CNAES_PILOTO);
     await service.from("certificado_config").update({
       ultima_execucao: new Date().toISOString(),
       ultimo_status: falhas ? `Concluído com ${falhas} erro(s)` : "Concluído",
