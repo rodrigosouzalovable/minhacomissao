@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Send, Pause, Play, Square, Trash2 } from "lucide-react";
+import { Send, Pause, Play, Square, Trash2, RefreshCw } from "lucide-react";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import CampanhaDetalheDialog from "./CampanhaDetalheDialog";
+import AquecimentoLeadsCampanhas from "./AquecimentoLeadsCampanhas";
 import { cn } from "@/lib/utils";
 
 function statusColor(s: string) {
@@ -26,9 +27,21 @@ function statusLabel(s: string) {
 export default function CampanhasFlutuante() {
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { parceiroMeta, veCampanhas, isLoading: permLoading } = useUserPermissions();
-  const { jobs, jobsAtivos, togglePausaJob, cancelarJob, limparJob } = useEnvioMetaSending();
+  const { jobs, jobsAtivos, togglePausaJob, cancelarJob, limparJob, refreshStatus } = useEnvioMetaSending();
   const [open, setOpen] = useState(false);
   const [dialogJobId, setDialogJobId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshAquecimento = useRef<(() => Promise<void>) | null>(null);
+
+  const atualizar = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await Promise.allSettled([refreshStatus(), ...(isAdmin && refreshAquecimento.current ? [refreshAquecimento.current()] : [])]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Mostra TODAS as campanhas finalizadas (concluído / cancelado / erro) —
   // só somem quando o usuário clica em "Excluir".
@@ -53,7 +66,7 @@ export default function CampanhasFlutuante() {
   return (
     <>
       <div className="fixed bottom-4 right-4 z-40">
-        <Popover open={open} onOpenChange={setOpen}>
+         <Popover open={open} onOpenChange={(next) => { setOpen(next); if (next) void atualizar(); }}>
           <PopoverTrigger asChild>
             <Button
               size="lg"
@@ -73,13 +86,16 @@ export default function CampanhasFlutuante() {
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" side="top" className="w-96 p-0 max-h-[70vh] overflow-y-auto">
-            <div className="p-3 border-b bg-muted/40">
-              <div className="text-sm font-semibold">Campanhas de envio</div>
+             <div className="p-3 border-b bg-muted/40 flex items-start justify-between gap-2">
+               <div><div className="text-sm font-semibold">Campanhas de envio</div>
               <div className="text-xs text-muted-foreground">
                 {jobsAtivos.length > 0
                   ? `${jobsAtivos.length} em andamento`
                   : "Nenhuma campanha em andamento"}
-              </div>
+               </div></div>
+               <Button size="icon" variant="ghost" title="Atualizar campanhas" aria-label="Atualizar campanhas" disabled={refreshing} onClick={() => void atualizar()}>
+                 <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+               </Button>
             </div>
 
             {jobsAtivos.length > 0 && (
@@ -173,6 +189,8 @@ export default function CampanhasFlutuante() {
                 Nenhuma campanha ainda — inicie um disparo na aba Envio Meta.
               </div>
             )}
+
+             {isAdmin && <AquecimentoLeadsCampanhas registerRefresh={(fn) => { refreshAquecimento.current = fn; }} />}
 
           </PopoverContent>
         </Popover>
