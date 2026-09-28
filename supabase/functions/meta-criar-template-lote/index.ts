@@ -473,7 +473,7 @@ serve(async (req) => {
         if (interrompido) {
           await supabase.from("meta_templates_instancia").upsert({
             template_mestre_id: mestre_id, instancia_id: inst.id,
-            status: "CANCELADO", erro: "Interrompido: a Meta reclassificou o modelo como Marketing.",
+            status: "FALHA_ENVIO", erro: "Interrompido: a Meta reclassificou o modelo como Marketing.",
           }, { onConflict: "template_mestre_id,instancia_id" });
           await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", "Lote interrompido por reclassificação Marketing");
           detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, interrompido: true });
