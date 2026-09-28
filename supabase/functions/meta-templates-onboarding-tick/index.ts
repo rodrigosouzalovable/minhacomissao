@@ -7,7 +7,7 @@
 //  - 1 modelo por vez por número, intervalo aleatório de 2 a 5 min
 //  - 2 reprovações seguidas → pausa a fila do número e avisa
 //  - erro de limite/bloqueio da Meta → pausa 24h nesse número
-import { createClient, FunctionsHttpError } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";
@@ -50,19 +50,6 @@ const erroDeLimiteMeta = (texto: string) => {
     t.includes("131031") || t.includes("131042") || t.includes("policy violation")
   );
 };
-
-async function detalheInvocacao(error: unknown): Promise<string> {
-  if (error instanceof FunctionsHttpError) {
-    try {
-      const texto = await error.context.text();
-      const body = JSON.parse(texto);
-      return String(body?.error || body?.message || texto).slice(0, 1000);
-    } catch {
-      return String(error.message);
-    }
-  }
-  return error instanceof Error ? error.message : String(error);
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
