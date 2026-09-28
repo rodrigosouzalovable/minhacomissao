@@ -1294,7 +1294,7 @@ export default function MetaTemplates() {
                 return st && st !== "ENVIADO";
               }).length;
               return <div className="space-y-2 border p-3 text-sm">
-                <div className="flex justify-between"><strong>Aplicação · {modelo?.nome || "Template"}</strong><span>{concluidos}/{loteAtual.ids.length} processados</span></div>
+                <div className="flex items-center justify-between gap-2"><strong>Aplicação · {modelo?.nome || "Template"}</strong><div className="flex items-center gap-2"><span>{concluidos}/{loteAtual.ids.length} processados</span><Button variant="ghost" size="icon" title="Atualizar aplicação" onClick={carregar} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button></div></div>
                 <Progress value={loteAtual.ids.length ? 100 * concluidos / loteAtual.ids.length : 100} />
                 <p className="text-xs text-muted-foreground">Processamento concluído não significa aprovação pela Meta.</p>
                 <div className="max-h-64 overflow-y-auto divide-y">{ids.map((id) => {
@@ -1303,7 +1303,7 @@ export default function MetaTemplates() {
                   const real = templMeta.find((t) => t.instancia_id === id && t.nome_template === modelo?.nome && t.idioma === modelo?.idioma);
                   return <div key={id} className="flex flex-wrap items-center justify-between gap-2 py-1">
                     <span>{inst?.nome || "Número não visível nesta tela"} · {inst?.display_phone || ""}</span>
-                    <div className="flex gap-2"><Badge variant="outline">{loteAtual.adiadas.includes(id) ? "Adiado (limite diário)" : item?.status === "ENVIADO" ? "Processando" : item?.status || "Aguardando"}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : "Utilidade"}</Badge>}</div>
+                    <div className="flex gap-2"><Badge variant="outline">{loteAtual.adiadas.includes(id) ? "Adiado (limite diário)" : item?.status === "ENVIADO" ? "Processando" : item?.status || "Aguardando"}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge>}</div>
                   </div>;
                 })}</div>
               </div>;

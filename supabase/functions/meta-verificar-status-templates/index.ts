@@ -125,6 +125,13 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
         }
 
         const remotos: any[] = data.data || [];
+        // As categorias podem mudar independentemente do status de aprovação.
+        for (const remoto of remotos) {
+          if (remoto.name && remoto.language && remoto.category) {
+            await supabase.from("meta_whatsapp_templates").update({ categoria: remoto.category })
+              .eq("instancia_id", inst.id).eq("nome_template", remoto.name).eq("idioma", remoto.language);
+          }
+        }
         const remotoById = new Map(remotos.map((t) => [String(t.id), t]));
         const remotoByName = new Map(remotos.map((t) => [`${t.name}|${t.language}`, t]));
 
