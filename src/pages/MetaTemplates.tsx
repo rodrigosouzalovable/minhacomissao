@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { humanizarErroTemplate } from "@/lib/humanizarErroTemplate";
 import { Loader2, Plus, Send, Trash2, RefreshCw, X, Search, Eye, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import BusinessManagersManager from "@/components/meta/BusinessManagersManager";
@@ -135,7 +136,7 @@ export default function MetaTemplates() {
   const [mestres, setMestres] = useState<Mestre[]>([]);
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [templInst, setTemplInst] = useState<TemplateInst[]>([]);
-  const [templMeta, setTemplMeta] = useState<Array<{ instancia_id: string; nome_template: string; status: string | null }>>([]);
+  const [templMeta, setTemplMeta] = useState<Array<{ instancia_id: string; nome_template: string; idioma: string; categoria: string | null; status: string | null }>>([]);
   const [bms, setBms] = useState<Bm[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -170,6 +171,9 @@ export default function MetaTemplates() {
 
 
   const [enviando, setEnviando] = useState(false);
+  const [loteAtual, setLoteAtual] = useState<{ mestreId: string; ids: string[]; adiadas: string[] } | null>(null);
+  const [verificando, setVerificando] = useState(false);
+  const [verificacao, setVerificacao] = useState({ inicio: 0, segundos: 0, concluidas: 0, total: 0, nome: "", erro: "" });
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const { parceiroMeta } = useUserPermissions();
 
@@ -195,7 +199,7 @@ export default function MetaTemplates() {
         .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
-      supabase.from("meta_whatsapp_templates").select("instancia_id, nome_template, status"),
+       supabase.from("meta_whatsapp_templates").select("instancia_id, nome_template, idioma, categoria, status"),
       supabase.from("meta_business_managers").select("id, nome, business_id"),
     ]);
     setBms(((bmRows.data as any) || []) as Bm[]);
@@ -210,6 +214,12 @@ export default function MetaTemplates() {
   };
 
   useEffect(() => { carregar(); }, [parceiroMeta]);
+
+  useEffect(() => {
+    if (!verificando) return;
+    const timer = window.setInterval(() => setVerificacao((v) => ({ ...v, segundos: Math.floor((Date.now() - v.inicio) / 1000) })), 1000);
+    return () => window.clearInterval(timer);
+  }, [verificando]);
 
   useEffect(() => {
     const ch = supabase.channel("meta-templates-inst")
@@ -451,6 +461,7 @@ export default function MetaTemplates() {
   const enviarLote = async (modo?: "piloto" | "replicar") => {
     if (!selMestre) { toast.error("Selecione um template"); return; }
     if (modo !== "replicar" && selInst.size === 0) { toast.error("Selecione ao menos uma instância"); return; }
+    if (mestres.find((m) => m.id === selMestre)?.reclassificado_marketing) { toast.error("Modelo reclassificado como Marketing; crie uma versão corrigida."); return; }
 
     setEnviando(true);
     const { data, error } = await supabase.functions.invoke("meta-criar-template-lote", {
@@ -468,6 +479,12 @@ export default function MetaTemplates() {
       return;
     }
     const adiadas = Number((data as any)?.adiadas_tier_250 || 0);
+    setLoteAtual({
+      mestreId: selMestre,
+      ids: ((data as any)?.instancias || []).map((i: { id: string }) => i.id),
+      adiadas: ((data as any)?.adiadas || []).map((i: { instancia_id: string }) => i.instancia_id),
+    });
+    setTab("status");
     toast.success(
       adiadas > 0
         ? `${(data as any)?.total || 0} envio(s) iniciado(s). ${adiadas} número(s) tier 250 chegaram ao limite de 2 hoje.`
@@ -510,16 +527,72 @@ export default function MetaTemplates() {
   }>({ open: false, atualizados: 0, aprovados: 0, instancias: 0, resumo: [] });
 
   const verificarStatus = async () => {
-    const { data, error } = await supabase.functions.invoke("meta-verificar-status-templates", { body: {} });
-    if (error) { toast.error(error.message); return; }
-    setStatusDialog({
-      open: true,
-      atualizados: (data as any)?.atualizados ?? 0,
-      aprovados: (data as any)?.aprovados ?? 0,
-      instancias: (data as any)?.instancias ?? 0,
-      resumo: ((data as any)?.resumo || []) as any,
-    });
-    setTimeout(carregar, 1500);
+    if (verificando) return;
+    setVerificando(true);
+    setVerificacao({ inicio: Date.now(), segundos: 0, concluidas: 0, total: 0, nome: "", erro: "" });
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Sua sessão expirou. Entre novamente.");
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-verificar-status-templates`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({ forcar: true }),
+      });
+      if (!response.ok || !response.body) throw new Error(`Falha na verificação (${response.status}).`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let terminou = false;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const eventos = buffer.split("\n\n");
+        buffer = eventos.pop() || "";
+        for (const evento of eventos) {
+          const linha = evento.split("\n").find((s) => s.startsWith("data: "));
+          if (!linha) continue;
+          const dados = JSON.parse(linha.slice(6));
+          if (dados.type === "start") setVerificacao((v) => ({ ...v, total: dados.total }));
+          if (dados.type === "progress") setVerificacao((v) => ({ ...v, concluidas: dados.done, total: dados.total, nome: dados.nome }));
+          if (dados.type === "error") throw new Error(dados.error || "Falha na verificação.");
+          if (dados.type === "complete") {
+            terminou = true;
+            setStatusDialog({ open: true, atualizados: dados.atualizados ?? 0, aprovados: dados.aprovados ?? 0, instancias: dados.instancias ?? 0, resumo: dados.resumo || [] });
+            await carregar();
+          }
+        }
+      }
+      if (!terminou) throw new Error("Verificação interrompida antes da conclusão.");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Falha na verificação";
+      setVerificacao((v) => ({ ...v, erro: msg }));
+      toast.error(msg);
+    } finally {
+      setVerificando(false);
+    }
+  };
+
+  const novaVersao = (m: Mestre) => {
+    setNome(`${m.nome}_novo`);
+    setCategoria("UTILITY");
+    setIdioma(m.idioma);
+    setCorpo(m.corpo);
+    setCabecalhoTipo(m.cabecalho_tipo || "NONE");
+    setCabecalhoTexto(m.cabecalho_texto || "");
+    setRodape(m.rodape || "");
+    setBotoes(m.botoes || []);
+    setMediaPath(m.cabecalho_media_url || null);
+    setMediaMime(m.cabecalho_media_mime || null);
+    setExemploBody(m.exemplo?.body_text?.[0] || []);
+    setMestreDialog(null);
+    setTab("criar");
   };
 
   const deletarMestre = async (id: string) => {
@@ -556,7 +629,7 @@ export default function MetaTemplates() {
 
   const marcarTodosInjecao = async (valor: boolean) => {
     if (!usuarioId) return;
-    const ids = mestres.map((m) => m.id);
+     const ids = mestres.filter((m) => !m.reclassificado_marketing || !valor).map((m) => m.id);
     if (ids.length === 0) return;
     const { error } = await supabase
       .from("meta_templates_mestre")
