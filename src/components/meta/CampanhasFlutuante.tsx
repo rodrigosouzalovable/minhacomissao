@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,6 @@ import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import CampanhaDetalheDialog from "./CampanhaDetalheDialog";
-import AquecimentoLeadsCampanhas from "./AquecimentoLeadsCampanhas";
 import { cn } from "@/lib/utils";
 
 function statusColor(s: string) {
@@ -31,13 +30,12 @@ export default function CampanhasFlutuante() {
   const [open, setOpen] = useState(false);
   const [dialogJobId, setDialogJobId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const refreshAquecimento = useRef<(() => Promise<void>) | null>(null);
 
   const atualizar = async () => {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      await Promise.allSettled([refreshStatus(), ...(isAdmin && refreshAquecimento.current ? [refreshAquecimento.current()] : [])]);
+      await refreshStatus();
     } finally {
       setRefreshing(false);
     }
@@ -97,8 +95,6 @@ export default function CampanhasFlutuante() {
                  <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
                </Button>
             </div>
-
-             {isAdmin && <AquecimentoLeadsCampanhas registerRefresh={(fn) => { refreshAquecimento.current = fn; }} />}
 
             {jobsAtivos.length > 0 && (
               <div className="p-2 space-y-1.5">

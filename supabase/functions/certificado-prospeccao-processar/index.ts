@@ -80,8 +80,11 @@ Deno.serve(async (req) => {
     let restante = preparacaoManual ? Number(preparacaoManual.quantidade_alvo) : cotaPorInstancia;
     let jobExistente: any = null;
     if (!modoTeste && !preparacaoManual) {
-      const { data } = await service.from("envio_meta_job").select("id,status,total,enviados,erros,instancia_ids,template_id_by_instance").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+      const { data } = await service.from("envio_meta_job").select("id,status,status_motivo,total,enviados,erros,instancia_ids,template_id_by_instance").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
       jobExistente = data;
+      if (jobExistente?.status === "pausado" && jobExistente?.status_motivo === "PREPARANDO_DESTINATARIOS") {
+        return json({ success: true, skipped: true, motivo: "A campanha de hoje já está sendo preparada" });
+      }
     }
 
     let resumoColeta: Record<string, unknown> | null = null;
@@ -320,7 +323,10 @@ Deno.serve(async (req) => {
 
     // Revalida imediatamente antes da criação para reduzir o risco de cliques concorrentes.
     if (!preparacaoManual) {
-      const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total,status,instancia_ids,template_id_by_instance").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+      const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total,status,status_motivo,instancia_ids,template_id_by_instance").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
+      if (jobCriadoEnquantoProcessava?.status === "pausado" && jobCriadoEnquantoProcessava?.status_motivo === "PREPARANDO_DESTINATARIOS") {
+        return json({ success: true, skipped: true, motivo: "A campanha de hoje já está sendo preparada" });
+      }
       if (jobCriadoEnquantoProcessava) jobExistente = jobCriadoEnquantoProcessava;
     }
 
@@ -329,9 +335,9 @@ Deno.serve(async (req) => {
     let job = jobExistente ? { id: jobExistente.id } : null;
     if (!job) {
       const { data: criado, error: jobError } = await service.from("envio_meta_job").insert({
-        user_id: userId, status: "rodando", template_id: principal.id, template_nome: templateNome,
+        user_id: userId, status: "pausado", status_motivo: "PREPARANDO_DESTINATARIOS", template_id: principal.id, template_nome: templateNome,
         template_id_by_instance: templateIdByInstance, instancia_ids: participantes.map((i: any) => i.id),
-        min_seg: 30, max_seg: 90, total: leads.length, proximo_em: new Date().toISOString(),
+        min_seg: 30, max_seg: 90, total: 0, proximo_em: null,
         nome_campanha: tipoExperimento === "renovacao_anual"
           ? `Renovação Certificado — 1 ano — ${nomeCampanha()}`
           : `Certificado Digital${preparacaoManual ? " Manual" : ""} — D+${janelaExperimento} — ${nomeCampanha()}`,
@@ -344,6 +350,9 @@ Deno.serve(async (req) => {
       const idsAnteriores = Array.isArray(jobExistente?.instancia_ids) ? jobExistente.instancia_ids : [];
       const mapaAnterior = jobExistente?.template_id_by_instance && typeof jobExistente.template_id_by_instance === "object" ? jobExistente.template_id_by_instance : {};
       const { error: jobInstanciasError } = await service.from("envio_meta_job").update({
+        status: "pausado",
+        status_motivo: "PREPARANDO_DESTINATARIOS",
+        proximo_em: null,
         instancia_ids: [...new Set([...idsAnteriores, ...participantes.map((i: any) => i.id)])],
         template_id_by_instance: { ...mapaAnterior, ...templateIdByInstance },
         instancias_bloqueadas_run: [],
@@ -414,13 +423,6 @@ Deno.serve(async (req) => {
       await service.from("envio_meta_job").update({ status: "erro", status_motivo: "Nenhum contato pôde ser reservado", concluido_em: new Date().toISOString() }).eq("id", job.id);
       return json({ success: true, skipped: true, motivo: "Os contatos elegíveis já pertencem a outra campanha" });
     }
-    await service.from("envio_meta_job").update({
-      total: ordemInicial + reservas.length,
-      status: "rodando",
-      status_motivo: null,
-      concluido_em: null,
-      proximo_em: new Date().toISOString(),
-    }).eq("id", job.id);
     const itens = reservas.map(({ lead, reserva, instancia, ordem }) => {
       const nome = lead.nome_fantasia || lead.razao_social || "cliente";
       return {
@@ -471,6 +473,14 @@ Deno.serve(async (req) => {
         const { error: leadsReservaError } = await service.from("certificado_leads").update({ situacao: "reservado", updated_at: new Date().toISOString() }).in("id", leadIds.slice(inicio, inicio + CHUNK_RESERVA)).eq("situacao", "novo");
         if (leadsReservaError) throw leadsReservaError;
       }
+      const { error: iniciarError } = await service.from("envio_meta_job").update({
+        total: ordemInicial + reservas.length,
+        status: "rodando",
+        status_motivo: null,
+        concluido_em: null,
+        proximo_em: new Date().toISOString(),
+      }).eq("id", job.id).eq("status", "pausado").eq("status_motivo", "PREPARANDO_DESTINATARIOS");
+      if (iniciarError) throw iniciarError;
     } catch (erroFila) {
       const reservaIds = reservas.map((reserva: any) => reserva.reserva.id);
       const itemIds = itens.map((item: any) => item.id);

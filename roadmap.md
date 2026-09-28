@@ -1,8 +1,8 @@
 # Roadmap
 
 ## Em aberto
-- [x] Mostrar histórico diário do aquecimento com leads Google Maps no painel Campanhas, com atualização manual e detalhe paginado
-- [ ] Confirmar próxima execução real do aquecimento com leads Google Maps; em 28/09 as cinco trilhas do dia estão pausadas e sem meta, último envio em 23/09
+- [x] Mostrar a campanha da Casa dos Dados como campanha comum e remover do painel Campanhas o histórico técnico do aquecimento Google Maps
+- [ ] Confirmar a execução real da campanha anual da Casa dos Dados após preparar todos os destinatários, sem reativar Google Maps
 - [x] Concluir pelo aviso os retornos agendados na conversa do Inbox, sem repetir a notificação após salvar
 - [x] Validar o piloto de renovação anual de 28/09 a 02/10, com 50 novos WhatsApps por instância apta e resultados separados por CNAE
 - [x] Confirmar que Templates > Aplicar templates sincroniza, enfileira os modelos faltantes sem duplicação e inicia a primeira rodada de processamento
