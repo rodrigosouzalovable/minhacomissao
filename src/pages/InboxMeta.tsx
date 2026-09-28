@@ -1134,8 +1134,6 @@ export default function InboxMeta() {
             (bTemDigito && bDigits.length >= 4 && instDigits.includes(bDigits));
           if (!matchTexto && !matchTel && !matchInst) return false;
         }
-        // Na lista paginada, o banco já verificou a etiqueta com as permissões do usuário.
-        // Não esconda a página enquanto a leitura auxiliar de chips ainda carrega.
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
         if (filtroJanela24h) {
           if (!c.ultima_msg_entrada_em) return false;
