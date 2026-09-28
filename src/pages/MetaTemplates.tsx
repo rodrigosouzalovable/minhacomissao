@@ -88,6 +88,15 @@ interface TemplateInst {
   meta_template_id: string | null;
 }
 
+interface LoteLog {
+  id: string;
+  template_mestre_id: string;
+  total_instancias: number;
+  sucessos: number;
+  falhas: number;
+  criado_em: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   APPROVED: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
   PENDING: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
@@ -137,6 +146,8 @@ export default function MetaTemplates() {
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [templInst, setTemplInst] = useState<TemplateInst[]>([]);
   const [templMeta, setTemplMeta] = useState<Array<{ instancia_id: string; nome_template: string; idioma: string; categoria: string | null; status: string | null }>>([]);
+  const [lotes, setLotes] = useState<LoteLog[]>([]);
+  const [erroCarregamento, setErroCarregamento] = useState("");
   const [bms, setBms] = useState<Bm[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -171,7 +182,7 @@ export default function MetaTemplates() {
 
 
   const [enviando, setEnviando] = useState(false);
-  const [loteAtual, setLoteAtual] = useState<{ mestreId: string; ids: string[]; adiadas: string[] } | null>(null);
+  const [loteAtual, setLoteAtual] = useState<{ mestreId: string; selecionadas: string[]; ids: string[]; adiadas: string[] } | null>(null);
   const [verificando, setVerificando] = useState(false);
   const [verificacao, setVerificacao] = useState({ inicio: 0, segundos: 0, concluidas: 0, total: 0, nome: "", erro: "", falhas: 0 });
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
@@ -179,6 +190,7 @@ export default function MetaTemplates() {
 
   const carregar = async () => {
     setLoading(true);
+    setErroCarregamento("");
     const { data: authData } = await supabase.auth.getUser();
     const uid = authData.user?.id ?? null;
     setUsuarioId(uid);
@@ -186,10 +198,12 @@ export default function MetaTemplates() {
       setMestres([]);
       setInstancias([]);
       setTemplInst([]);
+      setTemplMeta([]);
+      setLotes([]);
       setLoading(false);
       return;
     }
-    const [m, i, ti, par, tm, bmRows] = await Promise.all([
+    const [m, i, par, bmRows] = await Promise.all([
       supabase.from("meta_templates_mestre").select("*").eq("criado_por", uid).order("criado_em", { ascending: false }),
       supabase
         .from("meta_whatsapp_instances")
@@ -197,19 +211,62 @@ export default function MetaTemplates() {
         .eq("provider", "meta")
         .eq("user_id", uid)
         .order("nome"),
-      supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
-       supabase.from("meta_whatsapp_templates").select("instancia_id, nome_template, idioma, categoria, status"),
       supabase.from("meta_business_managers").select("id, nome, business_id"),
     ]);
+    if (m.error || i.error || par.error || bmRows.error) {
+      setErroCarregamento("Não foi possível carregar todas as instâncias e modelos. Atualize a página.");
+      setMestres([]);
+      setInstancias([]);
+      setTemplInst([]);
+      setTemplMeta([]);
+      setLotes([]);
+      setLoading(false);
+      return;
+    }
     setBms(((bmRows.data as any) || []) as Bm[]);
-    setTemplMeta(((tm.data as any) || []) as any);
     setMestres((m.data as any) || []);
     const idsParceiro = new Set(((par.data as any) || []).map((r: any) => r.instancia_id as string));
     const lista = ((i.data as any) || []) as Instancia[];
     setInstancias(parceiroMeta ? lista : lista.filter((x) => !idsParceiro.has(x.id)));
-    const idsMestres = new Set(((m.data as any[]) || []).map((row) => row.id));
-    setTemplInst((((ti.data as any[]) || []).filter((row) => idsMestres.has(row.template_mestre_id))));
+    const mestresIds = (m.data || []).map((row) => row.id);
+    const nomes = [...new Set((m.data || []).map((row) => row.nome))];
+    const instanciaIds = lista.map((row) => row.id);
+    // As tabelas já ultrapassam o limite padrão de 1.000 linhas por consulta.
+    // Consultar somente os modelos/números do proprietário, em páginas explícitas.
+    const porPagina = 500;
+    const carregarPaginas = async <T,>(criarConsulta: () => any): Promise<T[]> => {
+      const todas: T[] = [];
+      for (let inicio = 0; ; inicio += porPagina) {
+        const { data, error } = await criarConsulta().range(inicio, inicio + porPagina - 1);
+        if (error) throw error;
+        const pagina = (data || []) as T[];
+        todas.push(...pagina);
+        if (pagina.length < porPagina) return todas;
+      }
+    };
+    try {
+      const [registros, historico, cache] = await Promise.all([
+        mestresIds.length ? carregarPaginas<TemplateInst>(() => supabase.from("meta_templates_instancia")
+          .select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id")
+          .in("template_mestre_id", mestresIds).order("id")) : Promise.resolve([]),
+        mestresIds.length ? carregarPaginas<LoteLog>(() => supabase.from("meta_templates_lote_log")
+          .select("id, template_mestre_id, total_instancias, sucessos, falhas, criado_em")
+          .in("template_mestre_id", mestresIds).order("criado_em", { ascending: false }).order("id")) : Promise.resolve([]),
+        nomes.length && instanciaIds.length ? carregarPaginas<typeof templMeta[number]>(() => supabase.from("meta_whatsapp_templates")
+          .select("instancia_id, nome_template, idioma, categoria, status")
+          .in("instancia_id", instanciaIds).in("nome_template", nomes)
+          .order("instancia_id").order("nome_template").order("idioma")) : Promise.resolve([]),
+      ]);
+      setTemplInst(registros);
+      setLotes(historico);
+      setTemplMeta(cache);
+    } catch {
+      setErroCarregamento("A lista de status não foi carregada por completo. Tente atualizar antes de selecionar ou reenviar.");
+      setTemplInst([]);
+      setTemplMeta([]);
+      setLotes([]);
+    }
     setLoading(false);
   };
 
@@ -459,6 +516,7 @@ export default function MetaTemplates() {
   };
 
   const enviarLote = async (modo?: "piloto" | "replicar") => {
+    if (erroCarregamento) { toast.error("Atualize a lista antes de enviar."); return; }
     if (!selMestre) { toast.error("Selecione um template"); return; }
     if (modo !== "replicar" && selInst.size === 0) { toast.error("Selecione ao menos uma instância"); return; }
     if (mestres.find((m) => m.id === selMestre)?.reclassificado_marketing) { toast.error("Modelo reclassificado como Marketing; crie uma versão corrigida."); return; }
@@ -481,6 +539,7 @@ export default function MetaTemplates() {
     const adiadas = Number((data as any)?.adiadas_tier_250 || 0);
     setLoteAtual({
       mestreId: selMestre,
+      selecionadas: modo === "replicar" || modo === "piloto" ? ((data as any)?.instancias || []).map((i: { id: string }) => i.id) : Array.from(selInst),
       ids: ((data as any)?.instancias || []).map((i: { id: string }) => i.id),
       adiadas: ((data as any)?.adiadas || []).map((i: { instancia_id: string }) => i.instancia_id),
     });
@@ -502,6 +561,7 @@ export default function MetaTemplates() {
     ).length;
 
   const reenviarFalhas = async (mestreId: string) => {
+    if (erroCarregamento) { toast.error("Atualize a lista antes de reenviar."); return; }
     const n = contarFalhas(mestreId);
     if (n === 0) { toast.info("Nenhuma falha para reenviar neste modelo."); return; }
     if (!confirm(`Reenviar este modelo para ${n} número(s) com falha ou reprovação?`)) return;
@@ -669,6 +729,25 @@ export default function MetaTemplates() {
     const c: Record<string, number> = { total: filhas.length };
     filhas.forEach((f) => { c[f.status] = (c[f.status] || 0) + 1; });
     return c;
+  };
+
+  const ultimoLote = (mestreId: string) => lotes.find((l) => l.template_mestre_id === mestreId);
+
+  const selecionarAusentes = (mestreId: string) => {
+    const mestre = mestres.find((m) => m.id === mestreId);
+    if (!mestre || mestre.reclassificado_marketing || erroCarregamento) return;
+    const comRegistro = new Set(templInst.filter((t) => t.template_mestre_id === mestreId).map((t) => t.instancia_id));
+    const comModeloNaMeta = new Set(templMeta.filter((t) =>
+      t.nome_template.toLowerCase() === mestre.nome.toLowerCase() && t.idioma === mestre.idioma &&
+      ["APPROVED", "PENDING", "ENVIADO", "IN_APPEAL"].includes(String(t.status || "").toUpperCase()),
+    ).map((t) => t.instancia_id));
+    const ausentes = instancias.filter((inst) => inst.ativo && !comRegistro.has(inst.id) && !comModeloNaMeta.has(inst.id) &&
+      ["GREEN", "UNKNOWN", "SEM LEITURA"].includes(qualidadeDa(inst)));
+    if (ausentes.length === 0) { toast.info("Nenhum número ativo e elegível sem registro deste modelo."); return; }
+    setSelMestre(mestreId);
+    setSelInst(new Set(ausentes.map((inst) => inst.id)));
+    setTab("lote");
+    toast.info(`${ausentes.length} número(s) sem registro selecionado(s). Confira antes de enviar.`);
   };
 
   // BM vinculada ao número — mostrada ao lado da instância para abrir rápido
@@ -1252,7 +1331,7 @@ export default function MetaTemplates() {
                   <Button
                     variant="secondary"
                     onClick={() => enviarLote("piloto")}
-                    disabled={enviando || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
+                    disabled={enviando || !!erroCarregamento || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar piloto (1 número)
@@ -1260,12 +1339,12 @@ export default function MetaTemplates() {
                   <Button
                     variant="outline"
                     onClick={() => enviarLote("replicar")}
-                    disabled={enviando || !selMestre || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
+                    disabled={enviando || !!erroCarregamento || !selMestre || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                     Replicar nas demais
                   </Button>
-                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !!erroCarregamento || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}>
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar para todas agora ({selInst.size})
                   </Button>
@@ -1276,6 +1355,7 @@ export default function MetaTemplates() {
 
           {/* ===== Status ===== */}
           <TabsContent value="status" className="space-y-4">
+            {erroCarregamento && <p role="alert" className="text-sm text-destructive">{erroCarregamento}</p>}
             <div className="flex justify-end">
               <Button variant="outline" size="sm" onClick={verificarStatus} disabled={verificando}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${verificando ? "animate-spin" : ""}`} /> Verificar status na Meta
@@ -1289,13 +1369,18 @@ export default function MetaTemplates() {
             </div>}
             {loteAtual && (() => {
               const modelo = mestres.find((m) => m.id === loteAtual.mestreId);
-              const ids = [...loteAtual.ids, ...loteAtual.adiadas];
+              const ids = [...new Set([...loteAtual.selecionadas, ...loteAtual.ids, ...loteAtual.adiadas])];
+              const agendadas = new Set(loteAtual.ids);
+              const adiadas = new Set(loteAtual.adiadas);
+              const semRegistro = loteAtual.selecionadas.filter((id) => !agendadas.has(id) && !adiadas.has(id));
               const concluidos = loteAtual.ids.filter((id) => {
                 const st = templInst.find((t) => t.template_mestre_id === loteAtual.mestreId && t.instancia_id === id)?.status;
                 return st && st !== "ENVIADO";
               }).length;
               return <div className="space-y-2 border p-3 text-sm">
                 <div className="flex items-center justify-between gap-2"><strong>Aplicação · {modelo?.nome || "Template"}</strong><div className="flex items-center gap-2"><span>{concluidos}/{loteAtual.ids.length} processados</span><Button variant="ghost" size="icon" title="Atualizar aplicação" onClick={carregar} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button></div></div>
+                <p className="text-xs text-muted-foreground">Selecionadas: {loteAtual.selecionadas.length} · submetidas: {loteAtual.ids.length} · adiadas pelo limite diário: {loteAtual.adiadas.length} · sem registro: {semRegistro.length}</p>
+                {semRegistro.length > 0 && <p className="text-xs text-destructive">Nem todos os números selecionados entraram no processamento. Confira os números sem registro antes de tentar novamente.</p>}
                 <Progress value={loteAtual.ids.length ? 100 * concluidos / loteAtual.ids.length : 100} />
                 <p className="text-xs text-muted-foreground">Processamento concluído não significa aprovação pela Meta.</p>
                 <div className="max-h-64 overflow-y-auto divide-y">{ids.map((id) => {
@@ -1304,7 +1389,7 @@ export default function MetaTemplates() {
                   const real = templMeta.find((t) => t.instancia_id === id && t.nome_template === modelo?.nome && t.idioma === modelo?.idioma);
                   return <div key={id} className="flex flex-wrap items-center justify-between gap-2 py-1">
                     <span>{inst?.nome || "Número não visível nesta tela"} · {inst?.display_phone || ""}</span>
-                    <div className="flex gap-2"><Badge variant="outline">{loteAtual.adiadas.includes(id) ? "Adiado (limite diário)" : item?.status === "ENVIADO" ? "Processando" : item?.status || "Aguardando"}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge>}</div>
+                    <div className="flex gap-2"><Badge variant="outline">{adiadas.has(id) ? "Adiado (limite diário)" : !agendadas.has(id) ? "Sem registro" : item?.status === "ENVIADO" ? "Processando" : item?.status || "Aguardando"}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge>}</div>
                   </div>;
                 })}</div>
               </div>;
@@ -1341,6 +1426,7 @@ export default function MetaTemplates() {
             {mestres.map((m) => {
               const c = contagemPorMestre(m.id);
               const filhas = templInst.filter((t) => t.template_mestre_id === m.id);
+              const lote = ultimoLote(m.id);
               return (
                 <Card key={m.id}>
                   <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -1358,7 +1444,7 @@ export default function MetaTemplates() {
                         size="sm"
                         variant="outline"
                         onClick={() => reenviarFalhas(m.id)}
-                        disabled={enviando || contarFalhas(m.id) === 0 || !!m.reclassificado_marketing}
+                        disabled={enviando || !!erroCarregamento || contarFalhas(m.id) === 0 || !!m.reclassificado_marketing}
                         title={contarFalhas(m.id) === 0 ? "Nenhuma falha para reenviar" : undefined}
                       >
                         <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas ({contarFalhas(m.id)})
@@ -1377,6 +1463,8 @@ export default function MetaTemplates() {
                     </div>
                   </CardHeader>
                   <CardContent>
+                    {lote && <p className="mb-2 text-xs text-muted-foreground">Último lote registrado: {lote.total_instancias} número(s) processado(s) · {lote.sucessos} aceitos pela Meta · {lote.falhas} falhas. Aceito não significa aprovado.</p>}
+                    {!m.reclassificado_marketing && <Button size="sm" variant="outline" className="mb-3" onClick={() => selecionarAusentes(m.id)} disabled={loading || !!erroCarregamento}>Selecionar números sem registro</Button>}
                     <details>
                       <summary className="cursor-pointer text-sm text-muted-foreground">Ver detalhes por instância ({filhas.length})</summary>
                       <div className="mt-2 space-y-1">
