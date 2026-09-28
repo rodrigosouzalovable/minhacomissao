@@ -727,7 +727,7 @@ export default function InboxMeta() {
       const etiquetaIds = modoMeusClientes ? (minhaEtiquetaId ? [minhaEtiquetaId] : []) : Array.from(filtroEtiqueta);
       const iniIso = mcDataIni ? new Date(new Date(mcDataIni).setHours(0, 0, 0, 0)).toISOString() : null;
       const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
-      const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso]);
+      const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), [...mcMarcadores].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso, buscaDebounced]);
       const cached = taggedPageRef.current.key === key ? taggedPageRef.current : null;
       const rows = cached ? [...cached.rows] : [];
       let exhausted = cached?.exhausted ?? false;
@@ -738,8 +738,9 @@ export default function InboxMeta() {
         return;
       }
       while (rows.length < limiteContatos && !exhausted) {
-        const { data, error } = await supabase.rpc('meta_inbox_tagged_contacts_page', {
-          p_etiquetas: etiquetaIds, p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
+        const { data, error } = await supabase.rpc('meta_inbox_tagged_qualified_page', {
+          p_etiquetas: etiquetaIds, p_qualificacoes: modoMeusClientes ? Array.from(mcMarcadores) : [],
+          p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
           p_folder: currentFolderId, p_filtrar_folder: !modoMeusClientes,
           p_arquivado: abaAtiva === 'arquivados', p_filtrar_arquivado: !modoMeusClientes,
           p_inicio: modoMeusClientes ? iniIso : null, p_fim: modoMeusClientes ? fimIso : null,
@@ -1202,8 +1203,9 @@ export default function InboxMeta() {
       const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
       const todos: MetaContato[] = [];
       for (let offset = 0; ; offset += PAGE_CONTATOS) {
-        const { data, error } = await supabase.rpc('meta_inbox_tagged_contacts_page', {
-          p_etiquetas: [minhaEtiquetaId], p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
+        const { data, error } = await supabase.rpc('meta_inbox_tagged_qualified_page', {
+          p_etiquetas: [minhaEtiquetaId], p_qualificacoes: Array.from(mcMarcadores),
+          p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
           p_folder: null, p_filtrar_folder: false, p_arquivado: false, p_filtrar_arquivado: false,
           p_inicio: iniIso, p_fim: fimIso, p_limit: PAGE_CONTATOS, p_offset: offset,
         });
@@ -1219,9 +1221,7 @@ export default function InboxMeta() {
         if (error) throw error;
         for (const row of data ?? []) (qualificacoesTodos[row.contato_id] ??= []).push(row.qualificacao_id);
       }
-      const filtrados = mcMarcadores.size
-        ? todos.filter(c => (qualificacoesTodos[c.id] ?? []).some(id => mcMarcadores.has(id)))
-        : todos;
+      const filtrados = todos;
       const nomeCaixa = (id?: string | null) => (id ? (folders.find(f => f.id === id)?.nome || '—') : 'Padrão');
       const linhas = filtrados.map(c => {
         const ids = qualificacoesTodos[c.id] ?? [];
