@@ -11302,6 +11302,13 @@ export type Database = {
         Args: { p_instancia_id: string; p_job_id: string; p_limite?: number }
         Returns: number
       }
+      certificado_redistribuir_pendentes_job: {
+        Args: { p_job_id: string }
+        Returns: {
+          instancia_id: string
+          quantidade: number
+        }[]
+      }
       certificado_reservar_lote_instancia: {
         Args: {
           p_bm_id: string

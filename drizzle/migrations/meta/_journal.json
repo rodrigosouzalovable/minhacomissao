@@ -575,6 +575,13 @@
       "when": 1790614300198,
       "tag": "0081_redistribute_pending_certificate_campaign",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1790614375661,
+      "tag": "0082_balance_pending_certificate_campaign",
+      "breakpoints": true
     }
   ]
 }
