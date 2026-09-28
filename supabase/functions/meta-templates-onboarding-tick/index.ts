@@ -359,13 +359,14 @@ Deno.serve(async (req) => {
           .maybeSingle();
         const stReal = String((existeReal as any)?.status || "").toLowerCase();
         if (existeReal && ["approved", "pending", "in_appeal", "pending_deletion"].includes(stReal)) {
+          const aprovado = stReal === "approved";
           await supabase
             .from("meta_templates_onboarding_fila")
             .update({
-              status: "APPROVED",
-              motivo: "já existente no número",
+              status: aprovado ? "APPROVED" : "ENVIADO",
+              motivo: aprovado ? "já aprovado no número" : "enviado; aguardando aprovação da Meta",
               enviado_em: new Date().toISOString(),
-              finalizado_em: new Date().toISOString(),
+              finalizado_em: aprovado ? new Date().toISOString() : null,
             })
             .eq("id", proximo.id);
           processados.push({ instancia_id: inst.id, ok: true, ja_existia: mestreItem.nome });
