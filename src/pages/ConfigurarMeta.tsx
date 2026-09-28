@@ -1044,12 +1044,13 @@ export default function ConfigurarMeta() {
       if (filaData?.success === false || filaData?.error) throw new Error(filaData?.error || "Não foi possível iniciar a aplicação");
 
       const enfileirados = Number(filaData?.enfileirados || 0);
-      if (enfileirados > 0) {
-        const { error: tickError } = await supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} });
-        if (tickError) console.warn("Primeira rodada de templates será retomada pelo processamento automático", tickError);
-        toast.success(`${enfileirados} template${enfileirados === 1 ? "" : "s"} colocado${enfileirados === 1 ? "" : "s"} na fila`);
+      const { data: tickData, error: tickError } = await supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} });
+      if (tickError || tickData?.ok === false) {
+        toast.warning("Modelos na fila, mas a primeira tentativa falhou. Consulte o progresso e tente atualizar.");
       } else {
-        toast.success("Todos os templates cadastrados já estão aplicados ou em processamento");
+        toast.info(enfileirados > 0
+          ? `${enfileirados} modelo${enfileirados === 1 ? "" : "s"} na fila. A aplicação é gradual e depende da aprovação da Meta.`
+          : "Fila conferida. Acompanhe os modelos enviados e a aprovação da Meta no progresso.");
       }
       await carregar();
     } catch (e: any) {
