@@ -43,9 +43,9 @@ Hoje, **Templates > Aplicar templates** chama apenas a sincronização dos templ
 ### Correção
 
 - Ao clicar em **Aplicar templates**, primeiro sincronizar os templates reais da instância para evitar duplicidades.
-- Em seguida, enfileirar automaticamente os templates mestres elegíveis já cadastrados para aplicação em novos números.
+- Em seguida, enfileirar automaticamente os templates mestres já cadastrados e marcados para aplicação em novos números.
 - Não reenviar nome + idioma que já esteja aprovado, pendente ou em análise nessa instância.
-- Aplicar somente modelos de utilidade permitidos pelo fluxo atual; modelos reclassificados como marketing ou incompatíveis ficam fora e terão motivo visível.
+- Permitir a submissão das categorias já liberadas no cadastro, inclusive MARKETING, sem usar essa liberação para disparar mensagens a clientes; modelos estruturalmente incompatíveis ficam fora e terão motivo visível.
 - Manter processamento gradual, horário de 07:00 a 20:00 BRT, bloqueio aos domingos, limite de tier 250 e pausas diante de recusas ou limites reais da Meta.
 - Exibir confirmação com quantidade enfileirada, quantidade já existente e motivo quando não houver modelo pendente; manter o progresso no badge do card.
 
