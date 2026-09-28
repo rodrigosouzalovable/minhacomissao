@@ -381,10 +381,18 @@ Deno.serve(async (req) => {
 
       let erroEnvio: string | null = null;
       try {
-        const { data: res, error } = await supabase.functions.invoke("meta-criar-template-lote", {
-          body: { mestre_id: proximo.template_mestre_id, instancia_ids: [inst.id] },
+        // A chamada interna deve usar a identidade de serviço. O cliente sem
+        // cabeçalho explícito envia a chave pública e recebe "Sessão inválida".
+        const resposta = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/meta-criar-template-lote`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ mestre_id: proximo.template_mestre_id, instancia_ids: [inst.id] }),
         });
-        if (error) erroEnvio = await detalheInvocacao(error);
+        const res = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) erroEnvio = String((res as any)?.error || `Falha ao submeter modelo (HTTP ${resposta.status})`);
         else if ((res as any)?.success === false) erroEnvio = String((res as any)?.error || "falha");
         else if (Number((res as any)?.total || 0) === 0 && Number((res as any)?.adiadas_tier_250 || 0) > 0) {
           await supabase
