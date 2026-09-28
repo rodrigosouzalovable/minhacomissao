@@ -503,7 +503,7 @@ export default function ConfigurarMeta() {
       for (const r of (data as any[]) ?? []) {
         mapa[r.instancia_id] ??= { feitos: 0, total: 0 };
         mapa[r.instancia_id].total++;
-        if (r.status !== "PENDENTE") mapa[r.instancia_id].feitos++;
+        if (r.status === "APPROVED") mapa[r.instancia_id].feitos++;
       }
       setTplProgresso(mapa);
     })();
@@ -1765,10 +1765,10 @@ export default function ConfigurarMeta() {
                                 title={
                                   pausado
                                     ? "Cópia de templates pausada (reprovações seguidas ou limite da Meta). Corrija e reative."
-                                    : "Cópia gradual dos templates já aprovados nos seus outros números"
+                                    : "Modelos aprovados pela Meta / modelos na fila. Os demais ainda aguardam envio ou aprovação."
                                 }
                               >
-                                📋 Templates{p ? ` ${p.feitos}/${p.total}` : ""}
+                                📋 Templates aprovados{p ? ` ${p.feitos}/${p.total}` : ""}
                                 {pausado ? " · pausado" : concluido ? " · concluído" : ""}
                               </Badge>
                             );
