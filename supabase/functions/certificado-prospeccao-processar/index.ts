@@ -308,7 +308,7 @@ Deno.serve(async (req) => {
       }).eq("id", preparacaoManual.id);
       return json({ error: "Alguns contatos foram usados por outra campanha durante a preparação. Nenhuma campanha parcial foi criada." }, 409);
     }
-    if (simulacao) return json({ success: true, simulacao: true, elegiveis: leads?.length ?? 0, limite_restante: restante, cota_por_instancia: cotaPorInstancia, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone, meta: Number(i.certificado_limite_diario ?? cotaPorInstancia), restante: cotasRestantes.get(i.id) ?? Number(i.certificado_limite_diario ?? cotaPorInstancia) })) });
+    if (simulacao) return json({ success: true, simulacao: true, tipo_oferta: tipoExperimento, data_abertura: dataAlvo, elegiveis: leads?.length ?? 0, limite_restante: restante, cota_por_instancia: cotaPorInstancia, participantes: participantes.map((i: any) => ({ id: i.id, nome: i.nome, telefone: i.display_phone, meta: Number(i.certificado_limite_diario ?? cotaPorInstancia), restante: cotasRestantes.get(i.id) ?? Number(i.certificado_limite_diario ?? cotaPorInstancia) })) });
     if (!leads?.length) return json({
       success: true,
       skipped: true,
