@@ -1134,7 +1134,9 @@ export default function InboxMeta() {
             (bTemDigito && bDigits.length >= 4 && instDigits.includes(bDigits));
           if (!matchTexto && !matchTel && !matchInst) return false;
         }
-        if (filtroEtiqueta.size > 0) {
+        // Na lista paginada, o banco já verificou a etiqueta com as permissões do usuário.
+        // Não esconda a página enquanto a leitura auxiliar de chips ainda carrega.
+        if (filtroEtiqueta.size > 0 && !modoMeusClientes && taggedPageRef.current.key === '') {
           const ids = contatoEtiquetas[c.id] || [];
           if (!ids.some(id => filtroEtiqueta.has(id))) return false;
         }
@@ -1144,10 +1146,7 @@ export default function InboxMeta() {
           const fim = new Date(c.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
           if (fim - Date.now() <= 0) return false;
         }
-        if (modoMeusClientes && mcMarcadores.size > 0) {
-          const qids = qualifPorContato[c.id] ?? [];
-          if (!qids.some(id => mcMarcadores.has(id))) return false;
-        }
+        // Marcadores de Meus Clientes também já estão aplicados na consulta paginada.
         if (filtroQualifs.size > 0) {
           const qids = qualifPorContato[c.id] ?? [];
           if (!qids.some(id => filtroQualifs.has(id))) return false;
