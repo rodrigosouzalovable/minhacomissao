@@ -44,8 +44,9 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
     const forcar = body?.forcar === true;
     const agora = new Date().toISOString();
     let dono: string | null = null;
-    if (progresso) {
-      const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim();
+    const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim();
+    const serviceCall = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!serviceCall) {
       const { data: auth } = token ? await supabase.auth.getUser(token) : { data: null };
       dono = auth?.user?.id || null;
       if (!dono) return new Response(JSON.stringify({ success: false, error: "Sessão inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -77,9 +78,8 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
         ...(registros.map((r) => r.instancia_id)),
       ]),
     ).slice(0, MAX_INSTANCIAS_POR_EXECUCAO);
-    progresso?.({ type: "start", total: instIds.length });
-
     if (instIds.length === 0) {
+      progresso?.({ type: "start", total: 0 });
       // Nada aguardando: encerra sem chamar a Meta (custo praticamente zero).
       return new Response(JSON.stringify({ success: true, atualizados: 0, nada_pendente: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -91,7 +91,8 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
       .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, saude_quality, user_id")
       .in("id", instIds);
     if (dono) qInstancias = qInstancias.eq("user_id", dono);
-    const { data: instancias } = await qInstancias;
+    const { data: instancias, error: erroInstancias } = await qInstancias;
+    if (erroInstancias) throw erroInstancias;
     const total = instancias?.length || 0;
     let conferidas = 0;
     progresso?.({ type: "start", total });
@@ -118,7 +119,10 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
           { headers: { Authorization: `Bearer ${inst.access_token}` } },
         );
         const data = await res.json();
-        if (!res.ok) continue;
+        if (!res.ok) {
+          progresso?.({ type: "failure", nome: rotuloInstancia(inst), error: data?.error?.message || `HTTP ${res.status}` });
+          continue;
+        }
 
         const remotos: any[] = data.data || [];
         const remotoById = new Map(remotos.map((t) => [String(t.id), t]));
