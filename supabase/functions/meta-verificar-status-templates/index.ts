@@ -86,11 +86,15 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
       });
     }
 
-    const { data: instancias } = await supabase
+    let qInstancias = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, saude_quality")
-      .in("id", instIds)
-      ...(dono ? [] : []);
+      .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, saude_quality, user_id")
+      .in("id", instIds);
+    if (dono) qInstancias = qInstancias.eq("user_id", dono);
+    const { data: instancias } = await qInstancias;
+    const total = instancias?.length || 0;
+    let conferidas = 0;
+    progresso?.({ type: "start", total });
 
     let atualizados = 0;
     let aprovadosTotal = 0;
@@ -103,7 +107,10 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
     }> = [];
 
     for (const inst of instancias || []) {
-      if (!inst.waba_id || !inst.access_token) continue;
+      if (!inst.waba_id || !inst.access_token) {
+        progresso?.({ type: "progress", done: ++conferidas, total, nome: rotuloInstancia(inst) });
+        continue;
+      }
 
       try {
         const res = await fetch(
@@ -124,10 +131,12 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
         for (const t of virouMarketing) {
           const { data: mestre } = await supabase
             .from("meta_templates_mestre")
-            .select("id, nome, reclassificado_marketing")
+            .select("id, nome, categoria, reclassificado_marketing")
             .eq("nome", t.name)
+            .eq("idioma", t.language)
+            .eq("criado_por", inst.user_id)
             .maybeSingle();
-          if (!mestre || mestre.reclassificado_marketing === true) continue;
+          if (!mestre || mestre.categoria !== "UTILITY" || mestre.reclassificado_marketing === true) continue;
 
           await supabase
             .from("meta_templates_mestre")
@@ -174,7 +183,7 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
         if (!forcar) {
           qLocPend = qLocPend.or(`proxima_verificacao_em.is.null,proxima_verificacao_em.lte.${agora}`);
         }
-        const [locPend, locRej] = await Promise.all([
+          const [locPend, locRej] = await Promise.all([
           qLocPend,
           supabase
             .from("meta_templates_instancia")
@@ -183,7 +192,8 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
             .eq("status", "REJECTED")
             .is("motivo_rejeicao", null),
         ]);
-        const locais = [...(locPend.data || []), ...(locRej.data || [])];
+        const locais = [...(locPend.data || []), ...(locRej.data || [])]
+          .filter((row) => !dono || registros.some((r) => r.instancia_id === inst.id && r.template_mestre_id === row.template_mestre_id));
 
         for (const local of locais || []) {
           let remoto: any = null;
@@ -193,7 +203,7 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
             const { data: mestre } = await supabase
               .from("meta_templates_mestre").select("nome, idioma")
               .eq("id", local.template_mestre_id).maybeSingle();
-            if (mestre) {
+          if (mestre) {
               mestreNome = mestre.nome;
               remoto = remotoByName.get(`${mestre.nome}|${mestre.idioma}`);
             }
@@ -244,6 +254,10 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
             if (!motivo) motivo = "Rejeitado pela Meta sem motivo detalhado na API";
           }
 
+          if (remoto.name && remoto.language && remoto.category) {
+            await supabase.from("meta_whatsapp_templates").update({ categoria: remoto.category })
+              .eq("instancia_id", inst.id).eq("nome_template", remoto.name).eq("idioma", remoto.language);
+          }
           const resolvido = ["APPROVED", "REJECTED"].includes(novoStatus);
 
           const patch: Record<string, unknown> = {
@@ -284,7 +298,7 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
           .eq("instancia_id", inst.id)
           .in("status", EM_ABERTO);
 
-        if ((restantes || 0) === 0) {
+        if (!dono && (restantes || 0) === 0) {
           const { count: aprovados } = await supabase
             .from("meta_templates_instancia")
             .select("id", { count: "exact", head: true })
@@ -316,6 +330,8 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
         });
       } catch (_e) {
         // segue para próxima instância
+      } finally {
+        progresso?.({ type: "progress", done: ++conferidas, total, nome: rotuloInstancia(inst) });
       }
     }
 
@@ -329,4 +345,25 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.headers.get("Accept") !== "text/event-stream") return verificar(req);
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enviar = (evento: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(evento)}\n\n`));
+      try {
+        const response = await verificar(req, enviar);
+        const data = await response.json();
+        enviar({ type: response.ok ? "complete" : "error", ...data });
+      } catch (error) {
+        enviar({ type: "error", error: error instanceof Error ? error.message : "Falha na verificação" });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
 });
