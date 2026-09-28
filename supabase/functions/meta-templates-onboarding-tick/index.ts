@@ -76,20 +76,6 @@ Deno.serve(async (req) => {
 
     const avisos: any[] = [];
 
-    // Corrige as falhas antigas provocadas por chamada interna sem sessão,
-    // sem contar isso como reprovação do modelo pela Meta.
-    const { data: falhasDeSessao } = await supabase.from("meta_templates_onboarding_fila")
-      .select("id,tentativas,motivo").eq("status", "FALHA_ENVIO")
-      .or(`tentativas.is.null,tentativas.lt.${MAX_TENTATIVAS}`).limit(100);
-    for (const falha of falhasDeSessao ?? []) {
-      if (!/Sessão inválida|Edge Function returned a non-2xx status code/i.test(String(falha.motivo ?? ""))) continue;
-      await supabase.from("meta_templates_onboarding_fila").update({
-        status: "PENDENTE", motivo: "Chamada interna corrigida; aguardando nova tentativa",
-        agendado_para: new Date(Date.now() + sorteio(120, 300) * 1000).toISOString(),
-        finalizado_em: null,
-      }).eq("id", falha.id).eq("status", "FALHA_ENVIO");
-    }
-
     for (const item of (emVoo as any[]) || []) {
       const { data: ti } = await supabase
         .from("meta_templates_instancia")
