@@ -729,6 +729,12 @@ export default function InboxMeta() {
       const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
       const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso]);
       const rows = taggedPageRef.current.key === key ? [...taggedPageRef.current.rows] : [];
+      if (etiquetaIds.length === 0) {
+        taggedPageRef.current = { key, rows: [] };
+        setContatos([]);
+        contatoIdsRef.current = [];
+        return;
+      }
       while (rows.length < limiteContatos && etiquetaIds.length) {
         const { data, error } = await supabase.rpc('meta_inbox_tagged_contacts_page', {
           p_etiquetas: etiquetaIds, p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
@@ -860,7 +866,9 @@ export default function InboxMeta() {
         agendarRefetch();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contato_etiquetas' }, (payload) => {
+        taggedPageRef.current = { key: '', rows: [] };
         applyEtiquetaEvent(payload);
+        agendarRefetch();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_etiquetas' }, () => {
         fetchEtiquetas();
@@ -1181,16 +1189,40 @@ export default function InboxMeta() {
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
   const baixarMeusClientesExcel = useCallback(async () => {
-    if (contatosFiltrados.length === 0) {
+    if (!minhaEtiquetaId) {
       toast({ title: 'Nada para exportar', description: 'Nenhum cliente na lista atual.' });
       return;
     }
     setMcExportando(true);
     try {
       const { exportarParaExcel } = await import('@/lib/exportExcel');
+      const iniIso = mcDataIni ? new Date(new Date(mcDataIni).setHours(0, 0, 0, 0)).toISOString() : null;
+      const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
+      const todos: MetaContato[] = [];
+      for (let offset = 0; ; offset += PAGE_CONTATOS) {
+        const { data, error } = await supabase.rpc('meta_inbox_tagged_contacts_page', {
+          p_etiquetas: [minhaEtiquetaId], p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
+          p_folder: null, p_filtrar_folder: false, p_arquivado: false, p_filtrar_arquivado: false,
+          p_inicio: iniIso, p_fim: fimIso, p_limit: PAGE_CONTATOS, p_offset: offset,
+        });
+        if (error) throw error;
+        const page = (data as MetaContato[]) ?? [];
+        todos.push(...page);
+        if (page.length < PAGE_CONTATOS) break;
+      }
+      const qualificacoesTodos: Record<string, string[]> = {};
+      for (let offset = 0; offset < todos.length; offset += 300) {
+        const { data, error } = await supabase.from('meta_contato_qualificacao')
+          .select('contato_id, qualificacao_id').in('contato_id', todos.slice(offset, offset + 300).map(c => c.id));
+        if (error) throw error;
+        for (const row of data ?? []) (qualificacoesTodos[row.contato_id] ??= []).push(row.qualificacao_id);
+      }
+      const filtrados = mcMarcadores.size
+        ? todos.filter(c => (qualificacoesTodos[c.id] ?? []).some(id => mcMarcadores.has(id)))
+        : todos;
       const nomeCaixa = (id?: string | null) => (id ? (folders.find(f => f.id === id)?.nome || '—') : 'Padrão');
-      const linhas = contatosFiltrados.map(c => {
-        const ids = qualifPorContato[c.id] ?? [];
+      const linhas = filtrados.map(c => {
+        const ids = qualificacoesTodos[c.id] ?? [];
         const sel = ids.map(id => qualificacoes.find(x => x.id === id)).filter(Boolean) as MetaQualificacao[];
         const qs = sel.filter(q => !q.parent_id).map(p => {
           const mots = sel.filter(m => m.parent_id === p.id).map(m => m.nome);
@@ -1221,7 +1253,7 @@ export default function InboxMeta() {
     } finally {
       setMcExportando(false);
     }
-  }, [contatosFiltrados, qualificacoes, qualifPorContato, nomesCRM, folders, toast]);
+  }, [minhaEtiquetaId, mcDataIni, mcDataFim, filtroInstancia, mcMarcadores, qualificacoes, nomesCRM, folders, toast]);
 
 
 
