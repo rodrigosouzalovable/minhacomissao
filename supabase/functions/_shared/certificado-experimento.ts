@@ -3,6 +3,7 @@ export const JANELAS_PILOTO = [5, 10, 15, 20, 25, 30];
 export const INICIO_PILOTO = "2026-09-23";
 export const INICIO_PILOTO_RENOVACAO = "2026-09-28";
 export const FIM_PILOTO_RENOVACAO = "2026-10-02";
+export const MARGEM_RENOVACAO_DIAS = 15;
 
 export type EtapaCertificado = {
   janela: number;
@@ -28,8 +29,22 @@ export function dataUmAnoAntes(hoje: string): string {
   return alvo.toISOString().slice(0, 10);
 }
 
+export function datasRenovacaoPorPrioridade(hoje: string, margem = MARGEM_RENOVACAO_DIAS): string[] {
+  const exata = dataUmAnoAntes(hoje);
+  const base = new Date(`${exata}T12:00:00Z`);
+  const datas = [exata];
+  for (let distancia = 1; distancia <= margem; distancia++) {
+    const anterior = new Date(base);
+    anterior.setUTCDate(anterior.getUTCDate() - distancia);
+    const posterior = new Date(base);
+    posterior.setUTCDate(posterior.getUTCDate() + distancia);
+    datas.push(anterior.toISOString().slice(0, 10), posterior.toISOString().slice(0, 10));
+  }
+  return datas;
+}
+
 export function etapaCertificado(hoje: string): EtapaCertificado | null {
-  if (hoje >= INICIO_PILOTO_RENOVACAO && hoje <= FIM_PILOTO_RENOVACAO) {
+  if (hoje >= INICIO_PILOTO_RENOVACAO) {
     const dataAlvo = dataUmAnoAntes(hoje);
     return {
       janela: diferencaDias(hoje, dataAlvo),
@@ -38,8 +53,6 @@ export function etapaCertificado(hoje: string): EtapaCertificado | null {
       tipo: "renovacao_anual",
     };
   }
-  // O piloto antigo não volta sozinho depois do teste anual.
-  if (hoje > FIM_PILOTO_RENOVACAO) return null;
   const etapa = etapaPiloto(hoje);
   if (!etapa) return null;
   const atual = new Date(`${hoje}T12:00:00Z`);

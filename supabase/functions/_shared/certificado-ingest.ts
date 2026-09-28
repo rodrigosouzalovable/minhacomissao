@@ -41,7 +41,7 @@ export async function coletarJanela(
   cfg: ConfigCert,
   janela: number,
   manual: boolean,
-  opcoes: { maxPaginas?: number; paginaInicial?: number; maxTentativas?: number; timeoutMs?: number; preparacaoId?: string; dataReferencia?: string } = {},
+  opcoes: { maxPaginas?: number; paginaInicial?: number; maxTentativas?: number; timeoutMs?: number; preparacaoId?: string; dataReferencia?: string; dataFim?: string } = {},
 ): Promise<ResultadoJanela> {
   const dataRef = opcoes.dataReferencia ?? dataBRT(janela);
   const res: ResultadoJanela = {
@@ -66,7 +66,7 @@ export async function coletarJanela(
         ufs: cfg.ufs,
         cnaes: cfg.cnaes,
         dataInicio: dataRef,
-        dataFim: dataRef,
+        dataFim: opcoes.dataFim ?? dataRef,
         somenteMei: cfg.somente_mei,
         somenteCelular: cfg.somente_celular,
         pagina,
