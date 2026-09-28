@@ -1078,7 +1078,7 @@ export default function InboxMeta() {
   // A consulta acompanha o carregamento normal da lista e não adiciona polling.
   useEffect(() => {
     if (currentFolderId !== FOLDER_CERTIFICADO_ID) {
-      setAberturasCnpj({});
+      setAberturasCnpj(prev => Object.keys(prev).length === 0 ? prev : {});
       return;
     }
     const suffixes = Array.from(new Set(contatos.map(c => suffix8(c.telefone)).filter(Boolean)));

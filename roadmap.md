@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Corrigir o ciclo de renderização da Inbox fora da caixa CERTIFICADO e tornar os erros da prospecção diária do Certificado diagnosticáveis
 - [x] Reduzir a demora da Inbox Meta com páginas nos filtros por etiqueta e Meus Clientes, leituras de metadados em paralelo e validação de respostas no navegador
 - [x] Registrar respostas automáticas de todos os envios Meta/UAZAPI e revisar, sem duplicação, as conversas dos últimos sete dias
 - [x] Adicionar “Ativar pool” no cabeçalho das Instâncias do Envio Meta para tentar ativar todas as instâncias permitidas, com validação de saúde e resumo
