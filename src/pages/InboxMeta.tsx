@@ -728,7 +728,10 @@ export default function InboxMeta() {
       const iniIso = mcDataIni ? new Date(new Date(mcDataIni).setHours(0, 0, 0, 0)).toISOString() : null;
       const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
       const buscaLocal = buscaDebounced.trim();
-      const buscaInstancia = buscaLocal && instancias.some(i => norm(i.nome || '').includes(norm(buscaLocal)) || String(i.display_phone || '').replace(/\D/g, '').includes(buscaLocal.replace(/\D/g, '')) && buscaLocal.replace(/\D/g, '').length >= 4);
+      const buscaDigitos = buscaLocal.replace(/\D/g, '');
+      const buscaInstancia = buscaLocal && instancias.some(i =>
+        norm(i.nome || '').includes(norm(buscaLocal)) ||
+        (buscaDigitos.length >= 4 && String(i.display_phone || '').replace(/\D/g, '').includes(buscaDigitos)));
       const buscaNoServidor = buscaInstancia ? '' : buscaLocal;
       const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), [...mcMarcadores].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso, buscaNoServidor]);
       const cached = taggedPageRef.current.key === key ? taggedPageRef.current : null;
