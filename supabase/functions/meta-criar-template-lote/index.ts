@@ -234,11 +234,6 @@ serve(async (req) => {
       usuario_id = userData?.user?.id ?? null;
     }
     if (!usuario_id && !serviceCall) return new Response(JSON.stringify({ success: false, error: "Sessão inválida." }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    const { data: adminRole, error: roleError } = serviceCall ? { data: null, error: null } : await supabase
-      .from("user_roles").select("role").eq("user_id", usuario_id).eq("role", "admin").maybeSingle();
-    if (roleError) throw roleError;
-    const isAdmin = serviceCall || !!adminRole;
-
     const { data: mestre, error: me } = await supabase
       .from("meta_templates_mestre").select("*").eq("id", mestre_id).maybeSingle();
     if (me || !mestre) throw new Error("Template mestre não encontrado");
