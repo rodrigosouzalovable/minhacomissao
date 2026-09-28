@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Concluir pelo aviso os retornos agendados na conversa do Inbox, sem repetir a notificação após salvar
 - [x] Validar o piloto de renovação anual de 28/09 a 02/10, com 50 novos WhatsApps por instância apta e resultados separados por CNAE
 - [x] Confirmar que Templates > Aplicar templates sincroniza, enfileira os modelos faltantes sem duplicação e inicia a primeira rodada de processamento
 - [x] Exibir e controlar no card Meta a ativação, o progresso e a meta diária individual do aquecimento do Certificado
