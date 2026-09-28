@@ -553,6 +553,7 @@ export default function MetaTemplates() {
     ).length;
 
   const reenviarFalhas = async (mestreId: string) => {
+    if (erroCarregamento) { toast.error("Atualize a lista antes de reenviar."); return; }
     const n = contarFalhas(mestreId);
     if (n === 0) { toast.info("Nenhuma falha para reenviar neste modelo."); return; }
     if (!confirm(`Reenviar este modelo para ${n} número(s) com falha ou reprovação?`)) return;
@@ -723,6 +724,23 @@ export default function MetaTemplates() {
   };
 
   const ultimoLote = (mestreId: string) => lotes.find((l) => l.template_mestre_id === mestreId);
+
+  const selecionarAusentes = (mestreId: string) => {
+    const mestre = mestres.find((m) => m.id === mestreId);
+    if (!mestre || mestre.reclassificado_marketing || erroCarregamento) return;
+    const comRegistro = new Set(templInst.filter((t) => t.template_mestre_id === mestreId).map((t) => t.instancia_id));
+    const comModeloNaMeta = new Set(templMeta.filter((t) =>
+      t.nome_template.toLowerCase() === mestre.nome.toLowerCase() && t.idioma === mestre.idioma &&
+      ["APPROVED", "PENDING", "ENVIADO", "IN_APPEAL"].includes(String(t.status || "").toUpperCase()),
+    ).map((t) => t.instancia_id));
+    const ausentes = instancias.filter((inst) => inst.ativo && !comRegistro.has(inst.id) && !comModeloNaMeta.has(inst.id) &&
+      ["GREEN", "UNKNOWN", "SEM LEITURA"].includes(qualidadeDa(inst)));
+    if (ausentes.length === 0) { toast.info("Nenhum número ativo e elegível sem registro deste modelo."); return; }
+    setSelMestre(mestreId);
+    setSelInst(new Set(ausentes.map((inst) => inst.id)));
+    setTab("lote");
+    toast.info(`${ausentes.length} número(s) sem registro selecionado(s). Confira antes de enviar.`);
+  };
 
   // BM vinculada ao número — mostrada ao lado da instância para abrir rápido
   // no Gerenciador de Negócios quando algo falha.
@@ -1305,7 +1323,7 @@ export default function MetaTemplates() {
                   <Button
                     variant="secondary"
                     onClick={() => enviarLote("piloto")}
-                    disabled={enviando || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
+                    disabled={enviando || !!erroCarregamento || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar piloto (1 número)
@@ -1313,7 +1331,7 @@ export default function MetaTemplates() {
                   <Button
                     variant="outline"
                     onClick={() => enviarLote("replicar")}
-                    disabled={enviando || !selMestre || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
+                    disabled={enviando || !!erroCarregamento || !selMestre || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                     Replicar nas demais
@@ -1418,7 +1436,7 @@ export default function MetaTemplates() {
                         size="sm"
                         variant="outline"
                         onClick={() => reenviarFalhas(m.id)}
-                        disabled={enviando || contarFalhas(m.id) === 0 || !!m.reclassificado_marketing}
+                        disabled={enviando || !!erroCarregamento || contarFalhas(m.id) === 0 || !!m.reclassificado_marketing}
                         title={contarFalhas(m.id) === 0 ? "Nenhuma falha para reenviar" : undefined}
                       >
                         <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas ({contarFalhas(m.id)})
@@ -1438,6 +1456,7 @@ export default function MetaTemplates() {
                   </CardHeader>
                   <CardContent>
                     {lote && <p className="mb-2 text-xs text-muted-foreground">Último lote registrado: {lote.total_instancias} número(s) processado(s) · {lote.sucessos} aceitos pela Meta · {lote.falhas} falhas. Aceito não significa aprovado.</p>}
+                    {!m.reclassificado_marketing && <Button size="sm" variant="outline" className="mb-3" onClick={() => selecionarAusentes(m.id)} disabled={loading || !!erroCarregamento}>Selecionar números sem registro</Button>}
                     <details>
                       <summary className="cursor-pointer text-sm text-muted-foreground">Ver detalhes por instância ({filhas.length})</summary>
                       <div className="mt-2 space-y-1">
