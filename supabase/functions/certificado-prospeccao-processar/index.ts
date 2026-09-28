@@ -11,6 +11,20 @@ const agoraBrt = () => new Date(new Date().toLocaleString("en-US", { timeZone: "
 const diaBrt = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const nomeCampanha = () => new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(new Date());
 const TEMPLATE_TESTE = "cnpj_atualizado_2";
+type ErrorDetails = { message: string; code?: string; details?: string; hint?: string };
+function errorDetails(error: unknown): ErrorDetails {
+  if (error instanceof Error) return { message: error.message };
+  if (error && typeof error === "object") {
+    const value = error as Record<string, unknown>;
+    return {
+      message: typeof value.message === "string" && value.message ? value.message : "Falha na prospecção",
+      ...(typeof value.code === "string" && value.code ? { code: value.code } : {}),
+      ...(typeof value.details === "string" && value.details ? { details: value.details } : {}),
+      ...(typeof value.hint === "string" && value.hint ? { hint: value.hint } : {}),
+    };
+  }
+  return { message: typeof error === "string" && error ? error : "Falha na prospecção" };
+}
 function formatarDataAbertura(data: string | null | undefined): string {
   const iso = String(data ?? "").slice(0, 10);
   const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
@@ -614,7 +628,8 @@ Deno.serve(async (req) => {
       parcial: Number((resumoColeta as any)?.janelas_falha ?? 0) > 0,
     });
   } catch (error) {
-    console.error("certificado-prospeccao-processar", error);
-    return json({ error: error instanceof Error ? error.message : "Falha na prospecção" }, 500);
+    const details = errorDetails(error);
+    console.error("certificado-prospeccao-processar", details);
+    return json({ error: details.message, code: details.code, details: details.details, hint: details.hint }, 500);
   }
 });

@@ -3,6 +3,12 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") return error.message;
+  return typeof error === "string" && error ? error : fallback;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -26,12 +32,13 @@ Deno.serve(async (req) => {
         console.log("certificado-prospeccao-diaria processamento concluído", result);
       }
     }).catch((error) => {
-      console.error("certificado-prospeccao-diaria processamento", error);
+      console.error("certificado-prospeccao-diaria processamento", { error: errorMessage(error, "Falha ao chamar o processamento diário") });
     });
     EdgeRuntime.waitUntil(processamento);
     return json({ success: true, iniciado: true, motivo: "Processamento diário iniciado" }, 202);
   } catch (error) {
-    console.error("certificado-prospeccao-diaria", error);
-    return json({ error: error instanceof Error ? error.message : "Falha no início diário" }, 500);
+    const message = errorMessage(error, "Falha no início diário");
+    console.error("certificado-prospeccao-diaria", { error: message });
+    return json({ error: message }, 500);
   }
 });
