@@ -31,7 +31,7 @@ function proximaConferencia(criadoEm: string | null): string {
   return new Date(Date.now() + intervalo).toISOString();
 }
 
-serve(async (req) => {
+async function verificar(req: Request, progresso?: (evento: unknown) => void): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -43,11 +43,18 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({} as any));
     const forcar = body?.forcar === true;
     const agora = new Date().toISOString();
+    let dono: string | null = null;
+    if (progresso) {
+      const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim();
+      const { data: auth } = token ? await supabase.auth.getUser(token) : { data: null };
+      dono = auth?.user?.id || null;
+      if (!dono) return new Response(JSON.stringify({ success: false, error: "Sessão inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // ===== 1) Itens em aberto que já venceram a conferência =====
     let qAbertos = supabase
       .from("meta_templates_instancia")
-      .select("instancia_id")
+      .select("instancia_id, template_mestre_id")
       .in("status", EM_ABERTO);
     if (!forcar) qAbertos = qAbertos.or(`proxima_verificacao_em.is.null,proxima_verificacao_em.lte.${agora}`);
     const { data: abertos } = await qAbertos;
@@ -55,16 +62,22 @@ serve(async (req) => {
     // REJECTED sem motivo: enriquece o motivo uma vez (não entra na escada)
     const { data: rejSemMotivo } = await supabase
       .from("meta_templates_instancia")
-      .select("instancia_id")
+      .select("instancia_id, template_mestre_id")
       .eq("status", "REJECTED")
       .is("motivo_rejeicao", null);
 
+    let registros = [ ...((abertos as any[]) || []), ...((rejSemMotivo as any[]) || []) ];
+    if (dono) {
+      const { data: meus } = await supabase.from("meta_templates_mestre").select("id").eq("criado_por", dono);
+      const permitidos = new Set((meus || []).map((m) => m.id));
+      registros = registros.filter((r) => permitidos.has(r.template_mestre_id));
+    }
     const instIds = Array.from(
       new Set([
-        ...(((abertos as any[]) || []).map((r) => r.instancia_id)),
-        ...(((rejSemMotivo as any[]) || []).map((r) => r.instancia_id)),
+        ...(registros.map((r) => r.instancia_id)),
       ]),
     ).slice(0, MAX_INSTANCIAS_POR_EXECUCAO);
+    progresso?.({ type: "start", total: instIds.length });
 
     if (instIds.length === 0) {
       // Nada aguardando: encerra sem chamar a Meta (custo praticamente zero).
@@ -76,7 +89,8 @@ serve(async (req) => {
     const { data: instancias } = await supabase
       .from("meta_whatsapp_instances")
       .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, saude_quality")
-      .in("id", instIds);
+      .in("id", instIds)
+      ...(dono ? [] : []);
 
     let atualizados = 0;
     let aprovadosTotal = 0;
