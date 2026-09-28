@@ -1282,9 +1282,10 @@ export default function MetaTemplates() {
               </Button>
             </div>
             {(verificando || verificacao.erro) && <div className="space-y-2 border p-3 text-sm" role="status" aria-live="polite">
-              <div className="flex justify-between gap-2"><span>{verificacao.erro || `Conferindo ${verificacao.nome || "instâncias"}… · ${verificacao.segundos}s`}</span><strong>{verificacao.total ? Math.round(100 * (verificacao.concluidas - verificacao.falhas) / verificacao.total) : verificando ? "Aguardando…" : ""}{verificacao.total ? "%" : ""}</strong></div>
-              <Progress value={verificacao.total ? 100 * (verificacao.concluidas - verificacao.falhas) / verificacao.total : 0} />
+              <div className="flex justify-between gap-2"><span>Conferindo {verificacao.nome || "instâncias"}… · {verificacao.segundos}s</span><strong>{verificacao.total ? Math.round(100 * verificacao.concluidas / verificacao.total) : verificando ? "Aguardando…" : ""}{verificacao.total ? "%" : ""}</strong></div>
+              <Progress value={verificacao.total ? 100 * verificacao.concluidas / verificacao.total : 0} />
               {verificando && <span className="text-muted-foreground">{verificacao.concluidas} de {verificacao.total} instâncias conferidas</span>}
+              {verificacao.erro && <span className="text-destructive">{verificacao.erro}</span>}
             </div>}
             {loteAtual && (() => {
               const modelo = mestres.find((m) => m.id === loteAtual.mestreId);
