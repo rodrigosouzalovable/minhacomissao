@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Permitir que todos os usuários alterem vencimentos pendentes e marquem/desmarquem pagamentos em acordos próprios ou de outros usuários, sem liberar valores, comissões ou responsável
 - [x] Executar renovação anual em dias úteis: até 50 contatos inéditos por instância marcada e apta, priorizando a data exata e ampliando até ±15 dias, das 08h às 16h, com teto obrigatório de R$120/dia; sem Google Maps
 - [x] Corrigir a aplicação automática de templates na instância SOUZA 62 8243-4364: autenticar a chamada interna, recuperar falhas de sessão e mostrar somente aprovações confirmadas
 - [x] Iniciar campanha pontual comum D+20 da Casa dos Dados com 50 contatos já verificados, sem reativar Google Maps ou alterar a renovação anual
