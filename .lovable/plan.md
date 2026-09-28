@@ -16,6 +16,7 @@ Também corrigir o comando **Templates > Aplicar templates** no card da API Ofic
 - Manter deduplicação por CNPJ e pelos últimos 8 dígitos do telefone, blacklist, opt-out e bloqueio de contatos já usados.
 - Participarão somente instâncias com aquecimento ativado, conectadas, no pool, sem restrição, com qualidade GREEN/UNKNOWN e template aprovado.
 - Encerrar automaticamente esse modo anual após 02/10/2026, preservando os resultados e sem voltar a disparar o piloto antigo silenciosamente.
+- Registrar no próprio envio que ele pertence ao piloto de renovação anual, permitindo à Clara e aos relatórios distingui-lo do fluxo de primeira emissão.
 
 ## Campanha e acompanhamento
 
@@ -43,10 +44,11 @@ Hoje, **Templates > Aplicar templates** chama apenas a sincronização dos templ
 ### Correção
 
 - Ao clicar em **Aplicar templates**, primeiro sincronizar os templates reais da instância para evitar duplicidades.
-- Em seguida, enfileirar automaticamente os templates mestres já cadastrados e marcados para aplicação em novos números.
+- Em seguida, enfileirar automaticamente todos os templates mestres cadastrados que sejam válidos para submissão nessa instância.
 - Não reenviar nome + idioma que já esteja aprovado, pendente ou em análise nessa instância.
 - Permitir a submissão das categorias já liberadas no cadastro, inclusive MARKETING, sem usar essa liberação para disparar mensagens a clientes; modelos estruturalmente incompatíveis ficam fora e terão motivo visível.
 - Manter processamento gradual, horário de 07:00 a 20:00 BRT, bloqueio aos domingos, limite de tier 250 e pausas diante de recusas ou limites reais da Meta.
+- Acionar imediatamente a primeira rodada segura após criar a fila; as demais continuam no processamento gradual já existente, sem novo agendamento.
 - Exibir confirmação com quantidade enfileirada, quantidade já existente e motivo quando não houver modelo pendente; manter o progresso no badge do card.
 
 ## Validação
