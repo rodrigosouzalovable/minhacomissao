@@ -216,6 +216,11 @@ export default function MetaTemplates() {
     ]);
     if (m.error || i.error || par.error || bmRows.error) {
       setErroCarregamento("Não foi possível carregar todas as instâncias e modelos. Atualize a página.");
+      setMestres([]);
+      setInstancias([]);
+      setTemplInst([]);
+      setTemplMeta([]);
+      setLotes([]);
       setLoading(false);
       return;
     }
@@ -258,6 +263,9 @@ export default function MetaTemplates() {
       setTemplMeta(cache);
     } catch {
       setErroCarregamento("A lista de status não foi carregada por completo. Tente atualizar antes de selecionar ou reenviar.");
+      setTemplInst([]);
+      setTemplMeta([]);
+      setLotes([]);
     }
     setLoading(false);
   };
