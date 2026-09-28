@@ -295,20 +295,21 @@ Deno.serve(async (req) => {
         .eq("id", proximo.template_mestre_id)
         .maybeSingle();
 
-      // Só sobe utilidade com variável numerada. Qualquer outro caso sai da fila.
+      // Sobe UTILIDADE ou MARKETING com variável numerada. Qualquer outro caso sai da fila.
       if (mestreItem) {
         const nomeadas = String((mestreItem as any).corpo || "").match(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g) || [];
-        const naoUtility = String((mestreItem as any).categoria || "").toUpperCase() !== "UTILITY";
-        const marketing = (mestreItem as any).reclassificado_marketing === true;
-        if (nomeadas.length > 0 || naoUtility || marketing) {
+        const categoria = String((mestreItem as any).categoria || "").toUpperCase();
+        const categoriaInvalida = !["UTILITY", "MARKETING"].includes(categoria);
+        const reclassificadoInconsistente = (mestreItem as any).reclassificado_marketing === true && categoria !== "MARKETING";
+        if (nomeadas.length > 0 || categoriaInvalida || reclassificadoInconsistente) {
           await supabase
             .from("meta_templates_onboarding_fila")
             .update({
               status: "CANCELADO",
-              motivo: marketing
-                ? "modelo reclassificado como MARKETING pela Meta"
-                : naoUtility
-                ? "somente modelos de utilidade são injetados"
+              motivo: reclassificadoInconsistente
+                ? "modelo reclassificado como MARKETING; salve-o nessa categoria antes de reenviar"
+                : categoriaInvalida
+                ? "categoria incompatível com a aplicação automática"
                 : "modelo usa variável com nome; use {{1}}, {{2}}...",
               finalizado_em: new Date().toISOString(),
             })
