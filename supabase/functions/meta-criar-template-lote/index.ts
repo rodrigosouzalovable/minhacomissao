@@ -450,9 +450,11 @@ serve(async (req) => {
       let sucessos = 0;
       let falhas = 0;
       let interrompido = false;
+      let motivoInterrupcao = "Interrompido: a Meta reclassificou o modelo como Marketing.";
 
       const bloquearReclassificado = async (inst: any) => {
         interrompido = true;
+        motivoInterrupcao = "Interrompido: a Meta reclassificou o modelo como Marketing.";
         await supabase.from("meta_templates_mestre").update({
           reclassificado_marketing: true, categoria_meta: "MARKETING",
           injetar_em_novos: false, usar_em_leads: false,
@@ -468,14 +470,14 @@ serve(async (req) => {
         if (!interrompido) {
           const { data: atual } = await supabase.from("meta_templates_mestre")
             .select("reclassificado_marketing").eq("id", mestre_id).maybeSingle();
-          interrompido = categoria === "UTILITY" && atual?.reclassificado_marketing === true;
+          if (categoria === "UTILITY" && atual?.reclassificado_marketing === true) interrompido = true;
         }
         if (interrompido) {
           await supabase.from("meta_templates_instancia").upsert({
             template_mestre_id: mestre_id, instancia_id: inst.id,
-            status: "FALHA_ENVIO", erro: "Interrompido: a Meta reclassificou o modelo como Marketing.",
+            status: "FALHA_ENVIO", erro: motivoInterrupcao,
           }, { onConflict: "template_mestre_id,instancia_id" });
-          await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", "Lote interrompido por reclassificação Marketing");
+          await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", motivoInterrupcao);
           detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, interrompido: true });
           continue;
         }
@@ -596,6 +598,10 @@ serve(async (req) => {
                await bloquearReclassificado(inst);
              }
            }
+            if (res.ok && categoria === "UTILITY" && !categoriaReal) {
+              interrompido = true;
+              motivoInterrupcao = "Interrompido: a categoria ainda não foi confirmada pela Meta. Verifique o status antes de reenviar.";
+            }
 
           if (!res.ok) {
             falhas++;

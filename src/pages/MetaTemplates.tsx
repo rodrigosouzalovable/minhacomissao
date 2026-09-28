@@ -1405,7 +1405,7 @@ export default function MetaTemplates() {
                                 })()}
                                  {(() => {
                                    const real = templMeta.find((t) => t.instancia_id === f.instancia_id && t.nome_template === m.nome && t.idioma === m.idioma);
-                                   return real?.categoria ? <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"} className="ml-2">{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : "Utilidade"}</Badge> : null;
+                                   return real?.categoria ? <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"} className="ml-2">{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge> : null;
                                  })()}
                                  {inst && (
                                   <Badge
