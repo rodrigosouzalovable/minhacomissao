@@ -109,6 +109,7 @@ interface MetaMensagem {
 const PAGE_SIZE = 40;
 const JANELA_24H_MS = 24 * 60 * 60 * 1000;
 const ALERTA_1H_MS = 60 * 60 * 1000;
+const FOLDER_CERTIFICADO_ID = '9267b296-24e6-425d-9f0e-0e4114c782d9';
 
 function formatTelefone(t: string) {
   const d = t.replace(/\D/g, '');
@@ -257,6 +258,7 @@ export default function InboxMeta() {
   // Marca quando o usuário escolhe manualmente uma caixa (evita voltar para Padrão depois)
   const escolhaManualFolderRef = useRef(false);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
+  const [aberturasCnpj, setAberturasCnpj] = useState<Record<string, string>>({}); // suffix8 -> data de abertura
 
   
   const [etiquetasOpen, setEtiquetasOpen] = useState(false);
@@ -1112,6 +1114,35 @@ export default function InboxMeta() {
     })();
   }, [contatos]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Na caixa CERTIFICADO, resolve em lote a abertura do CNPJ pelo sufixo do telefone.
+  // A consulta acompanha o carregamento normal da lista e não adiciona polling.
+  useEffect(() => {
+    if (currentFolderId !== FOLDER_CERTIFICADO_ID) {
+      setAberturasCnpj({});
+      return;
+    }
+    const suffixes = Array.from(new Set(contatos.map(c => suffix8(c.telefone)).filter(Boolean)));
+    const faltando = suffixes.filter(s => !(s in aberturasCnpj));
+    if (faltando.length === 0) return;
+    let cancelado = false;
+    void (async () => {
+      const { data } = await supabase.rpc('buscar_aberturas_cnpj_certificado_por_telefone', {
+        p_suffixes: faltando.slice(0, 300),
+      });
+      if (cancelado || !data) return;
+      setAberturasCnpj(prev => {
+        const next = { ...prev };
+        for (const s of faltando) if (!(s in next)) next[s] = '';
+        for (const row of data as Array<{ suffix: string; data_abertura: string | null }>) {
+          const sfx = suffix8(row.suffix || '');
+          if (sfx && row.data_abertura) next[sfx] = row.data_abertura;
+        }
+        return next;
+      });
+    })();
+    return () => { cancelado = true; };
+  }, [contatos, currentFolderId, aberturasCnpj]);
+
   const [nowTick, setNowTick] = useState(Date.now());
 
   const isCaixaAquecimento = useMemo(() => {
@@ -1866,7 +1897,16 @@ export default function InboxMeta() {
                     </p>
                   )}
                   <div className="flex items-center gap-1">
-                    <Popover>
+                    {currentFolderId === FOLDER_CERTIFICADO_ID ? (
+                      <span className="inline-flex items-center rounded border px-1.5 py-0.5 font-medium text-foreground/90">
+                        Abertura do CNPJ: {(() => {
+                          const data = aberturasCnpj[suffix8(contatoAtivo.telefone)];
+                          if (!data) return 'não informada';
+                          const partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(data);
+                          return partes ? `${partes[3]}/${partes[2]}/${partes[1]}` : data;
+                        })()}
+                      </span>
+                    ) : <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px] justify-start">
                           {mcDataIni ? format(mcDataIni, 'dd/MM/yy') : 'Data inicial'}
@@ -1875,7 +1915,7 @@ export default function InboxMeta() {
                       <PopoverContent className="w-auto p-0" align="start">
                         <CalendarPicker mode="single" selected={mcDataIni} onSelect={setMcDataIni} initialFocus locale={ptBR} className="p-3 pointer-events-auto" />
                       </PopoverContent>
-                    </Popover>
+                    </Popover>}
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px] justify-start">
