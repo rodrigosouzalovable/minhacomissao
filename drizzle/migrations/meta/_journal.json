@@ -624,6 +624,13 @@
       "when": 1790622384844,
       "tag": "0088_fix_inbox_tagged_search_text_match",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1790625131723,
+      "tag": "0089_scope_meta_labels_by_inbox_folder",
+      "breakpoints": true
     }
   ]
 }
