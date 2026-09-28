@@ -11,9 +11,17 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const auth = req.headers.get('Authorization') || '';
-  if (!serviceKey || auth !== `Bearer ${serviceKey}`) return json({ error: 'Não autorizado' }, 401);
-
-  const supabase = createClient(Deno.env.get('SUPABASE_URL') || '', serviceKey);
+  if (!serviceKey) return json({ error: 'Configuração indisponível' }, 500);
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const supabase = createClient(supabaseUrl, serviceKey);
+  if (auth !== `Bearer ${serviceKey}`) {
+    const jwt = auth.replace(/^Bearer\s+/i, '');
+    const { data: authData } = await supabase.auth.getUser(jwt);
+    const userId = authData.user?.id;
+    if (!userId) return json({ error: 'Não autorizado' }, 401);
+    const { data: admin } = await supabase.rpc('has_role', { _user_id: userId, _role: 'admin' });
+    if (admin !== true) return json({ error: 'Acesso restrito ao administrador' }, 403);
+  }
   try {
     const body = await req.json().catch(() => ({}));
     const origem = body?.origem === 'uazapi' ? 'uazapi' : 'meta';
