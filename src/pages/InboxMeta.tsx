@@ -1136,10 +1136,6 @@ export default function InboxMeta() {
         }
         // Na lista paginada, o banco já verificou a etiqueta com as permissões do usuário.
         // Não esconda a página enquanto a leitura auxiliar de chips ainda carrega.
-        if (filtroEtiqueta.size > 0 && !modoMeusClientes && taggedPageRef.current.key === '') {
-          const ids = contatoEtiquetas[c.id] || [];
-          if (!ids.some(id => filtroEtiqueta.has(id))) return false;
-        }
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
         if (filtroJanela24h) {
           if (!c.ultima_msg_entrada_em) return false;
