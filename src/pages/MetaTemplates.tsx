@@ -1013,8 +1013,8 @@ export default function MetaTemplates() {
                             <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400 text-xs">
                               <Zap className="w-3 h-3 mr-1" /> automático
                             </Badge>
-                          )}
-                           {m.categoria === "UTILITY" && !m.reclassificado_marketing && <label
+                            )}
+                            {m.categoria === "UTILITY" && !m.reclassificado_marketing && <label
                             className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
                             title="Usar este modelo nas mensagens de aquecimento para leads do Google Maps"
                           >
@@ -1360,7 +1360,7 @@ export default function MetaTemplates() {
                     />
                   </div>
 
-                  {m.categoria === "UTILITY" && !m.reclassificado_marketing && <div className="flex items-center gap-2 rounded-md border p-3">
+                  {["UTILITY", "MARKETING"].includes(m.categoria) && !m.reclassificado_marketing && <div className="flex items-center gap-2 rounded-md border p-3">
                     <Checkbox
                       checked={!!m.injetar_em_novos}
                       onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
