@@ -526,6 +526,13 @@
       "when": 1790601427491,
       "tag": "0074_fix_certificado_reserva_ambiguous_lead",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790601484721,
+      "tag": "0075_fix_certificado_reserva_conflict_target",
+      "breakpoints": true
     }
   ]
 }
