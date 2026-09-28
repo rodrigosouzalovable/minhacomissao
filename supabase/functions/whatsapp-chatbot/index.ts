@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extrairPropostaDoTexto } from '../_shared/proposta-previa.ts';
 import { enqueueAdminNotification } from '../_shared/enqueue-admin-notification.ts';
+import { registrarAutoRespostaSeConfirmada } from '../_shared/registrar-auto-resposta.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1480,17 +1481,39 @@ serve(async (req) => {
               whatsapp_msg_id: cleanedMsgId,
             };
             let insErr: any = null;
+            let mensagemEntradaId: string | null = null;
             if (cleanedMsgId) {
-              const { error } = await supabase
+              const { data, error } = await supabase
                 .from('whatsapp_mensagens')
-                .upsert(baseRow, { onConflict: 'instancia_id,whatsapp_msg_id', ignoreDuplicates: true });
+                .upsert(baseRow, { onConflict: 'instancia_id,whatsapp_msg_id', ignoreDuplicates: true })
+                .select('id')
+                .maybeSingle();
               insErr = error;
+              mensagemEntradaId = data?.id || null;
             } else {
-              const { error } = await supabase.from('whatsapp_mensagens').insert(baseRow);
+              const { data, error } = await supabase.from('whatsapp_mensagens').insert(baseRow).select('id').single();
               insErr = error;
+              mensagemEntradaId = data?.id || null;
             }
             if (insErr) console.error('[INBOX] insert entrada erro:', insErr.message, 'tel=', telefoneParaSalvar, 'msgId=', cleanedMsgId);
             else console.log(`[INBOX] ✅ Mensagem entrada salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo} len=${inboxConteudo.length}`);
+
+            if (!insErr && mensagemEntradaId && inboxTipoConteudo === 'texto') {
+              try {
+                await registrarAutoRespostaSeConfirmada({
+                  supabase,
+                  origem: 'uazapi',
+                  instanciaId,
+                  telefone: telefoneParaSalvar,
+                  texto: inboxConteudo,
+                  mensagemChave: cleanedMsgId || mensagemEntradaId,
+                  recebidaEm: agora,
+                  nome: inboxNomeContato,
+                });
+              } catch (erro) {
+                console.error('[INBOX] falha ao registrar resposta automática geral', erro);
+              }
+            }
 
             if (matchedContact) {
               await supabase.from('whatsapp_contatos').update({
