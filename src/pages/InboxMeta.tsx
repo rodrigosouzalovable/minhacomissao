@@ -826,7 +826,7 @@ export default function InboxMeta() {
     // Etiquetas apenas dos contatos que entraram na lista
     fetchContatoEtiquetas(contatoIdsRef.current);
     fetchQualifContatos(contatoIdsRef.current);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, filtroEtiqueta]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
