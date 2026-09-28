@@ -1,0 +1,22 @@
+# Acompanhar verificação e envio de Templates Meta, com bloqueio ao virar Marketing
+
+## Resultado esperado
+- Ao clicar em **Verificar status na Meta**, mostrar imediatamente o tempo decorrido e uma barra de 0 a 100% baseada nas instâncias realmente conferidas. Ao terminar, exibir o resumo já conhecido; em falhas, mostrar o erro e não fingir 100%.
+- Após enviar um template para instâncias selecionadas, mostrar a lista dessas instâncias e acompanhar cada uma como aguardando processamento, enviada/pendente de aprovação, aprovada, falhou ou foi interrompida. A lista deve permanecer acessível em **Status e Aprovação**, mesmo após trocar de aba.
+- Exibir em cada linha a categoria confirmada pela Meta naquele número (**Utilidade** ou **Marketing**), separada da qualidade da instância e do estado de aprovação. No cadastro em **Aplicar em Lote**, destacar **Marketing** quando um modelo originalmente Utilidade for reclassificado, impedir novos envios dele e oferecer exclusão ou edição para criar uma versão corrigida.
+- Assim que uma reclassificação para Marketing for confirmada durante um lote, não submeter esse mesmo modelo aos números ainda não processados. Manter os registros dos números já submetidos e indicar claramente os demais como interrompidos.
+
+## Como será feito
+1. Adaptar a verificação manual para comunicar o avanço por instância na própria requisição, sem inventar porcentagem nem criar atualização periódica. Preservar a conferência automática existente e limitar a consulta manual aos templates/instâncias do próprio usuário. Mostrar tempo decorrido desde o clique e finalizar somente após retorno real.
+2. Aproveitar os registros de envio por instância e a atualização já existente na tela para acompanhar o lote. Retornar os IDs efetivamente aceitos e os adiados; distinguir processamento da aprovação da Meta, que pode demorar depois de a barra de submissão chegar a 100%.
+3. Registrar/atualizar a categoria real por nome **e idioma** na instância, vinculando-a ao template do seu proprietário. Durante o envio, conferir a categoria devolvida pela Meta antes da próxima instância; se ela não vier no retorno, consultar apenas o template recém-enviado. Se houver reclassificação confirmada, desmarcar a aplicação automática, cancelar pendências desse modelo e interromper o restante do lote, sem interferir nos modelos de outros proprietários.
+4. Acrescentar etiquetas de categoria nas linhas de **Status e Aprovação** e no catálogo de **Aplicar em Lote**. O cadastro reclassificado continua visível para inspeção/exclusão; para alterar o texto/categoria de um modelo já enviado, oferecer criação de uma nova versão com novo nome, pois editar o cadastro não altera retroativamente o template que a Meta já recebeu.
+5. Validar progresso, lote normal, erro de consulta, reclassificação no meio do lote e isolamento entre usuários, sem enviar mensagens de campanha a clientes.
+
+## Detalhes técnicos
+- Ajustar `src/pages/MetaTemplates.tsx`, `meta-verificar-status-templates` e `meta-criar-template-lote`; aproveitar `meta_templates_instancia`, `meta_whatsapp_templates.categoria` e `meta_templates_mestre.reclassificado_marketing`. Manter o cron existente, sem novo agendamento ou polling.
+- A verificação atual só consulta itens abertos elegíveis, limita-se a 25 instâncias por execução e não comunica progresso. A submissão em lote inicia processamento em segundo plano; a categoria real existe no cache de templates por instância, mas não está nas linhas desta tela. A detecção atual de Marketing ocorre na verificação posterior e cancela a fila automática, não o lote manual já em andamento.
+- Preservar a possibilidade de cadastrar modelos Marketing diretamente, mas **não** liberar disparos Marketing para clientes. Não classificar como reclassificação um modelo originalmente cadastrado como Marketing.
+
+## Alerta de custo
+**⚠️ ALERTA DE CUSTO LOVABLE CLOUD:** para parar um lote imediatamente quando a Meta reclassificar um template, poderá ser necessária **até uma consulta adicional à Meta por instância efetivamente submetida** caso a resposta inicial não informe a categoria (por exemplo, até 50 consultas em um lote de 50). Não haverá novo cron, polling ou rotina contínua; o consumo adicional do Cloud fica restrito ao processamento manual do lote e não há valor monetário confiável sem a tarifação efetiva da Meta/Cloud. A aprovação deste plano confirma esse custo potencial.
