@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Adicionar “Ativar pool” no cabeçalho das Instâncias do Envio Meta para tentar ativar todas as instâncias permitidas, com validação de saúde e resumo
 - [x] Exibir a data de abertura do CNPJ no cabeçalho das conversas da caixa CERTIFICADO, sem novo polling
 - [x] Redistribuir os contatos pendentes da campanha anual entre novas instâncias aptas, preservando cotas, qualidade e orçamento
 - [x] Permitir que todos os usuários alterem vencimentos pendentes e marquem/desmarquem pagamentos em acordos próprios ou de outros usuários, sem liberar valores, comissões ou responsável

@@ -312,6 +312,7 @@ export default function EnvioMeta() {
   const [editPhone, setEditPhone] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
   const [instanciasDialogOpen, setInstanciasDialogOpen] = useState<boolean>(false);
+  const [ativandoPoolTodos, setAtivandoPoolTodos] = useState<boolean>(false);
   const custoRef = useRef<CustoEnvioCardHandle>(null);
   const custoEstimativaRef = useRef<Awaited<ReturnType<typeof calcularCustoEstimado>> | null>(null);
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
@@ -638,6 +639,84 @@ export default function EnvioMeta() {
       await carregar();
     } finally {
       setAtivandoPoolId(null);
+    }
+  };
+
+  const ativarTodosNoPool = async () => {
+    if ((!isAdmin && !parceiroMeta) || ativandoPoolTodos) return;
+
+    const jaAtivas = instancias.filter(
+      (inst) => !inst.pool_fora_manual && (inst.estado_pool || "aguardando_templates") === "ativo",
+    ).length;
+    const paraAtivar = instancias.filter(
+      (inst) => inst.pool_fora_manual || (inst.estado_pool || "aguardando_templates") !== "ativo",
+    );
+
+    if (paraAtivar.length === 0) {
+      toast.success(`Todas as ${jaAtivas} instância(s) permitida(s) já estão no pool`);
+      return;
+    }
+
+    if (!confirm(`Ativar o pool de ${paraAtivar.length} instância(s)? As retiradas manualmente terão a saúde consultada na Meta antes da tentativa.`)) return;
+
+    setAtivandoPoolTodos(true);
+    const falhas = new Map<string, string>();
+
+    try {
+      const retiradasManual = paraAtivar.filter((inst) => inst.pool_fora_manual);
+      for (let inicio = 0; inicio < retiradasManual.length; inicio += 100) {
+        const lote = retiradasManual.slice(inicio, inicio + 100);
+        try {
+          const { data, error } = await supabase.functions.invoke("check-meta-instance-health", {
+            body: { instancia_ids: lote.map((inst) => inst.id) },
+          });
+          if (error) throw error;
+          const resultados = new Map<string, any>(
+            ((data?.results || []) as any[]).map((resultado) => [String(resultado.instancia_id), resultado]),
+          );
+          for (const inst of lote) {
+            const resultado = resultados.get(inst.id);
+            if (!resultado || resultado.error) {
+              falhas.set(inst.id, resultado?.error || "A Meta não confirmou a saúde desta instância");
+            }
+          }
+        } catch (error: any) {
+          for (const inst of lote) falhas.set(inst.id, error?.message || "Falha ao consultar a saúde na Meta");
+        }
+      }
+
+      const candidatas = paraAtivar.filter((inst) => !falhas.has(inst.id));
+      let ativadas = 0;
+      for (let inicio = 0; inicio < candidatas.length; inicio += 8) {
+        const lote = candidatas.slice(inicio, inicio + 8);
+        const resultados = await Promise.all(
+          lote.map(async (inst) => {
+            const { error } = await (supabase as any).rpc("ativar_meta_instancia_pool", {
+              p_instancia_id: inst.id,
+            });
+            return { inst, error };
+          }),
+        );
+        for (const { inst, error } of resultados) {
+          if (error) falhas.set(inst.id, error.message || "Ativação recusada");
+          else ativadas += 1;
+        }
+      }
+
+      await carregar();
+      const resumo = `${ativadas} ativada(s) • ${jaAtivas} já ativa(s) • ${falhas.size} não ativada(s)`;
+      if (falhas.size > 0) {
+        const primeirosNomes = paraAtivar
+          .filter((inst) => falhas.has(inst.id))
+          .slice(0, 3)
+          .map((inst) => inst.nome)
+          .join(", ");
+        toast.warning(`${resumo}${primeirosNomes ? ` • Verifique: ${primeirosNomes}` : ""}`);
+      } else {
+        toast.success(resumo);
+      }
+    } finally {
+      setAtivandoPoolTodos(false);
     }
   };
 
@@ -1538,7 +1617,24 @@ export default function EnvioMeta() {
       <Dialog open={instanciasDialogOpen} onOpenChange={setInstanciasDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>Instâncias</DialogTitle>
+            <div className="flex items-center justify-between gap-3 pr-8">
+              <DialogTitle>Instâncias</DialogTitle>
+              {(isAdmin || parceiroMeta) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={ativarTodosNoPool}
+                  disabled={ativandoPoolTodos || instancias.length === 0}
+                >
+                  {ativandoPoolTodos ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <Power className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Ativar pool
+                </Button>
+              )}
+            </div>
             <DialogDescription>Marque as instâncias para distribuir em round-robin.</DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2 flex-wrap">
@@ -1651,7 +1747,7 @@ export default function EnvioMeta() {
               <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm ? "border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
-                  disabled={ativandoPoolId === i.id}
+                  disabled={ativandoPoolTodos || ativandoPoolId === i.id}
                   onCheckedChange={() => toggleInstancia(i)}
                 />
 
@@ -1796,7 +1892,7 @@ export default function EnvioMeta() {
                         size="sm"
                         variant="default"
                         className="h-7 px-2 text-xs"
-                        disabled={ativandoPoolId === i.id}
+                        disabled={ativandoPoolTodos || ativandoPoolId === i.id}
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); ativarNoPool(i); }}
                         title={i.pool_fora_manual ? "Verificar saúde na Meta e ativar o pool" : i.estado_pool === "pausado" ? "Retomar envio pelo pool" : "Ativar esta instância no pool (Dia 1 = 20 msg)"}
                       >
@@ -1816,7 +1912,7 @@ export default function EnvioMeta() {
                         size="sm"
                         variant="outline"
                         className="h-7 px-2 text-xs"
-                        disabled={ativandoPoolId === i.id}
+                        disabled={ativandoPoolTodos || ativandoPoolId === i.id}
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); retirarDoPool(i); }}
                         title="Desativar esta instância no pool sem alterar a seleção da campanha"
                       >
