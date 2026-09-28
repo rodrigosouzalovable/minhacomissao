@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { humanizarErroTemplate } from "@/lib/humanizarErroTemplate";
 import { Loader2, Plus, Send, Trash2, RefreshCw, X, Search, Eye, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 import BusinessManagersManager from "@/components/meta/BusinessManagersManager";
@@ -135,7 +136,7 @@ export default function MetaTemplates() {
   const [mestres, setMestres] = useState<Mestre[]>([]);
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [templInst, setTemplInst] = useState<TemplateInst[]>([]);
-  const [templMeta, setTemplMeta] = useState<Array<{ instancia_id: string; nome_template: string; status: string | null }>>([]);
+  const [templMeta, setTemplMeta] = useState<Array<{ instancia_id: string; nome_template: string; idioma: string; categoria: string | null; status: string | null }>>([]);
   const [bms, setBms] = useState<Bm[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -170,6 +171,9 @@ export default function MetaTemplates() {
 
 
   const [enviando, setEnviando] = useState(false);
+  const [loteAtual, setLoteAtual] = useState<{ mestreId: string; ids: string[]; adiadas: string[] } | null>(null);
+  const [verificando, setVerificando] = useState(false);
+  const [verificacao, setVerificacao] = useState({ inicio: 0, segundos: 0, concluidas: 0, total: 0, nome: "", erro: "", falhas: 0 });
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const { parceiroMeta } = useUserPermissions();
 
@@ -195,7 +199,7 @@ export default function MetaTemplates() {
         .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
-      supabase.from("meta_whatsapp_templates").select("instancia_id, nome_template, status"),
+       supabase.from("meta_whatsapp_templates").select("instancia_id, nome_template, idioma, categoria, status"),
       supabase.from("meta_business_managers").select("id, nome, business_id"),
     ]);
     setBms(((bmRows.data as any) || []) as Bm[]);
@@ -210,6 +214,12 @@ export default function MetaTemplates() {
   };
 
   useEffect(() => { carregar(); }, [parceiroMeta]);
+
+  useEffect(() => {
+    if (!verificando) return;
+    const timer = window.setInterval(() => setVerificacao((v) => ({ ...v, segundos: Math.floor((Date.now() - v.inicio) / 1000) })), 1000);
+    return () => window.clearInterval(timer);
+  }, [verificando]);
 
   useEffect(() => {
     const ch = supabase.channel("meta-templates-inst")
@@ -451,6 +461,7 @@ export default function MetaTemplates() {
   const enviarLote = async (modo?: "piloto" | "replicar") => {
     if (!selMestre) { toast.error("Selecione um template"); return; }
     if (modo !== "replicar" && selInst.size === 0) { toast.error("Selecione ao menos uma instância"); return; }
+    if (mestres.find((m) => m.id === selMestre)?.reclassificado_marketing) { toast.error("Modelo reclassificado como Marketing; crie uma versão corrigida."); return; }
 
     setEnviando(true);
     const { data, error } = await supabase.functions.invoke("meta-criar-template-lote", {
@@ -468,6 +479,12 @@ export default function MetaTemplates() {
       return;
     }
     const adiadas = Number((data as any)?.adiadas_tier_250 || 0);
+    setLoteAtual({
+      mestreId: selMestre,
+      ids: ((data as any)?.instancias || []).map((i: { id: string }) => i.id),
+      adiadas: ((data as any)?.adiadas || []).map((i: { instancia_id: string }) => i.instancia_id),
+    });
+    setTab("status");
     toast.success(
       adiadas > 0
         ? `${(data as any)?.total || 0} envio(s) iniciado(s). ${adiadas} número(s) tier 250 chegaram ao limite de 2 hoje.`
@@ -510,16 +527,73 @@ export default function MetaTemplates() {
   }>({ open: false, atualizados: 0, aprovados: 0, instancias: 0, resumo: [] });
 
   const verificarStatus = async () => {
-    const { data, error } = await supabase.functions.invoke("meta-verificar-status-templates", { body: {} });
-    if (error) { toast.error(error.message); return; }
-    setStatusDialog({
-      open: true,
-      atualizados: (data as any)?.atualizados ?? 0,
-      aprovados: (data as any)?.aprovados ?? 0,
-      instancias: (data as any)?.instancias ?? 0,
-      resumo: ((data as any)?.resumo || []) as any,
-    });
-    setTimeout(carregar, 1500);
+    if (verificando) return;
+    setVerificando(true);
+    setVerificacao({ inicio: Date.now(), segundos: 0, concluidas: 0, total: 0, nome: "", erro: "", falhas: 0 });
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Sua sessão expirou. Entre novamente.");
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-verificar-status-templates`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({ forcar: true }),
+      });
+      if (!response.ok || !response.body) throw new Error(`Falha na verificação (${response.status}).`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let terminou = false;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const eventos = buffer.split("\n\n");
+        buffer = eventos.pop() || "";
+        for (const evento of eventos) {
+          const linha = evento.split("\n").find((s) => s.startsWith("data: "));
+          if (!linha) continue;
+          const dados = JSON.parse(linha.slice(6));
+          if (dados.type === "start") setVerificacao((v) => ({ ...v, total: dados.total }));
+          if (dados.type === "progress") setVerificacao((v) => ({ ...v, concluidas: dados.done, total: dados.total, nome: dados.nome }));
+          if (dados.type === "failure") setVerificacao((v) => ({ ...v, falhas: v.falhas + 1, erro: `Não foi possível conferir ${dados.nome}: ${dados.error}` }));
+          if (dados.type === "error") throw new Error(dados.error || "Falha na verificação.");
+          if (dados.type === "complete") {
+            terminou = true;
+            setStatusDialog({ open: true, atualizados: dados.atualizados ?? 0, aprovados: dados.aprovados ?? 0, instancias: dados.instancias ?? 0, resumo: dados.resumo || [] });
+            await carregar();
+          }
+        }
+      }
+      if (!terminou) throw new Error("Verificação interrompida antes da conclusão.");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Falha na verificação";
+      setVerificacao((v) => ({ ...v, erro: msg }));
+      toast.error(msg);
+    } finally {
+      setVerificando(false);
+    }
+  };
+
+  const novaVersao = (m: Mestre) => {
+    setNome(`${m.nome}_novo`);
+    setCategoria("UTILITY");
+    setIdioma(m.idioma);
+    setCorpo(m.corpo);
+    setCabecalhoTipo(m.cabecalho_tipo || "NONE");
+    setCabecalhoTexto(m.cabecalho_texto || "");
+    setRodape(m.rodape || "");
+    setBotoes(m.botoes || []);
+    setMediaPath(m.cabecalho_media_url || null);
+    setMediaMime(m.cabecalho_media_mime || null);
+    setExemploBody(m.exemplo?.body_text?.[0] || []);
+    setMestreDialog(null);
+    setTab("criar");
   };
 
   const deletarMestre = async (id: string) => {
@@ -556,7 +630,7 @@ export default function MetaTemplates() {
 
   const marcarTodosInjecao = async (valor: boolean) => {
     if (!usuarioId) return;
-    const ids = mestres.map((m) => m.id);
+    const ids = mestres.filter((m) => !m.reclassificado_marketing || !valor).map((m) => m.id);
     if (ids.length === 0) return;
     const { error } = await supabase
       .from("meta_templates_mestre")
@@ -564,7 +638,7 @@ export default function MetaTemplates() {
       .eq("criado_por", usuarioId)
       .in("id", ids);
     if (error) { toast.error(error.message); return; }
-    setMestres((prev) => prev.map((m) => ({ ...m, injetar_em_novos: valor })));
+    setMestres((prev) => prev.map((m) => ids.includes(m.id) ? { ...m, injetar_em_novos: valor } : m));
     toast.success(valor ? "Todos marcados" : "Marcação limpa");
   };
 
@@ -984,7 +1058,7 @@ export default function MetaTemplates() {
                       nome: m.nome,
                       idioma: m.idioma,
                       descricao: m.corpo,
-                      meta: <Badge variant="secondary" className="text-[10px]">{m.categoria}</Badge>,
+                       meta: <Badge variant="secondary" className="text-[10px]">{m.reclassificado_marketing ? "Marketing · reclassificado" : m.categoria}</Badge>,
                     }))}
                   />
 
@@ -1007,6 +1081,7 @@ export default function MetaTemplates() {
                           >
                             <span className="font-medium">{m.nome}</span>
                             <span className="text-xs text-muted-foreground"> · {m.categoria}</span>
+                             {m.reclassificado_marketing && <Badge variant="destructive" className="ml-2 text-xs">Marketing · reclassificado</Badge>}
                           </button>
                           <Badge variant="outline" className="text-xs">{usos} nº</Badge>
                           {m.injetar_em_novos && (
@@ -1170,14 +1245,14 @@ export default function MetaTemplates() {
                   <p>Se preferir reduzir esse risco, envie um <b>piloto</b>, aguarde a aprovação e depois clique em <b>Replicar nas demais</b>.</p>
                   <p><b>Tier 250:</b> no máximo 2 submissões de templates por número/dia, inclusive em envios manuais.</p>
                   <p>Aprovar um template MARKETING não libera disparos a clientes; o bloqueio de custos permanece ativo.</p>
-                  {mestres.find((m) => m.id === selMestre)?.reclassificado_marketing && <p className="text-destructive">Este modelo foi reclassificado pela Meta como MARKETING. Se foi criado como UTILITY, cadastre outro na categoria correta para reenviar.</p>}
+                    {mestres.find((m) => m.id === selMestre)?.reclassificado_marketing && <p className="text-destructive">Este modelo virou Marketing na Meta. Não será enviado aos demais números. Exclua ou crie uma versão corrigida com outro nome.</p>}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
                     onClick={() => enviarLote("piloto")}
-                    disabled={enviando || !selMestre || selInst.size === 0}
+                    disabled={enviando || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar piloto (1 número)
@@ -1185,12 +1260,12 @@ export default function MetaTemplates() {
                   <Button
                     variant="outline"
                     onClick={() => enviarLote("replicar")}
-                    disabled={enviando || !selMestre}
+                    disabled={enviando || !selMestre || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                     Replicar nas demais
                   </Button>
-                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0}>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}>
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar para todas agora ({selInst.size})
                   </Button>
@@ -1202,10 +1277,38 @@ export default function MetaTemplates() {
           {/* ===== Status ===== */}
           <TabsContent value="status" className="space-y-4">
             <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={verificarStatus}>
-                <RefreshCw className="w-4 h-4 mr-2" /> Verificar status na Meta
+              <Button variant="outline" size="sm" onClick={verificarStatus} disabled={verificando}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${verificando ? "animate-spin" : ""}`} /> Verificar status na Meta
               </Button>
             </div>
+            {(verificando || verificacao.erro) && <div className="space-y-2 border p-3 text-sm" role="status" aria-live="polite">
+              <div className="flex justify-between gap-2"><span>Conferindo {verificacao.nome || "instâncias"}… · {verificacao.segundos}s</span><strong>{verificacao.total ? Math.round(100 * verificacao.concluidas / verificacao.total) : verificando ? "Aguardando…" : ""}{verificacao.total ? "%" : ""}</strong></div>
+              <Progress value={verificacao.total ? 100 * verificacao.concluidas / verificacao.total : 0} />
+              {verificando && <span className="text-muted-foreground">{verificacao.concluidas} de {verificacao.total} instâncias conferidas</span>}
+              {verificacao.erro && <span className="text-destructive">{verificacao.erro}</span>}
+            </div>}
+            {loteAtual && (() => {
+              const modelo = mestres.find((m) => m.id === loteAtual.mestreId);
+              const ids = [...loteAtual.ids, ...loteAtual.adiadas];
+              const concluidos = loteAtual.ids.filter((id) => {
+                const st = templInst.find((t) => t.template_mestre_id === loteAtual.mestreId && t.instancia_id === id)?.status;
+                return st && st !== "ENVIADO";
+              }).length;
+              return <div className="space-y-2 border p-3 text-sm">
+                <div className="flex items-center justify-between gap-2"><strong>Aplicação · {modelo?.nome || "Template"}</strong><div className="flex items-center gap-2"><span>{concluidos}/{loteAtual.ids.length} processados</span><Button variant="ghost" size="icon" title="Atualizar aplicação" onClick={carregar} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button></div></div>
+                <Progress value={loteAtual.ids.length ? 100 * concluidos / loteAtual.ids.length : 100} />
+                <p className="text-xs text-muted-foreground">Processamento concluído não significa aprovação pela Meta.</p>
+                <div className="max-h-64 overflow-y-auto divide-y">{ids.map((id) => {
+                  const inst = instancias.find((i) => i.id === id);
+                  const item = templInst.find((t) => t.template_mestre_id === loteAtual.mestreId && t.instancia_id === id);
+                  const real = templMeta.find((t) => t.instancia_id === id && t.nome_template === modelo?.nome && t.idioma === modelo?.idioma);
+                  return <div key={id} className="flex flex-wrap items-center justify-between gap-2 py-1">
+                    <span>{inst?.nome || "Número não visível nesta tela"} · {inst?.display_phone || ""}</span>
+                    <div className="flex gap-2"><Badge variant="outline">{loteAtual.adiadas.includes(id) ? "Adiado (limite diário)" : item?.status === "ENVIADO" ? "Processando" : item?.status || "Aguardando"}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge>}</div>
+                  </div>;
+                })}</div>
+              </div>;
+            })()}
 
             <Dialog open={statusDialog.open} onOpenChange={(v) => setStatusDialog((s) => ({ ...s, open: v }))}>
               <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
@@ -1255,7 +1358,7 @@ export default function MetaTemplates() {
                         size="sm"
                         variant="outline"
                         onClick={() => reenviarFalhas(m.id)}
-                        disabled={enviando || contarFalhas(m.id) === 0}
+                        disabled={enviando || contarFalhas(m.id) === 0 || !!m.reclassificado_marketing}
                         title={contarFalhas(m.id) === 0 ? "Nenhuma falha para reenviar" : undefined}
                       >
                         <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas ({contarFalhas(m.id)})
@@ -1301,7 +1404,11 @@ export default function MetaTemplates() {
                                     <span className="ml-2 text-xs text-muted-foreground">BM: {bm.nome}</span>
                                   );
                                 })()}
-                                {inst && (
+                                 {(() => {
+                                   const real = templMeta.find((t) => t.instancia_id === f.instancia_id && t.nome_template === m.nome && t.idioma === m.idioma);
+                                   return real?.categoria ? <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"} className="ml-2">{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge> : null;
+                                 })()}
+                                 {inst && (
                                   <Badge
                                     className={QUALIDADE_CORES[qualidadeDa(inst)] || "bg-muted text-muted-foreground"}
                                     title="Qualidade atual da instância na Meta"
@@ -1374,8 +1481,10 @@ export default function MetaTemplates() {
                   </div>}
 
                   <div className="flex flex-wrap gap-2">
+                    {m.reclassificado_marketing && <Button variant="outline" onClick={() => novaVersao(m)}>Criar versão corrigida</Button>}
                     <Button
                       onClick={() => { setSelMestre(m.id); setMestreDialog(null); }}
+                      disabled={!!m.reclassificado_marketing}
                     >
                       <Send className="w-4 h-4 mr-2" /> Usar no envio em lote
                     </Button>
@@ -1414,19 +1523,19 @@ export default function MetaTemplates() {
             </div>
 
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(true)}>Marcar todos</Button>
+              <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(true)}>Marcar elegíveis</Button>
               <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(false)}>Limpar</Button>
             </div>
 
             <div className="max-h-72 overflow-y-auto rounded-md border divide-y">
               {mestresFiltrados.map((m) => (
                 <label key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50">
-                  <Checkbox
+                  <Checkbox disabled={!!m.reclassificado_marketing}
                     checked={!!m.injetar_em_novos}
                     onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
                   />
                   <span className="flex-1">{m.nome}</span>
-                  <span className="text-xs text-muted-foreground">{m.categoria}</span>
+                  <span className="text-xs text-muted-foreground">{m.reclassificado_marketing ? "Marketing · reclassificado" : m.categoria}</span>
                 </label>
               ))}
               {mestresFiltrados.length === 0 && (

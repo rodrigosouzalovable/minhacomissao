@@ -31,7 +31,7 @@ function proximaConferencia(criadoEm: string | null): string {
   return new Date(Date.now() + intervalo).toISOString();
 }
 
-serve(async (req) => {
+async function verificar(req: Request, progresso?: (evento: unknown) => void): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -43,11 +43,19 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({} as any));
     const forcar = body?.forcar === true;
     const agora = new Date().toISOString();
+    let dono: string | null = null;
+    const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim();
+    const serviceCall = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!serviceCall) {
+      const { data: auth } = token ? await supabase.auth.getUser(token) : { data: null };
+      dono = auth?.user?.id || null;
+      if (!dono) return new Response(JSON.stringify({ success: false, error: "Sessão inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // ===== 1) Itens em aberto que já venceram a conferência =====
     let qAbertos = supabase
       .from("meta_templates_instancia")
-      .select("instancia_id")
+      .select("instancia_id, template_mestre_id")
       .in("status", EM_ABERTO);
     if (!forcar) qAbertos = qAbertos.or(`proxima_verificacao_em.is.null,proxima_verificacao_em.lte.${agora}`);
     const { data: abertos } = await qAbertos;
@@ -55,28 +63,39 @@ serve(async (req) => {
     // REJECTED sem motivo: enriquece o motivo uma vez (não entra na escada)
     const { data: rejSemMotivo } = await supabase
       .from("meta_templates_instancia")
-      .select("instancia_id")
+      .select("instancia_id, template_mestre_id")
       .eq("status", "REJECTED")
       .is("motivo_rejeicao", null);
 
+    let registros = [ ...((abertos as any[]) || []), ...((rejSemMotivo as any[]) || []) ];
+    if (dono) {
+      const { data: meus } = await supabase.from("meta_templates_mestre").select("id").eq("criado_por", dono);
+      const permitidos = new Set((meus || []).map((m) => m.id));
+      registros = registros.filter((r) => permitidos.has(r.template_mestre_id));
+    }
     const instIds = Array.from(
       new Set([
-        ...(((abertos as any[]) || []).map((r) => r.instancia_id)),
-        ...(((rejSemMotivo as any[]) || []).map((r) => r.instancia_id)),
+        ...(registros.map((r) => r.instancia_id)),
       ]),
     ).slice(0, MAX_INSTANCIAS_POR_EXECUCAO);
-
     if (instIds.length === 0) {
+      progresso?.({ type: "start", total: 0 });
       // Nada aguardando: encerra sem chamar a Meta (custo praticamente zero).
       return new Response(JSON.stringify({ success: true, atualizados: 0, nada_pendente: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { data: instancias } = await supabase
+    let qInstancias = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, saude_quality")
+      .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, saude_quality, user_id")
       .in("id", instIds);
+    if (dono) qInstancias = qInstancias.eq("user_id", dono);
+    const { data: instancias, error: erroInstancias } = await qInstancias;
+    if (erroInstancias) throw erroInstancias;
+    const total = instancias?.length || 0;
+    let conferidas = 0;
+    progresso?.({ type: "start", total });
 
     let atualizados = 0;
     let aprovadosTotal = 0;
@@ -89,7 +108,10 @@ serve(async (req) => {
     }> = [];
 
     for (const inst of instancias || []) {
-      if (!inst.waba_id || !inst.access_token) continue;
+      if (!inst.waba_id || !inst.access_token) {
+        progresso?.({ type: "progress", done: ++conferidas, total, nome: rotuloInstancia(inst) });
+        continue;
+      }
 
       try {
         const res = await fetch(
@@ -97,7 +119,10 @@ serve(async (req) => {
           { headers: { Authorization: `Bearer ${inst.access_token}` } },
         );
         const data = await res.json();
-        if (!res.ok) continue;
+        if (!res.ok) {
+          progresso?.({ type: "failure", nome: rotuloInstancia(inst), error: data?.error?.message || `HTTP ${res.status}` });
+          continue;
+        }
 
         const remotos: any[] = data.data || [];
         const remotoById = new Map(remotos.map((t) => [String(t.id), t]));
@@ -110,10 +135,15 @@ serve(async (req) => {
         for (const t of virouMarketing) {
           const { data: mestre } = await supabase
             .from("meta_templates_mestre")
-            .select("id, nome, reclassificado_marketing")
+            .select("id, nome, categoria, reclassificado_marketing")
             .eq("nome", t.name)
+            .eq("idioma", t.language)
+            .eq("criado_por", inst.user_id)
             .maybeSingle();
-          if (!mestre || mestre.reclassificado_marketing === true) continue;
+          if (!mestre || mestre.categoria !== "UTILITY" || mestre.reclassificado_marketing === true) continue;
+
+          await supabase.from("meta_whatsapp_templates").update({ categoria: "MARKETING" })
+            .eq("instancia_id", inst.id).eq("nome_template", t.name).eq("idioma", t.language);
 
           await supabase
             .from("meta_templates_mestre")
@@ -160,7 +190,7 @@ serve(async (req) => {
         if (!forcar) {
           qLocPend = qLocPend.or(`proxima_verificacao_em.is.null,proxima_verificacao_em.lte.${agora}`);
         }
-        const [locPend, locRej] = await Promise.all([
+          const [locPend, locRej] = await Promise.all([
           qLocPend,
           supabase
             .from("meta_templates_instancia")
@@ -169,7 +199,8 @@ serve(async (req) => {
             .eq("status", "REJECTED")
             .is("motivo_rejeicao", null),
         ]);
-        const locais = [...(locPend.data || []), ...(locRej.data || [])];
+        const locais = [...(locPend.data || []), ...(locRej.data || [])]
+          .filter((row) => !dono || registros.some((r) => r.instancia_id === inst.id && r.template_mestre_id === row.template_mestre_id));
 
         for (const local of locais || []) {
           let remoto: any = null;
@@ -179,7 +210,7 @@ serve(async (req) => {
             const { data: mestre } = await supabase
               .from("meta_templates_mestre").select("nome, idioma")
               .eq("id", local.template_mestre_id).maybeSingle();
-            if (mestre) {
+          if (mestre) {
               mestreNome = mestre.nome;
               remoto = remotoByName.get(`${mestre.nome}|${mestre.idioma}`);
             }
@@ -230,6 +261,10 @@ serve(async (req) => {
             if (!motivo) motivo = "Rejeitado pela Meta sem motivo detalhado na API";
           }
 
+          if (remoto.name && remoto.language && remoto.category) {
+            await supabase.from("meta_whatsapp_templates").update({ categoria: remoto.category })
+              .eq("instancia_id", inst.id).eq("nome_template", remoto.name).eq("idioma", remoto.language);
+          }
           const resolvido = ["APPROVED", "REJECTED"].includes(novoStatus);
 
           const patch: Record<string, unknown> = {
@@ -270,7 +305,7 @@ serve(async (req) => {
           .eq("instancia_id", inst.id)
           .in("status", EM_ABERTO);
 
-        if ((restantes || 0) === 0) {
+        if (!dono && (restantes || 0) === 0) {
           const { count: aprovados } = await supabase
             .from("meta_templates_instancia")
             .select("id", { count: "exact", head: true })
@@ -302,6 +337,8 @@ serve(async (req) => {
         });
       } catch (_e) {
         // segue para próxima instância
+      } finally {
+        progresso?.({ type: "progress", done: ++conferidas, total, nome: rotuloInstancia(inst) });
       }
     }
 
@@ -315,4 +352,25 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.headers.get("Accept") !== "text/event-stream") return verificar(req);
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enviar = (evento: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(evento)}\n\n`));
+      try {
+        const response = await verificar(req, enviar);
+        const data = await response.json();
+        enviar({ type: response.ok ? "complete" : "error", ...data });
+      } catch (error) {
+        enviar({ type: "error", error: error instanceof Error ? error.message : "Falha na verificação" });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
 });
