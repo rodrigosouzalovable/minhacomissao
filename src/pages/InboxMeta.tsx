@@ -757,8 +757,7 @@ export default function InboxMeta() {
       const lista = rows.slice(0, limiteContatos);
       setContatos(lista);
       contatoIdsRef.current = lista.map(c => c.id);
-      fetchContatoEtiquetas(contatoIdsRef.current);
-      fetchQualifContatos(contatoIdsRef.current);
+      void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current)]);
       return;
     }
 
@@ -2206,7 +2205,7 @@ export default function InboxMeta() {
                 </MetaConversaContextMenu>
               );
             })}
-            {contatos.length >= limiteContatos && (
+            {contatos.length >= limiteContatos && (!(modoMeusClientes || filtroEtiqueta.size > 0) || !taggedPageRef.current.exhausted) && (
               <div className="p-3">
                 <Button
                   variant="outline"
