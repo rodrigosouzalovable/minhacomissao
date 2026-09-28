@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Registrar respostas automáticas de todos os envios Meta/UAZAPI e revisar, sem duplicação, as conversas dos últimos sete dias
 - [x] Adicionar “Ativar pool” no cabeçalho das Instâncias do Envio Meta para tentar ativar todas as instâncias permitidas, com validação de saúde e resumo
 - [x] Exibir a data de abertura do CNPJ no cabeçalho das conversas da caixa CERTIFICADO, sem novo polling
 - [x] Redistribuir os contatos pendentes da campanha anual entre novas instâncias aptas, preservando cotas, qualidade e orçamento

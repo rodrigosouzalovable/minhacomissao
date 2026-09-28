@@ -589,6 +589,13 @@
       "when": 1790614423871,
       "tag": "0083_fix_balance_pending_certificate_campaign_lock",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1790619417222,
+      "tag": "0084_generalize_automatic_response_registry",
+      "breakpoints": true
     }
   ]
 }

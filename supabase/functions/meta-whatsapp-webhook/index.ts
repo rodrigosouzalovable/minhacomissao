@@ -4,6 +4,7 @@ import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { etiquetarAguardandoHumano, ehPedidoBloqueioContato, suprimirDestinatario } from '../_shared/iago.ts';
 import { resolverAtendenteChamada } from '../_shared/meta-call-atendente.ts';
 import { classificarRespostaAquecimento } from '../_shared/resposta-automatica.ts';
+import { registrarAutoRespostaSeConfirmada } from '../_shared/registrar-auto-resposta.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -697,25 +698,42 @@ serve(async (req) => {
                     }
                     const telefoneNormalizado = String(outroLado || '').replace(/\D/g, '');
                     if (telefoneNormalizado) {
-                      await supabase.rpc('registrar_meta_aquecimento_auto_resposta', {
-                        _log_id: aqLog.id,
+                      await supabase.rpc('registrar_auto_resposta_geral', {
+                        _origem: 'meta',
+                        _mensagem_chave: String(m.id || `${inst.id}:${tsMsg}:${sufixoResp}`),
+                        _instancia_id: inst.id,
                         _telefone_normalizado: telefoneNormalizado,
                         _telefone: outroLado,
-                        _lead_id: aqLog.lead_id,
-                        _nome: nomeLead,
-                        _nicho: aqLog.nicho,
-                        _cidade: aqLog.cidade,
                         _resposta: texto,
                         _motivo: classificacao.motivo,
                         _confianca: classificacao.confianca,
-                        _instancia_id: inst.id,
                         _detectado_em: agora.toISOString(),
+                        _nome: nomeLead,
+                        _nicho: aqLog.nicho,
+                        _cidade: aqLog.cidade,
+                        _lead_id: aqLog.lead_id,
+                        _log_id: aqLog.id,
                       });
                     }
                   }
                 }
               }
             } catch (_e) { /* aprendizado não bloqueia o webhook */ }
+
+            try {
+              await registrarAutoRespostaSeConfirmada({
+                supabase,
+                origem: 'meta',
+                instanciaId: inst.id,
+                telefone: String(outroLado || ''),
+                texto: String(texto || ''),
+                mensagemChave: String(m.id || `${inst.id}:${tsMsg}:${phoneSuffix(outroLado)}`),
+                recebidaEm: tsMsg,
+                nome: nomeContato,
+              });
+            } catch (erro) {
+              console.error('[MetaWebhook] falha ao registrar resposta automática geral', erro);
+            }
           }
 
 

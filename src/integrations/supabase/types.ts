@@ -4655,6 +4655,36 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_auto_resposta_eventos: {
+        Row: {
+          criado_em: string
+          detectado_em: string
+          id: string
+          instancia_id: string
+          mensagem_chave: string
+          origem: string
+          telefone_normalizado: string
+        }
+        Insert: {
+          criado_em?: string
+          detectado_em?: string
+          id?: string
+          instancia_id: string
+          mensagem_chave: string
+          origem: string
+          telefone_normalizado: string
+        }
+        Update: {
+          criado_em?: string
+          detectado_em?: string
+          id?: string
+          instancia_id?: string
+          mensagem_chave?: string
+          origem?: string
+          telefone_normalizado?: string
+        }
+        Relationships: []
+      }
       meta_billing_alerts: {
         Row: {
           criado_em: string
@@ -12045,6 +12075,25 @@ export type Database = {
           ume_recebido: number
           user_id: string
         }[]
+      }
+      registrar_auto_resposta_geral: {
+        Args: {
+          _cidade?: string
+          _confianca: number
+          _detectado_em?: string
+          _instancia_id: string
+          _lead_id?: string
+          _log_id?: string
+          _mensagem_chave: string
+          _motivo: string
+          _nicho?: string
+          _nome?: string
+          _origem: string
+          _resposta: string
+          _telefone: string
+          _telefone_normalizado: string
+        }
+        Returns: boolean
       }
       registrar_meta_aquecimento_auto_resposta: {
         Args: {
