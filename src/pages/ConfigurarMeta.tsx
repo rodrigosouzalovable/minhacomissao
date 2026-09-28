@@ -1028,6 +1028,36 @@ export default function ConfigurarMeta() {
     setSincronizando(null);
   };
 
+  const aplicarTemplates = async (inst: Instancia) => {
+    setSincronizando(inst.id);
+    try {
+      const { data: syncData, error: syncError } = await supabase.functions.invoke("meta-sync-templates", {
+        body: { instancia_id: inst.id },
+      });
+      if (syncError) throw syncError;
+      if (syncData?.success === false) throw new Error(syncData?.error || "Não foi possível sincronizar os templates atuais");
+
+      const { data: filaData, error: filaError } = await supabase.functions.invoke("meta-templates-onboarding-enfileirar", {
+        body: { instancia_id: inst.id },
+      });
+      if (filaError) throw filaError;
+      if (filaData?.success === false || filaData?.error) throw new Error(filaData?.error || "Não foi possível iniciar a aplicação");
+
+      const enfileirados = Number(filaData?.enfileirados || 0);
+      if (enfileirados > 0) {
+        const { error: tickError } = await supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} });
+        if (tickError) console.warn("Primeira rodada de templates será retomada pelo processamento automático", tickError);
+        toast.success(`${enfileirados} template${enfileirados === 1 ? "" : "s"} colocado${enfileirados === 1 ? "" : "s"} na fila`);
+      } else {
+        toast.success("Todos os templates cadastrados já estão aplicados ou em processamento");
+      }
+      await carregar();
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    }
+    setSincronizando(null);
+  };
+
   const sincronizarPerfil = async (inst: Instancia) => {
     setSincPerfil(inst.id);
     try {
@@ -1814,7 +1844,7 @@ export default function ConfigurarMeta() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start">
-                              <DropdownMenuItem onSelect={() => sincronizar(inst)}>Aplicar templates</DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => aplicarTemplates(inst)}>Aplicar templates</DropdownMenuItem>
                               <DropdownMenuItem onSelect={() => setInstTemplatesVer(inst)}>Visualizar templates</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

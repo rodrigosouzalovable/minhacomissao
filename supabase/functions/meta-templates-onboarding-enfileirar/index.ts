@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     const templateIdioma = String(body?.idioma || "").trim();
     let restricaoMestres: string[] | null = null;
     if (templateNome) {
-      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma").eq("nome", templateNome).eq("categoria", "UTILITY").eq("reclassificado_marketing", false);
+      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma").eq("nome", templateNome).in("categoria", ["UTILITY", "MARKETING"]);
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
       const { data: mestres } = await q;
       restricaoMestres = ((mestres as any[]) || []).map((r) => r.id as string);
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Modelos já aprovados em OUTROS números (os que a Meta claramente aceita)
+      // Modelos já processados internamente e templates reais conhecidos nesse número.
       const { data: aprovados } = await supabase
         .from("meta_templates_instancia")
         .select("template_mestre_id, instancia_id, status");
@@ -92,12 +92,32 @@ Deno.serve(async (req) => {
       const jaNoNumero = new Set<string>();
       for (const r of (aprovados as any[]) || []) {
         if (r.instancia_id === instanciaId) {
-          jaNoNumero.add(r.template_mestre_id);
+          if (["APPROVED", "PENDING", "IN_APPEAL", "ENVIADO"].includes(String(r.status || "").toUpperCase())) {
+            jaNoNumero.add(r.template_mestre_id);
+          }
           continue;
         }
         if (String(r.status || "").toUpperCase() !== "APPROVED") continue;
         contagem.set(r.template_mestre_id, (contagem.get(r.template_mestre_id) || 0) + 1);
       }
+
+      const { data: mestresValidos, error: mestresError } = await supabase
+        .from("meta_templates_mestre")
+        .select("id,nome,idioma,categoria")
+        .in("categoria", ["UTILITY", "MARKETING"])
+        .order("criado_em", { ascending: true });
+      if (mestresError) throw mestresError;
+      const { data: reais } = await supabase.from("meta_whatsapp_templates")
+        .select("nome_template,idioma,status").eq("instancia_id", instanciaId);
+      const chavesReais = new Set(((reais as any[]) || [])
+        .filter((r) => ["approved", "pending", "in_appeal", "pending_deletion"].includes(String(r.status || "").toLowerCase()))
+        .map((r) => `${r.nome_template}|${r.idioma || "pt_BR"}`));
+      const mestresAusentes = ((mestresValidos as any[]) || []).filter((m) => !chavesReais.has(`${m.nome}|${m.idioma || "pt_BR"}`));
+      const { data: filaAtual } = await supabase.from("meta_templates_onboarding_fila")
+        .select("template_mestre_id,status").eq("instancia_id", instanciaId);
+      const emProcessamento = new Set(((filaAtual as any[]) || [])
+        .filter((r) => ["PENDENTE", "ENVIADO", "APPROVED"].includes(String(r.status || "").toUpperCase()))
+        .map((r) => r.template_mestre_id));
 
       let candidatos: [string, number][];
       if (restricaoMestres) {
@@ -105,26 +125,11 @@ Deno.serve(async (req) => {
           .filter((id) => !jaNoNumero.has(id))
           .map((id, idx) => [id, restricaoMestres!.length - idx] as [string, number]);
       } else {
-        // Se o admin marcou modelos específicos ("injetar em números novos"),
-        // a fila usa exatamente esses — na ordem da lista. Sem marcação, mantém
-        // a escolha automática pelos mais aprovados em outros números.
-        const { data: marcados } = await supabase
-          .from("meta_templates_mestre")
-          .select("id")
-          .eq("injetar_em_novos", true)
-          .eq("categoria", "UTILITY")
-          .eq("reclassificado_marketing", false)
-          .order("criado_em", { ascending: true });
-
-        const listaMarcados = ((marcados as any[]) || []).map((r) => r.id as string);
-
-        candidatos = listaMarcados.length > 0
-          ? listaMarcados
-              .filter((id) => !jaNoNumero.has(id))
-              .map((id, idx) => [id, listaMarcados.length - idx] as [string, number])
-          : Array.from(contagem.entries())
-              .filter(([id]) => !jaNoNumero.has(id))
-              .sort((a, b) => b[1] - a[1]);
+        const listaAplicaveis = mestresAusentes.map((r) => r.id as string);
+        candidatos = listaAplicaveis
+          .filter((id) => !jaNoNumero.has(id) && !emProcessamento.has(id))
+          .map((id, idx) => [id, (contagem.get(id) || 0) * 1000 + listaAplicaveis.length - idx] as [string, number])
+          .sort((a, b) => b[1] - a[1]);
       }
 
       if (candidatos.length === 0) {
@@ -153,7 +158,7 @@ Deno.serve(async (req) => {
 
       const { error: errIns } = await supabase
         .from("meta_templates_onboarding_fila")
-        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true });
+        .upsert(rows, { onConflict: "instancia_id,template_mestre_id" });
       if (errIns) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: errIns.message });
         continue;
@@ -181,7 +186,7 @@ Deno.serve(async (req) => {
           (bm ? `${bm}\n` : "") +
           (templateNome ? `Modelo: *${templateNome}*\n` : "") +
           `Modelos na fila: *${rows.length}*\n\n` +
-          `Envio gradual: contas tier 250 recebem no máximo 2 modelos de utilidade por número/dia; demais tiers mantêm o fluxo atual. Sempre das 07h às 20h e nunca no domingo.`,
+          `Envio gradual: contas tier 250 recebem no máximo 2 modelos por número/dia; demais tiers mantêm o fluxo atual. Sempre das 07h às 20h e nunca no domingo.`,
       });
 
       resultados.push({ instancia_id: instanciaId, ok: true, enfileirados: rows.length });
