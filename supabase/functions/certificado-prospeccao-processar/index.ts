@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
         const idsAprovadas = new Set((aprovadas ?? []).map((template: any) => template.instancia_id));
         metaConfirmados = aptasQualidade
           .filter((instancia: any) => idsAprovadas.has(instancia.id))
-          .reduce((total: number, instancia: any) => total + Number(instancia.certificado_limite_diario ?? 50), 0);
+           .reduce((total: number, instancia: any) => total + Math.min(50, Math.max(0, Number(instancia.certificado_limite_diario ?? 50))), 0);
       }
       if (metaConfirmados === 0) return json({ success: true, skipped: true, motivo: "Nenhum número marcado está apto e com o template aprovado" });
       const contarConfirmados = async () => {
@@ -263,7 +263,7 @@ Deno.serve(async (req) => {
         return { instancia, usados: Number(count ?? 0) };
       }));
       for (const { instancia, usados } of contagens) {
-        const limiteInstancia = Number(instancia.certificado_limite_diario ?? 50);
+         const limiteInstancia = Math.min(50, Math.max(0, Number(instancia.certificado_limite_diario ?? 50)));
         const saldo = Math.max(0, limiteInstancia - usados);
         if (saldo > 0) cotasRestantes.set(instancia.id, saldo);
       }
@@ -411,7 +411,7 @@ Deno.serve(async (req) => {
     for (const instancia of participantes) {
       const candidatosInstancia = candidatosReserva.filter((candidato: any) => candidato.instancia.id === instancia.id);
       if (!candidatosInstancia.length) continue;
-      const limiteInstancia = Number(instancia.certificado_limite_diario ?? cotaPorInstancia);
+       const limiteInstancia = modoCasaDados ? Math.min(50, Math.max(0, Number(instancia.certificado_limite_diario ?? 50))) : Number(instancia.certificado_limite_diario ?? cotaPorInstancia);
       const { data: criadas, error } = await service.rpc("certificado_reservar_lote_instancia", {
         p_instancia_id: instancia.id,
         p_limite: limiteInstancia,
