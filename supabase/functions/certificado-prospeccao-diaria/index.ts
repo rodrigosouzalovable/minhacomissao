@@ -7,7 +7,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const brt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-    if (brt.getDay() === 0 || brt.getDay() === 6 || brt.getHours() !== 9) return json({ success: true, skipped: true, motivo: "Fora do horário diário das 09h BRT" });
+    if (brt.getDay() === 0 || brt.getDay() === 6 || brt.getHours() !== 8) return json({ success: true, skipped: true, motivo: "Fora do horário diário das 08h BRT" });
     const url = Deno.env.get("SUPABASE_URL") ?? "";
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const service = createClient(url, key);
