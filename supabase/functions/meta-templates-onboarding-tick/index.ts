@@ -189,11 +189,13 @@ Deno.serve(async (req) => {
     // ===== 2) Conclusão: números sem nada pendente =====
     const { data: instsAtivas } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, ativo, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider")
+      .select("id, nome, display_phone, user_id, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, ativo, saude_quality, saude_status, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider")
       .eq("templates_auto_copiar", true);
 
     const elegiveis = ((instsAtivas as any[]) || []).filter(
-      (i) => (i.provider ?? "meta") === "meta" && i.waba_id && i.access_token,
+      (i) => (i.provider ?? "meta") === "meta" && i.waba_id && i.access_token &&
+        String(i.saude_quality || "").toUpperCase() === "GREEN" &&
+        String(i.saude_status || "").toUpperCase() === "CONNECTED",
     );
 
     for (const inst of elegiveis) {
@@ -291,9 +293,19 @@ Deno.serve(async (req) => {
       // Última checagem: se o modelo já existe nesse número na Meta, não reenvia.
       const { data: mestreItem } = await supabase
         .from("meta_templates_mestre")
-        .select("nome, idioma, corpo, categoria, reclassificado_marketing")
+        .select("nome, idioma, corpo, categoria, reclassificado_marketing, criado_por, injetar_em_novos")
         .eq("id", proximo.template_mestre_id)
         .maybeSingle();
+
+      if (!mestreItem || mestreItem.criado_por !== inst.user_id || mestreItem.injetar_em_novos !== true) {
+        await supabase.from("meta_templates_onboarding_fila").update({
+          status: "CANCELADO",
+          motivo: "modelo automático não pertence ao proprietário desta instância",
+          finalizado_em: new Date().toISOString(),
+        }).eq("id", proximo.id);
+        processados.push({ instancia_id: inst.id, ok: false, cancelado: "proprietario_incompativel" });
+        continue;
+      }
 
       // Sobe UTILIDADE ou MARKETING com variável numerada. Qualquer outro caso sai da fila.
       if (mestreItem) {

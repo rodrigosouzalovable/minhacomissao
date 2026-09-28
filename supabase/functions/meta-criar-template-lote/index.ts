@@ -242,7 +242,7 @@ serve(async (req) => {
     const { data: mestre, error: me } = await supabase
       .from("meta_templates_mestre").select("*").eq("id", mestre_id).maybeSingle();
     if (me || !mestre) throw new Error("Template mestre não encontrado");
-    if (!isAdmin && mestre.criado_por !== usuario_id) return new Response(JSON.stringify({ success: false, error: "Este template não pertence à sua conta." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!serviceCall && mestre.criado_por !== usuario_id) return new Response(JSON.stringify({ success: false, error: "Este template não pertence à sua conta." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     // ===== Pré-voo: bloqueia submissões que a Meta rejeitaria com certeza =====
     const categoria = String(mestre.categoria || "").toUpperCase();
@@ -277,7 +277,7 @@ serve(async (req) => {
     }
 
     let query = supabase.from("meta_whatsapp_instances")
-      .select("id, nome, waba_id, phone_number_id, access_token, ativo, meta_bm_id")
+      .select("id, nome, user_id, waba_id, phone_number_id, access_token, ativo, meta_bm_id")
       .eq("provider", "meta");
     if (idsFalhas) {
       query = query.in("id", idsFalhas);
@@ -293,7 +293,9 @@ serve(async (req) => {
       .from("meta_instance_parceiros").select("instancia_id, user_id");
     if (partnerError) throw partnerError;
     const donoParceiro = new Map(((parceirosRows as any[]) || []).map((r) => [r.instancia_id, r.user_id]));
-    let instancias = instanciasRaw.filter((i: any) => isAdmin ? !donoParceiro.has(i.id) : donoParceiro.get(i.id) === usuario_id);
+    let instancias = instanciasRaw.filter((i: any) => serviceCall
+      ? i.user_id === mestre.criado_por
+      : i.user_id === usuario_id && mestre.criado_por === usuario_id);
     if (Array.isArray(instancia_ids) && instancia_ids.length > 0 && !apenas_falhas && !isAdmin && instancias.length !== new Set(instancia_ids).size) {
       return new Response(JSON.stringify({ success: false, error: "Seleção contém número sem permissão. Atualize a lista." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
