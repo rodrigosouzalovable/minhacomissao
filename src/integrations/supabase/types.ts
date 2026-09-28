@@ -5788,6 +5788,57 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_inbox_folder_etiquetas: {
+        Row: {
+          ativa: boolean
+          atualizado_em: string
+          cor: string | null
+          criado_em: string
+          criado_por: string | null
+          etiqueta_id: string
+          exclusiva: boolean
+          folder_id: string
+          nome: string | null
+        }
+        Insert: {
+          ativa?: boolean
+          atualizado_em?: string
+          cor?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          etiqueta_id: string
+          exclusiva?: boolean
+          folder_id: string
+          nome?: string | null
+        }
+        Update: {
+          ativa?: boolean
+          atualizado_em?: string
+          cor?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          etiqueta_id?: string
+          exclusiva?: boolean
+          folder_id?: string
+          nome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_inbox_folder_etiquetas_etiqueta_id_fkey"
+            columns: ["etiqueta_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_etiquetas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_inbox_folder_etiquetas_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_inbox_folder_iago_janela: {
         Row: {
           ativo: boolean
@@ -11958,6 +12009,33 @@ export type Database = {
       meta_envios_resumo: {
         Args: { _ate?: string; _uid?: string }
         Returns: Json
+      }
+      meta_etiqueta_caixa_criar: {
+        Args: { _cor: string; _folder: string; _nome: string }
+        Returns: string
+      }
+      meta_etiqueta_caixa_remover: {
+        Args: { _etiqueta: string; _folder: string }
+        Returns: undefined
+      }
+      meta_etiqueta_caixa_salvar: {
+        Args: {
+          _ativa: boolean
+          _cor: string
+          _etiqueta: string
+          _folder: string
+          _nome: string
+        }
+        Returns: undefined
+      }
+      meta_etiquetas_da_caixa: {
+        Args: { _folder: string }
+        Returns: {
+          ativa: boolean
+          cor: string
+          id: string
+          nome: string
+        }[]
       }
       meta_fila_status_caixa: {
         Args: { _folder?: string }

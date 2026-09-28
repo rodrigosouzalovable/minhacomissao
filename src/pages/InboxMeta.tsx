@@ -365,10 +365,11 @@ export default function InboxMeta() {
 
   const fetchEtiquetas = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase.from('meta_whatsapp_etiquetas')
-      .select('id, nome, cor, ativa').order('nome');
+    const { data } = currentFolderId
+      ? await (supabase as any).rpc('meta_etiquetas_da_caixa', { _folder: currentFolderId })
+      : await supabase.from('meta_whatsapp_etiquetas').select('id, nome, cor, ativa').order('nome');
     setEtiquetas(((data as any[]) ?? []).map((e) => ({ ...e, ativa: e.ativa !== false })) as MetaEtiqueta[]);
-  }, [user]);
+  }, [user, currentFolderId]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
   // Janela mínima de reconsulta: eventos em rajada (Realtime/foco) não refazem
@@ -622,6 +623,12 @@ export default function InboxMeta() {
       return nomesAtendenteCaixa.has(puro);
     });
   }, [etiquetasAtivas, nomesAtendenteCaixa]);
+
+  const podeAdministrarCaixaAtual = useMemo(() => {
+    if (currentFolderId === null) return isAdmin || adminPadrao;
+    const atual = folders.find((folder) => folder.id === currentFolderId);
+    return isAdmin || atual?.owner_id === user?.id || adminCaixas.has(currentFolderId);
+  }, [adminCaixas, adminPadrao, currentFolderId, folders, isAdmin, user?.id]);
 
   // Etiqueta "Atendente: <meu nome>" do usuário logado (para "Meus Clientes")
   useEffect(() => {
@@ -1718,7 +1725,15 @@ export default function InboxMeta() {
                           </div>
                           <div className="flex gap-1">
                             <Button size="sm" className="h-6 flex-1 text-xs" onClick={async () => {
-                              const { error } = await supabase.from('meta_whatsapp_etiquetas').update({ cor: editEtCor }).eq('id', et.id);
+                              const { error } = currentFolderId && podeAdministrarCaixaAtual
+                                ? await (supabase as any).rpc('meta_etiqueta_caixa_salvar', {
+                                    _folder: currentFolderId,
+                                    _etiqueta: et.id,
+                                    _nome: et.nome,
+                                    _cor: editEtCor,
+                                    _ativa: et.ativa !== false,
+                                  })
+                                : await supabase.from('meta_whatsapp_etiquetas').update({ cor: editEtCor }).eq('id', et.id);
                               if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
                               setEditEtId(null); fetchEtiquetas();
                             }}>Salvar</Button>
@@ -2118,6 +2133,8 @@ export default function InboxMeta() {
                   etiquetasBloqueadas={etiquetasBloqueadas[c.id] ?? new Set()}
                   fixado={c.fixado}
                   arquivado={c.arquivado}
+                  folderId={currentFolderId}
+                  canManageFolder={podeAdministrarCaixaAtual}
                   podeExcluir={isAdmin && !c.ultima_msg_entrada_em}
                   onMarcarNaoLida={() => handleMarcarNaoLida(c.id)}
                   onExcluirConversa={handleExcluirConversa}
@@ -2767,8 +2784,8 @@ export default function InboxMeta() {
       </div>
       </div>
 
-      <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} isAdmin={isAdmin} />
-      <MetaEtiquetasDialog open={etiquetasConfigOpen} onOpenChange={setEtiquetasConfigOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} isAdmin={isAdmin} modoConfig />
+      <MetaEtiquetasDialog open={etiquetasOpen} onOpenChange={setEtiquetasOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} isAdmin={isAdmin} folderId={currentFolderId} canManageFolder={podeAdministrarCaixaAtual} />
+      <MetaEtiquetasDialog open={etiquetasConfigOpen} onOpenChange={setEtiquetasConfigOpen} etiquetas={etiquetas} onChange={fetchEtiquetas} isAdmin={isAdmin} modoConfig folderId={currentFolderId} canManageFolder={podeAdministrarCaixaAtual} />
       <MetaMensagensRapidasDialog open={msgRapidasOpen} onOpenChange={setMsgRapidasOpen} onChange={fetchMsgRapidas} />
       {user && (
         <MetaFoldersDialog

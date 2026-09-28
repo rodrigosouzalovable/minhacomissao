@@ -21,6 +21,10 @@ interface Props {
   isAdmin?: boolean;
   /** Modo configuração: foco em editar nome/cor e visibilidade das etiquetas existentes. */
   modoConfig?: boolean;
+  /** Caixa ativa. Quando informada, alterações administrativas ficam isoladas nela. */
+  folderId?: string | null;
+  /** Permissão administrativa da caixa ativa (admin geral, dono ou admin da caixa). */
+  canManageFolder?: boolean;
 }
 
 const isAtendente = (nome: string) => /^atendente:/i.test(String(nome || '').trim());
@@ -47,7 +51,10 @@ function Paleta({ valor, onSelect, size = 'md' }: { valor: string; onSelect: (c:
   );
 }
 
-export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, isAdmin = false, modoConfig = false }: Props) {
+export function MetaEtiquetasDialog({
+  open, onOpenChange, etiquetas, onChange, isAdmin = false, modoConfig = false,
+  folderId = null, canManageFolder = false,
+}: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [criando, setCriando] = useState(false);
@@ -60,6 +67,17 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, i
 
   const alternarAtiva = async (et: MetaEtiqueta) => {
     const novo = et.ativa === false;
+    if (folderId && canManageFolder) {
+      const { error } = await (supabase as any).rpc('meta_etiqueta_caixa_salvar', {
+        _folder: folderId, _etiqueta: et.id, _nome: et.nome, _cor: et.cor, _ativa: novo,
+      });
+      if (error) {
+        toast({ title: 'Não foi possível alterar', description: error.message, variant: 'destructive' });
+        return;
+      }
+      onChange();
+      return;
+    }
     const { data, error } = await supabase
       .from('meta_whatsapp_etiquetas')
       .update({ ativa: novo } as any)
@@ -79,15 +97,21 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, i
 
   const criar = async () => {
     if (!nome.trim() || !user) return;
-    const { error } = await supabase.from('meta_whatsapp_etiquetas').insert({
-      user_id: user.id, nome: nome.trim(), cor,
-    });
+    const { error } = folderId && canManageFolder
+      ? await (supabase as any).rpc('meta_etiqueta_caixa_criar', {
+          _folder: folderId, _nome: nome.trim(), _cor: cor,
+        })
+      : await supabase.from('meta_whatsapp_etiquetas').insert({
+          user_id: user.id, nome: nome.trim(), cor,
+        });
     if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     setNome(''); setCor(CORES[0]); setCriando(false); onChange();
   };
 
   const excluir = async (id: string) => {
-    const { error } = await supabase.from('meta_whatsapp_etiquetas').delete().eq('id', id);
+    const { error } = folderId && canManageFolder
+      ? await (supabase as any).rpc('meta_etiqueta_caixa_remover', { _folder: folderId, _etiqueta: id })
+      : await supabase.from('meta_whatsapp_etiquetas').delete().eq('id', id);
     if (error) {
       toast({
         title: 'Não é possível remover',
@@ -108,6 +132,24 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, i
 
   const salvarEdicao = async (id: string) => {
     if (!editNome.trim()) return;
+    const atual = etiquetas.find((et) => et.id === id);
+    if (!atual) return;
+    if (folderId && canManageFolder) {
+      const { error } = await (supabase as any).rpc('meta_etiqueta_caixa_salvar', {
+        _folder: folderId,
+        _etiqueta: id,
+        _nome: editNome.trim(),
+        _cor: editCor,
+        _ativa: atual.ativa !== false,
+      });
+      if (error) {
+        toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+        return;
+      }
+      cancelarEdicao();
+      onChange();
+      return;
+    }
     const { data, error } = await supabase
       .from('meta_whatsapp_etiquetas')
       .update({ nome: editNome.trim(), cor: editCor })
@@ -178,7 +220,7 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, i
         <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: et.cor }} />
         <span className={`text-sm truncate flex-1 min-w-0 ${inativa ? 'line-through' : ''}`}>{et.nome}</span>
         <div className="flex items-center gap-1 shrink-0">
-          {isAdmin && (
+          {(isAdmin || canManageFolder) && (
             <div className="flex items-center gap-1">
               {inativa
                 ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
@@ -226,7 +268,7 @@ export function MetaEtiquetasDialog({ open, onOpenChange, etiquetas, onChange, i
               {etiquetas.length} {etiquetas.length === 1 ? 'etiqueta' : 'etiquetas'}
             </span>
           </DialogTitle>
-          {modoConfig && isAdmin && (
+          {modoConfig && (isAdmin || canManageFolder) && (
             <p className="text-[11px] text-muted-foreground text-left">
               Use o interruptor para deixar a etiqueta visível ou invisível para os usuários.
             </p>

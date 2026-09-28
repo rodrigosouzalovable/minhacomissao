@@ -19,6 +19,8 @@ interface Props {
   etiquetasBloqueadas?: Set<string>;
   fixado: boolean;
   arquivado: boolean;
+  folderId?: string | null;
+  canManageFolder?: boolean;
   /** Exclusão definitiva só é oferecida quando permitido (admin + sem resposta do cliente) */
   podeExcluir?: boolean;
   onMarcarNaoLida: () => void;
@@ -31,7 +33,7 @@ interface Props {
 
 export function MetaConversaContextMenu({
   children, contatoId, etiquetas, etiquetasGerenciar, contatoEtiquetaIds, etiquetasBloqueadas,
-  fixado, arquivado, podeExcluir = false,
+  fixado, arquivado, podeExcluir = false, folderId = null, canManageFolder = false,
   onMarcarNaoLida, onExcluirConversa, onEtiquetaToggle, onEtiquetasChange, onFixarToggle, onArquivarToggle,
 }: Props) {
   const { toast } = useToast();
@@ -159,7 +161,15 @@ export function MetaConversaContextMenu({
           </ContextMenuSub>
         </ContextMenuContent>
       </ContextMenu>
-      <MetaEtiquetasDialog open={gerenciarOpen} onOpenChange={setGerenciarOpen} etiquetas={etiquetasGerenciar ?? etiquetas} onChange={onEtiquetasChange} />
+      <MetaEtiquetasDialog
+        open={gerenciarOpen}
+        onOpenChange={setGerenciarOpen}
+        etiquetas={etiquetasGerenciar ?? etiquetas}
+        onChange={onEtiquetasChange}
+        isAdmin={isAdmin}
+        folderId={folderId}
+        canManageFolder={canManageFolder}
+      />
     </>
   );
 }
