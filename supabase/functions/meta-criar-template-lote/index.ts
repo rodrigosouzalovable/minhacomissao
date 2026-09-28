@@ -364,6 +364,8 @@ serve(async (req) => {
           queued: false,
           total: 0,
           adiadas_tier_250: adiadasTier250.length,
+          instancias: [],
+          adiadas: adiadasTier250,
           message: "Limite seguro de 2 templates por número/dia atingido. Os próximos ficam para o dia seguinte.",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

@@ -173,7 +173,7 @@ export default function MetaTemplates() {
   const [enviando, setEnviando] = useState(false);
   const [loteAtual, setLoteAtual] = useState<{ mestreId: string; ids: string[]; adiadas: string[] } | null>(null);
   const [verificando, setVerificando] = useState(false);
-  const [verificacao, setVerificacao] = useState({ inicio: 0, segundos: 0, concluidas: 0, total: 0, nome: "", erro: "" });
+  const [verificacao, setVerificacao] = useState({ inicio: 0, segundos: 0, concluidas: 0, total: 0, nome: "", erro: "", falhas: 0 });
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const { parceiroMeta } = useUserPermissions();
 
@@ -529,7 +529,7 @@ export default function MetaTemplates() {
   const verificarStatus = async () => {
     if (verificando) return;
     setVerificando(true);
-    setVerificacao({ inicio: Date.now(), segundos: 0, concluidas: 0, total: 0, nome: "", erro: "" });
+    setVerificacao({ inicio: Date.now(), segundos: 0, concluidas: 0, total: 0, nome: "", erro: "", falhas: 0 });
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -561,6 +561,7 @@ export default function MetaTemplates() {
           const dados = JSON.parse(linha.slice(6));
           if (dados.type === "start") setVerificacao((v) => ({ ...v, total: dados.total }));
           if (dados.type === "progress") setVerificacao((v) => ({ ...v, concluidas: dados.done, total: dados.total, nome: dados.nome }));
+          if (dados.type === "failure") setVerificacao((v) => ({ ...v, falhas: v.falhas + 1, erro: `Não foi possível conferir ${dados.nome}: ${dados.error}` }));
           if (dados.type === "error") throw new Error(dados.error || "Falha na verificação.");
           if (dados.type === "complete") {
             terminou = true;
@@ -629,7 +630,7 @@ export default function MetaTemplates() {
 
   const marcarTodosInjecao = async (valor: boolean) => {
     if (!usuarioId) return;
-     const ids = mestres.filter((m) => !m.reclassificado_marketing || !valor).map((m) => m.id);
+    const ids = mestres.filter((m) => !m.reclassificado_marketing || !valor).map((m) => m.id);
     if (ids.length === 0) return;
     const { error } = await supabase
       .from("meta_templates_mestre")
@@ -637,7 +638,7 @@ export default function MetaTemplates() {
       .eq("criado_por", usuarioId)
       .in("id", ids);
     if (error) { toast.error(error.message); return; }
-    setMestres((prev) => prev.map((m) => ({ ...m, injetar_em_novos: valor })));
+    setMestres((prev) => prev.map((m) => ids.includes(m.id) ? { ...m, injetar_em_novos: valor } : m));
     toast.success(valor ? "Todos marcados" : "Marcação limpa");
   };
 
@@ -1281,8 +1282,8 @@ export default function MetaTemplates() {
               </Button>
             </div>
             {(verificando || verificacao.erro) && <div className="space-y-2 border p-3 text-sm" role="status" aria-live="polite">
-              <div className="flex justify-between gap-2"><span>{verificacao.erro || `Conferindo ${verificacao.nome || "instâncias"}… · ${verificacao.segundos}s`}</span><strong>{verificacao.total ? Math.round(100 * verificacao.concluidas / verificacao.total) : verificando ? "Aguardando…" : ""}{verificacao.total ? "%" : ""}</strong></div>
-              <Progress value={verificacao.total ? 100 * verificacao.concluidas / verificacao.total : 0} />
+              <div className="flex justify-between gap-2"><span>{verificacao.erro || `Conferindo ${verificacao.nome || "instâncias"}… · ${verificacao.segundos}s`}</span><strong>{verificacao.total ? Math.round(100 * (verificacao.concluidas - verificacao.falhas) / verificacao.total) : verificando ? "Aguardando…" : ""}{verificacao.total ? "%" : ""}</strong></div>
+              <Progress value={verificacao.total ? 100 * (verificacao.concluidas - verificacao.falhas) / verificacao.total : 0} />
               {verificando && <span className="text-muted-foreground">{verificacao.concluidas} de {verificacao.total} instâncias conferidas</span>}
             </div>}
             {loteAtual && (() => {
@@ -1356,7 +1357,7 @@ export default function MetaTemplates() {
                         size="sm"
                         variant="outline"
                         onClick={() => reenviarFalhas(m.id)}
-                        disabled={enviando || contarFalhas(m.id) === 0}
+                        disabled={enviando || contarFalhas(m.id) === 0 || !!m.reclassificado_marketing}
                         title={contarFalhas(m.id) === 0 ? "Nenhuma falha para reenviar" : undefined}
                       >
                         <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas ({contarFalhas(m.id)})
