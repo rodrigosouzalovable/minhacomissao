@@ -11244,6 +11244,13 @@ export type Database = {
         Args: { p_contato_id: string; p_somente_ia?: boolean }
         Returns: string
       }
+      buscar_aberturas_cnpj_certificado_por_telefone: {
+        Args: { p_suffixes: string[] }
+        Returns: {
+          data_abertura: string
+          suffix: string
+        }[]
+      }
       buscar_devedores_por_documento: {
         Args: { p_credor?: string; p_doc: string }
         Returns: {
@@ -11290,6 +11297,17 @@ export type Database = {
       can_view_meta_contato_folder: {
         Args: { _folder: string; _uid: string }
         Returns: boolean
+      }
+      certificado_redistribuir_pendentes_instancia: {
+        Args: { p_instancia_id: string; p_job_id: string; p_limite?: number }
+        Returns: number
+      }
+      certificado_redistribuir_pendentes_job: {
+        Args: { p_job_id: string }
+        Returns: {
+          instancia_id: string
+          quantidade: number
+        }[]
       }
       certificado_reservar_lote_instancia: {
         Args: {

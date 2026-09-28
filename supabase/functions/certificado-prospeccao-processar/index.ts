@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
     if (pontual && token === serviceKey) return json({ error: "A campanha pontual exige confirmação de um administrador" }, 403);
     if (pontual && (body?.janela !== 20 || completo || modoTeste)) return json({ error: "A campanha pontual aprovada usa somente D+20 e o estoque já verificado" }, 400);
     const manualPreparacaoId = String(body?.manual_preparacao_id ?? "").trim();
+    const redistribuirJobId = String(body?.redistribuir_job_id ?? "").trim();
     const instanciaIdsInicio = Array.isArray(body?.instancia_ids_inicio) ? [...new Set(body.instancia_ids_inicio.map(String).filter(Boolean))] : [];
     const brt = agoraBrt();
     const diaSemana = brt.getDay();
@@ -297,6 +298,49 @@ Deno.serve(async (req) => {
       if (error) throw error;
       restante = Math.max(0, cotaPorInstancia - Number(count ?? 0));
       if (!restante) return json({ success: true, skipped: true, motivo: "Limite diário de envios do Certificado atingido" });
+    }
+
+    if (redistribuirJobId) {
+      const { data: jobRedistribuir, error: jobRedistribuirError } = await service.from("envio_meta_job")
+        .select("id,status,instancia_ids,template_id_by_instance")
+        .eq("id", redistribuirJobId)
+        .eq("folder_id", FOLDER_CERTIFICADO)
+        .maybeSingle();
+      if (jobRedistribuirError) throw jobRedistribuirError;
+      if (!jobRedistribuir) return json({ error: "Campanha do Certificado não encontrada" }, 404);
+
+      const { data: redistribuicao, error: redistribuicaoError } = await service.rpc("certificado_redistribuir_pendentes_job", {
+        p_job_id: redistribuirJobId,
+      });
+      if (redistribuicaoError) throw redistribuicaoError;
+      const nomesPorId = new Map(participantes.map((instancia: any) => [instancia.id, instancia.nome]));
+      const redistribuidas = (redistribuicao ?? []).map((item: any) => ({
+        instancia_id: item.instancia_id,
+        nome: nomesPorId.get(item.instancia_id) ?? "Instância Meta",
+        quantidade: Number(item.quantidade ?? 0),
+      }));
+
+      const idsAnteriores = Array.isArray(jobRedistribuir.instancia_ids) ? jobRedistribuir.instancia_ids : [];
+      const mapaAnterior = jobRedistribuir.template_id_by_instance && typeof jobRedistribuir.template_id_by_instance === "object" ? jobRedistribuir.template_id_by_instance : {};
+      const novosTemplates = Object.fromEntries(participantes.map((i: any) => [i.id, (porInstancia.get(i.id) as any).id]));
+      const { error: atualizarJobError } = await service.from("envio_meta_job").update({
+        instancia_ids: [...new Set([...idsAnteriores, ...participantes.map((i: any) => i.id)])],
+        template_id_by_instance: { ...mapaAnterior, ...novosTemplates },
+        status: "rodando",
+        status_motivo: null,
+        concluido_em: null,
+        proximo_em: new Date().toISOString(),
+      }).eq("id", redistribuirJobId);
+      if (atualizarJobError) throw atualizarJobError;
+
+      fetch(`${url}/functions/v1/envio-meta-massa-tick`, { method: "POST", headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ job_id: redistribuirJobId }) }).catch(() => {});
+      return json({
+        success: true,
+        job_id: redistribuirJobId,
+        total_redistribuido: redistribuidas.reduce((total, item) => total + item.quantidade, 0),
+        redistribuidas,
+        participantes_aptas: participantes.length,
+      });
     }
 
     if (modoTeste) {

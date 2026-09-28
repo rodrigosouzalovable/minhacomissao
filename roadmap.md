@@ -1,6 +1,8 @@
 # Roadmap
 
 ## Em aberto
+- [x] Exibir a data de abertura do CNPJ no cabeçalho das conversas da caixa CERTIFICADO, sem novo polling
+- [x] Redistribuir os contatos pendentes da campanha anual entre novas instâncias aptas, preservando cotas, qualidade e orçamento
 - [x] Permitir que todos os usuários alterem vencimentos pendentes e marquem/desmarquem pagamentos em acordos próprios ou de outros usuários, sem liberar valores, comissões ou responsável
 - [x] Executar renovação anual em dias úteis: até 50 contatos inéditos por instância marcada e apta, priorizando a data exata e ampliando até ±15 dias, das 08h às 16h, com teto obrigatório de R$120/dia; sem Google Maps
 - [x] Corrigir a aplicação automática de templates na instância SOUZA 62 8243-4364: autenticar a chamada interna, recuperar falhas de sessão e mostrar somente aprovações confirmadas
