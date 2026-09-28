@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Mostrar todos os status por instância e distinguir seleção, submissão, falha e adiamento sem reenviar automaticamente
 - [x] Acompanhar verificação e aplicação Meta por instância; mostrar categoria real e parar lotes reclassificados
 - [x] Isolar templates Meta por proprietário e aplicar modelos marcados somente às próprias instâncias conectadas e GREEN, reutilizando a verificação diária
 - [x] Dar ao administrador da caixa AMARAL NM gestão de usuários e etiquetas isoladas, sem liberar outras caixas

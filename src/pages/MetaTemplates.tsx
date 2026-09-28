@@ -229,8 +229,8 @@ export default function MetaTemplates() {
     const idsParceiro = new Set(((par.data as any) || []).map((r: any) => r.instancia_id as string));
     const lista = ((i.data as any) || []) as Instancia[];
     setInstancias(parceiroMeta ? lista : lista.filter((x) => !idsParceiro.has(x.id)));
-    const mestresIds = ((m.data as Mestre[]) || []).map((row) => row.id);
-    const nomes = [...new Set(((m.data as Mestre[]) || []).map((row) => row.nome))];
+    const mestresIds = (m.data || []).map((row) => row.id);
+    const nomes = [...new Set((m.data || []).map((row) => row.nome))];
     const instanciaIds = lista.map((row) => row.id);
     // As tabelas já ultrapassam o limite padrão de 1.000 linhas por consulta.
     // Consultar somente os modelos/números do proprietário, em páginas explícitas.
