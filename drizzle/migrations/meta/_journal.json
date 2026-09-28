@@ -568,6 +568,13 @@
       "when": 1790614236867,
       "tag": "0080_inbox_certificado_cnpj_opening_dates",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1790614300198,
+      "tag": "0081_redistribute_pending_certificate_campaign",
+      "breakpoints": true
     }
   ]
 }

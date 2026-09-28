@@ -11298,6 +11298,10 @@ export type Database = {
         Args: { _folder: string; _uid: string }
         Returns: boolean
       }
+      certificado_redistribuir_pendentes_instancia: {
+        Args: { p_instancia_id: string; p_job_id: string; p_limite?: number }
+        Returns: number
+      }
       certificado_reservar_lote_instancia: {
         Args: {
           p_bm_id: string
