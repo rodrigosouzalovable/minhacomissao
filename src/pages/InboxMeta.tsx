@@ -659,7 +659,7 @@ export default function InboxMeta() {
   const [carregandoMais, setCarregandoMais] = useState(false);
 
   // Troca de caixa/instância/aba/busca volta ao primeiro lote
-  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim, filtroEtiqueta]);
+  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta]);
 
   // Link direto (aviso "Cliente autorizou a chamada"): abre a conversa do cliente
   const ultimoLinkDiretoRef = useRef('');
@@ -824,8 +824,7 @@ export default function InboxMeta() {
     setContatos(combinados);
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
-    fetchContatoEtiquetas(contatoIdsRef.current);
-    fetchQualifContatos(contatoIdsRef.current);
+    void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current)]);
   }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta]);
 
   // Debounce da busca — evita bater no banco a cada tecla
@@ -882,8 +881,7 @@ export default function InboxMeta() {
         taggedPageRef.current = { key: '', rows: [], exhausted: false };
         void fetchContatos();
         lastRefreshRef.current = Date.now();
-        // Reconcilia etiquetas dos contatos visíveis caso algum evento tenha sido perdido
-        fetchContatoEtiquetas(contatoIdsRef.current);
+        // fetchContatos reconcilia etiquetas e qualificações; não duplicar a leitura aqui.
       }
     };
     document.addEventListener('visibilitychange', onVis);
