@@ -319,6 +319,22 @@ Deno.serve(async (req) => {
         }
       }
       if (mestreItem?.nome) {
+        // A criação pode ter sido iniciada manualmente antes de o tick alcançar
+        // a fila. PENDING significa submissão real, não autorização para reenviar.
+        const { data: submissao } = await supabase.from("meta_templates_instancia")
+          .select("status,meta_template_id,erro")
+          .eq("instancia_id", inst.id).eq("template_mestre_id", proximo.template_mestre_id)
+          .maybeSingle();
+        if (submissao && ["PENDING", "ENVIADO", "APPROVED"].includes(String(submissao.status).toUpperCase())) {
+          await supabase.from("meta_templates_onboarding_fila").update({
+            status: submissao.status === "APPROVED" ? "APPROVED" : "ENVIADO",
+            motivo: submissao.status === "APPROVED" ? "aprovado pela Meta" : "enviado; aguardando aprovação da Meta",
+            enviado_em: new Date().toISOString(),
+            ...(submissao.status === "APPROVED" ? { finalizado_em: new Date().toISOString() } : {}),
+          }).eq("id", proximo.id);
+          processados.push({ instancia_id: inst.id, ok: true, aguardando_meta: submissao.status !== "APPROVED" });
+          continue;
+        }
         const { data: existeReal } = await supabase
           .from("meta_whatsapp_templates")
           .select("id, status")
@@ -329,13 +345,14 @@ Deno.serve(async (req) => {
           .maybeSingle();
         const stReal = String((existeReal as any)?.status || "").toLowerCase();
         if (existeReal && ["approved", "pending", "in_appeal", "pending_deletion"].includes(stReal)) {
+          const aprovado = stReal === "approved";
           await supabase
             .from("meta_templates_onboarding_fila")
             .update({
-              status: "APPROVED",
-              motivo: "já existente no número",
+              status: aprovado ? "APPROVED" : "ENVIADO",
+              motivo: aprovado ? "já aprovado no número" : "enviado; aguardando aprovação da Meta",
               enviado_em: new Date().toISOString(),
-              finalizado_em: new Date().toISOString(),
+              finalizado_em: aprovado ? new Date().toISOString() : null,
             })
             .eq("id", proximo.id);
           processados.push({ instancia_id: inst.id, ok: true, ja_existia: mestreItem.nome });
@@ -352,10 +369,18 @@ Deno.serve(async (req) => {
 
       let erroEnvio: string | null = null;
       try {
-        const { data: res, error } = await supabase.functions.invoke("meta-criar-template-lote", {
-          body: { mestre_id: proximo.template_mestre_id, instancia_ids: [inst.id] },
+        // A chamada interna deve usar a identidade de serviço. O cliente sem
+        // cabeçalho explícito envia a chave pública e recebe "Sessão inválida".
+        const resposta = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/meta-criar-template-lote`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ mestre_id: proximo.template_mestre_id, instancia_ids: [inst.id] }),
         });
-        if (error) erroEnvio = String(error.message || error);
+        const res = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) erroEnvio = String((res as any)?.error || `Falha ao submeter modelo (HTTP ${resposta.status})`);
         else if ((res as any)?.success === false) erroEnvio = String((res as any)?.error || "falha");
         else if (Number((res as any)?.total || 0) === 0 && Number((res as any)?.adiadas_tier_250 || 0) > 0) {
           await supabase

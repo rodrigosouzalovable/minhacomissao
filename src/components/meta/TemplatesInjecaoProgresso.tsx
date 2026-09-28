@@ -122,10 +122,10 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
       } else if (st === "ENVIADO") {
         emVoo++;
         pendentesPorInst.add(r.instancia_id);
+      } else if (st === "APPROVED") {
         concluidos++;
       } else {
         if (["REJECTED", "FALHA_ENVIO", "ERRO"].includes(st)) problemas++;
-        concluidos++;
       }
     }
     // Conferência de aprovação na Meta (última feita / próxima programada)
@@ -178,7 +178,7 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
           <FileText className="h-4 w-4 text-blue-600" />
           <span className="text-sm font-medium">Injeção de templates nas instâncias</span>
           <Badge variant="outline" className="text-[10px]">
-            {resumo.concluidos} de {resumo.total} modelos
+            {resumo.concluidos} de {resumo.total} aprovados
           </Badge>
           <Button
             size="sm"
@@ -188,7 +188,7 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
             onClick={async () => {
               setAtualizando(true);
               try {
-                await Promise.all([
+                const respostas = await Promise.all([
                   supabase.functions.invoke("meta-templates-onboarding-tick", {
                     body: { forcar: true },
                   }),
@@ -196,12 +196,13 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
                     body: { forcar: true },
                   }),
                 ]);
-              } catch {
-                /* segue mesmo se o disparo falhar */
+                if (respostas.some(({ error }) => error)) throw new Error("Não foi possível conferir os modelos agora");
+                toast.success("Situação dos modelos conferida");
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Falha ao conferir modelos");
               }
               await carregar();
               setAtualizando(false);
-              toast.success("Informações de injeção atualizadas");
             }}
           >
             <RefreshCw className={`h-3 w-3 ${atualizando ? "animate-spin" : ""}`} />
@@ -214,7 +215,7 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
         </div>
         <Progress value={pct} className="h-2" />
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <span>{pct}% concluído</span>
+          <span>{pct}% aprovados</span>
           <span>Faltam: {resumo.pendentes}</span>
           <span>Aguardando resposta da Meta: {resumo.emVoo}</span>
           <span>Reprovados/falhas: {resumo.problemas}</span>
