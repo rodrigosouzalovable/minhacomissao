@@ -71,7 +71,9 @@ export function RetornoAlertChecker() {
         const audio2 = new Audio(successSound);
         audio2.play().catch(() => {});
       }, 500);
-    } catch {}
+    } catch {
+      // O navegador pode bloquear áudio automático; o aviso visual continua disponível.
+    }
   }, [user]);
 
   useEffect(() => {
