@@ -39,6 +39,11 @@ Deno.serve(async (req) => {
     const modoTeste = body?.modo_teste === true;
     const telefoneTeste = String(body?.telefone_teste ?? "").replace(/\D/g, "");
     const completo = body?.iniciar_completo === true;
+    // Execução única, administrativa, com a janela explicitamente autorizada.
+    // Não altera a rotina diária de renovação anual.
+    const pontual = body?.campanha_pontual === true;
+    if (pontual && token === serviceKey) return json({ error: "A campanha pontual exige confirmação de um administrador" }, 403);
+    if (pontual && (body?.janela !== 20 || completo || modoTeste)) return json({ error: "A campanha pontual aprovada usa somente D+20 e o estoque já verificado" }, 400);
     const manualPreparacaoId = String(body?.manual_preparacao_id ?? "").trim();
     const instanciaIdsInicio = Array.isArray(body?.instancia_ids_inicio) ? [...new Set(body.instancia_ids_inicio.map(String).filter(Boolean))] : [];
     const brt = agoraBrt();
@@ -48,6 +53,13 @@ Deno.serve(async (req) => {
     let janelaExperimento = etapaAutomatica?.janela ?? null;
     let dataAlvoExperimento = etapaAutomatica?.dataAlvo;
     let tipoExperimento = etapaAutomatica?.tipo ?? "abertura_recente";
+    if (pontual) {
+      janelaExperimento = 20;
+      const alvo = new Date(`${diaBrt()}T12:00:00Z`);
+      alvo.setUTCDate(alvo.getUTCDate() - 20);
+      dataAlvoExperimento = alvo.toISOString().slice(0, 10);
+      tipoExperimento = "abertura_recente";
+    }
 
     const { data: cfg, error: cfgError } = await service.from("certificado_config").select("*").limit(1).maybeSingle();
     if (cfgError) throw cfgError;
@@ -79,7 +91,7 @@ Deno.serve(async (req) => {
     const cotaPorInstancia = Number(cfg.limite_diario ?? 50);
     let restante = preparacaoManual ? Number(preparacaoManual.quantidade_alvo) : cotaPorInstancia;
     let jobExistente: any = null;
-    if (!modoTeste && !preparacaoManual) {
+    if (!modoTeste && !preparacaoManual && !pontual) {
       const { data } = await service.from("envio_meta_job").select("id,status,status_motivo,total,enviados,erros,instancia_ids,template_id_by_instance").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
       jobExistente = data;
       if (jobExistente?.status === "pausado" && jobExistente?.status_motivo === "PREPARANDO_DESTINATARIOS") {
@@ -248,6 +260,7 @@ Deno.serve(async (req) => {
         if (saldo > 0) cotasRestantes.set(instancia.id, saldo);
       }
       restante = [...cotasRestantes.values()].reduce((total, cota) => total + cota, 0);
+      if (pontual) restante = Math.min(restante, 50);
       if (!restante) return json({ success: true, skipped: true, motivo: "Todos os números aptos já atingiram suas metas de hoje" });
     } else if (!preparacaoManual && !modoTeste) {
       const { count, error } = await service.from("certificado_prospeccao_envios")
@@ -322,7 +335,7 @@ Deno.serve(async (req) => {
     });
 
     // Revalida imediatamente antes da criação para reduzir o risco de cliques concorrentes.
-    if (!preparacaoManual) {
+    if (!preparacaoManual && !pontual) {
       const { data: jobCriadoEnquantoProcessava } = await service.from("envio_meta_job").select("id,total,status,status_motivo,instancia_ids,template_id_by_instance").eq("folder_id", FOLDER_CERTIFICADO).gte("created_at", inicioDia).in("status", ["rodando", "pausado", "concluido"]).limit(1).maybeSingle();
       if (jobCriadoEnquantoProcessava?.status === "pausado" && jobCriadoEnquantoProcessava?.status_motivo === "PREPARANDO_DESTINATARIOS") {
         return json({ success: true, skipped: true, motivo: "A campanha de hoje já está sendo preparada" });
@@ -340,7 +353,7 @@ Deno.serve(async (req) => {
         min_seg: 30, max_seg: 90, total: 0, proximo_em: null,
         nome_campanha: tipoExperimento === "renovacao_anual"
           ? `Renovação Certificado — 1 ano — ${nomeCampanha()}`
-          : `Certificado Digital${preparacaoManual ? " Manual" : ""} — D+${janelaExperimento} — ${nomeCampanha()}`,
+          : `Certificado Digital${pontual ? " · Casa dos Dados" : preparacaoManual ? " Manual" : ""} — D+${janelaExperimento} — ${nomeCampanha()}`,
         folder_id: FOLDER_CERTIFICADO,
         validar_no_envio: false,
       }).select("id").single();
