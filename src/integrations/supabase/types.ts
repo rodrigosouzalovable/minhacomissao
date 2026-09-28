@@ -11100,6 +11100,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      alterar_vencimento_parcela_global: {
+        Args: { p_nova_data: string; p_pagamento_id: string }
+        Returns: {
+          acordo_id: string
+          comissao_parcela: number
+          criado_em: string
+          data_paga: string | null
+          data_prevista: string
+          id: string
+          numero_parcela: number
+          status: string
+          valor_parcela: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pagamentos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       apify_incrementar_uso: { Args: { _qtd?: number }; Returns: number }
       apify_status_uso: {
         Args: never
@@ -11403,6 +11423,10 @@ export type Database = {
       definir_instancia_notificacao_uazapi: {
         Args: { p_ativa: boolean; p_instancia_id: string }
         Returns: boolean
+      }
+      definir_pagamento_parcela_global: {
+        Args: { p_pagamento_id: string; p_pago: boolean }
+        Returns: Json
       }
       definir_ponto_exigencia: { Args: { p_ativo: boolean }; Returns: boolean }
       delete_acordo_atomico: {
