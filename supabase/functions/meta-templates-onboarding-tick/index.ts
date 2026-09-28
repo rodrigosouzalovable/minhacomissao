@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     // sem contar isso como reprovação do modelo pela Meta.
     const { data: falhasDeSessao } = await supabase.from("meta_templates_onboarding_fila")
       .select("id,tentativas,motivo").eq("status", "FALHA_ENVIO")
-      .lt("tentativas", MAX_TENTATIVAS).limit(100);
+      .or(`tentativas.is.null,tentativas.lt.${MAX_TENTATIVAS}`).limit(100);
     for (const falha of falhasDeSessao ?? []) {
       if (!/Sessão inválida|Edge Function returned a non-2xx status code/i.test(String(falha.motivo ?? ""))) continue;
       await supabase.from("meta_templates_onboarding_fila").update({
