@@ -650,7 +650,7 @@ export default function InboxMeta() {
   // Paginação da lista de conversas: lote inicial leve + "carregar mais"
   const PAGE_CONTATOS = 300;
   const contatoIdsRef = useRef<string[]>([]);
-  const taggedPageRef = useRef<{ key: string; rows: MetaContato[] }>({ key: '', rows: [] });
+  const taggedPageRef = useRef<{ key: string; rows: MetaContato[]; exhausted: boolean }>({ key: '', rows: [], exhausted: false });
   const contatosRequestRef = useRef(0);
   const lastRefreshRef = useRef(0);
   const contatoLinkDiretoRef = useRef<MetaContato | null>(null);
@@ -728,14 +728,16 @@ export default function InboxMeta() {
       const iniIso = mcDataIni ? new Date(new Date(mcDataIni).setHours(0, 0, 0, 0)).toISOString() : null;
       const fimIso = mcDataFim ? new Date(new Date(mcDataFim).setHours(23, 59, 59, 999)).toISOString() : null;
       const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso]);
-      const rows = taggedPageRef.current.key === key ? [...taggedPageRef.current.rows] : [];
+      const cached = taggedPageRef.current.key === key ? taggedPageRef.current : null;
+      const rows = cached ? [...cached.rows] : [];
+      let exhausted = cached?.exhausted ?? false;
       if (etiquetaIds.length === 0) {
-        taggedPageRef.current = { key, rows: [] };
+        taggedPageRef.current = { key, rows: [], exhausted: true };
         setContatos([]);
         contatoIdsRef.current = [];
         return;
       }
-      while (rows.length < limiteContatos && etiquetaIds.length) {
+      while (rows.length < limiteContatos && !exhausted) {
         const { data, error } = await supabase.rpc('meta_inbox_tagged_contacts_page', {
           p_etiquetas: etiquetaIds, p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
           p_folder: currentFolderId, p_filtrar_folder: !modoMeusClientes,
@@ -747,10 +749,10 @@ export default function InboxMeta() {
         if (error) { console.error('Falha ao carregar conversas por etiqueta:', error); return; }
         const page = (data as MetaContato[]) ?? [];
         rows.push(...page);
-        if (page.length < PAGE_CONTATOS) break;
+        if (page.length < PAGE_CONTATOS) exhausted = true;
       }
       if (request !== contatosRequestRef.current) return;
-      taggedPageRef.current = { key, rows };
+      taggedPageRef.current = { key, rows, exhausted };
       const lista = rows.slice(0, limiteContatos);
       setContatos(lista);
       contatoIdsRef.current = lista.map(c => c.id);
@@ -853,7 +855,7 @@ export default function InboxMeta() {
       timer = setTimeout(() => {
         timer = null;
         if (document.visibilityState === 'visible') {
-          taggedPageRef.current = { key: '', rows: [] };
+          taggedPageRef.current = { key: '', rows: [], exhausted: false };
           void fetchContatos();
           lastRefreshRef.current = Date.now();
         }
@@ -866,7 +868,7 @@ export default function InboxMeta() {
         agendarRefetch();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meta_whatsapp_contato_etiquetas' }, (payload) => {
-        taggedPageRef.current = { key: '', rows: [] };
+        taggedPageRef.current = { key: '', rows: [], exhausted: false };
         applyEtiquetaEvent(payload);
         agendarRefetch();
       })
@@ -876,7 +878,7 @@ export default function InboxMeta() {
       .subscribe();
     const onVis = () => {
       if (!document.hidden && Date.now() - lastRefreshRef.current > 30_000) {
-        taggedPageRef.current = { key: '', rows: [] };
+        taggedPageRef.current = { key: '', rows: [], exhausted: false };
         void fetchContatos();
         lastRefreshRef.current = Date.now();
         // Reconcilia etiquetas dos contatos visíveis caso algum evento tenha sido perdido
