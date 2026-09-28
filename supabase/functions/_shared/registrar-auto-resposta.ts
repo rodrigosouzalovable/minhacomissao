@@ -41,6 +41,12 @@ export async function registrarAutoRespostaSeConfirmada({
   const sufixo = telefoneNormalizado.slice(-8);
   if (sufixo.length !== 8 || !texto || !mensagemChave) return false;
 
+  // Evita consultar o histórico para toda mensagem humana. O único caso que
+  // depende da rapidez é uma mensagem estruturada com sinal de atendimento.
+  const classificacaoSemTempo = classificarRespostaAutomatica(texto, null);
+  const estruturada = texto.length >= 100 || /\n|[•✅➡️📍📞🕐🐾]/u.test(texto);
+  if (!classificacaoSemTempo.automatica && !estruturada) return false;
+
   let segundos = segundosParaResposta;
   if (!envioAnteriorConfirmado) {
     const tabela = origem === 'meta' ? 'meta_whatsapp_mensagens' : 'whatsapp_mensagens';

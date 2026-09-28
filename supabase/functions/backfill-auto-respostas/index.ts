@@ -23,8 +23,8 @@ Deno.serve(async (req) => {
     const tabela = origem === 'meta' ? 'meta_whatsapp_mensagens' : 'whatsapp_mensagens';
     const campoTelefone = origem === 'meta' ? 'telefone' : 'telefone_remoto';
     const campoNome = origem === 'meta' ? null : 'nome_contato';
-    const campos = ['id', 'instancia_id', campoTelefone, 'conteudo', 'timestamp_msg', 'wa_message_id'];
-    if (campoNome) campos.push(campoNome);
+    const campoChave = origem === 'meta' ? 'wa_message_id' : 'whatsapp_msg_id';
+    const campos = ['id', 'instancia_id', campoTelefone, 'conteudo', 'timestamp_msg', campoChave];
 
     const { data: mensagens, error } = await supabase
       .from(tabela)
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     for (const mensagem of mensagens || []) {
       try {
         const telefone = String(mensagem[campoTelefone] || '');
-        const chave = String(mensagem.wa_message_id || mensagem.id || '');
+        const chave = String(mensagem[campoChave] || mensagem.id || '');
         const registrada = await registrarAutoRespostaSeConfirmada({
           supabase,
           origem,
