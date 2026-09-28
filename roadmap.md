@@ -1,6 +1,10 @@
 # Roadmap
 
 ## Em aberto
+- [x] Corrigir a aplicação automática de templates na instância SOUZA 62 8243-4364: autenticar a chamada interna, recuperar falhas de sessão e mostrar somente aprovações confirmadas
+- [x] Iniciar campanha pontual comum D+20 da Casa dos Dados com 50 contatos já verificados, sem reativar Google Maps ou alterar a renovação anual
+- [ ] Acompanhar a aprovação dos modelos submetidos à Meta na instância SOUZA 62 8243-4364; a Meta ainda não aprovou o template do Certificado nessa instância
+- [ ] Acompanhar a entrega dos 50 contatos da campanha pontual D+20; campanha iniciada com 50 reservas e andamento confirmado
 - [x] Mostrar a campanha da Casa dos Dados como campanha comum e remover do painel Campanhas o histórico técnico do aquecimento Google Maps
 - [x] Confirmar a execução real da campanha anual da Casa dos Dados após preparar todos os destinatários, sem reativar Google Maps
 - [x] Concluir pelo aviso os retornos agendados na conversa do Inbox, sem repetir a notificação após salvar

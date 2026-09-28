@@ -8,3 +8,5 @@
 - De 28/09/2026 a 02/10/2026, o Certificado busca a data-calendário exata de um ano antes para renovação; após o teste, não retoma D+5 a D+30 automaticamente.
 - A prospecção diária do Certificado usa a meta individual de cada instância marcada, com reserva atômica por número; exige Meta CONNECTED, qualidade GREEN/UNKNOWN e template aprovado, sem interromper as demais quando uma falha.
 - O painel Campanhas exibe somente jobs comuns; a prospecção do Certificado cria o job pausado para preparação e só o inicia após inserir destinatários e vínculos da Casa dos Dados, evitando campanhas vazias e sem misturar Google Maps.
+- Campanhas pontuais D+20 da Casa dos Dados são limitadas a 50 contatos já verificados e administradas separadamente da renovação diária, para impedir duplicidade e consumo acidental da coleta.
+- A aplicação automática de modelos chama a criação com identidade de serviço e só conta aprovações confirmadas pela Meta, para não confundir envio à análise com aprovação.
