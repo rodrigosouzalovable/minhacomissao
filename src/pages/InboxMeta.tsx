@@ -755,29 +755,7 @@ export default function InboxMeta() {
       }
       if (request !== contatosRequestRef.current) return;
       taggedPageRef.current = { key, rows, exhausted };
-      // Mantém contatos encontrados pelo nome do CRM ou pela instância quando a busca está ativa.
-      let lista = rows.slice(0, limiteContatos);
-      const buscaLocal = buscaDebounced.trim();
-      if (buscaLocal && lista.length < limiteContatos) {
-        const idsExistentes = new Set(lista.map(c => c.id));
-        const candidatoIds = Object.entries(nomesCRM)
-          .filter(([, nome]) => norm(nome).includes(norm(buscaLocal)))
-          .map(([telefone]) => telefone)
-          .slice(0, 200);
-        if (candidatoIds.length > 0) {
-          const { data: extras } = await supabase.from('meta_whatsapp_contatos').select(selectCols)
-            .in('telefone', candidatoIds).limit(200);
-          if (request !== contatosRequestRef.current) return;
-          const candidatos = (extras as MetaContato[] | null) ?? [];
-          for (const contato of candidatos) {
-            if (idsExistentes.has(contato.id)) continue;
-            // A própria consulta paginada continua sendo a autoridade para etiquetas/permissões.
-            if (!rows.some(row => row.id === contato.id)) continue;
-            lista.push(contato);
-            idsExistentes.add(contato.id);
-          }
-        }
-      }
+      const lista = rows.slice(0, limiteContatos);
       setContatos(lista);
       contatoIdsRef.current = lista.map(c => c.id);
       void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current)]);
