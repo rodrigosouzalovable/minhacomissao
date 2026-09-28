@@ -531,7 +531,7 @@ export default function MetaTemplates() {
     const adiadas = Number((data as any)?.adiadas_tier_250 || 0);
     setLoteAtual({
       mestreId: selMestre,
-      selecionadas: modo === "replicar" ? ((data as any)?.instancias || []).map((i: { id: string }) => i.id) : modo === "piloto" ? Array.from(selInst).slice(0, 1) : Array.from(selInst),
+      selecionadas: modo === "replicar" || modo === "piloto" ? ((data as any)?.instancias || []).map((i: { id: string }) => i.id) : Array.from(selInst),
       ids: ((data as any)?.instancias || []).map((i: { id: string }) => i.id),
       adiadas: ((data as any)?.adiadas || []).map((i: { instancia_id: string }) => i.instancia_id),
     });
@@ -721,6 +721,8 @@ export default function MetaTemplates() {
     filhas.forEach((f) => { c[f.status] = (c[f.status] || 0) + 1; });
     return c;
   };
+
+  const ultimoLote = (mestreId: string) => lotes.find((l) => l.template_mestre_id === mestreId);
 
   // BM vinculada ao número — mostrada ao lado da instância para abrir rápido
   // no Gerenciador de Negócios quando algo falha.
@@ -1316,7 +1318,7 @@ export default function MetaTemplates() {
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                     Replicar nas demais
                   </Button>
-                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !!erroCarregamento || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}>
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar para todas agora ({selInst.size})
                   </Button>
@@ -1327,6 +1329,7 @@ export default function MetaTemplates() {
 
           {/* ===== Status ===== */}
           <TabsContent value="status" className="space-y-4">
+            {erroCarregamento && <p role="alert" className="text-sm text-destructive">{erroCarregamento}</p>}
             <div className="flex justify-end">
               <Button variant="outline" size="sm" onClick={verificarStatus} disabled={verificando}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${verificando ? "animate-spin" : ""}`} /> Verificar status na Meta
@@ -1340,13 +1343,18 @@ export default function MetaTemplates() {
             </div>}
             {loteAtual && (() => {
               const modelo = mestres.find((m) => m.id === loteAtual.mestreId);
-              const ids = [...loteAtual.ids, ...loteAtual.adiadas];
+              const ids = [...new Set([...loteAtual.selecionadas, ...loteAtual.ids, ...loteAtual.adiadas])];
+              const agendadas = new Set(loteAtual.ids);
+              const adiadas = new Set(loteAtual.adiadas);
+              const semRegistro = loteAtual.selecionadas.filter((id) => !agendadas.has(id) && !adiadas.has(id));
               const concluidos = loteAtual.ids.filter((id) => {
                 const st = templInst.find((t) => t.template_mestre_id === loteAtual.mestreId && t.instancia_id === id)?.status;
                 return st && st !== "ENVIADO";
               }).length;
               return <div className="space-y-2 border p-3 text-sm">
                 <div className="flex items-center justify-between gap-2"><strong>Aplicação · {modelo?.nome || "Template"}</strong><div className="flex items-center gap-2"><span>{concluidos}/{loteAtual.ids.length} processados</span><Button variant="ghost" size="icon" title="Atualizar aplicação" onClick={carregar} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button></div></div>
+                <p className="text-xs text-muted-foreground">Selecionadas: {loteAtual.selecionadas.length} · submetidas: {loteAtual.ids.length} · adiadas pelo limite diário: {loteAtual.adiadas.length} · sem registro: {semRegistro.length}</p>
+                {semRegistro.length > 0 && <p className="text-xs text-destructive">Nem todos os números selecionados entraram no processamento. Confira os números sem registro antes de tentar novamente.</p>}
                 <Progress value={loteAtual.ids.length ? 100 * concluidos / loteAtual.ids.length : 100} />
                 <p className="text-xs text-muted-foreground">Processamento concluído não significa aprovação pela Meta.</p>
                 <div className="max-h-64 overflow-y-auto divide-y">{ids.map((id) => {
@@ -1355,7 +1363,7 @@ export default function MetaTemplates() {
                   const real = templMeta.find((t) => t.instancia_id === id && t.nome_template === modelo?.nome && t.idioma === modelo?.idioma);
                   return <div key={id} className="flex flex-wrap items-center justify-between gap-2 py-1">
                     <span>{inst?.nome || "Número não visível nesta tela"} · {inst?.display_phone || ""}</span>
-                    <div className="flex gap-2"><Badge variant="outline">{loteAtual.adiadas.includes(id) ? "Adiado (limite diário)" : item?.status === "ENVIADO" ? "Processando" : item?.status || "Aguardando"}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge>}</div>
+                    <div className="flex gap-2"><Badge variant="outline">{adiadas.has(id) ? "Adiado (limite diário)" : !agendadas.has(id) ? "Sem registro" : item?.status === "ENVIADO" ? "Processando" : item?.status || "Aguardando"}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge>}</div>
                   </div>;
                 })}</div>
               </div>;
@@ -1392,6 +1400,7 @@ export default function MetaTemplates() {
             {mestres.map((m) => {
               const c = contagemPorMestre(m.id);
               const filhas = templInst.filter((t) => t.template_mestre_id === m.id);
+              const lote = ultimoLote(m.id);
               return (
                 <Card key={m.id}>
                   <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -1428,6 +1437,7 @@ export default function MetaTemplates() {
                     </div>
                   </CardHeader>
                   <CardContent>
+                    {lote && <p className="mb-2 text-xs text-muted-foreground">Último lote registrado: {lote.total_instancias} número(s) processado(s) · {lote.sucessos} aceitos pela Meta · {lote.falhas} falhas. Aceito não significa aprovado.</p>}
                     <details>
                       <summary className="cursor-pointer text-sm text-muted-foreground">Ver detalhes por instância ({filhas.length})</summary>
                       <div className="mt-2 space-y-1">
