@@ -512,6 +512,13 @@
       "when": 1790594548974,
       "tag": "0072_meta_instance_certificate_daily_quota",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1790599549819,
+      "tag": "0073_resumo_aquecimento_leads_campanhas",
+      "breakpoints": true
     }
   ]
 }
