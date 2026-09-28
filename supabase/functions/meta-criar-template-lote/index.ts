@@ -447,8 +447,36 @@ serve(async (req) => {
       const detalhes: any[] = [];
       let sucessos = 0;
       let falhas = 0;
+      let interrompido = false;
+
+      const bloquearReclassificado = async (inst: any) => {
+        interrompido = true;
+        await supabase.from("meta_templates_mestre").update({
+          reclassificado_marketing: true, categoria_meta: "MARKETING",
+          injetar_em_novos: false, usar_em_leads: false,
+        }).eq("id", mestre_id).eq("categoria", "UTILITY");
+        await supabase.from("meta_templates_onboarding_fila").update({
+          status: "CANCELADO", motivo: "modelo reclassificado como MARKETING pela Meta",
+          finalizado_em: new Date().toISOString(),
+        }).eq("template_mestre_id", mestre_id).in("status", ["PENDENTE", "AGENDADO"]);
+        console.log(`Template ${mestre_id} reclassificado na instância ${inst.id}; lote interrompido`);
+      };
 
       for (const inst of instancias) {
+        if (!interrompido) {
+          const { data: atual } = await supabase.from("meta_templates_mestre")
+            .select("reclassificado_marketing").eq("id", mestre_id).maybeSingle();
+          interrompido = categoria === "UTILITY" && atual?.reclassificado_marketing === true;
+        }
+        if (interrompido) {
+          await supabase.from("meta_templates_instancia").upsert({
+            template_mestre_id: mestre_id, instancia_id: inst.id,
+            status: "CANCELADO", erro: "Interrompido: a Meta reclassificou o modelo como Marketing.",
+          }, { onConflict: "template_mestre_id,instancia_id" });
+          await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", "Lote interrompido por reclassificação Marketing");
+          detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, interrompido: true });
+          continue;
+        }
         if (apenas_falhas) {
           const { data: cur } = await supabase
             .from("meta_templates_instancia").select("status")
@@ -544,6 +572,29 @@ serve(async (req) => {
           );
           const data = await res.json();
 
+           // A categoria pode mudar já na submissão. A confirmação tem prioridade
+           // sobre o status de aprovação, que pode permanecer PENDING por dias.
+           let categoriaReal = String(data?.category || "").toUpperCase();
+           if (res.ok && data?.id && !categoriaReal) {
+             try {
+               const categoriaRes = await fetch(
+                 `https://graph.facebook.com/v21.0/${encodeURIComponent(String(data.id))}?fields=name,language,category,status`,
+                 { headers: { Authorization: `Bearer ${inst.access_token}` } },
+               );
+               if (categoriaRes.ok) categoriaReal = String((await categoriaRes.json())?.category || "").toUpperCase();
+             } catch (error) { console.warn("Categoria da Meta ainda indisponível", error); }
+           }
+           if (res.ok && categoriaReal) {
+             await supabase.from("meta_whatsapp_templates").upsert({
+               instancia_id: inst.id, nome_template: mestre.nome,
+               idioma: mestre.idioma || "pt_BR", categoria: categoriaReal,
+               status: String(data?.status || "pending").toLowerCase(),
+             }, { onConflict: "instancia_id,nome_template,idioma" });
+             if (categoria === "UTILITY" && categoriaReal === "MARKETING") {
+               await bloquearReclassificado(inst);
+             }
+           }
+
           if (!res.ok) {
             falhas++;
             const errMsg = descreverErroMeta(data, res.status);
@@ -615,6 +666,8 @@ serve(async (req) => {
         success: true,
         queued: true,
         total: instancias.length,
+        instancias: instancias.map((inst) => ({ id: inst.id, nome: inst.nome })),
+        adiadas: adiadasTier250,
         adiadas_tier_250: adiadasTier250.length,
         message: adiadasTier250.length > 0
           ? `${instancias.length} envio(s) iniciado(s); ${adiadasTier250.length} número(s) tier 250 atingiram o limite diário.`
