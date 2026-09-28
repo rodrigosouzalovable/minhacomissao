@@ -60,6 +60,7 @@ type Instancia = {
   saude_raw?: any;
   messaging_limit_manual?: string | null;
   aquecimento_meta_ativo?: boolean | null;
+  certificado_limite_diario?: number | null;
   templates_auto_copiar?: boolean | null;
   templates_auto_status?: string | null;
   templates_auto_pausado_ate?: string | null;
@@ -123,6 +124,9 @@ export default function ConfigurarMeta() {
   const { parceiroMeta } = useUserPermissions();
   const { isAdmin } = useUserRole();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
+  const [certificadoProgresso, setCertificadoProgresso] = useState<Record<string, { enviados: number; reservados: number; falhas: number }>>({});
+  const [certificadoMetas, setCertificadoMetas] = useState<Record<string, string>>({});
+  const [certificadoBusy, setCertificadoBusy] = useState<string | null>(null);
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -439,6 +443,43 @@ export default function ConfigurarMeta() {
       cancelado = true;
     };
   }, [isAdmin, idsAquecendo.join(",")]);
+
+  const idsInstancias = useMemo(() => instancias.map((i) => i.id), [instancias]);
+  useEffect(() => {
+    setCertificadoMetas((atuais) => {
+      const proximo = { ...atuais };
+      for (const instancia of instancias) {
+        if (proximo[instancia.id] === undefined) proximo[instancia.id] = String(instancia.certificado_limite_diario ?? 50);
+      }
+      return proximo;
+    });
+    if (!isAdmin || idsInstancias.length === 0) {
+      setCertificadoProgresso({});
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const inicioDia = new Date();
+      const partes = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(inicioDia);
+      const { data, error } = await supabase
+        .from("certificado_prospeccao_envios")
+        .select("instancia_id,status")
+        .gte("reservado_em", `${partes}T03:00:00.000Z`)
+        .in("instancia_id", idsInstancias);
+      if (cancelado || error) return;
+      const mapa: Record<string, { enviados: number; reservados: number; falhas: number }> = {};
+      for (const registro of (data as any[]) ?? []) {
+        if (!registro.instancia_id) continue;
+        const atual = mapa[registro.instancia_id] ?? { enviados: 0, reservados: 0, falhas: 0 };
+        if (["enviado", "entregue", "lido", "respondido"].includes(registro.status)) atual.enviados += 1;
+        else if (registro.status === "reservado") atual.reservados += 1;
+        else if (["erro", "falha", "cancelado"].includes(registro.status)) atual.falhas += 1;
+        mapa[registro.instancia_id] = atual;
+      }
+      setCertificadoProgresso(mapa);
+    })();
+    return () => { cancelado = true; };
+  }, [isAdmin, idsInstancias.join(",")]);
 
   // Progresso da cópia gradual de templates (somente admin, sem polling)
   const [tplProgresso, setTplProgresso] = useState<Record<string, { feitos: number; total: number }>>({});
