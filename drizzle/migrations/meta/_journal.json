@@ -540,6 +540,20 @@
       "when": 1790604843492,
       "tag": "0076_certificado_orcamento_envio_atomico",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790607003710,
+      "tag": "0077_grant_certificado_orcamento_rpc",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1790607062933,
+      "tag": "0078_fix_certificado_orcamento_service_execution",
+      "breakpoints": true
     }
   ]
 }

@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
 
     let resumoColeta: Record<string, unknown> | null = null;
     let resumoVerificacao: Record<string, unknown> | null = null;
+    let custoConservador = 0.20;
     if (completo && cfg.motor_ativo && !preparacaoManual && !simulacao) {
       let metaConfirmados = cotaPorInstancia;
       if (modoCasaDados) {
@@ -130,7 +131,7 @@ Deno.serve(async (req) => {
            .select("instancia_id,categoria").in("instancia_id", idsMarcadas).eq("nome_template", templateNome)
           .eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
         const idsAprovadas = new Set((aprovadas ?? []).map((template: any) => template.instancia_id));
-         const custoConservador = (aprovadas ?? []).every((template: any) => String(template.categoria ?? "").toUpperCase() === "UTILITY") ? 0.04 : 0.20;
+         custoConservador = (aprovadas ?? []).every((template: any) => String(template.categoria ?? "").toUpperCase() === "UTILITY") ? 0.04 : 0.20;
         metaConfirmados = aptasQualidade
           .filter((instancia: any) => idsAprovadas.has(instancia.id))
            .reduce((total: number, instancia: any) => total + Math.min(50, Math.max(0, Number(instancia.certificado_limite_diario ?? 50))), 0);
