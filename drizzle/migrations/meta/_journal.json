@@ -505,6 +505,13 @@
       "when": 1790361572991,
       "tag": "0071_track_meta_webhook_repair_time",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790594548974,
+      "tag": "0072_meta_instance_certificate_daily_quota",
+      "breakpoints": true
     }
   ]
 }
