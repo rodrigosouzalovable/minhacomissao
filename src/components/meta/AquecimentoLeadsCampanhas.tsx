@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -67,6 +67,7 @@ export default function AquecimentoLeadsCampanhas({ registerRefresh }: { registe
   }, [isAdmin, selected, fetchDetails]);
 
   registerRefresh(refresh);
+  useEffect(() => { void refresh(); }, [refresh]);
   if (!isAdmin) return null;
   const hoje = diaBrt();
   const resumoHoje = resumos.find((r) => r.dia === hoje);

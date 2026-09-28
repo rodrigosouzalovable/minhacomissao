@@ -66,7 +66,7 @@ export default function CampanhasFlutuante() {
   return (
     <>
       <div className="fixed bottom-4 right-4 z-40">
-         <Popover open={open} onOpenChange={(next) => { setOpen(next); if (next) void atualizar(); }}>
+          <Popover open={open} onOpenChange={(next) => { setOpen(next); if (next) void refreshStatus(); }}>
           <PopoverTrigger asChild>
             <Button
               size="lg"
@@ -188,7 +188,7 @@ export default function CampanhasFlutuante() {
 
             {jobsAtivos.length === 0 && finalizadasRecentes.length === 0 && (
               <div className="p-4 text-center text-xs text-muted-foreground">
-                Nenhuma campanha ainda — inicie um disparo na aba Envio Meta.
+                 Nenhuma campanha de envio Meta ainda — inicie um disparo na aba Envio Meta.
               </div>
             )}
 
