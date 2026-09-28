@@ -11286,6 +11286,10 @@ export type Database = {
           lead_id: string
         }[]
       }
+      certificado_reservar_orcamento_envio: {
+        Args: { p_custo: number; p_dia: string }
+        Returns: boolean
+      }
       certificado_sufixos_usados_por_candidatos: {
         Args: { p_sufixos: string[] }
         Returns: string[]
