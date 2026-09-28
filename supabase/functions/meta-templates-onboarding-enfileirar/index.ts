@@ -30,6 +30,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const interno = body?.interno === true;
+    let solicitanteId: string | null = null;
     const listaInstancias: string[] = Array.isArray(body?.instancia_ids)
       ? body.instancia_ids.map((x: unknown) => String(x || "").trim()).filter(Boolean)
       : [String(body?.instancia_id || "").trim()].filter(Boolean);
@@ -46,6 +47,7 @@ Deno.serve(async (req) => {
       if (!uid) return json({ success: false, error: "nao_autenticado" }, 401);
       const { data: ehAdmin } = await supabase.rpc("has_role", { _user_id: uid, _role: "admin" });
       if (ehAdmin !== true) return json({ success: false, error: "somente_admin" }, 403);
+      solicitanteId = uid;
     }
 
     // Modelo específico (opcional): injeta apenas esse template.
@@ -53,7 +55,7 @@ Deno.serve(async (req) => {
     const templateIdioma = String(body?.idioma || "").trim();
     let restricaoMestres: string[] | null = null;
     if (templateNome) {
-      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma").eq("nome", templateNome).in("categoria", ["UTILITY", "MARKETING"]);
+      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma, criado_por").eq("nome", templateNome).in("categoria", ["UTILITY", "MARKETING"]);
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
       const { data: mestres } = await q;
       restricaoMestres = ((mestres as any[]) || []).map((r) => r.id as string);
@@ -67,7 +69,7 @@ Deno.serve(async (req) => {
     for (const instanciaId of listaInstancias) {
       const { data: inst } = await supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, provider, waba_id, access_token, templates_auto_copiar, meta_bm_id, business_id")
+        .select("id, nome, display_phone, user_id, provider, ativo, saude_quality, saude_status, waba_id, access_token, templates_auto_copiar, meta_bm_id, business_id")
         .eq("id", instanciaId)
         .maybeSingle();
       if (!inst) {
@@ -80,6 +82,14 @@ Deno.serve(async (req) => {
       }
       if (!inst.waba_id || !inst.access_token) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_sem_credenciais" });
+        continue;
+      }
+      if (solicitanteId && inst.user_id !== solicitanteId) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_de_outro_proprietario" });
+        continue;
+      }
+      if (String(inst.saude_quality || "").toUpperCase() !== "GREEN" || String(inst.saude_status || "").toUpperCase() !== "CONNECTED") {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_precisa_estar_conectada_e_green" });
         continue;
       }
 
@@ -103,16 +113,19 @@ Deno.serve(async (req) => {
 
       const { data: mestresValidos, error: mestresError } = await supabase
         .from("meta_templates_mestre")
-        .select("id,nome,idioma,categoria")
+        .select("id,nome,idioma,categoria,criado_por,injetar_em_novos")
+        .eq("criado_por", inst.user_id)
+        .eq("injetar_em_novos", true)
         .in("categoria", ["UTILITY", "MARKETING"])
         .order("criado_em", { ascending: true });
       if (mestresError) throw mestresError;
+      const mestresPermitidos = ((mestresValidos as any[]) || []).filter((m) => !restricaoMestres || restricaoMestres.includes(m.id));
       const { data: reais } = await supabase.from("meta_whatsapp_templates")
         .select("nome_template,idioma,status").eq("instancia_id", instanciaId);
       const chavesReais = new Set(((reais as any[]) || [])
         .filter((r) => ["approved", "pending", "in_appeal", "pending_deletion"].includes(String(r.status || "").toLowerCase()))
         .map((r) => `${r.nome_template}|${r.idioma || "pt_BR"}`));
-      const mestresAusentes = ((mestresValidos as any[]) || []).filter((m) => !chavesReais.has(`${m.nome}|${m.idioma || "pt_BR"}`));
+      const mestresAusentes = mestresPermitidos.filter((m) => !chavesReais.has(`${m.nome}|${m.idioma || "pt_BR"}`));
       const { data: filaAtual } = await supabase.from("meta_templates_onboarding_fila")
         .select("template_mestre_id,status").eq("instancia_id", instanciaId);
       const emProcessamento = new Set(((filaAtual as any[]) || [])
@@ -121,7 +134,9 @@ Deno.serve(async (req) => {
 
       let candidatos: [string, number][];
       if (restricaoMestres) {
+        const idsPermitidos = new Set(mestresPermitidos.map((m) => m.id as string));
         candidatos = restricaoMestres
+          .filter((id) => idsPermitidos.has(id))
           .filter((id) => !jaNoNumero.has(id))
           .map((id, idx) => [id, restricaoMestres!.length - idx] as [string, number]);
       } else {

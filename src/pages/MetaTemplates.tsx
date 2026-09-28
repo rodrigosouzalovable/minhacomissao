@@ -48,8 +48,7 @@ interface Mestre {
   injetar_em_novos?: boolean;
   usar_em_leads?: boolean;
   reclassificado_marketing?: boolean;
-
-
+  criado_por: string | null;
 }
 
 interface Instancia {
@@ -61,6 +60,7 @@ interface Instancia {
   saude_quality: string | null;
   meta_bm_id: string | null;
   business_id: string | null;
+  user_id: string;
 }
 
 interface Bm {
@@ -170,16 +170,28 @@ export default function MetaTemplates() {
 
 
   const [enviando, setEnviando] = useState(false);
+  const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const { parceiroMeta } = useUserPermissions();
 
   const carregar = async () => {
     setLoading(true);
+    const { data: authData } = await supabase.auth.getUser();
+    const uid = authData.user?.id ?? null;
+    setUsuarioId(uid);
+    if (!uid) {
+      setMestres([]);
+      setInstancias([]);
+      setTemplInst([]);
+      setLoading(false);
+      return;
+    }
     const [m, i, ti, par, tm, bmRows] = await Promise.all([
-      supabase.from("meta_templates_mestre").select("*").order("criado_em", { ascending: false }),
+      supabase.from("meta_templates_mestre").select("*").eq("criado_por", uid).order("criado_em", { ascending: false }),
       supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, ativo, waba_id, saude_quality, meta_bm_id, business_id")
+        .select("id, nome, display_phone, ativo, waba_id, saude_quality, meta_bm_id, business_id, user_id")
         .eq("provider", "meta")
+        .eq("user_id", uid)
         .order("nome"),
       supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
@@ -192,7 +204,8 @@ export default function MetaTemplates() {
     const idsParceiro = new Set(((par.data as any) || []).map((r: any) => r.instancia_id as string));
     const lista = ((i.data as any) || []) as Instancia[];
     setInstancias(parceiroMeta ? lista : lista.filter((x) => !idsParceiro.has(x.id)));
-    setTemplInst((ti.data as any) || []);
+    const idsMestres = new Set(((m.data as any[]) || []).map((row) => row.id));
+    setTemplInst((((ti.data as any[]) || []).filter((row) => idsMestres.has(row.template_mestre_id))));
     setLoading(false);
   };
 
@@ -517,15 +530,17 @@ export default function MetaTemplates() {
     carregar();
   };
 
-  // Marca/desmarca o modelo para injeção automática em números novos
+  // Marca/desmarca o modelo para aplicação automática nas instâncias do proprietário.
   const alternarInjecao = async (id: string, valor: boolean) => {
+    if (!usuarioId) return;
     const { error } = await supabase
       .from("meta_templates_mestre")
       .update({ injetar_em_novos: valor })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("criado_por", usuarioId);
     if (error) { toast.error(error.message); return; }
     setMestres((prev) => prev.map((m) => (m.id === id ? { ...m, injetar_em_novos: valor } : m)));
-    toast.success(valor ? "Marcado para números novos" : "Removido dos números novos");
+    toast.success(valor ? "Aplicação automática ativada nas suas instâncias" : "Aplicação automática desativada");
   };
 
   // Marca/desmarca o modelo para uso no aquecimento de leads do Google Maps
@@ -540,11 +555,13 @@ export default function MetaTemplates() {
   };
 
   const marcarTodosInjecao = async (valor: boolean) => {
+    if (!usuarioId) return;
     const ids = mestres.map((m) => m.id);
     if (ids.length === 0) return;
     const { error } = await supabase
       .from("meta_templates_mestre")
       .update({ injetar_em_novos: valor })
+      .eq("criado_por", usuarioId)
       .in("id", ids);
     if (error) { toast.error(error.message); return; }
     setMestres((prev) => prev.map((m) => ({ ...m, injetar_em_novos: valor })));
@@ -954,7 +971,7 @@ export default function MetaTemplates() {
                     <Label>Template mestre</Label>
                     <Button size="sm" variant="outline" onClick={() => setSelecaoAutoAberta(true)}>
                       <Zap className="w-4 h-4 mr-2" />
-                      Modelos para números novos ({qtdMarcados})
+                      Aplicar automaticamente ({qtdMarcados})
                     </Button>
                   </div>
                   <TemplateFavoriteSelect
@@ -994,7 +1011,7 @@ export default function MetaTemplates() {
                           <Badge variant="outline" className="text-xs">{usos} nº</Badge>
                           {m.injetar_em_novos && (
                             <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400 text-xs">
-                              <Zap className="w-3 h-3 mr-1" /> nº novos
+                              <Zap className="w-3 h-3 mr-1" /> automático
                             </Badge>
                           )}
                            {m.categoria === "UTILITY" && !m.reclassificado_marketing && <label
@@ -1349,9 +1366,9 @@ export default function MetaTemplates() {
                       onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
                     />
                     <div className="text-sm">
-                      <p className="font-medium">Injetar em números novos</p>
+                      <p className="font-medium">Aplicar em todas as minhas instâncias</p>
                       <p className="text-xs text-muted-foreground">
-                        Aplicado sozinho em cada número novo, um por vez com 2–5 min de intervalo.
+                        Quando uma instância própria estiver GREEN, este modelo será incluído se ainda estiver ausente.
                       </p>
                     </div>
                   </div>}
@@ -1375,14 +1392,14 @@ export default function MetaTemplates() {
           </DialogContent>
         </Dialog>
 
-        {/* ===== Seleção dos modelos aplicados em números novos ===== */}
+        {/* ===== Seleção dos modelos automáticos do proprietário ===== */}
         <Dialog open={selecaoAutoAberta} onOpenChange={setSelecaoAutoAberta}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Modelos para números novos</DialogTitle>
+              <DialogTitle>Aplicar automaticamente nas minhas instâncias</DialogTitle>
               <DialogDescription>
-                Os marcados são aplicados automaticamente em cada número novo, todos no mesmo dia,
-                um por vez com 2–5 min de intervalo, das 07h às 20h e nunca no domingo.
+                Somente seus modelos marcados serão aplicados às suas instâncias conectadas e GREEN,
+                quando estiverem ausentes. A verificação também cobre novas instâncias e números que voltarem ao verde.
               </DialogDescription>
             </DialogHeader>
 
@@ -1418,7 +1435,7 @@ export default function MetaTemplates() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              {qtdMarcados} marcado(s). Sem nenhum marcado, o sistema escolhe sozinho os modelos mais aprovados.
+              {qtdMarcados} marcado(s). Sem marcação, nenhum modelo será aplicado automaticamente.
             </p>
           </DialogContent>
         </Dialog>

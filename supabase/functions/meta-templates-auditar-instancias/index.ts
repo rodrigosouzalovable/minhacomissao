@@ -1,5 +1,5 @@
-// Audita todas as instâncias próprias da API Oficial Meta e enfileira os
-// templates marcados como "injetar em números novos" que estiverem faltando.
+// Audita instâncias da API Oficial Meta e enfileira somente os templates
+// automáticos criados pelo mesmo proprietário da instância.
 // Somente administrador. dry_run=true devolve apenas o relatório.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     // ===== Modelos marcados para injeção =====
     const { data: marcados } = await supabase
       .from("meta_templates_mestre")
-      .select("id, nome, idioma")
+      .select("id, nome, idioma, criado_por")
       .eq("injetar_em_novos", true)
       .eq("categoria", "UTILITY")
       .eq("reclassificado_marketing", false)
@@ -57,7 +57,8 @@ Deno.serve(async (req) => {
       id: r.id as string,
       nome: r.nome as string,
       idioma: String(r.idioma || "pt_BR"),
-    }));
+      criado_por: r.criado_por as string | null,
+    })).filter((r) => !!r.criado_por);
     if (lista.length === 0) {
       return json({ success: true, modelos: 0, erro_amigavel: "nenhum_modelo_marcado", instancias: [] });
     }
@@ -70,7 +71,7 @@ Deno.serve(async (req) => {
 
     const { data: instsRaw } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, waba_id, access_token, saude_quality, saude_status, meta_name_status, ativo, provider, templates_auto_pausado_ate, templates_resync_pendente")
+      .select("id, nome, display_phone, user_id, waba_id, access_token, saude_quality, saude_status, meta_name_status, ativo, provider, templates_auto_pausado_ate, templates_resync_pendente")
       .eq("ativo", true)
       .eq("provider", "meta");
 
@@ -81,8 +82,7 @@ Deno.serve(async (req) => {
       const status = String(i.saude_status || "").toUpperCase();
       const qual = String(i.saude_quality || "").toUpperCase();
       const nomeStatus = String(i.meta_name_status || "").toUpperCase();
-      if (qual === "YELLOW") return "qualidade amarela";
-      if (qual === "RED") return "qualidade vermelha";
+       if (qual !== "GREEN") return qual ? `qualidade ${qual.toLowerCase()}` : "qualidade ainda não confirmada como GREEN";
       if (nomeStatus === "REJECTED") return "nome reprovado";
       if (["BANNED", "RESTRICTED", "FLAGGED", "DISABLED", "PENDING_PAYMENT"].includes(status)) {
         return `situação na Meta: ${status}`;
@@ -149,10 +149,11 @@ Deno.serve(async (req) => {
     }
 
     const relatorio = elegiveis.map((i) => {
+      const modelosDoProprietario = lista.filter((m) => m.criado_por === i.user_id);
       const tem = jaTem.get(i.id) || new Set<string>();
       const temNome = jaTemNome.get(i.id) || new Set<string>();
       const fila = naFila.get(i.id) || new Set<string>();
-      const faltando = lista.filter(
+      const faltando = modelosDoProprietario.filter(
         (m) => !tem.has(m.id) && !temNome.has(`${m.nome}|${m.idioma}`),
       );
       const novos = faltando.filter((m) => !fila.has(m.id));
@@ -160,8 +161,8 @@ Deno.serve(async (req) => {
         id: i.id,
         nome: i.nome || i.display_phone || i.id.slice(0, 8),
         telefone: i.display_phone || null,
-        total_modelos: lista.length,
-        possui: lista.length - faltando.length,
+        total_modelos: modelosDoProprietario.length,
+        possui: modelosDoProprietario.length - faltando.length,
         faltando: faltando.length,
         ja_na_fila: faltando.length - novos.length,
         a_enfileirar: novos.length,
