@@ -625,6 +625,29 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   let { data: pend, error: pendErr } = await buscarPendente();
   if (pendErr) { console.error('[tick pendErr]', pendErr); return { advanced: false, waitMs: delayUsuarioMs(job) }; }
 
+  const varsPendente = ((pend as any)?.vars && typeof (pend as any).vars === 'object') ? (pend as any).vars : {};
+  const renovacaoAnualPendente = typeof varsPendente.certificado_instancia_id === 'string' && varsPendente.certificado_tipo_oferta === 'renovacao_anual';
+  const horarioBrt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  if (pend && renovacaoAnualPendente && horarioBrt.getHours() >= 16) {
+    const motivo = 'Janela diária encerrada às 16h; contatos não enviados não serão reaproveitados amanhã';
+    const { data: restantes } = await supabase.from('envio_meta_job_item')
+      .select('id,vars').eq('job_id', job.id).eq('status', 'pendente').limit(1000);
+    const itemIds = (restantes ?? []).map((item: any) => item.id);
+    const reservaIds = (restantes ?? []).map((item: any) => item.vars?.certificado_envio_id).filter((id: unknown): id is string => typeof id === 'string');
+    if (itemIds.length) {
+      await supabase.from('envio_meta_job_item').update({ status: 'erro', erro: motivo, processado_em: new Date().toISOString() }).in('id', itemIds);
+    }
+    if (reservaIds.length) {
+      await supabase.from('certificado_prospeccao_envios').update({ status: 'falha', erro: motivo, updated_at: new Date().toISOString() }).in('id', reservaIds).eq('status', 'reservado');
+    }
+    const { data: encerrado } = await supabase.from('envio_meta_job').update({
+      status: 'erro', status_motivo: motivo, erros: Number(job.erros ?? 0) + itemIds.length,
+      concluido_em: new Date().toISOString(), proximo_em: null, atual_telefone: null, atual_instancia: null,
+    }).eq('id', job.id).eq('status', 'rodando').select('id').maybeSingle();
+    if (encerrado) await notificarConclusao(job.id, 'erro', motivo);
+    return { advanced: false, stop: true };
+  }
+
   // Validação de WhatsApp durante o envio: roda em SEGUNDO PLANO para não
   // atrasar o ritmo configurado. Quem for marcado como sem WhatsApp sai da fila
   // de pendentes e não recebe mensagem.
@@ -655,7 +678,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   // Recoloca no rodízio quem saiu por bloqueio TEMPORÁRIO da Meta e já está liberado
   const bloqueadasRun: string[] = await reabilitarInstanciasRecuperadas(job, bloqueadasBrutas);
   // Instâncias que já falharam para ESTE contato (não repetir o mesmo número no mesmo chip)
-  const varsPend = ((pend as any).vars && typeof (pend as any).vars === 'object') ? (pend as any).vars : {};
+  const varsPend = varsPendente;
   const exclItem: string[] = Array.isArray(varsPend._inst_excluidas) ? varsPend._inst_excluidas : [];
 
   // ===== Saída automática por queda de qualidade (YELLOW/RED) durante o job =====
