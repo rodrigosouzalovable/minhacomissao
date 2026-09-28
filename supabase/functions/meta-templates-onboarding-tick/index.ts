@@ -7,7 +7,7 @@
 //  - 1 modelo por vez por número, intervalo aleatório de 2 a 5 min
 //  - 2 reprovações seguidas → pausa a fila do número e avisa
 //  - erro de limite/bloqueio da Meta → pausa 24h nesse número
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, FunctionsHttpError } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";
@@ -50,6 +50,19 @@ const erroDeLimiteMeta = (texto: string) => {
     t.includes("131031") || t.includes("131042") || t.includes("policy violation")
   );
 };
+
+async function detalheInvocacao(error: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const texto = await error.context.text();
+      const body = JSON.parse(texto);
+      return String(body?.error || body?.message || texto).slice(0, 1000);
+    } catch {
+      return String(error.message);
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -319,6 +332,22 @@ Deno.serve(async (req) => {
         }
       }
       if (mestreItem?.nome) {
+        // A criação pode ter sido iniciada manualmente antes de o tick alcançar
+        // a fila. PENDING significa submissão real, não autorização para reenviar.
+        const { data: submissao } = await supabase.from("meta_templates_instancia")
+          .select("status,meta_template_id,erro")
+          .eq("instancia_id", inst.id).eq("template_mestre_id", proximo.template_mestre_id)
+          .maybeSingle();
+        if (submissao && ["PENDING", "ENVIADO", "APPROVED"].includes(String(submissao.status).toUpperCase())) {
+          await supabase.from("meta_templates_onboarding_fila").update({
+            status: submissao.status === "APPROVED" ? "APPROVED" : "ENVIADO",
+            motivo: submissao.status === "APPROVED" ? "aprovado pela Meta" : "enviado; aguardando aprovação da Meta",
+            enviado_em: new Date().toISOString(),
+            ...(submissao.status === "APPROVED" ? { finalizado_em: new Date().toISOString() } : {}),
+          }).eq("id", proximo.id);
+          processados.push({ instancia_id: inst.id, ok: true, aguardando_meta: submissao.status !== "APPROVED" });
+          continue;
+        }
         const { data: existeReal } = await supabase
           .from("meta_whatsapp_templates")
           .select("id, status")
@@ -355,7 +384,7 @@ Deno.serve(async (req) => {
         const { data: res, error } = await supabase.functions.invoke("meta-criar-template-lote", {
           body: { mestre_id: proximo.template_mestre_id, instancia_ids: [inst.id] },
         });
-        if (error) erroEnvio = String(error.message || error);
+        if (error) erroEnvio = await detalheInvocacao(error);
         else if ((res as any)?.success === false) erroEnvio = String((res as any)?.error || "falha");
         else if (Number((res as any)?.total || 0) === 0 && Number((res as any)?.adiadas_tier_250 || 0) > 0) {
           await supabase
