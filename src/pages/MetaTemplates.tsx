@@ -1057,7 +1057,7 @@ export default function MetaTemplates() {
                       nome: m.nome,
                       idioma: m.idioma,
                       descricao: m.corpo,
-                      meta: <Badge variant="secondary" className="text-[10px]">{m.categoria}</Badge>,
+                       meta: <Badge variant="secondary" className="text-[10px]">{m.reclassificado_marketing ? "Marketing · reclassificado" : m.categoria}</Badge>,
                     }))}
                   />
 
@@ -1080,6 +1080,7 @@ export default function MetaTemplates() {
                           >
                             <span className="font-medium">{m.nome}</span>
                             <span className="text-xs text-muted-foreground"> · {m.categoria}</span>
+                             {m.reclassificado_marketing && <Badge variant="destructive" className="ml-2 text-xs">Marketing · reclassificado</Badge>}
                           </button>
                           <Badge variant="outline" className="text-xs">{usos} nº</Badge>
                           {m.injetar_em_novos && (
@@ -1243,14 +1244,14 @@ export default function MetaTemplates() {
                   <p>Se preferir reduzir esse risco, envie um <b>piloto</b>, aguarde a aprovação e depois clique em <b>Replicar nas demais</b>.</p>
                   <p><b>Tier 250:</b> no máximo 2 submissões de templates por número/dia, inclusive em envios manuais.</p>
                   <p>Aprovar um template MARKETING não libera disparos a clientes; o bloqueio de custos permanece ativo.</p>
-                  {mestres.find((m) => m.id === selMestre)?.reclassificado_marketing && <p className="text-destructive">Este modelo foi reclassificado pela Meta como MARKETING. Se foi criado como UTILITY, cadastre outro na categoria correta para reenviar.</p>}
+                    {mestres.find((m) => m.id === selMestre)?.reclassificado_marketing && <p className="text-destructive">Este modelo virou Marketing na Meta. Não será enviado aos demais números. Exclua ou crie uma versão corrigida com outro nome.</p>}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
                     onClick={() => enviarLote("piloto")}
-                    disabled={enviando || !selMestre || selInst.size === 0}
+                    disabled={enviando || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar piloto (1 número)
@@ -1258,12 +1259,12 @@ export default function MetaTemplates() {
                   <Button
                     variant="outline"
                     onClick={() => enviarLote("replicar")}
-                    disabled={enviando || !selMestre}
+                    disabled={enviando || !selMestre || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                     Replicar nas demais
                   </Button>
-                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0}>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}>
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar para todas agora ({selInst.size})
                   </Button>
@@ -1275,10 +1276,37 @@ export default function MetaTemplates() {
           {/* ===== Status ===== */}
           <TabsContent value="status" className="space-y-4">
             <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={verificarStatus}>
-                <RefreshCw className="w-4 h-4 mr-2" /> Verificar status na Meta
+              <Button variant="outline" size="sm" onClick={verificarStatus} disabled={verificando}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${verificando ? "animate-spin" : ""}`} /> Verificar status na Meta
               </Button>
             </div>
+            {(verificando || verificacao.erro) && <div className="space-y-2 border p-3 text-sm" role="status" aria-live="polite">
+              <div className="flex justify-between gap-2"><span>{verificacao.erro || `Conferindo ${verificacao.nome || "instâncias"}… · ${verificacao.segundos}s`}</span><strong>{verificacao.total ? Math.round(100 * verificacao.concluidas / verificacao.total) : verificando ? "Aguardando…" : ""}{verificacao.total ? "%" : ""}</strong></div>
+              <Progress value={verificacao.total ? 100 * verificacao.concluidas / verificacao.total : 0} />
+              {verificando && <span className="text-muted-foreground">{verificacao.concluidas} de {verificacao.total} instâncias conferidas</span>}
+            </div>}
+            {loteAtual && (() => {
+              const modelo = mestres.find((m) => m.id === loteAtual.mestreId);
+              const ids = [...loteAtual.ids, ...loteAtual.adiadas];
+              const concluidos = loteAtual.ids.filter((id) => {
+                const st = templInst.find((t) => t.template_mestre_id === loteAtual.mestreId && t.instancia_id === id)?.status;
+                return st && st !== "ENVIADO";
+              }).length;
+              return <div className="space-y-2 border p-3 text-sm">
+                <div className="flex justify-between"><strong>Aplicação · {modelo?.nome || "Template"}</strong><span>{concluidos}/{loteAtual.ids.length} processados</span></div>
+                <Progress value={loteAtual.ids.length ? 100 * concluidos / loteAtual.ids.length : 100} />
+                <p className="text-xs text-muted-foreground">Processamento concluído não significa aprovação pela Meta.</p>
+                <div className="max-h-64 overflow-y-auto divide-y">{ids.map((id) => {
+                  const inst = instancias.find((i) => i.id === id);
+                  const item = templInst.find((t) => t.template_mestre_id === loteAtual.mestreId && t.instancia_id === id);
+                  const real = templMeta.find((t) => t.instancia_id === id && t.nome_template === modelo?.nome && t.idioma === modelo?.idioma);
+                  return <div key={id} className="flex flex-wrap items-center justify-between gap-2 py-1">
+                    <span>{inst?.nome || "Número não visível nesta tela"} · {inst?.display_phone || ""}</span>
+                    <div className="flex gap-2"><Badge variant="outline">{loteAtual.adiadas.includes(id) ? "Adiado (limite diário)" : item?.status === "ENVIADO" ? "Processando" : item?.status || "Aguardando"}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : "Utilidade"}</Badge>}</div>
+                  </div>;
+                })}</div>
+              </div>;
+            })()}
 
             <Dialog open={statusDialog.open} onOpenChange={(v) => setStatusDialog((s) => ({ ...s, open: v }))}>
               <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
@@ -1374,7 +1402,11 @@ export default function MetaTemplates() {
                                     <span className="ml-2 text-xs text-muted-foreground">BM: {bm.nome}</span>
                                   );
                                 })()}
-                                {inst && (
+                                 {(() => {
+                                   const real = templMeta.find((t) => t.instancia_id === f.instancia_id && t.nome_template === m.nome && t.idioma === m.idioma);
+                                   return real?.categoria ? <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"} className="ml-2">{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : "Utilidade"}</Badge> : null;
+                                 })()}
+                                 {inst && (
                                   <Badge
                                     className={QUALIDADE_CORES[qualidadeDa(inst)] || "bg-muted text-muted-foreground"}
                                     title="Qualidade atual da instância na Meta"
@@ -1447,8 +1479,10 @@ export default function MetaTemplates() {
                   </div>}
 
                   <div className="flex flex-wrap gap-2">
+                    {m.reclassificado_marketing && <Button variant="outline" onClick={() => novaVersao(m)}>Criar versão corrigida</Button>}
                     <Button
                       onClick={() => { setSelMestre(m.id); setMestreDialog(null); }}
+                      disabled={!!m.reclassificado_marketing}
                     >
                       <Send className="w-4 h-4 mr-2" /> Usar no envio em lote
                     </Button>
@@ -1487,19 +1521,19 @@ export default function MetaTemplates() {
             </div>
 
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(true)}>Marcar todos</Button>
+              <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(true)}>Marcar elegíveis</Button>
               <Button size="sm" variant="outline" onClick={() => marcarTodosInjecao(false)}>Limpar</Button>
             </div>
 
             <div className="max-h-72 overflow-y-auto rounded-md border divide-y">
               {mestresFiltrados.map((m) => (
                 <label key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50">
-                  <Checkbox
+                  <Checkbox disabled={!!m.reclassificado_marketing}
                     checked={!!m.injetar_em_novos}
                     onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
                   />
                   <span className="flex-1">{m.nome}</span>
-                  <span className="text-xs text-muted-foreground">{m.categoria}</span>
+                  <span className="text-xs text-muted-foreground">{m.reclassificado_marketing ? "Marketing · reclassificado" : m.categoria}</span>
                 </label>
               ))}
               {mestresFiltrados.length === 0 && (
