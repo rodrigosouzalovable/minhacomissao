@@ -12039,6 +12039,38 @@ export type Database = {
           ultima_msg_entrada_em: string
         }[]
       }
+      meta_inbox_tagged_search_page: {
+        Args: {
+          p_arquivado?: boolean
+          p_busca: string
+          p_etiquetas: string[]
+          p_filtrar_arquivado?: boolean
+          p_filtrar_folder?: boolean
+          p_fim?: string
+          p_folder?: string
+          p_inicio?: string
+          p_instancia?: string
+          p_limit?: number
+          p_offset?: number
+          p_qualificacoes: string[]
+        }
+        Returns: {
+          arquivado: boolean
+          cpf: string
+          credor: string
+          fixado: boolean
+          folder_id: string
+          id: string
+          instancia_id: string
+          nao_lido: number
+          nome: string
+          sla_dispensado_em: string
+          telefone: string
+          ultima_mensagem: string
+          ultima_mensagem_em: string
+          ultima_msg_entrada_em: string
+        }[]
+      }
       meta_instance_template_tier: {
         Args: { p_instancia_id: string }
         Returns: number
