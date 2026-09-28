@@ -88,6 +88,15 @@ interface TemplateInst {
   meta_template_id: string | null;
 }
 
+interface LoteLog {
+  id: string;
+  template_mestre_id: string;
+  total_instancias: number;
+  sucessos: number;
+  falhas: number;
+  criado_em: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   APPROVED: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
   PENDING: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
@@ -137,6 +146,8 @@ export default function MetaTemplates() {
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [templInst, setTemplInst] = useState<TemplateInst[]>([]);
   const [templMeta, setTemplMeta] = useState<Array<{ instancia_id: string; nome_template: string; idioma: string; categoria: string | null; status: string | null }>>([]);
+  const [lotes, setLotes] = useState<LoteLog[]>([]);
+  const [erroCarregamento, setErroCarregamento] = useState("");
   const [bms, setBms] = useState<Bm[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -171,7 +182,7 @@ export default function MetaTemplates() {
 
 
   const [enviando, setEnviando] = useState(false);
-  const [loteAtual, setLoteAtual] = useState<{ mestreId: string; ids: string[]; adiadas: string[] } | null>(null);
+  const [loteAtual, setLoteAtual] = useState<{ mestreId: string; selecionadas: string[]; ids: string[]; adiadas: string[] } | null>(null);
   const [verificando, setVerificando] = useState(false);
   const [verificacao, setVerificacao] = useState({ inicio: 0, segundos: 0, concluidas: 0, total: 0, nome: "", erro: "", falhas: 0 });
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
@@ -179,6 +190,7 @@ export default function MetaTemplates() {
 
   const carregar = async () => {
     setLoading(true);
+    setErroCarregamento("");
     const { data: authData } = await supabase.auth.getUser();
     const uid = authData.user?.id ?? null;
     setUsuarioId(uid);
@@ -186,10 +198,12 @@ export default function MetaTemplates() {
       setMestres([]);
       setInstancias([]);
       setTemplInst([]);
+      setTemplMeta([]);
+      setLotes([]);
       setLoading(false);
       return;
     }
-    const [m, i, ti, par, tm, bmRows] = await Promise.all([
+    const [m, i, par, bmRows] = await Promise.all([
       supabase.from("meta_templates_mestre").select("*").eq("criado_por", uid).order("criado_em", { ascending: false }),
       supabase
         .from("meta_whatsapp_instances")
@@ -197,19 +211,54 @@ export default function MetaTemplates() {
         .eq("provider", "meta")
         .eq("user_id", uid)
         .order("nome"),
-      supabase.from("meta_templates_instancia").select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id"),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
-       supabase.from("meta_whatsapp_templates").select("instancia_id, nome_template, idioma, categoria, status"),
       supabase.from("meta_business_managers").select("id, nome, business_id"),
     ]);
+    if (m.error || i.error || par.error || bmRows.error) {
+      setErroCarregamento("Não foi possível carregar todas as instâncias e modelos. Atualize a página.");
+      setLoading(false);
+      return;
+    }
     setBms(((bmRows.data as any) || []) as Bm[]);
-    setTemplMeta(((tm.data as any) || []) as any);
     setMestres((m.data as any) || []);
     const idsParceiro = new Set(((par.data as any) || []).map((r: any) => r.instancia_id as string));
     const lista = ((i.data as any) || []) as Instancia[];
     setInstancias(parceiroMeta ? lista : lista.filter((x) => !idsParceiro.has(x.id)));
-    const idsMestres = new Set(((m.data as any[]) || []).map((row) => row.id));
-    setTemplInst((((ti.data as any[]) || []).filter((row) => idsMestres.has(row.template_mestre_id))));
+    const mestresIds = ((m.data as Mestre[]) || []).map((row) => row.id);
+    const nomes = [...new Set(((m.data as Mestre[]) || []).map((row) => row.nome))];
+    const instanciaIds = lista.map((row) => row.id);
+    // As tabelas já ultrapassam o limite padrão de 1.000 linhas por consulta.
+    // Consultar somente os modelos/números do proprietário, em páginas explícitas.
+    const porPagina = 500;
+    const carregarPaginas = async <T,>(criarConsulta: () => any): Promise<T[]> => {
+      const todas: T[] = [];
+      for (let inicio = 0; ; inicio += porPagina) {
+        const { data, error } = await criarConsulta().range(inicio, inicio + porPagina - 1);
+        if (error) throw error;
+        const pagina = (data || []) as T[];
+        todas.push(...pagina);
+        if (pagina.length < porPagina) return todas;
+      }
+    };
+    try {
+      const [registros, historico, cache] = await Promise.all([
+        mestresIds.length ? carregarPaginas<TemplateInst>(() => supabase.from("meta_templates_instancia")
+          .select("id, template_mestre_id, instancia_id, status, erro, motivo_rejeicao, meta_template_id")
+          .in("template_mestre_id", mestresIds).order("id")) : Promise.resolve([]),
+        mestresIds.length ? carregarPaginas<LoteLog>(() => supabase.from("meta_templates_lote_log")
+          .select("id, template_mestre_id, total_instancias, sucessos, falhas, criado_em")
+          .in("template_mestre_id", mestresIds).order("criado_em", { ascending: false }).order("id")) : Promise.resolve([]),
+        nomes.length && instanciaIds.length ? carregarPaginas<typeof templMeta[number]>(() => supabase.from("meta_whatsapp_templates")
+          .select("instancia_id, nome_template, idioma, categoria, status")
+          .in("instancia_id", instanciaIds).in("nome_template", nomes)
+          .order("instancia_id").order("nome_template").order("idioma")) : Promise.resolve([]),
+      ]);
+      setTemplInst(registros);
+      setLotes(historico);
+      setTemplMeta(cache);
+    } catch {
+      setErroCarregamento("A lista de status não foi carregada por completo. Tente atualizar antes de selecionar ou reenviar.");
+    }
     setLoading(false);
   };
 
@@ -459,6 +508,7 @@ export default function MetaTemplates() {
   };
 
   const enviarLote = async (modo?: "piloto" | "replicar") => {
+    if (erroCarregamento) { toast.error("Atualize a lista antes de enviar."); return; }
     if (!selMestre) { toast.error("Selecione um template"); return; }
     if (modo !== "replicar" && selInst.size === 0) { toast.error("Selecione ao menos uma instância"); return; }
     if (mestres.find((m) => m.id === selMestre)?.reclassificado_marketing) { toast.error("Modelo reclassificado como Marketing; crie uma versão corrigida."); return; }
@@ -481,6 +531,7 @@ export default function MetaTemplates() {
     const adiadas = Number((data as any)?.adiadas_tier_250 || 0);
     setLoteAtual({
       mestreId: selMestre,
+      selecionadas: modo === "replicar" ? ((data as any)?.instancias || []).map((i: { id: string }) => i.id) : modo === "piloto" ? Array.from(selInst).slice(0, 1) : Array.from(selInst),
       ids: ((data as any)?.instancias || []).map((i: { id: string }) => i.id),
       adiadas: ((data as any)?.adiadas || []).map((i: { instancia_id: string }) => i.instancia_id),
     });
