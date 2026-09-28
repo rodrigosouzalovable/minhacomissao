@@ -296,7 +296,9 @@ serve(async (req) => {
     let instancias = instanciasRaw.filter((i: any) => serviceCall
       ? i.user_id === mestre.criado_por
       : i.user_id === usuario_id && mestre.criado_por === usuario_id);
-    if (Array.isArray(instancia_ids) && instancia_ids.length > 0 && !apenas_falhas && !isAdmin && instancias.length !== new Set(instancia_ids).size) {
+    // Mesmo para admins, não aceitar uma seleção parcialmente filtrada: isso
+    // faria o painel anunciar um lote completo enquanto alguns IDs sumiriam.
+    if (Array.isArray(instancia_ids) && instancia_ids.length > 0 && !apenas_falhas && instancias.length !== new Set(instancia_ids).size) {
       return new Response(JSON.stringify({ success: false, error: "Seleção contém número sem permissão. Atualize a lista." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     if (instancias.length === 0) {
@@ -363,6 +365,7 @@ serve(async (req) => {
           success: true,
           queued: false,
           total: 0,
+          selecionadas: Array.isArray(instancia_ids) ? new Set(instancia_ids).size : instancias.length + adiadasTier250.length,
           adiadas_tier_250: adiadasTier250.length,
           instancias: [],
           adiadas: adiadasTier250,
@@ -674,6 +677,7 @@ serve(async (req) => {
         success: true,
         queued: true,
         total: instancias.length,
+        selecionadas: Array.isArray(instancia_ids) ? new Set(instancia_ids).size : instancias.length + adiadasTier250.length,
         instancias: instancias.map((inst) => ({ id: inst.id, nome: inst.nome })),
         adiadas: adiadasTier250,
         adiadas_tier_250: adiadasTier250.length,
