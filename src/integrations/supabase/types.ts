@@ -12105,6 +12105,16 @@ export type Database = {
         }
         Returns: string
       }
+      resumo_aquecimento_leads_campanhas: {
+        Args: never
+        Returns: {
+          dia: string
+          enviados: number
+          falhas: number
+          instancias: number
+          tentativas: number
+        }[]
+      }
       retirar_meta_instancia_pool_manual: {
         Args: { p_instancia_id: string }
         Returns: {
