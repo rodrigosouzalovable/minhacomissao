@@ -19,6 +19,7 @@ export default function AquecimentoLeadsCampanhas({ registerRefresh }: { registe
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [error, setError] = useState("");
   const [detailsError, setDetailsError] = useState("");
@@ -61,6 +62,7 @@ export default function AquecimentoLeadsCampanhas({ registerRefresh }: { registe
       setError("Não foi possível atualizar o aquecimento. Tente novamente.");
     } finally {
       setLoading(false);
+      setLoaded(true);
     }
   }, [isAdmin, selected, fetchDetails]);
 
@@ -73,7 +75,7 @@ export default function AquecimentoLeadsCampanhas({ registerRefresh }: { registe
       <div className="font-semibold text-sm">Aquecimento · Leads Google Maps</div>
       {loading && <div role="status" className="text-muted-foreground">Atualizando aquecimento…</div>}
       {error && <div role="alert" className="text-destructive">{error}</div>}
-      {!loading && !error && !resumoHoje && <div className="text-muted-foreground">Nenhum envio hoje. {ultimoDia ? `Último envio: ${dataLabel(ultimoDia)}.` : "Nenhum envio registrado."}</div>}
+      {loaded && !loading && !error && !resumoHoje && <div className="text-muted-foreground">Nenhum envio hoje. {ultimoDia ? `Último envio: ${dataLabel(ultimoDia)}.` : "Nenhum envio registrado."}</div>}
       {resumos.map((r) => (
         <div key={r.dia} className="border rounded-md">
           <Button variant="ghost" className="h-auto min-h-10 w-full justify-between text-left px-2 py-2" onClick={() => {
@@ -87,7 +89,7 @@ export default function AquecimentoLeadsCampanhas({ registerRefresh }: { registe
           </Button>
           {selected === r.dia && <div className="border-t p-2 space-y-2">
             {detailsError && <div role="alert" className="text-destructive">{detailsError}</div>}
-            {detailsError && <Button size="sm" variant="outline" onClick={() => void fetchDetails(r.dia)}>Tentar novamente</Button>}
+            {detailsError && <Button size="sm" variant="outline" onClick={() => void fetchDetails(r.dia, page * PAGE_SIZE)}>Tentar novamente</Button>}
             {envios.map((item) => <div key={item.id} className="border-b pb-1 last:border-0 break-words">
               <div className="font-medium">{item.destino_telefone} · {item.status === "falha" ? "Falha" : item.respondeu_em ? "Respondeu" : item.lido_em ? "Lida" : item.entregue_em ? "Entregue" : "Enviada"}</div>
               <div className="text-muted-foreground">{new Date(item.enviado_em).toLocaleString("pt-BR")} · {item.template || "Sem template"} · Instância {item.instancia_id.slice(0, 8)}</div>

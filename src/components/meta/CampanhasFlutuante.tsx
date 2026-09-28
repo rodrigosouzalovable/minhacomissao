@@ -98,6 +98,8 @@ export default function CampanhasFlutuante() {
                </Button>
             </div>
 
+             {isAdmin && <AquecimentoLeadsCampanhas registerRefresh={(fn) => { refreshAquecimento.current = fn; }} />}
+
             {jobsAtivos.length > 0 && (
               <div className="p-2 space-y-1.5">
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground px-1">Ativas</div>
@@ -189,8 +191,6 @@ export default function CampanhasFlutuante() {
                 Nenhuma campanha ainda — inicie um disparo na aba Envio Meta.
               </div>
             )}
-
-             {isAdmin && <AquecimentoLeadsCampanhas registerRefresh={(fn) => { refreshAquecimento.current = fn; }} />}
 
           </PopoverContent>
         </Popover>
