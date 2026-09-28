@@ -86,6 +86,14 @@ Deno.serve(async (req) => {
     if (!modoTeste && !preparacaoManual && janelaExperimento === null) {
       return json({ success: true, skipped: true, motivo: "O experimento ainda não começou" });
     }
+    if (pontual) {
+      const { data: anterior, error } = await service.from("envio_meta_job").select("id,status")
+        .eq("folder_id", FOLDER_CERTIFICADO)
+        .eq("nome_campanha", `Certificado Digital · Casa dos Dados — D+20 — ${nomeCampanha()}`)
+        .limit(1).maybeSingle();
+      if (error) throw error;
+      if (anterior) return json({ success: true, skipped: true, motivo: "A campanha pontual de hoje já foi iniciada", job_id: anterior.id });
+    }
 
     const inicioDia = `${diaBrt()}T03:00:00.000Z`;
     const cotaPorInstancia = Number(cfg.limite_diario ?? 50);
