@@ -31,6 +31,8 @@ export function RetornoAlertChecker() {
   const navigate = useNavigate();
   const [fila, setFila] = useState<RetornoAlerta[]>([]);
   const [abrindo, setAbrindo] = useState(false);
+  const [concluindo, setConcluindo] = useState(false);
+  const [erroConclusao, setErroConclusao] = useState('');
   const [avisoAbertura, setAvisoAbertura] = useState('');
   const notifiedIds = useRef<Set<string>>(new Set());
 
@@ -94,7 +96,28 @@ export function RetornoAlertChecker() {
     };
   }, [user, checkRetornos]);
 
-  const fechar = () => { setAvisoAbertura(''); setFila((prev) => prev.slice(1)); };
+  const fechar = () => { setAvisoAbertura(''); setErroConclusao(''); setFila((prev) => prev.slice(1)); };
+
+  const concluirRetorno = async () => {
+    if (!alertaRetorno?.meta_contato_id || !user || concluindo) return;
+    setConcluindo(true);
+    setErroConclusao('');
+    try {
+      const { data, error } = await supabase.from('retornos')
+        .update({ status: 'concluido' })
+        .eq('id', alertaRetorno.id)
+        .eq('user_id', user.id)
+        .eq('status', 'pendente')
+        .select('id')
+        .maybeSingle();
+      if (error || !data) throw error ?? new Error('O retorno não está mais pendente. Atualize a página e confira o histórico.');
+      fechar();
+    } catch {
+      setErroConclusao('Não foi possível concluir o retorno. Tente novamente.');
+    } finally {
+      setConcluindo(false);
+    }
+  };
 
   const verRetorno = () => {
     if (!alertaRetorno) return;
@@ -175,6 +198,7 @@ export function RetornoAlertChecker() {
                 <p className="text-sm text-muted-foreground">Este retorno não registra uma conversa de origem. Consulte os detalhes em Ver retorno.</p>
               )}
               {avisoAbertura && <p role="alert" className="text-sm text-destructive">{avisoAbertura}</p>}
+              {erroConclusao && <p role="alert" className="text-sm text-destructive">{erroConclusao}</p>}
               {fila.length > 1 && (
                 <p className="text-xs text-muted-foreground">
                   +{fila.length - 1} outro(s) retorno(s) aguardando.
@@ -184,7 +208,13 @@ export function RetornoAlertChecker() {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={fechar}>Entendido</AlertDialogCancel>
+          {alertaRetorno?.meta_contato_id ? (
+            <AlertDialogCancel disabled={concluindo} onClick={(event) => { event.preventDefault(); void concluirRetorno(); }}>
+              {concluindo ? 'Concluindo...' : 'Concluído'}
+            </AlertDialogCancel>
+          ) : (
+            <AlertDialogCancel onClick={fechar}>Entendido</AlertDialogCancel>
+          )}
           <AlertDialogAction onClick={(event) => { event.preventDefault(); if (alertaRetorno?.meta_contato_id) void abrirConversa(); else verRetorno(); }} disabled={abrindo}>
             <MessageSquare className="mr-2 h-4 w-4" />{alertaRetorno?.meta_contato_id ? 'Abrir Conversa' : 'Ver retorno'}
           </AlertDialogAction>
