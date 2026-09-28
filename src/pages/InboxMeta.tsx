@@ -738,8 +738,9 @@ export default function InboxMeta() {
         return;
       }
       while (rows.length < limiteContatos && !exhausted) {
-        const { data, error } = await supabase.rpc('meta_inbox_tagged_qualified_page', {
+        const { data, error } = await supabase.rpc('meta_inbox_tagged_search_page', {
           p_etiquetas: etiquetaIds, p_qualificacoes: modoMeusClientes ? Array.from(mcMarcadores) : [],
+          p_busca: buscaDebounced.trim(),
           p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
           p_folder: currentFolderId, p_filtrar_folder: !modoMeusClientes,
           p_arquivado: abaAtiva === 'arquivados', p_filtrar_arquivado: !modoMeusClientes,
@@ -754,7 +755,29 @@ export default function InboxMeta() {
       }
       if (request !== contatosRequestRef.current) return;
       taggedPageRef.current = { key, rows, exhausted };
-      const lista = rows.slice(0, limiteContatos);
+      // Mantém contatos encontrados pelo nome do CRM ou pela instância quando a busca está ativa.
+      let lista = rows.slice(0, limiteContatos);
+      const buscaLocal = buscaDebounced.trim();
+      if (buscaLocal && lista.length < limiteContatos) {
+        const idsExistentes = new Set(lista.map(c => c.id));
+        const candidatoIds = Object.entries(nomesCRM)
+          .filter(([, nome]) => norm(nome).includes(norm(buscaLocal)))
+          .map(([telefone]) => telefone)
+          .slice(0, 200);
+        if (candidatoIds.length > 0) {
+          const { data: extras } = await supabase.from('meta_whatsapp_contatos').select(selectCols)
+            .in('telefone', candidatoIds).limit(200);
+          if (request !== contatosRequestRef.current) return;
+          const candidatos = (extras as MetaContato[] | null) ?? [];
+          for (const contato of candidatos) {
+            if (idsExistentes.has(contato.id)) continue;
+            // A própria consulta paginada continua sendo a autoridade para etiquetas/permissões.
+            if (!rows.some(row => row.id === contato.id)) continue;
+            lista.push(contato);
+            idsExistentes.add(contato.id);
+          }
+        }
+      }
       setContatos(lista);
       contatoIdsRef.current = lista.map(c => c.id);
       void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current)]);
