@@ -11244,6 +11244,13 @@ export type Database = {
         Args: { p_contato_id: string; p_somente_ia?: boolean }
         Returns: string
       }
+      buscar_aberturas_cnpj_certificado_por_telefone: {
+        Args: { p_suffixes: string[] }
+        Returns: {
+          data_abertura: string
+          suffix: string
+        }[]
+      }
       buscar_devedores_por_documento: {
         Args: { p_credor?: string; p_doc: string }
         Returns: {
