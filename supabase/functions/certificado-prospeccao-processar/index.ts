@@ -309,18 +309,16 @@ Deno.serve(async (req) => {
       if (jobRedistribuirError) throw jobRedistribuirError;
       if (!jobRedistribuir) return json({ error: "Campanha do Certificado não encontrada" }, 404);
 
-      const redistribuidas: Array<{ instancia_id: string; nome: string; quantidade: number }> = [];
-      for (const instancia of participantes) {
-        const limite = Math.min(50, Math.max(0, Number(instancia.certificado_limite_diario ?? 50)));
-        const { data: quantidade, error } = await service.rpc("certificado_redistribuir_pendentes_instancia", {
-          p_job_id: redistribuirJobId,
-          p_instancia_id: instancia.id,
-          p_limite: limite,
-        });
-        if (error) throw error;
-        const movidas = Number(quantidade ?? 0);
-        if (movidas > 0) redistribuidas.push({ instancia_id: instancia.id, nome: instancia.nome, quantidade: movidas });
-      }
+      const { data: redistribuicao, error: redistribuicaoError } = await service.rpc("certificado_redistribuir_pendentes_job", {
+        p_job_id: redistribuirJobId,
+      });
+      if (redistribuicaoError) throw redistribuicaoError;
+      const nomesPorId = new Map(participantes.map((instancia: any) => [instancia.id, instancia.nome]));
+      const redistribuidas = (redistribuicao ?? []).map((item: any) => ({
+        instancia_id: item.instancia_id,
+        nome: nomesPorId.get(item.instancia_id) ?? "Instância Meta",
+        quantidade: Number(item.quantidade ?? 0),
+      }));
 
       const idsAnteriores = Array.isArray(jobRedistribuir.instancia_ids) ? jobRedistribuir.instancia_ids : [];
       const mapaAnterior = jobRedistribuir.template_id_by_instance && typeof jobRedistribuir.template_id_by_instance === "object" ? jobRedistribuir.template_id_by_instance : {};
