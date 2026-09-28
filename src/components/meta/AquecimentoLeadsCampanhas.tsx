@@ -68,7 +68,8 @@ export default function AquecimentoLeadsCampanhas({ registerRefresh }: { registe
 
   registerRefresh(refresh);
   const initialRefresh = useRef(refresh);
-  useEffect(() => { void initialRefresh.current(); }, []);
+  initialRefresh.current = refresh;
+  useEffect(() => { if (isAdmin) void initialRefresh.current(); }, [isAdmin]);
   if (!isAdmin) return null;
   const hoje = diaBrt();
   const resumoHoje = resumos.find((r) => r.dia === hoje);
