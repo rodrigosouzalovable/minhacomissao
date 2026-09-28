@@ -664,6 +664,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   const bloqueadasQualidade = await removerInstanciasComQuedaQualidade(job, bloqueadasRun);
 
   const instanciaCertificado = typeof varsPend.certificado_instancia_id === 'string' ? varsPend.certificado_instancia_id : null;
+  const ehRenovacaoAnual = instanciaCertificado && varsPend.certificado_tipo_oferta === 'renovacao_anual';
   const instanciasPermitidas: string[] = instanciaCertificado ? [instanciaCertificado] : (job.instancia_ids || []);
   const instanciaIdsDisponiveis: string[] = instanciasPermitidas
     .filter((id: string) => !bloqueadasQualidade.includes(id) && !exclItem.includes(id));
@@ -807,6 +808,29 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   }
   await supabase.from('envio_meta_job_item')
     .update({ template_id_resolvido: tplId }).eq('id', pend.id);
+
+  // Reserva custo estimado ANTES do envio. A atualização atômica impede duas
+  // campanhas de ultrapassarem juntas o teto compartilhado de aquecimento.
+  if (ehRenovacaoAnual) {
+    const dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const { data: orc, error: orcError } = await supabase.from('meta_aquecimento_orcamento')
+      .select('custo_utility,custo_marketing').eq('dia', dia).maybeSingle();
+    const { data: templateCusto, error: tplError } = await supabase.from('meta_whatsapp_templates')
+      .select('categoria').eq('id', tplId).maybeSingle();
+    if (orcError || tplError || !templateCusto) {
+      await supabase.from('envio_meta_job_item').update({ status: 'pendente', instancia_id: null, instancia_nome: null }).eq('id', pend.id).eq('status', 'processando');
+      await supabase.from('envio_meta_job').update({ status: 'pausado', status_motivo: 'Orçamento indisponível; envio interrompido por segurança', proximo_em: null }).eq('id', job.id);
+      return { advanced: false, stop: true };
+    }
+    const categoria = String(templateCusto.categoria ?? '').toUpperCase();
+    const custo = categoria === 'MARKETING' ? Number(orc?.custo_marketing ?? 0.20) : Number(orc?.custo_utility ?? 0.04);
+    const { data: reservado, error: reservaErro } = await supabase.rpc('certificado_reservar_orcamento_envio', { p_dia: dia, p_custo: custo });
+    if (reservaErro || reservado !== true) {
+      await supabase.from('envio_meta_job_item').update({ status: 'pendente', instancia_id: null, instancia_nome: null }).eq('id', pend.id).eq('status', 'processando');
+      await supabase.from('envio_meta_job').update({ status: 'pausado', status_motivo: reservaErro ? 'Orçamento indisponível; envio interrompido por segurança' : 'Limite diário de R$ 120 atingido', proximo_em: null }).eq('id', job.id);
+      return { advanced: false, stop: true };
+    }
+  }
 
   const cliente = {
     telefone: pend.telefone,

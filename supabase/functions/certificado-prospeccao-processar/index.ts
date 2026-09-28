@@ -113,25 +113,34 @@ Deno.serve(async (req) => {
       let metaConfirmados = cotaPorInstancia;
       if (modoCasaDados) {
         const { data: marcadas } = await service.from("meta_whatsapp_instances")
-          .select("id,saude_quality,certificado_limite_diario").eq("provider", "meta").eq("ativo", true)
+           .select("id,saude_quality,certificado_limite_diario,saude_ban_info,pausa_automatica_ate").eq("provider", "meta").eq("ativo", true)
           .eq("instancia_teste_aquecimento", false)
           .eq("aquecimento_meta_ativo", true)
           .eq("estado_pool", "ativo").eq("pool_fora_manual", false)
           .eq("saude_status", "CONNECTED").not("meta_bm_id", "is", null);
         const aptasQualidade = (marcadas ?? []).filter((instancia: any) => {
           const qualidade = String(instancia.saude_quality ?? "UNKNOWN").toUpperCase();
-          return qualidade === "GREEN" || qualidade === "UNKNOWN" || qualidade === "";
+          return (qualidade === "GREEN" || qualidade === "UNKNOWN" || qualidade === "") && !instancia.saude_ban_info && (!instancia.pausa_automatica_ate || new Date(instancia.pausa_automatica_ate) <= new Date());
         });
         const idsMarcadas = aptasQualidade.map((instancia: any) => instancia.id).filter((id: string) => instanciaIdsInicio.length === 0 || instanciaIdsInicio.includes(id));
-        const { data: aprovadas } = idsMarcadas.length ? await service.from("meta_whatsapp_templates")
-          .select("instancia_id").in("instancia_id", idsMarcadas).eq("nome_template", templateNome)
+         const { data: aprovadas } = idsMarcadas.length ? await service.from("meta_whatsapp_templates")
+           .select("instancia_id,categoria").in("instancia_id", idsMarcadas).eq("nome_template", templateNome)
           .eq("idioma", templateIdioma).eq("status", "approved") : { data: [] };
         const idsAprovadas = new Set((aprovadas ?? []).map((template: any) => template.instancia_id));
+         const custoConservador = (aprovadas ?? []).every((template: any) => String(template.categoria ?? "").toUpperCase() === "UTILITY") ? 0.04 : 0.20;
         metaConfirmados = aptasQualidade
           .filter((instancia: any) => idsAprovadas.has(instancia.id))
-          .reduce((total: number, instancia: any) => total + Number(instancia.certificado_limite_diario ?? 50), 0);
+           .reduce((total: number, instancia: any) => total + Math.min(50, Math.max(0, Number(instancia.certificado_limite_diario ?? 50))), 0);
       }
       if (metaConfirmados === 0) return json({ success: true, skipped: true, motivo: "Nenhum número marcado está apto e com o template aprovado" });
+      if (modoCasaDados && tipoExperimento === "renovacao_anual") {
+        const { data: orc, error: orcErro } = await service.from("meta_aquecimento_orcamento")
+          .select("teto_reais,gasto_reais,custo_utility").eq("dia", diaBrt()).maybeSingle();
+        if (orcErro) throw orcErro;
+        const saldo = Math.max(0, Math.min(120, Number(orc?.teto_reais ?? 120)) - Number(orc?.gasto_reais ?? 0));
+        metaConfirmados = Math.min(metaConfirmados, Math.floor(saldo / Math.max(custoConservador, Number(orc?.custo_utility ?? 0.04))));
+        if (!metaConfirmados) return json({ success: true, skipped: true, motivo: "Limite diário de R$ 120 do aquecimento atingido" });
+      }
       const contarConfirmados = async () => {
         const { count, error } = await service.from("certificado_leads")
           .select("id", { count: "exact", head: true })
@@ -263,12 +272,19 @@ Deno.serve(async (req) => {
         return { instancia, usados: Number(count ?? 0) };
       }));
       for (const { instancia, usados } of contagens) {
-        const limiteInstancia = Number(instancia.certificado_limite_diario ?? 50);
+         const limiteInstancia = Math.min(50, Math.max(0, Number(instancia.certificado_limite_diario ?? 50)));
         const saldo = Math.max(0, limiteInstancia - usados);
         if (saldo > 0) cotasRestantes.set(instancia.id, saldo);
       }
       restante = [...cotasRestantes.values()].reduce((total, cota) => total + cota, 0);
       if (pontual) restante = Math.min(restante, 50);
+      if (tipoExperimento === "renovacao_anual") {
+        const { data: orc, error: orcErro } = await service.from("meta_aquecimento_orcamento")
+          .select("teto_reais,gasto_reais,custo_utility").eq("dia", diaBrt()).maybeSingle();
+        if (orcErro) throw orcErro;
+        const saldo = Math.max(0, Math.min(120, Number(orc?.teto_reais ?? 120)) - Number(orc?.gasto_reais ?? 0));
+        restante = Math.min(restante, Math.floor(saldo / Math.max(0.04, Number(orc?.custo_utility ?? 0.04))));
+      }
       if (!restante) return json({ success: true, skipped: true, motivo: "Todos os números aptos já atingiram suas metas de hoje" });
     } else if (!preparacaoManual && !modoTeste) {
       const { count, error } = await service.from("certificado_prospeccao_envios")
@@ -411,7 +427,7 @@ Deno.serve(async (req) => {
     for (const instancia of participantes) {
       const candidatosInstancia = candidatosReserva.filter((candidato: any) => candidato.instancia.id === instancia.id);
       if (!candidatosInstancia.length) continue;
-      const limiteInstancia = Number(instancia.certificado_limite_diario ?? cotaPorInstancia);
+       const limiteInstancia = modoCasaDados ? Math.min(50, Math.max(0, Number(instancia.certificado_limite_diario ?? 50))) : Number(instancia.certificado_limite_diario ?? cotaPorInstancia);
       const { data: criadas, error } = await service.rpc("certificado_reservar_lote_instancia", {
         p_instancia_id: instancia.id,
         p_limite: limiteInstancia,

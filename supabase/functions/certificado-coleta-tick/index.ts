@@ -36,13 +36,20 @@ Deno.serve(async (req) => {
     if (!etapa) return resposta({ success: true, skipped: true, motivo: "Fora do calendário do piloto" });
     const filtro = (query: any) => query.in("cnae", CNAES_PILOTO).eq("data_abertura", etapa.dataAlvo);
 
-    const { count: marcadas } = await service.from("meta_whatsapp_instances")
-      .select("id", { count: "exact", head: true }).eq("provider", "meta").eq("ativo", true)
+    const { data: marcadas, error: instanciasError } = await service.from("meta_whatsapp_instances")
+      .select("id, certificado_limite_diario, saude_quality, saude_ban_info, pausa_automatica_ate").eq("provider", "meta").eq("ativo", true)
       .eq("instancia_teste_aquecimento", false).eq("aquecimento_meta_ativo", true)
-      .eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN")
+      .eq("saude_status", "CONNECTED")
       .eq("estado_pool", "ativo").eq("pool_fora_manual", false);
-    const limiteDiario = Math.min(2500, Math.max(1, Number(marcadas ?? 0) * 50));
-    if (!marcadas) return resposta({ success: true, skipped: true, motivo: "Nenhuma instância GREEN apta para o piloto" });
+    if (instanciasError) throw instanciasError;
+    const saudaveis = (marcadas ?? []).filter((i: any) => ["GREEN", "UNKNOWN", ""].includes(String(i.saude_quality ?? "").toUpperCase()) && !i.saude_ban_info && (!i.pausa_automatica_ate || new Date(i.pausa_automatica_ate) <= new Date()));
+    const { data: modelos, error: modelosError } = await service.from("meta_whatsapp_templates")
+      .select("instancia_id").in("instancia_id", saudaveis.length ? saudaveis.map((i: any) => i.id) : ["00000000-0000-0000-0000-000000000000"])
+      .eq("nome_template", "cnpj_atualizado_2").eq("idioma", "pt_BR").eq("status", "approved");
+    if (modelosError) throw modelosError;
+    const aprovadas = new Set((modelos ?? []).map((m: any) => m.instancia_id));
+    const limiteDiario = Math.min(2500, saudaveis.filter((i: any) => aprovadas.has(i.id)).reduce((total: number, i: any) => total + Math.min(50, Math.max(0, Number(i.certificado_limite_diario ?? 50))), 0));
+    if (!limiteDiario) return resposta({ success: true, skipped: true, motivo: "Nenhuma instância marcada está apta e com modelo aprovado" });
     const { count: confirmados, error: confirmadosError } = await filtro(service.from("certificado_leads")
       .select("id", { count: "exact", head: true })
       .eq("situacao", "novo").eq("whatsapp_status", "com_whatsapp").not("telefone_principal", "is", null));
