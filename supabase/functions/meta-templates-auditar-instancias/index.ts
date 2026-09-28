@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
       if (["BANNED", "RESTRICTED", "FLAGGED", "DISABLED", "PENDING_PAYMENT"].includes(status)) {
         return `situação na Meta: ${status}`;
       }
-      if (status && status !== "CONNECTED" && status !== "PENDING_REVIEW") {
+       if (status !== "CONNECTED") {
         return `não conectado (${status})`;
       }
       if (i.templates_auto_pausado_ate && new Date(i.templates_auto_pausado_ate) > new Date()) {

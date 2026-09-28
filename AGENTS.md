@@ -9,5 +9,5 @@
 - A prospecção anual do Certificado roda em dias úteis, prioriza a data exata e amplia até ±15 dias, usa até 50 por instância marcada entre 08h–16h, com reserva atômica por número e custo estimado (teto conjunto R$120/dia); exige Meta CONNECTED, qualidade GREEN/UNKNOWN e template aprovado.
 - O painel Campanhas exibe somente jobs comuns; a prospecção do Certificado cria o job pausado para preparação e só o inicia após inserir destinatários e vínculos da Casa dos Dados, evitando campanhas vazias e sem misturar Google Maps.
 - Campanhas pontuais D+20 da Casa dos Dados são limitadas a 50 contatos já verificados e administradas separadamente da renovação diária, para impedir duplicidade e consumo acidental da coleta.
-- Modelos automáticos usam identidade de serviço e só contam aprovação confirmada pela Meta.
+- Modelos Meta automáticos usam serviço, exigem aprovação confirmada e só entram em instâncias GREEN/CONNECTED do mesmo proprietário.
 - Respostas automáticas Meta/UAZAPI são registradas uma vez por mensagem, após confirmar envio anterior no mesmo número e instância.
