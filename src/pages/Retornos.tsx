@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { CopyButton } from '@/components/CopyButton';
+import { MetaNovaConversaDialog } from '@/components/inbox/meta/MetaNovaConversaDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -124,6 +126,13 @@ interface Retorno {
   };
 }
 
+interface MetaInstance {
+  id: string;
+  nome: string | null;
+  display_phone: string | null;
+  provider?: string | null;
+}
+
 export default function Retornos() {
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
@@ -137,7 +146,7 @@ export default function Retornos() {
   const [loadingRetornos, setLoadingRetornos] = useState(true);
   const [nomeError, setNomeError] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [sendingWhatsApp, setSendingWhatsApp] = useState<string | null>(null);
+  const [retornoParaMensagem, setRetornoParaMensagem] = useState<Retorno | null>(null);
   
   // Admin filter states
   const [funcionarios, setFuncionarios] = useState<{ id: string; nome: string }[]>([]);
@@ -161,6 +170,26 @@ export default function Retornos() {
     valorPrimeiraParcela: '',
     valorDemaisParcelas: '',
     dataPrimeiroPagamento: '',
+  });
+
+  const { data: profile } = useQuery({
+    queryKey: ['my-profile', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('nome').eq('id', user?.id || '').single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: metaInstances } = useQuery({
+    queryKey: ['meta-instances-for-retornos', user?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('get_meta_whatsapp_active_instances_for_sending');
+      if (error) throw error;
+      return ((data || []) as MetaInstance[]).filter(instance => (instance.provider ?? 'meta') === 'meta');
+    },
+    enabled: !!user,
   });
 
   // Load retornos when user and role are ready
@@ -518,81 +547,40 @@ export default function Retornos() {
     }
   };
 
-  const handleEnviarWhatsApp = async (retorno: Retorno) => {
-    if (!retorno.valor_total || !retorno.numero_parcelas || !retorno.valor_primeira_parcela || !retorno.valor_demais_parcelas || !retorno.data_primeiro_pagamento) {
+  const abrirEnvioMeta = (retorno: Retorno) => {
+    if (!retorno.cliente_telefone) {
       toast({
         variant: 'destructive',
-        title: 'Dados incompletos',
-        description: 'Este retorno não possui todos os dados do acordo.',
+        title: 'Telefone não cadastrado',
+        description: 'Este cliente não possui telefone cadastrado.',
       });
       return;
     }
-
-    setSendingWhatsApp(retorno.id);
-
-    try {
-      const primeiroNome = retorno.cliente_nome.split(' ')[0];
-      const dataPagamentoFormatada = format(
-        new Date(retorno.data_primeiro_pagamento + 'T00:00:00'),
-        "dd/MM/yyyy"
-      );
-
-      let mensagem: string;
-
-      if (retorno.numero_parcelas === 1) {
-        mensagem = `Olá ${primeiroNome}, tudo bem? Sou do departamento de confirmação de acordos das Lojas Novo Mundo, e estou entrando em contato para finalizamos o acordo que negociamos no valor de ${formatCurrencyDisplay(retorno.valor_total)} para o dia ${dataPagamentoFormatada}. Posso enviar o boleto para pagamento?`;
-      } else {
-        const parcelasRestantes = retorno.numero_parcelas - 1;
-        mensagem = `Olá ${primeiroNome}, tudo bem? Sou do departamento de confirmação de acordos das Lojas Novo Mundo, e estou entrando em contato para finalizamos o acordo que negociamos no valor de ${formatCurrencyDisplay(retorno.valor_primeira_parcela)} para o dia ${dataPagamentoFormatada} e o restante em ${parcelasRestantes} DE ${formatCurrencyDisplay(retorno.valor_demais_parcelas)} para o dia ${dataPagamentoFormatada}. Gostaria de alterar essa negociação ou posso enviar o boleto para pagamento?`;
-      }
-
-      // Fetch active instance for credentials
-      const { data: instData } = await supabase
-        .from('user_whatsapp_instances')
-        .select('id, server_url, instance_token')
-        .eq('user_id', user!.id)
-        .eq('ativo', true)
-        .eq('apenas_lembretes', false)
-        .limit(1)
-        .maybeSingle();
-
-      const sendBody: any = { telefone: retorno.cliente_telefone, mensagem };
-      if (instData) {
-        sendBody.uazapi_server_url = instData.server_url;
-        sendBody.uazapi_instance_token = instData.instance_token;
-        sendBody.instancia_id = instData.id;
-      }
-
-      const { error } = await supabase.functions.invoke('send-whatsapp', {
-        body: sendBody,
-      });
-
-      if (error) throw error;
-
-      // Atualizar o campo whatsapp_enviado_em
-      await supabase
-        .from('retornos')
-        .update({ whatsapp_enviado_em: new Date().toISOString() })
-        .eq('id', retorno.id);
-
-      // Atualizar estado local
-      setRetornos(prev =>
-        prev.map(r => r.id === retorno.id ? { ...r, whatsapp_enviado_em: new Date().toISOString() } : r)
-      );
-
-      toast({
-        title: 'Mensagem enviada!',
-        description: `WhatsApp enviado para ${primeiroNome}.`,
-      });
-    } catch (error) {
-      console.error('WhatsApp error:', error);
+    if (!metaInstances?.length) {
       toast({
         variant: 'destructive',
-        title: 'Erro ao enviar WhatsApp',
-        description: 'Não foi possível enviar a mensagem. Tente novamente.',
+        title: 'Meta não configurada',
+        description: 'Nenhuma instância da API Oficial Meta está disponível para envio.',
       });
-    } finally {
-      setSendingWhatsApp(null);
+      return;
+    }
+    setRetornoParaMensagem(retorno);
+  };
+
+  const registrarEnvioMeta = async () => {
+    const retornoId = retornoParaMensagem?.id;
+    if (!retornoId) return;
+    const enviadoEm = new Date().toISOString();
+    setRetornos(prev => prev.map(r => r.id === retornoId ? { ...r, whatsapp_enviado_em: enviadoEm } : r));
+    setRetornoParaMensagem(null);
+    const { error } = await supabase.from('retornos').update({ whatsapp_enviado_em: enviadoEm }).eq('id', retornoId);
+    if (error) {
+      console.error('Erro ao registrar envio Meta no retorno:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Template enviado, mas o indicador não foi salvo',
+        description: 'Atualize a página para conferir o histórico do retorno.',
+      });
     }
   };
 
@@ -980,30 +968,25 @@ export default function Retornos() {
                       </div>
 
                       <div className="flex gap-2 sm:flex-col">
-                        {retorno.status !== 'concluido' && retorno.valor_total && (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-green-600 hover:bg-green-50 hover:text-green-700"
-                              onClick={() => handleEnviarWhatsApp(retorno)}
-                              disabled={sendingWhatsApp === retorno.id}
-                            >
-                              {sendingWhatsApp === retorno.id ? (
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <MessageCircle className="h-4 w-4 mr-1" />
-                              )}
-                              WhatsApp
-                            </Button>
-                            {retorno.whatsapp_enviado_em && (
-                              <Badge variant="secondary" className="text-xs">
-                                <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
-                                Enviado
-                              </Badge>
-                            )}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-green-600 hover:bg-green-50 hover:text-green-700"
+                            onClick={() => abrirEnvioMeta(retorno)}
+                            disabled={!retorno.cliente_telefone}
+                            title={retorno.cliente_telefone ? 'Enviar template Meta' : 'Telefone não cadastrado'}
+                          >
+                            <MessageCircle className="h-4 w-4 mr-1" />
+                            WhatsApp
+                          </Button>
+                          {retorno.whatsapp_enviado_em && (
+                            <Badge variant="secondary" className="text-xs">
+                              <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
+                              Enviado
+                            </Badge>
+                          )}
+                        </div>
                         {retorno.status !== 'concluido' && (
                           <Button
                             size="sm"
@@ -1032,6 +1015,16 @@ export default function Retornos() {
           )}
         </div>
       </div>
+      <MetaNovaConversaDialog
+        open={!!retornoParaMensagem}
+        onOpenChange={(open) => { if (!open) setRetornoParaMensagem(null); }}
+        instancias={metaInstances || []}
+        atendenteNome={profile?.nome || undefined}
+        folderId={null}
+        initialTelefone={retornoParaMensagem?.cliente_telefone || ''}
+        initialNome={retornoParaMensagem?.cliente_nome || ''}
+        onSent={() => { void registrarEnvioMeta(); }}
+      />
     </AppLayout>
   );
 }
