@@ -378,7 +378,6 @@ Deno.serve(async (req) => {
           updatePayload.teto_escada = Number(escada[0] ?? 20);
           updatePayload.dias_green_consecutivos = 0;
           updatePayload.green_contado_dia = null;
-
         }
 
         // Inclui os números próprios com liberação manual ou antiga opção desligada.
@@ -421,8 +420,6 @@ Deno.serve(async (req) => {
           );
           updatePayload.recuperacao_proximo_envio_em = new Date().toISOString();
         }
-
-
         const { linhaPrevisao } = await import('../_shared/meta-recuperacao-aviso.ts');
 
         // ===== Volta para GREEN: conta os dias e encerra a recuperação =====
