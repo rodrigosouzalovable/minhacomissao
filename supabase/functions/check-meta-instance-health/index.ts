@@ -6,6 +6,7 @@ import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-in
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
 import { isInformationalDisplayNameLimit } from '../_shared/meta-name-status.ts';
+import { RECUPERACAO_OWNER_ID, bloqueioRecuperacaoMeta } from '../_shared/meta-aquecimento-alvo.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -367,10 +368,12 @@ Deno.serve(async (req) => {
           updatePayload.dias_green_consecutivos = 0;
           updatePayload.green_contado_dia = null;
 
-          // Aquecimento automático só nos números próprios (parceiro Meta não usa).
-           if (recupAuto && inst.aquecimento_qualidade_permitido === true &&
+          // Apenas números oficiais do proprietário, independentemente do antigo switch.
+           if (recupAuto && inst.user_id === RECUPERACAO_OWNER_ID &&
                inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
-               String(r.status).toUpperCase() === 'CONNECTED' && !r.ban_info && !restritoMeta && !pausaViolacaoConta) {
+                inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
+                !r.ban_info && !restritoMeta && !pausaViolacaoConta &&
+                !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {
             // Já estava em recuperação e piorou → reduz o volume em vez de subir.
             const piorou = inst.recuperacao_ativa === true;
             updatePayload.recuperacao_ativa = true;
@@ -393,9 +396,10 @@ Deno.serve(async (req) => {
           !pausaViolacaoConta && !caiu && (qual === 'YELLOW' || qual === 'RED') &&
           inst.recuperacao_ativa !== true &&
           inst.qualidade_liberada_manual !== true &&
-          inst.aquecimento_qualidade_permitido === true &&
+           inst.user_id === RECUPERACAO_OWNER_ID &&
            inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
-           String(r.status).toUpperCase() === 'CONNECTED' && !r.ban_info && !restritoMeta &&
+            inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
+            !r.ban_info && !restritoMeta && !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo) &&
           recupAuto
         ) {
           entrouPorVarredura = true;
@@ -478,7 +482,7 @@ Deno.serve(async (req) => {
               ? `Quarentena até ${new Date(updatePayload.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (fora das campanhas; segue atendendo conversas recebidas).\n`
               : '') +
             (updatePayload.recuperacao_ativa
-               ? `🔥 Recuperação ligada: até ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia para UAZAPI e testes Meta aptos da caixa AQUECIMENTO (09h–19h, intervalos de 20–40 min).\n`
+                ? `🔥 Recuperação ligada: até ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia somente para UAZAPI conectados da caixa AQUECIMENTO (09h–19h, intervalos de 20–40 min).\n`
               : `ℹ️ Aquecimento automático não está liberado para este número.\n`) +
             `Volta com teto de ${escada[0] ?? 20}/dia e sobe em escada se ficar GREEN.\n` +
             `${linhaPrevisao(qual, 0, diasGreenAlta)}`;

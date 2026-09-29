@@ -1,6 +1,6 @@
 // Recuperação automática de qualidade dos números Meta (cron a cada 10 min).
 // Números marcados com recuperacao_ativa (queda para YELLOW/RED) enviam, sozinhos,
-// um volume baixo de mensagens para UAZAPI e testes Meta aptos da caixa
+// um volume baixo de mensagens somente para UAZAPI conectados da caixa
 // AQUECIMENTO, atendidos pelo IAGO. Não substitui a avaliação da Meta.
 //
 // Limites obrigatórios (anti-ban e anti-storm):
@@ -19,6 +19,8 @@ import {
   escolherTemplateAprovado,
   hojeBrt,
   sorteio,
+  RECUPERACAO_OWNER_ID,
+  bloqueioRecuperacaoMeta,
 } from "../_shared/meta-aquecimento-alvo.ts";
 
 const corsHeaders = {
@@ -71,12 +73,12 @@ Deno.serve(async (req) => {
 
     let q = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, saude_status, saude_ban_info, pausa_automatica_motivo, partner_client_id, recuperacao_ativa, recuperacao_desde, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, dias_green_consecutivos, quarentena_ate, ativo, provider, instancia_teste_aquecimento")
+      .select("id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, saude_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, partner_client_id, recuperacao_ativa, recuperacao_desde, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, dias_green_consecutivos, quarentena_ate, ativo, provider, instancia_teste_aquecimento")
       .eq("ativo", true)
+      .eq("user_id", RECUPERACAO_OWNER_ID)
       .eq("provider", "meta")
       .eq("instancia_teste_aquecimento", false)
-      // Só os números próprios: parceiros Meta não usam o aquecimento de qualidade.
-      .eq("aquecimento_qualidade_permitido", true)
+      .is("partner_client_id", null)
       .eq("recuperacao_ativa", true);
     if (instanciaId) q = q.eq("id", instanciaId);
     const { data: insts, error: instError } = await q.order("recuperacao_proximo_envio_em", { ascending: true, nullsFirst: true });
@@ -84,7 +86,7 @@ Deno.serve(async (req) => {
 
     if (!insts?.length) return json({ ok: true, skipped: "nenhuma_em_recuperacao" });
 
-    const destinos = await destinosAquecimento(supabase, { incluirMetaTeste: true });
+    const destinos = await destinosAquecimento(supabase);
     if (destinos.length === 0) {
       return json({ ok: true, skipped: "nenhum destino conectado na caixa AQUECIMENTO" });
     }
@@ -114,10 +116,17 @@ Deno.serve(async (req) => {
 
     for (const inst of insts as any[]) {
       if (processadas >= MAX_INSTANCIAS_POR_RUN) break;
+      const restricoes = inst.saude_restricoes;
+      const phoneEntities = Array.isArray(restricoes?.phone_health?.entities) ? restricoes.phone_health.entities : [];
+      const envioRestrito = phoneEntities.some((e: any) =>
+        String(e?.entity_type).toUpperCase() === "PHONE_NUMBER" &&
+        ["LIMITED", "BLOCKED", "UNAVAILABLE", "RESTRICTED"].includes(String(e?.can_send_message).toUpperCase()) &&
+        !/quality|reputation|lowered/i.test(String(e?.additional_info || ""))
+      );
       if (inst.partner_client_id || String(inst.saude_status).toUpperCase() !== "CONNECTED" ||
           !["YELLOW", "RED"].includes(String(inst.saude_quality).toUpperCase()) ||
           (inst.saude_ban_info && Object.keys(inst.saude_ban_info).length > 0) ||
-          /account_violation|payment|pagamento|ban|blocked|restri[cç]/i.test(String(inst.pausa_automatica_motivo || ""))) {
+          envioRestrito || bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {
         resultados.push({ instancia: inst.nome, skip: "remetente_inapto" });
         continue;
       }
@@ -231,7 +240,7 @@ Deno.serve(async (req) => {
               `${await linhaBmInstancia(supabase, inst)}\n` +
               `Qualidade atual: ${String(inst.saude_quality || "UNKNOWN").toUpperCase()} · dia ${diasEmRecup} de recuperação\n` +
               `Meta de hoje: ${metaDia} mensagens (intervalos de 20–40 min, 09h–19h)\n` +
-              `Destino: números conectados UAZAPI ou testes Meta da caixa AQUECIMENTO\n` +
+               `Destino: somente números conectados UAZAPI da caixa AQUECIMENTO\n` +
               (inst.quarentena_ate
                 ? `Fora das campanhas até ${new Date(inst.quarentena_ate).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}\n`
                 : "") +
