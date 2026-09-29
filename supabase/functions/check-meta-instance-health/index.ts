@@ -397,7 +397,6 @@ Deno.serve(async (req) => {
         if (
           !pausaViolacaoConta && !caiu && (qual === 'YELLOW' || qual === 'RED') &&
           inst.recuperacao_ativa !== true &&
-          inst.qualidade_liberada_manual !== true &&
           inst.user_id === RECUPERACAO_OWNER_ID &&
           inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
           inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
