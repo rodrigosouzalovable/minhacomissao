@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Recuperar números Meta próprios RED/YELLOW somente com UAZAPI conectado de qualquer dono; validar bloqueios e agenda duplicada
+- [x] Recuperar números Meta próprios RED/YELLOW somente com UAZAPI conectado de qualquer dono; simular bloqueios e retirar agenda duplicada
 - [x] Mostrar todos os status por instância e distinguir seleção, submissão, falha e adiamento sem reenviar automaticamente
 - [x] Acompanhar verificação e aplicação Meta por instância; mostrar categoria real e parar lotes reclassificados
 - [x] Isolar templates Meta por proprietário e aplicar modelos marcados somente às próprias instâncias conectadas e GREEN, reutilizando a verificação diária
