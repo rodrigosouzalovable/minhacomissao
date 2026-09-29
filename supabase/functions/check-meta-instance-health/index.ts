@@ -230,6 +230,8 @@ Deno.serve(async (req) => {
         const detalheLimitacao = String(r.limitacao_numero || '');
         const limitacaoNomeInformativa = isInformationalDisplayNameLimit(detalheLimitacao, nomeAtual);
         const restritoMeta = restritoMetaBruto && !limitacaoNomeInformativa;
+        // LIMITED por qualidade/reputação não significa bloqueio total do envio.
+        const apenasQualidadeLimitada = r.limitacao_tipo === 'qualidade' && !comercialBloqueado;
         r.restrito_meta = restritoMeta;
         r.limitacao_nome_informativa = limitacaoNomeInformativa;
         const limitacaoPorQualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalheLimitacao) ||
@@ -372,7 +374,7 @@ Deno.serve(async (req) => {
            if (recupAuto && inst.user_id === RECUPERACAO_OWNER_ID &&
                inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
                 inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
-                !r.ban_info && !restritoMeta && !pausaViolacaoConta &&
+                !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) && !pausaViolacaoConta &&
                 !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {
             // Já estava em recuperação e piorou → reduz o volume em vez de subir.
             const piorou = inst.recuperacao_ativa === true;
@@ -399,7 +401,7 @@ Deno.serve(async (req) => {
            inst.user_id === RECUPERACAO_OWNER_ID &&
            inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
             inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
-            !r.ban_info && !restritoMeta && !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo) &&
+            !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) && !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo) &&
           recupAuto
         ) {
           entrouPorVarredura = true;

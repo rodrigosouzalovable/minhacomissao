@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +37,6 @@ function previsao(qualidade: string | null, diasGreen: number) {
 }
 
 export function RecuperacaoQualidadePanel() {
-  const queryClient = useQueryClient();
 
   const { data } = useQuery({
     queryKey: ['meta-recuperacao-panel'],
