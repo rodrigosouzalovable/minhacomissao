@@ -298,8 +298,26 @@ Deno.serve(async (req) => {
 
         if (user_id && origem !== 'ia') {
           await supabase.from('iago_conversa_estado')
-            .update({ aguardando_humano: true, followup_em: null })
+            .update({
+              aguardando_humano: true,
+              followup_em: null,
+              followup_feito: true,
+              followup_etapa: 3,
+              contexto: { transferencia_humana_definitiva: true },
+            })
             .eq('contato_id', (ctUz as any).id);
+
+          const { data: tagsAtuais } = await supabase
+            .from('meta_whatsapp_contato_etiquetas')
+            .select('etiqueta_id, meta_whatsapp_etiquetas!inner(nome)')
+            .eq('contato_id', (ctUz as any).id);
+          const tagsIago = (tagsAtuais || [])
+            .filter((r: any) => String(r?.meta_whatsapp_etiquetas?.nome || '').toLowerCase().startsWith('atendente: iago'))
+            .map((r: any) => r.etiqueta_id);
+          if (tagsIago.length) {
+            await supabase.from('meta_whatsapp_contato_etiquetas')
+              .delete().eq('contato_id', (ctUz as any).id).in('etiqueta_id', tagsIago);
+          }
 
           const mAt = String(texto || '').match(/^\*Atendente\s+(.+?):\*/i);
           let nomeAtendente = mAt?.[1]?.trim() || '';
@@ -312,7 +330,7 @@ Deno.serve(async (req) => {
               contatoId: (ctUz as any).id,
               atendenteNome: nomeAtendente,
               ownerUserId: (inst as any).user_id,
-              somenteSeSemEtiqueta: true,
+              somenteSeSemEtiqueta: false,
               logPrefix: '[send-whatsapp-meta-text/uazapi]',
             });
           }
@@ -458,8 +476,26 @@ Deno.serve(async (req) => {
           .update({ aguardando_humano: true })
           .eq('contato_id', contato.id);
         await supabase.from('iago_conversa_estado')
-          .update({ aguardando_humano: true, followup_em: null })
+          .update({
+            aguardando_humano: true,
+            followup_em: null,
+            followup_feito: true,
+            followup_etapa: 3,
+            contexto: { transferencia_humana_definitiva: true },
+          })
           .eq('contato_id', contato.id);
+
+        const { data: tagsAtuais } = await supabase
+          .from('meta_whatsapp_contato_etiquetas')
+          .select('etiqueta_id, meta_whatsapp_etiquetas!inner(nome)')
+          .eq('contato_id', contato.id);
+        const tagsIago = (tagsAtuais || [])
+          .filter((r: any) => String(r?.meta_whatsapp_etiquetas?.nome || '').toLowerCase().startsWith('atendente: iago'))
+          .map((r: any) => r.etiqueta_id);
+        if (tagsIago.length) {
+          await supabase.from('meta_whatsapp_contato_etiquetas')
+            .delete().eq('contato_id', contato.id).in('etiqueta_id', tagsIago);
+        }
 
         // Etiqueta a conversa com o atendente que enviou (se ainda não houver etiqueta de atendente)
         const mAt = String(texto || '').match(/^\*Atendente\s+(.+?):\*/i);
@@ -474,7 +510,7 @@ Deno.serve(async (req) => {
             contatoId: contato.id,
             atendenteNome: nomeAtendente,
             ownerUserId: inst.user_id,
-            somenteSeSemEtiqueta: true,
+            somenteSeSemEtiqueta: false,
             logPrefix: '[send-whatsapp-meta-text]',
           });
         }
