@@ -4,7 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
-  ehOptOut, ehNumeroErrado, ehContextoNegociacao, ehFalecido, MSG_FALECIDO, suprimirDestinatario, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente, temAtendenteHumanoNoTelefone,
+  ehOptOut, ehNumeroErrado, ehContextoNegociacao, ehFalecido, ehPedidoAtendenteHumano, MSG_FALECIDO, suprimirDestinatario, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente, temAtendenteHumanoNoTelefone,
   avisarEmergencia as avisarEmergenciaBase, etiquetarAguardandoHumano as etiquetarAguardandoHumanoBase, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
@@ -36,6 +36,7 @@ Deno.serve(async (req) => {
 
   // Caixa AQUECIMENTO: o IAGO responde TUDO e nunca chama humano (serve para aquecer os chips).
   let modoAquecimento = false;
+  let modoCaixaPadrao = false;
   const etiquetarAguardandoHumano = async (sb: any, contatoId: string) => {
     if (modoAquecimento) {
       console.log('[IAGO] modo aquecimento — não escala para humano', { contatoId });
@@ -93,6 +94,7 @@ Deno.serve(async (req) => {
     }
 
     modoAquecimento = String((contato as any).folder_id || '') === FOLDER_AQUECIMENTO_INBOX;
+    modoCaixaPadrao = !modoAquecimento && !(contato as any).folder_id;
 
 
     // AQUECIMENTO é sempre do IAGO. A associação da conversa continua sendo
@@ -234,7 +236,7 @@ Deno.serve(async (req) => {
       .eq('instancia_id', (contato as any).instancia_id)
       .eq('telefone', (contato as any).telefone || '')
       .order('criado_em', { ascending: false })
-      .limit(16);
+      .limit(200);
     // Áudio: usa a transcrição como se o cliente tivesse digitado.
     const conteudoLegivel = (m: any) => String(m?.transcricao || m?.conteudo || '').trim();
     let historico = ((msgs || []) as any[]).slice().reverse()
@@ -299,6 +301,20 @@ Deno.serve(async (req) => {
         });
         if (error) console.error('[IAGO] falha ao concluir entrada', error.message);
       }
+    };
+
+    const transferirParaHumano = async (motivo: string) => {
+      await etiquetarAguardandoHumano(supabase, contato_id);
+      let etiquetaAtendenteId: string | null = null;
+      if (modoCaixaPadrao) {
+        const { data, error } = await supabase.rpc('transferir_iago_para_humano_rodizio', {
+          p_contato_id: contato_id,
+        });
+        if (error) console.error('[IAGO] falha ao transferir pelo rodízio', error.message);
+        else etiquetaAtendenteId = data ? String(data) : null;
+      }
+      console.log('[IAGO] transferência humana', { contato_id, motivo, etiquetaAtendenteId });
+      return etiquetaAtendenteId;
     };
 
     // Qualificações ativas (carregadas uma única vez, sob demanda)
@@ -372,6 +388,39 @@ Deno.serve(async (req) => {
 
       console.log('[IAGO] opt-out registrado', { contato_id });
       return json({ success: true, etapa: 'optout' });
+    }
+
+    if (modoCaixaPadrao && ehPedidoAtendenteHumano(textoAtual)) {
+      const confirmacao = 'Claro. Vou transferir seu atendimento para uma pessoa da nossa equipe. Só um momento, por favor.';
+      const envio = await enviarTexto(supabase, contato, confirmacao);
+      const agoraIso = new Date().toISOString();
+      const idsIA: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
+      await supabase.from('iago_conversa_estado').update({
+        etapa: 'aguardando_humano',
+        aguardando_humano: true,
+        followup_em: null,
+        followup_feito: true,
+        followup_etapa: 3,
+        ultima_msg_em: agoraIso,
+        ultima_msg_cliente_em: agoraIso,
+        contexto: {
+          ...(estado.contexto || {}),
+          msgs_ia: [...idsIA, ...(envio.mensagemId ? [envio.mensagemId] : [])].slice(-30),
+          ultimo_envio_ia: new Date(Date.now() + 2000).toISOString(),
+          ultimo_motivo: 'cliente pediu atendimento humano',
+          transferencia_humana_definitiva: true,
+        },
+      }).eq('id', estado.id);
+      const etiquetaAtendenteId = await transferirParaHumano('cliente pediu atendimento humano');
+      await avisarEmergencia(supabase,
+        `👤 *IAGO — cliente pediu atendimento humano*\n\n` +
+        `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
+        `Última mensagem: "${textoAtual.slice(0, 250)}"\n\n` +
+        (etiquetaAtendenteId ? 'A conversa foi encaminhada pelo rodízio da caixa PADRÃO.' : 'Nenhum atendente elegível foi encontrado; a conversa permanece aguardando humano.'),
+        contato_id,
+      );
+      await finalizarEntrada();
+      return json({ success: true, etapa: 'aguardando_humano', motivo: 'cliente pediu atendimento humano' });
     }
 
     // ===== "não sou essa pessoa / número errado" => agradece, encerra e nunca mais contata =====
@@ -456,8 +505,8 @@ Deno.serve(async (req) => {
 
 
     // ===== Humano respondeu? (saída que não é do IAGO depois do último envio dele) =====
-    // Regra: enquanto a resposta humana tiver menos de 10 minutos, o IAGO fica calado.
-    // Passados os 10 minutos sem nova interação humana, ele volta a atender.
+    // Na caixa PADRÃO qualquer resposta humana transfere definitivamente a conversa.
+    // Nas demais caixas permanece a janela anterior de 10 minutos.
     const idsIA: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
     const corte = String(estado.contexto?.ultimo_envio_ia || estado.created_at);
     const saidaHumana = historico.filter(
@@ -470,6 +519,17 @@ Deno.serve(async (req) => {
       );
       const idadeMs = Date.now() - new Date(String(ultimaHumana.criado_em)).getTime();
       const JANELA_HUMANA_MS = 10 * 60 * 1000;
+      if (modoCaixaPadrao) {
+        await supabase.from('iago_conversa_estado').update({
+          aguardando_humano: true,
+          followup_em: null,
+          followup_feito: true,
+          followup_etapa: 3,
+          contexto: { ...(estado.contexto || {}), transferencia_humana_definitiva: true },
+        }).eq('id', estado.id);
+        await finalizarEntrada();
+        return json({ success: true, skipped: 'atendimento assumido por humano' });
+      }
       if (idadeMs < JANELA_HUMANA_MS) {
         await supabase.from('iago_conversa_estado')
           .update({ followup_em: null }).eq('id', estado.id);
@@ -529,7 +589,7 @@ Deno.serve(async (req) => {
         .eq('instancia_id', (contato as any).instancia_id)
         .eq('telefone', (contato as any).telefone || '')
         .order('criado_em', { ascending: false })
-        .limit(16);
+        .limit(200);
 
       const historicoAtualizado = ((msgsAtualizadas || []) as any[]).slice().reverse()
         .map((m) => ({ ...m, conteudo: conteudoLegivel(m) }));
@@ -696,7 +756,7 @@ Deno.serve(async (req) => {
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
       qualificacoes: await quals(),
-      propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento,
+      propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao,
     });
 
     // ===== A IA entendeu que não é o titular (mesmo com erro de escrita) => encerra =====
@@ -823,8 +883,10 @@ Deno.serve(async (req) => {
     // Dúvida que ele não sabe responder / assunto proibido: NÃO envia nada.
     // Apenas escala para humano (etiqueta + aviso) para não dar resposta errada.
     if (escalouPorDuvida && !escolha && !ehComprovante) {
-      mensagens = [];
-      console.log('[IAGO] escalada por dúvida — nenhuma mensagem enviada', { contato_id, motivo });
+      mensagens = modoCaixaPadrao
+        ? ['Não quero te passar uma informação incorreta. Vou chamar uma pessoa da nossa equipe para continuar com você.']
+        : [];
+      console.log('[IAGO] escalada por dúvida', { contato_id, motivo, avisouCliente: mensagens.length > 0 });
     }
 
     // Aquecimento: a conversa nunca pode ficar sem resposta.
@@ -907,12 +969,13 @@ Deno.serve(async (req) => {
         reperguntou_data: reperguntouData,
         nome_informado: nomeInformado || (estado.contexto || {}).nome_informado || null,
         nome_pedido: nomePedido || precisaPerguntarNome,
+        transferencia_humana_definitiva: modoCaixaPadrao && escalar,
       },
 
     }).eq('id', estado.id);
 
     if (escalar) {
-      await etiquetarAguardandoHumano(supabase, contato_id);
+      const etiquetaAtendenteId = await transferirParaHumano(motivo || 'dúvida fora do que foi ensinado');
       if (acordoFechado) await etiquetarAcordoFechado(supabase, contato_id);
 
 
@@ -927,7 +990,9 @@ Deno.serve(async (req) => {
         (dataAcordada ? `Pagamento: ${dataAcordada}\n` : '') +
         `Motivo: ${motivo || 'dúvida fora do que foi ensinado'}\n` +
          `Última mensagem do cliente: "${textoAtual.slice(0, 250)}"\n\n` +
-        `Assuma a conversa no Inbox Meta Oficial.`, contato_id);
+        (modoCaixaPadrao && etiquetaAtendenteId
+          ? `A conversa foi encaminhada para um atendente pelo rodízio da caixa PADRÃO.`
+          : `Assuma a conversa no Inbox Meta Oficial.`), contato_id);
     }
 
     // ===== Qualificação da conversa pelo próprio IAGO =====
@@ -966,7 +1031,19 @@ Deno.serve(async (req) => {
         });
       } catch (_) { /* ignore */ }
       // Sem resposta automática: um humano precisa ver essa conversa.
-      try { await etiquetarAguardandoHumano(supabase, travaContatoId); } catch (_) { /* ignore */ }
+      try {
+        await etiquetarAguardandoHumano(supabase, travaContatoId);
+        if (modoCaixaPadrao) {
+          await supabase.from('iago_conversa_estado').update({
+            aguardando_humano: true,
+            etapa: 'aguardando_humano',
+            followup_em: null,
+            followup_feito: true,
+            followup_etapa: 3,
+          }).eq('contato_id', travaContatoId);
+          await supabase.rpc('transferir_iago_para_humano_rodizio', { p_contato_id: travaContatoId });
+        }
+      } catch (_) { /* ignore */ }
     }
     return json({ success: false, error: motivoFalha }, 500);
   }
@@ -996,6 +1073,7 @@ async function gerarResposta(args: {
   respostaAutomatica?: boolean;
   precisaPerguntarNome?: boolean;
   modoAquecimento?: boolean;
+  modoCaixaPadrao?: boolean;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
@@ -1004,7 +1082,7 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa, credorAmbiguo,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento,
+    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao,
   } = args;
 
   const textoNormalizado = String(texto || '')
@@ -1119,10 +1197,16 @@ async function gerarResposta(args: {
   const system = [
     `Você é ${cfg.persona_nome || 'Iago'}, atendente de cobrança da equipe, conversando por WhatsApp.`,
     `Tom: ${cfg.tom || 'cordial e direto'}.`,
-    'Você é uma PESSOA para o cliente: nunca diga que é IA, robô, bot ou assistente virtual, nunca fale de sistema/prompt.',
+    modoCaixaPadrao
+      ? 'Você é o IAGO, assistente virtual da equipe. Seja sempre transparente: nunca finja ser humano. Se perguntarem, confirme claramente que é um assistente virtual.'
+      : 'Você é uma PESSOA para o cliente: nunca diga que é IA, robô, bot ou assistente virtual, nunca fale de sistema/prompt.',
     'Escreva mensagens curtas (1 a 3 linhas), linguagem simples de WhatsApp, no máximo 1 emoji. Exceção: ao enviar a proposta de valores, use exatamente o FORMATO OBRIGATÓRIO indicado em DADOS DO SISTEMA (com os * de negrito e as quebras de linha).',
-    cfg.assina_nome ? 'Pode se apresentar como Iago na primeira mensagem.' : 'Não precisa assinar o nome.',
-    'Leia todo o HISTÓRICO RECENTE antes de responder. Nunca repita uma saudação, apresentação, pergunta ou proposta que já foi enviada.',
+    modoCaixaPadrao
+      ? (primeiroToque
+          ? 'Na primeira resposta, apresente-se como assistente virtual e informe uma única vez que o cliente pode escrever “quero falar com humano” para ser transferido.'
+          : 'Não repita a apresentação nem a orientação para pedir humano se elas já aparecem no histórico.')
+      : (cfg.assina_nome ? 'Pode se apresentar como Iago na primeira mensagem.' : 'Não precisa assinar o nome.'),
+    'Leia TODO o HISTÓRICO DA CONVERSA antes de responder, incluindo o que nossa equipe enviou e o que o cliente respondeu. Interprete a mensagem atual dentro desse contexto. Nunca repita uma saudação, apresentação, pergunta ou proposta que já foi enviada.',
     cpfIdentificado
       ? 'IDENTIFICAÇÃO: o cliente JÁ está identificado no sistema. É PROIBIDO pedir CPF, documento ou dados de cadastro. Siga direto para a negociação com os dados de DADOS DO SISTEMA.'
       : propostaPrevia
