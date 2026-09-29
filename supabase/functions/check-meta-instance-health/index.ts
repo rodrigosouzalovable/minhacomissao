@@ -245,7 +245,16 @@ Deno.serve(async (req) => {
               : 'numero'
           : null;
         // LIMITED por qualidade/reputação não significa bloqueio total do envio.
-        const apenasQualidadeLimitada = r.limitacao_tipo === 'qualidade' && !comercialBloqueado;
+        const telefoneLimitadoSomentePorQualidade = (r.phone_health?.entities || [])
+          .filter((e: any) => String(e?.entity_type || '').toUpperCase() === 'PHONE_NUMBER')
+          .every((e: any) => {
+            const estado = String(e?.can_send_message || '').toUpperCase();
+            return estado === 'AVAILABLE' ||
+              (estado === 'LIMITED' && (e?.additional_info || []).some((info: unknown) =>
+                /quality rating|messaging limit.*quality|reputation/i.test(String(info))));
+          });
+        const apenasQualidadeLimitada = r.limitacao_tipo === 'qualidade' &&
+          telefoneLimitadoSomentePorQualidade && !comercialBloqueado;
         r.limitacao_motivo = limitacaoNomeInformativa
           ? null
           : r.limitacao_numero
