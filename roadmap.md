@@ -57,6 +57,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Destacar envios em andamento, respostas, pessoas distintas e taxa no detalhe da campanha, com apuração manual e horário visível
 - [x] Confirmar inscrição Meta, tentar reparo e evitar avisos WhatsApp de saúde do webhook por timeout passageiro
 - [x] Reativar prospecção do Certificado em dias úteis, isolar a instância recusada #131031, preservar histórico e permitir nova tentativa somente após falha sem envio confirmado
 - [x] Indexar vínculos por etiqueta e conversas Meta não lidas; agrupar atualização da Inbox para reduzir leituras redundantes

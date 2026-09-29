@@ -531,7 +531,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
           className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1 flex flex-col gap-3"
           style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}
         >
-          {isAdmin && <CampanhaResultadoCard jobId={job.id} nome={nome} template={job.template_nome} />}
+          {isAdmin && <CampanhaResultadoCard jobId={job.id} nome={nome} template={job.template_nome} enviadosAtual={job.enviados} />}
           <div className="rounded-md border bg-card p-3 text-xs">
             <div className="mb-2 flex items-center gap-2 text-sm font-medium"><DollarSign className="h-4 w-4" /> Custo calculado da campanha</div>
             {job.custo_brl == null ? (
