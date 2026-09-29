@@ -57,6 +57,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Tornar o IAGO a primeira linha 24/7 da caixa PADRÃO, com leitura contextual, apresentação transparente e transferência definitiva pelo rodízio quando necessário
 - [x] Tornar a apuração manual de respostas da campanha clara em caso de demora ou falha: manter números anteriores, impedir cliques repetidos, mostrar erro específico e validar campanhas em andamento e encerradas sem novos envios
 - [x] Corrigir a Clara para informar validade de 1 ano, explicar a videoconferência e pedir CNPJ/e-mail/CNH após a confirmação
 - [x] Adicionar envio de template Meta nos cards de Retornos, inclusive sem dados financeiros ou já concluídos, mantendo o indicador de envio

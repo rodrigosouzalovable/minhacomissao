@@ -554,10 +554,10 @@ Deno.serve(async (req) => {
       console.log('[IAGO] humano inativo há mais de 10 min — IAGO retoma', { contato_id });
     }
 
-    // ===== Espera extra de 20s: prioridade para o atendente humano =====
+    // ===== Espera extra: prioridade para o humano fora da PADRÃO =====
     // Dá 20 segundos a mais antes de responder. Se um humano responder nesse
     // intervalo, o IAGO não envia nada.
-    await sleep(20000);
+    await sleep(modoCaixaPadrao ? 1000 : 20000);
     {
       const corteEspera = String(estado.contexto?.ultimo_envio_ia || estado.created_at);
       const { data: novasSaidas } = await supabase

@@ -303,7 +303,6 @@ Deno.serve(async (req) => {
               followup_em: null,
               followup_feito: true,
               followup_etapa: 3,
-              contexto: { transferencia_humana_definitiva: true },
             })
             .eq('contato_id', (ctUz as any).id);
 
@@ -481,7 +480,6 @@ Deno.serve(async (req) => {
             followup_em: null,
             followup_feito: true,
             followup_etapa: 3,
-            contexto: { transferencia_humana_definitiva: true },
           })
           .eq('contato_id', contato.id);
 
