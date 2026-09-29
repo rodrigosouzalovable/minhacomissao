@@ -1,6 +1,7 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   decidirFluxoConhecido,
+  confirmaResponsabilidade,
   RESPOSTA_AGENDAMENTO,
   RESPOSTA_DOCUMENTOS,
   RESPOSTA_VALIDADE,
@@ -33,4 +34,11 @@ Deno.test("Clara pede os documentos depois da confirmação do agendamento", () 
 
 Deno.test("Clara não interpreta um sim solto fora do agendamento", () => {
   assertEquals(decidirFluxoConhecido("Sim", "conversa", { oferta_apresentada: true }), null);
+});
+
+Deno.test("Clara reconhece quem confirma ser responsável", () => {
+  for (const texto of ["Sou responsável sim", "Eu sou o responsável", "Sim, sou eu", "Responsável sou eu"]) {
+    assertEquals(confirmaResponsabilidade(texto), true);
+  }
+  assertEquals(confirmaResponsabilidade("Não sou o responsável"), false);
 });
