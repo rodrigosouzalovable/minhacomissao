@@ -21,22 +21,24 @@ type Resultado = {
 const brl = (v: number) =>
   Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export default function CampanhaResultadoCard({ jobId, nome, template }: { jobId: string; nome: string; template?: string | null }) {
+export default function CampanhaResultadoCard({ jobId, nome, template, enviadosAtual }: { jobId: string; nome: string; template?: string | null; enviadosAtual: number }) {
   const [dados, setDados] = useState<Resultado | null>(null);
   const [carregando, setCarregando] = useState(false);
 
-  const carregar = useCallback(async () => {
-    const { data } = await supabase
-      .from("envio_meta_job_resultado" as any)
-      .select("*")
-      .eq("job_id", jobId)
-      .maybeSingle();
-    if (data) setDados(data as unknown as Resultado);
-  }, [jobId]);
-
   useEffect(() => {
-    carregar();
-  }, [carregar]);
+    let ativo = true;
+    setDados(null);
+    const carregar = async () => {
+      const { data } = await supabase
+        .from("envio_meta_job_resultado" as any)
+        .select("*")
+        .eq("job_id", jobId)
+        .maybeSingle();
+      if (ativo && data) setDados(data as unknown as Resultado);
+    };
+    void carregar();
+    return () => { ativo = false; };
+  }, [jobId]);
 
   const recalcular = async () => {
     setCarregando(true);
@@ -47,7 +49,6 @@ export default function CampanhaResultadoCard({ jobId, nome, template }: { jobId
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (row) setDados(row as unknown as Resultado);
-      else await carregar();
       toast.success("Resultado atualizado");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível calcular agora");
@@ -87,7 +88,7 @@ export default function CampanhaResultadoCard({ jobId, nome, template }: { jobId
   };
 
   const taxa = Number(dados?.taxa_resposta || 0);
-  const corTaxa = taxa >= 15 ? "bg-green-600" : taxa >= 8 ? "bg-amber-500" : "bg-red-600";
+  const formatar = (valor: number) => Number(valor || 0).toLocaleString("pt-BR");
 
   return (
     <div className="rounded-md border bg-card p-3 space-y-2">
@@ -95,7 +96,6 @@ export default function CampanhaResultadoCard({ jobId, nome, template }: { jobId
         <div className="text-sm font-medium flex items-center gap-2">
           <MessageSquare className="h-4 w-4" /> Resultado da campanha
           {template && <Badge variant="outline" className="font-mono text-[10px]">{template}</Badge>}
-          {dados && <Badge className={`${corTaxa} text-white`}>{taxa.toFixed(1).replace(".", ",")}% de resposta</Badge>}
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" className="h-7 text-xs" disabled={carregando} onClick={recalcular}>
@@ -108,40 +108,37 @@ export default function CampanhaResultadoCard({ jobId, nome, template }: { jobId
         </div>
       </div>
 
-      {!dados ? (
-        <div className="text-xs text-muted-foreground">
-          Ainda não calculado — clique em “Atualizar” para conferir respostas, conversas abertas e acordos desta campanha.
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+        <div className="rounded border bg-muted/40 p-2 min-w-0">
+          <div className="text-lg font-semibold tabular-nums">{formatar(enviadosAtual)}</div>
+          <div className="text-[11px] text-muted-foreground">Mensagens enviadas até agora</div>
         </div>
+        <div className="rounded border bg-muted/40 p-2 min-w-0">
+          <div className="text-lg font-semibold tabular-nums">{dados ? formatar(dados.respostas) : "—"}</div>
+          <div className="text-[11px] text-muted-foreground">Mensagens respondidas</div>
+        </div>
+        <div className="rounded border bg-muted/40 p-2 min-w-0">
+          <div className="text-lg font-semibold tabular-nums">{dados ? formatar(dados.conversas_abertas) : "—"}</div>
+          <div className="text-[11px] text-muted-foreground">Pessoas que responderam</div>
+        </div>
+        <div className="rounded border bg-muted/40 p-2 min-w-0">
+          <div className="text-lg font-semibold tabular-nums">{dados ? `${taxa.toFixed(1).replace(".", ",")}%` : "—"}</div>
+          <div className="text-[11px] text-muted-foreground">Taxa de resposta</div>
+        </div>
+      </div>
+      {!dados ? (
+        <p className="text-xs text-muted-foreground">Ainda não calculado — clique em “Atualizar” para conferir as respostas.</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-            <div className="rounded border bg-muted/40 p-2">
-              <div className="text-lg font-semibold">{dados.enviados}</div>
-              <div className="text-[11px] text-muted-foreground">Enviadas</div>
-            </div>
-            <div className="rounded border bg-muted/40 p-2">
-              <div className="text-lg font-semibold">{dados.conversas_abertas}</div>
-              <div className="text-[11px] text-muted-foreground">Conversas abertas</div>
-            </div>
-            <div className="rounded border bg-muted/40 p-2">
-              <div className="text-lg font-semibold">{dados.respostas}</div>
-              <div className="text-[11px] text-muted-foreground">Respostas recebidas</div>
-            </div>
-            <div className="rounded border bg-muted/40 p-2">
-              <div className="text-lg font-semibold flex items-center justify-center gap-1">
-                <Handshake className="h-4 w-4" /> {dados.acordos_fechados}
-              </div>
-              <div className="text-[11px] text-muted-foreground">Acordos ({Number(dados.taxa_acordo).toFixed(1).replace(".", ",")}%)</div>
-            </div>
-          </div>
-          <div className="text-[11px] text-muted-foreground">
-            Valor dos acordos: <strong>{brl(Number(dados.acordos_valor))}</strong> • falhas: {dados.falhas} • atualizado em{" "}
-            {new Date(dados.calculado_em).toLocaleString("pt-BR")}
-          </div>
-          <div className="text-[11px] text-muted-foreground">
-            Resposta = cliente respondeu em até 72h após receber. Acordo = mesmo telefone (ou CPF, quando houver) com acordo
-            lançado em até 15 dias — o valor continua subindo nesses 15 dias conforme os atendentes lançam.
-          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Respostas apuradas em {new Date(dados.calculado_em).toLocaleString("pt-BR")} com {formatar(dados.enviados)} envios; clique em “Atualizar” para incluir novos envios e respostas.
+          </p>
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
+            <Handshake className="h-3.5 w-3.5" /> Acordos: <strong>{formatar(dados.acordos_fechados)}</strong> ({Number(dados.taxa_acordo).toFixed(1).replace(".", ",")}%) • Valor: <strong>{brl(Number(dados.acordos_valor))}</strong> • Falhas: {formatar(dados.falhas)}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            Resposta = mensagem recebida até 72h após o envio. A taxa considera pessoas distintas sobre os envios apurados; várias respostas da mesma pessoa contam uma vez na taxa. Acordos são vinculados por telefone ou CPF em até 15 dias.
+          </p>
         </>
       )}
     </div>
