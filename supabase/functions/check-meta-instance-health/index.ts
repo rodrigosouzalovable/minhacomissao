@@ -379,21 +379,21 @@ Deno.serve(async (req) => {
           updatePayload.dias_green_consecutivos = 0;
           updatePayload.green_contado_dia = null;
 
-          // Apenas números oficiais do proprietário, independentemente do antigo switch.
-          if (recupAuto && inst.user_id === RECUPERACAO_OWNER_ID &&
-              inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
-              inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
-              !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) && !pausaViolacaoConta &&
-              !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {
-            // Já estava em recuperação e piorou → reduz o volume em vez de subir.
-            const piorou = inst.recuperacao_ativa === true;
-            updatePayload.recuperacao_ativa = true;
-            updatePayload.recuperacao_desde = inst.recuperacao_desde || new Date().toISOString();
-            updatePayload.recuperacao_msgs_meta_dia = piorou
-              ? msgsPiora
-              : Math.floor(msgsMin + Math.random() * (msgsMax - msgsMin + 1));
-            updatePayload.recuperacao_proximo_envio_em = new Date().toISOString();
-          }
+        }
+
+        // Inclui os números próprios com liberação manual ou antiga opção desligada.
+        if (caiu && recupAuto && inst.user_id === RECUPERACAO_OWNER_ID &&
+            inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
+            inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
+            !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) && !pausaViolacaoConta &&
+            !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {
+          const piorou = inst.recuperacao_ativa === true;
+          updatePayload.recuperacao_ativa = true;
+          updatePayload.recuperacao_desde = inst.recuperacao_desde || new Date().toISOString();
+          updatePayload.recuperacao_msgs_meta_dia = piorou
+            ? msgsPiora
+            : Math.floor(msgsMin + Math.random() * (msgsMax - msgsMin + 1));
+          updatePayload.recuperacao_proximo_envio_em = new Date().toISOString();
         }
 
         // ===== Reconciliação: YELLOW/RED que ficou fora do reaquecimento =====
