@@ -39,6 +39,13 @@ function confirmaAgendamento(texto: string) {
     || /\bpode ser\b/.test(texto);
 }
 
+export function confirmaResponsabilidade(textoOriginal: string) {
+  const texto = normalizar(textoOriginal);
+  return /\b(sou|eu sou|sim sou) (o |a )?responsavel\b/.test(texto)
+    || /\b(responsavel (sou eu|aqui|sim))\b/.test(texto)
+    || /\b(sim|confirmo)[, ]+(sou )?(eu|o responsavel|a responsavel)\b/.test(texto);
+}
+
 export function decidirFluxoConhecido(
   textoOriginal: string,
   etapaAtual: string,

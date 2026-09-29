@@ -30,6 +30,9 @@ const SINAIS_FORTES = [
   /assim que possivel.*(atender|responder|retornar)/,
   /(equipe|atendente).*(atender|responder|retornar).*em breve/,
   /no momento nao (podemos|posso) atender/,
+  /nao estamos disponiveis no momento/,
+  /nao (estamos|estou) disponiveis? (agora|no momento)/,
+  /responderemos assim que possivel/,
   /estamos ausentes/,
 ];
 

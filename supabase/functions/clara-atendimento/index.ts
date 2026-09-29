@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { enviarTexto, etiquetasAtendente, etiquetarAguardandoHumano, ehOptOut, iagoAtendeCaixa, suprimirDestinatario, temAtendenteHumanoNoTelefone } from "../_shared/iago.ts";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
-import { decidirFluxoConhecido } from "./regras.ts";
+import { classificarRespostaAutomatica } from "../_shared/resposta-automatica.ts";
+import { confirmaResponsabilidade, decidirFluxoConhecido } from "./regras.ts";
 
 const CLARA_ID = "d318692e-dc9a-4895-aa67-e21368a9de04";
 const FOLDER_CERTIFICADO = "9267b296-24e6-425d-9f0e-0e4114c782d9";
@@ -86,7 +87,7 @@ async function decidirComIA(texto: string, historico: Array<{ direcao: string; c
       reasoning: { effort: "low", summary: "auto" },
       store: false,
       input: [
-        { role: "developer", content: [{ type: "input_text", text: `Você é Clara Ribeiro de Souza, vendedora ultra profissional de certificados digitais no Brasil. Interprete antes de responder. Seja humana, objetiva, educada e consultiva; nunca invente autoridade pública, não diga que houve atualização real do CNPJ e nunca afirme que o certificado venceu. O contato inicial usou uma mensagem de prospecção e agora você deve esclarecer a oferta. Quando a promoção ainda não tiver sido apresentada e a resposta não for uma recusa, opt-out, número realmente errado ou situação sensível, responda exatamente: "${ofertaInicial}". Dizer que o contador informou, cuida disso ou sabe do assunto NÃO significa número errado e deve receber essa oferta. Só classifique numero_errado quando a pessoa disser claramente que não é responsável, não conhece a empresa ou que o número está errado. O preço oficial desta oferta é certificado digital PJ A1 por R$ 129,90 e sua validade é de 1 ano. Dúvidas específicas não cobertas por essas informações devem ser transferidas ao humano, sem confirmar suposições. Quando o cliente demonstrar interesse em avançar, use esta mensagem de agendamento: "${fluxo.mensagemAgendar}". Depois que aceitar o agendamento, use esta mensagem de documentos: "${fluxo.mensagemDocumentos}". Quando CNPJ, e-mail e CNH estiverem todos recebidos, use esta confirmação: "${fluxo.mensagemRecebido}" e transfira ao humano. Pedido de parar/sair é optout. Reclamação, situação sensível, dúvida jurídica, desconfiança forte ou pedido explícito de uma pessoa deve ir para humano. Não responda novamente a uma recusa clara. Retorne somente JSON válido: {"classificacao":"interesse|duvida|objecao|recusa|numero_errado|optout|documentos|humano","resposta":"texto curto em pt-BR ou vazio quando não deve responder","interesse":boolean,"transferir_humano":boolean,"etapa":"conversa|agendamento|aguardando_documentos|aguardando_humano|encerrado"}. Contexto registrado: ${JSON.stringify(contexto)}. Histórico: ${JSON.stringify(historico.slice(-12))}` }] },
+        { role: "developer", content: [{ type: "input_text", text: `Você é Clara Ribeiro de Souza, vendedora ultra profissional de certificados digitais no Brasil. Interprete antes de responder. Leia o histórico em ordem cronológica e trate mensagens consecutivas do cliente como partes da mesma resposta, nunca como frases isoladas. Seja humana, objetiva, educada e consultiva; nunca invente autoridade pública, não diga que houve atualização real do CNPJ e nunca afirme que o certificado venceu. O contato inicial usou uma mensagem de prospecção e agora você deve esclarecer a oferta. Quando a promoção ainda não tiver sido apresentada e a resposta não for uma recusa, opt-out, número realmente errado ou situação sensível, responda exatamente: "${ofertaInicial}". Dizer que não entendeu, confirmar que é responsável, informar que o contador cuida disso ou que sabe do assunto NÃO significa número errado e deve receber a oferta. Se a oferta já foi apresentada, interprete confirmações como "sou responsável, sim" conforme a pergunta e continue a venda sem transferir ao humano. Só classifique numero_errado quando a pessoa disser claramente que não é responsável, não conhece a empresa ou que o número está errado. O preço oficial desta oferta é certificado digital PJ A1 por R$ 129,90 e sua validade é de 1 ano. Dúvidas específicas não cobertas por essas informações devem ser transferidas ao humano, sem confirmar suposições. Quando o cliente demonstrar interesse em avançar, use esta mensagem de agendamento: "${fluxo.mensagemAgendar}". Depois que aceitar o agendamento, use esta mensagem de documentos: "${fluxo.mensagemDocumentos}". Quando CNPJ, e-mail e CNH estiverem todos recebidos, use esta confirmação: "${fluxo.mensagemRecebido}" e transfira ao humano. Pedido de parar/sair é optout. Reclamação, situação sensível, dúvida jurídica, desconfiança forte ou pedido explícito de uma pessoa deve ir para humano. Não responda novamente a uma recusa clara. Retorne somente JSON válido: {"classificacao":"interesse|duvida|objecao|recusa|numero_errado|optout|documentos|humano","resposta":"texto curto em pt-BR ou vazio quando não deve responder","interesse":boolean,"transferir_humano":boolean,"etapa":"conversa|agendamento|aguardando_documentos|aguardando_humano|encerrado"}. Contexto registrado: ${JSON.stringify(contexto)}. Histórico: ${JSON.stringify(historico.slice(-12))}` }] },
         { role: "user", content: [{ type: "input_text", text: texto.slice(0, 1500) }] },
       ],
     }),
@@ -168,6 +169,21 @@ Deno.serve(async (req) => {
     });
     if (erroReserva) throw new Error(`Falha ao reservar mensagem da Clara: ${erroReserva.message}`);
     if (entradaReservada !== true) return json({ success: true, skipped: "mensagem já processada ou em processamento" });
+    const respostaAutomatica = classificarRespostaAutomatica(texto);
+    if (respostaAutomatica.automatica) {
+      const contextoAutomatico = {
+        ...(estado.contexto || {}),
+        ultima_resposta_automatica_em: new Date().toISOString(),
+        ultima_resposta_automatica_motivo: respostaAutomatica.motivo,
+      };
+      const { data: concluido, error: erroConclusao } = await service.rpc("clara_complete_message", {
+        p_contato_id: contatoId, p_entrada_id: entradaId, p_contexto: contextoAutomatico,
+        p_etapa: String(estado.etapa || "conversa"), p_optout: false,
+        p_aguardando_humano: false, p_ultima_resposta_em: estado.ultima_resposta_em || new Date().toISOString(),
+      });
+      if (erroConclusao || !concluido) throw new Error(`Falha ao concluir resposta automática da Clara: ${erroConclusao?.message || "reserva expirada"}`);
+      return json({ success: true, skipped: "resposta automática registrada", automatica: true });
+    }
     if (ehOptOut(texto)) {
       const decisao: Decisao = { classificacao: "optout", resposta: "", interesse: false, transferir_humano: false, etapa: "encerrado" };
       await suprimirDestinatario(service, contato.telefone, "blacklist: cliente pediu bloqueio no Certificado Digital", { instancia_id: contato.instancia_id, contato_nome: contato.nome, caixa_id: contato.folder_id, caixa_nome: "CERTIFICADO" });
@@ -212,10 +228,19 @@ Deno.serve(async (req) => {
     }, ofertaInicial);
     if (decisaoConhecida) contexto = decisaoConhecida.contexto;
     const primeiraAbordagem = contexto.oferta_apresentada !== true;
-    if (primeiraAbordagem && /\bcontador(?:a)?\b/i.test(texto) && !ehOptOut(texto)) {
+    const pediuEsclarecimento = /\b(n[aã]o entendi|pode explicar|do que se trata|sobre o que)\b/i.test(texto);
+    const confirmouResponsavel = confirmaResponsabilidade(texto);
+    if (primeiraAbordagem && (pediuEsclarecimento || confirmouResponsavel || /\bcontador(?:a)?\b/i.test(texto)) && !ehOptOut(texto)) {
       decisao.classificacao = "duvida";
       decisao.resposta = ofertaInicial;
       decisao.interesse = false;
+      decisao.transferir_humano = false;
+      decisao.etapa = "conversa";
+    } else if (!primeiraAbordagem && confirmouResponsavel && !ehOptOut(texto)) {
+      const acao = contexto.tipo_oferta === "renovacao_anual" ? "renovar" : "emitir";
+      decisao.classificacao = "interesse";
+      decisao.resposta = `Perfeito. O certificado digital PJ A1 está em promoção por R$ 129,90 e possui validade de 1 ano. Você tem interesse em ${acao} o certificado?`;
+      decisao.interesse = true;
       decisao.transferir_humano = false;
       decisao.etapa = "conversa";
     }

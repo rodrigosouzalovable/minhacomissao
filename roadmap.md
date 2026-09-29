@@ -58,6 +58,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Impedir que respostas automáticas encerrem a Clara e interpretar confirmações consecutivas de responsável na caixa CERTIFICADO
 - [x] Corrigir o envio de PDF e outras mídias por administradores de caixas compartilhadas, mantendo o armazenamento privado e restrito à conversa acessível
 - [x] Tornar o IAGO a primeira linha 24/7 da caixa PADRÃO, com leitura contextual, apresentação transparente e transferência definitiva pelo rodízio quando necessário
 - [x] Tornar a apuração manual de respostas da campanha clara em caso de demora ou falha: manter números anteriores, impedir cliques repetidos, mostrar erro específico e validar campanhas em andamento e encerradas sem novos envios

@@ -10,4 +10,4 @@
 - Campanhas mostra jobs comuns; Certificado só inicia após preparar destinatários Casa dos Dados, sem Google Maps.
 - Campanhas pontuais D+20 da Casa dos Dados são limitadas a 50 contatos já verificados e administradas separadamente da renovação diária, para impedir duplicidade e consumo acidental da coleta.
 - Modelos Meta são isolados por dono e GREEN/CONNECTED; lotes param ao confirmar Marketing; status paginado distingue seleção e submissão, evitando propagação e falsos envios.
-- Resposta automática é registrada uma vez por mensagem; Clara resolve validade→agendamento→documentos por etapa antes da IA.
+- Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
