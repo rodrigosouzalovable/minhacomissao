@@ -371,11 +371,11 @@ Deno.serve(async (req) => {
           updatePayload.green_contado_dia = null;
 
           // Apenas números oficiais do proprietário, independentemente do antigo switch.
-           if (recupAuto && inst.user_id === RECUPERACAO_OWNER_ID &&
-               inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
-                inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
-                !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) && !pausaViolacaoConta &&
-                !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {
+          if (recupAuto && inst.user_id === RECUPERACAO_OWNER_ID &&
+              inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
+              inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
+              !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) && !pausaViolacaoConta &&
+              !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {
             // Já estava em recuperação e piorou → reduz o volume em vez de subir.
             const piorou = inst.recuperacao_ativa === true;
             updatePayload.recuperacao_ativa = true;
@@ -398,10 +398,11 @@ Deno.serve(async (req) => {
           !pausaViolacaoConta && !caiu && (qual === 'YELLOW' || qual === 'RED') &&
           inst.recuperacao_ativa !== true &&
           inst.qualidade_liberada_manual !== true &&
-           inst.user_id === RECUPERACAO_OWNER_ID &&
-           inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
-            inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
-            !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) && !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo) &&
+          inst.user_id === RECUPERACAO_OWNER_ID &&
+          inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
+          inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
+          !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) &&
+          !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo) &&
           recupAuto
         ) {
           entrouPorVarredura = true;
