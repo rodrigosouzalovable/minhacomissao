@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { ehPedidoAtendenteHumano } from './iago.ts';
+import { ehPedidoAtendenteHumano } from '../_shared/iago.ts';
 
 Deno.test('detecta pedidos explícitos de atendimento humano', () => {
   const pedidos = [
