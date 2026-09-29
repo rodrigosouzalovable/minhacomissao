@@ -10,4 +10,4 @@
 - O painel Campanhas exibe somente jobs comuns; a prospecção do Certificado cria o job pausado para preparação e só o inicia após inserir destinatários e vínculos da Casa dos Dados, evitando campanhas vazias e sem misturar Google Maps.
 - Campanhas pontuais D+20 da Casa dos Dados são limitadas a 50 contatos já verificados e administradas separadamente da renovação diária, para impedir duplicidade e consumo acidental da coleta.
 - Modelos Meta são isolados por dono e GREEN/CONNECTED; lotes param ao confirmar Marketing; status paginado distingue seleção e submissão, evitando propagação e falsos envios.
-- Respostas automáticas Meta/UAZAPI são registradas uma vez por mensagem, após confirmar envio anterior no mesmo número e instância.
+- Resposta automática é registrada uma vez por mensagem; Clara resolve validade→agendamento→documentos por etapa antes da IA.
