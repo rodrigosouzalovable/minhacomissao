@@ -124,7 +124,7 @@ const checkInstanceConnected = async (inst: any) => {
   const token = String(inst.instance_token || "");
   if (!base || !token) return false;
 
-  const attempts = [
+  const attempts: Array<{ url: string; headers: Record<string, string> }> = [
     { url: uazUrl(base, "/instance/status", { token }), headers: {} },
     { url: `${base}/instance/status`, headers: { token } },
   ];
