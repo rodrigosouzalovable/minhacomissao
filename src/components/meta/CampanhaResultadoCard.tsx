@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Download, MessageSquare, Handshake } from "lucide-react";
@@ -18,16 +18,34 @@ type Resultado = {
   calculado_em: string;
 };
 
+type CalculationError = { code?: string; message?: string; status?: number };
+
+function descreverFalha(error: unknown): string {
+  const falha = error && typeof error === "object" ? error as CalculationError : {};
+  if (falha.code === "57014" || falha.status === 408 || falha.status === 504) {
+    return "A apuração demorou mais do que o servidor permite. Os números anteriores foram preservados; tente novamente em alguns minutos.";
+  }
+  if (falha.code === "42501" || falha.status === 401 || falha.status === 403 || /n[aã]o autorizado|apenas administradores/i.test(falha.message || "")) {
+    return "Sua sessão não tem permissão para apurar esta campanha. Entre novamente e tente outra vez.";
+  }
+  if (falha.status === 0 || /fetch|network|connection/i.test(falha.message || "")) {
+    return "A conexão foi interrompida antes do fim da apuração. Os números anteriores foram preservados; tente novamente.";
+  }
+  return `Não foi possível atualizar o resultado${falha.code ? ` (código ${falha.code})` : ""}. Os números anteriores foram preservados; tente novamente.`;
+}
+
 const brl = (v: number) =>
   Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function CampanhaResultadoCard({ jobId, nome, template, enviadosAtual }: { jobId: string; nome: string; template?: string | null; enviadosAtual: number }) {
   const [dados, setDados] = useState<Resultado | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [erroAtualizacao, setErroAtualizacao] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
     setDados(null);
+    setErroAtualizacao(null);
     const carregar = async () => {
       const { data } = await supabase
         .from("envio_meta_job_resultado" as any)
@@ -41,17 +59,21 @@ export default function CampanhaResultadoCard({ jobId, nome, template, enviadosA
   }, [jobId]);
 
   const recalcular = async () => {
+    if (carregando) return;
     setCarregando(true);
+    setErroAtualizacao(null);
     try {
       const { data, error } = await supabase.rpc("envio_meta_job_resultado_calcular" as any, {
         _job_id: jobId,
       });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
-      if (row) setDados(row as unknown as Resultado);
+      if (!row) throw new Error("A apuração não retornou resultado");
+      setDados(row as unknown as Resultado);
       toast.success("Resultado atualizado");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Não foi possível calcular agora");
+      console.warn("Falha ao apurar resultado da campanha", { jobId, error: e });
+      setErroAtualizacao(descreverFalha(e));
     } finally {
       setCarregando(false);
     }
@@ -107,6 +129,9 @@ export default function CampanhaResultadoCard({ jobId, nome, template, enviadosA
           </Button>
         </div>
       </div>
+
+      {carregando && <p role="status" className="text-xs text-muted-foreground">Apurando envios e respostas; aguarde a conclusão.</p>}
+      {erroAtualizacao && <p role="alert" className="text-xs text-destructive">{erroAtualizacao}</p>}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
         <div className="rounded border bg-muted/40 p-2 min-w-0">
