@@ -1,0 +1,20 @@
+# Recuperação dos seus números Meta RED/YELLOW com destinos exclusivamente UAZAPI
+
+## Resultado esperado
+- Todos os seus números oficiais que entrarem em RED ou YELLOW passam a ser considerados para recuperação, inclusive se a opção individual de aquecimento estiver desligada. Números oficiais de parceiros ou de outros proprietários não entram por essa mudança.
+- As mensagens de recuperação vão **somente** para números UAZAPI ativos, vinculados à caixa AQUECIMENTO e confirmados como conectados no momento da escolha, independentemente de quem cadastrou cada destino. Números Meta de teste e leads não serão usados nessa recuperação. Sem destino UAZAPI disponível, não há envio alternativo.
+- A recuperação não promete voltar a GREEN: a classificação é determinada pela Meta. Um número bloqueado, com restrição real de envio, desconectado ou sem modelo aprovado continua sem envio até estar apto.
+
+## O que será ajustado
+1. Restringir os remetentes da rotina de recuperação aos números oficiais do proprietário da conta solicitante; incluir os que estão em RED/YELLOW mesmo com a antiga autorização individual desligada, sem liberar números de parceiros. Na checagem de saúde, ativar/reconciliar a recuperação apenas após confirmar conexão e elegibilidade pela Meta.
+2. Na rotina de recuperação, solicitar apenas destinos UAZAPI conectados da caixa AQUECIMENTO, de qualquer usuário, sem fallback para Meta de teste. Evitar número próprio, repetir o último destino e ultrapassar o limite diário existente; distribuir oportunidades entre os remetentes aptos para que os novos números não fiquem atrás dos já ativos.
+3. Atualizar os avisos e o relatório de recuperação para refletir exclusivamente os destinos UAZAPI e distinguir números aguardando desbloqueio, modelo ou destino. Alinhar o controle visual de aquecimento com a nova regra de que todos os seus números oficiais elegíveis são considerados automaticamente.
+4. Validar em simulação, sem mensagens reais, que um RED/YELLOW apto usa somente UAZAPI de qualquer proprietário, que números de outros donos não enviam e que bloqueios como o registrado no final 3325 continuam impedindo envios. Conferir logs e resumo; não forçar envio nem liberar manualmente a instância bloqueada.
+
+## Custo e limites
+**Alerta de custo Lovable Cloud:** ampliar a recuperação de 7 para até 25 números seus em RED/YELLOW pode elevar tentativas e envios. A meta configurada é de 10–20 mensagens por número por dia, mas o limite compartilhado de 2 conversas por destino UAZAPI por dia e a disponibilidade real dos destinos prevalecem: com 41 destinos cadastrados, o teto teórico atual é 82 envios/dia (pode ser menor se houver telefones repetidos ou desconectados). Cada envio Meta pode ter cobrança conforme a categoria e o destino. A aprovação deste plano confirma essa ampliação; não cria nova verificação recorrente nem aumenta a frequência atual. Revisar as duas agendas existentes de 10 minutos e manter apenas uma, caso se confirme que ambas acionam a mesma rotina, para evitar trabalho duplicado.
+
+## Detalhes técnicos
+- Ajustar `check-meta-instance-health` e `meta-recuperacao-tick` para escopo de remetente baseado na identidade proprietária persistida, não no papel genérico de admin. Preservar validação de `CONNECTED`, restrições da Meta, quarentena de campanhas, tratamento de erros fatais, janela 09h–19h BRT sem domingos e intervalos aleatórios de 20–40 minutos.
+- Reutilizar `destinosAquecimento` com `incluirMetaTeste` desativado somente no fluxo de recuperação, sem alterar o aquecimento de campanhas que também usa esse helper. Na seleção, deduplicar destinos pelo sufixo telefônico para que o teto por telefone não seja contornado por espelhos repetidos.
+- Não adicionar polling, novas tabelas ou novas chamadas de verificação de conectividade fora da rotina existente. A primeira oportunidade de envio ocorre após a detecção da queda na checagem de saúde e no próximo processamento elegível; não prometer prazo fixo desde a mudança real na Meta.
