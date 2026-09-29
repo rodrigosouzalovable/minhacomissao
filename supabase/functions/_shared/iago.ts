@@ -378,6 +378,15 @@ export async function etiquetasAtendente(supabase: any, contatoId: string): Prom
  */
 export const FOLDER_AQUECIMENTO_INBOX = '4f7a52c0-9c86-4b80-8867-4ade7a6df441';
 
+/** Pedido explícito para deixar o atendimento virtual e falar com uma pessoa. */
+export function ehPedidoAtendenteHumano(texto: string): boolean {
+  const t = norm(texto).replace(/\s+/g, ' ').trim();
+  if (!t) return false;
+  return /(quero|preciso|gostaria|prefiro|posso|pode|consegue|chama|chame|passa|passe|transfere|transfira|falar|fala|conversar|conversa).{0,35}(humano|atendente|pessoa (real|de verdade)|alguem da equipe|funcionario|responsavel)/.test(t)
+    || /(humano|atendente|pessoa (real|de verdade)|alguem da equipe|funcionario|responsavel).{0,35}(quero|preciso|gostaria|prefiro|falar|conversar|chamar)/.test(t)
+    || /\b(me transfere|me passa|chama alguem|quero humano|atendimento humano|falar c humano|falar cm humano|flar com atendente)\b/.test(t);
+}
+
 export async function temAtendenteHumanoNoTelefone(
   supabase: any,
   contatoId: string,

@@ -12478,6 +12478,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      transferir_iago_para_humano_rodizio: {
+        Args: { p_contato_id: string }
+        Returns: string
+      }
       tresc_limpar_cache_antigo: { Args: never; Returns: number }
       user_can_access_tenant: {
         Args: { _tenant: string; _uid: string }

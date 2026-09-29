@@ -645,6 +645,13 @@
       "when": 1790627814966,
       "tag": "0091_isolate_meta_templates_by_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1790702315702,
+      "tag": "0092_transferir_iago_para_humano_rodizio",
+      "breakpoints": true
     }
   ]
 }
