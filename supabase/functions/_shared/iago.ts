@@ -378,6 +378,15 @@ export async function etiquetasAtendente(supabase: any, contatoId: string): Prom
  */
 export const FOLDER_AQUECIMENTO_INBOX = '4f7a52c0-9c86-4b80-8867-4ade7a6df441';
 
+/** Pedido explícito para deixar o atendimento virtual e falar com uma pessoa. */
+export function ehPedidoAtendenteHumano(texto: string): boolean {
+  const t = norm(texto).replace(/\s+/g, ' ').trim();
+  if (!t) return false;
+  return /(quero|preciso|gostaria|prefiro|posso|pode|consegue|chama|chame|passa|passe|transfere|transfira|falar|fala|conversar|conversa).{0,35}(humano|atendente|pessoa (real|de verdade)|alguem da equipe|funcionario|responsavel)/.test(t)
+    || /(humano|atendente|pessoa (real|de verdade)|alguem da equipe|funcionario|responsavel).{0,35}(quero|preciso|gostaria|prefiro|falar|conversar|chamar)/.test(t)
+    || /\b(me transfere|me passa|chama alguem|quero humano|atendimento humano|falar c humano|falar cm humano|flar com atendente)\b/.test(t);
+}
+
 export async function temAtendenteHumanoNoTelefone(
   supabase: any,
   contatoId: string,
@@ -806,7 +815,7 @@ export async function calcularProposta(
 }
 
 
-/** Chamada ao Lovable AI Gateway. Retorna o texto da resposta. */
+/** Chamada streaming ao Lovable AI Gateway Responses. Retorna o texto final. */
 async function chamarIAUmaVez(
   system: string,
   user: string,
@@ -814,44 +823,90 @@ async function chamarIAUmaVez(
 ): Promise<string> {
   const key = Deno.env.get('LOVABLE_API_KEY');
   if (!key) throw new Error('LOVABLE_API_KEY não configurada');
-  const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+  const res = await fetch('https://ai.gateway.lovable.dev/v1/responses', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Lovable-API-Key': key },
-    body: JSON.stringify({ model: modelo, messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ] }),
+    headers: {
+      'Content-Type': 'application/json',
+      'Lovable-API-Key': key,
+      'X-Lovable-AIG-SDK': 'fetch',
+    },
+    body: JSON.stringify({
+      model: modelo,
+      input: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      stream: true,
+      store: false,
+      reasoning: { effort: 'low', summary: 'auto' },
+      include: ['reasoning.encrypted_content'],
+    }),
   });
-  if (res.status === 429) throw new Error('rate_limit');
-  if (res.status === 402) throw new Error('sem_creditos');
-  if (!res.ok) throw new Error(`ai_${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const data = await res.json();
-  return String(data?.choices?.[0]?.message?.content || '');
+  if (!res.ok) {
+    const raw = await res.text();
+    let mensagem = raw;
+    try {
+      const parsed = JSON.parse(raw);
+      mensagem = String(parsed?.message || parsed?.error?.message || raw);
+    } catch { /* mantém a resposta segura recebida */ }
+    const erro = new Error(`ai_${res.status}: ${mensagem.slice(0, 300)}`) as Error & { status?: number; retryAfter?: number };
+    erro.status = res.status;
+    const retryAfter = Number(res.headers.get('retry-after') || 0);
+    if (Number.isFinite(retryAfter) && retryAfter > 0) erro.retryAfter = retryAfter;
+    throw erro;
+  }
+  if (!res.body) throw new Error('ai_500: resposta sem stream');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let texto = '';
+  let erroStream = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const linhas = buffer.split('\n');
+    buffer = done ? '' : linhas.pop() || '';
+    for (const linha of linhas) {
+      if (!linha.startsWith('data: ')) continue;
+      const payload = linha.slice(6).trim();
+      if (!payload || payload === '[DONE]') continue;
+      try {
+        const evento = JSON.parse(payload);
+        if (evento.type === 'response.output_text.delta') texto += String(evento.delta || '');
+        if (evento.type === 'error' || evento.type === 'response.failed') {
+          erroStream = String(evento?.error?.message || evento?.response?.error?.message || 'falha durante a resposta');
+        }
+      } catch { /* evento parcial ou desconhecido */ }
+    }
+    if (done) break;
+  }
+  if (erroStream) throw new Error(`ai_500: ${erroStream.slice(0, 300)}`);
+  if (!texto.trim()) throw new Error('ai_500: resposta vazia');
+  return texto.trim();
 }
 
 /**
- * Chamada ao Lovable AI Gateway com backoff.
- * Falhas transitórias (429 e 5xx, ex.: 503 upstream_error) são retentadas até 3x,
- * alternando para o modelo de reserva. Falhas terminais (400/401/403/sem crédito) não retentam.
+ * Chamada ao Lovable AI Gateway com backoff limitado.
+ * Somente 429 e 5xx são retentados; o modelo solicitado nunca é substituído.
  */
 export async function chamarIA(
   system: string,
   user: string,
-  modelo = 'google/gemini-3.6-flash',
-  modeloReserva = 'google/gemini-2.5-flash',
+  modelo = 'openai/gpt-6-astra',
 ): Promise<string> {
-  const terminal = (m: string) => m === 'sem_creditos' || /^ai_(400|401|403)/.test(m);
   let ultimo: any = null;
   for (let tentativa = 0; tentativa < 3; tentativa++) {
     try {
-      return await chamarIAUmaVez(system, user, tentativa === 0 ? modelo : modeloReserva);
+      return await chamarIAUmaVez(system, user, modelo);
     } catch (e: any) {
       const msg = String(e?.message || e);
       ultimo = e;
-      if (terminal(msg)) throw e;
+      const status = Number(e?.status || msg.match(/^ai_(\d{3})/)?.[1] || 0);
+      if (status !== 429 && (status < 500 || status > 599)) throw e;
       if (tentativa === 2) break;
-      const base = msg === 'rate_limit' ? 4000 : 1500;
-      const espera = base * (tentativa + 1) + Math.floor(Math.random() * 2000);
+      const retryAfterMs = Number(e?.retryAfter || 0) * 1000;
+      const espera = retryAfterMs || (1500 * (2 ** tentativa) + Math.floor(Math.random() * 1000));
       console.error('[IAGO] IA falhou, nova tentativa', { erro: msg, tentativa: tentativa + 1, espera });
       await sleep(espera);
     }
