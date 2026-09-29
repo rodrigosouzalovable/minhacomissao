@@ -659,6 +659,13 @@
       "when": 1790703662170,
       "tag": "0093_authorize_inbox_media_upload_by_conversation",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1790703888414,
+      "tag": "0094_harden_inbox_media_conversation_helper",
+      "breakpoints": true
     }
   ]
 }
