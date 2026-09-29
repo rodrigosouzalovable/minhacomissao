@@ -51,6 +51,7 @@ export function RecuperacaoQualidadePanel() {
           .select('id, nome, display_phone, saude_quality, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, recuperacao_desde, dias_green_consecutivos, quarentena_ate')
           .eq('user_id', user?.id || '')
           .eq('provider', 'meta')
+          .is('partner_client_id', null)
           .eq('recuperacao_ativa', true)
           .eq('ativo', true)
           .returns<InstRecup[]>(),
@@ -85,7 +86,7 @@ export function RecuperacaoQualidadePanel() {
         {insts.length === 0 ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="h-4 w-4 text-emerald-500" />
-            Nenhum número em recuperação — todos com qualidade saudável.
+            Nenhum número em recuperação no momento. Números bloqueados ou sem confirmação de saúde aguardam liberação.
           </div>
         ) : (
           insts.map((i) => {

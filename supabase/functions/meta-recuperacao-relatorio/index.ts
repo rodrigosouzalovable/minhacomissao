@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
         ? `⚠️ *Aquecimento de qualidade — ${horaAgora}*\n\n` +
           `Nenhum número está em reaquecimento agora, mas ${lista.length} número(s) estão fora do verde:\n` +
           `${lista.join('\n')}\n\n` +
-          `A varredura automática religa o reaquecimento na próxima checagem de saúde (de hora em hora).`
+          `A recuperação depende de uma nova checagem de saúde e de liberação de eventuais bloqueios da Meta.`
         : `✅ *Aquecimento de qualidade — ${horaAgora}*\n\n` +
           `Nenhum número em reaquecimento e nenhum número em YELLOW/RED. Todos os seus números da API oficial estão saudáveis.`;
 
