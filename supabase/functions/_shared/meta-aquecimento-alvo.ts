@@ -5,6 +5,8 @@
 const GRAPH = "https://graph.facebook.com/v21.0";
 // Proprietário dos números oficiais autorizados a iniciar recuperação de qualidade.
 export const RECUPERACAO_OWNER_ID = "ee649720-b8ce-47a2-859e-100a3a9ae6bb";
+// #131031 previamente confirmado; leitura de saúde limitada não comprova desbloqueio de envio.
+export const RECUPERACAO_AGUARDA_DESBLOQUEIO = "13416b75-9389-4c68-b92c-a5e492eb061a";
 
 export function bloqueioRecuperacaoMeta(motivo?: string | null): boolean {
   return /#131031|#131042|account.lock|account_violation|payment|pagamento|billing|ban|blocked|restri[cç][aã]o de envio/i.test(String(motivo || ""));

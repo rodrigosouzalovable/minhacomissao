@@ -20,6 +20,7 @@ import {
   hojeBrt,
   sorteio,
   RECUPERACAO_OWNER_ID,
+  RECUPERACAO_AGUARDA_DESBLOQUEIO,
   bloqueioRecuperacaoMeta,
 } from "../_shared/meta-aquecimento-alvo.ts";
 
@@ -134,7 +135,7 @@ Deno.serve(async (req) => {
         ["LIMITED", "BLOCKED", "UNAVAILABLE", "RESTRICTED"].includes(String(e?.can_send_message).toUpperCase()) &&
         !/quality|reputation|lowered/i.test(String(e?.additional_info || ""))
       );
-      if (inst.partner_client_id || String(inst.saude_status).toUpperCase() !== "CONNECTED" ||
+      if (inst.id === RECUPERACAO_AGUARDA_DESBLOQUEIO || inst.partner_client_id || String(inst.saude_status).toUpperCase() !== "CONNECTED" ||
           !["YELLOW", "RED"].includes(String(inst.saude_quality).toUpperCase()) ||
           (inst.saude_ban_info && Object.keys(inst.saude_ban_info).length > 0) ||
           envioRestrito || bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {

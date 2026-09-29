@@ -6,7 +6,7 @@ import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-in
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
 import { isInformationalDisplayNameLimit } from '../_shared/meta-name-status.ts';
-import { RECUPERACAO_OWNER_ID, bloqueioRecuperacaoMeta } from '../_shared/meta-aquecimento-alvo.ts';
+import { RECUPERACAO_OWNER_ID, RECUPERACAO_AGUARDA_DESBLOQUEIO, bloqueioRecuperacaoMeta } from '../_shared/meta-aquecimento-alvo.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -382,6 +382,7 @@ Deno.serve(async (req) => {
 
         // Inclui os números próprios com liberação manual ou antiga opção desligada.
         if (caiu && recupAuto && inst.user_id === RECUPERACAO_OWNER_ID &&
+            inst.id !== RECUPERACAO_AGUARDA_DESBLOQUEIO &&
             inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
             inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
             !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) && !pausaViolacaoConta &&
@@ -406,6 +407,7 @@ Deno.serve(async (req) => {
           !pausaViolacaoConta && !caiu && (qual === 'YELLOW' || qual === 'RED') &&
           inst.recuperacao_ativa !== true &&
           inst.user_id === RECUPERACAO_OWNER_ID &&
+          inst.id !== RECUPERACAO_AGUARDA_DESBLOQUEIO &&
           inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
           inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
           !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) &&
