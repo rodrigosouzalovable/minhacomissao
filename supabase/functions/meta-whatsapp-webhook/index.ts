@@ -984,7 +984,7 @@ serve(async (req) => {
               }
 
               if (!jaTemAtendente) {
-                // ---- Match por acordo (prioritário) ----
+                // ---- Match por acordo (prioritário fora da caixa PADRÃO) ----
                 let atendenteAcordoId: string | null = null;
                 let atendenteAcordoNome: string | null = null;
                 const sufixoContato = phoneSuffix(outroLado);
@@ -1051,7 +1051,7 @@ serve(async (req) => {
                   }
                 }
 
-                // ---- Plantão do IAGO (calculado antes): se ativo, o IAGO assume os novos contatos ----
+                // ---- IAGO na PADRÃO 24/7; nas demais caixas, respeita a janela de plantão ----
                 let etiquetaIagoId: string | null = null;
                 try {
                   const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
@@ -1060,7 +1060,7 @@ serve(async (req) => {
                     .select('ativo, hora_inicio, hora_fim, fim_semana_24h')
                     .eq('folder_id', _folderIdContato ?? CAIXA_PADRAO_ID)
                     .maybeSingle();
-                  if ((janela as any)?.ativo) {
+                  if (_folderIdContato === null || (janela as any)?.ativo) {
                     const agoraSP = new Date(Date.now() - 3 * 60 * 60 * 1000);
                     const minutos = agoraSP.getUTCHours() * 60 + agoraSP.getUTCMinutes();
                     const dia = agoraSP.getUTCDay(); // 0 dom, 6 sáb
@@ -1074,7 +1074,7 @@ serve(async (req) => {
                       ? true
                       : (ini < fim ? (minutos >= ini && minutos < fim) : (minutos >= ini || minutos < fim));
                     const fimDeSemana24h = (janela as any).fim_semana_24h !== false && (dia === 0 || dia === 6);
-                    if (naJanela || fimDeSemana24h) {
+                    if (_folderIdContato === null || naJanela || fimDeSemana24h) {
                       const { data: iagoCfg } = await supabase
                         .from('iago_config').select('user_id').limit(1).maybeSingle();
                       let nomeIago = '';
@@ -1160,7 +1160,23 @@ serve(async (req) => {
 
 
 
-                if (atendenteAcordoId) {
+                if (_folderIdContato === null && etiquetaIagoId) {
+                  const { error: iagoErr } = await supabase
+                    .from('meta_whatsapp_contato_etiquetas')
+                    .insert({
+                      contato_id: contatoIdFinal,
+                      etiqueta_id: etiquetaIagoId,
+                      origem: 'iago_padrao_24h',
+                    } as any);
+                  const duplicada = iagoErr
+                    ? String(iagoErr.message || '').toLowerCase().includes('duplicate') || iagoErr.code === '23505'
+                    : false;
+                  if (iagoErr && !duplicada) {
+                    console.error('[MetaWebhook] falha ao aplicar IAGO na caixa PADRÃO', iagoErr.message);
+                  } else {
+                    console.log('[MetaWebhook] conversa nova atribuída ao IAGO na caixa PADRÃO', { contato_id: contatoIdFinal });
+                  }
+                } else if (atendenteAcordoId) {
                   const { error: linkErr } = await supabase
                     .from('meta_whatsapp_contato_etiquetas')
                     .insert({
@@ -1216,6 +1232,12 @@ serve(async (req) => {
                 // ---- Plantão do IAGO em conversa ANTIGA (já tem atendente humano) ----
                 // Dentro da janela do plantão o IAGO assume temporariamente a conversa;
                 // a etiqueta original é guardada e devolvida às 08h (iago-plantao-devolver).
+                // Na caixa PADRÃO, um humano já atribuído permanece responsável até devolução explícita.
+                if (_folderIdContato === null) {
+                  console.log('[MetaWebhook] conversa PADRÃO já assumida por humano — IAGO permanece desligado', {
+                    contato_id: contatoIdFinal,
+                  });
+                } else {
                 try {
                   const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
                   const { data: janela } = await supabase
@@ -1305,6 +1327,7 @@ serve(async (req) => {
                 } catch (e: any) {
                   console.error('[MetaWebhook] erro no plantão IAGO (conversa antiga)', e?.message || e);
                 }
+                }
 
               }
             } catch (e: any) {
@@ -1326,7 +1349,7 @@ serve(async (req) => {
                 supabase.from('meta_inbox_folder_credores')
                   .select('folder_id').eq('folder_id', folderKey).maybeSingle(),
               ]);
-              const pastaComIago = !!(janelaIago as any)?.ativo || !!(credorPasta as any)?.folder_id;
+              const pastaComIago = _folderIdContato === null || !!(janelaIago as any)?.ativo || !!(credorPasta as any)?.folder_id;
 
               if (pastaComIago) {
                 const { data: msgSalva } = await supabase
@@ -1415,7 +1438,7 @@ serve(async (req) => {
                 supabase.from('meta_inbox_folder_credores')
                   .select('folder_id').eq('folder_id', folderKey).maybeSingle(),
               ]);
-              const pastaComIagoImg = !!(janelaIagoImg as any)?.ativo || !!(credorPastaImg as any)?.folder_id;
+              const pastaComIagoImg = _folderIdContato === null || !!(janelaIagoImg as any)?.ativo || !!(credorPastaImg as any)?.folder_id;
 
               if (pastaComIagoImg) {
                 const { data: msgSalvaImg } = await supabase
@@ -1556,14 +1579,16 @@ serve(async (req) => {
                 }
                 return;
               }
-              try {
-                const { data, error } = await supabase.functions.invoke('meta-ia-atendimento', {
-                  body: { contato_id: contatoIdFinal, texto: textoParaIA },
-                });
-                if (error) console.error('[MetaWebhook] IA erro', error.message);
-                else console.log('[MetaWebhook] IA', JSON.stringify(data || {}));
-              } catch (e: any) {
-                console.error('[MetaWebhook] IA exceção', e?.message || e);
+              if (_folderIdContato !== null) {
+                try {
+                  const { data, error } = await supabase.functions.invoke('meta-ia-atendimento', {
+                    body: { contato_id: contatoIdFinal, texto: textoParaIA },
+                  });
+                  if (error) console.error('[MetaWebhook] IA erro', error.message);
+                  else console.log('[MetaWebhook] IA', JSON.stringify(data || {}));
+                } catch (e: any) {
+                  console.error('[MetaWebhook] IA exceção', e?.message || e);
+                }
               }
               try {
                 const { data, error } = await supabase.functions.invoke('iago-atendimento', {
