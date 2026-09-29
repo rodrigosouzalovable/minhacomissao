@@ -84,8 +84,9 @@ Deno.serve(async (req) => {
       .limit(5000);
 
     const destinos = await destinosAquecimento(supabase);
-    const { data: destinosHistoricos } = await supabase.from('meta_whatsapp_instances')
-      .select('id, provider').in('id', [...new Set((logs || []).map((l: any) => l.destino_instancia_id).filter(Boolean))]);
+    const idsHistoricos = [...new Set((logs || []).map((l: any) => l.destino_instancia_id).filter(Boolean))];
+    const { data: destinosHistoricos } = idsHistoricos.length ? await supabase.from('meta_whatsapp_instances')
+      .select('id, provider').in('id', idsHistoricos) : { data: [] };
     const tipoDestino = new Map((destinosHistoricos || []).map((d: any) => [d.id, d.provider]));
     const destinosEnviados = new Map<string, Set<string>>();
     for (const log of logs || []) {

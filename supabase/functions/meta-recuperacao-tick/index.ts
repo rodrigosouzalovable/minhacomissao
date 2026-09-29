@@ -110,11 +110,22 @@ Deno.serve(async (req) => {
       const chave = String(l.destino_telefone || "").replace(/\D/g, "").slice(-8) || l.destino_instancia_id;
       if (chave) usoDestino.set(chave, (usoDestino.get(chave) || 0) + 1);
     });
+    const enviadosPorInstancia = new Map<string, number>();
+    for (const log of logsHoje || []) {
+      if (log.status === "enviado") enviadosPorInstancia.set(
+        log.instancia_id, (enviadosPorInstancia.get(log.instancia_id) || 0) + 1,
+      );
+    }
+    // Primeiro dar oportunidade aos que ainda não enviaram hoje.
+    const fila = [...insts].sort((a: any, b: any) =>
+      (enviadosPorInstancia.get(a.id) || 0) - (enviadosPorInstancia.get(b.id) || 0) ||
+      new Date(a.recuperacao_proximo_envio_em || 0).getTime() - new Date(b.recuperacao_proximo_envio_em || 0).getTime()
+    );
 
     const resultados: any[] = [];
     let processadas = 0;
 
-    for (const inst of insts as any[]) {
+    for (const inst of fila as any[]) {
       if (processadas >= MAX_INSTANCIAS_POR_RUN) break;
       const restricoes = inst.saude_restricoes;
       const phoneEntities = Array.isArray(restricoes?.phone_health?.entities) ? restricoes.phone_health.entities : [];

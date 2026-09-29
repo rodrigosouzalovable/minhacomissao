@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Flame, ShieldCheck } from 'lucide-react';
@@ -37,9 +38,10 @@ function previsao(qualidade: string | null, diasGreen: number) {
 }
 
 export function RecuperacaoQualidadePanel() {
+  const { user } = useAuth();
 
   const { data } = useQuery({
-    queryKey: ['meta-recuperacao-panel'],
+    queryKey: ['meta-recuperacao-panel', user?.id],
     staleTime: 120_000,
     queryFn: async () => {
       const dia = diaBrt();
@@ -47,6 +49,8 @@ export function RecuperacaoQualidadePanel() {
         supabase
           .from('meta_whatsapp_instances')
           .select('id, nome, display_phone, saude_quality, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, recuperacao_desde, dias_green_consecutivos, quarentena_ate')
+          .eq('user_id', user?.id || '')
+          .eq('provider', 'meta')
           .eq('recuperacao_ativa', true)
           .eq('ativo', true)
           .returns<InstRecup[]>(),
