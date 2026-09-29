@@ -163,10 +163,18 @@ Deno.serve(async (req) => {
     if (!estado || estado.optout || estado.aguardando_humano) return json({ success: true, skipped: "atendimento automático encerrado" });
     const entradaId = String(body?.entrada_id ?? "").trim();
     if (!entradaId) return json({ success: false, error: "entrada_id é obrigatório" }, 400);
-    const { data: entradaReservada, error: erroReserva } = await service.rpc("clara_claim_message", {
-      p_contato_id: contatoId,
-      p_entrada_id: entradaId,
-    });
+    let entradaReservada = false;
+    let erroReserva: { message?: string } | null = null;
+    for (let tentativa = 0; tentativa < 5 && !entradaReservada; tentativa += 1) {
+      const reserva = await service.rpc("clara_claim_message", {
+        p_contato_id: contatoId,
+        p_entrada_id: entradaId,
+      });
+      erroReserva = reserva.error;
+      entradaReservada = reserva.data === true;
+      if (erroReserva) break;
+      if (!entradaReservada && tentativa < 4) await new Promise((resolve) => setTimeout(resolve, 2000 * (tentativa + 1)));
+    }
     if (erroReserva) throw new Error(`Falha ao reservar mensagem da Clara: ${erroReserva.message}`);
     if (entradaReservada !== true) return json({ success: true, skipped: "mensagem já processada ou em processamento" });
     const respostaAutomatica = classificarRespostaAutomatica(texto);
