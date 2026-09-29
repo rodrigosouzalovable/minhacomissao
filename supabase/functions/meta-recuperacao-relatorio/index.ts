@@ -2,7 +2,7 @@
 // Cron 13h e 18h BRT: manda um único WhatsApp com o que já foi feito no dia,
 // quantas mensagens saíram, quantas voltaram e a previsão de volta ao GREEN.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { destinosAquecimento, hojeBrt } from '../_shared/meta-aquecimento-alvo.ts';
+import { destinosAquecimento, hojeBrt, RECUPERACAO_OWNER_ID } from '../_shared/meta-aquecimento-alvo.ts';
 import { linhaPrevisao, previsaoGreen } from '../_shared/meta-recuperacao-aviso.ts';
 import { notificarAdmin } from '../_shared/notificar-admin.ts';
 
@@ -31,7 +31,9 @@ Deno.serve(async (req) => {
       .select('id, nome, display_phone, saude_quality, recuperacao_ativa, recuperacao_desde, recuperacao_msgs_meta_dia, dias_green_consecutivos, quarentena_ate')
       .eq('ativo', true)
       .eq('provider', 'meta')
-      .eq('aquecimento_qualidade_permitido', true)
+      .eq('user_id', RECUPERACAO_OWNER_ID)
+      .is('partner_client_id', null)
+      .eq('instancia_teste_aquecimento', false)
       .eq('recuperacao_ativa', true);
 
     const DESTINOS_RELATORIO = ['5562991672674'];
@@ -48,6 +50,8 @@ Deno.serve(async (req) => {
         .select('nome, display_phone, saude_quality')
         .eq('ativo', true)
         .eq('provider', 'meta')
+        .eq('user_id', RECUPERACAO_OWNER_ID)
+        .is('partner_client_id', null)
         .in('saude_quality', ['YELLOW', 'RED']);
 
       const lista = (fora || []).map((i: any) =>
@@ -79,8 +83,10 @@ Deno.serve(async (req) => {
       .eq('dia', dia)
       .limit(5000);
 
-    const destinos = await destinosAquecimento(supabase, { incluirMetaTeste: true });
-    const tipoDestino = new Map(destinos.map((d) => [d.id, d.tipo]));
+    const destinos = await destinosAquecimento(supabase);
+    const { data: destinosHistoricos } = await supabase.from('meta_whatsapp_instances')
+      .select('id, provider').in('id', [...new Set((logs || []).map((l: any) => l.destino_instancia_id).filter(Boolean))]);
+    const tipoDestino = new Map((destinosHistoricos || []).map((d: any) => [d.id, d.provider]));
     const destinosEnviados = new Map<string, Set<string>>();
     for (const log of logs || []) {
       if (log.status !== 'enviado') continue;
@@ -117,7 +123,7 @@ Deno.serve(async (req) => {
       const meus = (logs || []).filter((l: any) => l.instancia_id === i.id);
       const enviados = meus.filter((l: any) => l.status === 'enviado').length;
       totalUazapi += meus.filter((l: any) => l.status === 'enviado' && tipoDestino.get(l.destino_instancia_id) === 'uazapi').length;
-      totalMetaTeste += meus.filter((l: any) => l.status === 'enviado' && tipoDestino.get(l.destino_instancia_id) === 'meta_teste').length;
+      totalMetaTeste += meus.filter((l: any) => l.status === 'enviado' && tipoDestino.get(l.destino_instancia_id) === 'meta').length;
       const falhas = meus.filter((l: any) => l.status === 'falha').length;
       const resp = respostas.get(i.id) || 0;
       const meta = Number(i.recuperacao_msgs_meta_dia || 0);
@@ -140,8 +146,8 @@ Deno.serve(async (req) => {
       `📈 *Aquecimento de qualidade — ${hora}*\n\n` +
       `${linhas.join('\n')}\n\n` +
       `Total do dia: ${totalEnv} enviadas · ${totalResp} respostas recebidas\n` +
-      `Destinos: ${totalUazapi} UAZAPI · ${totalMetaTeste} testes Meta · ${Math.max(0, totalEnv - totalUazapi - totalMetaTeste)} indisponíveis para classificação.\n` +
-      `Destinos disponíveis: ${destinos.filter(d => d.tipo === 'uazapi').length} UAZAPI e ${destinos.filter(d => d.tipo === 'meta_teste').length} testes Meta na caixa AQUECIMENTO. Envios 09h–19h, intervalos de 20–40 min; a melhora para GREEN depende da Meta.\n` +
+      `Destinos do dia: ${totalUazapi} UAZAPI${totalMetaTeste ? ` · ${totalMetaTeste} testes Meta antes da mudança` : ''} · ${Math.max(0, totalEnv - totalUazapi - totalMetaTeste)} indisponíveis para classificação.\n` +
+      `Destinos disponíveis agora: ${destinos.length} UAZAPI conectados na caixa AQUECIMENTO, de qualquer proprietário. Envios 09h–19h, intervalos de 20–40 min; a melhora para GREEN depende da Meta.\n` +
       `Enquanto estiverem em recuperação, esses números ficam fora das campanhas.`;
 
     await notificarAdmin(supabase, {

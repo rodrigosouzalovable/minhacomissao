@@ -2,10 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { Flame, ShieldCheck } from 'lucide-react';
-import { toast } from 'sonner';
-import { useUserRole } from '@/hooks/useUserRole';
 
 interface InstRecup {
   id: string;
@@ -17,7 +14,6 @@ interface InstRecup {
   recuperacao_desde: string | null;
   dias_green_consecutivos: number | null;
   quarentena_ate: string | null;
-  aquecimento_qualidade_permitido: boolean | null;
 }
 
 const DIAS_GREEN_ALTA = 3;
@@ -42,7 +38,6 @@ function previsao(qualidade: string | null, diasGreen: number) {
 
 export function RecuperacaoQualidadePanel() {
   const queryClient = useQueryClient();
-  const { isAdmin } = useUserRole();
 
   const { data } = useQuery({
     queryKey: ['meta-recuperacao-panel'],
@@ -52,7 +47,7 @@ export function RecuperacaoQualidadePanel() {
       const [instRes, logRes] = await Promise.all([
         supabase
           .from('meta_whatsapp_instances')
-          .select('id, nome, display_phone, saude_quality, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, recuperacao_desde, dias_green_consecutivos, quarentena_ate, aquecimento_qualidade_permitido')
+          .select('id, nome, display_phone, saude_quality, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, recuperacao_desde, dias_green_consecutivos, quarentena_ate')
           .eq('recuperacao_ativa', true)
           .eq('ativo', true)
           .returns<InstRecup[]>(),
@@ -74,19 +69,6 @@ export function RecuperacaoQualidadePanel() {
   });
 
   const insts = data?.insts || [];
-
-  const alternarPermissao = async (id: string, valor: boolean) => {
-    const { error } = await supabase
-      .from('meta_whatsapp_instances')
-      .update({ aquecimento_qualidade_permitido: valor })
-      .eq('id', id);
-    if (error) {
-      toast.error('Não foi possível alterar o aquecimento deste número');
-      return;
-    }
-    toast.success(valor ? 'Aquecimento liberado para este número' : 'Aquecimento desligado para este número');
-    queryClient.invalidateQueries({ queryKey: ['meta-recuperacao-panel'] });
-  };
 
   return (
     <Card>
@@ -135,15 +117,6 @@ export function RecuperacaoQualidadePanel() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {isAdmin && (
-                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Switch
-                        checked={i.aquecimento_qualidade_permitido !== false}
-                        onCheckedChange={(v) => alternarPermissao(i.id, v)}
-                      />
-                      aquecer
-                    </label>
-                  )}
                   <Badge
                     variant="outline"
                     className={
@@ -160,8 +133,8 @@ export function RecuperacaoQualidadePanel() {
           })
         )}
         <p className="pt-1 text-xs text-muted-foreground">
-          Números com queda de qualidade saem das campanhas e conversam sozinhos com os números da caixa
-          AQUECIMENTO (09h–19h, intervalos de 20–40 min). Após 3 dias em GREEN voltam ao pool em escada.
+          Seus números oficiais aptos em RED/YELLOW conversam somente com UAZAPI conectado na caixa
+          AQUECIMENTO (09h–19h, intervalos de 20–40 min). Bloqueios da Meta impedem envios; após 3 dias em GREEN voltam ao pool em escada.
           Avisos no WhatsApp: início do aquecimento, resumo às 13h e 18h, mudanças de qualidade e volta ao GREEN.
         </p>
       </CardContent>
