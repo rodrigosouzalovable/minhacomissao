@@ -6,6 +6,7 @@ import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-in
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
 import { isInformationalDisplayNameLimit } from '../_shared/meta-name-status.ts';
+import { RECUPERACAO_OWNER_ID, RECUPERACAO_AGUARDA_DESBLOQUEIO, bloqueioRecuperacaoMeta } from '../_shared/meta-aquecimento-alvo.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -243,6 +244,17 @@ Deno.serve(async (req) => {
               ? 'qualidade'
               : 'numero'
           : null;
+        // LIMITED por qualidade/reputação não significa bloqueio total do envio.
+        const telefoneLimitadoSomentePorQualidade = (r.phone_health?.entities || [])
+          .filter((e: any) => String(e?.entity_type || '').toUpperCase() === 'PHONE_NUMBER')
+          .every((e: any) => {
+            const estado = String(e?.can_send_message || '').toUpperCase();
+            return estado === 'AVAILABLE' ||
+              (estado === 'LIMITED' && (e?.additional_info || []).some((info: unknown) =>
+                /quality rating|messaging limit.*quality|reputation/i.test(String(info))));
+          });
+        const apenasQualidadeLimitada = r.limitacao_tipo === 'qualidade' &&
+          telefoneLimitadoSomentePorQualidade && !comercialBloqueado;
         r.limitacao_motivo = limitacaoNomeInformativa
           ? null
           : r.limitacao_numero
@@ -366,20 +378,22 @@ Deno.serve(async (req) => {
           updatePayload.teto_escada = Number(escada[0] ?? 20);
           updatePayload.dias_green_consecutivos = 0;
           updatePayload.green_contado_dia = null;
+        }
 
-          // Aquecimento automático só nos números próprios (parceiro Meta não usa).
-           if (recupAuto && inst.aquecimento_qualidade_permitido === true &&
-               inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
-               String(r.status).toUpperCase() === 'CONNECTED' && !r.ban_info && !restritoMeta && !pausaViolacaoConta) {
-            // Já estava em recuperação e piorou → reduz o volume em vez de subir.
-            const piorou = inst.recuperacao_ativa === true;
-            updatePayload.recuperacao_ativa = true;
-            updatePayload.recuperacao_desde = inst.recuperacao_desde || new Date().toISOString();
-            updatePayload.recuperacao_msgs_meta_dia = piorou
-              ? msgsPiora
-              : Math.floor(msgsMin + Math.random() * (msgsMax - msgsMin + 1));
-            updatePayload.recuperacao_proximo_envio_em = new Date().toISOString();
-          }
+        // Inclui os números próprios com liberação manual ou antiga opção desligada.
+        if (caiu && recupAuto && inst.user_id === RECUPERACAO_OWNER_ID &&
+            inst.id !== RECUPERACAO_AGUARDA_DESBLOQUEIO &&
+            inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
+            inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
+            !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) && !pausaViolacaoConta &&
+            !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {
+          const piorou = inst.recuperacao_ativa === true;
+          updatePayload.recuperacao_ativa = true;
+          updatePayload.recuperacao_desde = inst.recuperacao_desde || new Date().toISOString();
+          updatePayload.recuperacao_msgs_meta_dia = piorou
+            ? msgsPiora
+            : Math.floor(msgsMin + Math.random() * (msgsMax - msgsMin + 1));
+          updatePayload.recuperacao_proximo_envio_em = new Date().toISOString();
         }
 
         // ===== Reconciliação: YELLOW/RED que ficou fora do reaquecimento =====
@@ -392,10 +406,12 @@ Deno.serve(async (req) => {
         if (
           !pausaViolacaoConta && !caiu && (qual === 'YELLOW' || qual === 'RED') &&
           inst.recuperacao_ativa !== true &&
-          inst.qualidade_liberada_manual !== true &&
-          inst.aquecimento_qualidade_permitido === true &&
-           inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
-           String(r.status).toUpperCase() === 'CONNECTED' && !r.ban_info && !restritoMeta &&
+          inst.user_id === RECUPERACAO_OWNER_ID &&
+          inst.id !== RECUPERACAO_AGUARDA_DESBLOQUEIO &&
+          inst.instancia_teste_aquecimento !== true && !inst.partner_client_id &&
+          inst.provider === 'meta' && String(r.status).toUpperCase() === 'CONNECTED' &&
+          !r.ban_info && (!restritoMeta || apenasQualidadeLimitada) &&
+          !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo) &&
           recupAuto
         ) {
           entrouPorVarredura = true;
@@ -406,8 +422,6 @@ Deno.serve(async (req) => {
           );
           updatePayload.recuperacao_proximo_envio_em = new Date().toISOString();
         }
-
-
         const { linhaPrevisao } = await import('../_shared/meta-recuperacao-aviso.ts');
 
         // ===== Volta para GREEN: conta os dias e encerra a recuperação =====
@@ -478,7 +492,7 @@ Deno.serve(async (req) => {
               ? `Quarentena até ${new Date(updatePayload.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (fora das campanhas; segue atendendo conversas recebidas).\n`
               : '') +
             (updatePayload.recuperacao_ativa
-               ? `🔥 Recuperação ligada: até ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia para UAZAPI e testes Meta aptos da caixa AQUECIMENTO (09h–19h, intervalos de 20–40 min).\n`
+                ? `🔥 Recuperação ligada: até ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia somente para UAZAPI conectados da caixa AQUECIMENTO (09h–19h, intervalos de 20–40 min).\n`
               : `ℹ️ Aquecimento automático não está liberado para este número.\n`) +
             `Volta com teto de ${escada[0] ?? 20}/dia e sobe em escada se ficar GREEN.\n` +
             `${linhaPrevisao(qual, 0, diasGreenAlta)}`;

@@ -3,6 +3,14 @@
 // então toda mensagem enviada para eles gera entrada (inbound) real.
 
 const GRAPH = "https://graph.facebook.com/v21.0";
+// Proprietário dos números oficiais autorizados a iniciar recuperação de qualidade.
+export const RECUPERACAO_OWNER_ID = "ee649720-b8ce-47a2-859e-100a3a9ae6bb";
+// #131031 previamente confirmado; leitura de saúde limitada não comprova desbloqueio de envio.
+export const RECUPERACAO_AGUARDA_DESBLOQUEIO = "13416b75-9389-4c68-b92c-a5e492eb061a";
+
+export function bloqueioRecuperacaoMeta(motivo?: string | null): boolean {
+  return /#131031|#131042|account.lock|account_violation|payment|pagamento|billing|ban|blocked|restri[cç][aã]o de envio/i.test(String(motivo || ""));
+}
 
 export const FOLDERS_AQUECIMENTO_FALLBACK = [
   "4f7a52c0-9c86-4b80-8867-4ade7a6df441", // AQUECIMENTO
@@ -66,7 +74,7 @@ export async function destinosAquecimento(
       const status = await response.json().catch(() => ({}));
       if (conexaoUazapiAtiva(status)) online.add(String(inst.id));
     } catch (_) {
-      // Destino indisponível nesta rodada: os leads confirmados assumem o envio.
+      // Destino indisponível nesta rodada: nunca fazer fallback na recuperação.
     } finally {
       clearTimeout(timeout);
     }
@@ -82,7 +90,10 @@ export async function destinosAquecimento(
     }))
     .filter((d: DestinoAquecimento) => d.telefone.length >= 10);
 
-  if (!options.incluirMetaTeste) return destinosUazapi;
+  if (!options.incluirMetaTeste) {
+    // Espelhos repetidos não podem ultrapassar a cota por telefone.
+    return [...new Map(destinosUazapi.map((d) => [d.telefone.slice(-8), d])).values()];
+  }
 
   const { data: testes } = await supabase
     .from("meta_whatsapp_instances")
