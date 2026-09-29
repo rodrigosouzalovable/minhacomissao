@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { enviarTexto, etiquetasAtendente, etiquetarAguardandoHumano, ehOptOut, iagoAtendeCaixa, suprimirDestinatario, temAtendenteHumanoNoTelefone } from "../_shared/iago.ts";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
+import { decidirFluxoConhecido } from "./regras.ts";
 
 const CLARA_ID = "d318692e-dc9a-4895-aa67-e21368a9de04";
 const FOLDER_CERTIFICADO = "9267b296-24e6-425d-9f0e-0e4114c782d9";
@@ -85,7 +86,7 @@ async function decidirComIA(texto: string, historico: Array<{ direcao: string; c
       reasoning: { effort: "low", summary: "auto" },
       store: false,
       input: [
-        { role: "developer", content: [{ type: "input_text", text: `Você é Clara Ribeiro de Souza, vendedora ultra profissional de certificados digitais no Brasil. Interprete antes de responder. Seja humana, objetiva, educada e consultiva; nunca invente autoridade pública, não diga que houve atualização real do CNPJ e nunca afirme que o certificado venceu. O contato inicial usou uma mensagem de prospecção e agora você deve esclarecer a oferta. Quando a promoção ainda não tiver sido apresentada e a resposta não for uma recusa, opt-out, número realmente errado ou situação sensível, responda exatamente: "${ofertaInicial}". Dizer que o contador informou, cuida disso ou sabe do assunto NÃO significa número errado e deve receber essa oferta. Só classifique numero_errado quando a pessoa disser claramente que não é responsável, não conhece a empresa ou que o número está errado. O preço oficial desta oferta é certificado digital PJ A1 por R$ 129,90. Dúvidas sobre validade, vencimento ou situação específica do certificado devem ser transferidas ao humano, sem confirmar suposições. Quando o cliente demonstrar interesse em avançar, use esta mensagem de agendamento: "${fluxo.mensagemAgendar}". Depois que aceitar o agendamento, use esta mensagem de documentos: "${fluxo.mensagemDocumentos}". Quando CNPJ, e-mail e CNH estiverem todos recebidos, use esta confirmação: "${fluxo.mensagemRecebido}" e transfira ao humano. Pedido de parar/sair é optout. Reclamação, situação sensível, dúvida jurídica, desconfiança forte ou pedido explícito de uma pessoa deve ir para humano. Não responda novamente a uma recusa clara. Retorne somente JSON válido: {"classificacao":"interesse|duvida|objecao|recusa|numero_errado|optout|documentos|humano","resposta":"texto curto em pt-BR ou vazio quando não deve responder","interesse":boolean,"transferir_humano":boolean,"etapa":"conversa|agendamento|aguardando_documentos|aguardando_humano|encerrado"}. Contexto registrado: ${JSON.stringify(contexto)}. Histórico: ${JSON.stringify(historico.slice(-12))}` }] },
+        { role: "developer", content: [{ type: "input_text", text: `Você é Clara Ribeiro de Souza, vendedora ultra profissional de certificados digitais no Brasil. Interprete antes de responder. Seja humana, objetiva, educada e consultiva; nunca invente autoridade pública, não diga que houve atualização real do CNPJ e nunca afirme que o certificado venceu. O contato inicial usou uma mensagem de prospecção e agora você deve esclarecer a oferta. Quando a promoção ainda não tiver sido apresentada e a resposta não for uma recusa, opt-out, número realmente errado ou situação sensível, responda exatamente: "${ofertaInicial}". Dizer que o contador informou, cuida disso ou sabe do assunto NÃO significa número errado e deve receber essa oferta. Só classifique numero_errado quando a pessoa disser claramente que não é responsável, não conhece a empresa ou que o número está errado. O preço oficial desta oferta é certificado digital PJ A1 por R$ 129,90 e sua validade é de 1 ano. Dúvidas específicas não cobertas por essas informações devem ser transferidas ao humano, sem confirmar suposições. Quando o cliente demonstrar interesse em avançar, use esta mensagem de agendamento: "${fluxo.mensagemAgendar}". Depois que aceitar o agendamento, use esta mensagem de documentos: "${fluxo.mensagemDocumentos}". Quando CNPJ, e-mail e CNH estiverem todos recebidos, use esta confirmação: "${fluxo.mensagemRecebido}" e transfira ao humano. Pedido de parar/sair é optout. Reclamação, situação sensível, dúvida jurídica, desconfiança forte ou pedido explícito de uma pessoa deve ir para humano. Não responda novamente a uma recusa clara. Retorne somente JSON válido: {"classificacao":"interesse|duvida|objecao|recusa|numero_errado|optout|documentos|humano","resposta":"texto curto em pt-BR ou vazio quando não deve responder","interesse":boolean,"transferir_humano":boolean,"etapa":"conversa|agendamento|aguardando_documentos|aguardando_humano|encerrado"}. Contexto registrado: ${JSON.stringify(contexto)}. Histórico: ${JSON.stringify(historico.slice(-12))}` }] },
         { role: "user", content: [{ type: "input_text", text: texto.slice(0, 1500) }] },
       ],
     }),
@@ -184,7 +185,7 @@ Deno.serve(async (req) => {
     const { data: mensagens } = await service.from("meta_whatsapp_mensagens")
       .select("direcao,conteudo,timestamp_msg").eq("instancia_id", contato.instancia_id)
       .ilike("telefone", `%${sufixo}`).order("timestamp_msg", { ascending: false }).limit(12);
-    const contexto = { ...(estado.contexto || {}) };
+    let contexto = { ...(estado.contexto || {}) };
     if (!contexto.tipo_oferta) {
       const { data: enviosOferta } = await service.from("certificado_prospeccao_envios")
         .select("job_id,certificado_leads!inner(telefone_principal)")
@@ -203,11 +204,13 @@ Deno.serve(async (req) => {
     if (String(body?.tipo_conteudo || "").toLowerCase() === "documento" || /\b(cnh|carteira (nacional )?de habilita[cç][aã]o)\b/i.test(texto)) contexto.cnh = true;
 
     const ofertaInicial = contexto.tipo_oferta === "renovacao_anual" ? OFERTA_RENOVACAO : OFERTA_INICIAL;
-    const decisao = await decidirComIA(texto, (mensagens || []).reverse(), contexto, {
+    const decisaoConhecida = decidirFluxoConhecido(texto, String(estado.etapa || "conversa"), contexto);
+    const decisao: Decisao = decisaoConhecida ?? await decidirComIA(texto, (mensagens || []).reverse(), contexto, {
       mensagemAgendar: String(cfg.mensagem_agendar || ""),
       mensagemDocumentos: String(cfg.mensagem_documentos || ""),
       mensagemRecebido: String(cfg.mensagem_recebido || ""),
     }, ofertaInicial);
+    if (decisaoConhecida) contexto = decisaoConhecida.contexto;
     const primeiraAbordagem = contexto.oferta_apresentada !== true;
     if (primeiraAbordagem && /\bcontador(?:a)?\b/i.test(texto) && !ehOptOut(texto)) {
       decisao.classificacao = "duvida";

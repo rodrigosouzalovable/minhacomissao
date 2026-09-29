@@ -57,6 +57,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Corrigir a Clara para informar validade de 1 ano, explicar a videoconferência e pedir CNPJ/e-mail/CNH após a confirmação
 - [x] Adicionar envio de template Meta nos cards de Retornos, inclusive sem dados financeiros ou já concluídos, mantendo o indicador de envio
 - [x] Destacar envios em andamento, respostas, pessoas distintas e taxa no detalhe da campanha, com apuração manual e horário visível
 - [x] Confirmar inscrição Meta, tentar reparo e evitar avisos WhatsApp de saúde do webhook por timeout passageiro

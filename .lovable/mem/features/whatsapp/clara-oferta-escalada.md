@@ -9,3 +9,5 @@ type: feature
 - Demonstrado interesse, Clara continua com as mensagens de agendamento e documentos já configuradas.
 - Quando precisar de auxílio humano, aplica a etiqueta `Aguardando Humano`, encerra a automação e envia aviso somente ao WhatsApp administrativo principal.
 - Cada mensagem recebida é reservada atomicamente antes do atendimento; repetições e chamadas simultâneas para a mesma conversa não podem gerar respostas duplicadas.
+- Perguntas sobre período ou validade recebem a informação fixa de que o PJ A1 vale 1 ano, sem escalar ao humano.
+- “Como procedo?” e equivalentes oferecem videoconferência de 3 minutos; após confirmação, Clara solicita CNPJ, e-mail e CNH física ou digital.
