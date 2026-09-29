@@ -11363,6 +11363,10 @@ export type Database = {
         Args: { _uid: string }
         Returns: boolean
       }
+      can_upload_inbox_media_for_conversation: {
+        Args: { _object_name: string; _uid: string }
+        Returns: boolean
+      }
       can_view_credor: {
         Args: { _credor: string; _user: string }
         Returns: boolean

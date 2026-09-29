@@ -8,6 +8,14 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
   const s = raw.toLowerCase();
 
   if (
+    s.includes("row-level security") ||
+    s.includes("violates row level security") ||
+    s.includes("storage unauthorized")
+  ) {
+    return "Você não tem permissão para anexar arquivos nesta conversa. Atualize a página e tente novamente; se continuar, confirme seu acesso à caixa de mensagens.";
+  }
+
+  if (
     s.includes("not on whatsapp") ||
     s.includes("não está no whatsapp") ||
     s.includes("nao esta no whatsapp") ||
