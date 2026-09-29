@@ -230,8 +230,6 @@ Deno.serve(async (req) => {
         const detalheLimitacao = String(r.limitacao_numero || '');
         const limitacaoNomeInformativa = isInformationalDisplayNameLimit(detalheLimitacao, nomeAtual);
         const restritoMeta = restritoMetaBruto && !limitacaoNomeInformativa;
-        // LIMITED por qualidade/reputação não significa bloqueio total do envio.
-        const apenasQualidadeLimitada = r.limitacao_tipo === 'qualidade' && !comercialBloqueado;
         r.restrito_meta = restritoMeta;
         r.limitacao_nome_informativa = limitacaoNomeInformativa;
         const limitacaoPorQualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalheLimitacao) ||
@@ -246,6 +244,8 @@ Deno.serve(async (req) => {
               ? 'qualidade'
               : 'numero'
           : null;
+        // LIMITED por qualidade/reputação não significa bloqueio total do envio.
+        const apenasQualidadeLimitada = r.limitacao_tipo === 'qualidade' && !comercialBloqueado;
         r.limitacao_motivo = limitacaoNomeInformativa
           ? null
           : r.limitacao_numero
