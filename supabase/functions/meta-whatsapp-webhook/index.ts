@@ -745,7 +745,7 @@ serve(async (req) => {
           // Upsert contato — chave primária: BSUID quando disponível, senão telefone
           let existenteQuery = supabase
             .from('meta_whatsapp_contatos')
-            .select('id, nao_lido, nome, bsuid, telefone, whatsapp_username')
+            .select('id, nao_lido, nome, nome_perfil, bsuid, telefone, whatsapp_username')
             .eq('instancia_id', inst.id);
           if (msgBsuid) {
             existenteQuery = existenteQuery.eq('bsuid', msgBsuid);
@@ -759,7 +759,7 @@ serve(async (req) => {
           if (!existenteFinal && msgBsuid && outroLado) {
             const { data: existentePorTel } = await supabase
               .from('meta_whatsapp_contatos')
-              .select('id, nao_lido, nome, bsuid, telefone, whatsapp_username')
+              .select('id, nao_lido, nome, nome_perfil, bsuid, telefone, whatsapp_username')
               .eq('instancia_id', inst.id)
               .eq('telefone', outroLado)
               .maybeSingle();
@@ -777,6 +777,7 @@ serve(async (req) => {
             // Correlaciona BSUID/username/telefone quando chega dado novo
             if (msgBsuid && !existenteFinal.bsuid) upd.bsuid = msgBsuid;
             if (usernameContato && !existenteFinal.whatsapp_username) upd.whatsapp_username = usernameContato;
+            if (!isEcho && nomeContato) upd.nome_perfil = nomeContato;
             if (outroLado && !existenteFinal.telefone) {
               upd.telefone = outroLado;
               upd.telefone_visivel = true;
@@ -787,7 +788,6 @@ serve(async (req) => {
               upd.ultima_msg_entrada_em = tsMsg;
               upd.ultima_interacao_em = tsMsg;
               upd.nao_lido = (existenteFinal.nao_lido || 0) + 1;
-              upd.nome = existenteFinal.nome || nomeContato;
               // Resposta do cliente sempre traz a conversa de volta para a lista principal
               upd.arquivado = false;
             }
@@ -800,7 +800,8 @@ serve(async (req) => {
               telefone_visivel: !!outroLado,
               bsuid: msgBsuid,
               whatsapp_username: usernameContato,
-              nome: isEcho ? null : nomeContato,
+              nome: null,
+              nome_perfil: isEcho ? null : nomeContato,
               ultima_mensagem: texto,
               ultima_mensagem_em: tsMsg,
               ultima_msg_entrada_em: isEcho ? null : tsMsg,

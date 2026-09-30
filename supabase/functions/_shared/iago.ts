@@ -58,6 +58,7 @@ const PALAVRAS_NAO_NOME = new Set([
   'oi', 'ola', 'blz', 'beleza', 'certo', 'entendi', 'quem', 'aqui', 'nada', 'agora', 'depois',
   'boleto', 'pix', 'divida', 'acordo', 'valor', 'parcela', 'cpf', 'pode', 'quero', 'preciso',
   'desempregado', 'ainda', 'talvez', 'moco', 'senhor', 'senhora', 'amigo', 'amiga', 'irmao',
+  'tudo', 'bem', 'interactive', 'interativo',
 ]);
 
 /**
@@ -67,6 +68,7 @@ const PALAVRAS_NAO_NOME = new Set([
 export function extrairNomeInformado(texto?: string | null): string {
   const bruto = String(texto || '').trim();
   if (!bruto) return '';
+  if (/^\[[^\]]+\]$/u.test(bruto)) return '';
   if (/\d/.test(bruto.replace(/\s/g, '')) && soDigitos(bruto).length >= 6) return '';
 
   const limpar = (v: string) =>

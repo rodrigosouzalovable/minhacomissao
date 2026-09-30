@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     // ===== Contato / caixa =====
     const { data: contato } = await supabase
       .from('meta_whatsapp_contatos')
-      .select('id, instancia_id, telefone, bsuid, nome, cpf, folder_id, credor, origem_aquecimento')
+      .select('id, instancia_id, telefone, bsuid, nome, nome_perfil, cpf, folder_id, credor, origem_aquecimento')
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
@@ -704,7 +704,7 @@ Deno.serve(async (req) => {
     const ctxNome = (estado.contexto || {}) as any;
     let nomeInformado = String(ctxNome.nome_informado || '').trim();
     let nomePedido = !!ctxNome.nome_pedido;
-    const nomePerfil = String((contato as any).nome || '').trim();
+    const nomePerfil = String((contato as any).nome_perfil || '').trim();
     const perfilOk = nomePerfilConfiavel(nomePerfil);
     // Nome que já usamos na saudação das nossas mensagens (campanha/template)
     const nomeEnviadoPorNos = nomeDeSaudacaoEnviada(historico);

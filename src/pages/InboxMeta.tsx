@@ -83,7 +83,7 @@ interface MetaInstance {
 }
 
 interface MetaContato {
-  id: string; instancia_id: string; telefone: string; nome: string | null; cpf?: string | null;
+  id: string; instancia_id: string; telefone: string; nome: string | null; nome_perfil?: string | null; cpf?: string | null;
   ultima_mensagem: string | null; ultima_mensagem_em: string | null;
   ultima_msg_entrada_em: string | null; nao_lido: number;
   sla_dispensado_em?: string | null;
@@ -263,6 +263,17 @@ export default function InboxMeta() {
   const escolhaManualFolderRef = useRef(false);
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
   const [aberturasCnpj, setAberturasCnpj] = useState<Record<string, string>>({}); // suffix8 -> data de abertura
+
+  const nomeExibido = (contato?: MetaContato | null) => {
+    if (!contato) return '';
+    const perfil = String(contato.nome_perfil || '').trim();
+    if (perfil) return perfil;
+    const crm = contato.telefone ? String(nomesCRM[suffix8(contato.telefone)] || '').trim() : '';
+    if (crm) return crm;
+    const legado = String(contato.nome || '').trim();
+    if (/^(?:interactive|interativo|tudo\s+b[eé]m\??)$/iu.test(legado)) return '';
+    return legado;
+  };
 
   
   const [etiquetasOpen, setEtiquetasOpen] = useState(false);
@@ -691,7 +702,7 @@ export default function InboxMeta() {
 
     let cancelado = false;
     void (async () => {
-      const cols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
+      const cols = 'id, instancia_id, telefone, nome, nome_perfil, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
       let q = supabase.from('meta_whatsapp_contatos').select(cols).limit(1);
       if (contatoId) {
         q = q.eq('id', contatoId);
@@ -731,7 +742,7 @@ export default function InboxMeta() {
   const fetchContatos = useCallback(async () => {
     if (!user) return;
     const request = ++contatosRequestRef.current;
-    const selectCols = 'id, instancia_id, telefone, nome, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
+    const selectCols = 'id, instancia_id, telefone, nome, nome_perfil, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
 
     // Etiquetas e Meus Clientes: paginação diretamente no banco, sem varrer todos os vínculos.
     if (modoMeusClientes || filtroEtiqueta.size > 0) {
@@ -804,7 +815,7 @@ export default function InboxMeta() {
       const orParts: string[] = [];
       // ilike com escape básico de vírgulas e parênteses
       const safeText = bRaw.replace(/[,()%]/g, ' ').trim();
-      if (safeText) orParts.push(`nome.ilike.%${safeText}%`);
+      if (safeText) orParts.push(`nome.ilike.%${safeText}%`, `nome_perfil.ilike.%${safeText}%`);
       if (bDigits) {
         orParts.push(`telefone.ilike.%${bDigits}%`);
         // Também casa pelo sufixo (últimos 8 dígitos) — tolera o "9" extra do celular
@@ -1065,7 +1076,7 @@ export default function InboxMeta() {
   // Carrega nomes do CRM por telefone sem varrer a tabela grande de devedores.
   useEffect(() => {
     (async () => {
-      const semNome = contatos.filter(c => !c.nome && c.telefone);
+      const semNome = contatos.filter(c => !c.nome_perfil && !c.nome && c.telefone);
       if (semNome.length === 0) return;
       const suffixes = Array.from(new Set(semNome.map(c => suffix8(c.telefone)).filter(Boolean)));
       const faltando = suffixes.filter(s => !(s in nomesCRM));
@@ -1132,7 +1143,7 @@ export default function InboxMeta() {
     return contatos
       .filter(c => {
         if (b) {
-          const nomeContato = norm(c.nome || '');
+          const nomeContato = norm(c.nome_perfil || c.nome || '');
           const nomeCRM = norm(nomesCRM[suffix8(c.telefone)] || '');
           const telDigits = (c.telefone || '').replace(/\D/g, '');
           const telSfx = telDigits.slice(-8);
@@ -1240,7 +1251,7 @@ export default function InboxMeta() {
         });
         return {
           telefone: formatTelefone(c.telefone || ''),
-          nome: c.nome || nomesCRM[suffix8(c.telefone)] || '',
+          nome: nomeExibido(c),
           marcador: qs.length ? qs.join(', ') : 'Não qualificado',
           ultima: c.ultima_mensagem_em ? format(new Date(c.ultima_mensagem_em), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '',
           caixa: nomeCaixa(c.folder_id),
@@ -2187,7 +2198,7 @@ export default function InboxMeta() {
                       )}>
                         {selMultipla && (sel ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" /> : <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />)}
                         {c.fixado && <Pin className="h-3 w-3 text-amber-500 shrink-0" />}
-                        <span className="truncate">{c.nome || nomesCRM[suffix8(c.telefone)] || (c.telefone ? formatTelefone(c.telefone) : (c.whatsapp_username ? `@${c.whatsapp_username}` : 'Sem telefone'))}</span>
+                        <span className="truncate">{nomeExibido(c) || (c.telefone ? formatTelefone(c.telefone) : (c.whatsapp_username ? `@${c.whatsapp_username}` : 'Sem telefone'))}</span>
                         {!c.telefone && c.bsuid && <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">BSUID</Badge>}
                         {c.arquivado && abaAtiva !== 'arquivados' && (
                           <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">Arquivada</Badge>
@@ -2294,7 +2305,7 @@ export default function InboxMeta() {
                   </Button>
                   <div className="min-w-0">
                   <div className="text-sm font-semibold truncate flex items-center gap-2">
-                    {contatoAtivo.nome || (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.whatsapp_username ? `@${contatoAtivo.whatsapp_username}` : 'Contato sem telefone'))}
+                    {nomeExibido(contatoAtivo) || (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.whatsapp_username ? `@${contatoAtivo.whatsapp_username}` : 'Contato sem telefone'))}
                     {contatoAtivo.whatsapp_username && (
                       <Badge variant="secondary" className="text-[10px] py-0 h-4">@{contatoAtivo.whatsapp_username}</Badge>
                     )}
@@ -2469,7 +2480,7 @@ export default function InboxMeta() {
                               contato_id: contatoAtivo.id,
                               instancia_id: instId,
                               telefone: contatoAtivo.telefone!,
-                              nome: contatoAtivo.nome,
+                              nome: nomeExibido(contatoAtivo),
                             };
                             void ligarOuPedirPermissao(alvo);
 
@@ -2849,7 +2860,7 @@ export default function InboxMeta() {
           open={agendarRetornoOpen}
           onOpenChange={setAgendarRetornoOpen}
           metaContatoId={contatoAtivo.id}
-          clienteNome={contatoAtivo.nome || (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : 'Contato')}
+          clienteNome={nomeExibido(contatoAtivo) || (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : 'Contato')}
           clienteTelefone={contatoAtivo.telefone || ''}
           clienteCpf={cpfDoContato}
         />
@@ -2877,7 +2888,7 @@ export default function InboxMeta() {
           if (!open) setQualifContatoAlvo(null);
         }}
         contatoId={qualifContatoAlvo?.id ?? contatoAtivo?.id ?? null}
-        contatoNome={qualifContatoAlvo?.nome ?? contatoAtivo?.nome ?? undefined}
+        contatoNome={nomeExibido(qualifContatoAlvo ?? contatoAtivo) || undefined}
         atuais={qualifContatoAlvo
           ? (qualifPorContato[qualifContatoAlvo.id] ?? [])
           : contatoAtivo ? (qualifPorContato[contatoAtivo.id] ?? []) : []}
@@ -2907,7 +2918,7 @@ export default function InboxMeta() {
           onOpenChange={setReabrirTemplateOpen}
           instancia_id={contatoAtivo.instancia_id}
           telefone={contatoAtivo.telefone || ''}
-          contato_nome={contatoAtivo.nome || undefined}
+          contato_nome={nomeExibido(contatoAtivo) || undefined}
           atendente_nome={atendenteNome}
           onSent={() => { if (contatoAtivo) fetchMensagens(contatoAtivo, false); }}
         />
@@ -2917,7 +2928,7 @@ export default function InboxMeta() {
         file={arquivoParaConfirmar}
         destinoLabel={
           contatoAtivo
-            ? (contatoAtivo.nome ||
+            ? (nomeExibido(contatoAtivo) ||
                (contatoAtivo.telefone ? formatTelefone(contatoAtivo.telefone) : (contatoAtivo.bsuid || 'Contato')))
             : 'Contato'
         }
