@@ -20,18 +20,10 @@ type ImportRun = {
   ausentes_baixados: number; iniciado_em: string; concluido_em: string | null; erro_mensagem: string | null;
 };
 
-const formatDuration = (seconds: number) => {
-  if (!Number.isFinite(seconds) || seconds <= 0) return 'calculando…';
-  if (seconds < 60) return `${Math.ceil(seconds)} s`;
-  const minutes = Math.ceil(seconds / 60);
-  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
-};
-
 export default function CobmaisDailyImport() {
   const { user } = useAuth();
   const { toast } = useToast();
   const runRef = useRef<string | null>(null);
-  const startedRef = useRef(0);
   const [file, setFile] = useState<File | null>(null);
   const [displayFileName, setDisplayFileName] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
@@ -89,11 +81,6 @@ export default function CobmaisDailyImport() {
     return () => window.clearInterval(timer);
   }, [phase, refreshRuns]);
 
-  const updateEta = (done: number, total: number) => {
-    const elapsed = (Date.now() - startedRef.current) / 1000;
-    setEta(formatDuration(done > 0 ? (elapsed / done) * Math.max(0, total - done) : 0));
-  };
-
   const fail = async (error: string) => {
     setPhase('error');
     setMessage(error);
@@ -110,7 +97,6 @@ export default function CobmaisDailyImport() {
     setPhase('uploading');
     setProgress(1);
     setProcessed(0);
-    startedRef.current = Date.now();
 
     const path = `${user.id}/${crypto.randomUUID()}-${selected.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const { error: uploadError } = await supabase.storage.from('cobmais-importacoes').upload(path, selected, { upsert: false, contentType: selected.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
