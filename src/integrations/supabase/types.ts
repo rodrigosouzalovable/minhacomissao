@@ -7273,6 +7273,7 @@ export type Database = {
           instancia_id: string
           nao_lido: number
           nome: string | null
+          nome_perfil: string | null
           origem_aquecimento: string | null
           sla_dispensado_em: string | null
           telefone: string | null
@@ -7300,6 +7301,7 @@ export type Database = {
           instancia_id: string
           nao_lido?: number
           nome?: string | null
+          nome_perfil?: string | null
           origem_aquecimento?: string | null
           sla_dispensado_em?: string | null
           telefone?: string | null
@@ -7327,6 +7329,7 @@ export type Database = {
           instancia_id?: string
           nao_lido?: number
           nome?: string | null
+          nome_perfil?: string | null
           origem_aquecimento?: string | null
           sla_dispensado_em?: string | null
           telefone?: string | null
@@ -12434,6 +12437,7 @@ export type Database = {
           instancia_id: string
           nao_lido: number
           nome: string
+          nome_perfil: string
           sla_dispensado_em: string
           telefone: string
           ultima_mensagem: string
@@ -12465,6 +12469,7 @@ export type Database = {
           instancia_id: string
           nao_lido: number
           nome: string
+          nome_perfil: string
           sla_dispensado_em: string
           telefone: string
           ultima_mensagem: string
@@ -12497,6 +12502,7 @@ export type Database = {
           instancia_id: string
           nao_lido: number
           nome: string
+          nome_perfil: string
           sla_dispensado_em: string
           telefone: string
           ultima_mensagem: string

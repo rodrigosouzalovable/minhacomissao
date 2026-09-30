@@ -757,6 +757,13 @@
       "when": 1790798240427,
       "tag": "0107_allow_long_cobmais_atomic_publication",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1790799942761,
+      "tag": "0108_separate_meta_contact_profile_name",
+      "breakpoints": true
     }
   ]
 }
