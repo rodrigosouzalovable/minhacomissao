@@ -743,6 +743,13 @@
       "when": 1790798069634,
       "tag": "0105_persist_cobmais_background_imports",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1790798103382,
+      "tag": "0106_resume_cobmais_background_batches",
+      "breakpoints": true
     }
   ]
 }
