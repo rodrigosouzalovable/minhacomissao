@@ -266,7 +266,7 @@ export function useMetaAudioRecorder({
             return;
           }
           const destinatarioPath = (telefone || bsuid || 'destinatario').replace(/[^a-zA-Z0-9_-]/g, '_');
-          const path = `meta/${instanciaId}/${destinatarioPath}/${Date.now()}.${prepared.ext}`;
+          const path = `${instanciaId}/${destinatarioPath}/${Date.now()}.${prepared.ext}`;
           let audioSignedUrl: string;
           try {
             audioSignedUrl = await uploadInboxMedia(path, prepared.blob, prepared.contentType);

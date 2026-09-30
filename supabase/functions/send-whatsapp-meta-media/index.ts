@@ -134,6 +134,20 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    const pathParts = mediaPath.split('/').filter(Boolean);
+    const pathInstanceId = pathParts[0] || '';
+    const pathRecipient = pathParts[1] || '';
+    const requestedRecipient = String(telefone || bsuid || '').trim();
+    const pathDigits = pathRecipient.replace(/\D/g, '');
+    const requestedDigits = requestedRecipient.replace(/\D/g, '');
+    const sameRecipient = pathRecipient === requestedRecipient || (
+      pathDigits.length >= 8 && requestedDigits.length >= 8 && pathDigits.slice(-8) === requestedDigits.slice(-8)
+    );
+    if (pathInstanceId !== String(instancia_id) || !sameRecipient) {
+      return new Response(JSON.stringify({ success: false, error: 'O arquivo não corresponde à conversa selecionada' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
