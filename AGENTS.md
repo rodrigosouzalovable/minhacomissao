@@ -10,4 +10,4 @@
 - Modelos Meta isolam criação, alteração e automação por dono; fluxos operacionais compartilhados podem ler os modelos necessários, e lotes param ao confirmar Marketing.
 - Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
 - Resultados de campanhas cruzam respostas e acordos por sufixo/CPF normalizados e janelas temporais indexadas, para manter a apuração manual rápida sem polling.
-- “Não é o cliente” grava na blacklist por sufixo; usuários autorizados marcam e somente admins listam, exportam e desfazem.
+- “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores; todos desfazem pelo card, somente admins listam/exportam.

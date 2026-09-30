@@ -1561,10 +1561,18 @@ export default function InboxMeta() {
     setContatoAtivo(prev => prev?.id === id ? { ...prev, nao_lido: Math.max(prev.nao_lido || 0, 1) } : prev);
   };
   const handleMarcarNaoCliente = async (contato: MetaContato) => {
-    if (!window.confirm(`Adicionar ${formatTelefone(contato.telefone)} à blacklist como “Não é o cliente”?`)) return;
-    const { error } = await (supabase as any).rpc('marcar_meta_contato_nao_cliente', { _contato_id: contato.id });
+    if (!window.confirm(`Marcar ou desfazer ${formatTelefone(contato.telefone)} como “Não é o cliente”?`)) return;
+    const { data, error } = await (supabase as any).rpc('marcar_meta_contato_nao_cliente', { _contato_id: contato.id });
     if (error) {
       toast({ title: 'Não foi possível marcar o contato', description: error.message, variant: 'destructive' });
+      return;
+    }
+    if (data?.acao === 'desfeito') {
+      toast({ title: 'Marcação desfeita', description: 'O número foi retirado da blacklist.' });
+      return;
+    }
+    if (data?.acao === 'ja_bloqueado') {
+      toast({ title: 'Número já está na blacklist', description: 'O bloqueio anterior foi mantido.' });
       return;
     }
     toast({ title: 'Contato adicionado à blacklist', description: 'Este número será retirado das próximas listas do Envio Meta.' });
