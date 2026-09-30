@@ -792,6 +792,13 @@
       "when": 1790801703760,
       "tag": "0112_preserve_iago_waiting_human_label",
       "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1790801817272,
+      "tag": "0113_exclude_inbox_admins_from_iago_rotation",
+      "breakpoints": true
     }
   ]
 }
