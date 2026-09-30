@@ -12,6 +12,19 @@ const corsHeaders = {
 };
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
+const DOCUMENT_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt']);
+const MAX_DOCUMENT_BYTES = 100 * 1024 * 1024;
+
+function signedMediaPath(mediaUrl: string): string | null {
+  try {
+    const url = new URL(mediaUrl);
+    const marker = '/storage/v1/object/sign/inbox-media/';
+    const at = url.pathname.indexOf(marker);
+    return at >= 0 ? decodeURIComponent(url.pathname.slice(at + marker.length)) : null;
+  } catch {
+    return null;
+  }
+}
 
 function formatTel(tel: string): string {
   const d = (tel || '').replace(/\D/g, '');
@@ -97,7 +110,58 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token) {
+      return new Response(JSON.stringify({ success: false, error: 'Sessão necessária para enviar arquivos' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const supabase = createClient(supabaseUrl, serviceKey);
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    const authenticatedUserId = authData.user?.id;
+    if (authError || !authenticatedUserId) {
+      return new Response(JSON.stringify({ success: false, error: 'Sessão inválida ou expirada' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const mediaPath = signedMediaPath(String(media_url));
+    if (!mediaPath) {
+      return new Response(JSON.stringify({ success: false, error: 'Arquivo não pertence ao armazenamento seguro da Inbox' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: canUpload, error: permissionError } = await userClient.rpc('can_upload_inbox_media_for_conversation', {
+      _uid: authenticatedUserId,
+      _object_name: mediaPath,
+    });
+    if (permissionError || canUpload !== true) {
+      return new Response(JSON.stringify({ success: false, error: 'Você não tem acesso para enviar arquivos nesta conversa' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (type === 'document') {
+      const ext = String(file_name || mediaPath).split('.').pop()?.toLowerCase() || '';
+      if (!DOCUMENT_EXTENSIONS.has(ext)) {
+        return new Response(JSON.stringify({ success: false, error: 'Tipo de documento não permitido' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const stored = await fetch(media_url, { method: 'HEAD' });
+      const bytes = Number(stored.headers.get('content-length') || 0);
+      if (stored.ok && bytes > MAX_DOCUMENT_BYTES) {
+        return new Response(JSON.stringify({ success: false, error: 'Documento acima do limite de 100 MB' }), {
+          status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
     const { data: inst } = await supabase
       .from('meta_whatsapp_instances')
@@ -109,7 +173,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const uid = user_id || inst.user_id;
+    const uid = authenticatedUserId;
     let to = telefone ? formatTel(telefone) : '';
     const useBsuid = !to && !!bsuid;
     console.log('[send-whatsapp-meta-media] request accepted', {
