@@ -750,6 +750,13 @@
       "when": 1790798103382,
       "tag": "0106_resume_cobmais_background_batches",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1790798240427,
+      "tag": "0107_allow_long_cobmais_atomic_publication",
+      "breakpoints": true
     }
   ]
 }
