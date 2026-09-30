@@ -208,6 +208,7 @@ export default function InboxMeta() {
 
   const [etiquetas, setEtiquetas] = useState<MetaEtiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
+  const [contatosNaoCliente, setContatosNaoCliente] = useState<Set<string>>(new Set());
   const [filtroEtiqueta, setFiltroEtiqueta] = useState<Set<string>>(new Set());
   const [filtroEtOpen, setFiltroEtOpen] = useState(false);
   const [filtroJanela24h, setFiltroJanela24h] = useState(false);
@@ -387,6 +388,16 @@ export default function InboxMeta() {
   }, [user, currentFolderId]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
+  const fetchContatosNaoCliente = useCallback(async (contatoIds?: string[]) => {
+    const ids = (contatoIds ?? []).filter(Boolean);
+    if (ids.length === 0) {
+      setContatosNaoCliente(new Set());
+      return;
+    }
+    const { data, error } = await (supabase as any).rpc('meta_inbox_nao_cliente_contatos', { _contato_ids: ids });
+    if (error) return;
+    setContatosNaoCliente(new Set(((data as Array<{ contato_id: string }>) ?? []).map((row) => row.contato_id)));
+  }, []);
   // Janela mínima de reconsulta: eventos em rajada (Realtime/foco) não refazem
   // a leitura completa de etiquetas/qualificações quando a lista não mudou.
   const etiqCacheRef = useRef<{ key: string; ts: number }>({ key: '', ts: 0 });
@@ -786,7 +797,7 @@ export default function InboxMeta() {
       const lista = rows.slice(0, limiteContatos);
       setContatos(lista);
       contatoIdsRef.current = lista.map(c => c.id);
-      void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current)]);
+      void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current), fetchContatosNaoCliente(contatoIdsRef.current)]);
       return;
     }
 
@@ -852,8 +863,8 @@ export default function InboxMeta() {
     setContatos(combinados);
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
-    void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current)]);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, instancias]);
+    void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current), fetchContatosNaoCliente(contatoIdsRef.current)]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, fetchContatosNaoCliente, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, instancias]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -1568,6 +1579,11 @@ export default function InboxMeta() {
       return;
     }
     if (data?.acao === 'desfeito') {
+      setContatosNaoCliente(prev => {
+        const next = new Set(prev);
+        next.delete(contato.id);
+        return next;
+      });
       toast({ title: 'Marcação desfeita', description: 'O número foi retirado da blacklist.' });
       return;
     }
@@ -1575,6 +1591,7 @@ export default function InboxMeta() {
       toast({ title: 'Número já está na blacklist', description: 'O bloqueio anterior foi mantido.' });
       return;
     }
+    setContatosNaoCliente(prev => new Set(prev).add(contato.id));
     toast({ title: 'Contato adicionado à blacklist', description: 'Este número será retirado das próximas listas do Envio Meta.' });
   };
   const handleEtiquetaToggle = (cId: string, eId: string, ativo: boolean) => {
@@ -2220,6 +2237,9 @@ export default function InboxMeta() {
                         {!c.telefone && c.bsuid && <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">BSUID</Badge>}
                         {c.arquivado && abaAtiva !== 'arquivados' && (
                           <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">Arquivada</Badge>
+                        )}
+                        {contatosNaoCliente.has(c.id) && (
+                          <Badge variant="destructive" className="text-[9px] py-0 h-4 px-1.5 shrink-0">Não é o cliente</Badge>
                         )}
                       </span>
                       <span className={cn(
