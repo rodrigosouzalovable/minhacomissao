@@ -853,7 +853,7 @@ serve(async (req) => {
           // ===== Etiqueta do atendente =====
           // 1) Se o telefone bate (últimos 8 dígitos, tolera "9" móvel) com algum acordo,
           //    aplica a etiqueta "Atendente: <nome>" do usuário que lançou o acordo (LOCKED — só admin remove).
-          // 2) Caso contrário, cai no rodízio (round-robin por menor carga).
+           // 2) Caso contrário, cai no rodízio circular por ordem, sem compensar carga.
           // A etiqueta só pode ser de um atendente RESPONSÁVEL pela caixa de mensagens
           // (folder) em que a conversa está. Caixa Padrão => meta_inbox_default_members.
           let _folderIdContato: string | null = null;
@@ -908,8 +908,7 @@ serve(async (req) => {
 
 
               // ---- Responsáveis da caixa de mensagens da conversa ----
-              // Admins da caixa apenas acompanham: não entram no rodízio automático.
-              // Exceção: se TODOS os responsáveis forem admins, eles voltam a participar.
+               // Admins da caixa apenas acompanham: não entram no rodízio automático.
               const permitidosCaixa = new Set<string>();
               {
                 let mem: any[] | null = null;
@@ -926,9 +925,8 @@ serve(async (req) => {
                   mem = r.data as any[];
                 }
                 const lista = mem || [];
-                const temNaoAdmin = lista.some((m: any) => !m.admin);
                 for (const m of lista) {
-                  if (!temNaoAdmin || !(m as any).admin) permitidosCaixa.add((m as any).user_id);
+                   if (!(m as any).admin) permitidosCaixa.add((m as any).user_id);
                 }
               }
 

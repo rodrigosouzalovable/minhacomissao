@@ -12190,6 +12190,14 @@ export type Database = {
         Args: { _folder?: string }
         Returns: number
       }
+      meta_rodizio_status_caixa: {
+        Args: { _folder?: string }
+        Returns: {
+          ordem: number
+          proximo: boolean
+          user_id: string
+        }[]
+      }
       meta_tier_valor: { Args: { t: string }; Returns: number }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       parceiro_tem_instancia: {

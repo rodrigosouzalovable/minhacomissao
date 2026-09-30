@@ -666,6 +666,13 @@
       "when": 1790703888414,
       "tag": "0094_harden_inbox_media_conversation_helper",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1790769742337,
+      "tag": "0095_inbox_meta_strict_attendant_rotation_and_status",
+      "breakpoints": true
     }
   ]
 }
