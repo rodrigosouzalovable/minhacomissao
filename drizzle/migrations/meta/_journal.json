@@ -694,6 +694,13 @@
       "when": 1790778122629,
       "tag": "0098_support_legacy_meta_inbox_media_paths",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1790787252059,
+      "tag": "0099_track_meta_quality_recovery_cycles",
+      "breakpoints": true
     }
   ]
 }
