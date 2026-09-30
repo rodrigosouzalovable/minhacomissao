@@ -25,6 +25,7 @@ import * as XLSX from 'xlsx';
 import { calcularComissao } from '@/lib/comissao';
 import { BatimentoCpfsPortalCard } from '@/components/BatimentoCpfsPortalCard';
 import { ConferenciaCarteiraCard } from '@/components/ConferenciaCarteiraCard';
+import CobmaisDailyImport from '@/components/CobmaisDailyImport';
 
 const CREDOR_MMP = 'MMP MUNDO DA MODA';
 
@@ -2266,6 +2267,8 @@ export default function ImportarDevedores() {
     <AppLayout>
       <div className="max-w-5xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Importar Devedores</h1>
+
+        <CobmaisDailyImport />
 
         <Card className="mb-6">
           <CardHeader>
