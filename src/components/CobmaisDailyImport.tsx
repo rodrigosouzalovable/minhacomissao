@@ -28,6 +28,7 @@ export default function CobmaisDailyImport() {
   const runRef = useRef<string | null>(null);
   const startedRef = useRef(0);
   const [file, setFile] = useState<File | null>(null);
+  const [displayFileName, setDisplayFileName] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [progress, setProgress] = useState(0);
@@ -37,6 +38,68 @@ export default function CobmaisDailyImport() {
   const [result, setResult] = useState<Result | null>(null);
 
   useEffect(() => () => workerRef.current?.terminate(), []);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+
+    const restoreLatestImport = async () => {
+      const { data: run } = await (supabase as any)
+        .from('cobmais_importacoes_diarias')
+        .select('id,nome_arquivo,status,total_linhas,total_parcelas,linhas_repetidas,conflitos,iniciado_em')
+        .eq('importado_por', user.id)
+        .in('status', ['validando', 'enviando', 'publicando'])
+        .order('iniciado_em', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!active || !run) return;
+
+      runRef.current = run.id;
+      setDisplayFileName(run.nome_arquivo);
+      if (run.status === 'publicando') {
+        setPhase('publishing');
+        setProgress(50);
+        setMessage('Atualizando a carteira do portal…');
+        setEta('aguarde a conclusão');
+        return;
+      }
+
+      const { count } = await (supabase as any)
+        .from('cobmais_importacao_stage')
+        .select('source_key', { count: 'exact', head: true })
+        .eq('run_id', run.id);
+      if (!active) return;
+      const received = Number(count ?? 0);
+      const total = Number(run.total_parcelas ?? 0);
+      if (total > 0 && received === total) {
+        setSummary({
+          totalRows: Number(run.total_linhas),
+          totalParcels: total,
+          repeated: Number(run.linhas_repetidas),
+          conflicts: Number(run.conflitos),
+          invalid: Math.max(0, Number(run.total_linhas) - total - Number(run.linhas_repetidas)),
+        });
+        setProcessed(received);
+        setProgress(100);
+        setEta('validação concluída');
+        setMessage('Validação concluída. Confira os totais antes de atualizar o portal.');
+        setPhase('ready');
+        return;
+      }
+
+      if (received > 0) {
+        const uploadProgress = total > 0 ? 35 + Math.round((received / total) * 55) : 35;
+        setProcessed(received);
+        setProgress(Math.min(89, uploadProgress));
+        setEta('interrompida');
+        setMessage('A tentativa anterior foi interrompida. Selecione o mesmo arquivo para reiniciar com segurança.');
+        setPhase('error');
+      }
+    };
+
+    void restoreLatestImport();
+    return () => { active = false; };
+  }, [user]);
 
   const updateEta = (done: number, total: number) => {
     const elapsed = (Date.now() - startedRef.current) / 1000;
@@ -52,7 +115,20 @@ export default function CobmaisDailyImport() {
   const selectFile = async (selected: File | null) => {
     if (!selected || !user) return;
     workerRef.current?.terminate();
+
+    const previousRunId = runRef.current;
+    if (previousRunId) {
+      await (supabase as any).from('cobmais_importacao_stage').delete().eq('run_id', previousRunId);
+      await (supabase as any).from('cobmais_importacoes_diarias').update({
+        status: 'erro',
+        erro_mensagem: 'Tentativa substituída por uma nova seleção do arquivo.',
+        concluido_em: new Date().toISOString(),
+      }).eq('id', previousRunId).neq('status', 'concluido');
+      runRef.current = null;
+    }
+
     setFile(selected);
+    setDisplayFileName(selected.name);
     setSummary(null);
     setResult(null);
     setMessage('Lendo e validando 530 mil linhas sem travar a tela…');
@@ -108,13 +184,18 @@ export default function CobmaisDailyImport() {
         setProcessed(done);
         setProgress(value);
         updateEta(value, 100);
+        if ((payload.index + 1) % 50 === 0 || payload.index + 1 === payload.total) {
+          await (supabase as any).from('cobmais_importacoes_diarias').update({ registros_processados: done }).eq('id', run.id);
+        }
         worker.postMessage({ type: 'ack' });
         return;
       }
       if (payload.type === 'complete') {
         setPhase('ready');
-        setProgress(90);
-        setMessage('Prévia concluída. Confira os totais antes de atualizar o portal.');
+        setProgress(100);
+        setProcessed(summary?.totalParcels ?? payload.totalParcels ?? 0);
+        setEta('validação concluída');
+        setMessage('Validação concluída. Confira os totais antes de atualizar o portal.');
         worker.terminate();
         return;
       }
@@ -130,7 +211,8 @@ export default function CobmaisDailyImport() {
   const publish = async () => {
     if (!runRef.current || !summary) return;
     setPhase('publishing');
-    setProgress(92);
+    setProgress(50);
+    setEta('aguarde a conclusão');
     setMessage('Atualizando vencimentos e pagamentos e trocando a carteira do portal…');
     const { data, error } = await (supabase as any).rpc('publicar_importacao_cobmais_diaria', { p_run_id: runRef.current });
     if (error) {
@@ -164,7 +246,11 @@ export default function CobmaisDailyImport() {
             </div>
             <Progress value={progress} className="h-3" />
             <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-              <span>{file?.name}</span><span>{processed.toLocaleString('pt-BR')} registros · estimativa restante: {eta}</span>
+              <span>{file?.name ?? displayFileName}</span>
+              <span>
+                {processed.toLocaleString('pt-BR')} registros
+                {phase === 'ready' ? ' · validação concluída' : phase === 'publishing' ? ' · publicação em andamento' : ` · estimativa restante: ${eta}`}
+              </span>
             </div>
           </div>
         )}
@@ -185,7 +271,10 @@ export default function CobmaisDailyImport() {
         )}
         {phase === 'error' && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Importação interrompida</AlertTitle><AlertDescription>{message} A carteira atual não foi substituída.</AlertDescription></Alert>}
         {phase === 'ready' && (
-          <Button onClick={() => void publish()}><Upload className="mr-2 h-4 w-4" />Atualizar portal com esta planilha</Button>
+          <div className="space-y-2">
+            <Button size="lg" onClick={() => void publish()}><Upload className="mr-2 h-4 w-4" />Atualizar portal com esta planilha</Button>
+            <p className="text-sm text-muted-foreground">A carteira atual ainda não foi alterada. A publicação começa somente após clicar neste botão.</p>
+          </div>
         )}
         {phase === 'done' && result && (
           <Alert><Check className="h-4 w-4" /><AlertTitle>Atualização concluída</AlertTitle><AlertDescription>

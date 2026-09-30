@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Em aberto
-- [ ] Validar a primeira atualização diária real do portal com a exportação Cobmais de 530 mil linhas antes da publicação
+ - [ ] Validar a primeira publicação diária real do portal; a preparação recebeu 528.956 parcelas e o painel de progresso foi corrigido
 - [x] Registrar ciclos exatos de recuperação Meta e mostrar média/mediana entre o primeiro envio UAZAPI e o retorno confirmado a GREEN, sem novo cron
 - [x] Corrigir o envio de áudio no Inbox Meta aceitando com segurança os caminhos atual e legado `meta/`, sem liberar arquivos de outra conversa
 - [x] Otimizar a atualização manual da taxa de resposta das campanhas com índices por telefone/data e preservar o último resultado em falhas
