@@ -153,7 +153,7 @@ function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavIte
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin, isGestor } = useUserRole();
-  const { abasPermitidas, acordosCompartilhados, parceiroMeta, veCampanhas } = useUserPermissions();
+  const { abasPermitidas, acordosCompartilhados, veCampanhas } = useUserPermissions();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -333,16 +333,13 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Filter nav items based on role
   const filteredNavItems = navItems.filter((item) => {
-    // /admin/usuarios sempre visível para admin (fail-safe: não pode ser desabilitada)
-    if (isAdmin && item.href === '/admin/usuarios') return true;
-    // Parceiros Meta sempre veem a Blacklist (só os bloqueios das instâncias deles, via RLS)
-    if (parceiroMeta && item.href === '/admin/blacklist') return true;
-    if ((parceiroMeta || veCampanhas) && item.href === '/admin/campanhas-meta') return true;
-    if (parceiroMeta && item.href === '/admin/google-maps-leads') return true;
+    // Administradores globais mantêm acesso completo.
+    if (isAdmin) return true;
+    // Campanhas possui uma permissão explícita separada no editor.
+    if (item.href === '/admin/campanhas-meta') return veCampanhas;
     if (abasPermitidas) {
       return abasPermitidas.includes(item.href);
     }
-    if (isAdmin) return true;
     if (item.adminOnly) return false;
     if (item.gestorOnly && !isGestor && !acordosCompartilhados) return false;
     return true;
