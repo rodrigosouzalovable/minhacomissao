@@ -6,9 +6,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, RefreshCw, Search } from 'lucide-react';
 
 interface Funcionario { user_id: string; nome: string }
+interface RodizioStatus { user_id: string; ordem: number; proximo: boolean }
 
 interface Props {
   open: boolean;
@@ -25,14 +26,21 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
   const [membros, setMembros] = useState<Set<string>>(new Set());
   const [admins, setAdmins] = useState<Set<string>>(new Set());
   const [naFila, setNaFila] = useState<Set<string>>(new Set());
+  const [rodizio, setRodizio] = useState<RodizioStatus[]>([]);
+  const [erroRodizio, setErroRodizio] = useState(false);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const loadFila = useCallback(async () => {
     // Consulta segura no servidor: quem realmente está na fila (etiqueta + fila ativa + permissão)
-    const { data } = await (supabase as any).rpc('meta_fila_status_caixa', { _folder: folderId });
+    const [{ data }, status] = await Promise.all([
+      (supabase as any).rpc('meta_fila_status_caixa', { _folder: folderId }),
+      supabase.rpc('meta_rodizio_status_caixa', { _folder: folderId }),
+    ]);
     setNaFila(new Set(((data as any[]) ?? []).filter((r) => r.na_fila).map((r) => r.user_id)));
+    setRodizio((status.data as RodizioStatus[] | null) ?? []);
+    setErroRodizio(!!status.error);
   }, [folderId]);
 
 
@@ -97,8 +105,8 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
       if (checked) {
         // Garante etiqueta "Atendente: <nome>" + entrada na fila de distribuição
         await (supabase as any).rpc('meta_provisionar_atendentes_fila', { _folder: folderId });
-        await loadFila();
       }
+      await loadFila();
       onChanged?.();
 
     } finally {
@@ -127,6 +135,7 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
         if (checked) n.add(userId); else n.delete(userId);
         return n;
       });
+      await loadFila();
       onChanged?.();
     } finally {
       setSaving(false);
@@ -147,6 +156,8 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
     if (!t) return funcionarios;
     return funcionarios.filter((f) => f.nome.toLowerCase().includes(t));
   }, [funcionarios, busca]);
+  const ordemPorId = useMemo(() => new Map(rodizio.map((r, i) => [r.user_id, i + 1])), [rodizio]);
+  const proximo = funcionarios.find((f) => rodizio.some((r) => r.proximo && r.user_id === f.user_id));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -169,6 +180,23 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
           {saving && <Loader2 className="h-4 w-4 animate-spin self-center text-muted-foreground" />}
         </div>
 
+        {!loading && (
+          <div className="flex items-start justify-between gap-2 border-y py-2 text-xs" aria-live="polite">
+            <div className="min-w-0">
+              {erroRodizio ? (
+                <span className="text-destructive">Não foi possível consultar a fila.</span>
+              ) : proximo ? (
+                <span>Próximo na fila: <strong>{proximo.nome}</strong> · {rodizio.length} atendente{rodizio.length === 1 ? '' : 's'}</span>
+              ) : (
+                <span className="text-destructive">Sem atendente apto: novas conversas não serão distribuídas automaticamente.</span>
+              )}
+            </div>
+            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={loadFila} disabled={loading || saving} title="Atualizar fila" aria-label="Atualizar fila">
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+
         <ScrollArea className="h-72 border rounded p-2">
           {loading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
@@ -188,6 +216,11 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
               {membros.has(u.user_id) && admins.has(u.user_id) && (
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
                   só acompanha
+                </span>
+              )}
+              {membros.has(u.user_id) && !admins.has(u.user_id) && ordemPorId.has(u.user_id) && (
+                <span className="text-[10px] text-muted-foreground shrink-0" title="Posição na fila desta caixa">
+                  #{ordemPorId.get(u.user_id)}{rodizio.some((r) => r.user_id === u.user_id && r.proximo) ? ' · próximo' : ''}
                 </span>
               )}
               {membros.has(u.user_id) && !admins.has(u.user_id) && !naFila.has(u.user_id) && (
