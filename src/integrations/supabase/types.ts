@@ -1938,6 +1938,7 @@ export type Database = {
           concluido_em: string | null
           conflitos: number
           erro_mensagem: string | null
+          fase: string
           id: string
           importado_por: string
           iniciado_em: string
@@ -1945,11 +1946,14 @@ export type Database = {
           linhas_repetidas: number
           nome_arquivo: string
           pagos: number
+          progresso: number
           registros_processados: number
           status: string
+          storage_path: string | null
           tamanho_bytes: number
           total_linhas: number
           total_parcelas: number
+          ultima_atividade_em: string
         }
         Insert: {
           atualizados?: number
@@ -1957,6 +1961,7 @@ export type Database = {
           concluido_em?: string | null
           conflitos?: number
           erro_mensagem?: string | null
+          fase?: string
           id?: string
           importado_por?: string
           iniciado_em?: string
@@ -1964,11 +1969,14 @@ export type Database = {
           linhas_repetidas?: number
           nome_arquivo: string
           pagos?: number
+          progresso?: number
           registros_processados?: number
           status?: string
+          storage_path?: string | null
           tamanho_bytes?: number
           total_linhas?: number
           total_parcelas?: number
+          ultima_atividade_em?: string
         }
         Update: {
           atualizados?: number
@@ -1976,6 +1984,7 @@ export type Database = {
           concluido_em?: string | null
           conflitos?: number
           erro_mensagem?: string | null
+          fase?: string
           id?: string
           importado_por?: string
           iniciado_em?: string
@@ -1983,11 +1992,14 @@ export type Database = {
           linhas_repetidas?: number
           nome_arquivo?: string
           pagos?: number
+          progresso?: number
           registros_processados?: number
           status?: string
+          storage_path?: string | null
           tamanho_bytes?: number
           total_linhas?: number
           total_parcelas?: number
+          ultima_atividade_em?: string
         }
         Relationships: []
       }
