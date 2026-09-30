@@ -26,6 +26,23 @@ function signedMediaPath(mediaUrl: string): string | null {
   }
 }
 
+function conversationPartsFromMediaPath(mediaPath: string): {
+  instanceId: string;
+  recipient: string;
+  format: 'legacy_meta_prefix' | 'current';
+} | null {
+  const parts = mediaPath.split('/').filter(Boolean);
+  const offset = parts[0] === 'meta' ? 1 : 0;
+  const instanceId = parts[offset] || '';
+  const recipient = parts[offset + 1] || '';
+  if (!instanceId || !recipient) return null;
+  return {
+    instanceId,
+    recipient,
+    format: offset === 1 ? 'legacy_meta_prefix' : 'current',
+  };
+}
+
 function formatTel(tel: string): string {
   const d = (tel || '').replace(/\D/g, '');
   if (!d) return '';
@@ -134,9 +151,9 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const pathParts = mediaPath.split('/').filter(Boolean);
-    const pathInstanceId = pathParts[0] || '';
-    const pathRecipient = pathParts[1] || '';
+    const conversationParts = conversationPartsFromMediaPath(mediaPath);
+    const pathInstanceId = conversationParts?.instanceId || '';
+    const pathRecipient = conversationParts?.recipient || '';
     const requestedRecipient = String(telefone || bsuid || '').trim();
     const pathDigits = pathRecipient.replace(/\D/g, '');
     const requestedDigits = requestedRecipient.replace(/\D/g, '');
@@ -144,6 +161,11 @@ Deno.serve(async (req) => {
       pathDigits.length >= 8 && requestedDigits.length >= 8 && pathDigits.slice(-8) === requestedDigits.slice(-8)
     );
     if (pathInstanceId !== String(instancia_id) || !sameRecipient) {
+      console.log('[send-whatsapp-meta-media] conversation path rejected', {
+        path_format: conversationParts?.format || 'invalid',
+        instance_match: pathInstanceId === String(instancia_id),
+        recipient_match: sameRecipient,
+      });
       return new Response(JSON.stringify({ success: false, error: 'O arquivo não corresponde à conversa selecionada' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -160,6 +182,10 @@ Deno.serve(async (req) => {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    console.log('[send-whatsapp-meta-media] conversation path authorized', {
+      path_format: conversationParts?.format || 'invalid',
+      type,
+    });
 
     if (type === 'document') {
       const ext = String(file_name || mediaPath).split('.').pop()?.toLowerCase() || '';
