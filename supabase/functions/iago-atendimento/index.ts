@@ -925,6 +925,14 @@ Deno.serve(async (req) => {
       mensagens = [pool[Math.floor(Math.random() * pool.length)]];
     }
 
+    // Mantém a transparência mesmo quando uma regra determinística substitui
+    // a resposta produzida pela IA (por exemplo, CPF sem débito localizado).
+    mensagens = garantirApresentacaoVirtual(
+      mensagens,
+      estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
+      modoCaixaPadrao,
+    );
+
 
     const delay = Math.max(0, Number(cfg.delay_digitacao_seg ?? 4)) * 1000;
     const novosIds: string[] = [];
