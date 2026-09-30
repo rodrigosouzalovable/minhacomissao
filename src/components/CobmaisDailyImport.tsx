@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Check, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertCircle, Check, Clock3, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,8 +11,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
 type Summary = { totalRows: number; totalParcels: number; repeated: number; conflicts: number; invalid: number };
-type Phase = 'idle' | 'parsing' | 'uploading' | 'ready' | 'publishing' | 'done' | 'error';
+type Phase = 'idle' | 'uploading' | 'processing' | 'ready' | 'publishing' | 'done' | 'error';
 type Result = { inseridos: number; atualizados: number; pagos: number; ausentes_baixados: number };
+type ImportRun = {
+  id: string; nome_arquivo: string; status: string; fase: string | null; progresso: number | null;
+  total_linhas: number; total_parcelas: number; linhas_repetidas: number; conflitos: number;
+  registros_processados: number; inseridos: number; atualizados: number; pagos: number;
+  ausentes_baixados: number; iniciado_em: string; concluido_em: string | null; erro_mensagem: string | null;
+};
 
 const formatDuration = (seconds: number) => {
   if (!Number.isFinite(seconds) || seconds <= 0) return 'calculando…';
@@ -24,7 +30,6 @@ const formatDuration = (seconds: number) => {
 export default function CobmaisDailyImport() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const workerRef = useRef<Worker | null>(null);
   const runRef = useRef<string | null>(null);
   const startedRef = useRef(0);
   const [file, setFile] = useState<File | null>(null);
@@ -36,70 +41,53 @@ export default function CobmaisDailyImport() {
   const [eta, setEta] = useState('calculando…');
   const [message, setMessage] = useState('');
   const [result, setResult] = useState<Result | null>(null);
+  const [history, setHistory] = useState<ImportRun[]>([]);
 
-  useEffect(() => () => workerRef.current?.terminate(), []);
+  const applyRun = useCallback((run: ImportRun) => {
+    runRef.current = run.id;
+    setDisplayFileName(run.nome_arquivo);
+    setProcessed(Number(run.registros_processados ?? 0));
+    setProgress(Number(run.progresso ?? 0));
+    if (run.total_parcelas > 0) setSummary({
+      totalRows: run.total_linhas, totalParcels: run.total_parcelas,
+      repeated: run.linhas_repetidas, conflicts: run.conflitos,
+      invalid: Math.max(0, run.total_linhas - run.total_parcelas - run.linhas_repetidas),
+    });
+    if (run.status === 'concluido') {
+      setPhase('done'); setProgress(100); setEta('concluído');
+      setMessage('Portal atualizado com sucesso.');
+      setResult({ inseridos: run.inseridos, atualizados: run.atualizados, pagos: run.pagos, ausentes_baixados: run.ausentes_baixados });
+    } else if (run.status === 'erro') {
+      setPhase('error'); setMessage(run.erro_mensagem || 'A importação foi interrompida.');
+    } else if (run.fase === 'pronta' || (run.total_parcelas > 0 && run.registros_processados >= run.total_parcelas)) {
+      setPhase('ready'); setProgress(100); setEta('validação concluída');
+      setMessage('Validação concluída — portal ainda não atualizado.');
+    } else if (run.status === 'publicando' || run.fase === 'publicando') {
+      setPhase('publishing'); setMessage('Atualizando a carteira do portal no servidor…'); setEta('processando no servidor');
+    } else {
+      setPhase('processing');
+      setMessage(run.fase === 'gravando' ? 'Gravando as parcelas validadas no servidor…' : 'Validando a planilha no servidor…');
+      setEta('processando no servidor');
+    }
+  }, []);
+
+  const refreshRuns = useCallback(async () => {
+    if (!user) return;
+    const { data } = await (supabase as any).from('cobmais_importacoes_diarias')
+      .select('id,nome_arquivo,status,fase,progresso,total_linhas,total_parcelas,linhas_repetidas,conflitos,registros_processados,inseridos,atualizados,pagos,ausentes_baixados,iniciado_em,concluido_em,erro_mensagem')
+      .eq('importado_por', user.id).order('iniciado_em', { ascending: false }).limit(5);
+    const runs = (data ?? []) as ImportRun[];
+    setHistory(runs);
+    if (runs[0]) applyRun(runs[0]);
+  }, [applyRun, user]);
 
   useEffect(() => {
-    if (!user) return;
-    let active = true;
-
-    const restoreLatestImport = async () => {
-      const { data: run } = await (supabase as any)
-        .from('cobmais_importacoes_diarias')
-        .select('id,nome_arquivo,status,total_linhas,total_parcelas,linhas_repetidas,conflitos,iniciado_em')
-        .eq('importado_por', user.id)
-        .in('status', ['validando', 'enviando', 'publicando'])
-        .order('iniciado_em', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!active || !run) return;
-
-      runRef.current = run.id;
-      setDisplayFileName(run.nome_arquivo);
-      if (run.status === 'publicando') {
-        setPhase('publishing');
-        setProgress(50);
-        setMessage('Atualizando a carteira do portal…');
-        setEta('aguarde a conclusão');
-        return;
-      }
-
-      const { count } = await (supabase as any)
-        .from('cobmais_importacao_stage')
-        .select('source_key', { count: 'exact', head: true })
-        .eq('run_id', run.id);
-      if (!active) return;
-      const received = Number(count ?? 0);
-      const total = Number(run.total_parcelas ?? 0);
-      if (total > 0 && received === total) {
-        setSummary({
-          totalRows: Number(run.total_linhas),
-          totalParcels: total,
-          repeated: Number(run.linhas_repetidas),
-          conflicts: Number(run.conflitos),
-          invalid: Math.max(0, Number(run.total_linhas) - total - Number(run.linhas_repetidas)),
-        });
-        setProcessed(received);
-        setProgress(100);
-        setEta('validação concluída');
-        setMessage('Validação concluída. Confira os totais antes de atualizar o portal.');
-        setPhase('ready');
-        return;
-      }
-
-      if (received > 0) {
-        const uploadProgress = total > 0 ? 35 + Math.round((received / total) * 55) : 35;
-        setProcessed(received);
-        setProgress(Math.min(89, uploadProgress));
-        setEta('interrompida');
-        setMessage('A tentativa anterior foi interrompida. Selecione o mesmo arquivo para reiniciar com segurança.');
-        setPhase('error');
-      }
-    };
-
-    void restoreLatestImport();
-    return () => { active = false; };
-  }, [user]);
+    void refreshRuns();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && ['processing', 'publishing'].includes(phase)) void refreshRuns();
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [phase, refreshRuns]);
 
   const updateEta = (done: number, total: number) => {
     const elapsed = (Date.now() - startedRef.current) / 1000;
@@ -114,120 +102,56 @@ export default function CobmaisDailyImport() {
 
   const selectFile = async (selected: File | null) => {
     if (!selected || !user) return;
-    workerRef.current?.terminate();
-
-    const previousRunId = runRef.current;
-    if (previousRunId) {
-      await (supabase as any).from('cobmais_importacao_stage').delete().eq('run_id', previousRunId);
-      await (supabase as any).from('cobmais_importacoes_diarias').update({
-        status: 'erro',
-        erro_mensagem: 'Tentativa substituída por uma nova seleção do arquivo.',
-        concluido_em: new Date().toISOString(),
-      }).eq('id', previousRunId).neq('status', 'concluido');
-      runRef.current = null;
-    }
-
     setFile(selected);
     setDisplayFileName(selected.name);
     setSummary(null);
     setResult(null);
-    setMessage('Lendo e validando 530 mil linhas sem travar a tela…');
-    setPhase('parsing');
+    setMessage('Enviando o arquivo para processamento seguro…');
+    setPhase('uploading');
     setProgress(1);
     setProcessed(0);
     startedRef.current = Date.now();
 
+    const path = `${user.id}/${crypto.randomUUID()}-${selected.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const { error: uploadError } = await supabase.storage.from('cobmais-importacoes').upload(path, selected, { upsert: false, contentType: selected.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    if (uploadError) { await fail(uploadError.message); return; }
+    setProgress(10);
     const { data: run, error } = await (supabase as any).from('cobmais_importacoes_diarias').insert({
       nome_arquivo: selected.name,
       tamanho_bytes: selected.size,
       importado_por: user.id,
       status: 'validando',
+      fase: 'arquivo_recebido', progresso: 10, storage_path: path,
     }).select('id').single();
     if (error || !run) {
+      await supabase.storage.from('cobmais-importacoes').remove([path]);
       await fail(error?.message || 'Não foi possível iniciar a validação.');
       return;
     }
     runRef.current = run.id;
-
-    const worker = new Worker(new URL('../workers/cobmaisDailyWorker.ts', import.meta.url), { type: 'module' });
-    workerRef.current = worker;
-    worker.onmessage = async (event) => {
-      const payload = event.data;
-      if (payload.type === 'parsing') {
-        const value = Math.max(1, Math.round((payload.current / payload.total) * 35));
-        setProgress(value);
-        setProcessed(payload.current);
-        updateEta(value, 100);
-        return;
-      }
-      if (payload.type === 'summary') {
-        const next: Summary = payload;
-        setSummary(next);
-        setPhase('uploading');
-        setMessage('Enviando as parcelas validadas para uma área temporária segura…');
-        await (supabase as any).from('cobmais_importacoes_diarias').update({
-          status: 'enviando', total_linhas: next.totalRows, total_parcelas: next.totalParcels,
-          linhas_repetidas: next.repeated, conflitos: next.conflicts,
-        }).eq('id', run.id);
-        return;
-      }
-      if (payload.type === 'batch') {
-        const rows = payload.rows.map((row: Record<string, unknown>) => ({ ...row, run_id: run.id }));
-        const { error: batchError } = await (supabase as any).from('cobmais_importacao_stage').insert(rows);
-        if (batchError) {
-          worker.terminate();
-          await fail(batchError.message);
-          return;
-        }
-        const done = Math.min((payload.index + 1) * 500, payload.total * 500);
-        const value = 35 + Math.round(((payload.index + 1) / payload.total) * 55);
-        setProcessed(done);
-        setProgress(value);
-        updateEta(value, 100);
-        if ((payload.index + 1) % 50 === 0 || payload.index + 1 === payload.total) {
-          await (supabase as any).from('cobmais_importacoes_diarias').update({ registros_processados: done }).eq('id', run.id);
-        }
-        worker.postMessage({ type: 'ack' });
-        return;
-      }
-      if (payload.type === 'complete') {
-        setPhase('ready');
-        setProgress(100);
-        setProcessed(summary?.totalParcels ?? payload.totalParcels ?? 0);
-        setEta('validação concluída');
-        setMessage('Validação concluída. Confira os totais antes de atualizar o portal.');
-        worker.terminate();
-        return;
-      }
-      if (payload.type === 'error') {
-        worker.terminate();
-        await fail(payload.message);
-      }
-    };
-    worker.onerror = () => void fail('A leitura da planilha foi interrompida. Tente novamente.');
-    worker.postMessage({ buffer: await selected.arrayBuffer() });
+    const { data, error: invokeError } = await supabase.functions.invoke('cobmais-importacao-processar', { body: { runId: run.id, action: 'process' } });
+    if (invokeError || data?.message) { await fail(data?.message || invokeError?.message || 'Não foi possível iniciar o processamento.'); return; }
+    setPhase('processing'); setProgress(10); setEta('processando no servidor');
+    setMessage('Arquivo recebido. A validação continuará mesmo se você sair desta página.');
+    await refreshRuns();
   };
 
   const publish = async () => {
     if (!runRef.current || !summary) return;
     setPhase('publishing');
-    setProgress(50);
-    setEta('aguarde a conclusão');
-    setMessage('Atualizando vencimentos e pagamentos e trocando a carteira do portal…');
-    const { data, error } = await (supabase as any).rpc('publicar_importacao_cobmais_diaria', { p_run_id: runRef.current });
-    if (error) {
-      await fail(error.message);
+    setProgress(100);
+    setEta('processando no servidor');
+    setMessage('Atualizando vencimentos e pagamentos no servidor…');
+    const { data, error } = await supabase.functions.invoke('cobmais-importacao-processar', { body: { runId: runRef.current, action: 'publish' } });
+    if (error || data?.message) {
+      await fail(data?.message || error?.message || 'Não foi possível iniciar a publicação.');
       return;
     }
-    setResult(data as Result);
-    setPhase('done');
-    setProgress(100);
-    setEta('concluído');
-    setMessage('Carteira atualizada. As linhas temporárias e o arquivo anterior não ficaram armazenados.');
-    toast({ title: 'Portal atualizado', description: `${summary.totalParcels.toLocaleString('pt-BR')} parcelas processadas com segurança.` });
+    toast({ title: 'Atualização iniciada', description: 'O processo continuará no servidor mesmo se você sair desta página.' });
+    await refreshRuns();
   };
 
-  const busy = ['parsing', 'uploading', 'publishing'].includes(phase);
+  const busy = ['uploading', 'processing', 'publishing'].includes(phase);
 
   return (
     <Card className="mb-6">
@@ -249,7 +173,7 @@ export default function CobmaisDailyImport() {
               <span>{file?.name ?? displayFileName}</span>
               <span>
                 {processed.toLocaleString('pt-BR')} registros
-                {phase === 'ready' ? ' · validação concluída' : phase === 'publishing' ? ' · publicação em andamento' : ` · estimativa restante: ${eta}`}
+                {phase === 'ready' ? ' · validação concluída' : phase === 'publishing' ? ' · publicação em andamento' : ` · ${eta}`}
               </span>
             </div>
           </div>
@@ -282,6 +206,19 @@ export default function CobmaisDailyImport() {
           </AlertDescription></Alert>
         )}
         {phase === 'ready' && <Badge variant="secondary">Nenhuma alteração foi publicada ainda</Badge>}
+        {history.length > 0 && (
+          <div className="space-y-2 border-t pt-4">
+            <p className="flex items-center gap-2 text-sm font-medium"><Clock3 className="h-4 w-4" />Últimas importações</p>
+            {history.map((run) => (
+              <div key={run.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="truncate">{run.nome_arquivo}</span>
+                <Badge variant={run.status === 'concluido' ? 'default' : run.status === 'erro' ? 'destructive' : 'secondary'}>
+                  {run.status === 'concluido' ? 'Portal atualizado' : run.fase === 'pronta' ? 'Validada — aguardando publicação' : run.status === 'erro' ? 'Erro' : 'Em processamento'}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

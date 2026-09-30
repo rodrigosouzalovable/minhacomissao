@@ -126,10 +126,34 @@ Deno.serve(async (req) => {
     const { data: isAdmin } = await sb.rpc("has_role", { _user_id: user.id, _role: "admin" });
     if (!isAdmin) return new Response(JSON.stringify({ message: "Apenas administradores podem importar." }), { status: 403, headers: corsHeaders });
 
-    const { runId } = await req.json();
+    const { runId, action = "process" } = await req.json();
     const { data: run } = await sb.from("cobmais_importacoes_diarias").select("*")
       .eq("id", runId).eq("importado_por", user.id).maybeSingle();
-    if (!run?.storage_path) return new Response(JSON.stringify({ message: "Importação ou arquivo não encontrado." }), { status: 404, headers: corsHeaders });
+    if (!run) return new Response(JSON.stringify({ message: "Importação não encontrada." }), { status: 404, headers: corsHeaders });
+
+    if (action === "publish") {
+      if (run.fase !== "pronta") return new Response(JSON.stringify({ message: "A validação ainda não foi concluída." }), { status: 409, headers: corsHeaders });
+      await sb.from("cobmais_importacoes_diarias").update({
+        status: "publicando", fase: "publicando", progresso: 100,
+        ultima_atividade_em: new Date().toISOString(),
+      }).eq("id", run.id);
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const userClient = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const publishTask = (async () => {
+        const { error } = await userClient.rpc("publicar_importacao_cobmais_diaria", { p_run_id: run.id });
+        if (error) throw error;
+        if (run.storage_path) await sb.storage.from("cobmais-importacoes").remove([run.storage_path]);
+      })().catch(async (error) => {
+        await sb.from("cobmais_importacoes_diarias").update({
+          status: "erro", fase: "erro", erro_mensagem: String(error?.message ?? error).slice(0, 500),
+          concluido_em: new Date().toISOString(), ultima_atividade_em: new Date().toISOString(),
+        }).eq("id", run.id);
+      });
+      EdgeRuntime.waitUntil(publishTask);
+      return new Response(JSON.stringify({ ok: true, status: "publicando" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (!run.storage_path) return new Response(JSON.stringify({ message: "Arquivo temporário não encontrado." }), { status: 404, headers: corsHeaders });
     if (run.fase === "pronta" || run.status === "concluido") {
       return new Response(JSON.stringify({ ok: true, status: run.status, fase: run.fase }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
