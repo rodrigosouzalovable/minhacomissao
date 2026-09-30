@@ -306,6 +306,9 @@ Deno.serve(async (req) => {
     const transferirParaHumano = async (motivo: string) => {
       let etiquetaAtendenteId: string | null = null;
       if (modoCaixaPadrao) {
+        // Rede de segurança: a conversa permanece na fila visível mesmo se o
+        // rodízio não encontrar um atendente apto ou a RPC falhar.
+        await etiquetarAguardandoHumano(supabase, contato_id);
         const { data, error } = await supabase.rpc('transferir_iago_para_humano_rodizio', {
           p_contato_id: contato_id,
         });
