@@ -6233,6 +6233,91 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_mensagem_custos: {
+        Row: {
+          categoria: string
+          contato_id: string | null
+          created_at: string
+          entregue_em: string | null
+          fx_rate: number
+          id: string
+          instancia_id: string
+          mensagem_id: string
+          mes_referencia: string
+          origem: string
+          pricing_type: string | null
+          status: string
+          telefone: string | null
+          updated_at: string
+          user_id: string | null
+          valor_brl: number
+          valor_usd: number
+          wa_message_id: string | null
+        }
+        Insert: {
+          categoria?: string
+          contato_id?: string | null
+          created_at?: string
+          entregue_em?: string | null
+          fx_rate?: number
+          id?: string
+          instancia_id: string
+          mensagem_id: string
+          mes_referencia: string
+          origem?: string
+          pricing_type?: string | null
+          status?: string
+          telefone?: string | null
+          updated_at?: string
+          user_id?: string | null
+          valor_brl?: number
+          valor_usd?: number
+          wa_message_id?: string | null
+        }
+        Update: {
+          categoria?: string
+          contato_id?: string | null
+          created_at?: string
+          entregue_em?: string | null
+          fx_rate?: number
+          id?: string
+          instancia_id?: string
+          mensagem_id?: string
+          mes_referencia?: string
+          origem?: string
+          pricing_type?: string | null
+          status?: string
+          telefone?: string | null
+          updated_at?: string
+          user_id?: string | null
+          valor_brl?: number
+          valor_usd?: number
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_mensagem_custos_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_mensagem_custos_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_mensagem_custos_mensagem_id_fkey"
+            columns: ["mensagem_id"]
+            isOneToOne: true
+            referencedRelation: "meta_whatsapp_mensagens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_partner_client_users: {
         Row: {
           cliente_id: string
@@ -6490,6 +6575,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      meta_tarifas_mensagem: {
+        Row: {
+          categoria: string
+          created_at: string
+          franquia_mensal: number
+          id: string
+          pais: string
+          valor_brl: number
+          valor_usd: number | null
+          vigencia_inicio: string
+        }
+        Insert: {
+          categoria: string
+          created_at?: string
+          franquia_mensal?: number
+          id?: string
+          pais: string
+          valor_brl: number
+          valor_usd?: number | null
+          vigencia_inicio: string
+        }
+        Update: {
+          categoria?: string
+          created_at?: string
+          franquia_mensal?: number
+          id?: string
+          pais?: string
+          valor_brl?: number
+          valor_usd?: number | null
+          vigencia_inicio?: string
+        }
+        Relationships: []
       }
       meta_template_daily_reservations: {
         Row: {
@@ -7495,9 +7613,13 @@ export type Database = {
           direcao: string
           editada: boolean
           erro: string | null
+          foi_gratis: boolean | null
           id: string
           instancia_id: string
           media_url: string | null
+          origem_envio: string | null
+          pricing_category: string | null
+          pricing_type: string | null
           status_envio: string
           telefone: string
           template_botoes: Json | null
@@ -7521,9 +7643,13 @@ export type Database = {
           direcao: string
           editada?: boolean
           erro?: string | null
+          foi_gratis?: boolean | null
           id?: string
           instancia_id: string
           media_url?: string | null
+          origem_envio?: string | null
+          pricing_category?: string | null
+          pricing_type?: string | null
           status_envio?: string
           telefone: string
           template_botoes?: Json | null
@@ -7547,9 +7673,13 @@ export type Database = {
           direcao?: string
           editada?: boolean
           erro?: string | null
+          foi_gratis?: boolean | null
           id?: string
           instancia_id?: string
           media_url?: string | null
+          origem_envio?: string | null
+          pricing_category?: string | null
+          pricing_type?: string | null
           status_envio?: string
           telefone?: string
           template_botoes?: Json | null
@@ -12063,6 +12193,31 @@ export type Database = {
           tier_ilimitado: boolean
         }[]
       }
+      meta_conversa_custo_detalhes: {
+        Args: { p_contato_id: string; p_mes?: string }
+        Returns: {
+          categoria: string
+          entregue_em: string
+          id: string
+          mensagem_id: string
+          origem: string
+          status: string
+          valor_brl: number
+        }[]
+      }
+      meta_conversa_custo_resumo: {
+        Args: { p_contato_id: string; p_mes?: string }
+        Returns: {
+          cobradas: number
+          confirmado: boolean
+          custo_humano: number
+          custo_iago: number
+          custo_outros: number
+          entregues: number
+          gratuitas: number
+          valor_brl: number
+        }[]
+      }
       meta_envios_resumo: {
         Args: { _ate?: string; _uid?: string }
         Returns: Json
@@ -12330,6 +12485,17 @@ export type Database = {
           _telefone_normalizado: string
         }
         Returns: boolean
+      }
+      registrar_custo_mensagem_meta: {
+        Args: {
+          p_categoria?: string
+          p_entregue_em?: string
+          p_foi_gratis?: boolean
+          p_pricing_type?: string
+          p_status: string
+          p_wa_message_id: string
+        }
+        Returns: undefined
       }
       registrar_meta_aquecimento_auto_resposta: {
         Args: {

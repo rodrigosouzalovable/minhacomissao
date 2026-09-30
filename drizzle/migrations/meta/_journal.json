@@ -715,6 +715,13 @@
       "when": 1790787446994,
       "tag": "0101_restrict_meta_quality_trigger_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1790788932609,
+      "tag": "0102_meta_message_cost_per_conversation",
+      "breakpoints": true
     }
   ]
 }
