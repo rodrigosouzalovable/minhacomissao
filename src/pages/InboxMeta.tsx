@@ -225,6 +225,7 @@ export default function InboxMeta() {
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
   const [alertaEsperaCaixas, setAlertaEsperaCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
+  const [qualifContatoAlvo, setQualifContatoAlvo] = useState<MetaContato | null>(null);
   const [filtroQualifs, setFiltroQualifs] = useState<Set<string>>(new Set());
   const [filtroQualifOpen, setFiltroQualifOpen] = useState(false);
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
@@ -2135,6 +2136,8 @@ export default function InboxMeta() {
               const sel = selecionados.has(c.id);
               const jan = computeJanela(c.ultima_msg_entrada_em);
               const esp = computeEspera(c.ultima_msg_entrada_em, c.ultima_mensagem_em, c.sla_dispensado_em);
+              const respostaDispensada = !!c.sla_dispensado_em && !!c.ultima_msg_entrada_em
+                && new Date(c.sla_dispensado_em).getTime() >= new Date(c.ultima_msg_entrada_em).getTime();
               return (
                 <MetaConversaContextMenu
                   key={c.id}
@@ -2148,7 +2151,15 @@ export default function InboxMeta() {
                   folderId={currentFolderId}
                   canManageFolder={podeAdministrarCaixaAtual}
                   podeExcluir={isAdmin && !c.ultima_msg_entrada_em}
+                  mostrarQualificacao={qualificacaoAtivaNaCaixa}
+                  mostrarDispensaResposta={alertaEsperaAtivoNaCaixa}
+                  respostaDispensada={respostaDispensada}
                   onMarcarNaoLida={() => handleMarcarNaoLida(c.id)}
+                  onQualificar={() => {
+                    setQualifContatoAlvo(c);
+                    setQualifDialogOpen(true);
+                  }}
+                  onDispensarResposta={(dispensar) => void handleDispensarResposta(c.id, dispensar)}
                   onExcluirConversa={handleExcluirConversa}
                   onEtiquetaToggle={handleEtiquetaToggle}
                   onEtiquetasChange={fetchEtiquetas}
@@ -2356,7 +2367,10 @@ export default function InboxMeta() {
                       variant="outline"
                       size="icon"
                       className="h-7 w-7 p-0"
-                      onClick={() => setQualifDialogOpen(true)}
+                      onClick={() => {
+                        setQualifContatoAlvo(contatoAtivo);
+                        setQualifDialogOpen(true);
+                      }}
                       title="Qualificar esta conversa"
                       aria-label="Qualificar esta conversa"
                     >
@@ -2858,10 +2872,15 @@ export default function InboxMeta() {
       />
       <MetaQualificacaoDialog
         open={qualifDialogOpen}
-        onOpenChange={setQualifDialogOpen}
-        contatoId={contatoAtivo?.id ?? null}
-        contatoNome={contatoAtivo?.nome ?? undefined}
-        atuais={contatoAtivo ? (qualifPorContato[contatoAtivo.id] ?? []) : []}
+        onOpenChange={(open) => {
+          setQualifDialogOpen(open);
+          if (!open) setQualifContatoAlvo(null);
+        }}
+        contatoId={qualifContatoAlvo?.id ?? contatoAtivo?.id ?? null}
+        contatoNome={qualifContatoAlvo?.nome ?? contatoAtivo?.nome ?? undefined}
+        atuais={qualifContatoAlvo
+          ? (qualifPorContato[qualifContatoAlvo.id] ?? [])
+          : contatoAtivo ? (qualifPorContato[contatoAtivo.id] ?? []) : []}
         qualificacoes={qualificacoes}
         isAdmin={isAdmin}
         onQualificar={(cid, qids) => setQualifPorContato(prev => {

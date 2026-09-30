@@ -6,7 +6,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserRole } from '@/hooks/useUserRole';
-import { MailOpen, Tag, Settings, Check, Pin, Trash2, Archive, ArchiveRestore, Lock } from 'lucide-react';
+import { MailOpen, Tag, Settings, Check, Pin, Trash2, Archive, ArchiveRestore, Lock, CheckSquare, Square } from 'lucide-react';
 import { MetaEtiquetasDialog, MetaEtiqueta } from './MetaEtiquetasDialog';
 
 interface Props {
@@ -23,7 +23,12 @@ interface Props {
   canManageFolder?: boolean;
   /** Exclusão definitiva só é oferecida quando permitido (admin + sem resposta do cliente) */
   podeExcluir?: boolean;
+  mostrarQualificacao?: boolean;
+  mostrarDispensaResposta?: boolean;
+  respostaDispensada?: boolean;
   onMarcarNaoLida: () => void;
+  onQualificar?: () => void;
+  onDispensarResposta?: (dispensar: boolean) => void;
   onExcluirConversa: (id: string) => void;
   onEtiquetaToggle: (cId: string, eId: string, ativo: boolean) => void;
   onEtiquetasChange: () => void;
@@ -34,7 +39,9 @@ interface Props {
 export function MetaConversaContextMenu({
   children, contatoId, etiquetas, etiquetasGerenciar, contatoEtiquetaIds, etiquetasBloqueadas,
   fixado, arquivado, podeExcluir = false, folderId = null, canManageFolder = false,
-  onMarcarNaoLida, onExcluirConversa, onEtiquetaToggle, onEtiquetasChange, onFixarToggle, onArquivarToggle,
+  mostrarQualificacao = false, mostrarDispensaResposta = false, respostaDispensada = false,
+  onMarcarNaoLida, onQualificar, onDispensarResposta, onExcluirConversa, onEtiquetaToggle,
+  onEtiquetasChange, onFixarToggle, onArquivarToggle,
 }: Props) {
   const { toast } = useToast();
   const { isAdmin } = useUserRole();
@@ -120,6 +127,19 @@ export function MetaConversaContextMenu({
             {arquivado ? <ArchiveRestore className="h-4 w-4 mr-2" /> : <Archive className="h-4 w-4 mr-2" />}
             {arquivado ? 'Desarquivar' : 'Arquivar'}
           </ContextMenuItem>
+          {mostrarDispensaResposta && onDispensarResposta && (
+            <ContextMenuItem onClick={() => onDispensarResposta(!respostaDispensada)}>
+              {respostaDispensada
+                ? <CheckSquare className="h-4 w-4 mr-2" />
+                : <Square className="h-4 w-4 mr-2" />}
+              {respostaDispensada ? 'Voltar a exigir resposta' : 'Não precisa de resposta'}
+            </ContextMenuItem>
+          )}
+          {mostrarQualificacao && onQualificar && (
+            <ContextMenuItem onClick={onQualificar}>
+              <Tag className="h-4 w-4 mr-2" /> Qualificar conversa
+            </ContextMenuItem>
+          )}
           {podeExcluir && (
             <>
               <ContextMenuSeparator />
