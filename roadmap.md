@@ -64,6 +64,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Exibir no card da conversa a identificação persistente “Não é o cliente”, com atualização imediata ao marcar ou desfazer
 - [x] Manter conversas escaladas pelo IAGO com “Aguardando Humano” mesmo sem atendente elegível, preservando a exclusão de admins do rodízio
 - [x] Fazer o login do Bruno exibir e acessar somente as abas explicitamente liberadas, sem ampliar telas por Parceiro Meta
 - [x] Adicionar “Não é o cliente” às conversas, gravar na blacklist e oferecer lista administrativa exportável e reversível
