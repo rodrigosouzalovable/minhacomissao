@@ -771,6 +771,13 @@
       "when": 1790800760629,
       "tag": "0109_inbox_meta_nao_cliente_blacklist",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1790800999206,
+      "tag": "0110_fix_nao_cliente_folder_access",
+      "breakpoints": true
     }
   ]
 }
