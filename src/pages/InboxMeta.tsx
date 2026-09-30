@@ -264,9 +264,16 @@ export default function InboxMeta() {
   const [nomesCRM, setNomesCRM] = useState<Record<string, string>>({}); // suffix8 -> nome do devedor
   const [aberturasCnpj, setAberturasCnpj] = useState<Record<string, string>>({}); // suffix8 -> data de abertura
 
-  const nomeExibido = (contato?: MetaContato | null) => String(
-    contato?.nome_perfil || contato?.nome || (contato?.telefone ? nomesCRM[suffix8(contato.telefone)] : '') || '',
-  ).trim();
+  const nomeExibido = (contato?: MetaContato | null) => {
+    if (!contato) return '';
+    const perfil = String(contato.nome_perfil || '').trim();
+    if (perfil) return perfil;
+    const crm = contato.telefone ? String(nomesCRM[suffix8(contato.telefone)] || '').trim() : '';
+    if (crm) return crm;
+    const legado = String(contato.nome || '').trim();
+    if (/^(?:interactive|interativo|tudo\s+b[eé]m\??)$/iu.test(legado)) return '';
+    return legado;
+  };
 
   
   const [etiquetasOpen, setEtiquetasOpen] = useState(false);
