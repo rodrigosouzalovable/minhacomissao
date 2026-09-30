@@ -184,6 +184,9 @@ export default function CobmaisDailyImport() {
         setProcessed(done);
         setProgress(value);
         updateEta(value, 100);
+        if ((payload.index + 1) % 50 === 0 || payload.index + 1 === payload.total) {
+          await (supabase as any).from('cobmais_importacoes_diarias').update({ registros_processados: done }).eq('id', run.id);
+        }
         worker.postMessage({ type: 'ack' });
         return;
       }
