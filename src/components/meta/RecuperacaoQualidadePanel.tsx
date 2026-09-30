@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Flame, ShieldCheck } from 'lucide-react';
+import { Clock3, Flame, ShieldCheck } from 'lucide-react';
 
 interface InstRecup {
   id: string;
@@ -15,6 +15,18 @@ interface InstRecup {
   recuperacao_desde: string | null;
   dias_green_consecutivos: number | null;
   quarentena_ate: string | null;
+}
+
+interface CicloRecuperacao {
+  id: string;
+  instancia_id: string;
+  qualidade_origem: string;
+  caiu_em: string;
+  aquecimento_ativado_em: string | null;
+  primeiro_envio_uazapi_em: string | null;
+  voltou_green_em: string | null;
+  envios_uazapi_aceitos: number;
+  precisao: string;
 }
 
 const DIAS_GREEN_ALTA = 3;
@@ -37,6 +49,25 @@ function previsao(qualidade: string | null, diasGreen: number) {
   };
 }
 
+function formatarDuracao(ms: number | null) {
+  if (ms === null || !Number.isFinite(ms) || ms < 0) return '—';
+  const minutos = Math.round(ms / 60000);
+  if (minutos < 60) return `${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  const resto = minutos % 60;
+  if (horas < 24) return resto ? `${horas}h ${resto}min` : `${horas}h`;
+  const dias = Math.floor(horas / 24);
+  const restoHoras = horas % 24;
+  return restoHoras ? `${dias}d ${restoHoras}h` : `${dias}d`;
+}
+
+function mediana(valores: number[]) {
+  if (!valores.length) return null;
+  const ordenados = [...valores].sort((a, b) => a - b);
+  const meio = Math.floor(ordenados.length / 2);
+  return ordenados.length % 2 ? ordenados[meio] : (ordenados[meio - 1] + ordenados[meio]) / 2;
+}
+
 export function RecuperacaoQualidadePanel() {
   const { user } = useAuth();
 
@@ -45,7 +76,7 @@ export function RecuperacaoQualidadePanel() {
     staleTime: 120_000,
     queryFn: async () => {
       const dia = diaBrt();
-      const [instRes, logRes] = await Promise.all([
+      const [instRes, logRes, ciclosRes] = await Promise.all([
         supabase
           .from('meta_whatsapp_instances')
           .select('id, nome, display_phone, saude_quality, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, recuperacao_desde, dias_green_consecutivos, quarentena_ate')
@@ -60,6 +91,13 @@ export function RecuperacaoQualidadePanel() {
           .select('instancia_id, status')
           .eq('dia', dia)
           .limit(5000),
+        supabase
+          .from('meta_qualidade_recuperacao_ciclos')
+          .select('id, instancia_id, qualidade_origem, caiu_em, aquecimento_ativado_em, primeiro_envio_uazapi_em, voltou_green_em, envios_uazapi_aceitos, precisao')
+          .eq('user_id', user?.id || '')
+          .order('caiu_em', { ascending: false })
+          .limit(200)
+          .returns<CicloRecuperacao[]>(),
       ]);
       const enviados = new Map<string, number>();
       const falhas = new Map<string, number>();
@@ -68,11 +106,18 @@ export function RecuperacaoQualidadePanel() {
         if (!alvo) return;
         alvo.set(l.instancia_id, (alvo.get(l.instancia_id) || 0) + 1);
       });
-      return { insts: instRes.data || [], enviados, falhas };
+      return { insts: instRes.data || [], enviados, falhas, ciclos: ciclosRes.data || [] };
     },
   });
 
   const insts = data?.insts || [];
+  const ciclos = data?.ciclos || [];
+  const concluidos = ciclos.filter((c) => c.precisao === 'exata' && c.voltou_green_em && c.primeiro_envio_uazapi_em);
+  const tempos = concluidos.map((c) =>
+    new Date(c.voltou_green_em as string).getTime() - new Date(c.primeiro_envio_uazapi_em as string).getTime()
+  ).filter((v) => v >= 0);
+  const media = tempos.length ? tempos.reduce((total, valor) => total + valor, 0) / tempos.length : null;
+  const ciclosPorInstancia = new Map(ciclos.filter((c) => !c.voltou_green_em).map((c) => [c.instancia_id, c]));
 
   return (
     <Card>
@@ -83,6 +128,26 @@ export function RecuperacaoQualidadePanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-md border p-3">
+            <div className="text-xs text-muted-foreground">Média até GREEN</div>
+            <div className="mt-1 text-lg font-semibold">{formatarDuracao(media)}</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-xs text-muted-foreground">Mediana até GREEN</div>
+            <div className="mt-1 text-lg font-semibold">{formatarDuracao(mediana(tempos))}</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-xs text-muted-foreground">Recuperações exatas</div>
+            <div className="mt-1 text-lg font-semibold">{tempos.length}</div>
+          </div>
+        </div>
+        {tempos.length === 0 && (
+          <div className="flex items-center gap-2 rounded-md border p-2 text-xs text-muted-foreground">
+            <Clock3 className="h-4 w-4 shrink-0" />
+            A medição exata começou agora. A média aparecerá no primeiro retorno confirmado a GREEN após envio UAZAPI.
+          </div>
+        )}
         {insts.length === 0 ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="h-4 w-4 text-emerald-500" />
@@ -90,6 +155,7 @@ export function RecuperacaoQualidadePanel() {
           </div>
         ) : (
           insts.map((i) => {
+            const ciclo = ciclosPorInstancia.get(i.id);
             const feitos = data?.enviados.get(i.id) || 0;
             const falhas = data?.falhas.get(i.id) || 0;
             const meta = i.recuperacao_msgs_meta_dia || 0;
@@ -113,6 +179,17 @@ export function RecuperacaoQualidadePanel() {
                       <> · próximo às {proximo.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}</>
                     )}
                   </div>
+                  {ciclo && (
+                    <div className="text-xs text-muted-foreground">
+                      Queda há {formatarDuracao(Date.now() - new Date(ciclo.caiu_em).getTime())}
+                      {' · '}aquecimento {ciclo.aquecimento_ativado_em ? 'ativado' : 'aguardando ativação'}
+                      {' · '}primeiro envio UAZAPI {ciclo.primeiro_envio_uazapi_em
+                        ? `há ${formatarDuracao(Date.now() - new Date(ciclo.primeiro_envio_uazapi_em).getTime())}`
+                        : 'ainda não ocorreu'}
+                      {ciclo.envios_uazapi_aceitos > 0 && <> · {ciclo.envios_uazapi_aceitos} aceito(s) no ciclo</>}
+                      {ciclo.precisao !== 'exata' && <> · histórico parcial</>}
+                    </div>
+                  )}
                   <div className="text-xs text-muted-foreground">
                     Previsão: GREEN {p.greenEm} · volta ao pool {p.altaEm}
                     {i.quarentena_ate && (
@@ -140,6 +217,7 @@ export function RecuperacaoQualidadePanel() {
           Seus números oficiais aptos em RED/YELLOW conversam somente com UAZAPI conectado na caixa
           AQUECIMENTO (09h–19h, intervalos de 20–40 min). Bloqueios da Meta impedem envios; após 3 dias em GREEN voltam ao pool em escada.
           Avisos no WhatsApp: início do aquecimento, resumo às 13h e 18h, mudanças de qualidade e volta ao GREEN.
+          A média usa ciclos completos do primeiro envio aceito para UAZAPI até o retorno confirmado a GREEN.
         </p>
       </CardContent>
     </Card>

@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Registrar ciclos exatos de recuperação Meta e mostrar média/mediana entre o primeiro envio UAZAPI e o retorno confirmado a GREEN, sem novo cron
 - [x] Corrigir o envio de áudio no Inbox Meta aceitando com segurança os caminhos atual e legado `meta/`, sem liberar arquivos de outra conversa
 - [x] Otimizar a atualização manual da taxa de resposta das campanhas com índices por telefone/data e preservar o último resultado em falhas
 - [x] Remover as três retomadas automáticas do IAGO, cancelar pendências e manter somente atendimento imediato e transferência humana

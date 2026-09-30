@@ -6316,6 +6316,59 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_qualidade_recuperacao_ciclos: {
+        Row: {
+          aquecimento_ativado_em: string | null
+          atualizado_em: string
+          caiu_em: string
+          criado_em: string
+          envios_uazapi_aceitos: number
+          id: string
+          instancia_id: string
+          precisao: string
+          primeiro_envio_uazapi_em: string | null
+          qualidade_origem: string
+          user_id: string
+          voltou_green_em: string | null
+        }
+        Insert: {
+          aquecimento_ativado_em?: string | null
+          atualizado_em?: string
+          caiu_em: string
+          criado_em?: string
+          envios_uazapi_aceitos?: number
+          id?: string
+          instancia_id: string
+          precisao?: string
+          primeiro_envio_uazapi_em?: string | null
+          qualidade_origem: string
+          user_id: string
+          voltou_green_em?: string | null
+        }
+        Update: {
+          aquecimento_ativado_em?: string | null
+          atualizado_em?: string
+          caiu_em?: string
+          criado_em?: string
+          envios_uazapi_aceitos?: number
+          id?: string
+          instancia_id?: string
+          precisao?: string
+          primeiro_envio_uazapi_em?: string | null
+          qualidade_origem?: string
+          user_id?: string
+          voltou_green_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_qualidade_recuperacao_ciclos_instancia_id_fkey"
+            columns: ["instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_qualificacao_caixa: {
         Row: {
           alerta_espera_ativo: boolean
