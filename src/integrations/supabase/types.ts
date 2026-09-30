@@ -12436,6 +12436,12 @@ export type Database = {
         Args: { _folder: string; _uid: string }
         Returns: boolean
       }
+      meta_inbox_nao_cliente_contatos: {
+        Args: { _contato_ids: string[] }
+        Returns: {
+          contato_id: string
+        }[]
+      }
       meta_inbox_tagged_contacts_page: {
         Args: {
           p_arquivado?: boolean
