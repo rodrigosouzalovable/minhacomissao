@@ -968,12 +968,6 @@ Deno.serve(async (req) => {
     const propostaEnviada = !!estado.contexto?.proposta_enviada
       || !!propostaPrevia
       || (!!proposta && mensagens.some((m) => /r\$\s*\d/i.test(String(m))));
-    // O cliente respondeu: a janela de 24h reabriu, então as etapas de follow-up recomeçam.
-    const followupEm = !escalar && cfg.followup_ativo && mensagens.length
-      ? new Date(Date.now() + Math.max(1, Number(cfg.followup_horas ?? 2)) * 3600 * 1000).toISOString()
-      : null;
-
-
     await supabase.from('iago_conversa_estado').update({
       cpf: cpf || null,
       etapa: etapaNova,
@@ -982,9 +976,9 @@ Deno.serve(async (req) => {
       msgs_hoje: msgsHoje + mensagens.length,
       ultima_msg_em: agoraIso,
       ultima_msg_cliente_em: agoraIso,
-      followup_em: followupEm,
-      followup_feito: escalar ? true : false,
-      followup_etapa: escalar ? 3 : 0,
+      followup_em: null,
+      followup_feito: true,
+      followup_etapa: 3,
 
       contexto: {
         ...(estado.contexto || {}),

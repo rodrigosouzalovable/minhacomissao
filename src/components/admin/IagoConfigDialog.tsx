@@ -192,7 +192,6 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
               <TabsTrigger value="proibido">Nunca fazer</TabsTrigger>
               <TabsTrigger value="aprendizado">Aprendizado</TabsTrigger>
               <TabsTrigger value="objecoes">Objeções</TabsTrigger>
-              <TabsTrigger value="followup">Follow-up</TabsTrigger>
               <TabsTrigger value="testar">Testar</TabsTrigger>
             </TabsList>
 
@@ -349,77 +348,6 @@ export function IagoConfigDialog({ open, onOpenChange, userId, userName }: Props
               </TabsContent>
 
 
-
-              <TabsContent value="followup" className="space-y-4 mt-0">
-                <div className="flex items-center justify-between border rounded-md p-3">
-                  <div>
-                    <Label>Retomar contato quando o cliente não responde</Label>
-                    <p className="text-xs text-muted-foreground">Até 3 retomadas dentro da janela de 24h, com mensagens diferentes.</p>
-                  </div>
-                  <Switch checked={!!cfg.followup_ativo} onCheckedChange={(v) => salvarCfg({ followup_ativo: !!v })} />
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Após (horas)</Label>
-                    <Input type="number" min={1} max={23} value={cfg.followup_horas ?? 2}
-                      onChange={(e) => setCfg({ ...cfg, followup_horas: Number(e.target.value) })}
-                      onBlur={(e) => salvarCfg({ followup_horas: Number(e.target.value) })} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Das</Label>
-                    <Input type="number" min={0} max={23} value={cfg.followup_hora_inicio ?? 8}
-                      onChange={(e) => setCfg({ ...cfg, followup_hora_inicio: Number(e.target.value) })}
-                      onBlur={(e) => salvarCfg({ followup_hora_inicio: Number(e.target.value) })} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Até</Label>
-                    <Input type="number" min={1} max={24} value={cfg.followup_hora_fim ?? 19}
-                      onChange={(e) => setCfg({ ...cfg, followup_hora_fim: Number(e.target.value) })}
-                      onBlur={(e) => salvarCfg({ followup_hora_fim: Number(e.target.value) })} />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Mensagem de retomada (1ª tentativa)</Label>
-                  <Textarea rows={3} value={cfg.followup_texto || ''}
-                    onChange={(e) => setCfg({ ...cfg, followup_texto: e.target.value })}
-                    onBlur={(e) => salvarCfg({ followup_texto: e.target.value })} />
-                </div>
-
-                <div className="space-y-3 border rounded-md p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>2ª retomada (meio da janela)</Label>
-                      <p className="text-xs text-muted-foreground">Reforça o benefício de resolver agora.</p>
-                    </div>
-                    <Switch checked={cfg.followup2_ativo !== false}
-                      onCheckedChange={(v) => salvarCfg({ followup2_ativo: !!v })} />
-                  </div>
-                  <div className="space-y-1.5 max-w-[180px]">
-                    <Label>Horas após a última mensagem do cliente</Label>
-                    <Input type="number" min={1} max={23} value={cfg.followup2_horas ?? 12}
-                      onChange={(e) => setCfg({ ...cfg, followup2_horas: Number(e.target.value) })}
-                      onBlur={(e) => salvarCfg({ followup2_horas: Number(e.target.value) })} />
-                  </div>
-                </div>
-
-                <div className="space-y-3 border rounded-md p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>3ª retomada (última chance)</Label>
-                      <p className="text-xs text-muted-foreground">Antes de a janela de 24h fechar. Se o horário permitido acabar antes, sai na última passagem possível.</p>
-                    </div>
-                    <Switch checked={cfg.followup3_ativo !== false}
-                      onCheckedChange={(v) => salvarCfg({ followup3_ativo: !!v })} />
-                  </div>
-                  <div className="space-y-1.5 max-w-[180px]">
-                    <Label>Horas após a última mensagem do cliente</Label>
-                    <Input type="number" min={2} max={23} value={cfg.followup3_horas ?? 23}
-                      onChange={(e) => setCfg({ ...cfg, followup3_horas: Number(e.target.value) })}
-                      onBlur={(e) => salvarCfg({ followup3_horas: Number(e.target.value) })} />
-                  </div>
-                </div>
-
-              </TabsContent>
 
               <TabsContent value="testar" className="space-y-3 mt-0">
                 <p className="text-xs text-muted-foreground">Simula a resposta do IAGO sem enviar nada ao cliente.</p>
