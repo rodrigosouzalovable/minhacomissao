@@ -729,6 +729,13 @@
       "when": 1790790026807,
       "tag": "0103_scope_meta_template_ownership_to_writes",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1790794071698,
+      "tag": "0104_daily_cobmais_portal_snapshot",
+      "breakpoints": true
     }
   ]
 }

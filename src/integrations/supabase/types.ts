@@ -1881,6 +1881,116 @@ export type Database = {
           },
         ]
       }
+      cobmais_importacao_stage: {
+        Row: {
+          contrato: string
+          cpf: string
+          credor: string
+          nome: string
+          numero_parcela: string
+          observacao: string | null
+          run_id: string
+          source_key: string
+          status: string | null
+          valor: number
+          vencimento: string | null
+        }
+        Insert: {
+          contrato: string
+          cpf: string
+          credor: string
+          nome: string
+          numero_parcela: string
+          observacao?: string | null
+          run_id: string
+          source_key: string
+          status?: string | null
+          valor?: number
+          vencimento?: string | null
+        }
+        Update: {
+          contrato?: string
+          cpf?: string
+          credor?: string
+          nome?: string
+          numero_parcela?: string
+          observacao?: string | null
+          run_id?: string
+          source_key?: string
+          status?: string | null
+          valor?: number
+          vencimento?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobmais_importacao_stage_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "cobmais_importacoes_diarias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cobmais_importacoes_diarias: {
+        Row: {
+          atualizados: number
+          ausentes_baixados: number
+          concluido_em: string | null
+          conflitos: number
+          erro_mensagem: string | null
+          id: string
+          importado_por: string
+          iniciado_em: string
+          inseridos: number
+          linhas_repetidas: number
+          nome_arquivo: string
+          pagos: number
+          registros_processados: number
+          status: string
+          tamanho_bytes: number
+          total_linhas: number
+          total_parcelas: number
+        }
+        Insert: {
+          atualizados?: number
+          ausentes_baixados?: number
+          concluido_em?: string | null
+          conflitos?: number
+          erro_mensagem?: string | null
+          id?: string
+          importado_por?: string
+          iniciado_em?: string
+          inseridos?: number
+          linhas_repetidas?: number
+          nome_arquivo: string
+          pagos?: number
+          registros_processados?: number
+          status?: string
+          tamanho_bytes?: number
+          total_linhas?: number
+          total_parcelas?: number
+        }
+        Update: {
+          atualizados?: number
+          ausentes_baixados?: number
+          concluido_em?: string | null
+          conflitos?: number
+          erro_mensagem?: string | null
+          id?: string
+          importado_por?: string
+          iniciado_em?: string
+          inseridos?: number
+          linhas_repetidas?: number
+          nome_arquivo?: string
+          pagos?: number
+          registros_processados?: number
+          status?: string
+          tamanho_bytes?: number
+          total_linhas?: number
+          total_parcelas?: number
+        }
+        Relationships: []
+      }
       cobmais_sessoes_gravadas: {
         Row: {
           criado_em: string
@@ -2637,6 +2747,10 @@ export type Database = {
           arquivo_importacao: string | null
           ativo: boolean
           atualizado_em: string
+          cobmais_acordo_detectado: boolean
+          cobmais_atualizado_em: string | null
+          cobmais_chave: string | null
+          cobmais_status: string | null
           contrato: string | null
           cpf: string
           credor: string | null
@@ -2659,6 +2773,10 @@ export type Database = {
           arquivo_importacao?: string | null
           ativo?: boolean
           atualizado_em?: string
+          cobmais_acordo_detectado?: boolean
+          cobmais_atualizado_em?: string | null
+          cobmais_chave?: string | null
+          cobmais_status?: string | null
           contrato?: string | null
           cpf: string
           credor?: string | null
@@ -2681,6 +2799,10 @@ export type Database = {
           arquivo_importacao?: string | null
           ativo?: boolean
           atualizado_em?: string
+          cobmais_acordo_detectado?: boolean
+          cobmais_atualizado_em?: string | null
+          cobmais_chave?: string | null
+          cobmais_status?: string | null
           contrato?: string | null
           cpf?: string
           credor?: string | null
@@ -12448,6 +12570,10 @@ export type Database = {
           ultimo_ponto_em: string
           user_id: string
         }[]
+      }
+      publicar_importacao_cobmais_diaria: {
+        Args: { p_run_id: string }
+        Returns: Json
       }
       ranking_mensal: {
         Args: { p_mes_ano?: string }
