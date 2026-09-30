@@ -89,6 +89,7 @@ export default function CobmaisDailyImport() {
 
   const selectFile = async (selected: File | null) => {
     if (!selected || !user) return;
+    runRef.current = null;
     setFile(selected);
     setDisplayFileName(selected.name);
     setSummary(null);
