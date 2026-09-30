@@ -51,11 +51,11 @@ export default function CobmaisDailyImport() {
       setResult({ inseridos: run.inseridos, atualizados: run.atualizados, pagos: run.pagos, ausentes_baixados: run.ausentes_baixados });
     } else if (run.status === 'erro') {
       setPhase('error'); setMessage(run.erro_mensagem || 'A importação foi interrompida.');
+    } else if (run.status === 'publicando' || run.fase === 'publicando') {
+      setPhase('publishing'); setMessage('Atualizando a carteira do portal no servidor…'); setEta('processando no servidor');
     } else if (run.fase === 'pronta' || (run.total_parcelas > 0 && run.registros_processados >= run.total_parcelas)) {
       setPhase('ready'); setProgress(100); setEta('validação concluída');
       setMessage('Validação concluída — portal ainda não atualizado.');
-    } else if (run.status === 'publicando' || run.fase === 'publicando') {
-      setPhase('publishing'); setMessage('Atualizando a carteira do portal no servidor…'); setEta('processando no servidor');
     } else {
       setPhase('processing');
       setMessage(run.fase === 'gravando' ? 'Gravando as parcelas validadas no servidor…' : 'Validando a planilha no servidor…');
