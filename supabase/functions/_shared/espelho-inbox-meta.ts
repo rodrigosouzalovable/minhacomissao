@@ -116,7 +116,7 @@ export async function espelharMensagemInboxMeta(
   // Contato: reaproveita o formato de telefone já existente (sufixo 8 dígitos)
   const { data: achados } = await supabase
     .from('meta_whatsapp_contatos')
-    .select('id, telefone, nao_lido, nome, cpf')
+    .select('id, telefone, nao_lido, nome, nome_perfil, cpf')
     .eq('instancia_id', inst.id)
     .ilike('telefone', `%${sufixo}`)
     .order('atualizado_em', { ascending: false })
@@ -141,7 +141,7 @@ export async function espelharMensagemInboxMeta(
       upd.ultima_msg_entrada_em = agora;
       upd.ultima_interacao_em = agora;
       upd.nao_lido = ((contato as any)?.nao_lido || 0) + 1;
-      if (msg.nome && !(contato as any)?.nome) upd.nome = msg.nome;
+      if (msg.nome) upd.nome_perfil = msg.nome;
     }
     await supabase.from('meta_whatsapp_contatos').update(upd).eq('id', contatoId);
   } else {
@@ -154,7 +154,8 @@ export async function espelharMensagemInboxMeta(
         telefone: telefoneFinal,
         telefone_visivel: true,
         wa_jid: waJid,
-        nome: msg.nome || null,
+        nome: null,
+        nome_perfil: msg.nome || null,
         ultima_mensagem: preview,
         ultima_mensagem_em: agora,
         ultima_msg_entrada_em: msg.direcao === 'entrada' ? agora : null,
