@@ -23,15 +23,17 @@ const dateValue = (value: unknown): string | null => {
 
 let batches: StageRow[][] = [];
 let nextBatch = 0;
+let totalParcels = 0;
 
 self.onmessage = (event: MessageEvent) => {
   if (event.data?.type === 'ack') {
     nextBatch += 1;
     if (nextBatch < batches.length) self.postMessage({ type: 'batch', rows: batches[nextBatch], index: nextBatch, total: batches.length });
     else {
-      self.postMessage({ type: 'complete' });
+      self.postMessage({ type: 'complete', totalParcels });
       batches = [];
       nextBatch = 0;
+      totalParcels = 0;
     }
     return;
   }
@@ -84,12 +86,13 @@ self.onmessage = (event: MessageEvent) => {
       if (position % 10000 === 0) self.postMessage({ type: 'parsing', current: position, total: indexes.length - 1, started });
     }
     const rows = [...unique.values()];
+    totalParcels = rows.length;
     batches = [];
     for (let index = 0; index < rows.length; index += 500) batches.push(rows.slice(index, index + 500));
     nextBatch = 0;
     self.postMessage({ type: 'summary', totalRows: indexes.length - 1, totalParcels: rows.length, repeated, conflicts, invalid });
     if (batches.length) self.postMessage({ type: 'batch', rows: batches[0], index: 0, total: batches.length });
-    else self.postMessage({ type: 'complete' });
+    else self.postMessage({ type: 'complete', totalParcels });
   } catch (error) {
     self.postMessage({ type: 'error', message: error instanceof Error ? error.message : 'Não foi possível ler a planilha.' });
   }
