@@ -673,6 +673,13 @@
       "when": 1790769742337,
       "tag": "0095_inbox_meta_strict_attendant_rotation_and_status",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1790772351984,
+      "tag": "0096_atomic_iago_human_transfer",
+      "breakpoints": true
     }
   ]
 }
