@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Otimizar a atualização manual da taxa de resposta das campanhas com índices por telefone/data e preservar o último resultado em falhas
 - [x] Remover as três retomadas automáticas do IAGO, cancelar pendências e manter somente atendimento imediato e transferência humana
 - [x] Liberar documentos seguros nas caixas administradas pelo Bruno e tornar atômica a escalada do IAGO; a recuperação das conversas antigas aguarda autorização explícita
 - [x] Recuperar números Meta próprios RED/YELLOW somente com UAZAPI conectado de qualquer dono; simular bloqueios e retirar agenda duplicada
