@@ -7,6 +7,10 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
 
   const s = raw.toLowerCase();
 
+  if (s.includes('payload too large') || s.includes('maximum file size') || s.includes('file size')) {
+    return "O arquivo ultrapassa o limite permitido. Para documentos, envie arquivos de até 100 MB.";
+  }
+
   if (
     s.includes("row-level security") ||
     s.includes("violates row level security") ||

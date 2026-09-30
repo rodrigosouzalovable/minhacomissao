@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { ehPedidoAtendenteHumano } from '../_shared/iago.ts';
+import { ehPedidoAtendenteHumano, extrairDoc, garantirApresentacaoVirtual } from '../_shared/iago.ts';
 
 Deno.test('detecta pedidos explícitos de atendimento humano', () => {
   const pedidos = [
@@ -10,6 +10,17 @@ Deno.test('detecta pedidos explícitos de atendimento humano', () => {
     'Preciso falar com o responsável',
   ];
   for (const texto of pedidos) assertEquals(ehPedidoAtendenteHumano(texto), true, texto);
+});
+
+Deno.test('lê CPF mascarado enviado pelo cliente', () => {
+  assertEquals(extrairDoc('Meu CPF é 608.945.863-51'), '60894586351');
+});
+
+Deno.test('primeira resposta da PADRÃO informa que é assistente virtual e oferece humano', () => {
+  const mensagens = garantirApresentacaoVirtual(['Como posso ajudar?'], true, true);
+  assertEquals(mensagens[0].includes('assistente virtual'), true);
+  assertEquals(mensagens[0].includes('quero falar com humano'), true);
+  assertEquals(garantirApresentacaoVirtual(['Continuando'], false, true), ['Continuando']);
 });
 
 Deno.test('não confunde conversa comum com pedido de humano', () => {

@@ -8,7 +8,7 @@ import {
   avisarEmergencia as avisarEmergenciaBase, etiquetarAguardandoHumano as etiquetarAguardandoHumanoBase, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
-  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa,
+  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa, garantirApresentacaoVirtual,
   FOLDER_AQUECIMENTO_INBOX,
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
@@ -304,14 +304,23 @@ Deno.serve(async (req) => {
     };
 
     const transferirParaHumano = async (motivo: string) => {
-      await etiquetarAguardandoHumano(supabase, contato_id);
       let etiquetaAtendenteId: string | null = null;
       if (modoCaixaPadrao) {
         const { data, error } = await supabase.rpc('transferir_iago_para_humano_rodizio', {
           p_contato_id: contato_id,
         });
-        if (error) console.error('[IAGO] falha ao transferir pelo rodízio', error.message);
-        else etiquetaAtendenteId = data ? String(data) : null;
+        if (error) throw new Error(`falha ao transferir pelo rodízio: ${error.message}`);
+        etiquetaAtendenteId = data ? String(data) : null;
+        if (!etiquetaAtendenteId) {
+          await supabase.from('iago_falhas').insert({
+            contato_id,
+            entrada_id: String(entrada_id || ultimaEntradaId),
+            motivo: `Escalada sem atendente apto: ${motivo}`.slice(0, 300),
+          } as any);
+          console.error('[IAGO] escalada sem atendente apto', { contato_id, motivo });
+        }
+      } else {
+        await etiquetarAguardandoHumano(supabase, contato_id);
       }
       console.log('[IAGO] transferência humana', { contato_id, motivo, etiquetaAtendenteId });
       return etiquetaAtendenteId;
@@ -785,11 +794,22 @@ Deno.serve(async (req) => {
           .slice(0, 3)
       : [];
 
+    mensagens = garantirApresentacaoVirtual(
+      mensagens,
+      estado.etapa === 'inicio' && !historico.some((m) => m.direcao === 'saida'),
+      modoCaixaPadrao,
+    );
+
     // ===== Escolha da forma de pagamento => confirmar a DATA antes de chamar humano =====
     let escalar = modoAquecimento ? false : !!resultado?.escalar;
     const escalouPorDuvida = modoAquecimento ? false : !!resultado?.escalar;
 
     let motivo = String(resultado?.motivo || '');
+    if (modoCaixaPadrao && cpf && !temAcordo && !proposta && !propostaPrevia) {
+      escalar = true;
+      motivo = 'Nenhum débito em aberto localizado no sistema; conferência humana necessária';
+      mensagens = ['Não localizei débitos em aberto com esses dados. Vou chamar uma pessoa da nossa equipe para conferir e continuar com você.'];
+    }
     // Identidade negada durante a negociação: não encerra, chama o humano.
     if (naoEhTitular && !modoAquecimento) {
       escalar = true;
@@ -925,7 +945,7 @@ Deno.serve(async (req) => {
             ultimo_erro_envio: envio.erro || null,
           },
         }).eq('id', estado.id);
-        await etiquetarAguardandoHumano(supabase, contato_id);
+        await transferirParaHumano('destinatário sem WhatsApp ativo');
         await qualificar('Não é o Cliente');
         await finalizarEntrada();
         console.log('[IAGO] destinatário sem WhatsApp — sem novas tentativas automáticas', { contato_id });
@@ -1032,7 +1052,6 @@ Deno.serve(async (req) => {
       } catch (_) { /* ignore */ }
       // Sem resposta automática: um humano precisa ver essa conversa.
       try {
-        await etiquetarAguardandoHumano(supabase, travaContatoId);
         if (modoCaixaPadrao) {
           await supabase.from('iago_conversa_estado').update({
             aguardando_humano: true,
@@ -1041,7 +1060,12 @@ Deno.serve(async (req) => {
             followup_feito: true,
             followup_etapa: 3,
           }).eq('contato_id', travaContatoId);
-          await supabase.rpc('transferir_iago_para_humano_rodizio', { p_contato_id: travaContatoId });
+          const { data: etiqueta, error: transferError } = await supabase.rpc('transferir_iago_para_humano_rodizio', { p_contato_id: travaContatoId });
+          if (transferError || !etiqueta) {
+            console.error('[IAGO] falha ao atribuir humano após erro', transferError?.message || 'sem atendente apto');
+          }
+        } else {
+          await etiquetarAguardandoHumano(supabase, travaContatoId);
         }
       } catch (_) { /* ignore */ }
     }

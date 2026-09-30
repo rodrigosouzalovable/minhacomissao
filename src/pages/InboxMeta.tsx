@@ -110,6 +110,9 @@ const PAGE_SIZE = 40;
 const JANELA_24H_MS = 24 * 60 * 60 * 1000;
 const ALERTA_1H_MS = 60 * 60 * 1000;
 const FOLDER_CERTIFICADO_ID = '9267b296-24e6-425d-9f0e-0e4114c782d9';
+const DOCUMENT_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'];
+const DOCUMENT_ACCEPT = DOCUMENT_EXTENSIONS.map((ext) => `.${ext}`).join(',');
+const MAX_DOCUMENT_BYTES = 100 * 1024 * 1024;
 
 function formatTelefone(t: string) {
   const d = t.replace(/\D/g, '');
@@ -1457,14 +1460,18 @@ export default function InboxMeta() {
     const isImage = file.type.startsWith('image/');
     const isAudio = file.type.startsWith('audio/');
     const isVideo = file.type.startsWith('video/');
-    const isPdf = file.type === 'application/pdf';
-    if (!isImage && !isAudio && !isVideo && !isPdf) {
-      toast({ title: 'Arquivo inválido', description: 'Envie imagem, áudio, vídeo ou PDF', variant: 'destructive' });
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isDocument = DOCUMENT_EXTENSIONS.includes(ext);
+    if (!isImage && !isAudio && !isVideo && !isDocument) {
+      toast({ title: 'Arquivo inválido', description: 'Envie imagem, áudio, vídeo, PDF, Word, Excel, PowerPoint ou texto.', variant: 'destructive' });
+      return;
+    }
+    if (isDocument && file.size > MAX_DOCUMENT_BYTES) {
+      toast({ title: 'Documento muito grande', description: 'O limite para documentos é 100 MB.', variant: 'destructive' });
       return;
     }
     setEnviandoArquivo(true);
     try {
-      const ext = file.name.split('.').pop() || 'bin';
       const path = `${contatoAtivo.instancia_id}/${contatoAtivo.telefone || contatoAtivo.bsuid}/${Date.now()}.${ext}`;
       const mediaSignedUrl = await uploadInboxMedia(path, file, file.type);
       const type = isImage ? 'image' : isAudio ? 'audio' : isVideo ? 'video' : 'document';
@@ -1501,11 +1508,16 @@ export default function InboxMeta() {
       return;
     }
     const isImage = file.type.startsWith('image/');
-    const isPdf = file.type === 'application/pdf';
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isDocument = DOCUMENT_EXTENSIONS.includes(ext);
     const isAudio = file.type.startsWith('audio/');
     const isVideo = file.type.startsWith('video/');
-    if (!isImage && !isPdf && !isAudio && !isVideo) {
-      toast({ title: 'Arquivo inválido', description: 'Envie imagem, áudio, vídeo ou PDF', variant: 'destructive' });
+    if (!isImage && !isDocument && !isAudio && !isVideo) {
+      toast({ title: 'Arquivo inválido', description: 'Envie imagem, áudio, vídeo, PDF, Word, Excel, PowerPoint ou texto.', variant: 'destructive' });
+      return;
+    }
+    if (isDocument && file.size > MAX_DOCUMENT_BYTES) {
+      toast({ title: 'Documento muito grande', description: 'O limite para documentos é 100 MB.', variant: 'destructive' });
       return;
     }
     setArquivoParaConfirmar(file);
@@ -2726,7 +2738,7 @@ export default function InboxMeta() {
                 ) : (
                   <div className="p-3 flex gap-2 items-end">
                     <input ref={fileInputRef} type="file" className="hidden"
-                      accept="image/*,audio/*,video/*,.pdf"
+                      accept={`image/*,audio/*,video/*,${DOCUMENT_ACCEPT}`}
                       onChange={(e) => {
                         const f = e.target.files?.[0]; e.target.value = '';
                         if (f) solicitarConfirmacaoArquivo(f);
