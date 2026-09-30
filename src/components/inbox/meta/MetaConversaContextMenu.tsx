@@ -6,7 +6,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserRole } from '@/hooks/useUserRole';
-import { MailOpen, Tag, Settings, Check, Pin, Trash2, Archive, ArchiveRestore, Lock, CheckSquare, Square } from 'lucide-react';
+import { MailOpen, Tag, Settings, Check, Pin, Trash2, Archive, ArchiveRestore, Lock, CheckSquare, Square, UserRoundX } from 'lucide-react';
 import { MetaEtiquetasDialog, MetaEtiqueta } from './MetaEtiquetasDialog';
 
 interface Props {
@@ -29,6 +29,7 @@ interface Props {
   onMarcarNaoLida: () => void;
   onQualificar?: () => void;
   onDispensarResposta?: (dispensar: boolean) => void;
+  onMarcarNaoCliente?: () => void;
   onExcluirConversa: (id: string) => void;
   onEtiquetaToggle: (cId: string, eId: string, ativo: boolean) => void;
   onEtiquetasChange: () => void;
@@ -40,7 +41,7 @@ export function MetaConversaContextMenu({
   children, contatoId, etiquetas, etiquetasGerenciar, contatoEtiquetaIds, etiquetasBloqueadas,
   fixado, arquivado, podeExcluir = false, folderId = null, canManageFolder = false,
   mostrarQualificacao = false, mostrarDispensaResposta = false, respostaDispensada = false,
-  onMarcarNaoLida, onQualificar, onDispensarResposta, onExcluirConversa, onEtiquetaToggle,
+  onMarcarNaoLida, onQualificar, onDispensarResposta, onMarcarNaoCliente, onExcluirConversa, onEtiquetaToggle,
   onEtiquetasChange, onFixarToggle, onArquivarToggle,
 }: Props) {
   const { toast } = useToast();
@@ -138,6 +139,11 @@ export function MetaConversaContextMenu({
           {mostrarQualificacao && onQualificar && (
             <ContextMenuItem onClick={onQualificar}>
               <Tag className="h-4 w-4 mr-2" /> Qualificar conversa
+            </ContextMenuItem>
+          )}
+          {onMarcarNaoCliente && (
+            <ContextMenuItem onClick={onMarcarNaoCliente}>
+              <UserRoundX className="h-4 w-4 mr-2" /> Não é o cliente
             </ContextMenuItem>
           )}
           {podeExcluir && (

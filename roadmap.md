@@ -64,6 +64,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Adicionar “Não é o cliente” às conversas, gravar na blacklist e oferecer lista administrativa exportável e reversível
 - [x] Separar o nome oficial do perfil WhatsApp de textos e nomes inferidos no Inbox Meta
 - [x] Corrigir a leitura de templates do Certificado sem quebrar o isolamento de criação, edição e automação por proprietário; confirmar que etiquetas de atendente já são exclusivas no banco
 - [x] Garantir rodízio por ordem nas caixas do Thiago, excluir administradores da atribuição automática e mostrar próximo atendente/caixas sem atendente

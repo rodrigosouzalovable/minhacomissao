@@ -11869,6 +11869,10 @@ export type Database = {
         Args: { p_importacao_id: string }
         Returns: Json
       }
+      desfazer_meta_contato_nao_cliente: {
+        Args: { _telefone_sufixo: string }
+        Returns: boolean
+      }
       editar_acordo_proprio: {
         Args: { p_acordo_id: string; p_parcelas?: Json; p_telefone: string }
         Returns: {
@@ -12310,12 +12314,30 @@ export type Database = {
           user_id: string
         }[]
       }
+      listar_meta_contatos_nao_cliente: {
+        Args: never
+        Returns: {
+          caixa_id: string
+          caixa_nome: string
+          contato_nome: string
+          instancia_id: string
+          marcado_em: string
+          marcado_por: string
+          marcado_por_nome: string
+          telefone: string
+          telefone_sufixo: string
+        }[]
+      }
       listar_usuarios_ativos: {
         Args: never
         Returns: {
           nome: string
           user_id: string
         }[]
+      }
+      marcar_meta_contato_nao_cliente: {
+        Args: { _contato_id: string }
+        Returns: Json
       }
       master_tenant_id: { Args: never; Returns: string }
       meta_atendimentos_por_atendente: {
