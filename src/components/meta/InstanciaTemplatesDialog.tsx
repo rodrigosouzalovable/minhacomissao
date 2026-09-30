@@ -20,7 +20,7 @@ type Row = {
 };
 
 interface Props {
-  instancia: { id: string; nome: string; display_phone?: string | null } | null;
+  instancia: { id: string; nome: string; display_phone?: string | null; user_id?: string | null } | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSincronizar?: () => Promise<void> | void;
@@ -52,16 +52,19 @@ export default function InstanciaTemplatesDialog({ instancia, open, onOpenChange
   const carregar = async () => {
     if (!instancia) return;
     setLoading(true);
+    let modelosAutomaticos = supabase
+      .from("meta_templates_mestre")
+      .select("nome, idioma")
+      .eq("injetar_em_novos", true);
+    if (instancia.user_id) modelosAutomaticos = modelosAutomaticos.eq("criado_por", instancia.user_id);
+
     const [t, m] = await Promise.all([
       supabase
         .from("meta_whatsapp_templates")
         .select("id, nome_template, body_text, categoria, idioma, status, variaveis, sincronizado_em")
         .eq("instancia_id", instancia.id)
         .order("nome_template"),
-      supabase
-        .from("meta_templates_mestre")
-        .select("nome, idioma")
-        .eq("injetar_em_novos", true),
+      modelosAutomaticos,
     ]);
     if (t.error) toast.error("Erro ao carregar templates: " + t.error.message);
     setRows(((t.data as any[]) || []) as Row[]);
