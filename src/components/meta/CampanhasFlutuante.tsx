@@ -25,7 +25,7 @@ function statusLabel(s: string) {
 
 export default function CampanhasFlutuante() {
   const { isAdmin, loading: roleLoading } = useUserRole();
-  const { parceiroMeta, veCampanhas, isLoading: permLoading } = useUserPermissions();
+  const { veCampanhas, isLoading: permLoading } = useUserPermissions();
   const { jobs, jobsAtivos, togglePausaJob, cancelarJob, limparJob, refreshStatus } = useEnvioMetaSending();
   const [open, setOpen] = useState(false);
   const [dialogJobId, setDialogJobId] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export default function CampanhasFlutuante() {
   );
 
   if (roleLoading || permLoading) return null;
-  if (!isAdmin && !parceiroMeta && !veCampanhas) return null;
+  if (!isAdmin && !veCampanhas) return null;
 
 
   const excluirCampanha = async (id: string, nome: string) => {

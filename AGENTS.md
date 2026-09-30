@@ -11,3 +11,4 @@
 - Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
 - Resultados de campanhas cruzam respostas e acordos por sufixo/CPF normalizados e janelas temporais indexadas, para manter a apuração manual rápida sem polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores; todos desfazem pelo card, somente admins listam/exportam.
+- Permissões de navegação vêm apenas das abas explicitamente liberadas; `parceiro_meta` restringe instâncias e não concede telas extras.
