@@ -1938,6 +1938,7 @@ export type Database = {
           concluido_em: string | null
           conflitos: number
           erro_mensagem: string | null
+          fase: string
           id: string
           importado_por: string
           iniciado_em: string
@@ -1945,11 +1946,17 @@ export type Database = {
           linhas_repetidas: number
           nome_arquivo: string
           pagos: number
+          processador_lease_ate: string | null
+          processador_token: string | null
+          progresso: number
           registros_processados: number
           status: string
+          storage_path: string | null
           tamanho_bytes: number
+          tentativas: number
           total_linhas: number
           total_parcelas: number
+          ultima_atividade_em: string
         }
         Insert: {
           atualizados?: number
@@ -1957,6 +1964,7 @@ export type Database = {
           concluido_em?: string | null
           conflitos?: number
           erro_mensagem?: string | null
+          fase?: string
           id?: string
           importado_por?: string
           iniciado_em?: string
@@ -1964,11 +1972,17 @@ export type Database = {
           linhas_repetidas?: number
           nome_arquivo: string
           pagos?: number
+          processador_lease_ate?: string | null
+          processador_token?: string | null
+          progresso?: number
           registros_processados?: number
           status?: string
+          storage_path?: string | null
           tamanho_bytes?: number
+          tentativas?: number
           total_linhas?: number
           total_parcelas?: number
+          ultima_atividade_em?: string
         }
         Update: {
           atualizados?: number
@@ -1976,6 +1990,7 @@ export type Database = {
           concluido_em?: string | null
           conflitos?: number
           erro_mensagem?: string | null
+          fase?: string
           id?: string
           importado_por?: string
           iniciado_em?: string
@@ -1983,11 +1998,17 @@ export type Database = {
           linhas_repetidas?: number
           nome_arquivo?: string
           pagos?: number
+          processador_lease_ate?: string | null
+          processador_token?: string | null
+          progresso?: number
           registros_processados?: number
           status?: string
+          storage_path?: string | null
           tamanho_bytes?: number
+          tentativas?: number
           total_linhas?: number
           total_parcelas?: number
+          ultima_atividade_em?: string
         }
         Relationships: []
       }

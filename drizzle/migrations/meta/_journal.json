@@ -736,6 +736,27 @@
       "when": 1790794071698,
       "tag": "0104_daily_cobmais_portal_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1790798069634,
+      "tag": "0105_persist_cobmais_background_imports",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1790798103382,
+      "tag": "0106_resume_cobmais_background_batches",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1790798240427,
+      "tag": "0107_allow_long_cobmais_atomic_publication",
+      "breakpoints": true
     }
   ]
 }
