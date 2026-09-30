@@ -722,6 +722,13 @@
       "when": 1790788932609,
       "tag": "0102_meta_message_cost_per_conversation",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1790790026807,
+      "tag": "0103_scope_meta_template_ownership_to_writes",
+      "breakpoints": true
     }
   ]
 }

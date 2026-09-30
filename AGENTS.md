@@ -9,6 +9,6 @@
 - A prospecção anual do Certificado roda em dias úteis, prioriza a data exata e amplia até ±15 dias, usa até 50 por instância marcada entre 08h–16h, com reserva atômica por número e custo estimado (teto conjunto R$120/dia); exige Meta CONNECTED, qualidade GREEN/UNKNOWN e template aprovado.
 - Campanhas mostra jobs comuns; Certificado só inicia após preparar destinatários Casa dos Dados, sem Google Maps.
 - Campanhas pontuais D+20 da Casa dos Dados são limitadas a 50 contatos já verificados e administradas separadamente da renovação diária, para impedir duplicidade e consumo acidental da coleta.
-- Modelos Meta são isolados por dono e GREEN/CONNECTED; lotes param ao confirmar Marketing; status paginado distingue seleção e submissão, evitando propagação e falsos envios.
+- Modelos Meta isolam criação, alteração e automação por dono; fluxos operacionais compartilhados podem ler os modelos necessários, e lotes param ao confirmar Marketing.
 - Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
 - Resultados de campanhas cruzam respostas e acordos por sufixo/CPF normalizados e janelas temporais indexadas, para manter a apuração manual rápida sem polling.
