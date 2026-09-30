@@ -1,0 +1,134 @@
+CREATE OR REPLACE FUNCTION public.transferir_iago_para_humano_rodizio(p_contato_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_folder_id uuid;
+  v_folder_key uuid;
+  v_tenant_id uuid;
+  v_iago_user_id uuid;
+  v_etiqueta_id uuid;
+  v_aguardando_id uuid;
+  v_ordem integer;
+  v_last_ordem integer;
+  v_tem_nao_admin boolean;
+BEGIN
+  SELECT c.folder_id, c.tenant_id
+    INTO v_folder_id, v_tenant_id
+  FROM public.meta_whatsapp_contatos c
+  WHERE c.id = p_contato_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR v_folder_id IS NOT NULL THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT e.id INTO v_aguardando_id
+  FROM public.meta_whatsapp_etiquetas e
+  WHERE lower(trim(e.nome)) = lower('Aguardando Humano')
+    AND COALESCE(e.ativa, true) = true
+    AND (e.tenant_id IS NULL OR e.tenant_id = v_tenant_id)
+  ORDER BY CASE WHEN e.tenant_id = v_tenant_id THEN 0 ELSE 1 END, e.criado_em
+  LIMIT 1;
+
+  IF v_aguardando_id IS NULL THEN
+    RAISE EXCEPTION 'Etiqueta Aguardando Humano não encontrada para o tenant';
+  END IF;
+
+  SELECT cfg.user_id
+    INTO v_iago_user_id
+  FROM public.iago_config cfg
+  ORDER BY cfg.created_at
+  LIMIT 1;
+
+  DELETE FROM public.meta_whatsapp_contato_etiquetas ce
+  USING public.meta_whatsapp_etiquetas e
+  WHERE ce.contato_id = p_contato_id
+    AND ce.etiqueta_id = e.id
+    AND e.nome ILIKE 'Atendente:%'
+    AND (
+      (v_iago_user_id IS NOT NULL AND EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = v_iago_user_id
+          AND lower(trim(e.nome)) = lower('Atendente: ' || trim(p.nome))
+      ))
+      OR e.nome ILIKE 'Atendente: IAGO%'
+    );
+
+  SELECT ce.etiqueta_id
+    INTO v_etiqueta_id
+  FROM public.meta_whatsapp_contato_etiquetas ce
+  JOIN public.meta_whatsapp_etiquetas e ON e.id = ce.etiqueta_id
+  WHERE ce.contato_id = p_contato_id
+    AND e.nome ILIKE 'Atendente:%'
+  LIMIT 1;
+
+  IF v_etiqueta_id IS NULL THEN
+    v_folder_key := '00000000-0000-0000-0000-000000000000'::uuid;
+
+    INSERT INTO public.meta_atendimento_rodizio_estado (tenant_id, folder_key)
+    VALUES (v_tenant_id, v_folder_key)
+    ON CONFLICT (tenant_id, folder_key) DO NOTHING;
+
+    SELECT ultima_ordem INTO v_last_ordem
+    FROM public.meta_atendimento_rodizio_estado
+    WHERE tenant_id = v_tenant_id AND folder_key = v_folder_key
+    FOR UPDATE;
+
+    SELECT EXISTS (
+      SELECT 1 FROM public.meta_inbox_default_members d
+      WHERE COALESCE(d.admin, false) = false
+        AND d.user_id IS DISTINCT FROM v_iago_user_id
+    ) INTO v_tem_nao_admin;
+
+    WITH elegiveis AS (
+      SELECT DISTINCT f.etiqueta_id, f.ordem
+      FROM public.meta_atendimento_fila f
+      JOIN public.profiles p ON p.id = f.user_id
+      JOIN public.user_permissions up ON up.user_id = p.id
+      JOIN public.meta_whatsapp_etiquetas e ON e.id = f.etiqueta_id
+      JOIN public.meta_inbox_default_members d ON d.user_id = f.user_id
+      WHERE f.ativo = true
+        AND COALESCE(p.ativo, true) = true
+        AND up.atende_inbox_meta = true
+        AND e.ativa = true
+        AND e.nome ILIKE 'Atendente:%'
+        AND f.tenant_id = v_tenant_id
+        AND f.user_id IS DISTINCT FROM v_iago_user_id
+        AND e.nome NOT ILIKE 'Atendente: IAGO%'
+        AND (NOT v_tem_nao_admin OR COALESCE(d.admin, false) = false)
+    )
+    SELECT el.etiqueta_id, el.ordem
+      INTO v_etiqueta_id, v_ordem
+    FROM elegiveis el
+    ORDER BY CASE WHEN v_last_ordem IS NULL OR el.ordem > v_last_ordem THEN 0 ELSE 1 END,
+      el.ordem, el.etiqueta_id
+    LIMIT 1;
+
+    IF v_etiqueta_id IS NULL THEN
+      RETURN NULL;
+    END IF;
+
+    UPDATE public.meta_atendimento_rodizio_estado
+    SET ultima_ordem = v_ordem, atualizado_em = now()
+    WHERE tenant_id = v_tenant_id AND folder_key = v_folder_key;
+
+    INSERT INTO public.meta_whatsapp_contato_etiquetas
+      (contato_id, etiqueta_id, origem, tenant_id)
+    VALUES (p_contato_id, v_etiqueta_id, 'transferencia_iago', v_tenant_id)
+    ON CONFLICT (contato_id, etiqueta_id) DO NOTHING;
+  END IF;
+
+  INSERT INTO public.meta_whatsapp_contato_etiquetas
+    (contato_id, etiqueta_id, origem, tenant_id)
+  VALUES (p_contato_id, v_aguardando_id, 'transferencia_iago', v_tenant_id)
+  ON CONFLICT (contato_id, etiqueta_id) DO NOTHING;
+
+  RETURN v_etiqueta_id;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.transferir_iago_para_humano_rodizio(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.transferir_iago_para_humano_rodizio(uuid) TO service_role;

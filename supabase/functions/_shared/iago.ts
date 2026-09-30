@@ -320,6 +320,17 @@ export function extrairDoc(texto: string): string {
   return '';
 }
 
+/** Garante transparência na primeira resposta da caixa PADRÃO. */
+export function garantirApresentacaoVirtual(mensagens: string[], primeiroToque: boolean, modoCaixaPadrao: boolean): string[] {
+  if (!primeiroToque || !modoCaixaPadrao) return mensagens;
+  const conjunto = mensagens.join(' ').toLowerCase();
+  if (/assistente\s+virtual/.test(conjunto) && /(humano|pessoa|atendente)/.test(conjunto)) return mensagens;
+  return [
+    'Olá! Sou o IAGO, assistente virtual da equipe. Se preferir falar com uma pessoa, escreva “quero falar com humano”.',
+    ...mensagens,
+  ].slice(0, 3);
+}
+
 export async function carregarConfig(supabase: any) {
   const { data } = await supabase.from('iago_config').select('*').order('created_at').limit(1).maybeSingle();
   return data;

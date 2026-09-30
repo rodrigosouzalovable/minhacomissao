@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+- [x] Liberar documentos seguros nas caixas administradas pelo Bruno e tornar atômica a escalada do IAGO; a recuperação das conversas antigas aguarda autorização explícita
 - [x] Recuperar números Meta próprios RED/YELLOW somente com UAZAPI conectado de qualquer dono; simular bloqueios e retirar agenda duplicada
 - [x] Mostrar todos os status por instância e distinguir seleção, submissão, falha e adiamento sem reenviar automaticamente
 - [x] Acompanhar verificação e aplicação Meta por instância; mostrar categoria real e parar lotes reclassificados

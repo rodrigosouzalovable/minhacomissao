@@ -33,7 +33,7 @@ export function ConfirmarEnvioArquivoDialog({ file, destinoLabel, enviando, onCo
   }, [file]);
 
   const isImage = !!file && file.type.startsWith('image/');
-  const isPdf = !!file && file.type === 'application/pdf';
+  const documentType = file?.name.split('.').pop()?.toUpperCase() || 'Documento';
 
   return (
     <Dialog open={!!file} onOpenChange={(o) => { if (!o && !enviando) onCancelar(); }}>
@@ -61,7 +61,7 @@ export function ConfirmarEnvioArquivoDialog({ file, destinoLabel, enviando, onCo
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{file.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {isPdf ? 'PDF' : file.type || 'Arquivo'} · {formatSize(file.size)}
+                      {file.type.startsWith('image/') || file.type.startsWith('audio/') || file.type.startsWith('video/') ? file.type : documentType} · {formatSize(file.size)}
                     </div>
                   </div>
                 </div>
