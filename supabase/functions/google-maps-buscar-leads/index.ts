@@ -187,12 +187,20 @@ Deno.serve(async (req) => {
 
 
     const body = (await req.json()) as Body;
+    const origemSolicitada = String(body.origem || "manual").slice(0, 60);
     const { data: poolConfig } = await supabase
       .from("meta_envio_pool_config")
       .select("google_maps_captacao_ativa")
       .eq("id", 1)
       .maybeSingle();
-    if (poolConfig?.google_maps_captacao_ativa === false) {
+    const captacaoCandidatos = interno && origemSolicitada === "auto_resposta_goias";
+    let candidatosAtivos = false;
+    if (captacaoCandidatos) {
+      const { data: configCandidatos } = await supabase
+        .from("google_maps_auto_resposta_config").select("ativo").eq("id", true).maybeSingle();
+      candidatosAtivos = configCandidatos?.ativo === true;
+    }
+    if (poolConfig?.google_maps_captacao_ativa === false && !candidatosAtivos) {
       return new Response(JSON.stringify({ error: "captacao_pausada", message: "A captação de novos leads pelo Google Maps está temporariamente pausada." }), {
         status: 409,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -208,7 +216,7 @@ Deno.serve(async (req) => {
     }
     const maxRes = Math.min(Math.max(body.max_resultados ?? 60, 1), 120);
     const maxRequisicoes = Math.min(Math.max(Number(body.max_requisicoes ?? 18), 1), 18);
-    const origem = String(body.origem || "manual").slice(0, 60);
+    const origem = origemSolicitada;
 
     // Cria registro de busca
     const { data: busca, error: buscaErr } = await supabase
