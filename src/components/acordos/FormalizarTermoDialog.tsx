@@ -191,7 +191,7 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
         )}
         <div className="grid gap-3 sm:grid-cols-2">
           {conversas.length > 0 && (
-            <Button onClick={enviar} disabled={working !== null} className="h-auto min-h-20 flex-col gap-2">
+            <Button onClick={enviar} disabled={working !== null || !conversaSelecionada} className="h-auto min-h-20 flex-col gap-2">
               {working === 'whatsapp' ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               Enviar no WhatsApp Oficial
             </Button>
