@@ -5518,6 +5518,7 @@ export type Database = {
           atualizado_em: string
           caixa_id: string | null
           caixa_nome: string | null
+          categoria: string
           contato_nome: string | null
           credor: string | null
           criado_em: string
@@ -5534,6 +5535,7 @@ export type Database = {
           atualizado_em?: string
           caixa_id?: string | null
           caixa_nome?: string | null
+          categoria?: string
           contato_nome?: string | null
           credor?: string | null
           criado_em?: string
@@ -5550,6 +5552,7 @@ export type Database = {
           atualizado_em?: string
           caixa_id?: string | null
           caixa_nome?: string | null
+          categoria?: string
           contato_nome?: string | null
           credor?: string | null
           criado_em?: string
@@ -12479,6 +12482,12 @@ export type Database = {
           telefone_sufixo: string
         }[]
       }
+      listar_sem_whatsapp_verificados: {
+        Args: { _sufixos: string[] }
+        Returns: {
+          telefone_sufixo: string
+        }[]
+      }
       listar_usuarios_ativos: {
         Args: never
         Returns: {
@@ -12849,6 +12858,10 @@ export type Database = {
           _telefone_normalizado: string
         }
         Returns: undefined
+      }
+      registrar_sem_whatsapp_verificados: {
+        Args: { _telefones: Json }
+        Returns: Json
       }
       reivindicar_notificacao_admin: {
         Args: { p_id: string }
