@@ -3471,6 +3471,119 @@ export type Database = {
         }
         Relationships: []
       }
+      google_maps_auto_resposta_candidatos: {
+        Row: {
+          atualizado_em: string
+          avaliacao: number | null
+          captado_em: string
+          cidade: string | null
+          confirmado_em: string | null
+          em_teste_em: string | null
+          exportado_em: string | null
+          id: string
+          lead_id: string
+          motivo_pontuacao: string | null
+          nicho: string | null
+          nome: string | null
+          pontuacao: number
+          site: string | null
+          status: string
+          telefone: string
+          telefone_normalizado: string
+          total_avaliacoes: number | null
+        }
+        Insert: {
+          atualizado_em?: string
+          avaliacao?: number | null
+          captado_em?: string
+          cidade?: string | null
+          confirmado_em?: string | null
+          em_teste_em?: string | null
+          exportado_em?: string | null
+          id?: string
+          lead_id: string
+          motivo_pontuacao?: string | null
+          nicho?: string | null
+          nome?: string | null
+          pontuacao?: number
+          site?: string | null
+          status?: string
+          telefone: string
+          telefone_normalizado: string
+          total_avaliacoes?: number | null
+        }
+        Update: {
+          atualizado_em?: string
+          avaliacao?: number | null
+          captado_em?: string
+          cidade?: string | null
+          confirmado_em?: string | null
+          em_teste_em?: string | null
+          exportado_em?: string | null
+          id?: string
+          lead_id?: string
+          motivo_pontuacao?: string | null
+          nicho?: string | null
+          nome?: string | null
+          pontuacao?: number
+          site?: string | null
+          status?: string
+          telefone?: string
+          telefone_normalizado?: string
+          total_avaliacoes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_maps_auto_resposta_candidatos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "google_maps_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_maps_auto_resposta_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          id: boolean
+          lock_expires_at: string | null
+          lock_token: string | null
+          max_requisicoes_dia: number
+          meta_whatsapps_dia: number
+          regiao: string
+          ultima_execucao_em: string | null
+          ultimo_erro: string | null
+          ultimo_status: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          id?: boolean
+          lock_expires_at?: string | null
+          lock_token?: string | null
+          max_requisicoes_dia?: number
+          meta_whatsapps_dia?: number
+          regiao?: string
+          ultima_execucao_em?: string | null
+          ultimo_erro?: string | null
+          ultimo_status?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          id?: boolean
+          lock_expires_at?: string | null
+          lock_token?: string | null
+          max_requisicoes_dia?: number
+          meta_whatsapps_dia?: number
+          regiao?: string
+          ultima_execucao_em?: string | null
+          ultimo_erro?: string | null
+          ultimo_status?: string | null
+        }
+        Relationships: []
+      }
       google_maps_buscas: {
         Row: {
           categoria: string
@@ -12096,6 +12209,25 @@ export type Database = {
         }
         Returns: undefined
       }
+      gm_auto_resposta_claim: {
+        Args: { p_lock_minutes?: number; p_token: string }
+        Returns: boolean
+      }
+      gm_auto_resposta_ranking: {
+        Args: never
+        Returns: {
+          amostra: number
+          cidade: string
+          confirmados: number
+          nicho: string
+          score: number
+          taxa: number
+        }[]
+      }
+      gm_auto_resposta_release: {
+        Args: { p_erro?: string; p_status?: string; p_token: string }
+        Returns: undefined
+      }
       gm_incrementar_uso: { Args: { qtd?: number }; Returns: number }
       gm_incrementar_uso_chave: {
         Args: { p_chave_id: string; p_qtd?: number }
@@ -12150,6 +12282,10 @@ export type Database = {
           telefone_internacional: string
           total_avaliacoes: number
         }[]
+      }
+      gm_registrar_candidatos_auto_resposta: {
+        Args: { p_itens: Json }
+        Returns: number
       }
       gm_resumo_prospeccao_admin: {
         Args: never

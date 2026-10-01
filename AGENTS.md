@@ -12,3 +12,4 @@
 - Resultados de campanhas cruzam respostas e acordos por sufixo/CPF normalizados e janelas temporais indexadas, para manter a apuração manual rápida sem polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.
 - Permissões de navegação vêm apenas das abas explicitamente liberadas; `parceiro_meta` restringe instâncias e não concede telas extras.
+- A captação de candidatos a resposta automática usa configuração, origem e trava próprias; nunca reativa a captação antiga nem dispara mensagens.
