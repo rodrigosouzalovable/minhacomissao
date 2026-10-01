@@ -7,5 +7,6 @@
 - [x] Promover automaticamente candidatos confirmados para a lista existente.
 - [x] Publicar e validar funções; nenhum envio de mensagem foi executado.
 - [x] Validar compilação e responsividade estrutural da tela em desktop e celular.
-- [x] Aplicar teto diário de 650 consultas/US$ 20,80 e agenda nacional independente, inclusive domingos.
+- [x] Manter 650 consultas diárias e controlar a franquia mensal por conta, sem bloqueio diário em dólares.
 - [x] Exibir meta, faltantes, progresso e motivo de encerramento diário.
+- [x] Configurar 5.000 consultas mensais e corte preventivo de 4.750 em cada conta Google.

@@ -87,16 +87,14 @@ Deno.serve(async (req) => {
       .select("requisicoes_places,custo_estimado_usd,categoria,localizacao,total_resultados")
       .in("origem", ["auto_resposta_goias", ORIGEM]).gte("created_at", inicio).limit(1000);
     const requisicoesHoje = (buscasHoje ?? []).reduce((sum, item) => sum + Number(item.requisicoes_places || 0), 0);
-    const custoHoje = (buscasHoje ?? []).reduce((sum, item) => sum + Number(item.custo_estimado_usd || 0), 0);
-    const maxCustoDia = Number(cfg.max_custo_usd_dia ?? 20.8);
+    const custoTabelaHoje = (buscasHoje ?? []).reduce((sum, item) => sum + Number(item.custo_estimado_usd || 0), 0);
     const restantesConsultas = Math.max(0, Number(cfg.max_requisicoes_dia) - requisicoesHoje);
-    const restantesPorCusto = Math.max(0, Math.floor((maxCustoDia - custoHoje) / 0.032));
-    const restantes = Math.min(restantesConsultas, restantesPorCusto);
+    const restantes = restantesConsultas;
     if (restantes <= 0) {
       statusFinal = "teto_diario_atingido";
       return json({ ok: true, skipped: statusFinal, captados_hoje: confirmadosHoje ?? 0,
         faltam: Math.max(0, Number(cfg.meta_whatsapps_dia) - Number(confirmadosHoje ?? 0)),
-        requisicoes_hoje: requisicoesHoje, custo_estimado_usd: custoHoje });
+        requisicoes_hoje: requisicoesHoje, custo_tabela_usd: custoTabelaHoje });
     }
 
     const { data: rankingData, error: rankingError } = await supabase.rpc("gm_auto_resposta_ranking");
@@ -179,7 +177,7 @@ Deno.serve(async (req) => {
       captados_antes: confirmadosHoje ?? 0, adicionados, meta: cfg.meta_whatsapps_dia,
       faltam: Math.max(0, Number(cfg.meta_whatsapps_dia) - Number(confirmadosHoje ?? 0) - adicionados),
       requisicoes_antes: requisicoesHoje, requisicoes_lote: busca.requisicoes_places ?? 0,
-      custo_antes_usd: custoHoje, teto_custo_usd: maxCustoDia,
+      custo_tabela_antes_usd: custoTabelaHoje,
       verificacao,
     });
   } catch (error) {

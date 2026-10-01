@@ -12,4 +12,4 @@
 - Resultados de campanhas cruzam respostas e acordos por sufixo/CPF normalizados e janelas temporais indexadas, para manter a apuração manual rápida sem polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.
 - Permissões de navegação vêm apenas das abas explicitamente liberadas; `parceiro_meta` restringe instâncias e não concede telas extras.
-- A captação nacional de candidatos a resposta automática tem agenda, configuração, trava e teto diário próprios; nunca reativa a captação antiga nem dispara mensagens.
+- A captação nacional de candidatos a resposta automática tem agenda, configuração e trava próprias; usa o teto diário de consultas e limites mensais por conta Google, nunca um bloqueio diário em dólares, e não dispara mensagens.
