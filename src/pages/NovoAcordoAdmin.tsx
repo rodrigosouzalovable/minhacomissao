@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,11 +15,15 @@ import { ArrowLeft, Calculator, AlertCircle, User, CheckCircle } from 'lucide-re
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ConfirmarTelefoneDialog } from '@/components/acordos/ConfirmarTelefoneDialog';
+import { FormalizarTermoDialog } from '@/components/acordos/FormalizarTermoDialog';
+import { useAuth } from '@/hooks/useAuth';
+import type { Tables } from '@/integrations/supabase/types';
 
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
   clienteCpf: z.string().min(11, 'CPF é obrigatório').max(14, 'CPF inválido'),
-  clienteTelefone: z.string().min(10, 'Telefone é obrigatório').max(15, 'Telefone inválido'),
+  clienteTelefone: z.string().refine((value) => value.replace(/\D/g, '').length === 11, 'Telefone deve ter 11 dígitos'),
   valorTotal: z.number().positive('Valor deve ser maior que zero'),
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
   valorPrimeiraParcela: z.number().nonnegative().optional(),
@@ -69,11 +73,16 @@ const parseCurrency = (value: string): number => {
 
 export default function NovoAcordoAdmin() {
   const { userId } = useParams<{ userId: string }>();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [parcelasPagas, setParcelasPagas] = useState<Record<number, { pago: boolean; dataPagamento: string }>>({});
   const [nomeError, setNomeError] = useState('');
+  const formRef = useRef<HTMLFormElement>(null);
+  const [confirmarTelefoneOpen, setConfirmarTelefoneOpen] = useState(false);
+  const [telefoneConfirmado, setTelefoneConfirmado] = useState('');
+  const [formalizacao, setFormalizacao] = useState<{ acordo: Tables<'acordos'>; pagamentos: Tables<'pagamentos'>[] } | null>(null);
 
   // Buscar perfil do funcionário
   const { data: profile, isLoading: profileLoading } = useQuery({
@@ -332,6 +341,11 @@ export default function NovoAcordoAdmin() {
         diasAtraso: parseInt(form.diasAtraso),
         observacoes: form.observacoes.trim(),
       });
+      const telefoneAtual = validated.clienteTelefone.replace(/\D/g, '');
+      if (telefoneConfirmado !== telefoneAtual) {
+        setConfirmarTelefoneOpen(true);
+        return;
+      }
 
       // Criar acordo usando o userId do funcionário (parâmetro da URL)
       const { data: acordo, error: acordoError } = await supabase
@@ -351,6 +365,9 @@ export default function NovoAcordoAdmin() {
           observacoes: validated.observacoes,
           empresa: empresa,
           instancia_negociacao_id: instanciaNegociacaoId || null,
+          telefone_confirmado_em: new Date().toISOString(),
+          telefone_confirmado_por: user?.id ?? null,
+          termo_formalizacao_status: 'pendente',
         } as any)
         .select()
         .single();
@@ -403,7 +420,11 @@ export default function NovoAcordoAdmin() {
         description: `Acordo com ${validated.clienteNome} cadastrado para ${profile?.nome}.`,
       });
 
-      navigate(`/admin/usuarios/${userId}/comissoes`);
+      setFormalizacao({ acordo: acordo as Tables<'acordos'>, pagamentos: pagamentosData.map((p, index) => ({
+        ...p,
+        criado_em: new Date().toISOString(),
+        id: `pendente-${index}`,
+      })) });
     } catch (err) {
       if (err instanceof z.ZodError) {
         toast({
@@ -455,7 +476,7 @@ export default function NovoAcordoAdmin() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Dados do Cliente</CardTitle>
@@ -800,6 +821,25 @@ export default function NovoAcordoAdmin() {
             </Button>
           </div>
         </form>
+        <ConfirmarTelefoneDialog
+          open={confirmarTelefoneOpen}
+          clienteNome={form.clienteNome}
+          telefone={form.clienteTelefone}
+          onCancel={() => setConfirmarTelefoneOpen(false)}
+          onConfirm={() => {
+            setTelefoneConfirmado(form.clienteTelefone.replace(/\D/g, ''));
+            setConfirmarTelefoneOpen(false);
+            window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+          }}
+        />
+        {formalizacao && (
+          <FormalizarTermoDialog
+            open
+            acordo={formalizacao.acordo}
+            pagamentos={formalizacao.pagamentos}
+            onComplete={() => navigate(`/admin/usuarios/${userId}/comissoes`, { replace: true })}
+          />
+        )}
       </div>
     </AppLayout>
   );

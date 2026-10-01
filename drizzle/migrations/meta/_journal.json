@@ -869,6 +869,13 @@
       "when": 1790865643013,
       "tag": "0123_categorize_and_register_no_whatsapp_suppressions",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1790887375102,
+      "tag": "0124_add_agreement_formalization_tracking",
+      "breakpoints": true
     }
   ]
 }

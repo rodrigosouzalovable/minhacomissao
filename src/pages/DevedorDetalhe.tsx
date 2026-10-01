@@ -1357,6 +1357,9 @@ ${bodyContent}
           userId={user?.id || ''}
           contratosIds={contratos.map(c => c.id)}
           onContratosArquivados={fetchData}
+          clienteNome={devedor.nome}
+          clienteTelefone={telefones.find((telefone) => telefone.is_contato && telefone.ativo)?.numero || devedor.telefone || ''}
+          credor={devedor.credor}
         />
       </div>
     </AppLayout>

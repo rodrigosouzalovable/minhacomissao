@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -19,6 +19,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageDataExtractor, ExtractedData } from '@/components/ImageDataExtractor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ConfirmarTelefoneDialog } from '@/components/acordos/ConfirmarTelefoneDialog';
+import { FormalizarTermoDialog } from '@/components/acordos/FormalizarTermoDialog';
+import type { Tables } from '@/integrations/supabase/types';
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
   clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine(val => val.replace(/\D/g, '').length === 11, {
@@ -81,6 +84,7 @@ export default function NovoAcordo() {
   const { permiteCpfDuplicado } = useUserPermissions();
   
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     toast
   } = useToast();
@@ -92,6 +96,11 @@ export default function NovoAcordo() {
   const [cpfQuebraInfo, setCpfQuebraInfo] = useState('');
   const [checkingCpf, setCheckingCpf] = useState(false);
   const [telefoneError, setTelefoneError] = useState('');
+  const formRef = useRef<HTMLFormElement>(null);
+  const [confirmarTelefoneOpen, setConfirmarTelefoneOpen] = useState(false);
+  const [telefoneConfirmado, setTelefoneConfirmado] = useState('');
+  const [formalizacao, setFormalizacao] = useState<{ acordo: Tables<'acordos'>; pagamentos: Tables<'pagamentos'>[] } | null>(null);
+  const metaOrigem = (location.state as { metaOrigem?: { contatoId: string; instanciaId: string; telefone?: string | null; bsuid?: string | null; clienteNome?: string } } | null)?.metaOrigem ?? null;
   const handleNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
     const filteredValue = formatNome(rawValue);
@@ -152,6 +161,14 @@ export default function NovoAcordo() {
     diasAtraso: '',
     observacoes: ''
   });
+  useEffect(() => {
+    if (!metaOrigem) return;
+    setForm((current) => ({
+      ...current,
+      clienteNome: current.clienteNome || metaOrigem.clienteNome || '',
+      clienteTelefone: current.clienteTelefone || formatPhone((metaOrigem.telefone || '').replace(/^55(?=\d{10,11}$)/, '')),
+    }));
+  }, [metaOrigem]);
 
   // Handler para dados extraídos pela IA
   const handleDataExtracted = (data: ExtractedData) => {
@@ -439,6 +456,12 @@ export default function NovoAcordo() {
         observacoes: form.observacoes.trim()
       });
 
+      const telefoneAtual = validated.clienteTelefone.replace(/\D/g, '');
+      if (telefoneConfirmado !== telefoneAtual) {
+        setConfirmarTelefoneOpen(true);
+        return;
+      }
+
       // Criar acordo
       const {
         data: acordo,
@@ -457,7 +480,12 @@ export default function NovoAcordo() {
         comissao_total: calculo.comissaoTotal,
         observacoes: validated.observacoes,
         empresa: empresa,
-        instancia_negociacao_id: instanciaNegociacaoId || null
+        instancia_negociacao_id: instanciaNegociacaoId || null,
+        telefone_confirmado_em: new Date().toISOString(),
+        telefone_confirmado_por: user.id,
+        termo_formalizacao_status: 'pendente',
+        termo_meta_contato_id: metaOrigem?.contatoId ?? null,
+        termo_meta_instancia_id: metaOrigem?.instanciaId ?? null,
       } as any).select().single();
       if (acordoError) throw new Error(acordoError.message || 'Falha ao criar acordo');
 
@@ -484,7 +512,17 @@ export default function NovoAcordo() {
         title: 'Acordo criado!',
         description: `Acordo com ${validated.clienteNome} cadastrado com sucesso${operadorLabel}.`
       });
-      navigate(`/acordos/${acordo.id}`);
+      setFormalizacao({ acordo: acordo as Tables<'acordos'>, pagamentos: parcelas.map((p, index) => ({
+        acordo_id: acordo.id,
+        comissao_parcela: p.comissao_parcela,
+        criado_em: new Date().toISOString(),
+        data_paga: null,
+        data_prevista: p.data_prevista,
+        id: `pendente-${index}`,
+        numero_parcela: p.numero_parcela,
+        status: p.status,
+        valor_parcela: p.valor_parcela,
+      })) });
     } catch (err) {
       if (err instanceof z.ZodError) {
         toast({
@@ -553,7 +591,7 @@ export default function NovoAcordo() {
           </TabsContent>
 
           <TabsContent value="manual" className="space-y-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
               {isAdmin && (
                 <Card className="border-primary/40">
                   <CardHeader>
@@ -989,6 +1027,26 @@ export default function NovoAcordo() {
             </Button>
           </div>
             </form>
+            <ConfirmarTelefoneDialog
+              open={confirmarTelefoneOpen}
+              clienteNome={form.clienteNome}
+              telefone={form.clienteTelefone}
+              onCancel={() => setConfirmarTelefoneOpen(false)}
+              onConfirm={() => {
+                setTelefoneConfirmado(form.clienteTelefone.replace(/\D/g, ''));
+                setConfirmarTelefoneOpen(false);
+                window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+              }}
+            />
+            {formalizacao && (
+              <FormalizarTermoDialog
+                open
+                acordo={formalizacao.acordo}
+                pagamentos={formalizacao.pagamentos}
+                metaOrigem={metaOrigem}
+                onComplete={() => navigate(`/acordos/${formalizacao.acordo.id}`, { replace: true })}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </div>

@@ -27,6 +27,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Tables } from '@/integrations/supabase/types';
+import { FormalizarTermoDialog } from '@/components/acordos/FormalizarTermoDialog';
 
 type Acordo = Tables<'acordos'>;
 type Pagamento = Tables<'pagamentos'>;
@@ -56,6 +57,7 @@ export default function AcordoDetalhe() {
   const [excluindoLote, setExcluindoLote] = useState(false);
   const [isQuebraAcordo, setIsQuebraAcordo] = useState(false);
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  const [metaOrigem, setMetaOrigem] = useState<{ contatoId: string; instanciaId: string; telefone?: string | null; bsuid?: string | null } | null>(null);
 
   // Verifica se o usuário logado é o dono do acordo
   const isOwner = acordo?.user_id === user?.id;
@@ -96,6 +98,19 @@ export default function AcordoDetalhe() {
           return;
         }
         setAcordo(acordoData);
+        if (acordoData.termo_meta_contato_id && acordoData.termo_meta_instancia_id) {
+          const { data: contatoMeta } = await supabase
+            .from('meta_whatsapp_contatos')
+            .select('id, instancia_id, telefone, bsuid')
+            .eq('id', acordoData.termo_meta_contato_id)
+            .maybeSingle();
+          setMetaOrigem(contatoMeta ? {
+            contatoId: contatoMeta.id,
+            instanciaId: contatoMeta.instancia_id,
+            telefone: contatoMeta.telefone,
+            bsuid: contatoMeta.bsuid,
+          } : null);
+        }
 
         // Se não for o dono, buscar nome do funcionário
         if (acordoData.user_id !== user.id) {
@@ -678,6 +693,15 @@ export default function AcordoDetalhe() {
   return (
     <AppLayout>
       <div className="space-y-6">
+        {acordo.termo_formalizacao_status === 'pendente' && (
+          <FormalizarTermoDialog
+            open
+            acordo={acordo}
+            pagamentos={pagamentos}
+            metaOrigem={metaOrigem}
+            onComplete={() => setAcordo((current) => current ? { ...current, termo_formalizacao_status: 'concluido' } : current)}
+          />
+        )}
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => {
             let origem: string | null = null;
