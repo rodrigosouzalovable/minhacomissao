@@ -19,6 +19,7 @@ import { ArrowLeft, Mic, MicOff, Trash2, Check, Calendar, User, Phone, FileText,
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useOverdueInstallments, type OverdueInstallment } from '@/hooks/useOverdueInstallments';
 
 const retornoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
@@ -147,6 +148,8 @@ export default function Retornos() {
   const [nomeError, setNomeError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [retornoParaMensagem, setRetornoParaMensagem] = useState<Retorno | null>(null);
+  const [parcelaParaMensagem, setParcelaParaMensagem] = useState<OverdueInstallment | null>(null);
+  const { data: parcelasAtrasadas = [], isLoading: loadingParcelasAtrasadas } = useOverdueInstallments();
   
   // Admin filter states
   const [funcionarios, setFuncionarios] = useState<{ id: string; nome: string }[]>([]);
@@ -265,6 +268,9 @@ export default function Retornos() {
   const retornosFiltrados = funcionarioFilter === 'todos'
     ? retornos
     : retornos.filter(r => r.user_id === funcionarioFilter);
+  const parcelasAtrasadasFiltradas = funcionarioFilter === 'todos'
+    ? parcelasAtrasadas
+    : parcelasAtrasadas.filter(parcela => parcela.user_id === funcionarioFilter);
 
   useEffect(() => {
     if (!retornoDestacado || loadingRetornos || destaqueAplicado.current === retornoDestacado) return;
@@ -567,6 +573,18 @@ export default function Retornos() {
     setRetornoParaMensagem(retorno);
   };
 
+  const abrirEnvioMetaParcela = (parcela: OverdueInstallment) => {
+    if (!parcela.cliente_telefone) {
+      toast({ variant: 'destructive', title: 'Telefone não cadastrado', description: 'Este cliente não possui telefone cadastrado.' });
+      return;
+    }
+    if (!metaInstances?.length) {
+      toast({ variant: 'destructive', title: 'Meta não configurada', description: 'Nenhuma instância da API Oficial Meta está disponível para envio.' });
+      return;
+    }
+    setParcelaParaMensagem(parcela);
+  };
+
   const registrarEnvioMeta = async () => {
     const retornoId = retornoParaMensagem?.id;
     if (!retornoId) return;
@@ -860,6 +878,60 @@ export default function Retornos() {
           </form>
         )}
 
+        <section id="parcelas-atrasadas" className="space-y-4 scroll-mt-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-semibold">Parcelas atrasadas</h2>
+            {parcelasAtrasadasFiltradas.length > 0 && <Badge variant="destructive">{parcelasAtrasadasFiltradas.length}</Badge>}
+          </div>
+
+          {loadingParcelasAtrasadas ? (
+            <Card><CardContent className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></CardContent></Card>
+          ) : parcelasAtrasadasFiltradas.length === 0 ? (
+            <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhuma parcela atrasada.</CardContent></Card>
+          ) : (
+            <div className="grid gap-4">
+              {parcelasAtrasadasFiltradas.map((parcela) => {
+                const hoje = new Date();
+                hoje.setHours(0, 0, 0, 0);
+                const vencimento = new Date(`${parcela.data_prevista}T00:00:00`);
+                const diasAtraso = Math.max(1, Math.floor((hoje.getTime() - vencimento.getTime()) / 86400000));
+                const responsavel = funcionarios.find(funcionario => funcionario.id === parcela.user_id)?.nome
+                  || (parcela.user_id === user?.id ? profile?.nome : null);
+                return (
+                  <Card key={parcela.id} className="border-destructive/30">
+                    <CardContent className="pt-6">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-semibold">{parcela.cliente_nome}</span>
+                            <CopyButton value={parcela.cliente_nome} label="Nome" preserveText />
+                            <Badge variant="destructive">{diasAtraso} {diasAtraso === 1 ? 'dia' : 'dias'} em atraso</Badge>
+                          </div>
+                          <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+                            <div className="flex items-center gap-2"><Hash className="h-3 w-3" /><span>Parcela {parcela.numero_parcela}</span></div>
+                            <div className="flex items-center gap-2"><CalendarDays className="h-3 w-3" /><span>Venceu em {vencimento.toLocaleDateString('pt-BR')}</span></div>
+                            <div className="flex items-center gap-2"><DollarSign className="h-3 w-3" /><span>{formatCurrencyDisplay(parcela.valor_parcela)}</span></div>
+                            <div className="flex items-center gap-2"><FileText className="h-3 w-3" /><span>CPF: {parcela.cliente_cpf}</span><CopyButton value={parcela.cliente_cpf} label="CPF" /></div>
+                            <div className="flex items-center gap-2"><Phone className="h-3 w-3" /><span>{parcela.cliente_telefone || 'Sem telefone'}</span>{parcela.cliente_telefone && <CopyButton value={parcela.cliente_telefone} label="Telefone" />}</div>
+                            {responsavel && <div className="flex items-center gap-2"><UserCircle className="h-3 w-3" /><span>Responsável: {responsavel}</span></div>}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-2 sm:flex-col">
+                          <Button size="sm" variant="outline" onClick={() => abrirEnvioMetaParcela(parcela)} disabled={!parcela.cliente_telefone} title={parcela.cliente_telefone ? 'Enviar template Meta' : 'Telefone não cadastrado'}>
+                            <MessageCircle className="mr-1 h-4 w-4" />WhatsApp
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => navigate(`/acordos/${parcela.acordo_id}`)}>Ver acordo</Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
         {/* Lista de Retornos */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">
@@ -1016,14 +1088,14 @@ export default function Retornos() {
         </div>
       </div>
       <MetaNovaConversaDialog
-        open={!!retornoParaMensagem}
-        onOpenChange={(open) => { if (!open) setRetornoParaMensagem(null); }}
+        open={!!retornoParaMensagem || !!parcelaParaMensagem}
+        onOpenChange={(open) => { if (!open) { setRetornoParaMensagem(null); setParcelaParaMensagem(null); } }}
         instancias={metaInstances || []}
         atendenteNome={profile?.nome || undefined}
         folderId={null}
-        initialTelefone={retornoParaMensagem?.cliente_telefone || ''}
-        initialNome={retornoParaMensagem?.cliente_nome || ''}
-        onSent={() => { void registrarEnvioMeta(); }}
+        initialTelefone={retornoParaMensagem?.cliente_telefone || parcelaParaMensagem?.cliente_telefone || ''}
+        initialNome={retornoParaMensagem?.cliente_nome || parcelaParaMensagem?.cliente_nome || ''}
+        onSent={() => { if (retornoParaMensagem) void registrarEnvioMeta(); else setParcelaParaMensagem(null); }}
       />
     </AppLayout>
   );

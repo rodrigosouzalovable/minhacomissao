@@ -15,3 +15,4 @@
 - Permissões de navegação vêm apenas das abas explicitamente liberadas; `parceiro_meta` restringe instâncias e não concede telas extras.
 - A captação nacional de candidatos a resposta automática tem agenda, configuração e trava próprias; usa o teto diário de consultas e limites mensais por conta Google, nunca um bloqueio diário em dólares, e não dispara mensagens.
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
+- Parcelas vencidas são derivadas de pagamentos pendentes em acordos ativos e compartilham uma única consulta visível entre sino, alerta e Retornos, evitando duplicação de dados e polling.
