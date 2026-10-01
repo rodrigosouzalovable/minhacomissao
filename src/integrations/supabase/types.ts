@@ -12597,6 +12597,18 @@ export type Database = {
           user_id: string
         }[]
       }
+      localizar_conversas_meta_por_telefone: {
+        Args: { _telefone: string }
+        Returns: {
+          bsuid: string
+          contato_id: string
+          contato_nome: string
+          instancia_id: string
+          instancia_nome: string
+          telefone: string
+          ultima_mensagem_em: string
+        }[]
+      }
       marcar_meta_contato_nao_cliente: {
         Args: { _contato_id: string }
         Returns: Json

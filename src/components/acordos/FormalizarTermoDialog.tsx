@@ -30,6 +30,7 @@ interface Props {
 export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, entity = 'acordos', onComplete }: Props) {
   const [working, setWorking] = useState<'download' | 'whatsapp' | null>(null);
   const [procurandoConversa, setProcurandoConversa] = useState(false);
+  const [erroBuscaConversa, setErroBuscaConversa] = useState<string | null>(null);
   const [conversas, setConversas] = useState<MetaOrigem[]>(metaOrigem ? [metaOrigem] : []);
   const [conversaSelecionadaId, setConversaSelecionadaId] = useState(metaOrigem?.contatoId ?? '');
   const { toast } = useToast();
@@ -42,6 +43,7 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
     if (metaOrigem) {
       setConversas([metaOrigem]);
       setConversaSelecionadaId(metaOrigem.contatoId);
+      setErroBuscaConversa(null);
       setProcurandoConversa(false);
       return;
     }
@@ -51,6 +53,7 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
     if (sufixo.length < 8) {
       setConversas([]);
       setConversaSelecionadaId('');
+      setErroBuscaConversa(null);
       setProcurandoConversa(false);
       return;
     }
@@ -58,38 +61,29 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
     let ativo = true;
     const localizarConversas = async () => {
       setProcurandoConversa(true);
-      const { data: contatos, error } = await supabase
-        .from('meta_whatsapp_contatos')
-        .select('id, instancia_id, telefone, bsuid, nome, nome_perfil, ultima_mensagem_em')
-        .like('telefone', `%${sufixo}`)
-        .order('ultima_mensagem_em', { ascending: false, nullsFirst: false });
+      setErroBuscaConversa(null);
+      const { data: contatos, error } = await (supabase as any)
+        .rpc('localizar_conversas_meta_por_telefone', { _telefone: telefone });
 
       if (!ativo) return;
-      if (error || !contatos?.length) {
+      if (error) {
         setConversas([]);
         setConversaSelecionadaId('');
+        setErroBuscaConversa('Não foi possível consultar as conversas agora. Tente novamente antes de baixar o termo.');
         setProcurandoConversa(false);
         return;
       }
 
-      const instanciaIds = [...new Set(contatos.map((contato) => contato.instancia_id))];
-      const { data: instancias } = await supabase
-        .from('meta_whatsapp_instances')
-        .select('id, nome')
-        .in('id', instanciaIds);
-
-      if (!ativo) return;
-      const nomesInstancias = new Map((instancias || []).map((instancia) => [instancia.id, instancia.nome]));
-      const encontradas = contatos.map((contato) => ({
-        contatoId: contato.id,
+      const encontradas = (contatos || []).map((contato: any) => ({
+        contatoId: contato.contato_id,
         instanciaId: contato.instancia_id,
         telefone: contato.telefone,
         bsuid: contato.bsuid,
-        contatoNome: contato.nome_perfil || contato.nome,
-        instanciaNome: nomesInstancias.get(contato.instancia_id) || 'WhatsApp Oficial',
+        contatoNome: contato.contato_nome,
+        instanciaNome: contato.instancia_nome || 'WhatsApp Oficial',
       }));
       setConversas(encontradas);
-      setConversaSelecionadaId(encontradas.length === 1 ? encontradas[0].contatoId : '');
+      setConversaSelecionadaId(encontradas[0]?.contatoId ?? '');
       setProcurandoConversa(false);
     };
 
@@ -181,7 +175,13 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
             </Select>
           </div>
         )}
-        {!procurandoConversa && conversas.length === 0 && (
+        {!procurandoConversa && erroBuscaConversa && (
+          <Alert variant="destructive">
+            <MessageCircle className="h-4 w-4" />
+            <AlertDescription>{erroBuscaConversa}</AlertDescription>
+          </Alert>
+        )}
+        {!procurandoConversa && !erroBuscaConversa && conversas.length === 0 && (
           <Alert>
             <MessageCircle className="h-4 w-4" />
             <AlertDescription>
