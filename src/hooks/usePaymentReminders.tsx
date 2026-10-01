@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useUserRole } from '@/hooks/useUserRole';
 import { format, addDays } from 'date-fns';
+import { useOverdueInstallments } from '@/hooks/useOverdueInstallments';
 
 interface PaymentReminder {
   id: string;
@@ -139,58 +140,7 @@ export function usePaymentReminders() {
     refetchIntervalInBackground: false,
   });
 
-  // Buscar parcelas vencidas (data_prevista < hoje)
-  const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useQuery({
-    queryKey: ['overdue-reminders', user?.id, adminId, isAdmin],
-    queryFn: async () => {
-      if (!user) return [];
-      if (!isAdmin && userIds.length === 0) return [];
-
-      const hoje = format(new Date(), 'yyyy-MM-dd');
-
-      let query = supabase
-        .from('pagamentos')
-        .select(`
-          id,
-          acordo_id,
-          numero_parcela,
-          data_prevista,
-          valor_parcela,
-          acordos!inner(cliente_nome, cliente_telefone, user_id)
-        `)
-        .eq('status', 'pendente')
-        .lt('data_prevista', hoje);
-
-      if (!isAdmin) {
-        query = query.in('acordos.user_id', userIds);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Erro ao buscar parcelas vencidas:', error);
-        return [];
-      }
-
-      const items = (data || []).map((pagamento: any) => ({
-        id: pagamento.id,
-        acordo_id: pagamento.acordo_id,
-        numero_parcela: pagamento.numero_parcela,
-        data_prevista: pagamento.data_prevista,
-        valor_parcela: pagamento.valor_parcela,
-        cliente_nome: pagamento.acordos.cliente_nome,
-        cliente_telefone: pagamento.acordos.cliente_telefone,
-        tipo: 'vencido',
-        categoria: 'pagamento',
-      })) as PaymentReminder[];
-
-      return await filterParcelsWithLaterPaid(items);
-    },
-    enabled: !!user,
-    staleTime: 3 * 60 * 1000,
-    refetchInterval: () => (document.visibilityState === 'visible' ? 10 * 60 * 1000 : false),
-    refetchIntervalInBackground: false,
-  });
+  const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useOverdueInstallments();
 
   // Buscar retornos pendentes
   const { data: retornos = [], isLoading: isLoadingRetornos } = useQuery({

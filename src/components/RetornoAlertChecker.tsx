@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Bell, User, Phone, FileText, CalendarClock, MessageSquare } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
+import { Button } from '@/components/ui/button';
+import { useOverdueInstallments } from '@/hooks/useOverdueInstallments';
 import successSound from '@/assets/success-sound.mp3';
 
 interface RetornoAlerta {
@@ -34,9 +36,26 @@ export function RetornoAlertChecker() {
   const [concluindo, setConcluindo] = useState(false);
   const [erroConclusao, setErroConclusao] = useState('');
   const [avisoAbertura, setAvisoAbertura] = useState('');
+  const [avisoAtrasosAberto, setAvisoAtrasosAberto] = useState(false);
   const notifiedIds = useRef<Set<string>>(new Set());
+  const { data: parcelasAtrasadas = [], dataUpdatedAt } = useOverdueInstallments();
 
   const alertaRetorno = fila[0] ?? null;
+  const parcelasDoUsuario = parcelasAtrasadas.filter((parcela) => parcela.user_id === user?.id);
+
+  useEffect(() => {
+    if (!dataUpdatedAt || parcelasDoUsuario.length === 0) {
+      setAvisoAtrasosAberto(false);
+      return;
+    }
+    setAvisoAtrasosAberto(true);
+    try {
+      const audio = new Audio(successSound);
+      void audio.play().catch(() => {});
+    } catch {
+      // O navegador pode bloquear áudio automático; o aviso visual continua disponível.
+    }
+  }, [dataUpdatedAt, parcelasDoUsuario.length]);
 
   const checkRetornos = useCallback(async () => {
     if (!user) return;
@@ -151,6 +170,7 @@ export function RetornoAlertChecker() {
   };
 
   return (
+    <>
     <AlertDialog open={!!alertaRetorno} onOpenChange={(open) => { if (!open) fechar(); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -226,5 +246,44 @@ export function RetornoAlertChecker() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    <AlertDialog open={!alertaRetorno && avisoAtrasosAberto && parcelasDoUsuario.length > 0} onOpenChange={setAvisoAtrasosAberto}>
+      <AlertDialogContent className="max-w-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+            <Bell className="h-5 w-5" />
+            Parcelas atrasadas
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Estes clientes ainda possuem pagamentos pendentes. O aviso voltará em 10 minutos enquanto o atraso continuar.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+          {parcelasDoUsuario.map((parcela) => {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            const vencimento = new Date(`${parcela.data_prevista}T00:00:00`);
+            const dias = Math.max(1, Math.floor((hoje.getTime() - vencimento.getTime()) / 86400000));
+            return (
+              <div key={parcela.id} className="rounded border border-destructive/30 bg-destructive/10 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold text-foreground">{parcela.cliente_nome}</span>
+                  <Badge variant="destructive">{dias} {dias === 1 ? 'dia' : 'dias'} em atraso</Badge>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Parcela {parcela.numero_parcela} • Vencimento {vencimento.toLocaleDateString('pt-BR')} • {Number(parcela.valor_parcela).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Fechar por enquanto</AlertDialogCancel>
+          <Button onClick={() => { setAvisoAtrasosAberto(false); navigate('/retornos#parcelas-atrasadas'); }}>
+            Ver parcelas atrasadas
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
