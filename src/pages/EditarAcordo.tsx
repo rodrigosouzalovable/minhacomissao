@@ -480,7 +480,7 @@ export default function EditarAcordo() {
           </Card>
 
           {!isAdmin && <Card>
-            <CardHeader><CardTitle>Parcelas pendentes</CardTitle><CardDescription>Altere apenas as parcelas necessárias. O total do contrato será atualizado.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Parcelas</CardTitle><CardDescription>Altere aqui as parcelas pendentes. Valores de parcelas pagas e datas de pagamento podem ser corrigidos nos detalhes do acordo.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
               {parcelasOriginais.map((parcela) => (
                 <div key={parcela.id} className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr] items-end border-b pb-3 last:border-0">

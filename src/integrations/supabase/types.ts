@@ -12023,6 +12023,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      editar_parcela_acordo_proprio: {
+        Args: {
+          p_nova_data_paga?: string
+          p_novo_valor?: number
+          p_pagamento_id: string
+        }
+        Returns: Json
+      }
       enfileirar_notificacao_admin: {
         Args: {
           p_chave_idempotencia: string

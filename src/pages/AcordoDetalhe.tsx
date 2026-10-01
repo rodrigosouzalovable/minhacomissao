@@ -334,19 +334,40 @@ export default function AcordoDetalhe() {
   };
 
   const atualizarDataPagamento = async (pagamentoId: string, novaData: string) => {
+    if (!novaData) {
+      toast({ variant: 'destructive', title: 'Data inválida', description: 'Informe a data do pagamento.' });
+      return;
+    }
     try {
-      const { error } = await supabase
-        .from('pagamentos')
-        .update({ data_paga: novaData })
-        .eq('id', pagamentoId);
+      const { data, error } = await supabase.rpc('editar_parcela_acordo_proprio' as any, {
+        p_pagamento_id: pagamentoId,
+        p_novo_valor: null,
+        p_nova_data_paga: novaData,
+      });
 
       if (error) throw error;
 
+      const resultado = data as {
+        data_paga?: string;
+        valor_total?: number;
+        valor_medio_parcela?: number;
+        comissao_total?: number;
+      } | null;
+      const dataPersistida = resultado?.data_paga || novaData;
+
       setPagamentos(prev =>
         prev.map(p =>
-          p.id === pagamentoId ? { ...p, data_paga: novaData } : p
+          p.id === pagamentoId ? { ...p, data_paga: dataPersistida } : p
         )
       );
+      if (resultado && acordo) {
+        setAcordo({
+          ...acordo,
+          valor_total: resultado.valor_total ?? acordo.valor_total,
+          valor_parcela: resultado.valor_medio_parcela ?? acordo.valor_parcela,
+          comissao_total: resultado.comissao_total ?? acordo.comissao_total,
+        });
+      }
 
       setEditandoDataPagamento(null);
       setNovaDataPagamento('');
@@ -402,51 +423,42 @@ export default function AcordoDetalhe() {
       return;
     }
     try {
-      if (isOwner && !isAdmin) {
-        const parcela = pagamentos.find(p => p.id === pagamentoId);
-        if (!parcela || parcela.status !== 'pendente') throw new Error('Só é possível alterar parcelas pendentes.');
-        const { error } = await supabase.rpc('editar_acordo_proprio', {
-          p_acordo_id: acordo.id,
-          p_telefone: acordo.cliente_telefone,
-          p_parcelas: [{ id: pagamentoId, valor: novoValor, data: parcela.data_prevista }],
-        });
-        if (error) throw error;
-        const novoTotal = Math.round(pagamentos.reduce((sum, p) => sum + (p.id === pagamentoId ? novoValor : Number(p.valor_parcela)), 0) * 100) / 100;
-        setPagamentos(prev => prev.map(p => p.id === pagamentoId ? { ...p, valor_parcela: novoValor } : p));
-        setAcordo(prev => prev ? { ...prev, valor_total: novoTotal } : prev);
-        setEditandoValorParcela(null);
-        setNovoValorParcela('');
-        toast({ title: 'Parcela atualizada!' });
-        return;
-      }
-      const { error: errParcela } = await supabase
-        .from('pagamentos')
-        .update({ valor_parcela: novoValor })
-        .eq('id', pagamentoId);
-      if (errParcela) throw errParcela;
+      const { data, error } = await supabase.rpc('editar_parcela_acordo_proprio', {
+        p_pagamento_id: pagamentoId,
+        p_novo_valor: novoValor,
+        p_nova_data_paga: null,
+      });
+      if (error) throw error;
 
-      const novoTotal = pagamentos.reduce(
-        (sum, p) => sum + (p.id === pagamentoId ? novoValor : Number(p.valor_parcela)),
-        0
-      );
-      const totalArred = Math.round(novoTotal * 100) / 100;
-
-      const { error: errAcordo } = await supabase
-        .from('acordos')
-        .update({ valor_total: totalArred })
-        .eq('id', acordo.id);
-      if (errAcordo) throw errAcordo;
+      const resultado = data as {
+        valor_parcela?: number;
+        comissao_parcela?: number;
+        valor_total?: number;
+        valor_medio_parcela?: number;
+        comissao_total?: number;
+      } | null;
+      const valorPersistido = resultado?.valor_parcela ?? novoValor;
+      const totalPersistido = resultado?.valor_total ?? acordo.valor_total;
 
       setPagamentos(prev =>
-        prev.map(p => (p.id === pagamentoId ? { ...p, valor_parcela: novoValor } : p))
+        prev.map(p => (p.id === pagamentoId ? {
+          ...p,
+          valor_parcela: valorPersistido,
+          comissao_parcela: resultado?.comissao_parcela ?? p.comissao_parcela,
+        } : p))
       );
-      setAcordo(prev => (prev ? { ...prev, valor_total: totalArred } : prev));
+      setAcordo(prev => (prev ? {
+        ...prev,
+        valor_total: totalPersistido,
+        valor_parcela: resultado?.valor_medio_parcela ?? prev.valor_parcela,
+        comissao_total: resultado?.comissao_total ?? prev.comissao_total,
+      } : prev));
       setEditandoValorParcela(null);
       setNovoValorParcela('');
 
       toast({
         title: 'Parcela atualizada!',
-        description: `Novo valor: ${formatarMoeda(novoValor)} • Total: ${formatarMoeda(totalArred)}`,
+        description: `Novo valor: ${formatarMoeda(valorPersistido)} • Total: ${formatarMoeda(totalPersistido)}`,
       });
     } catch (e) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível atualizar o valor da parcela.' });
@@ -1120,7 +1132,7 @@ export default function AcordoDetalhe() {
                             ) : (
                               <span className="flex items-center gap-1">
                                 <span>Pago em: {formatarData(pagamento.data_paga)}</span>
-                                 {isAdmin && (
+                                 {canEdit && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -1142,7 +1154,7 @@ export default function AcordoDetalhe() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      {(isAdmin || (isOwner && pagamento.status === 'pendente')) && editandoValorParcela === pagamento.id ? (
+                      {canEdit && editandoValorParcela === pagamento.id ? (
                         <div className="flex items-center gap-1 justify-end">
                           <span className="text-sm text-muted-foreground">R$</span>
                           <Input
@@ -1175,7 +1187,7 @@ export default function AcordoDetalhe() {
                       ) : (
                         <p className="font-medium flex items-center gap-1 justify-end">
                           {formatarMoeda(pagamento.valor_parcela)}
-                          {(isAdmin || (isOwner && pagamento.status === 'pendente')) && (
+                           {canEdit && (
                             <Button
                               variant="ghost"
                               size="sm"
