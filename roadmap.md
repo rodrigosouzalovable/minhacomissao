@@ -10,3 +10,6 @@
 - [x] Manter 650 consultas diárias e controlar a franquia mensal por conta, sem bloqueio diário em dólares.
 - [x] Exibir meta, faltantes, progresso e motivo de encerramento diário.
 - [x] Configurar 5.000 consultas mensais e corte preventivo de 4.750 em cada conta Google.
+- [x] Restringir o contador do Inbox Meta às conversas não lidas da caixa Padrão.
+- [x] Preparar migração atômica da Novo Mundo 3144 para UAZAPI, preservando histórico e vínculo com a Padrão.
+- [ ] Executar a migração da Novo Mundo 3144 após a nova conexão UAZAPI ser criada e validada.
