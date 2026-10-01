@@ -19,7 +19,7 @@ type Resumo = {
 
 type Detalhe = {
   id: string;
-  entregue_em: string | null;
+  entregue_em: string;
   origem: string;
   categoria: string;
   status: string;

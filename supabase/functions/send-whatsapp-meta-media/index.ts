@@ -451,8 +451,6 @@ Deno.serve(async (req) => {
         p_wa_message_id: waId,
         p_status: 'sent',
         p_categoria: 'SERVICE',
-        p_pricing_type: null,
-        p_foi_gratis: null,
         p_entregue_em: nowIso,
       });
       if (custoErr) console.error('[send-whatsapp-meta-media] falha ao estimar custo', custoErr.message);
