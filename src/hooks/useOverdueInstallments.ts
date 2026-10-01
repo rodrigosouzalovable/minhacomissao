@@ -19,17 +19,19 @@ export interface OverdueInstallment {
   categoria: 'pagamento';
 }
 
-export function useOverdueInstallments() {
-  const { user } = useAuth();
-  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
-  const { isAdmin } = useUserRole();
-  const adminId = acordosCompartilhados && concedidoPor ? concedidoPor : null;
-  const userIds = adminId ? [user?.id, adminId].filter(Boolean) as string[] : user ? [user.id] : [];
+interface OverdueInstallmentsScope {
+  userId?: string;
+  adminId: string | null;
+  isAdmin: boolean;
+}
+
+export function useOverdueInstallmentsQuery({ userId, adminId, isAdmin }: OverdueInstallmentsScope) {
+  const userIds = adminId ? [userId, adminId].filter(Boolean) as string[] : userId ? [userId] : [];
 
   return useQuery({
-    queryKey: ['overdue-reminders', user?.id, adminId, isAdmin],
+    queryKey: ['overdue-reminders', userId, adminId, isAdmin],
     queryFn: async () => {
-      if (!user || (!isAdmin && userIds.length === 0)) return [];
+      if (!userId || (!isAdmin && userIds.length === 0)) return [];
 
       const hoje = format(new Date(), 'yyyy-MM-dd');
       let query = supabase
@@ -84,10 +86,18 @@ export function useOverdueInstallments() {
 
       return installments.filter(item => (highestPaidByAgreement.get(item.acordo_id) ?? 0) < item.numero_parcela);
     },
-    enabled: !!user,
+    enabled: !!userId,
     staleTime: 3 * 60 * 1000,
     refetchInterval: () => (document.visibilityState === 'visible' ? 10 * 60 * 1000 : false),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
+}
+
+export function useOverdueInstallments() {
+  const { user } = useAuth();
+  const { acordosCompartilhados, concedidoPor } = useUserPermissions();
+  const { isAdmin } = useUserRole();
+  const adminId = acordosCompartilhados && concedidoPor ? concedidoPor : null;
+  return useOverdueInstallmentsQuery({ userId: user?.id, adminId, isAdmin });
 }

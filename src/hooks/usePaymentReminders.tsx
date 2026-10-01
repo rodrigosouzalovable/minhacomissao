@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useUserRole } from '@/hooks/useUserRole';
 import { format, addDays } from 'date-fns';
-import { useOverdueInstallments } from '@/hooks/useOverdueInstallments';
+import { useOverdueInstallmentsQuery } from '@/hooks/useOverdueInstallments';
 
 interface PaymentReminder {
   id: string;
@@ -140,7 +140,11 @@ export function usePaymentReminders() {
     refetchIntervalInBackground: false,
   });
 
-  const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useOverdueInstallments();
+  const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useOverdueInstallmentsQuery({
+    userId: user?.id,
+    adminId,
+    isAdmin,
+  });
 
   // Buscar retornos pendentes
   const { data: retornos = [], isLoading: isLoadingRetornos } = useQuery({
