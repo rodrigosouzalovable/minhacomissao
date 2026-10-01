@@ -14,5 +14,5 @@
 - [x] Preparar migração atômica da Novo Mundo 3144 para UAZAPI, preservando histórico e vínculo com a Padrão.
 - [ ] Executar a migração da Novo Mundo 3144 após a nova conexão UAZAPI ser criada e validada.
 - [x] Registrar números confirmados sem WhatsApp e removê-los automaticamente das novas listas do Envio Meta.
-- [x] Avisar parcelas atrasadas a cada 10 minutos com o sistema visível e exibi-las em Retornos com envio Meta.
+- [x] Avisar parcelas atrasadas às 9h e 15h BRT, uma vez por janela, com acesso direto ao acordo e exibição em Retornos.
 - [x] Corrigir o aviso travado de templates e completar HSM Utility aprovados apenas nas instâncias GREEN do mesmo dono.
