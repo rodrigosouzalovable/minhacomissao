@@ -628,79 +628,6 @@ export function AquecimentoMetaTab() {
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Building2 className="h-4 w-4" /> Candidatos a resposta automática
-              <Badge variant="secondary">{candidatos?.total ?? 0}</Badge>
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => captarCandidatos.mutate()} disabled={captarCandidatos.isPending}>
-                {captarCandidatos.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-                Captar agora
-              </Button>
-              <Button size="sm" onClick={exportarCandidatos} disabled={!candidatos?.total}>
-                <Download className="h-4 w-4 mr-1" /> Baixar novos
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Captação automática em Goiás: até {configCandidatos?.meta_whatsapps_dia ?? 200} WhatsApps novos por dia. Nenhuma mensagem é enviada automaticamente.
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.hoje ?? 0}</div><div className="text-xs text-muted-foreground">captados hoje</div></div>
-            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.requisicoes ?? 0}</div><div className="text-xs text-muted-foreground">consultas hoje</div></div>
-            <div className="rounded-md border p-2"><div className="text-lg font-semibold">US$ {(resumoCandidatos?.custo ?? 0).toFixed(2)}</div><div className="text-xs text-muted-foreground">custo estimado</div></div>
-            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.exportados ?? 0}</div><div className="text-xs text-muted-foreground">exportados / em teste</div></div>
-            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.confirmados ?? 0}</div><div className="text-xs text-muted-foreground">confirmados</div></div>
-          </div>
-          {configCandidatos?.ultimo_erro && <div role="alert" className="text-xs text-destructive">Última falha: {configCandidatos.ultimo_erro}</div>}
-          <div className="flex flex-wrap gap-2">
-            <div className="relative min-w-[240px] flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar telefone, empresa, nicho ou cidade" value={buscaCandidato}
-                onChange={(event) => { setBuscaCandidato(event.target.value); setPaginaCandidato(0); }} />
-            </div>
-            <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={statusCandidato}
-              onChange={(event) => { setStatusCandidato(event.target.value); setPaginaCandidato(0); }}>
-              <option value="disponiveis">Disponíveis</option><option value="novo">Novos</option>
-              <option value="exportado">Exportados</option><option value="em_teste">Em teste</option>
-              <option value="confirmado">Confirmados</option><option value="todos">Todos</option>
-            </select>
-          </div>
-          {carregandoCandidatos ? <p className="text-sm text-muted-foreground">Carregando…</p> : !candidatos?.total ? (
-            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Nenhum candidato encontrado neste filtro.</div>
-          ) : <>
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full min-w-[980px] text-sm">
-                <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground"><tr>
-                  <th className="p-2 font-medium">WhatsApp</th><th className="p-2 font-medium">Empresa</th>
-                  <th className="p-2 font-medium">Nicho / cidade</th><th className="p-2 font-medium">Perfil</th>
-                  <th className="p-2 font-medium">Pontuação</th><th className="p-2 font-medium">Status</th><th className="p-2 font-medium">Ação</th>
-                </tr></thead>
-                <tbody className="divide-y">{(candidatos.itens as any[]).map((item) => <tr key={item.id}>
-                  <td className="p-2 font-medium whitespace-nowrap">{telefoneBr(item.telefone)}</td>
-                  <td className="p-2">{item.nome || "—"}</td><td className="p-2">{[item.nicho, item.cidade].filter(Boolean).join(" · ") || "—"}</td>
-                  <td className="p-2">{item.avaliacao ? `${item.avaliacao} · ${item.total_avaliacoes ?? 0} avaliações` : "Sem avaliação"}</td>
-                  <td className="p-2" title={item.motivo_pontuacao || ""}><Badge variant="outline">{Number(item.pontuacao).toFixed(0)}</Badge></td>
-                  <td className="p-2"><Badge variant={item.status === "confirmado" ? "default" : "secondary"}>{String(item.status).replace("_", " ")}</Badge></td>
-                  <td className="p-2">{["novo", "exportado"].includes(item.status) && <Button size="sm" variant="outline" onClick={() => marcarEmTeste.mutate(item.id)}>Marcar em teste</Button>}</td>
-                </tr>)}</tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-              <span>{candidatos.total} candidatos</span><div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={paginaCandidato === 0} onClick={() => setPaginaCandidato((p) => Math.max(0, p - 1))}>Anterior</Button>
-                <Button size="sm" variant="outline" disabled={(paginaCandidato + 1) * CANDIDATOS_PAGE_SIZE >= candidatos.total} onClick={() => setPaginaCandidato((p) => p + 1)}>Próxima</Button>
-              </div>
-            </div>
-          </>}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-sm flex items-center gap-2">
               <Bot className="h-4 w-4" /> Contatos com resposta automática
               <Badge variant="secondary">{autoRespondedores?.total ?? 0}</Badge>
             </CardTitle>
@@ -770,6 +697,79 @@ export function AquecimentoMetaTab() {
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Building2 className="h-4 w-4" /> Candidatos a resposta automática
+              <Badge variant="secondary">{candidatos?.total ?? 0}</Badge>
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => captarCandidatos.mutate()} disabled={captarCandidatos.isPending}>
+                {captarCandidatos.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+                Captar agora
+              </Button>
+              <Button size="sm" onClick={exportarCandidatos} disabled={!candidatos?.total}>
+                <Download className="h-4 w-4 mr-1" /> Baixar novos
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Captação automática em Goiás: até {configCandidatos?.meta_whatsapps_dia ?? 200} WhatsApps novos por dia. Nenhuma mensagem é enviada automaticamente.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.hoje ?? 0}</div><div className="text-xs text-muted-foreground">captados hoje</div></div>
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.requisicoes ?? 0}</div><div className="text-xs text-muted-foreground">consultas hoje</div></div>
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">US$ {(resumoCandidatos?.custo ?? 0).toFixed(2)}</div><div className="text-xs text-muted-foreground">custo estimado</div></div>
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.exportados ?? 0}</div><div className="text-xs text-muted-foreground">exportados / em teste</div></div>
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.confirmados ?? 0}</div><div className="text-xs text-muted-foreground">confirmados</div></div>
+          </div>
+          {configCandidatos?.ultimo_erro && <div role="alert" className="text-xs text-destructive">Última falha: {configCandidatos.ultimo_erro}</div>}
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-[240px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input className="pl-9" placeholder="Buscar telefone, empresa, nicho ou cidade" value={buscaCandidato}
+                onChange={(event) => { setBuscaCandidato(event.target.value); setPaginaCandidato(0); }} />
+            </div>
+            <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={statusCandidato}
+              onChange={(event) => { setStatusCandidato(event.target.value); setPaginaCandidato(0); }}>
+              <option value="disponiveis">Disponíveis</option><option value="novo">Novos</option>
+              <option value="exportado">Exportados</option><option value="em_teste">Em teste</option>
+              <option value="confirmado">Confirmados</option><option value="todos">Todos</option>
+            </select>
+          </div>
+          {carregandoCandidatos ? <p className="text-sm text-muted-foreground">Carregando…</p> : !candidatos?.total ? (
+            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Nenhum candidato encontrado neste filtro.</div>
+          ) : <>
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full min-w-[980px] text-sm">
+                <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground"><tr>
+                  <th className="p-2 font-medium">WhatsApp</th><th className="p-2 font-medium">Empresa</th>
+                  <th className="p-2 font-medium">Nicho / cidade</th><th className="p-2 font-medium">Perfil</th>
+                  <th className="p-2 font-medium">Pontuação</th><th className="p-2 font-medium">Status</th><th className="p-2 font-medium">Ação</th>
+                </tr></thead>
+                <tbody className="divide-y">{(candidatos.itens as any[]).map((item) => <tr key={item.id}>
+                  <td className="p-2 font-medium whitespace-nowrap">{telefoneBr(item.telefone)}</td>
+                  <td className="p-2">{item.nome || "—"}</td><td className="p-2">{[item.nicho, item.cidade].filter(Boolean).join(" · ") || "—"}</td>
+                  <td className="p-2">{item.avaliacao ? `${item.avaliacao} · ${item.total_avaliacoes ?? 0} avaliações` : "Sem avaliação"}</td>
+                  <td className="p-2" title={item.motivo_pontuacao || ""}><Badge variant="outline">{Number(item.pontuacao).toFixed(0)}</Badge></td>
+                  <td className="p-2"><Badge variant={item.status === "confirmado" ? "default" : "secondary"}>{String(item.status).replace("_", " ")}</Badge></td>
+                  <td className="p-2">{["novo", "exportado"].includes(item.status) && <Button size="sm" variant="outline" onClick={() => marcarEmTeste.mutate(item.id)}>Marcar em teste</Button>}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>{candidatos.total} candidatos</span><div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={paginaCandidato === 0} onClick={() => setPaginaCandidato((p) => Math.max(0, p - 1))}>Anterior</Button>
+                <Button size="sm" variant="outline" disabled={(paginaCandidato + 1) * CANDIDATOS_PAGE_SIZE >= candidatos.total} onClick={() => setPaginaCandidato((p) => p + 1)}>Próxima</Button>
+              </div>
+            </div>
+          </>}
         </CardContent>
       </Card>
 
