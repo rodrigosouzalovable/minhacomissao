@@ -1,11 +1,12 @@
 ---
-name: Captação Google Maps de 1.000 WhatsApps com rodízio seguro
-description: Meta diária de 1.000 confirmados, teto de 650 consultas/dia e bloqueio em 950 por conta/mês
+name: Captação Google Maps com rodízio seguro
+description: Meta diária da captação, teto de 650 consultas/dia e corte preventivo em 4.750 por conta/mês
 type: feature
 ---
-- A captação automática busca 1.000 contatos novos com WhatsApp confirmado por dia.
+- A captação automática de candidatos busca 200 contatos novos com WhatsApp confirmado por dia em todo o Brasil.
 - O teto global é 650 consultas Places por dia.
-- Cada conta Google Cloud é bloqueada automaticamente em 950 consultas mensais, com limite informativo de 1.000.
+- Cada conta Google Cloud possui franquia informada de 5.000 consultas mensais e corte preventivo em 4.750, preservando 5% de margem.
 - O rodízio escolhe a conta disponível com menor consumo mensal; prioridade desempata.
 - Conta indisponível no mês permanece fora do rodízio.
-- Esses limites reduzem risco, mas não garantem custo zero porque a cobrança final depende do Google.
+- Não existe bloqueio diário em dólares; o painel mostra custo efetivo estimado de US$ 0,00 enquanto o uso estiver dentro das franquias informadas.
+- A cobrança final e a independência das franquias continuam dependendo da configuração das contas no Google.

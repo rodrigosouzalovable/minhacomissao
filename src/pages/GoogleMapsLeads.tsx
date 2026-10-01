@@ -582,7 +582,7 @@ export default function GoogleMapsLeads() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center justify-between">
-                <span>Consumo do mês: {limite.consumo_atual} de {limite.limite_maximo} requisições Places (unidade que o Google usa para cobrar e para a franquia gratuita)</span>
+                <span>Uso da franquia: {limite.consumo_atual} de {limite.limite_maximo} requisições Places</span>
                 <Badge variant={limite.nivel === "bloqueado" ? "destructive" : "secondary"}>
                   {limite.percentual_consumido.toFixed(1)}%
                 </Badge>
@@ -603,7 +603,7 @@ export default function GoogleMapsLeads() {
                 </Alert>
               )}
               <p className="text-xs text-muted-foreground">
-                Corte de segurança total em {limite.limite_bloqueio} requisições • Cada conta troca automaticamente ao atingir 4.800 • Reinício em {limite.data_reset_br}
+                Custo efetivo estimado: US$ 0,00 dentro das franquias • Corte preventivo de 4.750 por conta • Reinício em {limite.data_reset_br}
               </p>
               {limite.provedores?.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-2">
