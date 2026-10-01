@@ -5,7 +5,9 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-const MAX_INSTANCES_PER_RUN = 80;
+// A ação manual precisa conferir todas as instâncias atuais em uma única
+// execução. O limite continua finito para proteger chamadas acidentais.
+const MAX_INSTANCES_PER_RUN = 500;
 const LOCK_MINUTES = 30;
 
 const json = (payload: unknown, status = 200) => new Response(JSON.stringify(payload), {

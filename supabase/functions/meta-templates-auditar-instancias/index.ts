@@ -169,6 +169,9 @@ Deno.serve(async (req) => {
         .select("instancia_id, template_mestre_id, status")
         .in("instancia_id", idsElegiveis);
       for (const r of ((fila as any[]) || [])) {
+        if (utilityApprovedOnly && !["PENDENTE", "ENVIADO", "APPROVED"].includes(String(r.status || "").toUpperCase())) {
+          continue;
+        }
         if (!naFila.has(r.instancia_id)) naFila.set(r.instancia_id, new Set());
         naFila.get(r.instancia_id)!.add(r.template_mestre_id);
       }
@@ -234,7 +237,7 @@ Deno.serve(async (req) => {
       }));
       const { error } = await supabase
         .from("meta_templates_onboarding_fila")
-        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true });
+        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: !utilityApprovedOnly });
       if (error) continue;
       enfileirados += rows.length;
       await supabase
