@@ -39,24 +39,83 @@ export function RetornoAlertChecker() {
   const [avisoAbertura, setAvisoAbertura] = useState('');
   const [avisoAtrasosAberto, setAvisoAtrasosAberto] = useState(false);
   const notifiedIds = useRef<Set<string>>(new Set());
-  const { data: parcelasAtrasadas = [], dataUpdatedAt } = useOverdueInstallments();
+  const verificandoAvisoAtrasos = useRef(false);
+  const avisosAtrasosExibidos = useRef<Set<string>>(new Set());
+  const { data: parcelasAtrasadas = [], refetch: atualizarParcelasAtrasadas } = useOverdueInstallments();
 
   const alertaRetorno = fila[0] ?? null;
   const parcelasDoUsuario = parcelasAtrasadas.filter((parcela) => parcela.user_id === user?.id);
 
-  useEffect(() => {
-    if (!dataUpdatedAt || parcelasDoUsuario.length === 0) {
-      setAvisoAtrasosAberto(false);
-      return;
-    }
-    setAvisoAtrasosAberto(true);
+  const verificarHorarioAvisoAtrasos = useCallback(async () => {
+    if (!user || document.visibilityState !== 'visible' || verificandoAvisoAtrasos.current) return;
+
+    const partes = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date());
+    const valor = (tipo: Intl.DateTimeFormatPartTypes) => partes.find((parte) => parte.type === tipo)?.value ?? '';
+    const hora = Number(valor('hour'));
+    const horario = hora >= 15 ? '15h' : hora >= 9 ? '9h' : null;
+    if (!horario) return;
+
+    const dataBrasilia = `${valor('year')}-${valor('month')}-${valor('day')}`;
+    const chave = `parcelas-atrasadas-aviso:${user.id}:${dataBrasilia}:${horario}`;
+    let jaExibido = avisosAtrasosExibidos.current.has(chave);
     try {
-      const audio = new Audio(successSound);
-      void audio.play().catch(() => {});
+      jaExibido = jaExibido || localStorage.getItem(chave) === '1';
     } catch {
-      // O navegador pode bloquear áudio automático; o aviso visual continua disponível.
+      // Se o armazenamento estiver indisponível, a trava em memória evita repetição nesta sessão.
     }
-  }, [dataUpdatedAt, parcelasDoUsuario.length]);
+    if (jaExibido) return;
+
+    verificandoAvisoAtrasos.current = true;
+    try {
+      const resultado = await atualizarParcelasAtrasadas();
+      const atrasadasDoUsuario = (resultado.data ?? []).filter((parcela) => parcela.user_id === user.id);
+      if (atrasadasDoUsuario.length === 0) {
+        setAvisoAtrasosAberto(false);
+        return;
+      }
+
+      avisosAtrasosExibidos.current.add(chave);
+      try {
+        localStorage.setItem(chave, '1');
+      } catch {
+        // O aviso ainda fica registrado em memória durante a sessão atual.
+      }
+      setAvisoAtrasosAberto(true);
+      try {
+        const audio = new Audio(successSound);
+        void audio.play().catch(() => {});
+      } catch {
+        // O navegador pode bloquear áudio automático; o aviso visual continua disponível.
+      }
+    } finally {
+      verificandoAvisoAtrasos.current = false;
+    }
+  }, [atualizarParcelasAtrasadas, user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    void verificarHorarioAvisoAtrasos();
+    const interval = window.setInterval(() => {
+      void verificarHorarioAvisoAtrasos();
+    }, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void verificarHorarioAvisoAtrasos();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user, verificarHorarioAvisoAtrasos]);
 
   const checkRetornos = useCallback(async () => {
     if (!user) return;
@@ -255,7 +314,7 @@ export function RetornoAlertChecker() {
             Parcelas atrasadas
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Estes clientes ainda possuem pagamentos pendentes. O aviso voltará em 10 minutos enquanto o atraso continuar.
+            Estes clientes ainda possuem pagamentos pendentes. Este aviso aparece às 9h e às 15h.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
@@ -265,15 +324,26 @@ export function RetornoAlertChecker() {
             const vencimento = new Date(`${parcela.data_prevista}T00:00:00`);
             const dias = Math.max(1, Math.floor((hoje.getTime() - vencimento.getTime()) / 86400000));
             return (
-              <div key={parcela.id} className="rounded border border-destructive/30 bg-destructive/10 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-semibold text-foreground">{parcela.cliente_nome}</span>
-                  <Badge variant="destructive">{dias} {dias === 1 ? 'dia' : 'dias'} em atraso</Badge>
+              <Button
+                key={parcela.id}
+                type="button"
+                variant="ghost"
+                className="h-auto w-full justify-start rounded border border-destructive/30 bg-destructive/10 p-3 text-left hover:bg-destructive/15"
+                onClick={() => {
+                  setAvisoAtrasosAberto(false);
+                  navigate(`/acordos/${parcela.acordo_id}`);
+                }}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground">{parcela.cliente_nome}</span>
+                    <Badge variant="destructive">{dias} {dias === 1 ? 'dia' : 'dias'} em atraso</Badge>
+                  </div>
+                  <p className="mt-1 whitespace-normal text-sm font-normal text-muted-foreground">
+                    Parcela {parcela.numero_parcela} • Vencimento {vencimento.toLocaleDateString('pt-BR')} • {Number(parcela.valor_parcela).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Parcela {parcela.numero_parcela} • Vencimento {vencimento.toLocaleDateString('pt-BR')} • {Number(parcela.valor_parcela).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </p>
-              </div>
+              </Button>
             );
           })}
         </div>
