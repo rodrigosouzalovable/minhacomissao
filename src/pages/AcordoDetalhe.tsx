@@ -423,24 +423,7 @@ export default function AcordoDetalhe() {
       return;
     }
     try {
-      if (isOwner && !isAdmin) {
-        const parcela = pagamentos.find(p => p.id === pagamentoId);
-        if (!parcela || parcela.status !== 'pendente') throw new Error('Só é possível alterar parcelas pendentes.');
-        const { error } = await supabase.rpc('editar_acordo_proprio', {
-          p_acordo_id: acordo.id,
-          p_telefone: acordo.cliente_telefone,
-          p_parcelas: [{ id: pagamentoId, valor: novoValor, data: parcela.data_prevista }],
-        });
-        if (error) throw error;
-        const novoTotal = Math.round(pagamentos.reduce((sum, p) => sum + (p.id === pagamentoId ? novoValor : Number(p.valor_parcela)), 0) * 100) / 100;
-        setPagamentos(prev => prev.map(p => p.id === pagamentoId ? { ...p, valor_parcela: novoValor } : p));
-        setAcordo(prev => prev ? { ...prev, valor_total: novoTotal } : prev);
-        setEditandoValorParcela(null);
-        setNovoValorParcela('');
-        toast({ title: 'Parcela atualizada!' });
-        return;
-      }
-      const { data, error } = await supabase.rpc('editar_parcela_acordo_proprio' as any, {
+      const { data, error } = await supabase.rpc('editar_parcela_acordo_proprio', {
         p_pagamento_id: pagamentoId,
         p_novo_valor: novoValor,
         p_nova_data_paga: null,
