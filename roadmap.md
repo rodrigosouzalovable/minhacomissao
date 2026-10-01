@@ -64,6 +64,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Reativar automaticamente números Meta próprios RED/YELLOW aptos na rotina existente, preservando bloqueios reais e a medição até GREEN
 - [x] Exibir no card da conversa a identificação persistente “Não é o cliente”, com atualização imediata ao marcar ou desfazer
 - [x] Manter conversas escaladas pelo IAGO com “Aguardando Humano” mesmo sem atendente elegível, preservando a exclusão de admins do rodízio
 - [x] Fazer o login do Bruno exibir e acessar somente as abas explicitamente liberadas, sem ampliar telas por Parceiro Meta
