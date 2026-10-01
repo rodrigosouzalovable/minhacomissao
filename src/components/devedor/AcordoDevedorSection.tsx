@@ -14,6 +14,9 @@ import { Plus, Check, X, Handshake, Loader2, Pencil, Save, Trash2, Mic, MicOff, 
 import { format, differenceInCalendarDays } from 'date-fns';
 import { calcularComissaoMontrealParcela } from '@/lib/comissao';
 import { useUserRole } from '@/hooks/useUserRole';
+import { ConfirmarTelefoneDialog } from '@/components/acordos/ConfirmarTelefoneDialog';
+import { FormalizarTermoDialog } from '@/components/acordos/FormalizarTermoDialog';
+import type { Tables } from '@/integrations/supabase/types';
 
 interface AcordoDevedor {
   id: string;
@@ -48,9 +51,12 @@ interface Props {
   userId: string;
   contratosIds: string[];
   onContratosArquivados: () => void;
+  clienteNome: string;
+  clienteTelefone: string;
+  credor: string | null;
 }
 
-export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArquivados }: Props) {
+export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArquivados, clienteNome, clienteTelefone, credor }: Props) {
   const [acordos, setAcordos] = useState<AcordoDevedor[]>([]);
   const [parcelas, setParcelas] = useState<Record<string, ParcelaDevedor[]>>({});
   const [loading, setLoading] = useState(true);
@@ -76,6 +82,8 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [observacoes, setObservacoes] = useState('');
+  const [confirmarTelefoneOpen, setConfirmarTelefoneOpen] = useState(false);
+  const [formalizacao, setFormalizacao] = useState<{ acordo: Tables<'acordos'>; pagamentos: Tables<'pagamentos'>[] } | null>(null);
 
   // Audio recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -303,6 +311,16 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
   const handleConfirmarAcordo = async () => {
     if (!previewParcelas || previewParcelas.length === 0) return;
+    if (clienteTelefone.replace(/\D/g, '').length < 10) {
+      toast.error('Cadastre um telefone válido para o cliente antes de salvar o acordo.');
+      return;
+    }
+    setConfirmarTelefoneOpen(true);
+  };
+
+  const salvarAcordoConfirmado = async () => {
+    if (!previewParcelas || previewParcelas.length === 0) return;
+    setConfirmarTelefoneOpen(false);
 
     setSaving(true);
     try {
@@ -318,6 +336,12 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
           data_primeiro_vencimento: primeiraData,
           criado_por: userId,
           observacoes: observacoes || null,
+          cliente_nome: clienteNome,
+          cliente_telefone: clienteTelefone,
+          credor,
+          telefone_confirmado_em: new Date().toISOString(),
+          telefone_confirmado_por: userId,
+          termo_formalizacao_status: 'pendente',
         } as any)
         .select()
         .single();
@@ -342,7 +366,53 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
       // Contratos NÃO são mais desativados automaticamente ao criar acordo.
       // A desativação deve ser feita manualmente pelo administrador.
 
-      toast.success('Acordo criado com sucesso!');
+      const dataCriacao = new Date().toISOString();
+      const acordoPdf = {
+        id: acordoId,
+        cliente_nome: clienteNome,
+        cliente_cpf: cpfNorm,
+        cliente_telefone: clienteTelefone,
+        valor_total: Math.round(valorTotal * 100) / 100,
+        parcelas: previewParcelas.length,
+        valor_parcela: previewParcelas[0]?.valor ?? 0,
+        data_primeiro_pagamento: primeiraData,
+        dias_atraso: 0,
+        percentual_comissao: 0,
+        comissao_total: 0,
+        observacoes: observacoes || null,
+        empresa: credor || 'Credor',
+        user_id: userId,
+        criado_em: dataCriacao,
+        atualizado_em: dataCriacao,
+        status: 'ativo',
+        boleto_enviado: false,
+        duplicado_verificado: false,
+        instancia_negociacao_id: null,
+        telefone_confirmado_em: dataCriacao,
+        telefone_confirmado_por: userId,
+        termo_formalizacao_metodo: null,
+        termo_formalizacao_status: 'pendente',
+        termo_formalizado_em: null,
+        termo_formalizado_por: null,
+        termo_meta_contato_id: null,
+        termo_meta_instancia_id: null,
+        whatsapp_opt_in: false,
+        whatsapp_opt_in_em: null,
+        whatsapp_opt_in_origem: null,
+      } satisfies Tables<'acordos'>;
+      const pagamentosPdf = previewParcelas.map((p, index) => ({
+        acordo_id: acordoId,
+        comissao_parcela: 0,
+        criado_em: dataCriacao,
+        data_paga: null,
+        data_prevista: p.data_vencimento,
+        id: `pendente-${index}`,
+        numero_parcela: p.numero_parcela,
+        status: 'pendente',
+        valor_parcela: p.valor,
+      } satisfies Tables<'pagamentos'>));
+      toast.success('Acordo criado. Emita o termo para finalizar.');
+      setFormalizacao({ acordo: acordoPdf, pagamentos: pagamentosPdf });
       setPreviewParcelas(null);
       setPreviewValorTotal(0);
       onContratosArquivados();
@@ -817,6 +887,22 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
           </div>
         </DialogContent>
       </Dialog>
+      <ConfirmarTelefoneDialog
+        open={confirmarTelefoneOpen}
+        clienteNome={clienteNome}
+        telefone={clienteTelefone}
+        onCancel={() => setConfirmarTelefoneOpen(false)}
+        onConfirm={() => void salvarAcordoConfirmado()}
+      />
+      {formalizacao && (
+        <FormalizarTermoDialog
+          open
+          acordo={formalizacao.acordo}
+          pagamentos={formalizacao.pagamentos}
+          entity="acordos_devedor"
+          onComplete={() => setFormalizacao(null)}
+        />
+      )}
 
       {/* Dialog Observação da Parcela */}
       <Dialog open={!!obsDialogParcela} onOpenChange={(open) => { if (!open) setObsDialogParcela(null); }}>

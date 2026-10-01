@@ -14,16 +14,18 @@ interface Props {
   acordo: Tables<'acordos'>;
   pagamentos: Tables<'pagamentos'>[];
   metaOrigem?: MetaOrigem | null;
+  entity?: 'acordos' | 'acordos_devedor';
   onComplete: () => void;
 }
 
-export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, onComplete }: Props) {
+export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, entity = 'acordos', onComplete }: Props) {
   const [working, setWorking] = useState<'download' | 'whatsapp' | null>(null);
   const { toast } = useToast();
 
   const concluir = async (metodo: 'download' | 'whatsapp') => {
     const { data: auth } = await supabase.auth.getUser();
-    const { error } = await supabase.from('acordos').update({
+    const table = entity === 'acordos_devedor' ? 'acordos_devedor' : 'acordos';
+    const { error } = await supabase.from(table).update({
       termo_formalizacao_status: 'concluido',
       termo_formalizacao_metodo: metodo,
       termo_formalizado_em: new Date().toISOString(),
