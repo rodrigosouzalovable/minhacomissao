@@ -52,7 +52,7 @@ export function useOverdueInstallments() {
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data || []).map((pagamento: any) => ({
+      const installments = (data || []).map((pagamento: any) => ({
         id: pagamento.id,
         acordo_id: pagamento.acordo_id,
         numero_parcela: pagamento.numero_parcela,
@@ -65,6 +65,24 @@ export function useOverdueInstallments() {
         tipo: 'vencido',
         categoria: 'pagamento',
       })) as OverdueInstallment[];
+
+      const acordoIds = [...new Set(installments.map(item => item.acordo_id))];
+      if (acordoIds.length === 0) return installments;
+
+      const { data: paidInstallments, error: paidError } = await supabase
+        .from('pagamentos')
+        .select('acordo_id, numero_parcela')
+        .in('acordo_id', acordoIds)
+        .eq('status', 'pago');
+      if (paidError) throw paidError;
+
+      const highestPaidByAgreement = new Map<string, number>();
+      for (const paid of paidInstallments || []) {
+        const current = highestPaidByAgreement.get(paid.acordo_id) ?? 0;
+        highestPaidByAgreement.set(paid.acordo_id, Math.max(current, paid.numero_parcela));
+      }
+
+      return installments.filter(item => (highestPaidByAgreement.get(item.acordo_id) ?? 0) < item.numero_parcela);
     },
     enabled: !!user,
     staleTime: 3 * 60 * 1000,

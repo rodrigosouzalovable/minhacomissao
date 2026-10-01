@@ -15,6 +15,7 @@ import {
 import { Bell, User, Phone, FileText, CalendarClock, MessageSquare } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useOverdueInstallments } from '@/hooks/useOverdueInstallments';
 import successSound from '@/assets/success-sound.mp3';
 
