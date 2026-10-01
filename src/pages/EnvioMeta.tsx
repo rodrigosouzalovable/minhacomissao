@@ -318,7 +318,7 @@ export default function EnvioMeta() {
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [validacaoPreview, setValidacaoPreview] = useState<{ valid: string[]; invalid: string[]; errors: string[]; duplicados?: number } | null>(null);
+  const [validacaoPreview, setValidacaoPreview] = useState<{ valid: string[]; invalid: string[]; errors: string[]; duplicados?: number; bloqueados?: number } | null>(null);
   const [custoDlg, setCustoDlg] = useState<{
     open: boolean;
     cobrados: number;
@@ -438,6 +438,29 @@ export default function EnvioMeta() {
     }
   };
 
+  const removerSemWhatsAppConhecidos = async (linhas: string[]) => {
+    const sufixos = Array.from(new Set(
+      linhas.map((linha) => telSuffix8(splitLinhaEnvio(linha.trim())[0] || "")).filter(Boolean),
+    ));
+    if (sufixos.length === 0) return { linhas, removidos: 0 };
+
+    const bloqueados = new Set<string>();
+    for (let i = 0; i < sufixos.length; i += 1000) {
+      const { data, error } = await supabase.rpc("listar_sem_whatsapp_verificados", {
+        _sufixos: sufixos.slice(i, i + 1000),
+      });
+      if (error) throw error;
+      (data || []).forEach((row) => bloqueados.add(row.telefone_sufixo));
+    }
+
+    if (bloqueados.size === 0) return { linhas, removidos: 0 };
+    const filtradas = linhas.filter((linha) => {
+      const sufixo = telSuffix8(splitLinhaEnvio(linha.trim())[0] || "");
+      return !bloqueados.has(sufixo);
+    });
+    return { linhas: filtradas, removidos: linhas.length - filtradas.length };
+  };
+
   // Guarda a lista da última importação para alertar se a nova é praticamente a mesma.
   const ultimaListaRef = useRef<Set<string>>(new Set());
 
@@ -482,9 +505,23 @@ export default function EnvioMeta() {
         invalid: (data?.invalid || []).map((n: string) => String(n)),
         errors: (data?.errors || []).map((n: string) => String(n)),
         duplicados,
+        bloqueados: 0,
       };
+      if (preview.invalid.length > 0) {
+        const { error: registrarError } = await supabase.rpc("registrar_sem_whatsapp_verificados", {
+          _telefones: preview.invalid,
+        });
+        if (registrarError) throw registrarError;
+        const invalidSet = new Set(preview.invalid.map((t) => normalizeTelKey(t)));
+        const linhas = texto.split(/\r?\n/).filter((linha) => {
+          const tel = splitLinhaEnvio(linha.trim())[0] || "";
+          return !invalidSet.has(normalizeTelKey(tel));
+        });
+        setRecipientsRaw(linhas.join("\n"));
+        preview.bloqueados = preview.invalid.length;
+      }
       setValidacaoPreview(preview);
-      toast.success(`Validação: ✅ ${preview.valid.length} • ❌ ${preview.invalid.length} • ⚠️ ${preview.errors.length}${duplicados ? ` • 🔁 ${duplicados}` : ""}`);
+      toast.success(`Validação: ✅ ${preview.valid.length} • 🚫 ${preview.bloqueados} bloqueado(s) sem WhatsApp • ⚠️ ${preview.errors.length}${duplicados ? ` • 🔁 ${duplicados}` : ""}`);
     } catch (e: any) {
       toast.error("Erro na validação: " + (e?.message || e));
     } finally {
@@ -492,23 +529,6 @@ export default function EnvioMeta() {
     }
   };
 
-
-  const removerSemWhatsApp = () => {
-    if (!validacaoPreview) return;
-    const invalidSet = new Set(validacaoPreview.invalid.map((t) => normalizeTelKey(t)));
-    // Filtra as linhas cru do textarea preservando a ordem/colunas originais (tabela ou texto).
-    const linhas = recipientsRaw.split(/\r?\n/).filter((linha) => {
-      const trimmed = linha.trim();
-      if (!trimmed) return false;
-      const tel = splitLinhaEnvio(trimmed)[0] || "";
-      const key = normalizeTelKey(tel);
-      if (!key) return false;
-      return !invalidSet.has(key);
-    });
-    setRecipientsRaw(linhas.join("\n"));
-    setValidacaoPreview({ ...validacaoPreview, invalid: [] });
-    toast.success(`${invalidSet.size} número(s) sem WhatsApp removido(s)`);
-  };
 
   const [sincronizandoPerfis, setSincronizandoPerfis] = useState(false);
   const sincronizarPerfis = async () => {
@@ -2096,6 +2116,14 @@ export default function EnvioMeta() {
                       rows: allRows,
                       origem: existingLines.length > 0 ? "manual" : "clipboard",
                     });
+                  } else {
+                    e.preventDefault();
+                    const existingLines = recipientsRaw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+                    void removerSemWhatsAppConhecidos([...existingLines, ...lines]).then(({ linhas: filtradas, removidos }) => {
+                      setRecipientsRaw(filtradas.join("\n"));
+                      setValidacaoPreview(null);
+                      if (removidos > 0) toast.warning(`${removidos} removido(s): já confirmados sem WhatsApp`);
+                    }).catch(() => toast.error("Não foi possível consultar a blacklist de números sem WhatsApp"));
                   }
                 }}
                 placeholder={"5562999999999, João Silva, 12345678900, 45, 1250.50\n5562988887777, Maria, 98765432100, 12, 540"}
@@ -2326,12 +2354,6 @@ export default function EnvioMeta() {
                 Validar agora (opcional)
               </Button>
 
-              {validacaoPreview && validacaoPreview.invalid.length > 0 && (
-                <Button type="button" size="sm" variant="outline" onClick={removerSemWhatsApp}>
-                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                  Remover {validacaoPreview.invalid.length} sem WhatsApp
-                </Button>
-              )}
               {validacaoPreview && validacaoPreview.valid.length > 0 && (
                 <Button
                   type="button"
@@ -2372,7 +2394,7 @@ export default function EnvioMeta() {
               <div className="mt-2 rounded-md border bg-muted/30 p-2 space-y-1.5">
                 <div className="flex flex-wrap gap-2 text-xs">
                   <Badge className="bg-green-600 text-white">✅ {validacaoPreview.valid.length} com WhatsApp</Badge>
-                  <Badge variant="destructive">❌ {validacaoPreview.invalid.length} sem WhatsApp</Badge>
+                  <Badge variant="destructive">🚫 {validacaoPreview.bloqueados ?? validacaoPreview.invalid.length} sem WhatsApp bloqueado(s)</Badge>
                   {validacaoPreview.errors.length > 0 && (
                     <Badge className="bg-amber-500 text-white">⚠️ {validacaoPreview.errors.length} erro(s)</Badge>
                   )}
@@ -2710,8 +2732,18 @@ export default function EnvioMeta() {
           body_text: (template as any).body_text || "",
           variaveis: template.variaveis || null,
         } : null}
-        onConfirm={(linhas, stats, novosVars, headers, credByTel) => {
-          setRecipientsRaw(linhas.join("\n"));
+        onConfirm={async (linhas, stats, novosVars, headers, credByTel) => {
+          let linhasFiltradas = linhas;
+          let removidosSemWhatsApp = 0;
+          try {
+            const filtragem = await removerSemWhatsAppConhecidos(linhas);
+            linhasFiltradas = filtragem.linhas;
+            removidosSemWhatsApp = filtragem.removidos;
+          } catch {
+            toast.error("Não foi possível consultar a blacklist de números sem WhatsApp");
+            return;
+          }
+          setRecipientsRaw(linhasFiltradas.join("\n"));
           setRecipientsHeaders(headers || []);
           setEditAsText(false);
           setValidacaoPreview(null);
@@ -2719,11 +2751,12 @@ export default function EnvioMeta() {
           setCredorByTel(credByTel || {});
           const varsCount = Object.keys(novosVars || {}).length;
           toast.success(
-            `${stats.total} contato(s) importado(s)` +
+            `${linhasFiltradas.length} contato(s) importado(s)` +
             (stats.ignorados ? ` • ${stats.ignorados} ignorado(s)` : "") +
             (stats.duplicados ? ` • 🔁 ${stats.duplicados} duplicado(s) removido(s)` : "") +
             (stats.preservados ? ` • 🟦 ${stats.preservados} linha(s) de números UAZAPI mantidas` : "") +
-            (varsCount ? ` • variáveis do template preenchidas em ${varsCount} linha(s)` : "")
+            (varsCount ? ` • variáveis do template preenchidas em ${varsCount} linha(s)` : "") +
+            (removidosSemWhatsApp ? ` • 🚫 ${removidosSemWhatsApp} já confirmados sem WhatsApp removidos` : "")
           );
           // Alerta se esta lista é praticamente a mesma da última campanha criada.
           (async () => {
@@ -2732,7 +2765,7 @@ export default function EnvioMeta() {
               return d.length >= 8 ? d.slice(-8) : d;
             };
             const nova = new Set(
-              linhas.map((l) => suf(splitLinhaEnvio(l.trim())[0] || "")).filter(Boolean),
+              linhasFiltradas.map((l) => suf(splitLinhaEnvio(l.trim())[0] || "")).filter(Boolean),
             );
             ultimaListaRef.current = nova;
             if (nova.size === 0) return;

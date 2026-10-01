@@ -95,7 +95,7 @@ export default function Blacklist() {
         .select('telefone_sufixo, telefone, motivo, criado_em, instancia_id, contato_nome, credor, caixa_id, caixa_nome, origem_texto, categoria')
         .in('categoria', ['blacklist', 'sem_whatsapp'])
         .order('criado_em', { ascending: false })
-        .limit(1000);
+        .limit(5000);
       if (instanciaFiltro !== 'todas') q = q.eq('instancia_id', instanciaFiltro);
       if (de) q = q.gte('criado_em', new Date(`${de}T00:00:00`).toISOString());
       if (ate) q = q.lte('criado_em', new Date(`${ate}T23:59:59`).toISOString());

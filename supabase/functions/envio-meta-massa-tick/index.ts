@@ -1061,10 +1061,12 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       const dig = String((pend as any).telefone || '').replace(/\D+/g, '');
       const sufixo = dig.length >= 8 ? dig.slice(-8) : dig;
       if (sufixo) {
-        const { error: registrarErro } = await supabase.rpc('registrar_sem_whatsapp_verificados', {
-          _telefones: [dig],
-        });
-        if (registrarErro) console.error('[tick envio] falha ao registrar sem WhatsApp:', registrarErro.message);
+        await supabase.from('meta_destinatario_supressao').upsert({
+          telefone_sufixo: sufixo,
+          telefone: dig,
+          motivo: `entrega impossível: ${String(erroMsg || '').slice(0, 160)}`,
+          criado_em: new Date().toISOString(),
+        }, { onConflict: 'telefone_sufixo' });
       }
     }
   }
