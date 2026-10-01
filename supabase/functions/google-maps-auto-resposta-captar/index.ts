@@ -84,30 +84,25 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: statusFinal, requisicoes_hoje: requisicoesHoje });
     }
 
-    const { data: historico } = await supabase.from("meta_aquecimento_auto_respondedores")
-      .select("nicho,cidade,lead_id,confianca").not("lead_id", "is", null).limit(5000);
-    const agregados = new Map<string, { nicho: string; total: number; confianca: number }>();
-    for (const item of historico ?? []) {
-      const nicho = String(item.nicho || "").trim().toLocaleLowerCase("pt-BR");
-      if (!nicho) continue;
-      const atual = agregados.get(nicho) ?? { nicho, total: 0, confianca: 0 };
-      atual.total += 1;
-      atual.confianca += Number(item.confianca || 0);
-      agregados.set(nicho, atual);
-    }
-    const ranking = [...agregados.values()].sort((a, b) => b.total - a.total || b.confianca - a.confianca);
-    const comprovados = ranking.filter((item) => item.total >= 20).map((item) => item.nicho);
-    const intermediarios = ranking.filter((item) => item.total >= 5 && item.total < 20).map((item) => item.nicho);
-    const exploracao = SEMENTES.filter((nicho) => !ranking.some((item) => item.nicho === nicho));
+    const { data: rankingData, error: rankingError } = await supabase.rpc("gm_auto_resposta_ranking");
+    if (rankingError) throw rankingError;
+    const ranking = (rankingData ?? []) as Array<{ nicho: string; cidade: string; amostra: number; confirmados: number; taxa: number; score: number }>;
+    const comprovados = ranking.filter((item) => Number(item.amostra) >= 50 && Number(item.taxa) >= 0.15);
+    const intermediarios = ranking.filter((item) => Number(item.amostra) >= 20 && Number(item.taxa) >= 0.08);
+    const nichosConhecidos = new Set(ranking.map((item) => item.nicho));
+    const exploracao = SEMENTES.filter((nicho) => !nichosConhecidos.has(nicho));
 
     const rodada = (buscasHoje ?? []).length;
     const faixa = rodada % 10;
     const grupo = faixa < 7 ? "comprovado" : faixa < 9 ? "intermediario" : "exploracao";
-    const pool = grupo === "comprovado" ? comprovados : grupo === "intermediario" ? intermediarios : exploracao;
-    const fallback = grupo === "exploracao" ? SEMENTES : [...comprovados, ...intermediarios, ...SEMENTES];
-    const nichos = pool.length ? pool : fallback;
-    const nicho = nichos[rodada % nichos.length] ?? SEMENTES[0];
-    const cidade = CIDADES_GO[Math.floor(rodada / Math.max(1, nichos.length)) % CIDADES_GO.length];
+    const pool = grupo === "comprovado" ? comprovados : grupo === "intermediario" ? intermediarios : [];
+    const escolhido = pool.length ? pool[rodada % pool.length] : null;
+    const nichosExploracao = exploracao.length ? exploracao : SEMENTES;
+    const nicho = escolhido?.nicho ?? nichosExploracao[rodada % nichosExploracao.length] ?? SEMENTES[0];
+    const cidadeHistorica = String(escolhido?.cidade || "");
+    const cidade = /\bGO\b/i.test(cidadeHistorica)
+      ? cidadeHistorica
+      : CIDADES_GO[Math.floor(rodada / Math.max(1, nichosExploracao.length)) % CIDADES_GO.length];
 
     const faltam = Math.max(1, cfg.meta_whatsapps_dia - (confirmadosHoje ?? 0));
     const maxResultados = Math.min(120, Math.max(30, faltam * 2));
@@ -150,10 +145,9 @@ Deno.serve(async (req) => {
     });
     let adicionados = 0;
     if (linhas.length) {
-      const { data: inseridos, error: insertError } = await supabase
-        .from("google_maps_auto_resposta_candidatos").upsert(linhas, { onConflict: "lead_id", ignoreDuplicates: true }).select("id");
+      const { data: totalInserido, error: insertError } = await supabase.rpc("gm_registrar_candidatos_auto_resposta", { p_itens: linhas });
       if (insertError) throw insertError;
-      adicionados = inseridos?.length ?? 0;
+      adicionados = Number(totalInserido || 0);
     }
 
     statusFinal = adicionados > 0 ? "lote_concluido" : "lote_sem_novos_whatsapps";
