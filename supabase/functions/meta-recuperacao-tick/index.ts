@@ -31,6 +31,38 @@ const corsHeaders = {
 
 const MAX_INSTANCIAS_POR_RUN = 8;
 
+function temBanAtivo(banInfo: unknown): boolean {
+  return !!banInfo && typeof banInfo === "object" && Object.keys(banInfo as Record<string, unknown>).length > 0;
+}
+
+function temRestricaoFatal(restricoes: any): boolean {
+  const phoneEntities = Array.isArray(restricoes?.phone_health?.entities)
+    ? restricoes.phone_health.entities
+    : [];
+  return phoneEntities.some((entity: any) => {
+    if (String(entity?.entity_type).toUpperCase() !== "PHONE_NUMBER") return false;
+    const status = String(entity?.can_send_message).toUpperCase();
+    if (!["LIMITED", "BLOCKED", "UNAVAILABLE", "RESTRICTED"].includes(status)) return false;
+    const detalhe = String(entity?.additional_info || "");
+    return !/quality|reputation|lowered|customer.*block|blocking your phone|messaging limit.*quality/i.test(detalhe);
+  });
+}
+
+function remetenteAptoParaRecuperacao(inst: any): boolean {
+  return inst.id !== RECUPERACAO_AGUARDA_DESBLOQUEIO &&
+    inst.user_id === RECUPERACAO_OWNER_ID &&
+    inst.ativo === true &&
+    inst.provider === "meta" &&
+    inst.instancia_teste_aquecimento !== true &&
+    !inst.partner_client_id &&
+    inst.aquecimento_qualidade_permitido !== false &&
+    String(inst.saude_status).toUpperCase() === "CONNECTED" &&
+    ["YELLOW", "RED"].includes(String(inst.saude_quality).toUpperCase()) &&
+    !temBanAtivo(inst.saude_ban_info) &&
+    !temRestricaoFatal(inst.saude_restricoes) &&
+    !bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const supabase = createClient(
@@ -67,14 +99,53 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: "recuperacao_desativada" });
     }
 
+    const msgsMin = Math.min(20, Math.max(1, Number(cfg?.recuperacao_msgs_min_dia ?? 10)));
+    const msgsMax = Math.min(20, Math.max(msgsMin, Number(cfg?.recuperacao_msgs_max_dia ?? 20)));
+    const reativadas: string[] = [];
+
+    // A própria rotina de recuperação reconcilia números aptos antes de enviar.
+    // Assim, uma queda perdida pela checagem de saúde não deixa o número parado.
+    if (!simulacao) {
+      let reconciliacao = supabase
+        .from("meta_whatsapp_instances")
+        .select("id, user_id, nome, display_phone, saude_quality, saude_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, partner_client_id, recuperacao_ativa, recuperacao_desde, ativo, provider, instancia_teste_aquecimento, aquecimento_qualidade_permitido")
+        .eq("ativo", true)
+        .eq("user_id", RECUPERACAO_OWNER_ID)
+        .eq("provider", "meta")
+        .or("recuperacao_ativa.eq.false,recuperacao_ativa.is.null")
+        .in("saude_quality", ["YELLOW", "RED"]);
+      if (instanciaId) reconciliacao = reconciliacao.eq("id", instanciaId);
+
+      const { data: candidatas, error: reconciliacaoError } = await reconciliacao;
+      if (reconciliacaoError) throw reconciliacaoError;
+
+      for (const candidata of (candidatas || []).filter(remetenteAptoParaRecuperacao)) {
+        const agora = new Date().toISOString();
+        const { error: ativacaoError } = await supabase
+          .from("meta_whatsapp_instances")
+          .update({
+            recuperacao_ativa: true,
+            recuperacao_desde: candidata.recuperacao_desde || agora,
+            recuperacao_msgs_meta_dia: sorteio(msgsMin, msgsMax),
+            recuperacao_proximo_envio_em: agora,
+            dias_green_consecutivos: 0,
+            green_contado_dia: null,
+          })
+          .eq("id", candidata.id)
+          .or("recuperacao_ativa.eq.false,recuperacao_ativa.is.null");
+        if (ativacaoError) throw ativacaoError;
+        reativadas.push(candidata.nome || candidata.display_phone || candidata.id);
+      }
+    }
+
     const hIni = Number(String(cfg?.horario_inicio || "09:00").split(":")[0]) || 9;
     const hFim = Number(String(cfg?.horario_fim || "19:00").split(":")[0]) || 19;
     const janela = dentroJanelaAquecimento(Math.max(9, hIni), Math.min(19, hFim));
-    if (!janela.ok && !forcar && !simulacao) return json({ ok: true, skipped: janela.motivo });
+    if (!janela.ok && !forcar && !simulacao) return json({ ok: true, skipped: janela.motivo, reativadas });
 
     let q = supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, saude_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, partner_client_id, recuperacao_ativa, recuperacao_desde, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, dias_green_consecutivos, quarentena_ate, ativo, provider, instancia_teste_aquecimento")
+      .select("id, user_id, nome, display_phone, phone_number_id, access_token, waba_id, meta_bm_id, saude_quality, saude_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, partner_client_id, recuperacao_ativa, recuperacao_desde, recuperacao_msgs_meta_dia, recuperacao_proximo_envio_em, dias_green_consecutivos, quarentena_ate, ativo, provider, instancia_teste_aquecimento, aquecimento_qualidade_permitido")
       .eq("ativo", true)
       .eq("user_id", RECUPERACAO_OWNER_ID)
       .eq("provider", "meta")
@@ -85,19 +156,17 @@ Deno.serve(async (req) => {
     const { data: insts, error: instError } = await q.order("recuperacao_proximo_envio_em", { ascending: true, nullsFirst: true });
     if (instError) throw instError;
 
-    if (!insts?.length) return json({ ok: true, skipped: "nenhuma_em_recuperacao" });
+    if (!insts?.length) return json({ ok: true, skipped: "nenhuma_em_recuperacao", reativadas });
 
     const destinos = await destinosAquecimento(supabase);
     if (destinos.length === 0) {
-      return json({ ok: true, skipped: "nenhum destino conectado na caixa AQUECIMENTO" });
+      return json({ ok: true, skipped: "nenhum destino conectado na caixa AQUECIMENTO", reativadas });
     }
 
     const dia = hojeBrt();
     const maxPorDestino = Math.max(1, Number(cfg?.recuperacao_max_por_destino_dia ?? 2));
     const intMin = Math.min(2400, Math.max(1200, Number(cfg?.recuperacao_intervalo_min_seg ?? 1200)));
     const intMax = Math.min(2400, Math.max(intMin, Number(cfg?.recuperacao_intervalo_max_seg ?? 2400)));
-    const msgsMin = Math.min(20, Math.max(1, Number(cfg?.recuperacao_msgs_min_dia ?? 10)));
-    const msgsMax = Math.min(20, Math.max(msgsMin, Number(cfg?.recuperacao_msgs_max_dia ?? 20)));
 
     // Uso dos destinos hoje (limite por destino é global, não por emissor)
     const { data: logsHoje } = await supabase
@@ -128,17 +197,7 @@ Deno.serve(async (req) => {
 
     for (const inst of fila as any[]) {
       if (processadas >= MAX_INSTANCIAS_POR_RUN) break;
-      const restricoes = inst.saude_restricoes;
-      const phoneEntities = Array.isArray(restricoes?.phone_health?.entities) ? restricoes.phone_health.entities : [];
-      const envioRestrito = phoneEntities.some((e: any) =>
-        String(e?.entity_type).toUpperCase() === "PHONE_NUMBER" &&
-        ["LIMITED", "BLOCKED", "UNAVAILABLE", "RESTRICTED"].includes(String(e?.can_send_message).toUpperCase()) &&
-        !/quality|reputation|lowered/i.test(String(e?.additional_info || ""))
-      );
-      if (inst.id === RECUPERACAO_AGUARDA_DESBLOQUEIO || inst.partner_client_id || String(inst.saude_status).toUpperCase() !== "CONNECTED" ||
-          !["YELLOW", "RED"].includes(String(inst.saude_quality).toUpperCase()) ||
-          (inst.saude_ban_info && Object.keys(inst.saude_ban_info).length > 0) ||
-          envioRestrito || bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo)) {
+      if (!remetenteAptoParaRecuperacao(inst)) {
         resultados.push({ instancia: inst.nome, skip: "remetente_inapto" });
         continue;
       }
@@ -314,7 +373,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return json({ ok: true, total: resultados.length, resultados });
+    return json({ ok: true, total: resultados.length, reativadas, resultados });
   } catch (e) {
     return json({ ok: false, error: e instanceof Error ? e.message : "erro" }, 500);
   }

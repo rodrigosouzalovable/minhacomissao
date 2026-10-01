@@ -3,7 +3,7 @@
 - A saúde do webhook Meta distingue indisponibilidade da consulta de inscrição incorreta confirmada; só alerta após tentativa de recuperação e confirmação, para evitar avisos falsos por timeout.
 - Valores de parcelas pendentes próprias usam RPC atômica; vencimentos e baixas de qualquer acordo usam RPCs autenticadas específicas, mantendo valores, comissões e responsável protegidos.
 
-- Inbox Meta: mídia valida caminhos atual/legado; IAGO atende PADRÃO sem follow-up, escala por ordem sem admins e mantém “Aguardando Humano” sem atendente apto; recuperação mede queda→UAZAPI→GREEN sem polling novo.
+- Inbox Meta: mídia valida caminhos atual/legado; IAGO atende PADRÃO sem follow-up, escala por ordem sem admins e mantém “Aguardando Humano” sem atendente apto; recuperação mede queda→UAZAPI→GREEN e reconcilia RED/YELLOW aptos no tick existente, sem polling novo.
 - Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
 - Cobmais diário envia o XLSX a armazenamento privado e processa no servidor; staging/publicação são atômicos, chave = CPF+credor+contrato+parcela e vencimento é substituível.
