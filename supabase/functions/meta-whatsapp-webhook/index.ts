@@ -812,25 +812,12 @@ serve(async (req) => {
             contatoIdFinal = (inseridoContato as any)?.id ?? null;
           }
 
-          // O sandbox oficial marcado como destino pertence sempre à caixa
-          // AQUECIMENTO e é atendido exclusivamente pelo IAGO.
+          // O sandbox oficial marcado como destino permanece na caixa AQUECIMENTO,
+          // sem atribuição automática ao IAGO (que atende somente a caixa PADRÃO).
           if (!isEcho && contatoIdFinal && inst.instancia_teste_aquecimento === true) {
             await supabase.from('meta_whatsapp_contatos')
               .update({ folder_id: FOLDER_AQUECIMENTO, origem_aquecimento: 'meta_teste' })
               .eq('id', contatoIdFinal);
-            const { data: etiquetaIago } = await supabase
-              .from('meta_whatsapp_etiquetas')
-              .select('id')
-              .ilike('nome', 'Atendente: Iago%')
-              .limit(1)
-              .maybeSingle();
-            if (etiquetaIago?.id) {
-              await supabase.from('meta_whatsapp_contato_etiquetas').upsert({
-                contato_id: contatoIdFinal,
-                etiqueta_id: etiquetaIago.id,
-                origem: 'meta_teste_aquecimento',
-              }, { onConflict: 'contato_id,etiqueta_id' });
-            }
           }
 
           if (!isEcho && !msgError && sufixo.length === 8) {
@@ -1050,16 +1037,16 @@ serve(async (req) => {
                   }
                 }
 
-                // ---- IAGO na PADRÃO 24/7; nas demais caixas, respeita a janela de plantão ----
+                // ---- IAGO exclusivamente na caixa PADRÃO ----
                 let etiquetaIagoId: string | null = null;
-                try {
+                if (_folderIdContato === null) try {
                   const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
                   const { data: janela } = await supabase
                     .from('meta_inbox_folder_iago_janela')
                     .select('ativo, hora_inicio, hora_fim, fim_semana_24h')
-                    .eq('folder_id', _folderIdContato ?? CAIXA_PADRAO_ID)
+                    .eq('folder_id', CAIXA_PADRAO_ID)
                     .maybeSingle();
-                  if (_folderIdContato === null || (janela as any)?.ativo) {
+                  if (_folderIdContato === null) {
                     const agoraSP = new Date(Date.now() - 3 * 60 * 60 * 1000);
                     const minutos = agoraSP.getUTCHours() * 60 + agoraSP.getUTCMinutes();
                     const dia = agoraSP.getUTCDay(); // 0 dom, 6 sáb
@@ -1560,8 +1547,9 @@ serve(async (req) => {
 
           // ===== Atendimento automático com IA (caixa "IA" + atendente IAGO) =====
           if (!isEcho && contatoIdFinal && !msgError
-            && (!audioSemTranscricao || _folderIdContato === FOLDER_AQUECIMENTO)
-            && (!imagemSemLeitura || _folderIdContato === FOLDER_CERTIFICADO || _folderIdContato === FOLDER_AQUECIMENTO)
+            && _folderIdContato !== FOLDER_AQUECIMENTO
+            && !audioSemTranscricao
+            && (!imagemSemLeitura || _folderIdContato === FOLDER_CERTIFICADO)
             && !pediuBloqueio && !_leadAquecimento) {
 
 
@@ -1689,6 +1677,24 @@ serve(async (req) => {
           if (pricingCategory) updateLog.pricing_category = pricingCategory;
           if (pricingType) updateLog.pricing_type = pricingType;
           if (foiGratis !== null) updateLog.foi_gratis = foiGratis;
+
+          await supabase.from('meta_whatsapp_mensagens')
+            .update({
+              pricing_category: pricingCategory,
+              pricing_type: pricingType,
+              foi_gratis: foiGratis,
+            })
+            .eq('wa_message_id', waId);
+
+          const { error: custoErr } = await supabase.rpc('registrar_custo_mensagem_meta', {
+            p_wa_message_id: waId,
+            p_status: status,
+            p_categoria: pricingCategory,
+            p_pricing_type: pricingType,
+            p_foi_gratis: foiGratis,
+            p_entregue_em: new Date(Number(s.timestamp || 0) * 1000 || Date.now()).toISOString(),
+          });
+          if (custoErr) console.error('[MetaWebhook] falha ao registrar custo da mensagem', custoErr.message);
 
           await supabase.from('meta_whatsapp_envios_log')
             .update(updateLog)

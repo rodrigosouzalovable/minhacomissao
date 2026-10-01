@@ -756,7 +756,18 @@ Deno.serve(async (req) => {
           wa_message_id: waId,
           template_nome: template.nome_template,
           template_botoes: templateBotoes,
+          origem_envio: 'template',
+          pricing_category: String(template.categoria || 'UTILITY').toUpperCase(),
         } as any);
+        if (waId) {
+          const { error: custoErr } = await supabase.rpc('registrar_custo_mensagem_meta', {
+            p_wa_message_id: waId,
+            p_status: 'sent',
+            p_categoria: String(template.categoria || 'UTILITY').toUpperCase(),
+            p_entregue_em: nowIso,
+          });
+          if (custoErr) console.error('[send-whatsapp-meta] falha ao estimar custo', custoErr.message);
+        }
         let contatoIdFinal: string | null = null;
         const cpfDigits = String((cliente as any)?.cpf ?? '').replace(/\D/g, '');
         // Excel remove zeros à esquerda: recompõe CPF (11) / CNPJ (14).

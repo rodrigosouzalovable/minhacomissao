@@ -1,6 +1,5 @@
-// IAGO — atendente de IA que atua como um atendente humano nas caixas do Inbox Meta Oficial
-// onde estiver marcado como responsável. Atende 24h/7 dias, faz um único follow-up e
-// escala para humano (etiqueta "Aguardando Humano") sempre que não souber responder.
+// IAGO — atendente de IA exclusivo da caixa PADRÃO do Inbox Meta Oficial.
+// Atende 24h/7 dias e escala para humano quando não souber responder.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
@@ -9,7 +8,6 @@ import {
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
   nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa, garantirApresentacaoVirtual,
-  FOLDER_AQUECIMENTO_INBOX,
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
 import { detectarPropostaPreviaNoHistorico, type PropostaPrevia } from '../_shared/proposta-previa.ts';
@@ -34,7 +32,6 @@ Deno.serve(async (req) => {
   let travaContatoId: string | null = null;
   let travaEntradaId: string | null = null;
 
-  // Caixa AQUECIMENTO: o IAGO responde TUDO e nunca chama humano (serve para aquecer os chips).
   let modoAquecimento = false;
   let modoCaixaPadrao = false;
   const etiquetarAguardandoHumano = async (sb: any, contatoId: string) => {
@@ -93,13 +90,14 @@ Deno.serve(async (req) => {
       return json({ success: false, skipped: 'lead de aquecimento (Google Maps)' });
     }
 
-    modoAquecimento = String((contato as any).folder_id || '') === FOLDER_AQUECIMENTO_INBOX;
-    modoCaixaPadrao = !modoAquecimento && !(contato as any).folder_id;
+    // O IAGO atende exclusivamente a caixa PADRÃO (folder_id nulo).
+    // Esta trava interna também protege contra chamadas antigas ou manuais fora dela.
+    if ((contato as any).folder_id) {
+      return json({ success: false, skipped: 'IAGO restrito à caixa PADRÃO' });
+    }
+    modoCaixaPadrao = true;
 
-
-    // AQUECIMENTO é sempre do IAGO. A associação da conversa continua sendo
-    // validada pela etiqueta abaixo, mas uma configuração geral de caixa não a silencia.
-    const atende = modoAquecimento || await iagoAtendeCaixa(supabase, iago.id, (contato as any).folder_id ?? null);
+    const atende = await iagoAtendeCaixa(supabase, iago.id, null);
     if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
 
     // ===== Credor da conversa: cabeçalho da conversa > credor único ativo da caixa =====

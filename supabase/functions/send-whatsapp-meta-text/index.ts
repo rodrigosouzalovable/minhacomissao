@@ -270,6 +270,7 @@ Deno.serve(async (req) => {
         timestamp_msg: nowIso,
         status_envio: 'enviada',
         wa_message_id: waId,
+        origem_envio: origem === 'ia' ? 'iago' : 'humano',
       } as any).select('id').maybeSingle();
 
       // Mantém a aba Acionamento coerente com o histórico
@@ -457,7 +458,18 @@ Deno.serve(async (req) => {
       wa_message_id: waId,
       wa_message_id_reply: reply_to_wa_id || null,
       conteudo_citado: conteudo_citado || null,
+      origem_envio: origem === 'ia' ? 'iago' : 'humano',
     } as any).select('id').maybeSingle();
+
+    if (waId) {
+      const { error: custoErr } = await supabase.rpc('registrar_custo_mensagem_meta', {
+        p_wa_message_id: waId,
+        p_status: 'sent',
+        p_categoria: 'SERVICE',
+        p_entregue_em: nowIso,
+      });
+      if (custoErr) console.error('[send-whatsapp-meta-text] falha ao estimar custo', custoErr.message);
+    }
 
     // Atualiza preview do contato (cria se não existir)
     if (contato?.id) {

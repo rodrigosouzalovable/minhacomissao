@@ -443,7 +443,18 @@ Deno.serve(async (req) => {
       wa_message_id: waId,
       wa_message_id_reply: reply_to_wa_id || null,
       conteudo_citado: conteudo_citado || null,
+      origem_envio: 'humano',
     } as any);
+
+    if (waId) {
+      const { error: custoErr } = await supabase.rpc('registrar_custo_mensagem_meta', {
+        p_wa_message_id: waId,
+        p_status: 'sent',
+        p_categoria: 'SERVICE',
+        p_entregue_em: nowIso,
+      });
+      if (custoErr) console.error('[send-whatsapp-meta-media] falha ao estimar custo', custoErr.message);
+    }
 
     if (contato?.id) {
       await supabase.from('meta_whatsapp_contatos')
