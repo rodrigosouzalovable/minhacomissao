@@ -293,7 +293,7 @@ Deno.serve(async (req) => {
       .from('meta_envio_pool_config').select('supressao_ativa, blacklist_ativa, antirrepeticao_dias').eq('id', 1).maybeSingle();
     const supressaoAtiva = cfgPool?.supressao_ativa !== false;
     const blacklistAtiva = cfgPool?.blacklist_ativa !== false;
-    if (supressaoAtiva || blacklistAtiva) {
+    {
       const sufixo = (t: string) => {
         const d = String(t || '').replace(/\D+/g, '');
         return d.length >= 8 ? d.slice(-8) : d;

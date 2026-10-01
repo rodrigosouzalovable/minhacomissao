@@ -13,4 +13,4 @@
 - [x] Restringir o contador do Inbox Meta às conversas não lidas da caixa Padrão.
 - [x] Preparar migração atômica da Novo Mundo 3144 para UAZAPI, preservando histórico e vínculo com a Padrão.
 - [ ] Executar a migração da Novo Mundo 3144 após a nova conexão UAZAPI ser criada e validada.
-- [ ] Registrar números confirmados sem WhatsApp e removê-los automaticamente das novas listas do Envio Meta.
+- [x] Registrar números confirmados sem WhatsApp e removê-los automaticamente das novas listas do Envio Meta.

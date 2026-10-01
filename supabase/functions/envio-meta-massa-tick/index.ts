@@ -1065,6 +1065,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
           telefone_sufixo: sufixo,
           telefone: dig,
           motivo: `entrega impossível: ${String(erroMsg || '').slice(0, 160)}`,
+          categoria: 'supressao',
           criado_em: new Date().toISOString(),
         }, { onConflict: 'telefone_sufixo' });
       }

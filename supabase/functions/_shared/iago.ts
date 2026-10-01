@@ -277,6 +277,7 @@ export async function suprimirDestinatario(
       telefone_sufixo: sufixo,
       telefone: dig,
       motivo: String(motivo || '').slice(0, 160),
+      categoria: String(motivo || '').startsWith('blacklist') ? 'blacklist' : 'supressao',
       criado_em: new Date().toISOString(),
     };
     // Só grava a origem quando conhecida — não sobrescreve dados anteriores com nulo.
