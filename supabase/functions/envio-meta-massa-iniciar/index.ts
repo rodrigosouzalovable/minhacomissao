@@ -284,6 +284,7 @@ Deno.serve(async (req) => {
     // ===== Higiene de base: remove destinatários suprimidos e blacklist =====
     // supressao_ativa -> números com falhas de entrega / sem resposta
     // blacklist_ativa -> números que pediram bloqueio pelo botão "Bloquear contato"
+    // sem_whatsapp -> bloqueio obrigatório, independente das duas chaves
     let clientesEnvio = clientes;
     let suprimidos = 0;
     let bloqueadosBlacklist = 0;
@@ -303,11 +304,15 @@ Deno.serve(async (req) => {
       for (let i = 0; i < sufixos.length; i += 500) {
         const { data } = await supabase
           .from('meta_destinatario_supressao')
-          .select('telefone_sufixo, motivo')
+          .select('telefone_sufixo, motivo, categoria')
           .in('telefone_sufixo', sufixos.slice(i, i + 500));
         (data || []).forEach((r: any) => {
-          const ehBlacklist = String(r.motivo || '').startsWith('blacklist');
-          if (ehBlacklist) {
+          const categoria = String(r.categoria || '');
+          const ehSemWhatsApp = categoria === 'sem_whatsapp';
+          const ehBlacklist = categoria === 'blacklist' || String(r.motivo || '').startsWith('blacklist');
+          if (ehSemWhatsApp) {
+            blacklist.add(r.telefone_sufixo);
+          } else if (ehBlacklist) {
             if (blacklistAtiva) blacklist.add(r.telefone_sufixo);
           } else if (supressaoAtiva) {
             bloqueados.add(r.telefone_sufixo);

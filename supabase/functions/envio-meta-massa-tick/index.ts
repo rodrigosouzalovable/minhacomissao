@@ -593,6 +593,13 @@ async function validarLotePendentes(job: any): Promise<void> {
       await supabase.from('envio_meta_job')
         .update({ sem_whatsapp: (cur?.sem_whatsapp || 0) + idsSem.length })
         .eq('id', job.id);
+      const telefonesSem = (itens as any[])
+        .filter((it) => idsSem.includes(it.id))
+        .map((it) => String(it.telefone || ''));
+      const { error: registrarErro } = await supabase.rpc('registrar_sem_whatsapp_verificados', {
+        _telefones: telefonesSem,
+      });
+      if (registrarErro) console.error('[tick val] falha ao registrar sem WhatsApp:', registrarErro.message);
     }
     console.log(`[tick val] job=${job.id} ok=${idsOk.length} sem=${idsSem.length} erro=${idsErro.length}`);
   } catch (e) {
@@ -1054,12 +1061,10 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       const dig = String((pend as any).telefone || '').replace(/\D+/g, '');
       const sufixo = dig.length >= 8 ? dig.slice(-8) : dig;
       if (sufixo) {
-        await supabase.from('meta_destinatario_supressao').upsert({
-          telefone_sufixo: sufixo,
-          telefone: dig,
-          motivo: `entrega impossível: ${String(erroMsg || '').slice(0, 160)}`,
-          criado_em: new Date().toISOString(),
-        }, { onConflict: 'telefone_sufixo' });
+        const { error: registrarErro } = await supabase.rpc('registrar_sem_whatsapp_verificados', {
+          _telefones: [dig],
+        });
+        if (registrarErro) console.error('[tick envio] falha ao registrar sem WhatsApp:', registrarErro.message);
       }
     }
   }
