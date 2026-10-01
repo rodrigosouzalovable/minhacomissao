@@ -7,5 +7,5 @@
 - [x] Promover automaticamente candidatos confirmados para a lista existente.
 - [x] Publicar e validar funções; nenhum envio de mensagem foi executado.
 - [x] Validar compilação e responsividade estrutural da tela em desktop e celular.
-- [ ] Aplicar teto diário de 650 consultas/US$ 20,80 e agenda nacional independente, inclusive domingos.
-- [ ] Exibir meta, faltantes, progresso e motivo de encerramento diário.
+- [x] Aplicar teto diário de 650 consultas/US$ 20,80 e agenda nacional independente, inclusive domingos.
+- [x] Exibir meta, faltantes, progresso e motivo de encerramento diário.
