@@ -1,6 +1,5 @@
-// IAGO — atendente de IA que atua como um atendente humano nas caixas do Inbox Meta Oficial
-// onde estiver marcado como responsável. Atende 24h/7 dias, faz um único follow-up e
-// escala para humano (etiqueta "Aguardando Humano") sempre que não souber responder.
+// IAGO — atendente de IA exclusivo da caixa PADRÃO do Inbox Meta Oficial.
+// Atende 24h/7 dias e escala para humano quando não souber responder.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,

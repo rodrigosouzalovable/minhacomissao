@@ -1037,16 +1037,16 @@ serve(async (req) => {
                   }
                 }
 
-                // ---- IAGO na PADRÃO 24/7; nas demais caixas, respeita a janela de plantão ----
+                // ---- IAGO exclusivamente na caixa PADRÃO ----
                 let etiquetaIagoId: string | null = null;
-                try {
+                if (_folderIdContato === null) try {
                   const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
                   const { data: janela } = await supabase
                     .from('meta_inbox_folder_iago_janela')
                     .select('ativo, hora_inicio, hora_fim, fim_semana_24h')
-                    .eq('folder_id', _folderIdContato ?? CAIXA_PADRAO_ID)
+                    .eq('folder_id', CAIXA_PADRAO_ID)
                     .maybeSingle();
-                  if (_folderIdContato === null || (janela as any)?.ativo) {
+                  if (_folderIdContato === null) {
                     const agoraSP = new Date(Date.now() - 3 * 60 * 60 * 1000);
                     const minutos = agoraSP.getUTCHours() * 60 + agoraSP.getUTCMinutes();
                     const dia = agoraSP.getUTCDay(); // 0 dom, 6 sáb
