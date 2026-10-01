@@ -855,6 +855,13 @@
       "when": 1790861526610,
       "tag": "0121_use_actual_installment_count_in_owner_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1790864754409,
+      "tag": "0122_prepare_meta_instance_migration_to_default_uazapi",
+      "breakpoints": true
     }
   ]
 }

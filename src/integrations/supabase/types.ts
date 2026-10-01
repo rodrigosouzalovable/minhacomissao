@@ -7585,6 +7585,7 @@ export type Database = {
           enviados_hoje: number
           estado_pool: string | null
           fase_rampup: string | null
+          folder_padrao_fixo: boolean
           folder_padrao_id: string | null
           green_contado_dia: string | null
           id: string
@@ -7673,6 +7674,7 @@ export type Database = {
           enviados_hoje?: number
           estado_pool?: string | null
           fase_rampup?: string | null
+          folder_padrao_fixo?: boolean
           folder_padrao_id?: string | null
           green_contado_dia?: string | null
           id?: string
@@ -7761,6 +7763,7 @@ export type Database = {
           enviados_hoje?: number
           estado_pool?: string | null
           fase_rampup?: string | null
+          folder_padrao_fixo?: boolean
           folder_padrao_id?: string | null
           green_contado_dia?: string | null
           id?: string
@@ -11687,6 +11690,7 @@ export type Database = {
           enviados_hoje: number
           estado_pool: string | null
           fase_rampup: string | null
+          folder_padrao_fixo: boolean
           folder_padrao_id: string | null
           green_contado_dia: string | null
           id: string
@@ -12731,6 +12735,10 @@ export type Database = {
         }[]
       }
       meta_tier_valor: { Args: { t: string }; Returns: number }
+      migrar_instancia_meta_para_uazapi_padrao: {
+        Args: { _instancia_meta_id: string; _uazapi_instance_id: string }
+        Returns: Json
+      }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       parceiro_tem_instancia: {
         Args: { _instancia: string; _uid: string }
@@ -12958,6 +12966,7 @@ export type Database = {
           enviados_hoje: number
           estado_pool: string | null
           fase_rampup: string | null
+          folder_padrao_fixo: boolean
           folder_padrao_id: string | null
           green_contado_dia: string | null
           id: string
@@ -13066,6 +13075,7 @@ export type Database = {
           enviados_hoje: number
           estado_pool: string | null
           fase_rampup: string | null
+          folder_padrao_fixo: boolean
           folder_padrao_id: string | null
           green_contado_dia: string | null
           id: string

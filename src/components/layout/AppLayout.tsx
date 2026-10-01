@@ -275,6 +275,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       .select('id', { count: 'exact', head: true })
       .in('instancia_id', instanceIds)
       .eq('arquivado', false)
+      .is('folder_id', null)
       .gt('nao_lido', 0);
     setMetaInboxUnreadCount(count ?? 0);
   }, [user]);
