@@ -5,7 +5,9 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-const MAX_INSTANCES_PER_RUN = 80;
+// A ação manual precisa conferir todas as instâncias atuais em uma única
+// execução. O limite continua finito para proteger chamadas acidentais.
+const MAX_INSTANCES_PER_RUN = 500;
 const LOCK_MINUTES = 30;
 
 const json = (payload: unknown, status = 200) => new Response(JSON.stringify(payload), {
@@ -21,6 +23,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const auto = body?.auto === true;
     const force = body?.force === true;
+    const completeUtility = body?.complete_utility === true && !auto;
 
     if (!auto) {
       const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
@@ -80,7 +83,11 @@ Deno.serve(async (req) => {
     });
 
     const audit = await supabase.functions.invoke("meta-templates-auditar-instancias", {
-      body: { auto: true, dry_run: false },
+      body: {
+        auto: true,
+        dry_run: false,
+        utility_approved_only: completeUtility,
+      },
     });
 
     return json({

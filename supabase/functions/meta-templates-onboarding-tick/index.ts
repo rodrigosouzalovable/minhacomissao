@@ -297,10 +297,16 @@ Deno.serve(async (req) => {
         .eq("id", proximo.template_mestre_id)
         .maybeSingle();
 
-      if (!mestreItem || mestreItem.criado_por !== inst.user_id || mestreItem.injetar_em_novos !== true) {
+      // A fila também pode receber Utility aprovado pela sincronização manual
+      // de todos os HSM. A inserção é feita somente por funções autenticadas;
+      // ainda exigimos o mesmo proprietário e uma categoria segura.
+      const categoriaMestre = String(mestreItem?.categoria || "").toUpperCase();
+      const permitidoPelaFila = mestreItem?.injetar_em_novos === true ||
+        (categoriaMestre === "UTILITY" && mestreItem?.reclassificado_marketing !== true);
+      if (!mestreItem || mestreItem.criado_por !== inst.user_id || !permitidoPelaFila) {
         await supabase.from("meta_templates_onboarding_fila").update({
           status: "CANCELADO",
-          motivo: "modelo automático não pertence ao proprietário desta instância",
+          motivo: "modelo não autorizado ou não pertence ao proprietário desta instância",
           finalizado_em: new Date().toISOString(),
         }).eq("id", proximo.id);
         processados.push({ instancia_id: inst.id, ok: false, cancelado: "proprietario_incompativel" });
