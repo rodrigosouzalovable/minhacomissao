@@ -1,13 +1,22 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
-const ORIGEM = "auto_resposta_goias";
+const ORIGEM = "auto_resposta_brasil";
 const MAX_REQUISICOES_RUN = 18;
-const CIDADES_GO = [
-  "Goiânia GO", "Aparecida de Goiânia GO", "Anápolis GO", "Rio Verde GO",
-  "Catalão GO", "Luziânia GO", "Águas Lindas de Goiás GO", "Valparaíso de Goiás GO",
-  "Trindade GO", "Formosa GO", "Itumbiara GO", "Jataí GO", "Senador Canedo GO",
-  "Caldas Novas GO", "Planaltina GO", "Goianésia GO", "Mineiros GO", "Cristalina GO",
+const CIDADES_BRASIL = [
+  "São Paulo SP", "Rio de Janeiro RJ", "Brasília DF", "Salvador BA", "Fortaleza CE",
+  "Belo Horizonte MG", "Manaus AM", "Curitiba PR", "Recife PE", "Goiânia GO",
+  "Belém PA", "Porto Alegre RS", "Guarulhos SP", "Campinas SP", "São Luís MA",
+  "Maceió AL", "Campo Grande MS", "São Gonçalo RJ", "Teresina PI", "João Pessoa PB",
+  "Natal RN", "Cuiabá MT", "Florianópolis SC", "Aracaju SE", "Vitória ES",
+  "Porto Velho RO", "Macapá AP", "Boa Vista RR", "Rio Branco AC", "Palmas TO",
+  "Aparecida de Goiânia GO", "Anápolis GO", "Santos SP", "São José dos Campos SP",
+  "Ribeirão Preto SP", "Sorocaba SP", "Niterói RJ", "Duque de Caxias RJ",
+  "Uberlândia MG", "Juiz de Fora MG", "Londrina PR", "Maringá PR", "Joinville SC",
+  "Blumenau SC", "Caxias do Sul RS", "Pelotas RS", "Feira de Santana BA",
+  "Vitória da Conquista BA", "Petrolina PE", "Caruaru PE", "Juazeiro do Norte CE",
+  "Campina Grande PB", "Mossoró RN", "Imperatriz MA", "Santarém PA", "Marabá PA",
+  "Dourados MS", "Rondonópolis MT", "Ji-Paraná RO", "Araguaína TO",
 ];
 const SEMENTES = [
   "clínica veterinária", "pet shop", "contabilidade", "salão de beleza",
@@ -52,10 +61,10 @@ Deno.serve(async (req) => {
     const { data: cfg, error: cfgError } = await supabase
       .from("google_maps_auto_resposta_config").select("*").eq("id", true).single();
     if (cfgError) throw cfgError;
-    if (!cfg.ativo && !forcar) return json({ ok: true, skipped: "captacao_desativada" });
+    if (!cfg.ativo) return json({ ok: true, skipped: "captacao_desativada" });
 
     const agoraBrt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-    if (!forcar && (agoraBrt.getDay() === 0 || agoraBrt.getHours() < 7 || agoraBrt.getHours() >= 19)) {
+    if (!forcar && (agoraBrt.getHours() < 7 || agoraBrt.getHours() >= 19)) {
       return json({ ok: true, skipped: "fora_da_janela" });
     }
 
@@ -75,13 +84,19 @@ Deno.serve(async (req) => {
     }
 
     const { data: buscasHoje } = await supabase.from("google_maps_buscas")
-      .select("requisicoes_places,categoria,localizacao,total_resultados")
-      .eq("origem", ORIGEM).gte("created_at", inicio).limit(1000);
+      .select("requisicoes_places,custo_estimado_usd,categoria,localizacao,total_resultados")
+      .in("origem", ["auto_resposta_goias", ORIGEM]).gte("created_at", inicio).limit(1000);
     const requisicoesHoje = (buscasHoje ?? []).reduce((sum, item) => sum + Number(item.requisicoes_places || 0), 0);
-    const restantes = Math.max(0, cfg.max_requisicoes_dia - requisicoesHoje);
+    const custoHoje = (buscasHoje ?? []).reduce((sum, item) => sum + Number(item.custo_estimado_usd || 0), 0);
+    const maxCustoDia = Number(cfg.max_custo_usd_dia ?? 20.8);
+    const restantesConsultas = Math.max(0, Number(cfg.max_requisicoes_dia) - requisicoesHoje);
+    const restantesPorCusto = Math.max(0, Math.floor((maxCustoDia - custoHoje) / 0.032));
+    const restantes = Math.min(restantesConsultas, restantesPorCusto);
     if (restantes <= 0) {
-      statusFinal = "limite_diario_atingido";
-      return json({ ok: true, skipped: statusFinal, requisicoes_hoje: requisicoesHoje });
+      statusFinal = "teto_diario_atingido";
+      return json({ ok: true, skipped: statusFinal, captados_hoje: confirmadosHoje ?? 0,
+        faltam: Math.max(0, Number(cfg.meta_whatsapps_dia) - Number(confirmadosHoje ?? 0)),
+        requisicoes_hoje: requisicoesHoje, custo_estimado_usd: custoHoje });
     }
 
     const { data: rankingData, error: rankingError } = await supabase.rpc("gm_auto_resposta_ranking");
@@ -93,16 +108,24 @@ Deno.serve(async (req) => {
     const exploracao = SEMENTES.filter((nicho) => !nichosConhecidos.has(nicho));
 
     const rodada = (buscasHoje ?? []).length;
+    const combinacoesHoje = new Set((buscasHoje ?? []).map((item) =>
+      `${String(item.categoria || "").toLowerCase()}|${String(item.localizacao || "").toLowerCase()}`));
     const faixa = rodada % 10;
     const grupo = faixa < 7 ? "comprovado" : faixa < 9 ? "intermediario" : "exploracao";
     const pool = grupo === "comprovado" ? comprovados : grupo === "intermediario" ? intermediarios : [];
     const escolhido = pool.length ? pool[rodada % pool.length] : null;
     const nichosExploracao = exploracao.length ? exploracao : SEMENTES;
     const nicho = escolhido?.nicho ?? nichosExploracao[rodada % nichosExploracao.length] ?? SEMENTES[0];
-    const cidadeHistorica = String(escolhido?.cidade || "");
-    const cidade = /\bGO\b/i.test(cidadeHistorica)
-      ? cidadeHistorica
-      : CIDADES_GO[Math.floor(rodada / Math.max(1, nichosExploracao.length)) % CIDADES_GO.length];
+    const cidadeHistorica = String(escolhido?.cidade || "").trim();
+    const inicioCidade = Math.floor(rodada / Math.max(1, nichosExploracao.length)) % CIDADES_BRASIL.length;
+    let cidade = cidadeHistorica || CIDADES_BRASIL[inicioCidade];
+    for (let deslocamento = 0; deslocamento < CIDADES_BRASIL.length; deslocamento += 1) {
+      const candidata = CIDADES_BRASIL[(inicioCidade + deslocamento) % CIDADES_BRASIL.length];
+      if (!combinacoesHoje.has(`${nicho.toLowerCase()}|${candidata.toLowerCase()}`)) {
+        cidade = candidata;
+        break;
+      }
+    }
 
     const faltam = Math.max(1, cfg.meta_whatsapps_dia - (confirmadosHoje ?? 0));
     const maxResultados = Math.min(120, Math.max(30, faltam * 2));
@@ -154,7 +177,9 @@ Deno.serve(async (req) => {
     return json({
       ok: true, dia, grupo, alvo: { nicho, cidade }, busca_id: busca.busca_id,
       captados_antes: confirmadosHoje ?? 0, adicionados, meta: cfg.meta_whatsapps_dia,
+      faltam: Math.max(0, Number(cfg.meta_whatsapps_dia) - Number(confirmadosHoje ?? 0) - adicionados),
       requisicoes_antes: requisicoesHoje, requisicoes_lote: busca.requisicoes_places ?? 0,
+      custo_antes_usd: custoHoje, teto_custo_usd: maxCustoDia,
       verificacao,
     });
   } catch (error) {

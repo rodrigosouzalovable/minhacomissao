@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
       .select("google_maps_captacao_ativa")
       .eq("id", 1)
       .maybeSingle();
-    const captacaoCandidatos = interno && origemSolicitada === "auto_resposta_goias";
+    const captacaoCandidatos = interno && ["auto_resposta_goias", "auto_resposta_brasil"].includes(origemSolicitada);
     let candidatosAtivos = false;
     if (captacaoCandidatos) {
       const { data: configCandidatos } = await supabase

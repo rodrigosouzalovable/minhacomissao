@@ -65,14 +65,6 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const forcar = body?.forcar === true;
 
-    // A captação de candidatos é independente do aquecimento e não envia mensagens.
-    // Reutiliza este acionamento agendado, com trava e limites próprios.
-    try {
-      await supabase.functions.invoke('google-maps-auto-resposta-captar', { body: {} });
-    } catch (err) {
-      console.log('[aquecimento] captação de candidatos falhou:', String(err).slice(0, 200));
-    }
-
     const { data: cfg } = await supabase
       .from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
     if (!cfg?.aquecimento_ativo && !forcar) {

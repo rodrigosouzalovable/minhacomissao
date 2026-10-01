@@ -216,7 +216,7 @@ export function AquecimentoMetaTab() {
         supabase.from("google_maps_auto_resposta_candidatos").select("id", { count: "exact", head: true }).eq("status", "confirmado"),
       ]);
       const { data: buscas } = await supabase.from("google_maps_buscas")
-        .select("requisicoes_places,custo_estimado_usd").eq("origem", "auto_resposta_goias").gte("created_at", inicio);
+        .select("requisicoes_places,custo_estimado_usd").in("origem", ["auto_resposta_goias", "auto_resposta_brasil"]).gte("created_at", inicio);
       return {
         hoje: hoje ?? 0, exportados: exportados ?? 0, confirmados: confirmados ?? 0,
         requisicoes: (buscas ?? []).reduce((s, b) => s + Number(b.requisicoes_places || 0), 0),
@@ -719,11 +719,32 @@ export function AquecimentoMetaTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Captação automática em Goiás: até {configCandidatos?.meta_whatsapps_dia ?? 200} WhatsApps novos por dia. Nenhuma mensagem é enviada automaticamente.
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {(() => {
+            const meta = Number(configCandidatos?.meta_whatsapps_dia ?? 200);
+            const captados = Number(resumoCandidatos?.hoje ?? 0);
+            const faltam = Math.max(0, meta - captados);
+            const consultas = Number(resumoCandidatos?.requisicoes ?? 0);
+            const custo = Number(resumoCandidatos?.custo ?? 0);
+            const maxConsultas = Number(configCandidatos?.max_requisicoes_dia ?? 650);
+            const maxCusto = Number(configCandidatos?.max_custo_usd_dia ?? 20.8);
+            const metaAtingida = captados >= meta;
+            const tetoAtingido = consultas >= maxConsultas || custo >= maxCusto;
+            return <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Captação automática em todo o Brasil: meta de {meta} WhatsApps verificados por dia, limitada a {maxConsultas} consultas ou US$ {maxCusto.toFixed(2)}. Nenhuma mensagem é enviada automaticamente.
+              </p>
+              <Progress value={meta > 0 ? Math.min(100, (captados / meta) * 100) : 0} />
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Badge variant={metaAtingida ? "default" : tetoAtingido ? "destructive" : "secondary"}>
+                  {metaAtingida ? "Meta atingida" : tetoAtingido ? `Teto diário atingido — faltaram ${faltam}` : `${captados}/${meta} captados — faltam ${faltam}`}
+                </Badge>
+                <span className="text-muted-foreground">{Math.min(100, Math.round((captados / Math.max(1, meta)) * 100))}% concluído</span>
+              </div>
+            </div>;
+          })()}
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
             <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.hoje ?? 0}</div><div className="text-xs text-muted-foreground">captados hoje</div></div>
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{Math.max(0, Number(configCandidatos?.meta_whatsapps_dia ?? 200) - Number(resumoCandidatos?.hoje ?? 0))}</div><div className="text-xs text-muted-foreground">faltam hoje</div></div>
             <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.requisicoes ?? 0}</div><div className="text-xs text-muted-foreground">consultas hoje</div></div>
             <div className="rounded-md border p-2"><div className="text-lg font-semibold">US$ {(resumoCandidatos?.custo ?? 0).toFixed(2)}</div><div className="text-xs text-muted-foreground">custo estimado</div></div>
             <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.exportados ?? 0}</div><div className="text-xs text-muted-foreground">exportados / em teste</div></div>

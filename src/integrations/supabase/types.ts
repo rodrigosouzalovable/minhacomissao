@@ -3549,6 +3549,7 @@ export type Database = {
           id: boolean
           lock_expires_at: string | null
           lock_token: string | null
+          max_custo_usd_dia: number
           max_requisicoes_dia: number
           meta_whatsapps_dia: number
           regiao: string
@@ -3562,6 +3563,7 @@ export type Database = {
           id?: boolean
           lock_expires_at?: string | null
           lock_token?: string | null
+          max_custo_usd_dia?: number
           max_requisicoes_dia?: number
           meta_whatsapps_dia?: number
           regiao?: string
@@ -3575,6 +3577,7 @@ export type Database = {
           id?: boolean
           lock_expires_at?: string | null
           lock_token?: string | null
+          max_custo_usd_dia?: number
           max_requisicoes_dia?: number
           meta_whatsapps_dia?: number
           regiao?: string
