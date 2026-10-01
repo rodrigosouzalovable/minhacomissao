@@ -240,6 +240,16 @@ export default function EditarAcordo() {
         comissao_total: calculo.comissaoTotal,
         observacoes: validated.observacoes,
       };
+      if ((validated.clienteTelefone || '') !== telefoneOriginal) {
+        updatePayload.telefone_confirmado_em = null;
+        updatePayload.telefone_confirmado_por = null;
+        updatePayload.termo_formalizacao_status = 'pendente';
+        updatePayload.termo_formalizacao_metodo = null;
+        updatePayload.termo_formalizado_em = null;
+        updatePayload.termo_formalizado_por = null;
+        updatePayload.termo_meta_contato_id = null;
+        updatePayload.termo_meta_instancia_id = null;
+      }
       // Admin: reativar acordo se estava quebrado/cancelado
       if (isAdmin) {
         if (empresa !== empresaOriginal) {
