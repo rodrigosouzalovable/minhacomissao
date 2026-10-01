@@ -62,7 +62,7 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
     const localizarConversas = async () => {
       setProcurandoConversa(true);
       setErroBuscaConversa(null);
-      const { data: contatos, error } = await (supabase as any)
+      const { data: contatos, error } = await supabase
         .rpc('localizar_conversas_meta_por_telefone', { _telefone: telefone });
 
       if (!ativo) return;
@@ -74,7 +74,7 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
         return;
       }
 
-      const encontradas = (contatos || []).map((contato: any) => ({
+      const encontradas = (contatos || []).map((contato) => ({
         contatoId: contato.contato_id,
         instanciaId: contato.instancia_id,
         telefone: contato.telefone,
