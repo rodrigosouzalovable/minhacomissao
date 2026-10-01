@@ -21,6 +21,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const auto = body?.auto === true;
     const force = body?.force === true;
+    const completeUtility = body?.complete_utility === true && !auto;
 
     if (!auto) {
       const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
@@ -80,7 +81,11 @@ Deno.serve(async (req) => {
     });
 
     const audit = await supabase.functions.invoke("meta-templates-auditar-instancias", {
-      body: { auto: true, dry_run: false },
+      body: {
+        auto: true,
+        dry_run: false,
+        utility_approved_only: completeUtility,
+      },
     });
 
     return json({

@@ -800,7 +800,8 @@ export default function ConfigurarMeta() {
       if ((data as any)?.success === false) throw new Error((data as any)?.error || "falha");
       const total = Number((data as any)?.enfileirados || 0);
       if (total === 0) {
-        toast.message("Nenhum modelo aprovado disponível para copiar agora.", { id: toastId });
+        toast.dismiss(toastId);
+        toast.message("Nenhum modelo aprovado disponível para copiar agora.", { duration: 4000 });
       } else {
         toast.success(
           `${total} modelos na fila. Números tier 250 recebem no máximo 2 templates de utilidade por dia; tier 2 mil mantém o fluxo atual.`,
@@ -809,7 +810,8 @@ export default function ConfigurarMeta() {
       }
       carregar();
     } catch (e: any) {
-      toast.error("Não foi possível montar a fila: " + (e?.message || e), { id: toastId });
+      toast.dismiss(toastId);
+      toast.error("Não foi possível montar a fila: " + (e?.message || e));
     }
   };
 
@@ -1093,12 +1095,19 @@ export default function ConfigurarMeta() {
     setSincronizando("__all__");
     try {
       const { data, error } = await supabase.functions.invoke("meta-templates-sync-diario", {
-        body: { force: true },
+        body: { force: true, complete_utility: true },
       });
       if (error) throw error;
       const erros = Array.isArray(data?.failures) ? data.failures.length : 0;
-      if (erros) toast.warning(`${data?.synced || 0} templates sincronizados; ${erros} instância(s) com ressalva`);
-      else toast.success(`${data?.synced || 0} templates sincronizados`);
+      const enfileirados = Number(data?.audit?.enfileirados || 0);
+      const afetadas = Number(data?.audit?.instancias_afetadas || 0);
+      const ignoradas = Array.isArray(data?.audit?.ignoradas) ? data.audit.ignoradas.length : 0;
+      const resumoAplicacao = enfileirados > 0
+        ? ` · ${enfileirados} Utility na fila de ${afetadas} instância(s) GREEN`
+        : " · cobertura Utility conferida, sem novos itens";
+      const resumoIgnoradas = ignoradas > 0 ? ` · ${ignoradas} ignorada(s) por qualidade ou bloqueio` : "";
+      if (erros) toast.warning(`${data?.synced || 0} templates sincronizados; ${erros} instância(s) com ressalva${resumoAplicacao}${resumoIgnoradas}`, { duration: 9000 });
+      else toast.success(`${data?.synced || 0} templates sincronizados${resumoAplicacao}${resumoIgnoradas}`, { duration: 9000 });
       await Promise.all([carregar(), carregarEstadoSyncTemplates()]);
     } catch (error) {
       toast.error("Erro ao sincronizar: " + (error instanceof Error ? error.message : "falha inesperada"));

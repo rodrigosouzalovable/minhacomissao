@@ -30,6 +30,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const dryRun = body?.dry_run !== false;
+    const utilityApprovedOnly = body?.utility_approved_only === true;
     // Modo automático (cron diário): roda sem token de usuário, sempre aplicando.
     const auto = body?.auto === true;
 
@@ -46,18 +47,21 @@ Deno.serve(async (req) => {
 
 
     // ===== Modelos marcados para injeção =====
-    const { data: marcados } = await supabase
+    let modelosQuery = supabase
       .from("meta_templates_mestre")
-      .select("id, nome, idioma, criado_por")
-      .eq("injetar_em_novos", true)
-      .in("categoria", ["UTILITY", "MARKETING"])
+      .select("id, nome, idioma, criado_por, categoria")
       .eq("reclassificado_marketing", false)
       .order("criado_em", { ascending: true });
+    modelosQuery = utilityApprovedOnly
+      ? modelosQuery.eq("categoria", "UTILITY")
+      : modelosQuery.eq("injetar_em_novos", true).in("categoria", ["UTILITY", "MARKETING"]);
+    const { data: marcados } = await modelosQuery;
     const lista = ((marcados as any[]) || []).map((r) => ({
       id: r.id as string,
       nome: r.nome as string,
       idioma: String(r.idioma || "pt_BR"),
       criado_por: r.criado_por as string | null,
+      categoria: String(r.categoria || "").toUpperCase(),
     })).filter((r) => !!r.criado_por);
     if (lista.length === 0) {
       return json({ success: true, modelos: 0, erro_amigavel: "nenhum_modelo_marcado", instancias: [] });
@@ -76,6 +80,28 @@ Deno.serve(async (req) => {
       .eq("provider", "meta");
 
     const insts = ((instsRaw as any[]) || []).filter((i) => !idsParceiros.has(i.id));
+
+    // Na sincronização manual completa, a referência é formada somente por
+    // modelos Utility que já estejam APPROVED em ao menos uma instância do
+    // mesmo proprietário. Isso impede copiar um rascunho ou misturar donos.
+    const modelosAprovadosPorDono = new Map<string, Set<string>>();
+    if (utilityApprovedOnly && insts.length > 0) {
+      const donoPorInstancia = new Map<string, string>(
+        insts.filter((i) => i.user_id).map((i) => [i.id, i.user_id]),
+      );
+      const { data: aprovadosReais } = await supabase
+        .from("meta_whatsapp_templates")
+        .select("instancia_id, nome_template, idioma, categoria, status")
+        .in("instancia_id", insts.map((i) => i.id))
+        .eq("status", "approved")
+        .eq("categoria", "UTILITY");
+      for (const r of ((aprovadosReais as any[]) || [])) {
+        const dono = donoPorInstancia.get(r.instancia_id);
+        if (!dono) continue;
+        if (!modelosAprovadosPorDono.has(dono)) modelosAprovadosPorDono.set(dono, new Set());
+        modelosAprovadosPorDono.get(dono)!.add(`${r.nome_template}|${String(r.idioma || "pt_BR")}`);
+      }
+    }
 
     const motivoIgnorar = (i: any): string | null => {
       if (!i.waba_id || !i.access_token) return "sem credenciais da Meta";
@@ -149,7 +175,11 @@ Deno.serve(async (req) => {
     }
 
     const relatorio = elegiveis.map((i) => {
-      const modelosDoProprietario = lista.filter((m) => m.criado_por === i.user_id);
+      const aprovadosDoDono = modelosAprovadosPorDono.get(i.user_id) || new Set<string>();
+      const modelosDoProprietario = lista.filter((m) =>
+        m.criado_por === i.user_id &&
+        (!utilityApprovedOnly || aprovadosDoDono.has(`${m.nome}|${m.idioma}`))
+      );
       const tem = jaTem.get(i.id) || new Set<string>();
       const temNome = jaTemNome.get(i.id) || new Set<string>();
       const fila = naFila.get(i.id) || new Set<string>();
@@ -180,6 +210,7 @@ Deno.serve(async (req) => {
 
     const resposta = {
       success: true,
+      modo: utilityApprovedOnly ? "utility_aprovados" : "marcados_automaticos",
       modelos: lista.length,
       verificadas: relatorio.length,
       completas,
