@@ -876,6 +876,13 @@
       "when": 1790887375102,
       "tag": "0124_add_agreement_formalization_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1790889503651,
+      "tag": "0125_localizar_conversas_meta_para_formalizacao",
+      "breakpoints": true
     }
   ]
 }
