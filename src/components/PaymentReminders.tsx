@@ -1,3 +1,4 @@
+/* @refresh reset */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { checkUazapiConnection, isResultConnected } from '@/lib/uazapiConnectionCache';
 import { Link } from 'react-router-dom';

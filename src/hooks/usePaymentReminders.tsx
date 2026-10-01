@@ -1,10 +1,11 @@
+/* @refresh reset */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useUserRole } from '@/hooks/useUserRole';
 import { format, addDays } from 'date-fns';
-import { useOverdueInstallmentsQuery } from '@/hooks/useOverdueInstallments';
+import type { OverdueInstallment } from '@/hooks/useOverdueInstallments';
 
 interface PaymentReminder {
   id: string;
@@ -140,10 +141,44 @@ export function usePaymentReminders() {
     refetchIntervalInBackground: false,
   });
 
-  const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useOverdueInstallmentsQuery({
-    userId: user?.id,
-    adminId,
-    isAdmin,
+  const { data: parcelasVencidas = [], isLoading: isLoadingVencidas } = useQuery({
+    queryKey: ['overdue-reminders', user?.id, adminId, isAdmin],
+    queryFn: async () => {
+      if (!user || (!isAdmin && userIds.length === 0)) return [];
+      const hoje = format(new Date(), 'yyyy-MM-dd');
+      let query = supabase
+        .from('pagamentos')
+        .select(`
+          id, acordo_id, numero_parcela, data_prevista, valor_parcela,
+          acordos!inner(cliente_nome, cliente_cpf, cliente_telefone, user_id, status)
+        `)
+        .eq('status', 'pendente')
+        .eq('acordos.status', 'ativo')
+        .lt('data_prevista', hoje)
+        .order('data_prevista', { ascending: true });
+      if (!isAdmin) query = query.in('acordos.user_id', userIds);
+      const { data, error } = await query;
+      if (error) throw error;
+      const items = (data || []).map((pagamento: any) => ({
+        id: pagamento.id,
+        acordo_id: pagamento.acordo_id,
+        numero_parcela: pagamento.numero_parcela,
+        data_prevista: pagamento.data_prevista,
+        valor_parcela: pagamento.valor_parcela,
+        cliente_nome: pagamento.acordos.cliente_nome,
+        cliente_cpf: pagamento.acordos.cliente_cpf,
+        cliente_telefone: pagamento.acordos.cliente_telefone,
+        user_id: pagamento.acordos.user_id,
+        tipo: 'vencido',
+        categoria: 'pagamento',
+      })) as OverdueInstallment[];
+      return filterParcelsWithLaterPaid(items);
+    },
+    enabled: !!user,
+    staleTime: 3 * 60 * 1000,
+    refetchInterval: () => (document.visibilityState === 'visible' ? 10 * 60 * 1000 : false),
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   // Buscar retornos pendentes
