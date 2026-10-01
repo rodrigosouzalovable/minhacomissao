@@ -1,3 +1,8 @@
+# Formalização obrigatória de acordos
+- [x] Confirmar o telefone real antes de gravar acordos em todos os lançamentos.
+- [x] Exigir envio pela conversa oficial da negociação ou download do termo para finalizar.
+- [ ] Reabrir automaticamente formalizações interrompidas e termos após alteração do telefone.
+
 # Roadmap
 
 - [x] Criar base e configuração separadas para candidatos a resposta automática.

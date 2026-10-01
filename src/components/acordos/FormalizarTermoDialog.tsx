@@ -39,7 +39,7 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
   const baixar = async () => {
     setWorking('download');
     try {
-      gerarTermoAcordoPdf({ acordo, pagamentos, salvar: true });
+      await gerarTermoAcordoPdf({ acordo, pagamentos, salvar: true });
       await concluir('download');
       toast({ title: 'Termo emitido', description: 'O download foi iniciado e o acordo foi formalizado.' });
       onComplete();
@@ -52,7 +52,7 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
     if (!metaOrigem) return;
     setWorking('whatsapp');
     try {
-      const { doc, nomeArquivo } = gerarTermoAcordoPdf({ acordo, pagamentos, salvar: false });
+      const { doc, nomeArquivo } = await gerarTermoAcordoPdf({ acordo, pagamentos, salvar: false });
       const blob = doc.output('blob');
       const destino = (metaOrigem.telefone || metaOrigem.bsuid || 'contato').replace(/\D/g, '');
       const path = `${metaOrigem.instanciaId}/${destino}/${Date.now()}-${nomeArquivo}`;
