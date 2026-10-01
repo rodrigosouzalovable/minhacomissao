@@ -1257,7 +1257,7 @@ function ChaveApiCard() {
 
         <p className="text-xs text-muted-foreground">
           As chaves ficam guardadas apenas no backend e nunca são exibidas de volta. O sistema usa as contas pela ordem
-          acima e passa automaticamente à próxima ao atingir 4.800 requisições. O teste consome 1 consulta do contador mensal.
+          acima e passa automaticamente à próxima ao atingir 4.750 requisições. O teste consome 1 consulta do contador mensal.
         </p>
       </CardContent>
     </Card>
