@@ -59,6 +59,7 @@ import {
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
 import { MetaInstanceHealthBanner } from '@/components/inbox/meta/MetaInstanceHealthBanner';
+import { MetaConversationCost } from '@/components/inbox/meta/MetaConversationCost';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -2411,6 +2412,12 @@ export default function InboxMeta() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
+                  {contatoAtivo.folder_id == null && (
+                    <MetaConversationCost
+                      contatoId={contatoAtivo.id}
+                      refreshKey={mensagens.map((m) => `${m.id}:${m.status_envio || ''}`).join('|')}
+                    />
+                  )}
                   {qualificacaoAtivaNaCaixa && (
                     <Button
                       variant="outline"

@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Em aberto
+ - [ ] Validar em uma entrega real da Meta a mudança do custo de Estimado para Confirmado no cabeçalho da conversa PADRÃO
  - [ ] Confirmar a primeira publicação diária real do portal; 528.956 parcelas já estão validadas e aguardam confirmação, com novos uploads persistentes no servidor
 - [x] Registrar ciclos exatos de recuperação Meta e mostrar média/mediana entre o primeiro envio UAZAPI e o retorno confirmado a GREEN, sem novo cron
 - [x] Corrigir o envio de áudio no Inbox Meta aceitando com segurança os caminhos atual e legado `meta/`, sem liberar arquivos de outra conversa
@@ -64,6 +65,7 @@
 - [ ] Validar a primeira captação completa com a nova meta de 1.000 WhatsApps confirmados e teto de 650 consultas
 
 ## Concluído
+- [x] Restringir o IAGO à caixa PADRÃO e exibir no cabeçalho o custo mensal detalhado por conversa
 - [x] Reativar automaticamente números Meta próprios RED/YELLOW aptos na rotina existente, preservando bloqueios reais e a medição até GREEN
 - [x] Exibir no card da conversa a identificação persistente “Não é o cliente”, com atualização imediata ao marcar ou desfazer
 - [x] Manter conversas escaladas pelo IAGO com “Aguardando Humano” mesmo sem atendente elegível, preservando a exclusão de admins do rodízio
