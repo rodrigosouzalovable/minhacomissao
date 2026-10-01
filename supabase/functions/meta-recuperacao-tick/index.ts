@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
         .eq("ativo", true)
         .eq("user_id", RECUPERACAO_OWNER_ID)
         .eq("provider", "meta")
-        .eq("recuperacao_ativa", false)
+        .or("recuperacao_ativa.eq.false,recuperacao_ativa.is.null")
         .in("saude_quality", ["YELLOW", "RED"]);
       if (instanciaId) reconciliacao = reconciliacao.eq("id", instanciaId);
 
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
             green_contado_dia: null,
           })
           .eq("id", candidata.id)
-          .eq("recuperacao_ativa", false);
+          .or("recuperacao_ativa.eq.false,recuperacao_ativa.is.null");
         if (ativacaoError) throw ativacaoError;
         reativadas.push(candidata.nome || candidata.display_phone || candidata.id);
       }
