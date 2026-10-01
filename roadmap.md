@@ -3,6 +3,7 @@
 - [x] Exigir envio pela conversa oficial da negociação ou download do termo para finalizar.
 - [x] Reabrir automaticamente formalizações interrompidas e termos após alteração do telefone.
 - [x] Localizar a conversa Meta pelo telefone confirmado e permitir escolher quando houver mais de uma.
+- [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
 
