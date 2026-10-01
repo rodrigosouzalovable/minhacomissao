@@ -131,6 +131,14 @@ export type Database = {
           parcelas: number
           percentual_comissao: number
           status: string
+          telefone_confirmado_em: string | null
+          telefone_confirmado_por: string | null
+          termo_formalizacao_metodo: string | null
+          termo_formalizacao_status: string
+          termo_formalizado_em: string | null
+          termo_formalizado_por: string | null
+          termo_meta_contato_id: string | null
+          termo_meta_instancia_id: string | null
           user_id: string
           valor_parcela: number
           valor_total: number
@@ -156,6 +164,14 @@ export type Database = {
           parcelas: number
           percentual_comissao: number
           status?: string
+          telefone_confirmado_em?: string | null
+          telefone_confirmado_por?: string | null
+          termo_formalizacao_metodo?: string | null
+          termo_formalizacao_status?: string
+          termo_formalizado_em?: string | null
+          termo_formalizado_por?: string | null
+          termo_meta_contato_id?: string | null
+          termo_meta_instancia_id?: string | null
           user_id: string
           valor_parcela: number
           valor_total: number
@@ -181,6 +197,14 @@ export type Database = {
           parcelas?: number
           percentual_comissao?: number
           status?: string
+          telefone_confirmado_em?: string | null
+          telefone_confirmado_por?: string | null
+          termo_formalizacao_metodo?: string | null
+          termo_formalizacao_status?: string
+          termo_formalizado_em?: string | null
+          termo_formalizado_por?: string | null
+          termo_meta_contato_id?: string | null
+          termo_meta_instancia_id?: string | null
           user_id?: string
           valor_parcela?: number
           valor_total?: number
@@ -196,10 +220,27 @@ export type Database = {
             referencedRelation: "user_whatsapp_instances"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "acordos_termo_meta_contato_id_fkey"
+            columns: ["termo_meta_contato_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordos_termo_meta_instancia_id_fkey"
+            columns: ["termo_meta_instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
         ]
       }
       acordos_devedor: {
         Row: {
+          cliente_nome: string | null
+          cliente_telefone: string | null
+          credor: string | null
           criado_em: string
           criado_por: string
           data_primeiro_vencimento: string
@@ -208,9 +249,20 @@ export type Database = {
           num_parcelas: number
           observacoes: string | null
           status: string
+          telefone_confirmado_em: string | null
+          telefone_confirmado_por: string | null
+          termo_formalizacao_metodo: string | null
+          termo_formalizacao_status: string
+          termo_formalizado_em: string | null
+          termo_formalizado_por: string | null
+          termo_meta_contato_id: string | null
+          termo_meta_instancia_id: string | null
           valor_total: number
         }
         Insert: {
+          cliente_nome?: string | null
+          cliente_telefone?: string | null
+          credor?: string | null
           criado_em?: string
           criado_por: string
           data_primeiro_vencimento: string
@@ -219,9 +271,20 @@ export type Database = {
           num_parcelas: number
           observacoes?: string | null
           status?: string
+          telefone_confirmado_em?: string | null
+          telefone_confirmado_por?: string | null
+          termo_formalizacao_metodo?: string | null
+          termo_formalizacao_status?: string
+          termo_formalizado_em?: string | null
+          termo_formalizado_por?: string | null
+          termo_meta_contato_id?: string | null
+          termo_meta_instancia_id?: string | null
           valor_total: number
         }
         Update: {
+          cliente_nome?: string | null
+          cliente_telefone?: string | null
+          credor?: string | null
           criado_em?: string
           criado_por?: string
           data_primeiro_vencimento?: string
@@ -230,9 +293,32 @@ export type Database = {
           num_parcelas?: number
           observacoes?: string | null
           status?: string
+          telefone_confirmado_em?: string | null
+          telefone_confirmado_por?: string | null
+          termo_formalizacao_metodo?: string | null
+          termo_formalizacao_status?: string
+          termo_formalizado_em?: string | null
+          termo_formalizado_por?: string | null
+          termo_meta_contato_id?: string | null
+          termo_meta_instancia_id?: string | null
           valor_total?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "acordos_devedor_termo_meta_contato_id_fkey"
+            columns: ["termo_meta_contato_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordos_devedor_termo_meta_instancia_id_fkey"
+            columns: ["termo_meta_instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_notificacao_instancias: {
         Row: {
@@ -11618,6 +11704,14 @@ export type Database = {
           parcelas: number
           percentual_comissao: number
           status: string
+          telefone_confirmado_em: string | null
+          telefone_confirmado_por: string | null
+          termo_formalizacao_metodo: string | null
+          termo_formalizacao_status: string
+          termo_formalizado_em: string | null
+          termo_formalizado_por: string | null
+          termo_meta_contato_id: string | null
+          termo_meta_instancia_id: string | null
           user_id: string
           valor_parcela: number
           valor_total: number
@@ -12016,6 +12110,14 @@ export type Database = {
           parcelas: number
           percentual_comissao: number
           status: string
+          telefone_confirmado_em: string | null
+          telefone_confirmado_por: string | null
+          termo_formalizacao_metodo: string | null
+          termo_formalizacao_status: string
+          termo_formalizado_em: string | null
+          termo_formalizado_por: string | null
+          termo_meta_contato_id: string | null
+          termo_meta_instancia_id: string | null
           user_id: string
           valor_parcela: number
           valor_total: number
