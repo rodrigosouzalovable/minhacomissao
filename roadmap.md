@@ -16,3 +16,4 @@
 - [x] Registrar números confirmados sem WhatsApp e removê-los automaticamente das novas listas do Envio Meta.
 - [x] Avisar parcelas atrasadas às 9h e 15h BRT, uma vez por janela, com acesso direto ao acordo e exibição em Retornos.
 - [x] Corrigir o aviso travado de templates e completar HSM Utility aprovados apenas nas instâncias GREEN do mesmo dono.
+- [x] Corrigir a calculadora UME: à vista sem juros e acréscimo de 10% somente no parcelamento.
