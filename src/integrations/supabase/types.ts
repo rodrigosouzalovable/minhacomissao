@@ -12213,6 +12213,17 @@ export type Database = {
         Args: { p_lock_minutes?: number; p_token: string }
         Returns: boolean
       }
+      gm_auto_resposta_ranking: {
+        Args: never
+        Returns: {
+          amostra: number
+          cidade: string
+          confirmados: number
+          nicho: string
+          score: number
+          taxa: number
+        }[]
+      }
       gm_auto_resposta_release: {
         Args: { p_erro?: string; p_status?: string; p_token: string }
         Returns: undefined
@@ -12271,6 +12282,10 @@ export type Database = {
           telefone_internacional: string
           total_avaliacoes: number
         }[]
+      }
+      gm_registrar_candidatos_auto_resposta: {
+        Args: { p_itens: Json }
+        Returns: number
       }
       gm_resumo_prospeccao_admin: {
         Args: never
