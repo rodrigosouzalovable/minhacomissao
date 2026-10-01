@@ -2480,6 +2480,22 @@ export default function InboxMeta() {
                   >
                     <Handshake className="h-3.5 w-3.5" />
                   </Button>
+                   <Button
+                     size="sm"
+                     variant="outline"
+                     className="h-7 w-7 p-0"
+                     onClick={() => navigate('/acordos/novo', { state: { metaOrigem: {
+                       contatoId: contatoAtivo.id,
+                       instanciaId: contatoAtivo.instancia_id,
+                       telefone: contatoAtivo.telefone,
+                       bsuid: contatoAtivo.bsuid,
+                       clienteNome: nomeExibido(contatoAtivo),
+                     } } })}
+                     title="Lançar acordo desta negociação"
+                     aria-label="Lançar acordo desta negociação"
+                   >
+                     <Plus className="h-3.5 w-3.5" />
+                   </Button>
 
                   {(() => {
                     const ultimaEntrada = [...mensagens].reverse().find((m) => m.direcao === 'entrada');
