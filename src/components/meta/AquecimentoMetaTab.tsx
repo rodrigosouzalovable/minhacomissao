@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { exportarParaExcel } from "@/lib/exportExcel";
 
 const AUTO_RESP_PAGE_SIZE = 10;
+const CANDIDATOS_PAGE_SIZE = 10;
 
 function telefoneBr(valor: string) {
   const d = String(valor || "").replace(/\D/g, "");
@@ -37,6 +38,9 @@ export function AquecimentoMetaTab() {
   const [tetoEdit, setTetoEdit] = useState<string>("");
   const [buscaAuto, setBuscaAuto] = useState("");
   const [paginaAuto, setPaginaAuto] = useState(0);
+  const [buscaCandidato, setBuscaCandidato] = useState("");
+  const [paginaCandidato, setPaginaCandidato] = useState(0);
+  const [statusCandidato, setStatusCandidato] = useState("disponiveis");
 
   const { data: trilhas, isLoading } = useQuery({
     queryKey: ["aq-trilhas", dia],
@@ -173,6 +177,54 @@ export function AquecimentoMetaTab() {
     },
   });
 
+  const { data: configCandidatos } = useQuery({
+    queryKey: ["gm-auto-resposta-config"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("google_maps_auto_resposta_config").select("*").eq("id", true).single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: candidatos, isLoading: carregandoCandidatos } = useQuery({
+    queryKey: ["gm-auto-resposta-candidatos", paginaCandidato, buscaCandidato, statusCandidato],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const inicio = paginaCandidato * CANDIDATOS_PAGE_SIZE;
+      let query = supabase.from("google_maps_auto_resposta_candidatos")
+        .select("*", { count: "exact" }).order("pontuacao", { ascending: false })
+        .order("captado_em", { ascending: false }).range(inicio, inicio + CANDIDATOS_PAGE_SIZE - 1);
+      if (statusCandidato === "disponiveis") query = query.in("status", ["novo", "exportado", "em_teste"]);
+      else if (statusCandidato !== "todos") query = query.eq("status", statusCandidato);
+      const termo = buscaCandidato.trim().replace(/[,%()]/g, "");
+      if (termo) query = query.or(`telefone.ilike.%${termo}%,nome.ilike.%${termo}%,nicho.ilike.%${termo}%,cidade.ilike.%${termo}%`);
+      const { data, error, count } = await query;
+      if (error) throw error;
+      return { itens: data ?? [], total: count ?? 0 };
+    },
+  });
+
+  const { data: resumoCandidatos } = useQuery({
+    queryKey: ["gm-auto-resposta-resumo", dia],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const inicio = new Date(`${dia}T00:00:00-03:00`).toISOString();
+      const [{ count: hoje }, { count: exportados }, { count: confirmados }] = await Promise.all([
+        supabase.from("google_maps_auto_resposta_candidatos").select("id", { count: "exact", head: true }).gte("captado_em", inicio),
+        supabase.from("google_maps_auto_resposta_candidatos").select("id", { count: "exact", head: true }).in("status", ["exportado", "em_teste"]),
+        supabase.from("google_maps_auto_resposta_candidatos").select("id", { count: "exact", head: true }).eq("status", "confirmado"),
+      ]);
+      const { data: buscas } = await supabase.from("google_maps_buscas")
+        .select("requisicoes_places,custo_estimado_usd").eq("origem", "auto_resposta_goias").gte("created_at", inicio);
+      return {
+        hoje: hoje ?? 0, exportados: exportados ?? 0, confirmados: confirmados ?? 0,
+        requisicoes: (buscas ?? []).reduce((s, b) => s + Number(b.requisicoes_places || 0), 0),
+        custo: (buscas ?? []).reduce((s, b) => s + Number(b.custo_estimado_usd || 0), 0),
+      };
+    },
+  });
+
   const alternarSelecao = useMutation({
     mutationFn: async ({ id, valor }: { id: string; valor: boolean }) => {
       const { error } = await supabase
@@ -236,6 +288,32 @@ export function AquecimentoMetaTab() {
     onError: (e: any) => toast.error(e?.message ?? "Falha ao enviar relatório"),
   });
 
+  const captarCandidatos = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("google-maps-auto-resposta-captar", { body: { forcar: true } });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Não foi possível executar a captação");
+      return data;
+    },
+    onSuccess: (data: any) => {
+      toast.success(data?.skipped ? `Captação: ${String(data.skipped).replace(/_/g, " ")}` : `${Number(data?.adicionados ?? 0)} novos candidatos adicionados`);
+      qc.invalidateQueries({ queryKey: ["gm-auto-resposta-candidatos"] });
+      qc.invalidateQueries({ queryKey: ["gm-auto-resposta-resumo"] });
+      qc.invalidateQueries({ queryKey: ["gm-auto-resposta-config"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Falha na captação"),
+  });
+
+  const marcarEmTeste = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("google_maps_auto_resposta_candidatos")
+        .update({ status: "em_teste", em_teste_em: new Date().toISOString(), atualizado_em: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["gm-auto-resposta-candidatos"] }),
+    onError: (e: any) => toast.error(e?.message ?? "Não foi possível atualizar o candidato"),
+  });
+
   const copiarAutoRespondedores = async () => {
     const { data, error } = await supabase
       .from("meta_aquecimento_auto_respondedores")
@@ -272,6 +350,31 @@ export function AquecimentoMetaTab() {
       { chave: "primeira_deteccao_em", titulo: "Primeira detecção" },
       { chave: "ultima_deteccao_em", titulo: "Última detecção" },
     ], "contatos-resposta-automatica");
+  };
+
+  const exportarCandidatos = async () => {
+    const { data, error } = await supabase.from("google_maps_auto_resposta_candidatos")
+      .select("id,telefone,nome,nicho,cidade,captado_em").eq("status", "novo")
+      .order("pontuacao", { ascending: false }).limit(5000);
+    if (error) return toast.error("Não foi possível preparar o Excel");
+    if (!data?.length) return toast.info("Não há candidatos novos para exportar");
+    await exportarParaExcel(data.map((item) => ({
+      ...item, telefone: telefoneBr(item.telefone), captado_em: new Date(item.captado_em).toLocaleString("pt-BR"),
+    })), [
+      { chave: "nome", titulo: "Nome" }, { chave: "telefone", titulo: "Telefone" },
+      { chave: "nome", titulo: "Empresa" }, { chave: "nicho", titulo: "Nicho" },
+      { chave: "cidade", titulo: "Cidade" }, { chave: "captado_em", titulo: "Data da captação" },
+    ], `candidatos-resposta-automatica-${dia}`);
+    const ids = data.map((item) => item.id);
+    const agora = new Date().toISOString();
+    const { error: updateError } = await supabase.from("google_maps_auto_resposta_candidatos")
+      .update({ status: "exportado", exportado_em: agora, atualizado_em: agora }).in("id", ids);
+    if (updateError) toast.warning("Excel baixado, mas o status dos contatos não foi atualizado");
+    else {
+      toast.success(`${data.length} candidatos exportados`);
+      qc.invalidateQueries({ queryKey: ["gm-auto-resposta-candidatos"] });
+      qc.invalidateQueries({ queryKey: ["gm-auto-resposta-resumo"] });
+    }
   };
 
   const gasto = Number(orcamento?.gasto_reais ?? 0);
@@ -518,6 +621,79 @@ export function AquecimentoMetaTab() {
               })}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Building2 className="h-4 w-4" /> Candidatos a resposta automática
+              <Badge variant="secondary">{candidatos?.total ?? 0}</Badge>
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => captarCandidatos.mutate()} disabled={captarCandidatos.isPending}>
+                {captarCandidatos.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+                Captar agora
+              </Button>
+              <Button size="sm" onClick={exportarCandidatos} disabled={!candidatos?.total}>
+                <Download className="h-4 w-4 mr-1" /> Baixar novos
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Captação automática em Goiás: até {configCandidatos?.meta_whatsapps_dia ?? 200} WhatsApps novos por dia. Nenhuma mensagem é enviada automaticamente.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.hoje ?? 0}</div><div className="text-xs text-muted-foreground">captados hoje</div></div>
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.requisicoes ?? 0}</div><div className="text-xs text-muted-foreground">consultas hoje</div></div>
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">US$ {(resumoCandidatos?.custo ?? 0).toFixed(2)}</div><div className="text-xs text-muted-foreground">custo estimado</div></div>
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.exportados ?? 0}</div><div className="text-xs text-muted-foreground">exportados / em teste</div></div>
+            <div className="rounded-md border p-2"><div className="text-lg font-semibold">{resumoCandidatos?.confirmados ?? 0}</div><div className="text-xs text-muted-foreground">confirmados</div></div>
+          </div>
+          {configCandidatos?.ultimo_erro && <div role="alert" className="text-xs text-destructive">Última falha: {configCandidatos.ultimo_erro}</div>}
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-[240px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input className="pl-9" placeholder="Buscar telefone, empresa, nicho ou cidade" value={buscaCandidato}
+                onChange={(event) => { setBuscaCandidato(event.target.value); setPaginaCandidato(0); }} />
+            </div>
+            <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={statusCandidato}
+              onChange={(event) => { setStatusCandidato(event.target.value); setPaginaCandidato(0); }}>
+              <option value="disponiveis">Disponíveis</option><option value="novo">Novos</option>
+              <option value="exportado">Exportados</option><option value="em_teste">Em teste</option>
+              <option value="confirmado">Confirmados</option><option value="todos">Todos</option>
+            </select>
+          </div>
+          {carregandoCandidatos ? <p className="text-sm text-muted-foreground">Carregando…</p> : !candidatos?.total ? (
+            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Nenhum candidato encontrado neste filtro.</div>
+          ) : <>
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full min-w-[980px] text-sm">
+                <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground"><tr>
+                  <th className="p-2 font-medium">WhatsApp</th><th className="p-2 font-medium">Empresa</th>
+                  <th className="p-2 font-medium">Nicho / cidade</th><th className="p-2 font-medium">Perfil</th>
+                  <th className="p-2 font-medium">Pontuação</th><th className="p-2 font-medium">Status</th><th className="p-2 font-medium">Ação</th>
+                </tr></thead>
+                <tbody className="divide-y">{(candidatos.itens as any[]).map((item) => <tr key={item.id}>
+                  <td className="p-2 font-medium whitespace-nowrap">{telefoneBr(item.telefone)}</td>
+                  <td className="p-2">{item.nome || "—"}</td><td className="p-2">{[item.nicho, item.cidade].filter(Boolean).join(" · ") || "—"}</td>
+                  <td className="p-2">{item.avaliacao ? `${item.avaliacao} · ${item.total_avaliacoes ?? 0} avaliações` : "Sem avaliação"}</td>
+                  <td className="p-2" title={item.motivo_pontuacao || ""}><Badge variant="outline">{Number(item.pontuacao).toFixed(0)}</Badge></td>
+                  <td className="p-2"><Badge variant={item.status === "confirmado" ? "default" : "secondary"}>{String(item.status).replace("_", " ")}</Badge></td>
+                  <td className="p-2">{["novo", "exportado"].includes(item.status) && <Button size="sm" variant="outline" onClick={() => marcarEmTeste.mutate(item.id)}>Marcar em teste</Button>}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>{candidatos.total} candidatos</span><div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={paginaCandidato === 0} onClick={() => setPaginaCandidato((p) => Math.max(0, p - 1))}>Anterior</Button>
+                <Button size="sm" variant="outline" disabled={(paginaCandidato + 1) * CANDIDATOS_PAGE_SIZE >= candidatos.total} onClick={() => setPaginaCandidato((p) => p + 1)}>Próxima</Button>
+              </div>
+            </div>
+          </>}
         </CardContent>
       </Card>
 
