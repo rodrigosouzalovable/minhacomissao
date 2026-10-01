@@ -1,7 +1,7 @@
 # Decisões técnicas
 
 - A saúde do webhook Meta distingue indisponibilidade da consulta de inscrição incorreta confirmada; só alerta após tentativa de recuperação e confirmação, para evitar avisos falsos por timeout.
-- Valores de parcelas pendentes próprias usam RPC atômica; vencimentos e baixas de qualquer acordo usam RPCs autenticadas específicas, mantendo valores, comissões e responsável protegidos.
+- Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
 
 - Inbox Meta: mídia valida caminhos atual/legado; IAGO atende exclusivamente a PADRÃO sem follow-up, escala por ordem sem admins e mantém “Aguardando Humano” sem atendente apto; custo mensal por conversa é alimentado pelos eventos Meta e atualizado sem polling novo.
 - Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.
