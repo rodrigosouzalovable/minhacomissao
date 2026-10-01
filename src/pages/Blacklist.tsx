@@ -28,6 +28,7 @@ interface BlacklistRow {
   caixa_id: string | null;
   caixa_nome: string | null;
   origem_texto: string | null;
+  categoria: string;
 }
 
 function formatarTelefone(tel: string | null, sufixo: string) {
@@ -91,10 +92,10 @@ export default function Blacklist() {
     queryFn: async () => {
       let q = supabase
         .from('meta_destinatario_supressao')
-        .select('telefone_sufixo, telefone, motivo, criado_em, instancia_id, contato_nome, credor, caixa_id, caixa_nome, origem_texto')
-        .like('motivo', 'blacklist%')
+        .select('telefone_sufixo, telefone, motivo, criado_em, instancia_id, contato_nome, credor, caixa_id, caixa_nome, origem_texto, categoria')
+        .in('categoria', ['blacklist', 'sem_whatsapp'])
         .order('criado_em', { ascending: false })
-        .limit(1000);
+        .limit(5000);
       if (instanciaFiltro !== 'todas') q = q.eq('instancia_id', instanciaFiltro);
       if (de) q = q.gte('criado_em', new Date(`${de}T00:00:00`).toISOString());
       if (ate) q = q.lte('criado_em', new Date(`${ate}T23:59:59`).toISOString());
@@ -175,7 +176,7 @@ export default function Blacklist() {
               Blacklist
             </h1>
             <p className="text-sm text-muted-foreground">
-              Clientes que pediram "Bloquear contato" e não recebem mais campanhas.
+               Contatos bloqueados por solicitação ou confirmados sem WhatsApp.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -237,6 +238,7 @@ export default function Blacklist() {
                   <TableHead>Instância de origem</TableHead>
                   <TableHead>Caixa de mensagens</TableHead>
                   <TableHead>Credor</TableHead>
+                   <TableHead>Motivo</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -244,14 +246,14 @@ export default function Blacklist() {
               <TableBody>
                 {isLoading && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Carregando...
                     </TableCell>
                   </TableRow>
                 )}
                 {!isLoading && filtradas.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Nenhum número na blacklist.
                     </TableCell>
                   </TableRow>
@@ -275,6 +277,11 @@ export default function Blacklist() {
                         : <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell>{l.credor || <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell>
+                      <Badge variant={l.categoria === 'sem_whatsapp' ? 'secondary' : 'outline'}>
+                        {l.categoria === 'sem_whatsapp' ? 'Sem WhatsApp verificado' : 'Bloqueado pelo contato'}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-sm">
                       {new Date(l.criado_em).toLocaleString('pt-BR')}
                     </TableCell>

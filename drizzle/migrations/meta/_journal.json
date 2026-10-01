@@ -862,6 +862,13 @@
       "when": 1790864754409,
       "tag": "0122_prepare_meta_instance_migration_to_default_uazapi",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1790865643013,
+      "tag": "0123_categorize_and_register_no_whatsapp_suppressions",
+      "breakpoints": true
     }
   ]
 }

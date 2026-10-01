@@ -680,6 +680,7 @@ serve(async (req) => {
                       telefone_sufixo: sufixoResp,
                       telefone: String(outroLado || '').replace(/\D/g, ''),
                       motivo: classificacaoResposta.tipo === 'optout' ? 'optout_aquecimento' : 'numero_errado_aquecimento',
+                      categoria: 'supressao',
                       instancia_id: inst.id,
                       contato_nome: nomeContato || null,
                       origem_texto: String(texto || '').slice(0, 300),

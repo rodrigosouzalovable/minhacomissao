@@ -284,6 +284,7 @@ Deno.serve(async (req) => {
     // ===== Higiene de base: remove destinatários suprimidos e blacklist =====
     // supressao_ativa -> números com falhas de entrega / sem resposta
     // blacklist_ativa -> números que pediram bloqueio pelo botão "Bloquear contato"
+    // sem_whatsapp -> bloqueio obrigatório, independente das duas chaves
     let clientesEnvio = clientes;
     let suprimidos = 0;
     let bloqueadosBlacklist = 0;
@@ -292,7 +293,7 @@ Deno.serve(async (req) => {
       .from('meta_envio_pool_config').select('supressao_ativa, blacklist_ativa, antirrepeticao_dias').eq('id', 1).maybeSingle();
     const supressaoAtiva = cfgPool?.supressao_ativa !== false;
     const blacklistAtiva = cfgPool?.blacklist_ativa !== false;
-    if (supressaoAtiva || blacklistAtiva) {
+    {
       const sufixo = (t: string) => {
         const d = String(t || '').replace(/\D+/g, '');
         return d.length >= 8 ? d.slice(-8) : d;
@@ -303,11 +304,15 @@ Deno.serve(async (req) => {
       for (let i = 0; i < sufixos.length; i += 500) {
         const { data } = await supabase
           .from('meta_destinatario_supressao')
-          .select('telefone_sufixo, motivo')
+          .select('telefone_sufixo, motivo, categoria')
           .in('telefone_sufixo', sufixos.slice(i, i + 500));
         (data || []).forEach((r: any) => {
-          const ehBlacklist = String(r.motivo || '').startsWith('blacklist');
-          if (ehBlacklist) {
+          const categoria = String(r.categoria || '');
+          const ehSemWhatsApp = categoria === 'sem_whatsapp';
+          const ehBlacklist = categoria === 'blacklist' || String(r.motivo || '').startsWith('blacklist');
+          if (ehSemWhatsApp) {
+            blacklist.add(r.telefone_sufixo);
+          } else if (ehBlacklist) {
             if (blacklistAtiva) blacklist.add(r.telefone_sufixo);
           } else if (supressaoAtiva) {
             bloqueados.add(r.telefone_sufixo);
