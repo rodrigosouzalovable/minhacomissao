@@ -1,11 +1,15 @@
 // Traduz erros técnicos de envio para uma explicação amigável ao usuário leigo.
 // Mantém o texto original disponível separadamente para debug avançado.
 
-export function humanizarErroEnvio(erroBruto?: string | null): string {
+export function humanizarErroEnvio(erroBruto?: string | null, contexto: 'mensagem' | 'midia' = 'mensagem'): string {
   const raw = (erroBruto || "").toString();
   if (!raw) return "Erro desconhecido durante o envio.";
 
   const s = raw.toLowerCase();
+
+  if (s.includes('não foi possível liberar o acesso ao arquivo anexado') || s.includes('não foi possível salvar o arquivo anexado')) {
+    return raw;
+  }
 
   if (s.includes('payload too large') || s.includes('maximum file size') || s.includes('file size')) {
     return "O arquivo ultrapassa o limite permitido. Para documentos, envie arquivos de até 100 MB.";
@@ -106,6 +110,7 @@ export function humanizarErroEnvio(erroBruto?: string | null): string {
     return "A Meta bloqueou esse envio. Pode ser bloqueio da conta, restrição do template ou permissão insuficiente.";
   }
   if (s.includes("404") || s.includes("not found")) {
+    if (contexto === 'midia') return "O arquivo ou a instância não foi encontrado para este envio. Atualize a conversa e tente novamente; se continuar, confira o acesso à caixa e a conexão da instância.";
     return "A instância ou o template não foi encontrado no servidor da Meta.";
   }
 

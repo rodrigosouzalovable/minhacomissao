@@ -932,6 +932,13 @@
       "when": 1790950957371,
       "tag": "0132_fix_blacklist_aquecimento_telefone_ambiguo",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1790972643395,
+      "tag": "0133_authorize_inbox_media_read_by_conversation",
+      "breakpoints": true
     }
   ]
 }

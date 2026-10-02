@@ -1521,7 +1521,7 @@ export default function InboxMeta() {
       setRespondendo(null);
       setArquivoParaConfirmar(null);
     } catch (e: any) {
-      toast({ title: 'Erro ao enviar mídia', description: humanizarErroEnvio(e.message), variant: 'destructive', duration: 12000 });
+      toast({ title: 'Erro ao enviar mídia', description: humanizarErroEnvio(e.message, 'midia'), variant: 'destructive', duration: 12000 });
     } finally {
       setEnviandoArquivo(false);
     }

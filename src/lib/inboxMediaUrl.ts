@@ -11,7 +11,7 @@ export async function signedInboxMediaUrl(
   expiresIn = DEFAULT_EXPIRES,
 ): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, expiresIn);
-  if (error || !data?.signedUrl) throw error || new Error('Falha ao gerar URL da mídia');
+  if (error || !data?.signedUrl) throw new Error('Não foi possível liberar o acesso ao arquivo anexado. Atualize a conversa e tente novamente. Se persistir, confira seu acesso à caixa de mensagens.');
   return data.signedUrl;
 }
 
@@ -25,7 +25,7 @@ export async function uploadInboxMedia(
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(path, file, { contentType, upsert: opts?.upsert ?? false });
-  if (error) throw error;
+  if (error) throw new Error('Não foi possível salvar o arquivo anexado. Atualize a conversa e tente novamente. Se persistir, confira seu acesso à caixa de mensagens.');
   return signedInboxMediaUrl(path, opts?.expiresIn);
 }
 
