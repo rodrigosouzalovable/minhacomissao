@@ -967,7 +967,9 @@ serve(async (req) => {
                   .eq('contato_id', contatoIdFinal)
                   .in('etiqueta_id', atendenteIds)
                   .limit(1);
-                jaTemAtendente = !!(jaAtribuido && jaAtribuido.length > 0);
+                jaTemAtendente = !!(jaAtribuido || []).find((r: any) =>
+                  atendenteRodizioIds.includes((r as any).etiqueta_id)
+                );
               }
 
               if (!jaTemAtendente) {
@@ -1038,50 +1040,9 @@ serve(async (req) => {
                   }
                 }
 
-                // ---- IAGO exclusivamente na caixa PADRÃO ----
+                // O IAGO participa do mesmo rodízio dos operadores, exclusivamente na PADRÃO.
+                // Não há mais prioridade automática, plantão ou tomada de conversa.
                 let etiquetaIagoId: string | null = null;
-                if (_folderIdContato === null) try {
-                  const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
-                  const { data: janela } = await supabase
-                    .from('meta_inbox_folder_iago_janela')
-                    .select('ativo, hora_inicio, hora_fim, fim_semana_24h')
-                    .eq('folder_id', CAIXA_PADRAO_ID)
-                    .maybeSingle();
-                  if (_folderIdContato === null) {
-                    const agoraSP = new Date(Date.now() - 3 * 60 * 60 * 1000);
-                    const minutos = agoraSP.getUTCHours() * 60 + agoraSP.getUTCMinutes();
-                    const dia = agoraSP.getUTCDay(); // 0 dom, 6 sáb
-                    const toMin = (v: any) => {
-                      const [h, m] = String(v || '00:00').split(':');
-                      return (Number(h) || 0) * 60 + (Number(m) || 0);
-                    };
-                    const ini = toMin((janela as any).hora_inicio);
-                    const fim = toMin((janela as any).hora_fim);
-                    const naJanela = ini === fim
-                      ? true
-                      : (ini < fim ? (minutos >= ini && minutos < fim) : (minutos >= ini || minutos < fim));
-                    const fimDeSemana24h = (janela as any).fim_semana_24h !== false && (dia === 0 || dia === 6);
-                    if (_folderIdContato === null || naJanela || fimDeSemana24h) {
-                      const { data: iagoCfg } = await supabase
-                        .from('iago_config').select('user_id').limit(1).maybeSingle();
-                      let nomeIago = '';
-                      if ((iagoCfg as any)?.user_id) {
-                        const { data: pi } = await supabase
-                          .from('profiles').select('nome').eq('id', (iagoCfg as any).user_id).maybeSingle();
-                        nomeIago = String((pi as any)?.nome || '').trim().toLowerCase();
-                      }
-                      if (!nomeIago) nomeIago = 'iago';
-                      const cand = atendentesRodizio.find((a: any) => {
-                        const n = String(a.nome || '').replace(/^atendente:\s*/i, '').trim().toLowerCase();
-                        return n === nomeIago || n.startsWith('iago');
-                      });
-                      if (cand) etiquetaIagoId = (cand as any).id;
-                      else console.log('[MetaWebhook] plantão IAGO ativo, mas etiqueta do IAGO não está elegível nesta caixa');
-                    }
-                  }
-                } catch (e: any) {
-                  console.error('[MetaWebhook] erro no plantão do IAGO', e?.message || e);
-                }
 
                 // ---- Match por quem realmente atendeu a conversa (envio MANUAL) ----
                 // Prioriza o nome do atendente no texto ("*Atendente X:*"); fallback: user_id do remetente.
@@ -1147,175 +1108,27 @@ serve(async (req) => {
 
 
 
-                if (_folderIdContato === null && etiquetaIagoId) {
-                  const { error: iagoErr } = await supabase
-                    .from('meta_whatsapp_contato_etiquetas')
-                    .insert({
-                      contato_id: contatoIdFinal,
-                      etiqueta_id: etiquetaIagoId,
-                      origem: 'iago_padrao_24h',
-                    } as any);
-                  const duplicada = iagoErr
-                    ? String(iagoErr.message || '').toLowerCase().includes('duplicate') || iagoErr.code === '23505'
-                    : false;
-                  if (iagoErr && !duplicada) {
-                    console.error('[MetaWebhook] falha ao aplicar IAGO na caixa PADRÃO', iagoErr.message);
-                  } else {
-                    console.log('[MetaWebhook] conversa nova atribuída ao IAGO na caixa PADRÃO', { contato_id: contatoIdFinal });
-                  }
-                } else if (atendenteAcordoId) {
-                  const { error: linkErr } = await supabase
-                    .from('meta_whatsapp_contato_etiquetas')
-                    .insert({
-                      contato_id: contatoIdFinal,
-                      etiqueta_id: atendenteAcordoId,
-                      origem: 'auto_atendente',
-                    } as any);
-                  if (linkErr) {
-                    const dup = String(linkErr.message || '').toLowerCase().includes('duplicate') || linkErr.code === '23505';
-                    if (!dup) console.error('[MetaWebhook] falha ao aplicar etiqueta atendente (acordo)', linkErr.message);
-                  } else {
-                    console.log('[MetaWebhook] etiqueta atendente aplicada via acordo', {
-                      contato_id: contatoIdFinal,
-                      atendente: atendenteAcordoNome,
-                    });
-                  }
-                } else if (atendenteRodizioIds.length > 0) {
-
-
-                  if (etiquetaIagoId) {
-                    const { error: iagoErr } = await supabase
-                      .from('meta_whatsapp_contato_etiquetas')
-                      .insert({
-                        contato_id: contatoIdFinal,
-                        etiqueta_id: etiquetaIagoId,
-                        origem: 'auto_atendente',
-                      } as any);
-                    const dup = iagoErr
-                      ? String(iagoErr.message || '').toLowerCase().includes('duplicate') || iagoErr.code === '23505'
-                      : false;
-                    if (iagoErr && !dup) {
-                      console.error('[MetaWebhook] falha ao aplicar etiqueta do IAGO (plantão)', iagoErr.message);
-                    } else {
-                      console.log('[MetaWebhook] conversa atribuída ao IAGO (plantão)', { contato_id: contatoIdFinal });
-                    }
-                  } else {
-                    // Rodízio circular atômico por caixa. A função mantém a ordem da fila
-                    // e não compensa diferenças históricas ou do dia.
-                    const { data: etiquetaEscolhidaId, error: rodizioErr } = await supabase
-                      .rpc('atribuir_atendente_rodizio', { p_contato_id: contatoIdFinal });
-                    if (rodizioErr) {
-                      console.error('[MetaWebhook] falha ao atribuir atendente (rodízio)', rodizioErr.message);
-                    } else if (etiquetaEscolhidaId) {
-                      const escolhido: any = atendentesRodizio.find((a: any) => a.id === etiquetaEscolhidaId);
-                      console.log('[MetaWebhook] atendente atribuido via rodízio circular', {
-                        contato_id: contatoIdFinal,
-                        atendente: escolhido?.nome || etiquetaEscolhidaId,
-                      });
-                    }
-                  }
-                }
-              } else {
-                // ---- Plantão do IAGO em conversa ANTIGA (já tem atendente humano) ----
-                // Dentro da janela do plantão o IAGO assume temporariamente a conversa;
-                // a etiqueta original é guardada e devolvida às 08h (iago-plantao-devolver).
-                // Na caixa PADRÃO, um humano já atribuído permanece responsável até devolução explícita.
-                if (_folderIdContato === null) {
-                  console.log('[MetaWebhook] conversa PADRÃO já assumida por humano — IAGO permanece desligado', {
+                const { data: etiquetaEscolhidaId, error: rodizioErr } = await supabase
+                  .rpc('atribuir_atendente_conversa', {
+                    p_contato_id: contatoIdFinal,
+                    p_etiqueta_preferida: atendenteAcordoId,
+                  });
+                if (rodizioErr) {
+                  console.error('[MetaWebhook] falha ao atribuir atendente', rodizioErr.message);
+                } else if (etiquetaEscolhidaId) {
+                  const escolhido: any = atendentesRodizio.find((a: any) => a.id === etiquetaEscolhidaId);
+                  console.log('[MetaWebhook] conversa atribuída de forma atômica', {
                     contato_id: contatoIdFinal,
+                    atendente: atendenteAcordoNome || escolhido?.nome || etiquetaEscolhidaId,
                   });
                 } else {
-                try {
-                  const CAIXA_PADRAO_ID = '00000000-0000-0000-0000-000000000000';
-                  const { data: janela } = await supabase
-                    .from('meta_inbox_folder_iago_janela')
-                    .select('ativo, hora_inicio, hora_fim, fim_semana_24h')
-                    .eq('folder_id', _folderIdContato ?? CAIXA_PADRAO_ID)
-                    .maybeSingle();
-                  if ((janela as any)?.ativo) {
-                    const agoraSP = new Date(Date.now() - 3 * 60 * 60 * 1000);
-                    const minutos = agoraSP.getUTCHours() * 60 + agoraSP.getUTCMinutes();
-                    const dia = agoraSP.getUTCDay();
-                    const toMin = (v: any) => {
-                      const [h, mm] = String(v || '00:00').split(':');
-                      return (Number(h) || 0) * 60 + (Number(mm) || 0);
-                    };
-                    const ini = toMin((janela as any).hora_inicio);
-                    const fim = toMin((janela as any).hora_fim);
-                    const naJanela = ini === fim
-                      ? true
-                      : (ini < fim ? (minutos >= ini && minutos < fim) : (minutos >= ini || minutos < fim));
-                    const fimDeSemana24h = (janela as any).fim_semana_24h !== false && (dia === 0 || dia === 6);
-
-                    if (naJanela || fimDeSemana24h) {
-                      // Nome/etiqueta do IAGO elegível nesta caixa
-                      const { data: iagoCfg } = await supabase
-                        .from('iago_config').select('user_id').limit(1).maybeSingle();
-                      let nomeIago = '';
-                      if ((iagoCfg as any)?.user_id) {
-                        const { data: pi } = await supabase
-                          .from('profiles').select('nome').eq('id', (iagoCfg as any).user_id).maybeSingle();
-                        nomeIago = String((pi as any)?.nome || '').trim().toLowerCase();
-                      }
-                      if (!nomeIago) nomeIago = 'iago';
-                      const ehIago = (nomeEtiqueta: string) => {
-                        const n = String(nomeEtiqueta || '').replace(/^atendente:\s*/i, '').trim().toLowerCase();
-                        return n === nomeIago || n.startsWith('iago');
-                      };
-                      const etiquetaIago: any = atendentesRodizio.find((a: any) => ehIago(a.nome));
-
-                      if (etiquetaIago) {
-                        // Etiquetas de atendente atualmente na conversa
-                        const { data: atuais } = await supabase
-                          .from('meta_whatsapp_contato_etiquetas')
-                          .select('etiqueta_id')
-                          .eq('contato_id', contatoIdFinal)
-                          .in('etiqueta_id', atendenteIds);
-                        const atuaisIds = (atuais || []).map((r: any) => r.etiqueta_id);
-                        const jaEhIago = atuaisIds.includes(etiquetaIago.id);
-                        const humanaId = atuaisIds.find((id: string) => id !== etiquetaIago.id) || null;
-
-                        if (!jaEhIago && humanaId) {
-                          await supabase.from('iago_plantao_transferencia').upsert({
-                            contato_id: contatoIdFinal,
-                            etiqueta_original_id: humanaId,
-                            folder_id: _folderIdContato,
-                            assumido_em: new Date().toISOString(),
-                            devolvido_em: null,
-                          } as any, { onConflict: 'contato_id' });
-
-                          await supabase
-                            .from('meta_whatsapp_contato_etiquetas')
-                            .delete()
-                            .eq('contato_id', contatoIdFinal)
-                            .in('etiqueta_id', atuaisIds);
-
-                          const { error: insErr } = await supabase
-                            .from('meta_whatsapp_contato_etiquetas')
-                            .insert({
-                              contato_id: contatoIdFinal,
-                              etiqueta_id: etiquetaIago.id,
-                              origem: 'plantao_iago',
-                            } as any);
-                          if (insErr) {
-                            console.error('[MetaWebhook] falha ao transferir conversa ao IAGO (plantão)', insErr.message);
-                          } else {
-                            console.log('[MetaWebhook] conversa antiga assumida pelo IAGO (plantão)', {
-                              contato_id: contatoIdFinal,
-                              etiqueta_original_id: humanaId,
-                            });
-                          }
-                        }
-                      } else {
-                        console.log('[MetaWebhook] plantão ativo, mas etiqueta do IAGO não elegível (conversa antiga)');
-                      }
-                    }
-                  }
-                } catch (e: any) {
-                  console.error('[MetaWebhook] erro no plantão IAGO (conversa antiga)', e?.message || e);
+                  console.log('[MetaWebhook] conversa sem atendente elegível', {
+                    contato_id: contatoIdFinal,
+                    folder_id: _folderIdContato,
+                  });
                 }
-                }
-
+              } else {
+                console.log('[MetaWebhook] conversa manteve o atendente atual', { contato_id: contatoIdFinal });
               }
             } catch (e: any) {
               console.error('[MetaWebhook] erro na atribuição de atendente', e?.message || e);
