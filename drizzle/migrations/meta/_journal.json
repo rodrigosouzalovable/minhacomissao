@@ -911,6 +911,13 @@
       "when": 1790948340116,
       "tag": "0129_add_template_odres_cred",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1790950189584,
+      "tag": "0130_blacklist_aquecimento_auto_respondedor",
+      "breakpoints": true
     }
   ]
 }

@@ -11878,6 +11878,13 @@ export type Database = {
         Args: { p_contato_id: string; p_somente_ia?: boolean }
         Returns: string
       }
+      blacklist_aquecimento_auto_respondedor: {
+        Args: { _respondedor_id: string }
+        Returns: {
+          telefone: string
+          telefone_sufixo: string
+        }[]
+      }
       buscar_aberturas_cnpj_certificado_por_telefone: {
         Args: { p_suffixes: string[] }
         Returns: {
