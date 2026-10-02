@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Loader2, MessageCircle, Send } from 'lucide-react';
+import { Download, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -30,6 +30,7 @@ interface Props {
 export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, entity = 'acordos', onComplete }: Props) {
   const [working, setWorking] = useState<'download' | 'whatsapp' | null>(null);
   const [concluido, setConcluido] = useState(false);
+  const [fechado, setFechado] = useState(false);
   const [procurandoConversa, setProcurandoConversa] = useState(false);
   const [erroBuscaConversa, setErroBuscaConversa] = useState<string | null>(null);
   const [conversas, setConversas] = useState<MetaOrigem[]>(metaOrigem ? [metaOrigem] : []);
@@ -37,6 +38,10 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
   const { toast } = useToast();
 
   const conversaSelecionada = conversas.find((conversa) => conversa.contatoId === conversaSelecionadaId) ?? null;
+
+  useEffect(() => {
+    setFechado(false);
+  }, [acordo.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -154,8 +159,22 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
   };
 
   return (
-    <Dialog open={open && !concluido}>
+    <Dialog open={open && !concluido && !fechado}>
       <DialogContent className="sm:max-w-lg [&>button]:hidden" onEscapeKeyDown={(event) => event.preventDefault()} onPointerDownOutside={(event) => event.preventDefault()}>
+        <div className="absolute right-4 top-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setFechado(true)}
+            disabled={working !== null}
+            aria-label="Fechar"
+            title="Fechar"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
         <DialogHeader>
           <DialogTitle>Emissão obrigatória do termo</DialogTitle>
           <DialogDescription>Para finalizar o lançamento, envie o termo na conversa da negociação ou faça o download.</DialogDescription>
