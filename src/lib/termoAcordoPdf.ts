@@ -2,6 +2,7 @@ import type { Tables } from '@/integrations/supabase/types';
 import souzaRibeiroAsset from '@/assets/souza-e-ribeiro-oficial.png.asset.json';
 import umeAsset from '@/assets/ume-oficial.png.asset.json';
 import novoMundoAsset from '@/assets/logo-novo-mundo-termo.png.asset.json';
+import odresCredAsset from '@/assets/logo-odres-cred.png.asset.json';
 import { getEmpresaLabel } from '@/lib/empresaLabels';
 
 type Acordo = Tables<'acordos'>;
@@ -110,13 +111,17 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
     throw new Error('As parcelas deste acordo não foram encontradas.');
   }
 
-  const usarLogoCredor = acordo.empresa !== 'odres_cred';
   const [{ default: jsPDF }, logoSouza, logoCredor] = await Promise.all([
     import('jspdf'),
     carregarImagem(souzaRibeiroAsset.url),
-    usarLogoCredor
-      ? carregarImagem(acordo.empresa === 'mundo_da_moda' ? umeAsset.url : novoMundoAsset.url, false)
-      : Promise.resolve(null),
+    carregarImagem(
+      acordo.empresa === 'mundo_da_moda'
+        ? umeAsset.url
+        : acordo.empresa === 'odres_cred'
+          ? odresCredAsset.url
+          : novoMundoAsset.url,
+      false,
+    ),
   ]);
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
@@ -157,13 +162,10 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
 
   // Cabeçalho institucional
   doc.addImage(logoSouza, 'JPEG', margem, 12, 74, 21);
-  if (logoCredor) {
-    doc.addImage(logoCredor, 'JPEG', 164, 9, 24, 24);
+  if (acordo.empresa === 'odres_cred') {
+    doc.addImage(logoCredor, 'JPEG', 145, 15, 43, 9.3);
   } else {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(20, 58, 92);
-    doc.text('ODRES CRED', 188, 22, { align: 'right' });
+    doc.addImage(logoCredor, 'JPEG', 164, 9, 24, 24);
   }
   doc.setDrawColor(20, 58, 92);
   doc.setLineWidth(0.7);
