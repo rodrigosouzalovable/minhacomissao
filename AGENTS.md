@@ -24,3 +24,4 @@
 - Modelos de negociação por credor mantêm texto editável independente, mesmo quando compartilham extração e cálculo.
 - O IAGO participa do rodízio somente na PADRÃO, mas responde toda entrada UAZAPI da AQUECIMENTO com uma resposta curta, sem transferência e sem follow-up.
 - A recuperação automática de números próprios RED/YELLOW opera diariamente das 08h às 19h BRT, exceto domingos, e desativa imediatamente remetentes com bloqueio real confirmado pela Meta.
+- Contatos confirmados do Google Maps podem ser colocados na blacklist pelo Aquecimento Meta; o bloqueio por sufixo remove o contato da fonte e impede que novas detecções o recriem.
