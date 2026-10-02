@@ -20,6 +20,8 @@ Identificamos seu débito e hoje temos condições especiais para você:
 
 *Qual opção é melhor para você? Que dia consegue realizar o pagamento?*`;
 
+export const TEMPLATE_ODRES_CRED_PADRAO = TEMPLATE_UME_PADRAO.replace('à UME', 'à Odres Cred');
+
 const GRADE_UME = [2, 4, 6, 8, 12, 18];
 const PARCELA_MINIMA = 100;
 
@@ -34,12 +36,17 @@ const brl = (v: number) =>
 interface Props {
   /** Compacta o layout (usado no diálogo do Inbox). */
   compact?: boolean;
+  credor?: 'ume' | 'odres_cred';
 }
 
-export function LayoutUmeTab({ compact }: Props) {
+export function LayoutUmeTab({ compact, credor = 'ume' }: Props) {
   const { user } = useAuth();
+  const isOdresCred = credor === 'odres_cred';
+  const nomeCredor = isOdresCred ? 'Odres Cred' : 'UME';
+  const colunaTemplate = isOdresCred ? 'template_odres_cred' : 'template_ume';
+  const templatePadrao = isOdresCred ? TEMPLATE_ODRES_CRED_PADRAO : TEMPLATE_UME_PADRAO;
 
-  const [template, setTemplate] = useState(TEMPLATE_UME_PADRAO);
+  const [template, setTemplate] = useState(templatePadrao);
   const [nomeUsuario, setNomeUsuario] = useState('');
   const [hydrated, setHydrated] = useState(false);
 
@@ -59,19 +66,19 @@ export function LayoutUmeTab({ compact }: Props) {
       const [{ data: tpl }, { data: prof }] = await Promise.all([
         supabase
           .from('modelo_mensagem_template' as any)
-          .select('template_ume')
+          .select(colunaTemplate)
           .eq('user_id', user.id)
           .maybeSingle(),
         supabase.from('profiles').select('nome').eq('id', user.id).maybeSingle(),
       ]);
       if (cancelled) return;
-      const t = (tpl as any)?.template_ume;
-      if (t) setTemplate(t);
+      const t = (tpl as any)?.[colunaTemplate];
+      setTemplate(t || templatePadrao);
       setNomeUsuario(String((prof as any)?.nome || ''));
       setHydrated(true);
     })();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, colunaTemplate, templatePadrao]);
 
   // Salva o template (debounce)
   useEffect(() => {
@@ -79,11 +86,11 @@ export function LayoutUmeTab({ compact }: Props) {
     const t = setTimeout(() => {
       supabase
         .from('modelo_mensagem_template' as any)
-        .upsert({ user_id: user.id, template_ume: template }, { onConflict: 'user_id' })
-        .then(({ error }) => { if (error) console.error('[modelo_mensagem_template] upsert ume', error); });
+        .upsert({ user_id: user.id, [colunaTemplate]: template }, { onConflict: 'user_id' })
+        .then(({ error }) => { if (error) console.error(`[modelo_mensagem_template] upsert ${credor}`, error); });
     }, 700);
     return () => clearTimeout(t);
-  }, [template, user, hydrated]);
+  }, [template, user, hydrated, colunaTemplate, credor]);
 
   const loadFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -212,7 +219,7 @@ export function LayoutUmeTab({ compact }: Props) {
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium">1. Cole a "Tabela - Desconto Especial" da UME</Label>
+            <Label className="text-sm font-medium">1. Cole a "Tabela - Desconto Especial" da {nomeCredor}</Label>
             {imageData && (
               <Button variant="ghost" size="sm" onClick={limpar}>
                 <Trash2 className="h-4 w-4 mr-1" /> Limpar
@@ -226,7 +233,7 @@ export function LayoutUmeTab({ compact }: Props) {
             className={`border-2 border-dashed rounded-lg p-4 ${compact ? 'min-h-[160px]' : 'min-h-[260px]'} flex flex-col items-center justify-center bg-muted/30`}
           >
             {imageData ? (
-              <img src={imageData} alt="Tabela UME" className={`${compact ? 'max-h-[220px]' : 'max-h-[400px]'} max-w-full rounded`} />
+              <img src={imageData} alt={`Tabela ${nomeCredor}`} className={`${compact ? 'max-h-[220px]' : 'max-h-[400px]'} max-w-full rounded`} />
             ) : (
               <div className="text-center text-sm text-muted-foreground space-y-2">
                 <ImageIcon className="h-10 w-10 mx-auto opacity-50" />
@@ -238,7 +245,7 @@ export function LayoutUmeTab({ compact }: Props) {
 
           <div className="flex gap-2">
             <input
-              id="img-ume-input"
+              id={`img-${credor}-input`}
               type="file"
               accept="image/*"
               className="hidden"
@@ -247,7 +254,7 @@ export function LayoutUmeTab({ compact }: Props) {
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => document.getElementById('img-ume-input')?.click()}
+              onClick={() => document.getElementById(`img-${credor}-input`)?.click()}
             >
               <Upload className="h-4 w-4 mr-2" /> Selecionar arquivo
             </Button>

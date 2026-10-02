@@ -12,7 +12,9 @@ interface Props {
 }
 
 function abaDoCredor(credor?: string | null) {
-  return credor === 'ume' ? 'layout-ume' : 'imagem';
+  if (credor === 'ume') return 'layout-ume';
+  if (credor === 'odres_cred') return 'layout-odres-cred';
+  return 'imagem';
 }
 
 export function ModeloMensagemDialog({ open, onOpenChange, credor }: Props) {
@@ -22,7 +24,11 @@ export function ModeloMensagemDialog({ open, onOpenChange, credor }: Props) {
     if (open) setAba(abaDoCredor(credor));
   }, [open, credor]);
 
-  const marca = aba === 'layout-ume' ? CREDOR_MARCAS.ume : CREDOR_MARCAS.novo_mundo;
+  const marca = aba === 'layout-ume'
+    ? CREDOR_MARCAS.ume
+    : aba === 'layout-odres-cred'
+      ? CREDOR_MARCAS.odres_cred
+      : CREDOR_MARCAS.novo_mundo;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -44,15 +50,19 @@ export function ModeloMensagemDialog({ open, onOpenChange, credor }: Props) {
         </DialogHeader>
         {open && (
           <Tabs value={aba} onValueChange={setAba}>
-            <TabsList>
+            <TabsList className="h-auto flex-wrap justify-start">
               <TabsTrigger value="imagem">Layout Novo Mundo</TabsTrigger>
               <TabsTrigger value="layout-ume">Layout UME</TabsTrigger>
+              <TabsTrigger value="layout-odres-cred">Layout Odres Cred</TabsTrigger>
             </TabsList>
             <TabsContent value="imagem" className="mt-4">
               <ColarImagemTab />
             </TabsContent>
             <TabsContent value="layout-ume" className="mt-4">
               <LayoutUmeTab />
+            </TabsContent>
+            <TabsContent value="layout-odres-cred" className="mt-4">
+              <LayoutUmeTab credor="odres_cred" />
             </TabsContent>
           </Tabs>
         )}

@@ -1,7 +1,8 @@
 import logoNovoMundo from '@/assets/logo-novo-mundo.png';
 import logoUme from '@/assets/logo-ume.png';
+import logoOdresCred from '@/assets/logo-odres-cred.png.asset.json';
 
-export type CredorSlug = 'novo_mundo' | 'ume';
+export type CredorSlug = 'novo_mundo' | 'ume' | 'odres_cred';
 
 export interface CredorMarca {
   slug: CredorSlug;
@@ -12,11 +13,13 @@ export interface CredorMarca {
 export const CREDOR_MARCAS: Record<CredorSlug, CredorMarca> = {
   novo_mundo: { slug: 'novo_mundo', nome: 'Novo Mundo', logo: logoNovoMundo },
   ume: { slug: 'ume', nome: 'UME', logo: logoUme },
+  odres_cred: { slug: 'odres_cred', nome: 'Odres Cred', logo: logoOdresCred.url },
 };
 
 export const CREDOR_MARCAS_LISTA: CredorMarca[] = [
   CREDOR_MARCAS.novo_mundo,
   CREDOR_MARCAS.ume,
+  CREDOR_MARCAS.odres_cred,
 ];
 
 export function getCredorMarca(slug?: string | null): CredorMarca | null {
@@ -38,5 +41,6 @@ export function normalizarCredor(valor?: string | null): CredorSlug | null {
   if (!t) return null;
   if (/(^|\s)(nm|novo\s*mundo|novomundo)(\s|$)/.test(t)) return 'novo_mundo';
   if (/(^|\s)(ume|umme|u\s*me)(\s|$)/.test(t)) return 'ume';
+  if (/(^|\s)(odres\s*cred|odrescred)(\s|$)/.test(t)) return 'odres_cred';
   return null;
 }

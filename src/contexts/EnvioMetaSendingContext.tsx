@@ -119,13 +119,13 @@ export type IniciarParams = {
   erroValidacao?: string[];
   templateIdByInstance?: Record<string, string>;
   /** Variação de templates: round-robin entre variantes (mesma qtd de variáveis) */
-  templateVariantes?: Array<{ template_id: string; nome_template: string; template_id_by_instance: Record<string, string>; credor?: 'novo_mundo' | 'ume' | null }>;
+  templateVariantes?: Array<{ template_id: string; nome_template: string; template_id_by_instance: Record<string, string>; credor?: 'novo_mundo' | 'ume' | 'odres_cred' | null }>;
 
   nomeCampanha?: string;
   modoRajada?: boolean;
   msgsPorSegundo?: number;
   folderId?: string | null;
-  /** Credor padrão da campanha ("novo_mundo" | "ume" | null) */
+  /** Credor padrão da campanha. */
   credor?: string | null;
   /** ISO UTC: quando preenchido, a campanha fica registrada e só começa nesse momento. */
   agendarPara?: string | null;
