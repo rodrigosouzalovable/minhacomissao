@@ -17,11 +17,12 @@ const json = (payload: unknown, status = 200) => new Response(JSON.stringify(pay
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const serviceToken = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceToken);
 
   try {
     const body = await req.json().catch(() => ({}));
-    const auto = body?.auto === true;
+    const auto = body?.auto === true && req.headers.get("Authorization") === `Bearer ${serviceToken}`;
     const force = body?.force === true;
     const completeUtility = body?.complete_utility === true && !auto;
 
@@ -83,6 +84,7 @@ Deno.serve(async (req) => {
     });
 
     const audit = await supabase.functions.invoke("meta-templates-auditar-instancias", {
+      headers: { Authorization: `Bearer ${serviceToken}` },
       body: {
         auto: true,
         dry_run: false,
