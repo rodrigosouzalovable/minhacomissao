@@ -8248,6 +8248,7 @@ export type Database = {
           parcelas_padrao_2: number | null
           template: string
           template_2: string | null
+          template_odres_cred: string | null
           template_ume: string | null
           updated_at: string
           user_id: string
@@ -8263,6 +8264,7 @@ export type Database = {
           parcelas_padrao_2?: number | null
           template?: string
           template_2?: string | null
+          template_odres_cred?: string | null
           template_ume?: string | null
           updated_at?: string
           user_id: string
@@ -8278,6 +8280,7 @@ export type Database = {
           parcelas_padrao_2?: number | null
           template?: string
           template_2?: string | null
+          template_odres_cred?: string | null
           template_ume?: string | null
           updated_at?: string
           user_id?: string
