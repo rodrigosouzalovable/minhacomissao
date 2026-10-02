@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
       `${linhas.join('\n')}\n\n` +
       `Total do dia: ${totalEnv} enviadas · ${totalResp} respostas recebidas\n` +
       `Destinos do dia: ${totalUazapi} UAZAPI${totalMetaTeste ? ` · ${totalMetaTeste} testes Meta antes da mudança` : ''} · ${Math.max(0, totalEnv - totalUazapi - totalMetaTeste)} indisponíveis para classificação.\n` +
-      `Destinos disponíveis agora: ${destinos.length} UAZAPI conectados na caixa AQUECIMENTO, de qualquer proprietário. Envios 09h–19h, intervalos de 20–40 min; a melhora para GREEN depende da Meta.\n` +
+      `Destinos disponíveis agora: ${destinos.length} UAZAPI conectados na caixa AQUECIMENTO, de qualquer proprietário. Envios 08h–19h, intervalos de 20–40 min; a melhora para GREEN depende da Meta.\n` +
       `Enquanto estiverem em recuperação, esses números ficam fora das campanhas.`;
 
     await notificarAdmin(supabase, {

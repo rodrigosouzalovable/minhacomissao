@@ -29,3 +29,4 @@
 - [x] Restaurar etiquetas automáticas por rodízio, com IAGO somente na Padrão, e carregar todas as conversas não lidas.
 - [x] Adicionar o modelo de mensagem da Odres Cred com o mesmo cálculo da UME e texto independente.
 - [x] Liberar o IAGO para responder todas as entradas UAZAPI da AQUECIMENTO, sem humano e sem follow-up.
+- [x] Antecipar o reaquecimento RED/YELLOW para 8h BRT e interromper números com bloqueio real da Meta.

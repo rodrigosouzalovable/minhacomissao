@@ -215,7 +215,7 @@ export function RecuperacaoQualidadePanel() {
         )}
         <p className="pt-1 text-xs text-muted-foreground">
           Seus números oficiais aptos em RED/YELLOW conversam somente com UAZAPI conectado na caixa
-          AQUECIMENTO (09h–19h, intervalos de 20–40 min). Bloqueios da Meta impedem envios; após 3 dias em GREEN voltam ao pool em escada.
+          AQUECIMENTO (08h–19h, intervalos de 20–40 min). Bloqueios da Meta impedem envios; após 3 dias em GREEN voltam ao pool em escada.
           Avisos no WhatsApp: início do aquecimento, resumo às 13h e 18h, mudanças de qualidade e volta ao GREEN.
           A média usa ciclos completos do primeiro envio aceito para UAZAPI até o retorno confirmado a GREEN.
         </p>
