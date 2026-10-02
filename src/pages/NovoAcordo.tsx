@@ -113,7 +113,7 @@ export default function NovoAcordo() {
       clienteNome: filteredValue
     });
   };
-  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda' | null>(null);
+  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred' | null>(null);
   const [empresaSugerida, setEmpresaSugerida] = useState<string>('');
   const [instanciaNegociacaoId, setInstanciaNegociacaoId] = useState<string>('');
   const [instanciasMinimizado, setInstanciasMinimizado] = useState<boolean>(() => localStorage.getItem('novoAcordo:instanciasMinimizado') === '1');
@@ -419,7 +419,7 @@ export default function NovoAcordo() {
       toast({
         variant: 'destructive',
         title: 'Empresa não selecionada',
-        description: 'Selecione a empresa/credor do contrato (NOVO MUNDO ou UME).'
+        description: 'Selecione a empresa/credor do contrato (NOVO MUNDO, UME ou ODRES CRED).'
       });
       return;
     }
@@ -714,12 +714,15 @@ export default function NovoAcordo() {
               {/* Seletor de Empresa */}
               <div className="space-y-2">
                 <Label>Empresa *</Label>
-                <div className="flex gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Button type="button" variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'} className="flex-1" onClick={() => setEmpresa('ume_novo_mundo')}>
                     NOVO MUNDO
                   </Button>
                   <Button type="button" variant={empresa === 'mundo_da_moda' ? 'default' : 'outline'} className="flex-1" onClick={() => setEmpresa('mundo_da_moda')}>
                     UME
+                  </Button>
+                  <Button type="button" variant={empresa === 'odres_cred' ? 'default' : 'outline'} className="flex-1" onClick={() => setEmpresa('odres_cred')}>
+                    ODRES CRED
                   </Button>
                 </div>
                 {!empresa && empresaSugerida && (

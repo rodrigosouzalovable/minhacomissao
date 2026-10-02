@@ -65,7 +65,7 @@ export default function EditarAcordo() {
   const [cpfError, setCpfError] = useState('');
   const [operadorId, setOperadorId] = useState('');
   const [operadorOriginal, setOperadorOriginal] = useState('');
-  const [empresaOriginal, setEmpresaOriginal] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  const [empresaOriginal, setEmpresaOriginal] = useState<'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred'>('ume_novo_mundo');
   const [telefoneOriginal, setTelefoneOriginal] = useState('');
   const [operadores, setOperadores] = useState<Array<{ user_id: string; nome: string | null }>>([]);
   const [parcelasOriginais, setParcelasOriginais] = useState<Array<{ id: string; numero_parcela: number; status: string; valor_parcela: number; data_prevista: string }>>([]);
@@ -79,7 +79,7 @@ export default function EditarAcordo() {
   }, [isAdmin]);
 
   
-  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda'>('ume_novo_mundo');
+  const [empresa, setEmpresa] = useState<'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred'>('ume_novo_mundo');
   
   const [form, setForm] = useState({
     clienteNome: '',
@@ -445,7 +445,7 @@ export default function EditarAcordo() {
               {/* Seletor de Empresa (credor) */}
               <div className="space-y-2">
                 <Label>Empresa *</Label>
-                <div className="flex gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Button
                     type="button"
                     variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'}
@@ -461,6 +461,14 @@ export default function EditarAcordo() {
                     onClick={() => setEmpresa('mundo_da_moda')}
                   >
                     UME
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={empresa === 'odres_cred' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setEmpresa('odres_cred')}
+                  >
+                    ODRES CRED
                   </Button>
                 </div>
               </div>

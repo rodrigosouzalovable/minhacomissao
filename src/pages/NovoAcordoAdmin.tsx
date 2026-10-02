@@ -304,7 +304,7 @@ export default function NovoAcordoAdmin() {
       toast({
         variant: 'destructive',
         title: 'Empresa não selecionada',
-        description: 'Selecione a empresa/credor do contrato (NOVO MUNDO ou UME).',
+        description: 'Selecione a empresa/credor do contrato (NOVO MUNDO, UME ou ODRES CRED).',
       });
       return;
     }
@@ -527,7 +527,7 @@ export default function NovoAcordoAdmin() {
               {/* Seletor de Empresa */}
               <div className="space-y-2">
                 <Label>Empresa *</Label>
-                <div className="flex gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Button
                     type="button"
                     variant={empresa === 'ume_novo_mundo' ? 'default' : 'outline'}
@@ -543,6 +543,14 @@ export default function NovoAcordoAdmin() {
                     onClick={() => setEmpresa('mundo_da_moda')}
                   >
                     UME
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={empresa === 'odres_cred' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setEmpresa('odres_cred')}
+                  >
+                    ODRES CRED
                   </Button>
                 </div>
                 {!empresa && (
