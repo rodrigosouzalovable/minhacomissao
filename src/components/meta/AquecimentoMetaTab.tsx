@@ -7,9 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Flame, RefreshCw, Play, Brain, DollarSign, Send, Loader2, Bot, Search, Copy, Download, Building2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Flame, RefreshCw, Play, Brain, DollarSign, Send, Loader2, Bot, Search, Copy, Download, Building2, AlertTriangle, CheckCircle2, Ban } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { exportarParaExcel } from "@/lib/exportExcel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const AUTO_RESP_PAGE_SIZE = 10;
 const CANDIDATOS_PAGE_SIZE = 10;
@@ -41,6 +51,7 @@ export function AquecimentoMetaTab() {
   const [buscaCandidato, setBuscaCandidato] = useState("");
   const [paginaCandidato, setPaginaCandidato] = useState(0);
   const [statusCandidato, setStatusCandidato] = useState("disponiveis");
+  const [respondedorParaBloquear, setRespondedorParaBloquear] = useState<any | null>(null);
 
   const { data: trilhas, isLoading } = useQuery({
     queryKey: ["aq-trilhas", dia],
@@ -312,6 +323,22 @@ export function AquecimentoMetaTab() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gm-auto-resposta-candidatos"] }),
     onError: (e: any) => toast.error(e?.message ?? "Não foi possível atualizar o candidato"),
+  });
+
+  const adicionarAutoRespondedorBlacklist = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc("blacklist_aquecimento_auto_respondedor", {
+        _respondedor_id: id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Número adicionado à blacklist e bloqueado para futuros envios");
+      setRespondedorParaBloquear(null);
+      qc.invalidateQueries({ queryKey: ["aq-auto-respondedores"] });
+      qc.invalidateQueries({ queryKey: ["blacklist"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Não foi possível adicionar este número à blacklist"),
   });
 
   const copiarAutoRespondedores = async () => {
@@ -672,6 +699,7 @@ export function AquecimentoMetaTab() {
                       <th className="p-2 font-medium">Ocorrências</th>
                       <th className="p-2 font-medium">Última resposta</th>
                       <th className="p-2 font-medium">Detectada em</th>
+                      <th className="p-2 font-medium text-right">Ação</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -683,6 +711,17 @@ export function AquecimentoMetaTab() {
                         <td className="p-2"><Badge variant="outline">{item.quantidade_respostas}</Badge></td>
                         <td className="p-2 max-w-[320px] truncate" title={item.ultima_resposta || ""}>{item.ultima_resposta || "—"}</td>
                         <td className="p-2 whitespace-nowrap">{new Date(item.ultima_deteccao_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</td>
+                        <td className="p-2 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setRespondedorParaBloquear(item)}
+                            disabled={adicionarAutoRespondedorBlacklist.isPending}
+                          >
+                            <Ban className="mr-1 h-3.5 w-3.5" /> Blacklist
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -894,6 +933,37 @@ export function AquecimentoMetaTab() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog
+        open={respondedorParaBloquear !== null}
+        onOpenChange={(open) => { if (!open && !adicionarAutoRespondedorBlacklist.isPending) setRespondedorParaBloquear(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Adicionar à blacklist?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {respondedorParaBloquear
+                ? `${respondedorParaBloquear.nome || "Este contato"} · ${telefoneBr(respondedorParaBloquear.telefone)}`
+                : "Este contato"}{" "}
+              não poderá receber novas mensagens do Aquecimento Meta nem de futuras campanhas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={adicionarAutoRespondedorBlacklist.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={adicionarAutoRespondedorBlacklist.isPending || !respondedorParaBloquear}
+              onClick={(event) => {
+                event.preventDefault();
+                if (respondedorParaBloquear) adicionarAutoRespondedorBlacklist.mutate(respondedorParaBloquear.id);
+              }}
+            >
+              {adicionarAutoRespondedorBlacklist.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Ban className="mr-2 h-4 w-4" />}
+              Confirmar blacklist
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
