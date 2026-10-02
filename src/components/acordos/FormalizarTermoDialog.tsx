@@ -161,18 +161,20 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
   return (
     <Dialog open={open && !concluido && !fechado}>
       <DialogContent className="sm:max-w-lg [&>button]:hidden" onEscapeKeyDown={(event) => event.preventDefault()} onPointerDownOutside={(event) => event.preventDefault()}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute right-4 top-4 h-8 w-8"
-          onClick={() => setFechado(true)}
-          disabled={working !== null}
-          aria-label="Fechar"
-          title="Fechar"
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="absolute right-4 top-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setFechado(true)}
+            disabled={working !== null}
+            aria-label="Fechar"
+            title="Fechar"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
         <DialogHeader>
           <DialogTitle>Emissão obrigatória do termo</DialogTitle>
           <DialogDescription>Para finalizar o lançamento, envie o termo na conversa da negociação ou faça o download.</DialogDescription>
