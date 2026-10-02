@@ -29,6 +29,7 @@ interface Props {
 
 export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, entity = 'acordos', onComplete }: Props) {
   const [working, setWorking] = useState<'download' | 'whatsapp' | null>(null);
+  const [concluido, setConcluido] = useState(false);
   const [procurandoConversa, setProcurandoConversa] = useState(false);
   const [erroBuscaConversa, setErroBuscaConversa] = useState<string | null>(null);
   const [conversas, setConversas] = useState<MetaOrigem[]>(metaOrigem ? [metaOrigem] : []);
@@ -39,6 +40,8 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
 
   useEffect(() => {
     if (!open) return;
+
+    setConcluido(false);
 
     if (metaOrigem) {
       setConversas([metaOrigem]);
@@ -89,7 +92,12 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
 
     void localizarConversas();
     return () => { ativo = false; };
-  }, [acordo.cliente_telefone, metaOrigem, open]);
+  }, [acordo.id, acordo.cliente_telefone, metaOrigem, open]);
+
+  const fecharAposConclusao = () => {
+    setConcluido(true);
+    onComplete();
+  };
 
   const concluir = async (metodo: 'download' | 'whatsapp') => {
     const { data: auth } = await supabase.auth.getUser();
@@ -111,7 +119,7 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
       await gerarTermoAcordoPdf({ acordo, pagamentos, salvar: true });
       await concluir('download');
       toast({ title: 'Termo emitido', description: 'O download foi iniciado e o acordo foi formalizado.' });
-      onComplete();
+      fecharAposConclusao();
     } catch (error) {
       toast({ title: 'Não foi possível emitir o termo', description: error instanceof Error ? error.message : 'Tente novamente.', variant: 'destructive' });
     } finally { setWorking(null); }
@@ -139,14 +147,14 @@ export function FormalizarTermoDialog({ open, acordo, pagamentos, metaOrigem, en
       if (!data?.success) throw new Error(data?.error || 'Falha ao enviar o termo.');
       await concluir('whatsapp');
       toast({ title: 'Termo enviado', description: 'O documento foi enviado na conversa da negociação.' });
-      onComplete();
+      fecharAposConclusao();
     } catch (error) {
       toast({ title: 'Não foi possível enviar', description: error instanceof Error ? error.message : 'Baixe o termo para concluir.', variant: 'destructive' });
     } finally { setWorking(null); }
   };
 
   return (
-    <Dialog open={open}>
+    <Dialog open={open && !concluido}>
       <DialogContent className="sm:max-w-lg [&>button]:hidden" onEscapeKeyDown={(event) => event.preventDefault()} onPointerDownOutside={(event) => event.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Emissão obrigatória do termo</DialogTitle>
