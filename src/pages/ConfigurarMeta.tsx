@@ -559,7 +559,7 @@ export default function ConfigurarMeta() {
     if (error) return toast.error("Erro ao iniciar: " + error.message);
     if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
     toast.success(
-      `${data.enfileirados} modelo(s) na fila de ${data.instancias_afetadas} número(s). O envio é gradual: 1 por vez, 5–10 min, das 07h às 20h.`,
+      `${data.enfileirados} Utility na fila de ${data.instancias_afetadas} número(s); ${data.ignoradas?.length || 0} número(s) aguardam liberação. Tier 250: até 2/dia; tiers 1.000 e 2.000: 1 por vez, com intervalo de 2–5 min.`,
     );
     setAuditoria(null);
     carregar();
