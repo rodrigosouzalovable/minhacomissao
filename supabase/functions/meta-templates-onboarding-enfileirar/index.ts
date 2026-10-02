@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     const templateIdioma = String(body?.idioma || "").trim();
     let restricaoMestres: string[] | null = null;
     if (templateNome) {
-      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma, criado_por").eq("nome", templateNome).in("categoria", ["UTILITY", "MARKETING"]);
+      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma, criado_por").eq("nome", templateNome).eq("categoria", "UTILITY").eq("reclassificado_marketing", false);
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
       const { data: mestres } = await q;
       restricaoMestres = ((mestres as any[]) || []).map((r) => r.id as string);
@@ -99,9 +99,9 @@ Deno.serve(async (req) => {
       // Modelos já processados internamente e templates reais conhecidos nesse número.
       const { data: aprovados } = await supabase
         .from("meta_templates_instancia")
-        .select("template_mestre_id, instancia_id, status");
+        .select("template_mestre_id, instancia_id, status")
+        .eq("instancia_id", instanciaId);
 
-      const contagem = new Map<string, number>();
       const jaNoNumero = new Set<string>();
       for (const r of (aprovados as any[]) || []) {
         if (r.instancia_id === instanciaId) {
@@ -110,8 +110,6 @@ Deno.serve(async (req) => {
           }
           continue;
         }
-        if (String(r.status || "").toUpperCase() !== "APPROVED") continue;
-        contagem.set(r.template_mestre_id, (contagem.get(r.template_mestre_id) || 0) + 1);
       }
 
       const { data: mestresValidos, error: mestresError } = await supabase
@@ -147,7 +145,7 @@ Deno.serve(async (req) => {
         const listaAplicaveis = mestresAusentes.map((r) => r.id as string);
         candidatos = listaAplicaveis
           .filter((id) => !jaNoNumero.has(id) && !emProcessamento.has(id))
-          .map((id, idx) => [id, (contagem.get(id) || 0) * 1000 + listaAplicaveis.length - idx] as [string, number])
+          .map((id, idx) => [id, listaAplicaveis.length - idx] as [string, number])
           .sort((a, b) => b[1] - a[1]);
       }
 

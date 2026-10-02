@@ -1047,6 +1047,12 @@ export default function ConfigurarMeta() {
       });
       if (filaError) throw filaError;
       if (filaData?.success === false || filaData?.error) throw new Error(filaData?.error || "Não foi possível iniciar a aplicação");
+      const bloqueioFila = filaData?.instancias?.find((item: { ok: boolean; erro?: string }) => !item.ok)?.erro;
+      if (bloqueioFila) {
+        toast.warning(`Aplicação aguardando: ${bloqueioFila}.`, { duration: 9000 });
+        await carregar();
+        return;
+      }
 
       const enfileirados = Number(filaData?.enfileirados || 0);
       const { data: tickData, error: tickError } = await supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} });

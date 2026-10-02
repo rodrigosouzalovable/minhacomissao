@@ -124,11 +124,13 @@ Deno.serve(async (req) => {
     if (idsElegiveis.length > 0) {
       const { data: existentes } = await supabase
         .from("meta_templates_instancia")
-        .select("instancia_id, template_mestre_id")
+        .select("instancia_id, template_mestre_id, status")
         .in("instancia_id", idsElegiveis);
       for (const r of ((existentes as any[]) || [])) {
-        if (!jaTem.has(r.instancia_id)) jaTem.set(r.instancia_id, new Set());
-        jaTem.get(r.instancia_id)!.add(r.template_mestre_id);
+        if (["APPROVED", "PENDING", "IN_APPEAL", "ENVIADO"].includes(String(r.status || "").toUpperCase())) {
+          if (!jaTem.has(r.instancia_id)) jaTem.set(r.instancia_id, new Set());
+          jaTem.get(r.instancia_id)?.add(r.template_mestre_id);
+        }
       }
     }
 
