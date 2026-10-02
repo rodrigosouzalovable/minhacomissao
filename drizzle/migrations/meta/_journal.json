@@ -925,6 +925,13 @@
       "when": 1790950215607,
       "tag": "0131_preservar_blacklist_ao_detectar_auto_resposta",
       "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1790950957371,
+      "tag": "0132_fix_blacklist_aquecimento_telefone_ambiguo",
+      "breakpoints": true
     }
   ]
 }
