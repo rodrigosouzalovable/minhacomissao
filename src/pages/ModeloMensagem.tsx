@@ -35,9 +35,10 @@ export default function ModeloMensagem() {
 
         {isAdmin ? (
           <Tabs defaultValue="imagem">
-            <TabsList>
+            <TabsList className="h-auto flex-wrap justify-start">
               <TabsTrigger value="imagem">Layout Novo Mundo</TabsTrigger>
               <TabsTrigger value="layout-ume">Layout UME</TabsTrigger>
+              <TabsTrigger value="layout-odres-cred">Layout Odres Cred</TabsTrigger>
               <TabsTrigger value="planilha">Layout Parcelamento</TabsTrigger>
               <TabsTrigger value="vista-parcelamento">Layout à vista + parcelamento</TabsTrigger>
               <TabsTrigger value="uazapi">Layout Uazapi</TabsTrigger>
@@ -48,6 +49,9 @@ export default function ModeloMensagem() {
             </TabsContent>
             <TabsContent value="layout-ume" className="mt-4">
               <LayoutUmeTab />
+            </TabsContent>
+            <TabsContent value="layout-odres-cred" className="mt-4">
+              <LayoutUmeTab credor="odres_cred" />
             </TabsContent>
             <TabsContent value="planilha" className="mt-4">
               <LayoutPlanilhaTab />
@@ -64,15 +68,19 @@ export default function ModeloMensagem() {
           </Tabs>
         ) : (
           <Tabs defaultValue="imagem">
-            <TabsList>
+            <TabsList className="h-auto flex-wrap justify-start">
               <TabsTrigger value="imagem">Layout Novo Mundo</TabsTrigger>
               <TabsTrigger value="layout-ume">Layout UME</TabsTrigger>
+              <TabsTrigger value="layout-odres-cred">Layout Odres Cred</TabsTrigger>
             </TabsList>
             <TabsContent value="imagem" className="mt-4">
               <ColarImagemTab key={reloadKey} />
             </TabsContent>
             <TabsContent value="layout-ume" className="mt-4">
               <LayoutUmeTab />
+            </TabsContent>
+            <TabsContent value="layout-odres-cred" className="mt-4">
+              <LayoutUmeTab credor="odres_cred" />
             </TabsContent>
           </Tabs>
         )}

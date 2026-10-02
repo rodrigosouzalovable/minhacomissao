@@ -21,3 +21,4 @@
 - Parcelas vencidas são derivadas de pagamentos pendentes em acordos ativos e compartilham a consulta entre sino, alerta e Retornos; o pop-up abre uma vez às 9h e às 15h BRT, inclusive no primeiro acesso posterior à janela.
 - A comissão do funcionário usa a data efetiva do pagamento: até 30/09/2026 preserva 2/3/4/6/8/10%, e desde 01/10/2026 usa 2/3/4/5/7/9% para todos os credores; honorários do escritório permanecem separados.
 - A calculadora UME carrega primeiro cliente e totais, busca tabelas alternativas sob demanda, limita a espera externa e mantém cache de 12 horas sem polling.
+- Modelos de negociação por credor mantêm texto editável independente, mesmo quando compartilham extração e cálculo.

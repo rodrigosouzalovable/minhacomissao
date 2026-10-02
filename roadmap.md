@@ -27,3 +27,4 @@
 - [x] Adicionar Odres Cred aos acordos e aplicar a nova comissão dos funcionários desde 01/10/2026, preservando pagamentos históricos.
 - [x] Acelerar a calculadora UME com consulta essencial, tabelas sob demanda, limite de espera e medição por etapa.
 - [x] Restaurar etiquetas automáticas por rodízio, com IAGO somente na Padrão, e carregar todas as conversas não lidas.
+- [x] Adicionar o modelo de mensagem da Odres Cred com o mesmo cálculo da UME e texto independente.
