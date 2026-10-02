@@ -1285,6 +1285,7 @@ export default function Acordos() {
                 <SelectItem value="todos">Todos os credores</SelectItem>
                 <SelectItem value="ume_novo_mundo">NOVO MUNDO</SelectItem>
                 <SelectItem value="mundo_da_moda">UME</SelectItem>
+                <SelectItem value="odres_cred">ODRES CRED</SelectItem>
               </SelectContent>
             </Select>
 

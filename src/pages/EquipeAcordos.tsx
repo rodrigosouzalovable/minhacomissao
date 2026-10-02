@@ -103,7 +103,7 @@ export default function EquipeAcordos() {
   const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(parseDate(initial.filtroDataVencimento));
   const [todasDatasPorAcordo, setTodasDatasPorAcordo] = useState<Map<string, string[]>>(new Map());
   const [podeAlterarCredor, setPodeAlterarCredor] = useState(false);
-  const [alteracaoCredor, setAlteracaoCredor] = useState<{ acordo: AcordoComFuncionario; novoCredor: 'ume_novo_mundo' | 'mundo_da_moda' } | null>(null);
+  const [alteracaoCredor, setAlteracaoCredor] = useState<{ acordo: AcordoComFuncionario; novoCredor: 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred' } | null>(null);
   const [alterandoCredorId, setAlterandoCredorId] = useState<string | null>(null);
   const [acordoParaMensagem, setAcordoParaMensagem] = useState<AcordoComFuncionario | null>(null);
 
@@ -323,6 +323,7 @@ export default function EquipeAcordos() {
           acordo.empresa,
           Number(pag.valor_parcela) || 0,
           acordo.dias_atraso,
+          pag.data_paga,
         );
         comissaoFuncionario = recalc.valor;
       }
@@ -1040,7 +1041,7 @@ export default function EquipeAcordos() {
                               disabled={alterandoCredorId === acordo.id}
                               onValueChange={(valor) => {
                                 if (valor === acordo.empresa) return;
-                                setAlteracaoCredor({ acordo, novoCredor: valor as 'ume_novo_mundo' | 'mundo_da_moda' });
+                                setAlteracaoCredor({ acordo, novoCredor: valor as 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred' });
                               }}
                             >
                               <SelectTrigger
@@ -1054,6 +1055,7 @@ export default function EquipeAcordos() {
                               <SelectContent onClick={(event) => event.stopPropagation()}>
                                 <SelectItem value="ume_novo_mundo">NOVO MUNDO</SelectItem>
                                 <SelectItem value="mundo_da_moda">UME</SelectItem>
+                                <SelectItem value="odres_cred">ODRES CRED</SelectItem>
                               </SelectContent>
                             </Select>
                           ) : (

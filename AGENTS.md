@@ -19,3 +19,4 @@
 - A captação nacional de candidatos a resposta automática tem agenda, configuração e trava próprias; usa o teto diário de consultas e limites mensais por conta Google, nunca um bloqueio diário em dólares, e não dispara mensagens.
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
 - Parcelas vencidas são derivadas de pagamentos pendentes em acordos ativos e compartilham a consulta entre sino, alerta e Retornos; o pop-up abre uma vez às 9h e às 15h BRT, inclusive no primeiro acesso posterior à janela.
+- A comissão do funcionário usa a data efetiva do pagamento: até 30/09/2026 preserva 2/3/4/6/8/10%, e desde 01/10/2026 usa 2/3/4/5/7/9% para todos os credores; honorários do escritório permanecem separados.

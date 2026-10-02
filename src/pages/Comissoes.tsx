@@ -45,7 +45,7 @@ export default function Comissoes() {
   const [filtro, setFiltro] = useState<'todas' | 'pagas' | 'duplicados'>('todas');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
-  const [credor, setCredor] = useState<'todos' | 'ume_novo_mundo' | 'mundo_da_moda'>('todos');
+  const [credor, setCredor] = useState<'todos' | 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred'>('todos');
 
   const { data: acordos, isLoading: loadingAcordos } = useQuery({
     queryKey: ['meus-acordos', user?.id],
@@ -109,7 +109,7 @@ export default function Comissoes() {
 
   // Comissão de funcionário por parcela (NUNCA usa comissao_parcela do banco — esse é do escritório)
   const comissaoFuncionarioParcela = (p: Pagamento) =>
-    calcularComissaoFuncionarioParcela(Number(p.valor_parcela), diasAtrasoPorAcordo.get(p.acordo_id) || 0).valor;
+    calcularComissaoFuncionarioParcela(Number(p.valor_parcela), diasAtrasoPorAcordo.get(p.acordo_id) || 0, p.data_paga).valor;
 
   // Calcular totais (apenas parcelas pagas no período)
   const pagamentosPagosNoPeriodo = pagamentosFiltradosPorPeriodo?.filter(p => p.status === 'pago') || [];
@@ -121,6 +121,7 @@ export default function Comissoes() {
   };
   const resumoNovoMundo = resumoPorCredor('ume_novo_mundo');
   const resumoUme = resumoPorCredor('mundo_da_moda');
+  const resumoOdres = resumoPorCredor('odres_cred');
   const totalPaga = pagamentosPagosFiltrados.reduce((sum, p) => sum + comissaoFuncionarioParcela(p), 0);
   const totalValorParcelasPagas = pagamentosPagosFiltrados.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
@@ -263,7 +264,7 @@ export default function Comissoes() {
                 onEndDateChange={setEndDate}
               />
               <div className="flex flex-wrap gap-2">
-                {(['todos', 'ume_novo_mundo', 'mundo_da_moda'] as const).map((valor) => (
+                {(['todos', 'ume_novo_mundo', 'mundo_da_moda', 'odres_cred'] as const).map((valor) => (
                   <Button key={valor} type="button" size="sm" variant={credor === valor ? 'default' : 'outline'} onClick={() => setCredor(valor)}>
                     {valor === 'todos' ? 'Todos' : getEmpresaLabel(valor)}
                   </Button>
@@ -274,7 +275,7 @@ export default function Comissoes() {
         </Card>
 
         {/* Cards de resumo */}
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -302,6 +303,7 @@ export default function Comissoes() {
         <div className="grid gap-4 md:grid-cols-2">
           <Card><CardContent className="pt-6"><p className="text-sm font-medium">NOVO MUNDO</p><p className="text-sm text-muted-foreground">Recebido: {formatarMoeda(resumoNovoMundo.recebido)}</p><p className="text-xl font-bold">Comissão: {formatarMoeda(resumoNovoMundo.comissao)}</p></CardContent></Card>
           <Card><CardContent className="pt-6"><p className="text-sm font-medium">UME</p><p className="text-sm text-muted-foreground">Recebido: {formatarMoeda(resumoUme.recebido)}</p><p className="text-xl font-bold">Comissão: {formatarMoeda(resumoUme.comissao)}</p></CardContent></Card>
+          <Card><CardContent className="pt-6"><p className="text-sm font-medium">ODRES CRED</p><p className="text-sm text-muted-foreground">Recebido: {formatarMoeda(resumoOdres.recebido)}</p><p className="text-xl font-bold">Comissão: {formatarMoeda(resumoOdres.comissao)}</p></CardContent></Card>
         </div>
 
         {/* Tabs de filtro */}

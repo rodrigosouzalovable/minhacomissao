@@ -126,7 +126,7 @@ export default function EditarAcordo() {
         setParcelasOriginais(pagamentos || []);
         setParcelasEditadas({});
 
-        const empresaCarregada = (acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda') || 'ume_novo_mundo';
+        const empresaCarregada = (acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred') || 'ume_novo_mundo';
         setEmpresa(empresaCarregada);
         setEmpresaOriginal(empresaCarregada);
         setTelefoneOriginal(acordo.cliente_telefone || '');

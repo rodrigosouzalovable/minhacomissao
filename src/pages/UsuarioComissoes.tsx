@@ -63,7 +63,7 @@ export default function UsuarioComissoes() {
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState('');
-  const [credor, setCredor] = useState<'todos' | 'ume_novo_mundo' | 'mundo_da_moda'>('todos');
+  const [credor, setCredor] = useState<'todos' | 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred'>('todos');
 
   // Mutation para marcar duplicado como verificado
   const marcarVerificadoMutation = useMutation({
@@ -171,17 +171,18 @@ export default function UsuarioComissoes() {
     const itens = pagamentosPagosNoPeriodo.filter((p) => acordoPorId.get(p.acordo_id)?.empresa === empresa);
     return {
       recebido: itens.reduce((acc, p) => acc + Number(p.valor_parcela), 0),
-      funcionario: itens.reduce((acc, p) => acc + calcularComissaoFuncionarioParcela(Number(p.valor_parcela), acordoPorId.get(p.acordo_id)?.dias_atraso || 0).valor, 0),
+      funcionario: itens.reduce((acc, p) => acc + calcularComissaoFuncionarioParcela(Number(p.valor_parcela), acordoPorId.get(p.acordo_id)?.dias_atraso || 0, p.data_paga).valor, 0),
       escritorio: itens.reduce((acc, p) => acc + Number(p.comissao_parcela), 0),
     };
   };
   const resumoNovoMundo = calcularResumo('ume_novo_mundo');
   const resumoUme = calcularResumo('mundo_da_moda');
+  const resumoOdres = calcularResumo('odres_cred');
   const totalPagoNoPeriodo = pagamentosPagosFiltrados.reduce((acc, p) => acc + Number(p.valor_parcela), 0);
   const comissaoEscritorioNoPeriodo = pagamentosPagosFiltrados.reduce((acc, p) => acc + Number(p.comissao_parcela), 0);
   const comissaoFuncionarioNoPeriodo = pagamentosPagosFiltrados.reduce((acc, p) => {
     const acordo = acordos?.find(a => a.id === p.acordo_id);
-    return acc + calcularComissaoFuncionarioParcela(Number(p.valor_parcela), acordo?.dias_atraso || 0).valor;
+    return acc + calcularComissaoFuncionarioParcela(Number(p.valor_parcela), acordo?.dias_atraso || 0, p.data_paga).valor;
   }, 0);
 
   // Normalizar CPF (apenas dígitos)
@@ -286,7 +287,7 @@ export default function UsuarioComissoes() {
         valor_parcela: parcela.valor_parcela,
         data_pagamento: formatarData(parcela.data_paga),
         numero_parcela: parcela.numero_parcela,
-        comissao_funcionario: calcularComissaoFuncionarioParcela(Number(parcela.valor_parcela), acordo?.dias_atraso || 0).valor,
+        comissao_funcionario: calcularComissaoFuncionarioParcela(Number(parcela.valor_parcela), acordo?.dias_atraso || 0, parcela.data_paga).valor,
         comissao_escritorio: Math.round(comissaoEscritorio * 100) / 100,
         dias_atraso: acordo?.dias_atraso || 0,
       };
@@ -378,7 +379,7 @@ export default function UsuarioComissoes() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {(['todos', 'ume_novo_mundo', 'mundo_da_moda'] as const).map((valor) => (
+          {(['todos', 'ume_novo_mundo', 'mundo_da_moda', 'odres_cred'] as const).map((valor) => (
             <Button key={valor} type="button" size="sm" variant={credor === valor ? 'default' : 'outline'} onClick={() => setCredor(valor)}>
               {valor === 'todos' ? 'Todos os credores' : getEmpresaLabel(valor)}
             </Button>
@@ -418,9 +419,10 @@ export default function UsuarioComissoes() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm">NOVO MUNDO</CardTitle></CardHeader><CardContent className="grid grid-cols-3 gap-2 text-sm"><div><p className="text-xs text-muted-foreground">Recebido</p><p className="font-semibold">{formatarMoeda(resumoNovoMundo.recebido)}</p></div><div><p className="text-xs text-muted-foreground">Funcionário</p><p className="font-semibold">{formatarMoeda(resumoNovoMundo.funcionario)}</p></div><div><p className="text-xs text-muted-foreground">Escritório</p><p className="font-semibold">{formatarMoeda(resumoNovoMundo.escritorio)}</p></div></CardContent></Card>
           <Card><CardHeader className="pb-2"><CardTitle className="text-sm">UME</CardTitle></CardHeader><CardContent className="grid grid-cols-3 gap-2 text-sm"><div><p className="text-xs text-muted-foreground">Recebido</p><p className="font-semibold">{formatarMoeda(resumoUme.recebido)}</p></div><div><p className="text-xs text-muted-foreground">Funcionário</p><p className="font-semibold">{formatarMoeda(resumoUme.funcionario)}</p></div><div><p className="text-xs text-muted-foreground">Escritório</p><p className="font-semibold">{formatarMoeda(resumoUme.escritorio)}</p></div></CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm">ODRES CRED</CardTitle></CardHeader><CardContent className="grid grid-cols-3 gap-2 text-sm"><div><p className="text-xs text-muted-foreground">Recebido</p><p className="font-semibold">{formatarMoeda(resumoOdres.recebido)}</p></div><div><p className="text-xs text-muted-foreground">Funcionário</p><p className="font-semibold">{formatarMoeda(resumoOdres.funcionario)}</p></div><div><p className="text-xs text-muted-foreground">Escritório</p><p className="font-semibold">{formatarMoeda(resumoOdres.escritorio)}</p></div></CardContent></Card>
         </div>
 
         {/* Filtro */}
