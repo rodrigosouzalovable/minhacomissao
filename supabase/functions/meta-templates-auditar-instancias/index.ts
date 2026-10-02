@@ -4,6 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
+import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 
 
 const corsHeaders = {
@@ -52,9 +53,7 @@ Deno.serve(async (req) => {
       .select("id, nome, idioma, criado_por, categoria")
       .eq("reclassificado_marketing", false)
       .order("criado_em", { ascending: true });
-    modelosQuery = utilityApprovedOnly
-      ? modelosQuery.eq("categoria", "UTILITY")
-      : modelosQuery.eq("injetar_em_novos", true).in("categoria", ["UTILITY", "MARKETING"]);
+    modelosQuery = modelosQuery.eq("categoria", "UTILITY").eq("injetar_em_novos", true);
     const { data: marcados } = await modelosQuery;
     const lista = ((marcados as any[]) || []).map((r) => ({
       id: r.id as string,
@@ -75,7 +74,7 @@ Deno.serve(async (req) => {
 
     const { data: instsRaw } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, user_id, waba_id, access_token, saude_quality, saude_status, meta_name_status, ativo, provider, templates_auto_pausado_ate, templates_resync_pendente")
+      .select("id, nome, display_phone, user_id, waba_id, access_token, saude_quality, saude_status, meta_name_status, ativo, provider, templates_auto_pausado_ate, templates_auto_status, templates_resync_pendente, qualidade_leitura_ok, qualidade_leitura_erro, saude_ban_info, saude_restricoes, pausa_automatica_motivo, templates_auto_copiar, instancia_teste_aquecimento")
       .eq("ativo", true)
       .eq("provider", "meta");
 
@@ -103,24 +102,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    const motivoIgnorar = (i: any): string | null => {
-      if (!i.waba_id || !i.access_token) return "sem credenciais da Meta";
-      const status = String(i.saude_status || "").toUpperCase();
-      const qual = String(i.saude_quality || "").toUpperCase();
-      const nomeStatus = String(i.meta_name_status || "").toUpperCase();
-       if (qual !== "GREEN") return qual ? `qualidade ${qual.toLowerCase()}` : "qualidade ainda não confirmada como GREEN";
-      if (nomeStatus === "REJECTED") return "nome reprovado";
-      if (["BANNED", "RESTRICTED", "FLAGGED", "DISABLED", "PENDING_PAYMENT"].includes(status)) {
-        return `situação na Meta: ${status}`;
-      }
-       if (status !== "CONNECTED") {
-        return `não conectado (${status})`;
-      }
-      if (i.templates_auto_pausado_ate && new Date(i.templates_auto_pausado_ate) > new Date()) {
-        return "fila pausada temporariamente";
-      }
-      return null;
-    };
+    const motivoIgnorar = (i: any): string | null =>
+      i.instancia_teste_aquecimento || i.templates_auto_copiar === false
+        ? "cópia automática desativada"
+        : motivoBloqueioTemplate(i);
 
     const elegiveis = insts.filter((i) => motivoIgnorar(i) === null);
     const ignoradas = insts
@@ -169,7 +154,7 @@ Deno.serve(async (req) => {
         .select("instancia_id, template_mestre_id, status")
         .in("instancia_id", idsElegiveis);
       for (const r of ((fila as any[]) || [])) {
-        if (utilityApprovedOnly && !["PENDENTE", "ENVIADO", "APPROVED"].includes(String(r.status || "").toUpperCase())) {
+        if (!["PENDENTE", "ENVIADO", "APPROVED"].includes(String(r.status || "").toUpperCase())) {
           continue;
         }
         if (!naFila.has(r.instancia_id)) naFila.set(r.instancia_id, new Set());
@@ -237,7 +222,7 @@ Deno.serve(async (req) => {
       }));
       const { error } = await supabase
         .from("meta_templates_onboarding_fila")
-        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: !utilityApprovedOnly });
+        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true });
       if (error) continue;
       enfileirados += rows.length;
       await supabase
@@ -245,8 +230,6 @@ Deno.serve(async (req) => {
         .update({
           templates_auto_copiar: true,
           templates_auto_status: "EM_ANDAMENTO",
-          templates_auto_pausado_ate: null,
-          templates_auto_rejeicoes_seguidas: 0,
           templates_auto_iniciado_em: new Date().toISOString(),
         })
         .eq("id", r.id);

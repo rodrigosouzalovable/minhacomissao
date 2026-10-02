@@ -11,6 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";
+import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -189,13 +190,11 @@ Deno.serve(async (req) => {
     // ===== 2) Conclusão: números sem nada pendente =====
     const { data: instsAtivas } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, user_id, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, ativo, saude_quality, saude_status, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider")
+      .select("id, nome, display_phone, user_id, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, ativo, saude_quality, saude_status, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider, qualidade_leitura_ok, qualidade_leitura_erro, meta_name_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, instancia_teste_aquecimento")
       .eq("templates_auto_copiar", true);
 
     const elegiveis = ((instsAtivas as any[]) || []).filter(
-      (i) => (i.provider ?? "meta") === "meta" && i.waba_id && i.access_token &&
-        String(i.saude_quality || "").toUpperCase() === "GREEN" &&
-        String(i.saude_status || "").toUpperCase() === "CONNECTED",
+      (i) => !i.instancia_teste_aquecimento && motivoBloqueioTemplate(i) === null,
     );
 
     for (const inst of elegiveis) {
@@ -301,8 +300,7 @@ Deno.serve(async (req) => {
       // de todos os HSM. A inserção é feita somente por funções autenticadas;
       // ainda exigimos o mesmo proprietário e uma categoria segura.
       const categoriaMestre = String(mestreItem?.categoria || "").toUpperCase();
-      const permitidoPelaFila = mestreItem?.injetar_em_novos === true ||
-        (categoriaMestre === "UTILITY" && mestreItem?.reclassificado_marketing !== true);
+      const permitidoPelaFila = categoriaMestre === "UTILITY" && mestreItem?.reclassificado_marketing !== true;
       if (!mestreItem || mestreItem.criado_por !== inst.user_id || !permitidoPelaFila) {
         await supabase.from("meta_templates_onboarding_fila").update({
           status: "CANCELADO",
@@ -317,8 +315,8 @@ Deno.serve(async (req) => {
       if (mestreItem) {
         const nomeadas = String((mestreItem as any).corpo || "").match(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g) || [];
         const categoria = String((mestreItem as any).categoria || "").toUpperCase();
-        const categoriaInvalida = !["UTILITY", "MARKETING"].includes(categoria);
-        const reclassificadoInconsistente = (mestreItem as any).reclassificado_marketing === true && categoria !== "MARKETING";
+        const categoriaInvalida = categoria !== "UTILITY";
+        const reclassificadoInconsistente = (mestreItem as any).reclassificado_marketing === true;
         if (nomeadas.length > 0 || categoriaInvalida || reclassificadoInconsistente) {
           await supabase
             .from("meta_templates_onboarding_fila")

@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
+import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -69,7 +70,7 @@ Deno.serve(async (req) => {
     for (const instanciaId of listaInstancias) {
       const { data: inst } = await supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, user_id, provider, ativo, saude_quality, saude_status, waba_id, access_token, templates_auto_copiar, meta_bm_id, business_id")
+        .select("id, nome, display_phone, user_id, provider, ativo, saude_quality, saude_status, waba_id, access_token, templates_auto_copiar, meta_bm_id, business_id, qualidade_leitura_ok, qualidade_leitura_erro, meta_name_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, templates_auto_pausado_ate, templates_auto_status, instancia_teste_aquecimento")
         .eq("id", instanciaId)
         .maybeSingle();
       if (!inst) {
@@ -88,8 +89,9 @@ Deno.serve(async (req) => {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_de_outro_proprietario" });
         continue;
       }
-      if (String(inst.saude_quality || "").toUpperCase() !== "GREEN" || String(inst.saude_status || "").toUpperCase() !== "CONNECTED") {
-        resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_precisa_estar_conectada_e_green" });
+      const bloqueio = motivoBloqueioTemplate(inst);
+      if (bloqueio || inst.instancia_teste_aquecimento) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: bloqueio || "instancia_de_teste" });
         continue;
       }
 
@@ -113,10 +115,11 @@ Deno.serve(async (req) => {
 
       const { data: mestresValidos, error: mestresError } = await supabase
         .from("meta_templates_mestre")
-        .select("id,nome,idioma,categoria,criado_por,injetar_em_novos")
+        .select("id,nome,idioma,categoria,criado_por,injetar_em_novos,reclassificado_marketing")
         .eq("criado_por", inst.user_id)
         .eq("injetar_em_novos", true)
-        .in("categoria", ["UTILITY", "MARKETING"])
+        .eq("categoria", "UTILITY")
+        .eq("reclassificado_marketing", false)
         .order("criado_em", { ascending: true });
       if (mestresError) throw mestresError;
       const mestresPermitidos = ((mestresValidos as any[]) || []).filter((m) => !restricaoMestres || restricaoMestres.includes(m.id));
@@ -173,7 +176,7 @@ Deno.serve(async (req) => {
 
       const { error: errIns } = await supabase
         .from("meta_templates_onboarding_fila")
-        .upsert(rows, { onConflict: "instancia_id,template_mestre_id" });
+        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true });
       if (errIns) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: errIns.message });
         continue;
@@ -184,8 +187,6 @@ Deno.serve(async (req) => {
         .update({
           templates_auto_copiar: true,
           templates_auto_status: "EM_ANDAMENTO",
-          templates_auto_pausado_ate: null,
-          templates_auto_rejeicoes_seguidas: 0,
           templates_auto_iniciado_em: new Date().toISOString(),
         })
         .eq("id", instanciaId);
