@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
+import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,7 +30,8 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const interno = body?.interno === true;
+    const serviceToken = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const interno = body?.interno === true && !!serviceToken && req.headers.get("Authorization") === `Bearer ${serviceToken}`;
     let solicitanteId: string | null = null;
     const listaInstancias: string[] = Array.isArray(body?.instancia_ids)
       ? body.instancia_ids.map((x: unknown) => String(x || "").trim()).filter(Boolean)
@@ -55,7 +57,7 @@ Deno.serve(async (req) => {
     const templateIdioma = String(body?.idioma || "").trim();
     let restricaoMestres: string[] | null = null;
     if (templateNome) {
-      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma, criado_por").eq("nome", templateNome).in("categoria", ["UTILITY", "MARKETING"]);
+      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma, criado_por").eq("nome", templateNome).eq("categoria", "UTILITY").eq("reclassificado_marketing", false);
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
       const { data: mestres } = await q;
       restricaoMestres = ((mestres as any[]) || []).map((r) => r.id as string);
@@ -69,11 +71,17 @@ Deno.serve(async (req) => {
     for (const instanciaId of listaInstancias) {
       const { data: inst } = await supabase
         .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, user_id, provider, ativo, saude_quality, saude_status, waba_id, access_token, templates_auto_copiar, meta_bm_id, business_id")
+        .select("id, nome, display_phone, user_id, provider, ativo, saude_quality, saude_status, waba_id, access_token, templates_auto_copiar, meta_bm_id, business_id, qualidade_leitura_ok, qualidade_leitura_erro, meta_name_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, templates_auto_pausado_ate, templates_auto_status, instancia_teste_aquecimento")
         .eq("id", instanciaId)
         .maybeSingle();
       if (!inst) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_nao_encontrada" });
+        continue;
+      }
+      const { data: parceiro } = await supabase.from("meta_instance_parceiros")
+        .select("instancia_id").eq("instancia_id", instanciaId).maybeSingle();
+      if (parceiro) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_de_parceiro" });
         continue;
       }
       if ((inst as any).provider && (inst as any).provider !== "meta") {
@@ -88,17 +96,18 @@ Deno.serve(async (req) => {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_de_outro_proprietario" });
         continue;
       }
-      if (String(inst.saude_quality || "").toUpperCase() !== "GREEN" || String(inst.saude_status || "").toUpperCase() !== "CONNECTED") {
-        resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_precisa_estar_conectada_e_green" });
+      const bloqueio = motivoBloqueioTemplate(inst);
+      if (bloqueio || inst.instancia_teste_aquecimento || inst.templates_auto_copiar !== true) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: bloqueio || (inst.instancia_teste_aquecimento ? "instancia_de_teste" : "copia_automatica_desativada") });
         continue;
       }
 
       // Modelos já processados internamente e templates reais conhecidos nesse número.
       const { data: aprovados } = await supabase
         .from("meta_templates_instancia")
-        .select("template_mestre_id, instancia_id, status");
+        .select("template_mestre_id, instancia_id, status")
+        .eq("instancia_id", instanciaId);
 
-      const contagem = new Map<string, number>();
       const jaNoNumero = new Set<string>();
       for (const r of (aprovados as any[]) || []) {
         if (r.instancia_id === instanciaId) {
@@ -107,16 +116,15 @@ Deno.serve(async (req) => {
           }
           continue;
         }
-        if (String(r.status || "").toUpperCase() !== "APPROVED") continue;
-        contagem.set(r.template_mestre_id, (contagem.get(r.template_mestre_id) || 0) + 1);
       }
 
       const { data: mestresValidos, error: mestresError } = await supabase
         .from("meta_templates_mestre")
-        .select("id,nome,idioma,categoria,criado_por,injetar_em_novos")
+        .select("id,nome,idioma,categoria,criado_por,injetar_em_novos,reclassificado_marketing")
         .eq("criado_por", inst.user_id)
         .eq("injetar_em_novos", true)
-        .in("categoria", ["UTILITY", "MARKETING"])
+        .eq("categoria", "UTILITY")
+        .eq("reclassificado_marketing", false)
         .order("criado_em", { ascending: true });
       if (mestresError) throw mestresError;
       const mestresPermitidos = ((mestresValidos as any[]) || []).filter((m) => !restricaoMestres || restricaoMestres.includes(m.id));
@@ -143,17 +151,11 @@ Deno.serve(async (req) => {
         const listaAplicaveis = mestresAusentes.map((r) => r.id as string);
         candidatos = listaAplicaveis
           .filter((id) => !jaNoNumero.has(id) && !emProcessamento.has(id))
-          .map((id, idx) => [id, (contagem.get(id) || 0) * 1000 + listaAplicaveis.length - idx] as [string, number])
+          .map((id, idx) => [id, listaAplicaveis.length - idx] as [string, number])
           .sort((a, b) => b[1] - a[1]);
       }
 
       if (candidatos.length === 0) {
-        if (!restricaoMestres) {
-          await supabase
-            .from("meta_whatsapp_instances")
-            .update({ templates_auto_status: "SEM_MODELOS" })
-            .eq("id", instanciaId);
-        }
         resultados.push({
           instancia_id: instanciaId,
           ok: true,
@@ -173,7 +175,7 @@ Deno.serve(async (req) => {
 
       const { error: errIns } = await supabase
         .from("meta_templates_onboarding_fila")
-        .upsert(rows, { onConflict: "instancia_id,template_mestre_id" });
+        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true });
       if (errIns) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: errIns.message });
         continue;
@@ -184,8 +186,6 @@ Deno.serve(async (req) => {
         .update({
           templates_auto_copiar: true,
           templates_auto_status: "EM_ANDAMENTO",
-          templates_auto_pausado_ate: null,
-          templates_auto_rejeicoes_seguidas: 0,
           templates_auto_iniciado_em: new Date().toISOString(),
         })
         .eq("id", instanciaId);

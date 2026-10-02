@@ -31,3 +31,4 @@
 - [x] Liberar o IAGO para responder todas as entradas UAZAPI da AQUECIMENTO, sem humano e sem follow-up.
 - [x] Antecipar o reaquecimento RED/YELLOW para 8h BRT e interromper números com bloqueio real da Meta.
 - [x] Permitir bloquear contatos confirmados do Google Maps diretamente no Aquecimento Meta.
+- [x] Liberar Utility selecionados em novas instâncias Meta UNKNOWN seguras, com fila sequencial e limite tier 250; avaliar bloqueios confirmados da BM AUREON antes de enfileirar.

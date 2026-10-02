@@ -325,7 +325,7 @@ export default function ConfigurarMeta() {
     access_token: "",
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
-    templates_auto_copiar: false,
+    templates_auto_copiar: true,
     instancia_teste_aquecimento: false,
   });
 
@@ -559,7 +559,7 @@ export default function ConfigurarMeta() {
     if (error) return toast.error("Erro ao iniciar: " + error.message);
     if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
     toast.success(
-      `${data.enfileirados} modelo(s) na fila de ${data.instancias_afetadas} número(s). O envio é gradual: 1 por vez, 5–10 min, das 07h às 20h.`,
+      `${data.enfileirados} Utility na fila de ${data.instancias_afetadas} número(s); ${data.ignoradas?.length || 0} número(s) aguardam liberação. Tier 250: até 2/dia; tiers 1.000 e 2.000: 1 por vez, com intervalo de 2–5 min.`,
     );
     setAuditoria(null);
     carregar();
@@ -684,7 +684,7 @@ export default function ConfigurarMeta() {
     access_token: "",
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
-    templates_auto_copiar: false,
+    templates_auto_copiar: true,
     instancia_teste_aquecimento: false,
 
   };
@@ -740,7 +740,7 @@ export default function ConfigurarMeta() {
         access_token: form.access_token.trim(),
         ...camposBmTier(form),
         aquecimento_meta_ativo: isAdmin ? form.aquecimento_meta_ativo : false,
-        templates_auto_copiar: isAdmin ? form.templates_auto_copiar : false,
+        templates_auto_copiar: isAdmin ? form.templates_auto_copiar && !form.instancia_teste_aquecimento : false,
         instancia_teste_aquecimento: isAdmin ? form.instancia_teste_aquecimento : false,
         folder_padrao_id: isAdmin && form.instancia_teste_aquecimento ? "4f7a52c0-9c86-4b80-8867-4ade7a6df441" : null,
         pool_fora_manual: isAdmin && form.instancia_teste_aquecimento,
@@ -784,7 +784,7 @@ export default function ConfigurarMeta() {
       await carregar();
     }
 
-    if (novaInst?.id && isAdmin && form.templates_auto_copiar) {
+    if (novaInst?.id && isAdmin && form.templates_auto_copiar && !form.instancia_teste_aquecimento) {
       await iniciarCopiaTemplates(novaInst.id);
     }
   };
@@ -799,12 +799,15 @@ export default function ConfigurarMeta() {
       if (error) throw new Error(error.message);
       if ((data as any)?.success === false) throw new Error((data as any)?.error || "falha");
       const total = Number((data as any)?.enfileirados || 0);
-      if (total === 0) {
+      const bloqueada = (data as any)?.instancias?.find((item: any) => !item.ok)?.erro;
+      if (bloqueada) {
+        toast.warning(`Cópia aguardando: ${bloqueada}.`, { id: toastId, duration: 9000 });
+      } else if (total === 0) {
         toast.dismiss(toastId);
         toast.message("Nenhum modelo aprovado disponível para copiar agora.", { duration: 4000 });
       } else {
         toast.success(
-          `${total} modelos na fila. Números tier 250 recebem no máximo 2 templates de utilidade por dia; tier 2 mil mantém o fluxo atual.`,
+          `${total} modelos Utility na fila. Tier 250: até 2 por número/dia; tiers 1.000 e 2.000: um por vez, com intervalo.`,
           { id: toastId, duration: 9000 },
         );
       }
@@ -1044,6 +1047,12 @@ export default function ConfigurarMeta() {
       });
       if (filaError) throw filaError;
       if (filaData?.success === false || filaData?.error) throw new Error(filaData?.error || "Não foi possível iniciar a aplicação");
+      const bloqueioFila = filaData?.instancias?.find((item: { ok: boolean; erro?: string }) => !item.ok)?.erro;
+      if (bloqueioFila) {
+        toast.warning(`Aplicação aguardando: ${bloqueioFila}.`, { duration: 9000 });
+        await carregar();
+        return;
+      }
 
       const enfileirados = Number(filaData?.enfileirados || 0);
       const { data: tickData, error: tickError } = await supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} });
@@ -2382,7 +2391,7 @@ export default function ConfigurarMeta() {
                 <div>
                   <Label>Copiar templates aprovados automaticamente</Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 07h às 20h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
+                     Copia os modelos Utility selecionados para novos números, um por vez das 07h às 20h (nunca no domingo). Tier 250: até 2 por número/dia; tiers 1.000 e 2.000: todos, com intervalo.
                   </p>
                 </div>
                 <Switch
@@ -2496,7 +2505,7 @@ export default function ConfigurarMeta() {
                 <div>
                   <Label>Copiar templates aprovados automaticamente</Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Copia, aos poucos, os modelos já aprovados nos seus outros números: 3 no 1º dia, 5 no 2º, 8 no 3º e 10/dia depois, 1 por vez das 07h às 20h (nunca no domingo). Você é avisado no WhatsApp no início, em cada reprovação e no fim.
+                     Copia os modelos Utility selecionados para novos números, um por vez das 07h às 20h (nunca no domingo). Tier 250: até 2 por número/dia; tiers 1.000 e 2.000: todos, com intervalo.
                   </p>
                 </div>
                 <Switch
