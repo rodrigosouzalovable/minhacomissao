@@ -195,7 +195,7 @@ export default function NovoAcordo() {
 
     // IA apenas SUGERE o credor (NM-AP / NM-I); a seleção final é sempre manual
     let credorDetectadoLabel = '';
-    if (data.empresa === 'mundo_da_moda' || data.empresa === 'ume_novo_mundo') {
+    if (data.empresa === 'mundo_da_moda' || data.empresa === 'ume_novo_mundo' || data.empresa === 'odres_cred') {
       credorDetectadoLabel = getEmpresaLabel(data.empresa);
       setEmpresaSugerida(credorDetectadoLabel);
     }

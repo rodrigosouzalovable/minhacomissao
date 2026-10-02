@@ -324,7 +324,9 @@ function AcordoCard({
                       "font-semibold",
                       acordo.empresa === 'ume_novo_mundo'
                         ? "border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-950/30"
-                        : "border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950/30"
+                        : acordo.empresa === 'odres_cred'
+                          ? "border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
+                          : "border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950/30"
                     )}
                   >
                     {getEmpresaLabel(acordo.empresa)}

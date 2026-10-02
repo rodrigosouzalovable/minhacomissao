@@ -548,7 +548,7 @@ export default function UsuarioComissoes() {
                                       </TableCell>
                                       <TableCell>{formatarMoeda(pagamento.valor_parcela)}</TableCell>
                                       <TableCell>
-                                        {formatarMoeda(calcularComissaoFuncionarioParcela(Number(pagamento.valor_parcela), acordo.dias_atraso).valor)}
+                                        {formatarMoeda(calcularComissaoFuncionarioParcela(Number(pagamento.valor_parcela), acordo.dias_atraso, pagamento.data_paga).valor)}
                                       </TableCell>
                                       <TableCell>{formatarMoeda(pagamento.comissao_parcela)}</TableCell>
                                       <TableCell>{formatarData(pagamento.data_prevista)}</TableCell>
