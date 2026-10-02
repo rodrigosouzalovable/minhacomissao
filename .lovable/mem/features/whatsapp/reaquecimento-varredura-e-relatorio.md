@@ -7,3 +7,4 @@ type: feature
 - Em `check-meta-instance-health`, além do gatilho de queda (`caiu`), há a **varredura de reconciliação**: todo número `provider='meta'`, `aquecimento_qualidade_permitido !== false`, `qualidade_liberada_manual !== true` que esteja em YELLOW/RED com `recuperacao_ativa !== true` volta ao reaquecimento (meta do dia sorteada, `recuperacao_proximo_envio_em = now()`), sem reiniciar quarentena. Aviso `meta_aquecimento_religado` (1x por número por dia) nos 2 destinos.
 - `meta-recuperacao-relatorio` (13h e 18h BRT) **nunca fica em silêncio**: sem ninguém em reaquecimento, envia alerta listando os YELLOW/RED sem tratamento, ou confirma que todos estão saudáveis.
 - Relatórios de reaquecimento vão sempre para `5562991672674` e `5562994300880` via `destinatarios` do `notificar-admin`.
+- O reaquecimento opera das 08h às 19h BRT, exceto domingos; bloqueios reais confirmados pela Meta, incluindo #131031 e #131042, interrompem imediatamente os envios.
