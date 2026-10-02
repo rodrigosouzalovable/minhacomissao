@@ -313,7 +313,7 @@ export default function ConfigurarMeta() {
     access_token: "",
     messaging_limit_manual: "__auto__",
     aquecimento_meta_ativo: false,
-    templates_auto_copiar: true,
+    templates_auto_copiar: false,
     instancia_teste_aquecimento: false,
   });
   const [salvandoEdit, setSalvandoEdit] = useState(false);

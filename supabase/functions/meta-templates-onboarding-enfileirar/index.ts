@@ -30,7 +30,8 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const interno = body?.interno === true;
+    const serviceToken = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const interno = body?.interno === true && !!serviceToken && req.headers.get("Authorization") === `Bearer ${serviceToken}`;
     let solicitanteId: string | null = null;
     const listaInstancias: string[] = Array.isArray(body?.instancia_ids)
       ? body.instancia_ids.map((x: unknown) => String(x || "").trim()).filter(Boolean)

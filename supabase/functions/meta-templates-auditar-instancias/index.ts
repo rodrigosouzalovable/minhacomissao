@@ -33,11 +33,13 @@ Deno.serve(async (req) => {
     const dryRun = body?.dry_run !== false;
     const utilityApprovedOnly = body?.utility_approved_only === true;
     // Modo automático (cron diário): roda sem token de usuário, sempre aplicando.
-    const auto = body?.auto === true;
+    const serviceToken = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    const auto = body?.auto === true && !!serviceToken && bearer === serviceToken;
 
     // ===== Autorização: somente admin (dispensado no modo automático) =====
     if (!auto) {
-      const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+      const token = bearer;
       if (!token) return json({ success: false, error: "nao_autenticado" }, 401);
       const { data: userData } = await supabase.auth.getUser(token);
       const uid = userData?.user?.id;
@@ -172,7 +174,7 @@ Deno.serve(async (req) => {
       const temNome = jaTemNome.get(i.id) || new Set<string>();
       const fila = naFila.get(i.id) || new Set<string>();
       const faltando = modelosDoProprietario.filter(
-        (m) => !tem.has(m.id) && !temNome.has(`${m.nome}|${m.idioma}`),
+        (m) => !temNome.has(`${m.nome}|${m.idioma}`) && !tem.has(m.id),
       );
       const novos = faltando.filter((m) => !fila.has(m.id));
       return {
