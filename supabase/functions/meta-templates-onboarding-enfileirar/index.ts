@@ -150,12 +150,6 @@ Deno.serve(async (req) => {
       }
 
       if (candidatos.length === 0) {
-        if (!restricaoMestres) {
-          await supabase
-            .from("meta_whatsapp_instances")
-            .update({ templates_auto_status: "SEM_MODELOS" })
-            .eq("id", instanciaId);
-        }
         resultados.push({
           instancia_id: instanciaId,
           ok: true,
