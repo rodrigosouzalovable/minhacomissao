@@ -65,9 +65,9 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-function montarTabela(valores: Array<Array<string | number>>, ate3x: number | null, quatroMais: number | null): UmeTabela {
+function montarTabela(valores: Array<Array<string | number>> | undefined, ate3x: number | null, quatroMais: number | null): UmeTabela {
   const parcelas: UmeParcela[] = [];
-  valores.forEach((col, idx) => {
+  (valores ?? []).forEach((col, idx) => {
     const v = num(col?.[0]);
     if (v != null && v > 0) parcelas.push({ parcelas: idx + 1, valorParcela: v });
   });
