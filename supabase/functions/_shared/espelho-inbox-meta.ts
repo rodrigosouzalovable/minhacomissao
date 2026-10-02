@@ -5,6 +5,8 @@
 // Ao espelhar, os números conectados via UAZAPI passam a aparecer na caixa e o IAGO
 // atende essas conversas com exatamente as mesmas regras das instâncias oficiais.
 
+import { FOLDER_AQUECIMENTO_INBOX } from './iago.ts';
+
 /**
  * Padroniza o telefone no formato do lado oficial: 55 + DDD + 9 + 8 dígitos.
  * A UAZAPI às vezes entrega o celular sem o "9" (12 dígitos).
@@ -206,14 +208,22 @@ export async function garantirEtiquetaIagoInbox(
   ownerUserId: string,
 ): Promise<boolean> {
   try {
+    const { data: contato } = await supabase
+      .from('meta_whatsapp_contatos')
+      .select('folder_id')
+      .eq('id', contatoId)
+      .maybeSingle();
+    const ehAquecimento = (contato as any)?.folder_id === FOLDER_AQUECIMENTO_INBOX;
+
     const { data: jaTem } = await supabase
       .from('meta_whatsapp_contato_etiquetas')
       .select('etiqueta_id, meta_whatsapp_etiquetas!inner(nome)')
       .eq('contato_id', contatoId);
     const nomes = (jaTem ?? []).map((r: any) => String(r?.meta_whatsapp_etiquetas?.nome || ''));
-    if (nomes.some((n: string) => n.toLowerCase().startsWith('atendente:'))) {
+    if (!ehAquecimento && nomes.some((n: string) => n.toLowerCase().startsWith('atendente:'))) {
       return nomes.some((n: string) => /^atendente:\s*iago/i.test(n));
     }
+    if (nomes.some((n: string) => /^atendente:\s*iago/i.test(n))) return true;
 
     let { data: etiq } = await supabase
       .from('meta_whatsapp_etiquetas')
@@ -235,6 +245,24 @@ export async function garantirEtiquetaIagoInbox(
     if (!(etiq as any)?.id) {
       console.log('[espelho-inbox-meta] etiqueta do IAGO inexistente');
       return false;
+    }
+
+    // Na AQUECIMENTO, o IAGO é o único responsável por todas as entradas UAZAPI.
+    // Remove somente etiquetas de atendente; qualificações e demais etiquetas permanecem.
+    if (ehAquecimento) {
+      const linksAtendente = (jaTem ?? []).filter((r: any) =>
+        /^atendente:/i.test(String(r?.meta_whatsapp_etiquetas?.nome || '')),
+      );
+      const idsOutros = linksAtendente
+        .map((r: any) => String(r.etiqueta_id || ''))
+        .filter((id: string) => id && id !== String((etiq as any).id));
+      if (idsOutros.length) {
+        await supabase
+          .from('meta_whatsapp_contato_etiquetas')
+          .delete()
+          .eq('contato_id', contatoId)
+          .in('etiqueta_id', idsOutros);
+      }
     }
 
     const { error } = await supabase

@@ -1,5 +1,5 @@
-// IAGO — atendente de IA exclusivo da caixa PADRÃO do Inbox Meta Oficial.
-// Atende 24h/7 dias e escala para humano quando não souber responder.
+// IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
+// Na PADRÃO pode escalar; na AQUECIMENTO responde curto, sem humano e sem follow-up.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
@@ -7,7 +7,7 @@ import {
   avisarEmergencia as avisarEmergenciaBase, etiquetarAguardandoHumano as etiquetarAguardandoHumanoBase, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
-  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa, garantirApresentacaoVirtual,
+  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa, garantirApresentacaoVirtual, FOLDER_AQUECIMENTO_INBOX,
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
 import { detectarPropostaPreviaNoHistorico, type PropostaPrevia } from '../_shared/proposta-previa.ts';
@@ -90,15 +90,20 @@ Deno.serve(async (req) => {
       return json({ success: false, skipped: 'lead de aquecimento (Google Maps)' });
     }
 
-    // O IAGO atende exclusivamente a caixa PADRÃO (folder_id nulo).
-    // Esta trava interna também protege contra chamadas antigas ou manuais fora dela.
-    if ((contato as any).folder_id) {
-      return json({ success: false, skipped: 'IAGO restrito à caixa PADRÃO' });
+    const folderId = (contato as any).folder_id ?? null;
+    modoAquecimento = folderId === FOLDER_AQUECIMENTO_INBOX;
+    modoCaixaPadrao = folderId === null;
+    // Exceção controlada: fora da PADRÃO, somente a AQUECIMENTO pode usar o IAGO.
+    if (!modoCaixaPadrao && !modoAquecimento) {
+      return json({ success: false, skipped: 'IAGO restrito às caixas PADRÃO e AQUECIMENTO' });
     }
-    modoCaixaPadrao = true;
 
-    const atende = await iagoAtendeCaixa(supabase, iago.id, null);
-    if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
+    // Na PADRÃO, o IAGO participa somente quando estiver cadastrado no rodízio.
+    // Na AQUECIMENTO, toda entrada UAZAPI espelhada é responsabilidade dele.
+    if (modoCaixaPadrao) {
+      const atende = await iagoAtendeCaixa(supabase, iago.id, null);
+      if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
+    }
 
     // ===== Credor da conversa: cabeçalho da conversa > credor único ativo da caixa =====
     const credorResolvido = await resolverCredorConversa(
@@ -567,7 +572,7 @@ Deno.serve(async (req) => {
     // ===== Espera extra: prioridade para o humano fora da PADRÃO =====
     // Dá 20 segundos a mais antes de responder. Se um humano responder nesse
     // intervalo, o IAGO não envia nada.
-    await sleep(modoCaixaPadrao ? 1000 : 20000);
+    await sleep((modoCaixaPadrao || modoAquecimento) ? 1000 : 20000);
     {
       const corteEspera = String(estado.contexto?.ultimo_envio_ia || estado.created_at);
       const { data: novasSaidas } = await supabase
@@ -1147,7 +1152,7 @@ async function gerarResposta(args: {
       const out = await chamarIA(systemAquecimento, userAquecimento);
       const parsed = extrairJson(out);
       const respostas = Array.isArray(parsed?.mensagens)
-        ? parsed.mensagens.map((m: any) => String(m).trim()).filter(Boolean).slice(0, 2)
+        ? parsed.mensagens.map((m: any) => String(m).trim()).filter(Boolean).slice(0, 1)
         : [];
       if (respostas.length) return { mensagens: respostas, escalar: false, motivo: '' };
       const txt = String(out || '').trim();
