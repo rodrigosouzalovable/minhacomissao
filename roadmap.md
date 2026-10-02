@@ -33,3 +33,4 @@
 - [x] Permitir bloquear contatos confirmados do Google Maps diretamente no Aquecimento Meta.
 - [x] Liberar Utility selecionados em novas instâncias Meta UNKNOWN seguras, com fila sequencial e limite tier 250; avaliar bloqueios confirmados da BM AUREON antes de enfileirar.
 - [x] Preservar a seleção ao colar listas simples no Envio Meta, substituindo o trecho selecionado sem misturar contatos antigos.
+- [x] Permitir ao Bruno ler e enviar PDFs nas conversas autorizadas e distinguir erros de anexo de erros da Meta.

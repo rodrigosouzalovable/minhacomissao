@@ -6,6 +6,7 @@
 - Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
 
 - Inbox Meta: toda entrada recebe um atendente por atribuição atômica; IAGO participa do rodízio somente na PADRÃO, responde apenas suas conversas sem follow-up; “Não lidas” filtra na base antes da paginação; custo mensal é atualizado sem polling.
+- Inbox media reads and signed URLs follow conversation-level authorization, not broad folder membership; this allows assigned staff to send attachments without exposing files in other folders.
 - Migrações Meta→UAZAPI devem reaproveitar o registro da instância oficial, validar o telefone e fixar a caixa antes de desativar o canal antigo, preservando histórico e evitando duplicidade.
 - Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
