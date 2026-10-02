@@ -883,6 +883,20 @@
       "when": 1790889503651,
       "tag": "0125_localizar_conversas_meta_para_formalizacao",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1790937706281,
+      "tag": "0126_allow_odres_cred_agreement_creditor",
+      "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1790937777049,
+      "tag": "0127_extend_agreement_creditor_audit_checks",
+      "breakpoints": true
     }
   ]
 }

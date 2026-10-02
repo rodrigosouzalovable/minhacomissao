@@ -17,6 +17,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { ConfirmarTelefoneDialog } from '@/components/acordos/ConfirmarTelefoneDialog';
 import { FormalizarTermoDialog } from '@/components/acordos/FormalizarTermoDialog';
 import type { Tables } from '@/integrations/supabase/types';
+import { EMPRESA_LABELS, type EmpresaAcordo } from '@/lib/empresaLabels';
 
 interface AcordoDevedor {
   id: string;
@@ -27,6 +28,7 @@ interface AcordoDevedor {
   criado_por: string;
   criado_em: string;
   status: string;
+  credor: string | null;
 }
 
 interface ParcelaDevedor {
@@ -84,6 +86,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
   const [observacoes, setObservacoes] = useState('');
   const [confirmarTelefoneOpen, setConfirmarTelefoneOpen] = useState(false);
   const [formalizacao, setFormalizacao] = useState<{ acordo: Tables<'acordos'>; pagamentos: Tables<'pagamentos'>[] } | null>(null);
+  const [empresaSelecionada, setEmpresaSelecionada] = useState<EmpresaAcordo | null>(null);
 
   // Audio recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -311,6 +314,10 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
 
   const handleConfirmarAcordo = async () => {
     if (!previewParcelas || previewParcelas.length === 0) return;
+    if (!empresaSelecionada) {
+      toast.error('Selecione o credor do acordo.');
+      return;
+    }
     if (clienteTelefone.replace(/\D/g, '').length < 10) {
       toast.error('Cadastre um telefone válido para o cliente antes de salvar o acordo.');
       return;
@@ -338,7 +345,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
           observacoes: observacoes || null,
           cliente_nome: clienteNome,
           cliente_telefone: clienteTelefone,
-          credor,
+          credor: EMPRESA_LABELS[empresaSelecionada],
           telefone_confirmado_em: new Date().toISOString(),
           telefone_confirmado_por: userId,
           termo_formalizacao_status: 'pendente',
@@ -380,7 +387,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
         percentual_comissao: 0,
         comissao_total: 0,
         observacoes: observacoes || null,
-        empresa: credor || 'Credor',
+        empresa: empresaSelecionada,
         user_id: userId,
         criado_em: dataCriacao,
         atualizado_em: dataCriacao,
@@ -415,6 +422,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
       setFormalizacao({ acordo: acordoPdf, pagamentos: pagamentosPdf });
       setPreviewParcelas(null);
       setPreviewValorTotal(0);
+      setEmpresaSelecionada(null);
       onContratosArquivados();
       fetchAcordos();
     } catch (err: any) {
@@ -572,6 +580,21 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
         {/* Preview after PDF extraction */}
         {previewParcelas && (
           <div className="space-y-4 mb-6">
+            <div className="space-y-2">
+              <Label>Credor do acordo *</Label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {(Object.entries(EMPRESA_LABELS) as [EmpresaAcordo, string][]).map(([valor, label]) => (
+                  <Button
+                    key={valor}
+                    type="button"
+                    variant={empresaSelecionada === valor ? 'default' : 'outline'}
+                    onClick={() => setEmpresaSelecionada(valor)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h3 className="font-semibold text-sm">Parcelas extraídas do PDF</h3>
@@ -673,6 +696,7 @@ export function AcordoDevedorSection({ cpf, userId, contratosIds, onContratosArq
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       <Badge variant={acordo.status === 'ativo' ? 'default' : 'secondary'}>{acordo.status}</Badge>
+                      {acordo.credor && <Badge variant="outline">{acordo.credor}</Badge>}
                       <span className="font-semibold">{fmtBRL(acordo.valor_total)}</span>
                       <span className="text-xs text-muted-foreground">
                         {acordo.num_parcelas}x • {pagas}/{acordo.num_parcelas} pagas

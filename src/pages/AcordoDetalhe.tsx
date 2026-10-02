@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
+import { getEmpresaLabel } from '@/lib/empresaLabels';
 import { gerarTermoAcordoPdf } from '@/lib/termoAcordoPdf';
 import { ArrowLeft, Check, Clock, Calendar, User, DollarSign, Phone, Pencil, X, Send, Trash2, MessageCircle, Download, Loader2 } from 'lucide-react';
 import {
@@ -909,7 +910,7 @@ export default function AcordoDetalhe() {
               <div>
                 <p className="text-sm text-muted-foreground">Empresa</p>
                 <p className="font-medium">
-                  {acordo.empresa === 'mundo_da_moda' ? 'UME' : 'NOVO MUNDO'}
+                  {getEmpresaLabel(acordo.empresa)}
                 </p>
               </div>
               {isAdmin && (

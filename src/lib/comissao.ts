@@ -3,7 +3,7 @@
 // Esta é a única tabela que pode ser exibida para funcionários.
 // Máximo 7% a partir de 721 dias.
 // ============================================================
-export const tabelaComissoesFuncionario = [
+export const tabelaComissoesFuncionarioHistorica = [
   { min: 1,   max: 60,    percentual: 2 },
   { min: 61,  max: 90,    percentual: 3 },
   { min: 91,  max: 180,   percentual: 4 },
@@ -12,8 +12,26 @@ export const tabelaComissoesFuncionario = [
   { min: 721, max: 999999, percentual: 10 },
 ];
 
-export function calcularPercentualComissaoFuncionario(diasAtraso: number): number {
-  for (const faixa of tabelaComissoesFuncionario) {
+export const tabelaComissoesFuncionario = [
+  { min: 1,   max: 60,     percentual: 2 },
+  { min: 61,  max: 90,     percentual: 3 },
+  { min: 91,  max: 180,    percentual: 4 },
+  { min: 181, max: 360,    percentual: 5 },
+  { min: 361, max: 720,    percentual: 7 },
+  { min: 721, max: 999999, percentual: 9 },
+];
+
+export const DATA_INICIO_NOVA_COMISSAO_FUNCIONARIO = '2026-10-01';
+
+export function calcularPercentualComissaoFuncionario(
+  diasAtraso: number,
+  dataPagamento?: string | null,
+): number {
+  const data = dataPagamento?.slice(0, 10);
+  const tabela = data && data < DATA_INICIO_NOVA_COMISSAO_FUNCIONARIO
+    ? tabelaComissoesFuncionarioHistorica
+    : tabelaComissoesFuncionario;
+  for (const faixa of tabela) {
     if (diasAtraso >= faixa.min && diasAtraso <= faixa.max) {
       return faixa.percentual;
     }
@@ -21,8 +39,12 @@ export function calcularPercentualComissaoFuncionario(diasAtraso: number): numbe
   return 0;
 }
 
-export function calcularComissaoFuncionarioParcela(valorParcela: number, diasAtraso: number) {
-  const percentual = calcularPercentualComissaoFuncionario(diasAtraso);
+export function calcularComissaoFuncionarioParcela(
+  valorParcela: number,
+  diasAtraso: number,
+  dataPagamento?: string | null,
+) {
+  const percentual = calcularPercentualComissaoFuncionario(diasAtraso, dataPagamento);
   return {
     percentual,
     valor: Math.round(Number(valorParcela) * (percentual / 100) * 100) / 100,
@@ -244,12 +266,11 @@ export function calcularComissao(valorTotal: number, parcelas: number, diasAtras
 export function calcularComissaoParcelaPorEmpresa(
   empresa: string | null | undefined,
   valorParcela: number,
-  diasAtraso: number
+  diasAtraso: number,
+  dataPagamento?: string | null,
 ): { percentual: number; valor: number } {
-  // Unificado: toda empresa usa a tabela faixada de Honorário (imagem UME).
-  const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
-  const valor = Math.round(valorParcela * (percentual / 100) * 100) / 100;
-  return { percentual, valor };
+  void empresa;
+  return calcularComissaoFuncionarioParcela(valorParcela, diasAtraso, dataPagamento);
 }
 
 export function formatarMoeda(valor: number): string {

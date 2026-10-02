@@ -25,7 +25,7 @@ import {
 // Receita Gerada = parte que entra no escritório (H.O. sobre o valor pago).
 // Comissão Funcionário = % funcionário sobre o valor_parcela.
 // Comissão Escritório = Receita Gerada - Comissão Funcionário (líquido).
-function calcularRepartePagamento(valorParcela: number, diasAtraso: number, empresa: string | null | undefined) {
+function calcularRepartePagamento(valorParcela: number, diasAtraso: number, empresa: string | null | undefined, dataPagamento?: string | null) {
   const emp = (empresa || '').toString().toUpperCase();
   let percEmpresa: number;
   if (emp.includes('MONTREAL')) {
@@ -35,7 +35,7 @@ function calcularRepartePagamento(valorParcela: number, diasAtraso: number, empr
   } else {
     percEmpresa = calcularPercentualComissaoEmpresa(diasAtraso);
   }
-  const percFunc = calcularPercentualComissaoFuncionario(diasAtraso);
+  const percFunc = calcularPercentualComissaoFuncionario(diasAtraso, dataPagamento);
   const receita = Number(valorParcela) * (percEmpresa / 100);
   const comissaoFuncionario = Number(valorParcela) * (percFunc / 100);
   const comissaoEscritorio = receita - comissaoFuncionario;
@@ -284,7 +284,8 @@ export default function Financeiro() {
       const r = calcularRepartePagamento(
         Number(p.valor_parcela),
         p.acordos?.dias_atraso || 0,
-        p.acordos?.empresa
+        p.acordos?.empresa,
+        p.data_paga,
       );
       return acc + r.comissaoEscritorio;
     }, 0);
@@ -313,7 +314,8 @@ export default function Financeiro() {
         const r = calcularRepartePagamento(
           Number(p.valor_parcela),
           p.acordos?.dias_atraso || 0,
-          p.acordos?.empresa
+          p.acordos?.empresa,
+          p.data_paga,
         );
         receita += Number(p.valor_parcela);
         comissaoFuncionario += r.comissaoFuncionario;

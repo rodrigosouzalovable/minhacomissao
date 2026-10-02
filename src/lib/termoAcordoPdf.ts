@@ -110,13 +110,13 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
     throw new Error('As parcelas deste acordo não foram encontradas.');
   }
 
+  const usarLogoCredor = acordo.empresa !== 'odres_cred';
   const [{ default: jsPDF }, logoSouza, logoCredor] = await Promise.all([
     import('jspdf'),
     carregarImagem(souzaRibeiroAsset.url),
-    carregarImagem(
-      acordo.empresa === 'mundo_da_moda' ? umeAsset.url : novoMundoAsset.url,
-      false,
-    ),
+    usarLogoCredor
+      ? carregarImagem(acordo.empresa === 'mundo_da_moda' ? umeAsset.url : novoMundoAsset.url, false)
+      : Promise.resolve(null),
   ]);
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
@@ -157,10 +157,13 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
 
   // Cabeçalho institucional
   doc.addImage(logoSouza, 'JPEG', margem, 12, 74, 21);
-  if (acordo.empresa === 'mundo_da_moda') {
+  if (logoCredor) {
     doc.addImage(logoCredor, 'JPEG', 164, 9, 24, 24);
   } else {
-    doc.addImage(logoCredor, 'JPEG', 164, 9, 24, 24);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(20, 58, 92);
+    doc.text('ODRES CRED', 188, 22, { align: 'right' });
   }
   doc.setDrawColor(20, 58, 92);
   doc.setLineWidth(0.7);
