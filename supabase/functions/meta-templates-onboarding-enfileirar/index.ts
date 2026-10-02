@@ -78,6 +78,12 @@ Deno.serve(async (req) => {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_nao_encontrada" });
         continue;
       }
+      const { data: parceiro } = await supabase.from("meta_instance_parceiros")
+        .select("instancia_id").eq("instancia_id", instanciaId).maybeSingle();
+      if (parceiro) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_de_parceiro" });
+        continue;
+      }
       if ((inst as any).provider && (inst as any).provider !== "meta") {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: "somente_api_oficial" });
         continue;
@@ -91,8 +97,8 @@ Deno.serve(async (req) => {
         continue;
       }
       const bloqueio = motivoBloqueioTemplate(inst);
-      if (bloqueio || inst.instancia_teste_aquecimento) {
-        resultados.push({ instancia_id: instanciaId, ok: false, erro: bloqueio || "instancia_de_teste" });
+      if (bloqueio || inst.instancia_teste_aquecimento || inst.templates_auto_copiar !== true) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: bloqueio || (inst.instancia_teste_aquecimento ? "instancia_de_teste" : "copia_automatica_desativada") });
         continue;
       }
 
