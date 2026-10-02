@@ -2118,8 +2118,12 @@ export default function EnvioMeta() {
                     });
                   } else {
                     e.preventDefault();
-                    const existingLines = recipientsRaw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-                    void removerSemWhatsAppConhecidos([...existingLines, ...lines]).then(({ linhas: filtradas, removidos }) => {
+                    const textarea = e.currentTarget;
+                    const selectionStart = textarea.selectionStart ?? recipientsRaw.length;
+                    const selectionEnd = textarea.selectionEnd ?? selectionStart;
+                    const textoComColagem = `${recipientsRaw.slice(0, selectionStart)}${text}${recipientsRaw.slice(selectionEnd)}`;
+                    const linhasComColagem = textoComColagem.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+                    void removerSemWhatsAppConhecidos(linhasComColagem).then(({ linhas: filtradas, removidos }) => {
                       setRecipientsRaw(filtradas.join("\n"));
                       setValidacaoPreview(null);
                       if (removidos > 0) toast.warning(`${removidos} removido(s): já confirmados sem WhatsApp`);
