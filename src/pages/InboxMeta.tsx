@@ -693,7 +693,7 @@ export default function InboxMeta() {
   const [carregandoMais, setCarregandoMais] = useState(false);
 
   // Troca de caixa/instância/aba/busca volta ao primeiro lote
-  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta]);
+  useEffect(() => { setLimiteContatos(PAGE_CONTATOS); }, [filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, modoMeusClientes, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, filtroLeitura]);
 
   // Link direto (aviso "Cliente autorizou a chamada"): abre a conversa do cliente
   const ultimoLinkDiretoRef = useRef('');
@@ -767,7 +767,7 @@ export default function InboxMeta() {
         norm(i.nome || '').includes(norm(buscaLocal)) ||
         (buscaDigitos.length >= 4 && String(i.display_phone || '').replace(/\D/g, '').includes(buscaDigitos)));
       const buscaNoServidor = buscaInstancia ? '' : buscaLocal;
-      const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), [...mcMarcadores].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso, buscaNoServidor]);
+      const key = JSON.stringify([modoMeusClientes, [...etiquetaIds].sort(), [...mcMarcadores].sort(), filtroInstancia, currentFolderId, abaAtiva, iniIso, fimIso, buscaNoServidor, filtroLeitura]);
       const cached = taggedPageRef.current.key === key ? taggedPageRef.current : null;
       const rows = cached ? [...cached.rows] : [];
       let exhausted = cached?.exhausted ?? false;
@@ -781,6 +781,7 @@ export default function InboxMeta() {
         const { data, error } = await supabase.rpc('meta_inbox_tagged_search_page', {
           p_etiquetas: etiquetaIds, p_qualificacoes: modoMeusClientes ? Array.from(mcMarcadores) : [],
           p_busca: buscaNoServidor,
+          p_apenas_nao_lidas: filtroLeitura === 'nao_lidas',
           p_instancia: filtroInstancia === 'todas' ? null : filtroInstancia,
           p_folder: currentFolderId, p_filtrar_folder: !modoMeusClientes,
           p_arquivado: abaAtiva === 'arquivados', p_filtrar_arquivado: !modoMeusClientes,
@@ -812,6 +813,7 @@ export default function InboxMeta() {
       .limit(limiteContatos);
 
     if (filtroInstancia !== 'todas') q = q.eq('instancia_id', filtroInstancia);
+    if (filtroLeitura === 'nao_lidas') q = q.gt('nao_lido', 0);
     if (currentFolderId === null) q = q.is('folder_id', null);
     else q = q.eq('folder_id', currentFolderId);
     const { data: base } = await q;
@@ -842,6 +844,7 @@ export default function InboxMeta() {
           .limit(200);
 
         if (filtroInstancia !== 'todas') qs = qs.eq('instancia_id', filtroInstancia);
+        if (filtroLeitura === 'nao_lidas') qs = qs.gt('nao_lido', 0);
         if (currentFolderId === null) qs = qs.is('folder_id', null);
         else qs = qs.eq('folder_id', currentFolderId);
         const { data: extras } = await qs;
@@ -865,7 +868,7 @@ export default function InboxMeta() {
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
     void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current), fetchContatosNaoCliente(contatoIdsRef.current)]);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, fetchContatosNaoCliente, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, instancias]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, fetchContatosNaoCliente, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, filtroLeitura, instancias]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
