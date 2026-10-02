@@ -11,7 +11,7 @@
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
 - Cobmais diário envia o XLSX a armazenamento privado e processa no servidor; staging/publicação são atômicos, chave = CPF+credor+contrato+parcela e vencimento é substituível.
 - Modelos Meta isolam criação, alteração e automação por dono; fluxos operacionais compartilhados podem ler os modelos necessários, e lotes param ao confirmar Marketing.
-- A sincronização HSM manual completa somente Utility já aprovado entre instâncias GREEN do mesmo dono; YELLOW/RED aguardam GREEN e Marketing não é propagado.
+- A cópia automática de modelos Meta usa apenas Utility selecionado do mesmo dono em números CONNECTED com qualidade GREEN ou UNKNOWN verificada e sem bloqueio real; YELLOW/RED aguardam, tier 250 reserva duas submissões por número/dia e tiers 1.000/2.000 seguem a fila sequencial. A sincronização manual de HSM mantém a exigência de Utility aprovado na origem para evitar copiar rascunhos.
 - Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
 - Resultados de campanhas cruzam respostas e acordos por sufixo/CPF normalizados e janelas temporais indexadas, para manter a apuração manual rápida sem polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.
