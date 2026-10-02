@@ -4,7 +4,7 @@
 // AQUECIMENTO, atendidos pelo IAGO. Não substitui a avaliação da Meta.
 //
 // Limites obrigatórios (anti-ban e anti-storm):
-//  - 09h–19h BRT, nunca domingo
+//  - 08h–19h BRT, nunca domingo
 //  - 10 a 20 mensagens/dia por número (5 se a qualidade piorou de novo)
 //  - intervalo aleatório de 20 a 40 min entre mensagens do mesmo número
 //  - no máximo 2 conversas por destino por dia e nunca o mesmo destino em sequência
@@ -138,9 +138,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    const hIni = Number(String(cfg?.horario_inicio || "09:00").split(":")[0]) || 9;
+    const hIni = Number(String(cfg?.horario_inicio || "08:00").split(":")[0]) || 8;
     const hFim = Number(String(cfg?.horario_fim || "19:00").split(":")[0]) || 19;
-    const janela = dentroJanelaAquecimento(Math.max(9, hIni), Math.min(19, hFim));
+    const janela = dentroJanelaAquecimento(Math.max(8, hIni), Math.min(19, hFim));
     if (!janela.ok && !forcar && !simulacao) return json({ ok: true, skipped: janela.motivo, reativadas });
 
     let q = supabase
@@ -198,6 +198,11 @@ Deno.serve(async (req) => {
     for (const inst of fila as any[]) {
       if (processadas >= MAX_INSTANCIAS_POR_RUN) break;
       if (!remetenteAptoParaRecuperacao(inst)) {
+        if (bloqueioRecuperacaoMeta(inst.pausa_automatica_motivo) ||
+            inst.id === RECUPERACAO_AGUARDA_DESBLOQUEIO ||
+            temBanAtivo(inst.saude_ban_info) || temRestricaoFatal(inst.saude_restricoes)) {
+          await supabase.from("meta_whatsapp_instances").update({ recuperacao_ativa: false }).eq("id", inst.id);
+        }
         resultados.push({ instancia: inst.nome, skip: "remetente_inapto" });
         continue;
       }
@@ -310,7 +315,7 @@ Deno.serve(async (req) => {
               `Número: *${rotulo}*\n` +
               `${await linhaBmInstancia(supabase, inst)}\n` +
               `Qualidade atual: ${String(inst.saude_quality || "UNKNOWN").toUpperCase()} · dia ${diasEmRecup} de recuperação\n` +
-              `Meta de hoje: ${metaDia} mensagens (intervalos de 20–40 min, 09h–19h)\n` +
+              `Meta de hoje: ${metaDia} mensagens (intervalos de 20–40 min, 08h–19h)\n` +
                `Destino: somente números conectados UAZAPI da caixa AQUECIMENTO\n` +
               (inst.quarentena_ate
                 ? `Fora das campanhas até ${new Date(inst.quarentena_ate).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}\n`

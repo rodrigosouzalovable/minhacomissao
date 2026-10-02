@@ -492,7 +492,7 @@ Deno.serve(async (req) => {
               ? `Quarentena até ${new Date(updatePayload.quarentena_ate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (fora das campanhas; segue atendendo conversas recebidas).\n`
               : '') +
             (updatePayload.recuperacao_ativa
-                ? `🔥 Recuperação ligada: até ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia somente para UAZAPI conectados da caixa AQUECIMENTO (09h–19h, intervalos de 20–40 min).\n`
+                ? `🔥 Recuperação ligada: até ${updatePayload.recuperacao_msgs_meta_dia} mensagens/dia somente para UAZAPI conectados da caixa AQUECIMENTO (08h–19h, intervalos de 20–40 min).\n`
               : `ℹ️ Aquecimento automático não está liberado para este número.\n`) +
             `Volta com teto de ${escada[0] ?? 20}/dia e sobe em escada se ficar GREEN.\n` +
             `${linhaPrevisao(qual, 0, diasGreenAlta)}`;
@@ -605,7 +605,7 @@ Deno.serve(async (req) => {
                 `${await linhaBmInstancia(supabase, inst)}\n` +
                 `Qualidade atual: ${qual}\n` +
                 `Estava fora do reaquecimento e voltou pela varredura automática. ` +
-                `Meta de hoje: ${updatePayload.recuperacao_msgs_meta_dia} mensagens para os números UAZAPI da caixa AQUECIMENTO (09h–19h, 20–40 min entre envios).\n` +
+                `Meta de hoje: ${updatePayload.recuperacao_msgs_meta_dia} mensagens para os números UAZAPI da caixa AQUECIMENTO (08h–19h, 20–40 min entre envios).\n` +
                 `${linhaPrevisao(qual, 0, diasGreenAlta)}`,
               chaveIdempotencia: `meta_aquec_religado_${inst.id}_${hojeIdem}`,
               umaVezPorChave: true,
