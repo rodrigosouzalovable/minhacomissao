@@ -20,11 +20,18 @@ serve(async (req) => {
   );
 
   try {
+    const inicio = performance.now();
+    const tempos: Record<string, number> = {};
+    const marcar = (etapa: string, desde: number) => {
+      tempos[etapa] = Math.round(performance.now() - desde);
+    };
     // Exige usuário autenticado
     const auth = req.headers.get('Authorization') ?? '';
     const token = auth.replace(/^Bearer\s+/i, '');
     if (!token) return json({ error: 'não autenticado' }, 401);
+    const inicioAuth = performance.now();
     const { data: userData } = await service.auth.getUser(token);
+    marcar('autenticacao', inicioAuth);
     if (!userData?.user) return json({ error: 'não autenticado' }, 401);
 
     const body = await req.json().catch(() => ({}));
@@ -32,20 +39,34 @@ serve(async (req) => {
     const forcar = !!(body as any)?.forcar;
     if (cpf.length !== 11) return json({ error: 'CPF inválido' }, 400);
 
+    const inicioConfig = performance.now();
+    const configPromise = service.from('iago_config').select('ume_tabela').limit(1).maybeSingle();
     let tabela: 'padrao' | 'especial' | 'sem_juros_10' = 'sem_juros_10';
+    const perfil = (body as any)?.perfil === 'completo' ? 'completo' : 'essencial';
+    const inicioConsulta = performance.now();
+    const consultaPromise = consultarUme(service, cpf, { forcar, perfil, aguardarCache: false });
     try {
-      const { data: cfg } = await service.from('iago_config').select('ume_tabela').limit(1).maybeSingle();
+      const { data: cfg } = await configPromise;
       const v = String((cfg as any)?.ume_tabela || '');
       if (v === 'especial' || v === 'padrao' || v === 'sem_juros_10') tabela = v;
     } catch { /* padrão */ }
+    marcar('configuracao', inicioConfig);
 
-    const consulta = await consultarUme(service, cpf, { forcar });
+    const consulta = await consultaPromise;
+    marcar('consulta', inicioConsulta);
+    tempos.total = Math.round(performance.now() - inicio);
+    console.log('[consultar-ume-desconto] desempenho', {
+      origem: consulta.doCache ? 'cache' : 'externa',
+      perfil,
+      ...tempos,
+    });
     return json({
       success: true,
       encontrado: consulta.encontrado,
       consulta,
       proposta: propostaDaUme(consulta, tabela),
       tabelaPadraoConfig: tabela,
+      desempenho: { origem: consulta.doCache ? 'cache' : 'externa', totalMs: tempos.total },
     });
   } catch (error) {
     const msg = String((error as Error)?.message || error);
@@ -58,6 +79,9 @@ serve(async (req) => {
         });
       } catch { /* melhor esforço */ }
       return json({ success: false, error: 'layout_ume_mudou', message: 'O layout do relatório UME mudou. Avisei o administrador.' }, 200);
+    }
+    if (msg.includes('ume_timeout')) {
+      return json({ success: false, error: 'ume_timeout', message: 'A consulta da UME demorou mais que o esperado. Tente novamente.' }, 200);
     }
     return json({ success: false, error: msg }, 200);
   }

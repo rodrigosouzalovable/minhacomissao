@@ -28,6 +28,7 @@ export interface UmeConsulta {
   especial: UmeTabela;
   consultadoEm: string;
   doCache?: boolean;
+  perfil?: UmePerfilConsulta;
 }
 
 const ORDEM = [
@@ -40,6 +41,12 @@ const ORDEM = [
   'especial_ate3x',
   'especial_4xmais',
 ] as const;
+
+type UmeBloco = typeof ORDEM[number];
+export type UmePerfilConsulta = 'essencial' | 'completo';
+const BLOCOS_ESSENCIAIS: UmeBloco[] = ['cliente', 'limites'];
+const CONSULTA_TIMEOUT_MS = 15_000;
+const consultasEmAndamento = new Map<string, Promise<UmeConsulta>>();
 
 export const soDigitos = (v: unknown) => String(v ?? '').replace(/\D/g, '');
 
@@ -68,24 +75,39 @@ function montarTabela(valores: Array<Array<string | number>>, ate3x: number | nu
 }
 
 /** Consulta o relatório UME. Lança erro identificado se o layout mudar. */
-export async function consultarUmeDireto(cpfBruto: string): Promise<UmeConsulta> {
+export async function consultarUmeDireto(
+  cpfBruto: string,
+  perfil: UmePerfilConsulta = 'completo',
+): Promise<UmeConsulta> {
   const cpf = soDigitos(cpfBruto);
   if (cpf.length !== 11) throw new Error('cpf_invalido');
 
-  const dataRequest = ORDEM.map((chave) => {
+  const ordem = perfil === 'essencial' ? BLOCOS_ESSENCIAIS : [...ORDEM];
+  const dataRequest = ordem.map((chave) => {
     const tpl = UME_REQUEST_TEMPLATES[chave];
     if (!tpl) throw new Error('layout_ume_mudou');
     return JSON.parse(JSON.stringify(tpl).replace(/__CPF__/g, cpf));
   });
 
-  const res = await fetch(UME_BATCH_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
-    },
-    body: JSON.stringify({ dataRequest }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CONSULTA_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(UME_BATCH_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+      },
+      body: JSON.stringify({ dataRequest }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if ((error as Error)?.name === 'AbortError') throw new Error('ume_timeout');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   const txt = await res.text();
   if (!res.ok) throw new Error(`ume_http_${res.status}: ${txt.slice(0, 200)}`);
   const ini = txt.indexOf('{');
@@ -93,10 +115,10 @@ export async function consultarUmeDireto(cpfBruto: string): Promise<UmeConsulta>
   let json: any;
   try { json = JSON.parse(txt.slice(ini)); } catch { throw new Error('layout_ume_mudou'); }
   const respostas = json?.dataResponse;
-  if (!Array.isArray(respostas) || respostas.length !== ORDEM.length) throw new Error('layout_ume_mudou');
+  if (!Array.isArray(respostas) || respostas.length !== ordem.length) throw new Error('layout_ume_mudou');
 
   const por: Record<string, Array<Array<string | number>>> = {};
-  ORDEM.forEach((chave, i) => { por[chave] = colunas(respostas[i]); });
+  ordem.forEach((chave, i) => { por[chave] = colunas(respostas[i]); });
 
   const cli = por.cliente;
   const cpfRet = String(cli?.[0]?.[0] ?? '');
@@ -119,6 +141,7 @@ export async function consultarUmeDireto(cpfBruto: string): Promise<UmeConsulta>
     padrao: montarTabela(por.padrao, escalar(por.padrao_ate3x, 0), escalar(por.padrao_4xmais, 0)),
     especial: montarTabela(por.especial, escalar(por.especial_ate3x, 0), escalar(por.especial_4xmais, 0)),
     consultadoEm: new Date().toISOString(),
+    perfil,
   };
 
   return consulta;
@@ -128,11 +151,12 @@ export async function consultarUmeDireto(cpfBruto: string): Promise<UmeConsulta>
 export async function consultarUme(
   supabase: any,
   cpfBruto: string,
-  opts?: { horasCache?: number; forcar?: boolean },
+  opts?: { horasCache?: number; forcar?: boolean; perfil?: UmePerfilConsulta; aguardarCache?: boolean },
 ): Promise<UmeConsulta> {
   const cpf = soDigitos(cpfBruto);
   if (cpf.length !== 11) throw new Error('cpf_invalido');
   const horas = opts?.horasCache ?? 12;
+  const perfil = opts?.perfil ?? 'completo';
 
   if (!opts?.forcar) {
     const { data } = await supabase
@@ -142,20 +166,42 @@ export async function consultarUme(
       .maybeSingle();
     if (data?.payload && data?.atualizado_em) {
       const idade = Date.now() - new Date(data.atualizado_em).getTime();
-      if (idade < horas * 3600_000) return { ...(data.payload as UmeConsulta), doCache: true };
+      const payload = data.payload as UmeConsulta & { perfil?: UmePerfilConsulta };
+      const cacheCompleto = !payload.perfil || payload.perfil === 'completo';
+      if (idade < horas * 3600_000 && (perfil === 'essencial' || cacheCompleto)) {
+        return { ...payload, doCache: true };
+      }
     }
   }
 
-  const consulta = await consultarUmeDireto(cpf);
+  const chave = `${cpf}:${perfil}`;
+  let pendente = consultasEmAndamento.get(chave);
+  if (!pendente) {
+    pendente = consultarUmeDireto(cpf, perfil);
+    consultasEmAndamento.set(chave, pendente);
+  }
+
+  let consulta: UmeConsulta;
   try {
-    await supabase.from('ume_consultas_cache').upsert({
+    consulta = await pendente;
+  } finally {
+    if (consultasEmAndamento.get(chave) === pendente) consultasEmAndamento.delete(chave);
+  }
+
+  const gravarCache = supabase.from('ume_consultas_cache').upsert({
       cpf,
       payload: consulta,
       encontrado: consulta.encontrado,
       atualizado_em: new Date().toISOString(),
-    }, { onConflict: 'cpf' });
-  } catch (e) {
-    console.error('[UME] falha ao gravar cache', e);
+    }, { onConflict: 'cpf' }).then(({ error }: { error?: unknown }) => {
+      if (error) console.error('[UME] falha ao gravar cache', error);
+    }).catch((e: unknown) => console.error('[UME] falha ao gravar cache', e));
+
+  if (opts?.aguardarCache === false) {
+    const runtime = (globalThis as typeof globalThis & { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    runtime?.waitUntil?.(gravarCache);
+  } else {
+    await gravarCache;
   }
   return consulta;
 }

@@ -22,6 +22,7 @@ interface Consulta {
   valorComJuros: number | null;
   padrao: Tabela;
   especial: Tabela;
+  perfil?: 'essencial' | 'completo';
 }
 
 const fmt = (v: number | null | undefined) =>
@@ -96,6 +97,7 @@ export function ConsultaUmeDialog({
   const [consulta, setConsulta] = useState<Consulta | null>(null);
   const [tabela, setTabela] = useState<TabelaKey>('padrao');
   const [erro, setErro] = useState('');
+  const [loadingTabelas, setLoadingTabelas] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -107,7 +109,7 @@ export function ConsultaUmeDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cpfInicial]);
 
-  const consultar = async (valor: string, forcar: boolean) => {
+  const consultar = async (valor: string, forcar: boolean, perfil: 'essencial' | 'completo' = 'essencial') => {
     const digitos = soDigitos(valor);
     if (digitos.length !== 11) {
       toast.error('Informe um CPF com 11 dígitos');
@@ -117,7 +119,7 @@ export function ConsultaUmeDialog({
     setErro('');
     try {
       const { data, error } = await supabase.functions.invoke('consultar-ume-desconto', {
-        body: { cpf: digitos, forcar },
+        body: { cpf: digitos, forcar, perfil },
       });
       if (error) throw error;
       if ((data as any)?.error === 'layout_ume_mudou') {
@@ -125,7 +127,12 @@ export function ConsultaUmeDialog({
         setConsulta(null);
         return;
       }
-      if (!(data as any)?.success) throw new Error((data as any)?.error || 'Falha na consulta');
+      if (!(data as any)?.success) {
+        const mensagem = (data as any)?.error === 'ume_timeout'
+          ? 'A consulta da UME demorou mais que o esperado. Tente novamente.'
+          : ((data as any)?.message || (data as any)?.error || 'Falha na consulta');
+        throw new Error(mensagem);
+      }
       const c = (data as any).consulta as Consulta;
       const preferida = (data as any).tabelaPadraoConfig as TabelaKey | undefined;
       // Se a tabela configurada não pode ser calculada (sem "total sem juros"),
@@ -140,6 +147,20 @@ export function ConsultaUmeDialog({
       setConsulta(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const selecionarTabela = async (proxima: TabelaKey) => {
+    if (proxima === 'sem_juros_10' || consulta?.perfil !== 'essencial') {
+      setTabela(proxima);
+      return;
+    }
+    setLoadingTabelas(true);
+    try {
+      await consultar(cpf, false, 'completo');
+      setTabela(proxima);
+    } finally {
+      setLoadingTabelas(false);
     }
   };
 
@@ -182,8 +203,8 @@ export function ConsultaUmeDialog({
               pode ser calculada para este CPF (a UME não devolveu os valores necessários). Escolha outra tabela abaixo.
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => setTabela('padrao')}>Tabela Padrão</Button>
-              <Button size="sm" variant="outline" onClick={() => setTabela('especial')}>Desconto Especial</Button>
+              <Button size="sm" variant="outline" onClick={() => void selecionarTabela('padrao')}>Tabela Padrão</Button>
+              <Button size="sm" variant="outline" onClick={() => void selecionarTabela('especial')}>Desconto Especial</Button>
               <Button size="sm" variant="outline" disabled={base10 == null} onClick={() => setTabela('sem_juros_10')}>Sem Juros + 10%</Button>
             </div>
           </div>
@@ -204,8 +225,8 @@ export function ConsultaUmeDialog({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <Button size="sm" variant={tabela === 'padrao' ? 'default' : 'outline'} onClick={() => setTabela('padrao')}>Tabela Padrão</Button>
-              <Button size="sm" variant={tabela === 'especial' ? 'default' : 'outline'} onClick={() => setTabela('especial')}>Desconto Especial</Button>
+              <Button size="sm" variant={tabela === 'padrao' ? 'default' : 'outline'} disabled={loadingTabelas} onClick={() => void selecionarTabela('padrao')}>Tabela Padrão</Button>
+              <Button size="sm" variant={tabela === 'especial' ? 'default' : 'outline'} disabled={loadingTabelas} onClick={() => void selecionarTabela('especial')}>Desconto Especial</Button>
               <Button
                 size="sm"
                 variant={tabela === 'sem_juros_10' ? 'default' : 'outline'}
@@ -215,6 +236,7 @@ export function ConsultaUmeDialog({
               >
                 Sem Juros + 10%
               </Button>
+              {loadingTabelas && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Carregando tabela" />}
             </div>
 
             <div className="rounded border">
