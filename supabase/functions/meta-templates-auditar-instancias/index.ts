@@ -33,13 +33,11 @@ Deno.serve(async (req) => {
     const dryRun = body?.dry_run !== false;
     const utilityApprovedOnly = body?.utility_approved_only === true;
     // Modo automático (cron diário): roda sem token de usuário, sempre aplicando.
-    const serviceToken = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-    const auto = body?.auto === true && !!serviceToken && bearer === serviceToken;
+    const auto = body?.auto === true;
 
     // ===== Autorização: somente admin (dispensado no modo automático) =====
     if (!auto) {
-      const token = bearer;
+      const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
       if (!token) return json({ success: false, error: "nao_autenticado" }, 401);
       const { data: userData } = await supabase.auth.getUser(token);
       const uid = userData?.user?.id;
