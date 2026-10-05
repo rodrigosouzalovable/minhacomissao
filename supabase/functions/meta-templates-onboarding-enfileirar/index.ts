@@ -55,14 +55,34 @@ Deno.serve(async (req) => {
     // Modelo específico (opcional): injeta apenas esse template.
     const templateNome = String(body?.template_nome || "").trim();
     const templateIdioma = String(body?.idioma || "").trim();
-    let restricaoMestres: string[] | null = null;
+    let mestresEspecificos: Array<{
+      id: string;
+      nome: string;
+      idioma: string;
+      criado_por: string | null;
+      categoria: string;
+      reclassificado_marketing: boolean;
+    }> | null = null;
     if (templateNome) {
-      let q = supabase.from("meta_templates_mestre").select("id, nome, idioma, criado_por").eq("nome", templateNome).eq("categoria", "UTILITY").eq("reclassificado_marketing", false);
+      let q = supabase
+        .from("meta_templates_mestre")
+        .select("id, nome, idioma, criado_por, categoria, reclassificado_marketing")
+        .eq("nome", templateNome);
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
-      const { data: mestres } = await q;
-      restricaoMestres = ((mestres as any[]) || []).map((r) => r.id as string);
-      if (restricaoMestres.length === 0) {
-        return json({ success: false, error: "template_nao_cadastrado_como_mestre" }, 400);
+      const { data: mestres, error: mestresError } = await q;
+      if (mestresError) throw mestresError;
+      const encontrados = ((mestres as any[]) || []) as typeof mestresEspecificos;
+      if (encontrados.length === 0) {
+        // Erro de negócio: responder 200 permite que a tela mostre a orientação
+        // sem transformar o caso esperado em RUNTIME_ERROR do invoke.
+        return json({ success: false, error: "template_nao_cadastrado_como_mestre" });
+      }
+      mestresEspecificos = encontrados.filter((m) =>
+        String(m.categoria || "").toUpperCase() === "UTILITY" &&
+        m.reclassificado_marketing !== true
+      );
+      if (mestresEspecificos.length === 0) {
+        return json({ success: false, error: "template_mestre_nao_elegivel" });
       }
     }
 
@@ -96,6 +116,13 @@ Deno.serve(async (req) => {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: "instancia_de_outro_proprietario" });
         continue;
       }
+      const idsMestreDoProprietario = mestresEspecificos
+        ?.filter((m) => m.criado_por === inst.user_id)
+        .map((m) => m.id) ?? null;
+      if (mestresEspecificos && idsMestreDoProprietario?.length === 0) {
+        resultados.push({ instancia_id: instanciaId, ok: false, erro: "template_mestre_de_outro_proprietario" });
+        continue;
+      }
       const bloqueio = motivoBloqueioTemplate(inst);
       if (bloqueio || inst.instancia_teste_aquecimento || inst.templates_auto_copiar !== true) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: bloqueio || (inst.instancia_teste_aquecimento ? "instancia_de_teste" : "copia_automatica_desativada") });
@@ -118,16 +145,20 @@ Deno.serve(async (req) => {
         }
       }
 
-      const { data: mestresValidos, error: mestresError } = await supabase
+      let mestresQuery = supabase
         .from("meta_templates_mestre")
         .select("id,nome,idioma,categoria,criado_por,injetar_em_novos,reclassificado_marketing")
         .eq("criado_por", inst.user_id)
-        .eq("injetar_em_novos", true)
         .eq("categoria", "UTILITY")
         .eq("reclassificado_marketing", false)
         .order("criado_em", { ascending: true });
+      // A marcação “injetar em números novos” vale apenas para o fluxo automático.
+      // Uma aplicação manual pode usar qualquer mestre Utility seguro do proprietário.
+      if (idsMestreDoProprietario) mestresQuery = mestresQuery.in("id", idsMestreDoProprietario);
+      else mestresQuery = mestresQuery.eq("injetar_em_novos", true);
+      const { data: mestresValidos, error: mestresError } = await mestresQuery;
       if (mestresError) throw mestresError;
-      const mestresPermitidos = ((mestresValidos as any[]) || []).filter((m) => !restricaoMestres || restricaoMestres.includes(m.id));
+      const mestresPermitidos = (mestresValidos as any[]) || [];
       const { data: reais } = await supabase.from("meta_whatsapp_templates")
         .select("nome_template,idioma,status").eq("instancia_id", instanciaId);
       const chavesReais = new Set(((reais as any[]) || [])
@@ -141,12 +172,12 @@ Deno.serve(async (req) => {
         .map((r) => r.template_mestre_id));
 
       let candidatos: [string, number][];
-      if (restricaoMestres) {
+      if (idsMestreDoProprietario) {
         const idsPermitidos = new Set(mestresPermitidos.map((m) => m.id as string));
-        candidatos = restricaoMestres
+        candidatos = idsMestreDoProprietario
           .filter((id) => idsPermitidos.has(id))
           .filter((id) => !jaNoNumero.has(id))
-          .map((id, idx) => [id, restricaoMestres!.length - idx] as [string, number]);
+          .map((id, idx) => [id, idsMestreDoProprietario.length - idx] as [string, number]);
       } else {
         const listaAplicaveis = mestresAusentes.map((r) => r.id as string);
         candidatos = listaAplicaveis
@@ -208,10 +239,13 @@ Deno.serve(async (req) => {
     }
 
     const enfileirados = resultados.reduce((s, r) => s + (r.enfileirados || 0), 0);
+    const algumSucesso = resultados.some((r) => r.ok === true);
+    const primeiroErro = resultados.find((r) => r.erro)?.erro;
     return json({
-      success: true,
+      success: algumSucesso,
       enfileirados,
       instancias: resultados,
+      ...(!algumSucesso && primeiroErro ? { error: primeiroErro } : {}),
       // compat: chamadas antigas de 1 instância
       ...(listaInstancias.length === 1 && resultados[0]?.erro ? { error: resultados[0].erro } : {}),
     });
