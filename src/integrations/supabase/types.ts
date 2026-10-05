@@ -7972,6 +7972,7 @@ export type Database = {
           instancia_id: string
           media_url: string | null
           origem_envio: string | null
+          payload_diagnostico: Json | null
           pricing_category: string | null
           pricing_type: string | null
           status_envio: string
@@ -8002,6 +8003,7 @@ export type Database = {
           instancia_id: string
           media_url?: string | null
           origem_envio?: string | null
+          payload_diagnostico?: Json | null
           pricing_category?: string | null
           pricing_type?: string | null
           status_envio?: string
@@ -8032,6 +8034,7 @@ export type Database = {
           instancia_id?: string
           media_url?: string | null
           origem_envio?: string | null
+          payload_diagnostico?: Json | null
           pricing_category?: string | null
           pricing_type?: string | null
           status_envio?: string
