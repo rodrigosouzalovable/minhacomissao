@@ -978,10 +978,8 @@ export default function InboxMeta() {
       setTemMaisAnteriores(pagina.length === PAGE_SIZE);
       setCarregandoMsgs(false);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
-      if (contato.nao_lido > 0) {
-        setContatos(prev => prev.map(c => c.id === contato.id ? { ...c, nao_lido: 0 } : c));
-        await supabase.from('meta_whatsapp_contatos').update({ nao_lido: 0 }).eq('id', contato.id);
-      }
+      // Abrir a conversa é apenas uma leitura visual. A pendência permanece no
+      // banco e só é encerrada por uma resposta enviada com sucesso.
     }
   }, [paginaAtual]);
 
@@ -1047,6 +1045,20 @@ export default function InboxMeta() {
           if (!rowSuf || !atvSuf || rowSuf !== atvSuf) return;
           if (payload.eventType === 'INSERT') {
             setMensagens(prev => prev.some(m => m.id === row.id) ? prev : [...prev, row]);
+            const ajustarNaoLido = (c: MetaContato) => {
+              if (c.id !== contatoAtivo.id) return c;
+              if (row.direcao === 'saida' && row.status_envio !== 'erro') return { ...c, nao_lido: 0 };
+              if (row.direcao === 'entrada') {
+                return {
+                  ...c,
+                  nao_lido: Math.max((c.nao_lido || 0) + 1, 1),
+                  ultima_msg_entrada_em: row.timestamp_msg,
+                };
+              }
+              return c;
+            };
+            setContatos(prev => prev.map(ajustarNaoLido));
+            setContatoAtivo(prev => prev ? ajustarNaoLido(prev) : prev);
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
           } else if (payload.eventType === 'UPDATE') {
             setMensagens(prev => prev.map(m => m.id === row.id ? { ...m, ...row } : m));
@@ -2233,7 +2245,7 @@ export default function InboxMeta() {
                     <div className="min-w-0 space-y-1">
                       <span className={cn(
                         'text-sm truncate flex items-center gap-1',
-                        c.nao_lido > 0 ? 'font-bold text-foreground' : 'font-medium',
+                        c.nao_lido > 0 && !ativo ? 'font-bold text-foreground' : 'font-medium',
                       )}>
                         {selMultipla && (sel ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" /> : <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />)}
                         {c.fixado && <Pin className="h-3 w-3 text-amber-500 shrink-0" />}
@@ -2248,13 +2260,13 @@ export default function InboxMeta() {
                       </span>
                       <span className={cn(
                         'block text-xs truncate',
-                        c.nao_lido > 0 ? 'text-foreground font-medium' : 'text-muted-foreground',
+                        c.nao_lido > 0 && !ativo ? 'text-foreground font-medium' : 'text-muted-foreground',
                       )}>{c.ultima_mensagem || '—'}</span>
                     </div>
                     <div className="absolute right-3 top-3 bottom-3 w-9 shrink-0 flex flex-col items-end justify-between pointer-events-none">
                       <span className={cn(
                         'text-[10px] whitespace-nowrap',
-                        c.nao_lido > 0 ? 'text-emerald-600 font-semibold' : 'text-muted-foreground',
+                        c.nao_lido > 0 && !ativo ? 'text-emerald-600 font-semibold' : 'text-muted-foreground',
                       )}>{formatContatoTime(c.ultima_mensagem_em)}</span>
                       <span
                         className={cn(
@@ -2269,7 +2281,7 @@ export default function InboxMeta() {
                             : 'Janela fechada — só template UTILITY'
                         }
                       />
-                      {c.nao_lido > 0 && (
+                      {c.nao_lido > 0 && !ativo && (
                         <span
                           className="inline-flex items-center justify-center h-6 min-w-6 px-1.5 rounded-full bg-emerald-500 text-[11px] font-bold leading-none text-white shadow-md ring-2 ring-background"
                           aria-label={`${c.nao_lido} mensagem${c.nao_lido > 1 ? 's' : ''} não lida${c.nao_lido > 1 ? 's' : ''}`}

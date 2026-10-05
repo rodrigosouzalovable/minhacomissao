@@ -140,12 +140,16 @@ export async function espelharMensagemInboxMeta(
     };
     if (waJid) upd.wa_jid = waJid;
     if (msg.direcao === 'entrada') {
-      upd.ultima_msg_entrada_em = agora;
-      upd.ultima_interacao_em = agora;
-      upd.nao_lido = ((contato as any)?.nao_lido || 0) + 1;
       if (msg.nome) upd.nome_perfil = msg.nome;
     }
     await supabase.from('meta_whatsapp_contatos').update(upd).eq('id', contatoId);
+    if (msg.direcao === 'entrada') {
+      const { error: unreadError } = await supabase.rpc('incrementar_meta_contato_nao_lido', {
+        _contato_id: contatoId,
+        _entrada_em: agora,
+      });
+      if (unreadError) console.error('[espelho-inbox-meta] falha ao incrementar não lido', unreadError.message);
+    }
   } else {
     const { data: novo } = await supabase
       .from('meta_whatsapp_contatos')

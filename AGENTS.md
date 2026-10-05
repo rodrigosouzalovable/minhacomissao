@@ -5,7 +5,7 @@
 - A saúde do webhook Meta distingue indisponibilidade da consulta de inscrição incorreta confirmada; só alerta após tentativa de recuperação e confirmação, para evitar avisos falsos por timeout.
 - Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
 
-- Inbox Meta: toda entrada recebe um atendente por atribuição atômica; IAGO participa do rodízio somente na PADRÃO, responde apenas suas conversas sem follow-up; “Não lidas” filtra na base antes da paginação; custo mensal é atualizado sem polling.
+- Inbox Meta: toda entrada recebe atendente por atribuição atômica; IAGO roda somente na PADRÃO; abrir não conclui o não lido, que só encerra após saída confirmada e posterior à entrada; “Não lidas” filtra antes da paginação.
 - Inbox Meta preserves a restricted diagnostic fragment for unknown inbound formats and shows a clear Meta-unavailable notice instead of technical placeholders.
 - Inbox media reads and signed URLs follow conversation-level authorization, not broad folder membership; this allows assigned staff to send attachments without exposing files in other folders.
 - Migrações Meta→UAZAPI devem reaproveitar o registro da instância oficial, validar o telefone e fixar a caixa antes de desativar o canal antigo, preservando histórico e evitando duplicidade.
