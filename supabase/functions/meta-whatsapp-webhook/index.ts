@@ -63,18 +63,59 @@ function extractContatosCompartilhados(m: any): { nome: string; telefones: { num
   });
 }
 
-function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_url: string | null; contatos?: any[] } {
-  const tipo = m.type || 'texto';
+const META_UNAVAILABLE_MESSAGE = 'Mensagem não disponibilizada pela Meta. Consulte o WhatsApp do número.';
+
+function safeMessageDiagnostic(m: any): Record<string, unknown> | null {
+  if (!m || typeof m !== 'object') return null;
+  const diagnostic: Record<string, unknown> = {
+    type: String(m.type || 'unknown'),
+    received_keys: Object.keys(m).filter((key) => !['from', 'to', 'id', 'timestamp'].includes(key)).slice(0, 30),
+  };
+  for (const key of ['errors', 'unsupported', 'system', 'referral', 'location', 'order', 'interactive', 'button']) {
+    if (m[key] !== undefined) diagnostic[key] = m[key];
+  }
+  return diagnostic;
+}
+
+function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_url: string | null; contatos?: any[]; diagnostico?: Record<string, unknown> | null } {
+  const tipo = String(m.type || 'texto').toLowerCase();
   if (m.text?.body) return { texto: m.text.body, tipo: 'texto', media_url: null };
-  if (m.button?.text) return { texto: m.button.text, tipo: 'texto', media_url: null };
+  if (m.button?.text || m.button?.payload) return { texto: m.button.text || m.button.payload, tipo: 'texto', media_url: null };
   if (m.interactive?.button_reply?.title) return { texto: m.interactive.button_reply.title, tipo: 'texto', media_url: null };
   if (m.interactive?.list_reply?.title) return { texto: m.interactive.list_reply.title, tipo: 'texto', media_url: null };
+  if (m.interactive?.nfm_reply?.response_json) {
+    const resposta = m.interactive.nfm_reply.body || m.interactive.nfm_reply.name || 'Resposta de formulário recebida';
+    return { texto: resposta, tipo: 'texto', media_url: null };
+  }
   if (tipo === 'image') return { texto: m.image?.caption || '[Imagem]', tipo: 'imagem', media_url: null };
   if (tipo === 'audio') return { texto: '[Áudio]', tipo: 'audio', media_url: null };
   if (tipo === 'document') return { texto: m.document?.filename || '[Documento]', tipo: 'documento', media_url: null };
   if (tipo === 'video') return { texto: m.video?.caption || '[Vídeo]', tipo: 'video', media_url: null };
   if (tipo === 'sticker') return { texto: '', tipo: 'sticker', media_url: null };
-  if (tipo === 'reaction') return { texto: m.reaction?.emoji || 'Reação removida', tipo: 'reacao', media_url: null };
+  if (tipo === 'reaction') return { texto: m.reaction?.emoji ? `Reação: ${m.reaction.emoji}` : 'Reação removida', tipo: 'texto', media_url: null };
+  if (tipo === 'location') {
+    const latitude = Number(m.location?.latitude);
+    const longitude = Number(m.location?.longitude);
+    const nome = String(m.location?.name || m.location?.address || 'Localização compartilhada').trim();
+    const mapa = Number.isFinite(latitude) && Number.isFinite(longitude)
+      ? `https://www.google.com/maps?q=${latitude},${longitude}`
+      : '';
+    return { texto: `📍 ${nome}${mapa ? `\n${mapa}` : ''}`, tipo: 'texto', media_url: null };
+  }
+  if (tipo === 'order') {
+    const itens = Array.isArray(m.order?.product_items) ? m.order.product_items : [];
+    const totalItens = itens.reduce((acc: number, item: any) => acc + Number(item?.quantity || 0), 0);
+    return { texto: `🛒 Pedido recebido${totalItens ? ` — ${totalItens} item(ns)` : ''}`, tipo: 'texto', media_url: null };
+  }
+  if (tipo === 'system') {
+    const corpo = String(m.system?.body || m.system?.type || '').trim();
+    return { texto: corpo || 'Aviso do WhatsApp', tipo: 'texto', media_url: null };
+  }
+  if (tipo === 'referral') {
+    const titulo = String(m.referral?.headline || m.referral?.body || 'Resposta a anúncio').trim();
+    const link = String(m.referral?.source_url || '').trim();
+    return { texto: `Anúncio: ${titulo}${link ? `\n${link}` : ''}`, tipo: 'texto', media_url: null };
+  }
   if (tipo === 'contacts') {
     const contatos = extractContatosCompartilhados(m);
     if (contatos.length) {
@@ -90,7 +131,12 @@ function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_u
     }
     return { texto: '👤 Contato compartilhado', tipo: 'contato', media_url: null, contatos: [] };
   }
-  return { texto: `[${tipo}]`, tipo: 'texto', media_url: null };
+  return {
+    texto: META_UNAVAILABLE_MESSAGE,
+    tipo: 'texto',
+    media_url: null,
+    diagnostico: safeMessageDiagnostic(m),
+  };
 }
 
 
@@ -539,7 +585,7 @@ serve(async (req) => {
           // Meta 2026: pode vir só BSUID sem telefone (username-only)
           const msgBsuid: string | null = m.from_user_id || m.from_userId || m.user_id || bsuidPorWaId[m.from] || null;
           if (!from && !msgBsuid) continue;
-          const { texto, tipo, contatos } = extractTextoFromMessage(m);
+          const { texto, tipo, contatos, diagnostico } = extractTextoFromMessage(m);
           const tsMsg = m.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString();
           const nomeContato = nomePorWaId[from] || (msgBsuid ? nomePorBsuid[msgBsuid] : null) || null;
           const usernameContato = usernamePorWaId[from] || (msgBsuid ? usernamePorWaId[msgBsuid] : null) || null;
@@ -635,6 +681,7 @@ serve(async (req) => {
             conteudo: texto,
             tipo_conteudo: tipo,
             contatos_payload: contatos && contatos.length ? contatos : null,
+            payload_diagnostico: diagnostico || null,
             media_url: mediaUrl,
             timestamp_msg: tsMsg,
             status_envio: isEcho ? 'enviada' : 'entregue',
