@@ -124,6 +124,18 @@ function validarMestre(mestre: any): string[] {
   for (const b of botoes) {
     if (!String(b?.text || "").trim()) erros.push("Há botão sem texto.");
     if (b?.type === "URL" && !String(b?.url || "").trim()) erros.push(`Botão URL "${b?.text}" sem endereço.`);
+    if (b?.type === "URL") {
+      const url = String(b?.url || "").trim();
+      const tipoUrl = b?.url_type || (url.includes("{{1}}") && b?.example ? "DYNAMIC" : "STATIC");
+      if (url && !/^https:\/\//i.test(url)) erros.push(`A URL do botão "${b?.text}" deve começar com https://.`);
+      if (tipoUrl === "DYNAMIC") {
+        if (!/\{\{1\}\}$/.test(url)) erros.push(`A URL dinâmica do botão "${b?.text}" deve terminar com {{1}}.`);
+        if (!String(b?.example || "").trim()) erros.push(`Botão URL dinâmico "${b?.text}" sem URL de amostra.`);
+        else if (!/^https:\/\//i.test(String(b.example).trim())) erros.push(`A URL de amostra do botão "${b?.text}" deve começar com https://.`);
+      } else if (/\{\{\s*\d+\s*\}\}/.test(url)) {
+        erros.push(`O botão "${b?.text}" usa variável, mas está configurado como URL estática.`);
+      }
+    }
     if (b?.type === "PHONE_NUMBER" && !String(b?.phone_number || "").trim()) {
       erros.push(`Botão de telefone "${b?.text}" sem número.`);
     }
@@ -179,7 +191,15 @@ function buildComponents(mestre: any, headerHandle: string | null) {
       type: "BUTTONS",
       buttons: botoes.map((b: any) => {
         if (b.type === "QUICK_REPLY") return { type: "QUICK_REPLY", text: b.text };
-        if (b.type === "URL") return { type: "URL", text: b.text, url: b.url, ...(b.example ? { example: [b.example] } : {}) };
+        if (b.type === "URL") {
+          const tipoUrl = b.url_type || (String(b.url || "").includes("{{1}}") && b.example ? "DYNAMIC" : "STATIC");
+          return {
+            type: "URL",
+            text: b.text,
+            url: b.url,
+            ...(tipoUrl === "DYNAMIC" && b.example ? { example: [String(b.example).trim()] } : {}),
+          };
+        }
         if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text: b.text, phone_number: b.phone_number };
         return b;
       }),

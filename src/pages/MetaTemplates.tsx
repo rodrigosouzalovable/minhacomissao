@@ -28,6 +28,7 @@ interface Botao {
   type: BotaoTipo;
   text: string;
   url?: string;
+  url_type?: "STATIC" | "DYNAMIC";
   phone_number?: string;
   example?: string;
 }
@@ -414,6 +415,32 @@ export default function MetaTemplates() {
       toast.error("Preencha os exemplos das variáveis nomeadas — sem eles a Meta rejeita por INVALID_FORMAT");
       return;
     }
+    for (const botao of botoes) {
+      if (!botao.text.trim()) {
+        toast.error("Preencha o texto de todos os botões");
+        return;
+      }
+      if (botao.type !== "URL") continue;
+      const tipoUrl = botao.url_type || (botao.url?.includes("{{1}}") && botao.example ? "DYNAMIC" : "STATIC");
+      const url = botao.url?.trim() || "";
+      if (!/^https:\/\//i.test(url)) {
+        toast.error(`A URL do botão "${botao.text}" deve começar com https://`);
+        return;
+      }
+      if (tipoUrl === "DYNAMIC") {
+        if (!/\{\{1\}\}$/.test(url)) {
+          toast.error(`A URL dinâmica do botão "${botao.text}" deve terminar com {{1}}`);
+          return;
+        }
+        if (!botao.example?.trim() || !/^https:\/\//i.test(botao.example.trim())) {
+          toast.error(`Informe uma URL de amostra completa para o botão "${botao.text}"`);
+          return;
+        }
+      } else if (/\{\{\s*\d+\s*\}\}/.test(url)) {
+        toast.error(`Selecione "Dinâmica" para usar variável na URL do botão "${botao.text}"`);
+        return;
+      }
+    }
 
     setSalvando(true);
     const exemplo: any = {};
@@ -512,7 +539,7 @@ export default function MetaTemplates() {
 
   const addBotao = (tipo: BotaoTipo) => {
     if (botoes.length >= 3) { toast.error("Máximo 3 botões"); return; }
-    setBotoes([...botoes, { type: tipo, text: "" }]);
+    setBotoes([...botoes, { type: tipo, text: "", ...(tipo === "URL" ? { url_type: "STATIC" as const } : {}) }]);
   };
 
   const enviarLote = async (modo?: "piloto" | "replicar") => {
@@ -1041,30 +1068,71 @@ export default function MetaTemplates() {
                         </Button>
                       </div>
                     </div>
-                    {botoes.map((b, idx) => (
-                      <div key={idx} className="flex items-center gap-2 rounded-md border p-2">
-                        <Badge variant="secondary">{b.type}</Badge>
-                        <Input placeholder="Texto do botão" value={b.text} maxLength={25}
-                          onChange={(e) => {
-                            const arr = [...botoes]; arr[idx] = { ...b, text: e.target.value }; setBotoes(arr);
-                          }} />
-                        {b.type === "URL" && (
-                          <Input placeholder="https://..." value={b.url || ""}
-                            onChange={(e) => {
-                              const arr = [...botoes]; arr[idx] = { ...b, url: e.target.value }; setBotoes(arr);
-                            }} />
-                        )}
-                        {b.type === "PHONE_NUMBER" && (
-                          <Input placeholder="+55..." value={b.phone_number || ""}
-                            onChange={(e) => {
-                              const arr = [...botoes]; arr[idx] = { ...b, phone_number: e.target.value }; setBotoes(arr);
-                            }} />
-                        )}
-                        <Button size="icon" variant="ghost" onClick={() => setBotoes(botoes.filter((_, i) => i !== idx))}>
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
+                    {botoes.map((b, idx) => {
+                      const tipoUrl = b.url_type || (b.url?.includes("{{1}}") && b.example ? "DYNAMIC" : "STATIC");
+                      return (
+                        <div key={idx} className="rounded-md border p-2 space-y-2">
+                          <div className="grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] items-center">
+                            <Badge variant="secondary" className="justify-self-start">{b.type}</Badge>
+                            <Input placeholder="Texto do botão" value={b.text} maxLength={25}
+                              onChange={(e) => {
+                                const arr = [...botoes]; arr[idx] = { ...b, text: e.target.value }; setBotoes(arr);
+                              }} />
+                            <Button size="icon" variant="ghost" type="button" aria-label="Remover botão" onClick={() => setBotoes(botoes.filter((_, i) => i !== idx))}>
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          {b.type === "URL" && (
+                            <div className="grid gap-2 sm:grid-cols-[150px_minmax(0,1fr)]">
+                              <div className="space-y-1">
+                                <Label className="text-xs">Tipo de URL</Label>
+                                <Select value={tipoUrl} onValueChange={(value: "STATIC" | "DYNAMIC") => {
+                                  const arr = [...botoes];
+                                  arr[idx] = {
+                                    ...b,
+                                    url_type: value,
+                                    url: value === "DYNAMIC"
+                                      ? (b.url?.replace(/\{\{\s*\d+\s*\}\}$/, "") || "") + "{{1}}"
+                                      : (b.url || "").replace(/\{\{\s*\d+\s*\}\}$/, ""),
+                                    example: value === "DYNAMIC" ? b.example : undefined,
+                                  };
+                                  setBotoes(arr);
+                                }}>
+                                  <SelectTrigger aria-label="Tipo de URL"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="STATIC">Estática</SelectItem>
+                                    <SelectItem value="DYNAMIC">Dinâmica</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">URL do site</Label>
+                                <Input placeholder={tipoUrl === "DYNAMIC" ? "https://meusite.com.br/{{1}}" : "https://meusite.com.br"} value={b.url || ""}
+                                  onChange={(e) => {
+                                    const arr = [...botoes]; arr[idx] = { ...b, url: e.target.value }; setBotoes(arr);
+                                  }} />
+                              </div>
+                              {tipoUrl === "DYNAMIC" && (
+                                <div className="space-y-1 sm:col-span-2">
+                                  <Label className="text-xs">URL da amostra</Label>
+                                  <p className="text-xs text-muted-foreground">Informe um exemplo completo para a Meta analisar. Não use dados reais de clientes.</p>
+                                  <Input placeholder="https://meusite.com.br/exemplo" value={b.example || ""}
+                                    onChange={(e) => {
+                                      const arr = [...botoes]; arr[idx] = { ...b, example: e.target.value }; setBotoes(arr);
+                                    }} />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {b.type === "PHONE_NUMBER" && (
+                            <Input placeholder="+55..." value={b.phone_number || ""}
+                              onChange={(e) => {
+                                const arr = [...botoes]; arr[idx] = { ...b, phone_number: e.target.value }; setBotoes(arr);
+                              }} />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <Button onClick={salvarMestre} disabled={salvando || !!nomeDuplicado}>
