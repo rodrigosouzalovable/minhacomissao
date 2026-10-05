@@ -88,7 +88,10 @@ self.onmessage = (event: MessageEvent) => {
     const rows = [...unique.values()];
     totalParcels = rows.length;
     batches = [];
-    for (let index = 0; index < rows.length; index += 500) batches.push(rows.slice(index, index + 500));
+    // Lotes maiores reduzem drasticamente as viagens ao servidor em arquivos
+    // Cobmais com mais de meio milhão de parcelas, sem ultrapassar o tamanho
+    // aceito pela API de dados.
+    for (let index = 0; index < rows.length; index += 3000) batches.push(rows.slice(index, index + 3000));
     nextBatch = 0;
     self.postMessage({ type: 'summary', totalRows: indexes.length - 1, totalParcels: rows.length, repeated, conflicts, invalid });
     if (batches.length) self.postMessage({ type: 'batch', rows: batches[0], index: 0, total: batches.length });

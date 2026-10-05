@@ -32,6 +32,7 @@ async function processFile(sb: any, run: any, token: string) {
 
     const workbook = XLSX.read(new Uint8Array(await blob.arrayBuffer()), {
       type: "array", dense: true, cellDates: true,
+      cellFormula: false, cellHTML: false, cellText: false, cellStyles: false,
     });
     const sheet = workbook.Sheets.Parcelas;
     if (!sheet) throw new Error("A aba Parcelas não foi encontrada.");
@@ -73,6 +74,14 @@ async function processFile(sb: any, run: any, token: string) {
         if (previous.vencimento !== row.vencimento || previous.valor !== row.valor || previous.status !== row.status) conflicts += 1;
       }
       unique.set(sourceKey, row);
+      if (position % 10_000 === 0) {
+        await sb.from("cobmais_importacoes_diarias").update({
+          progresso: 5 + Math.round((position / Math.max(1, indexes.length - 1)) * 30),
+          registros_processados: position,
+          ultima_atividade_em: new Date().toISOString(),
+          processador_lease_ate: new Date(Date.now() + 15 * 60_000).toISOString(),
+        }).eq("id", run.id).eq("processador_token", token);
+      }
     }
 
     const rows = [...unique.values()];
@@ -157,7 +166,9 @@ Deno.serve(async (req) => {
     if (run.fase === "pronta" || run.status === "concluido") {
       return new Response(JSON.stringify({ ok: true, status: run.status, fase: run.fase }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (run.processador_lease_ate && new Date(run.processador_lease_ate).getTime() > Date.now()) {
+    const atividadeEm = run.ultima_atividade_em ? new Date(run.ultima_atividade_em).getTime() : 0;
+    const atividadeRecente = atividadeEm > Date.now() - 2 * 60_000;
+    if (atividadeRecente && run.processador_lease_ate && new Date(run.processador_lease_ate).getTime() > Date.now()) {
       return new Response(JSON.stringify({ ok: true, status: "processando" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
