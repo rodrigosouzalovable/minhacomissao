@@ -833,13 +833,17 @@ serve(async (req) => {
             if (isEcho) {
               // envio nosso — não incrementa não-lido, não atualiza ultima_msg_entrada_em/interacao
             } else {
-              upd.ultima_msg_entrada_em = tsMsg;
-              upd.ultima_interacao_em = tsMsg;
-              upd.nao_lido = (existenteFinal.nao_lido || 0) + 1;
               // Resposta do cliente sempre traz a conversa de volta para a lista principal
               upd.arquivado = false;
             }
             await supabase.from('meta_whatsapp_contatos').update(upd).eq('id', existenteFinal.id);
+            if (!isEcho) {
+              const { error: unreadError } = await supabase.rpc('incrementar_meta_contato_nao_lido', {
+                _contato_id: existenteFinal.id,
+                _entrada_em: tsMsg,
+              });
+              if (unreadError) console.error('[MetaWebhook] falha ao incrementar não lido', unreadError.message);
+            }
           } else {
             const { data: inseridoContato } = await supabase.from('meta_whatsapp_contatos').insert({
               user_id: inst.user_id,
