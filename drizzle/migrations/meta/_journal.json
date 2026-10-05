@@ -939,6 +939,13 @@
       "when": 1790972643395,
       "tag": "0133_authorize_inbox_media_read_by_conversation",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1791199403863,
+      "tag": "0134_preserve_meta_message_diagnostics",
+      "breakpoints": true
     }
   ]
 }

@@ -227,7 +227,7 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
       return <p className="text-xs italic text-muted-foreground">{msg.conteudo}</p>;
     }
 
-    if (tipo !== 'texto' && tipo !== 'contato' && !mediaUrl) {
+    if (['audio', 'imagem', 'sticker', 'documento', 'video'].includes(tipo) && !mediaUrl) {
       return <p className="text-xs italic text-muted-foreground">Mídia indisponível</p>;
     }
 
@@ -372,6 +372,20 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
             <FileText className="h-5 w-5 shrink-0" />
             <span className="text-xs underline truncate">{msg.conteudo || 'Documento'}</span>
           </a>
+          {renderBotoes()}
+        </div>
+      );
+    }
+
+    if (tipo === 'video' && mediaUrl) {
+      return (
+        <div className="flex flex-col gap-2">
+          <video controls preload="metadata" className="max-w-[280px] rounded-md" src={mediaUrl}>
+            Seu navegador não conseguiu reproduzir este vídeo.
+          </video>
+          {msg.conteudo && msg.conteudo !== '[Vídeo]' && (
+            <p className="whitespace-pre-wrap break-words select-text cursor-text text-sm">{msg.conteudo}</p>
+          )}
           {renderBotoes()}
         </div>
       );
