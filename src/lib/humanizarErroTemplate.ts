@@ -4,6 +4,10 @@ export function humanizarErroTemplate(erroBruto?: string | null): string {
   if (!raw) return "Erro desconhecido ao criar o template.";
   const s = raw.toLowerCase();
 
+  if (s.includes("141006") || s.includes("payment method") || s.includes("método de pagamento")) {
+    return "A Meta bloqueou esta conta por problema no método de pagamento (código 141006). Revise a cobrança em Faturamento e tente novamente após a liberação da Meta.";
+  }
+
   if (
     (s.includes("header") || s.includes("cabeçalho") || s.includes("cabecalho")) &&
     (s.includes("expected") || s.includes("esperad") || s.includes("missing") || s.includes("não contém") || s.includes("nao contem"))

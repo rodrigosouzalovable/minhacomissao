@@ -37,3 +37,4 @@
 - [x] Exibir formatos recebidos pela Meta sem `[unsupported]` e preservar diagnóstico seguro de novos tipos desconhecidos.
 - [x] Manter conversas do Inbox Meta como não lidas até uma resposta ser enviada com sucesso.
 - [x] Isolar envios e etiquetas de atendentes pela caixa autorizada e corrigir etiquetas antigas incompatíveis.
+- [x] Atualizar a saúde antes de aplicar templates, explicar o bloqueio Meta 141006 e reconhecer instâncias já completas.

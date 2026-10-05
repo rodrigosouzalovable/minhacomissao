@@ -32,6 +32,7 @@ import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useUserRole } from "@/hooks/useUserRole";
 import ParceirosMetaTab from "@/components/meta/ParceirosMetaTab";
 import { isInformationalDisplayNameLimit, isMetaDisplayNameUsable } from "@/lib/metaNameStatus";
+import { humanizarErroTemplate } from "@/lib/humanizarErroTemplate";
 
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
@@ -1036,6 +1037,15 @@ export default function ConfigurarMeta() {
   const aplicarTemplates = async (inst: Instancia) => {
     setSincronizando(inst.id);
     try {
+      const { data: healthData, error: healthError } = await supabase.functions.invoke("check-meta-instance-health", {
+        body: { instancia_id: inst.id },
+      });
+      if (healthError) throw new Error("Não foi possível atualizar a situação desta conta na Meta. Tente novamente em alguns minutos.");
+      const healthResult = healthData?.results?.find((item: { instancia_id?: string }) => item.instancia_id === inst.id);
+      if (!healthResult || healthResult.error) {
+        throw new Error(healthResult?.error || "A Meta não confirmou a situação desta conta. Tente novamente em alguns minutos.");
+      }
+
       const { data: syncData, error: syncError } = await supabase.functions.invoke("meta-sync-templates", {
         body: { instancia_id: inst.id },
       });
@@ -1046,15 +1056,24 @@ export default function ConfigurarMeta() {
         body: { instancia_id: inst.id },
       });
       if (filaError) throw filaError;
-      if (filaData?.success === false || filaData?.error) throw new Error(filaData?.error || "Não foi possível iniciar a aplicação");
+      if (filaData?.success === false) throw new Error(filaData?.error || "Não foi possível iniciar a aplicação");
       const bloqueioFila = filaData?.instancias?.find((item: { ok: boolean; erro?: string }) => !item.ok)?.erro;
       if (bloqueioFila) {
-        toast.warning(`Aplicação aguardando: ${bloqueioFila}.`, { duration: 9000 });
+        toast.warning("Aplicação aguardando", {
+          description: humanizarErroTemplate(bloqueioFila),
+          duration: 12000,
+        });
         await carregar();
         return;
       }
 
       const enfileirados = Number(filaData?.enfileirados || 0);
+      const resultadoInstancia = filaData?.instancias?.find((item: { instancia_id?: string }) => item.instancia_id === inst.id);
+      if (enfileirados === 0 && resultadoInstancia?.motivo === "nenhum_modelo_pendente") {
+        toast.success("Todos os templates selecionados já estão aplicados.");
+        await carregar();
+        return;
+      }
       const { data: tickData, error: tickError } = await supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} });
       if (tickError || tickData?.ok === false) {
         toast.warning("Modelos na fila, mas a primeira tentativa falhou. Consulte o progresso e tente atualizar.");
@@ -1065,7 +1084,10 @@ export default function ConfigurarMeta() {
       }
       await carregar();
     } catch (e: any) {
-      toast.error("Erro: " + e.message);
+      toast.error("Não foi possível aplicar os templates", {
+        description: humanizarErroTemplate(e.message),
+        duration: 12000,
+      });
     }
     setSincronizando(null);
   };
