@@ -1355,15 +1355,28 @@ export default function InboxMeta() {
     return { nivel: 'ok' as const, min };
   }, [nowTick]);
 
-  // Marcar/desmarcar "não precisa resposta" (dispensa o alerta de tempo até nova mensagem do cliente)
+  // Marcar/desmarcar "não precisa resposta" (dispensa alerta e não lido até nova mensagem do cliente)
   const handleDispensarResposta = useCallback(async (contatoId: string, dispensar: boolean) => {
+    const contato = contatos.find(c => c.id === contatoId);
+    if (!contato) return;
+
     const valor = dispensar ? new Date().toISOString() : null;
-    setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, sla_dispensado_em: valor } : c));
-    setContatoAtivo(prev => prev && prev.id === contatoId ? { ...prev, sla_dispensado_em: valor } : prev);
+    const ultimaEntrada = contato.ultima_msg_entrada_em ? new Date(contato.ultima_msg_entrada_em).getTime() : 0;
+    const ultimaMensagem = contato.ultima_mensagem_em ? new Date(contato.ultima_mensagem_em).getTime() : 0;
+    const aguardaResposta = ultimaEntrada > 0 && ultimaMensagem <= ultimaEntrada;
+    const novoNaoLido = dispensar ? 0 : (aguardaResposta ? Math.max(contato.nao_lido || 0, 1) : contato.nao_lido);
+    const anterior = { sla_dispensado_em: contato.sla_dispensado_em ?? null, nao_lido: contato.nao_lido };
+
+    setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, sla_dispensado_em: valor, nao_lido: novoNaoLido } : c));
+    setContatoAtivo(prev => prev && prev.id === contatoId ? { ...prev, sla_dispensado_em: valor, nao_lido: novoNaoLido } : prev);
     const { error } = await (supabase as any).from('meta_whatsapp_contatos')
-      .update({ sla_dispensado_em: valor }).eq('id', contatoId);
-    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-  }, [toast]);
+      .update({ sla_dispensado_em: valor, nao_lido: novoNaoLido }).eq('id', contatoId);
+    if (error) {
+      setContatos(prev => prev.map(c => c.id === contatoId ? { ...c, ...anterior } : c));
+      setContatoAtivo(prev => prev && prev.id === contatoId ? { ...prev, ...anterior } : prev);
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    }
+  }, [contatos, toast]);
 
 
 
