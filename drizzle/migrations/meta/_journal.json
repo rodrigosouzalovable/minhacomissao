@@ -960,6 +960,13 @@
       "when": 1791201932684,
       "tag": "0136_authorize_meta_inbox_send_by_folder",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1791202050557,
+      "tag": "0137_harden_meta_inbox_send_authorization",
+      "breakpoints": true
     }
   ]
 }
