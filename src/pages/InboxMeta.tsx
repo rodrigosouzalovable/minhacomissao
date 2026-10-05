@@ -2986,6 +2986,7 @@ export default function InboxMeta() {
         defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
         atendenteNome={atendenteNome}
         folderId={currentFolderId}
+        enforceInboxAccess
         onSent={() => { fetchContatos(); }}
       />
       {contatoAtivo && (

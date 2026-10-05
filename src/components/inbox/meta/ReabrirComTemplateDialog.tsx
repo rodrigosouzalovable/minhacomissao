@@ -86,6 +86,7 @@ export function ReabrirComTemplateDialog({
           cliente: { telefone: telefone.replace(/\D/g, ''), nome: nomeVar.trim() || contato_nome || undefined },
           atendente_nome: atendente_nome?.trim() || undefined,
           folder_id: folder_id ?? null,
+          manual_inbox: true,
           // Resposta manual a um cliente: qualidade YELLOW/RED não bloqueia.
           ignorar_pausa_qualidade: true,
         },

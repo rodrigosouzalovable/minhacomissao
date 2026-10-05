@@ -26,11 +26,12 @@ interface Props {
   onSent: (instancia_id: string, telefone: string) => void;
   /** Caixa de mensagens ativa — a nova conversa nasce nela (null = Padrão) */
   folderId?: string | null;
+  enforceInboxAccess?: boolean;
   initialTelefone?: string;
   initialNome?: string;
 }
 
-export function MetaNovaConversaDialog({ open, onOpenChange, instancias, defaultInstancia, atendenteNome, onSent, folderId, initialTelefone = '', initialNome = '' }: Props) {
+export function MetaNovaConversaDialog({ open, onOpenChange, instancias, defaultInstancia, atendenteNome, onSent, folderId, enforceInboxAccess = false, initialTelefone = '', initialNome = '' }: Props) {
 
   const { toast } = useToast();
   const [instId, setInstId] = useState<string>(defaultInstancia || '');
@@ -164,6 +165,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           },
           atendente_nome: atendenteNome?.trim() || undefined,
           folder_id: folderId ?? null,
+          manual_inbox: enforceInboxAccess,
         },
       });
 

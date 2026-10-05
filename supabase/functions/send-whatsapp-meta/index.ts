@@ -450,7 +450,7 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro } = requestBody;
+    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro, manual_inbox } = requestBody;
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
@@ -467,18 +467,30 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const authToken = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     const chamadaInterna = authToken === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const authorization = await authorizeMetaInboxSend(req, supabase, {
-      instanciaId: instancia_id,
-      recipient: cliente.telefone,
-      folderId: folder_id || null,
-      allowNew: true,
-    });
-    if (!authorization.ok) {
-      return new Response(JSON.stringify({ success: false, error: authorization.error }), {
-        status: authorization.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    let authenticatedUserId: string | null = null;
+    if (!chamadaInterna) {
+      const { data: authData, error: authError } = await supabase.auth.getUser(authToken);
+      authenticatedUserId = authData.user?.id || null;
+      if (authError || !authenticatedUserId) {
+        return new Response(JSON.stringify({ success: false, error: 'Sessão inválida ou expirada' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
-    const user_id = chamadaInterna ? requestedUserId : authorization.userId;
+    if (manual_inbox === true) {
+      const authorization = await authorizeMetaInboxSend(req, supabase, {
+        instanciaId: instancia_id,
+        recipient: cliente.telefone,
+        folderId: folder_id || null,
+        allowNew: true,
+      });
+      if (!authorization.ok) {
+        return new Response(JSON.stringify({ success: false, error: authorization.error }), {
+          status: authorization.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+    const user_id = chamadaInterna ? requestedUserId : authenticatedUserId;
     let liberarTudoThiago = chamadaInterna && user_id === THIAGO_NOGUEIRA_USER_ID && liberacao_total_parceiro === true;
     if (!chamadaInterna && liberacao_total_parceiro === true) {
       const { data: authData } = await supabase.auth.getUser(authToken);
