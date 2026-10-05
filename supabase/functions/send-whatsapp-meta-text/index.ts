@@ -6,6 +6,7 @@ import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
 import { ehContaBloqueada, MSG_CONTA_BLOQUEADA, tratarContaBloqueada } from '../_shared/meta-conta-bloqueada.ts';
+import { authorizeMetaInboxSend } from '../_shared/meta-inbox-send-auth.ts';
 
 
 const corsHeaders = {
@@ -127,7 +128,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { instancia_id, telefone, bsuid, texto, user_id, reply_to_wa_id, conteudo_citado, origem } = await req.json();
+    const { instancia_id, telefone, bsuid, texto, user_id: requestedUserId, reply_to_wa_id, conteudo_citado, origem } = await req.json();
     if (!instancia_id || (!telefone && !bsuid) || !texto) {
       return new Response(JSON.stringify({ success: false, error: 'instancia_id, (telefone ou bsuid) e texto são obrigatórios' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -135,6 +136,17 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+    const authorization = await authorizeMetaInboxSend(req, supabase, {
+      instanciaId: instancia_id,
+      recipient: telefone || bsuid,
+    });
+    if (!authorization.ok) {
+      return new Response(JSON.stringify({ success: false, error: authorization.error }), {
+        status: authorization.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const user_id = authorization.internal ? requestedUserId : authorization.userId;
 
     const { data: inst } = await supabase
       .from('meta_whatsapp_instances')

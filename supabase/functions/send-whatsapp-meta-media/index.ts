@@ -1,6 +1,7 @@
 // Envia mídia (imagem, documento, áudio, vídeo) pela API oficial Meta dentro da janela 24h.
 // Áudio é enviado via Meta Media API (upload multipart) para evitar rejeição de container webm.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { authorizeMetaInboxSend } from '../_shared/meta-inbox-send-auth.ts';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
 import { ehContaBloqueada, MSG_CONTA_BLOQUEADA, tratarContaBloqueada } from '../_shared/meta-conta-bloqueada.ts';
@@ -142,6 +143,16 @@ Deno.serve(async (req) => {
     if (authError || !authenticatedUserId) {
       return new Response(JSON.stringify({ success: false, error: 'Sessão inválida ou expirada' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const authorization = await authorizeMetaInboxSend(req, supabase, {
+      instanciaId: instancia_id,
+      recipient: telefone || bsuid,
+    });
+    if (!authorization.ok) {
+      return new Response(JSON.stringify({ success: false, error: authorization.error }), {
+        status: authorization.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
