@@ -36,3 +36,4 @@
 - [x] Permitir ao Bruno ler e enviar PDFs nas conversas autorizadas e distinguir erros de anexo de erros da Meta.
 - [x] Exibir formatos recebidos pela Meta sem `[unsupported]` e preservar diagnóstico seguro de novos tipos desconhecidos.
 - [x] Manter conversas do Inbox Meta como não lidas até uma resposta ser enviada com sucesso.
+- [ ] Isolar envios e etiquetas de atendentes pela caixa autorizada e corrigir etiquetas antigas incompatíveis.

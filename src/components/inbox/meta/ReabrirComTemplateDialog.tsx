@@ -26,11 +26,12 @@ interface Props {
   telefone: string;
   contato_nome?: string;
   atendente_nome?: string;
+  folder_id?: string | null;
   onSent?: () => void;
 }
 
 export function ReabrirComTemplateDialog({
-  open, onOpenChange, instancia_id, telefone, contato_nome, atendente_nome, onSent,
+  open, onOpenChange, instancia_id, telefone, contato_nome, atendente_nome, folder_id, onSent,
 }: Props) {
   const { toast } = useToast();
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -84,6 +85,8 @@ export function ReabrirComTemplateDialog({
           instancia_id,
           cliente: { telefone: telefone.replace(/\D/g, ''), nome: nomeVar.trim() || contato_nome || undefined },
           atendente_nome: atendente_nome?.trim() || undefined,
+          folder_id: folder_id ?? null,
+          manual_inbox: true,
           // Resposta manual a um cliente: qualidade YELLOW/RED não bloqueia.
           ignorar_pausa_qualidade: true,
         },

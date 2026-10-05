@@ -2986,6 +2986,7 @@ export default function InboxMeta() {
         defaultInstancia={filtroInstancia !== 'todas' ? filtroInstancia : undefined}
         atendenteNome={atendenteNome}
         folderId={currentFolderId}
+        enforceInboxAccess
         onSent={() => { fetchContatos(); }}
       />
       {contatoAtivo && (
@@ -2996,6 +2997,7 @@ export default function InboxMeta() {
           telefone={contatoAtivo.telefone || ''}
           contato_nome={nomeExibido(contatoAtivo) || undefined}
           atendente_nome={atendenteNome}
+          folder_id={contatoAtivo.folder_id}
           onSent={() => { if (contatoAtivo) fetchMensagens(contatoAtivo, false); }}
         />
       )}

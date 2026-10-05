@@ -1,6 +1,7 @@
 // Envia mídia (imagem, documento, áudio, vídeo) pela API oficial Meta dentro da janela 24h.
 // Áudio é enviado via Meta Media API (upload multipart) para evitar rejeição de container webm.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { authorizeMetaInboxSend } from '../_shared/meta-inbox-send-auth.ts';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
 import { ehContaBloqueada, MSG_CONTA_BLOQUEADA, tratarContaBloqueada } from '../_shared/meta-conta-bloqueada.ts';
@@ -131,17 +132,30 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const authHeader = req.headers.get('Authorization') || '';
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const chamadaInterna = token === serviceKey;
     if (!token) {
       return new Response(JSON.stringify({ success: false, error: 'Sessão necessária para enviar arquivos' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     const supabase = createClient(supabaseUrl, serviceKey);
-    const { data: authData, error: authError } = await supabase.auth.getUser(token);
-    const authenticatedUserId = authData.user?.id;
-    if (authError || !authenticatedUserId) {
+    const { data: authData, error: authError } = chamadaInterna
+      ? { data: { user: null }, error: null }
+      : await supabase.auth.getUser(token);
+    const authenticatedUserId = authData.user?.id || null;
+    if (!chamadaInterna && (authError || !authenticatedUserId)) {
       return new Response(JSON.stringify({ success: false, error: 'Sessão inválida ou expirada' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const authorization = await authorizeMetaInboxSend(req, supabase, {
+      instanciaId: instancia_id,
+      recipient: telefone || bsuid,
+    });
+    if (!authorization.ok) {
+      return new Response(JSON.stringify({ success: false, error: authorization.error }), {
+        status: authorization.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
@@ -170,17 +184,19 @@ Deno.serve(async (req) => {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: canUpload, error: permissionError } = await userClient.rpc('can_upload_inbox_media_for_conversation', {
-      _uid: authenticatedUserId,
-      _object_name: mediaPath,
-    });
-    if (permissionError || canUpload !== true) {
-      return new Response(JSON.stringify({ success: false, error: 'Você não tem acesso para enviar arquivos nesta conversa' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    if (!chamadaInterna && authenticatedUserId) {
+      const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
       });
+      const { data: canUpload, error: permissionError } = await userClient.rpc('can_upload_inbox_media_for_conversation', {
+        _uid: authenticatedUserId,
+        _object_name: mediaPath,
+      });
+      if (permissionError || canUpload !== true) {
+        return new Response(JSON.stringify({ success: false, error: 'Você não tem acesso para enviar arquivos nesta conversa' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
     console.log('[send-whatsapp-meta-media] conversation path authorized', {
       path_format: conversationParts?.format || 'invalid',
@@ -213,7 +229,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const uid = authenticatedUserId;
+    const uid = authenticatedUserId || user_id || inst.user_id;
     let to = telefone ? formatTel(telefone) : '';
     const useBsuid = !to && !!bsuid;
     console.log('[send-whatsapp-meta-media] request accepted', {
