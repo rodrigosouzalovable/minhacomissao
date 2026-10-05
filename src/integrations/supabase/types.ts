@@ -7488,6 +7488,7 @@ export type Database = {
           ultima_mensagem: string | null
           ultima_mensagem_em: string | null
           ultima_msg_entrada_em: string | null
+          ultima_msg_saida_em: string | null
           user_id: string
           wa_jid: string | null
           whatsapp_username: string | null
@@ -7516,6 +7517,7 @@ export type Database = {
           ultima_mensagem?: string | null
           ultima_mensagem_em?: string | null
           ultima_msg_entrada_em?: string | null
+          ultima_msg_saida_em?: string | null
           user_id: string
           wa_jid?: string | null
           whatsapp_username?: string | null
@@ -7544,6 +7546,7 @@ export type Database = {
           ultima_mensagem?: string | null
           ultima_mensagem_em?: string | null
           ultima_msg_entrada_em?: string | null
+          ultima_msg_saida_em?: string | null
           user_id?: string
           wa_jid?: string | null
           whatsapp_username?: string | null
@@ -12506,6 +12509,10 @@ export type Database = {
       iago_finish_message: {
         Args: { p_contato_id: string; p_entrada_id: string }
         Returns: undefined
+      }
+      incrementar_meta_contato_nao_lido: {
+        Args: { _contato_id: string; _entrada_em: string }
+        Returns: number
       }
       incrementar_metrica_acionamento: {
         Args: { p_coluna: string; p_data: string; p_hora: string }
