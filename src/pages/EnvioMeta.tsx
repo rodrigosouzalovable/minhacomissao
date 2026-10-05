@@ -1500,9 +1500,18 @@ export default function EnvioMeta() {
                                 },
                               },
                             );
-                            if (error) throw error;
-                            if ((data as any)?.success === false) {
-                              const err = String((data as any)?.error || "");
+                            let resposta = data as any;
+                            if (error) {
+                              const response = "context" in error
+                                ? (error as { context?: Response }).context
+                                : undefined;
+                              const details = response
+                                ? await response.clone().json().catch(() => null)
+                                : null;
+                              resposta = details || { success: false, error: error.message };
+                            }
+                            if (resposta?.success === false) {
+                              const err = String(resposta?.error || "");
                               if (err === "template_nao_cadastrado_como_mestre") {
                                 toast.error(
                                   "Este template ainda não está cadastrado como modelo mestre. Cadastre-o na aba Template antes de aplicar.",
@@ -1518,7 +1527,7 @@ export default function EnvioMeta() {
                               }
                               return;
                             }
-                            const n = Number((data as any)?.enfileirados || 0);
+                            const n = Number(resposta?.enfileirados || 0);
                             if (n > 0) {
                               toast.success(
                                 `${n} envio(s) de template na fila. A aplicação é gradual (1 por vez, 2–5 min, 07h–20h).`,
