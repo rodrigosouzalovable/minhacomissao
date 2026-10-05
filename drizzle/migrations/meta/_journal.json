@@ -953,6 +953,13 @@
       "when": 1791200995033,
       "tag": "0135_meta_unread_until_answered",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1791201932684,
+      "tag": "0136_authorize_meta_inbox_send_by_folder",
+      "breakpoints": true
     }
   ]
 }

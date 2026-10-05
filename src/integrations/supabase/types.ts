@@ -11929,6 +11929,17 @@ export type Database = {
         Args: { _uid: string }
         Returns: boolean
       }
+      can_send_meta_inbox_message: {
+        Args: {
+          _allow_new?: boolean
+          _contato_id?: string
+          _folder_id?: string
+          _instancia_id?: string
+          _recipient?: string
+          _uid: string
+        }
+        Returns: boolean
+      }
       can_upload_inbox_media_for_conversation: {
         Args: { _object_name: string; _uid: string }
         Returns: boolean
