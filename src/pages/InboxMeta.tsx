@@ -1045,6 +1045,20 @@ export default function InboxMeta() {
           if (!rowSuf || !atvSuf || rowSuf !== atvSuf) return;
           if (payload.eventType === 'INSERT') {
             setMensagens(prev => prev.some(m => m.id === row.id) ? prev : [...prev, row]);
+            const ajustarNaoLido = (c: MetaContato) => {
+              if (c.id !== contatoAtivo.id) return c;
+              if (row.direcao === 'saida' && row.status_envio !== 'erro') return { ...c, nao_lido: 0 };
+              if (row.direcao === 'entrada') {
+                return {
+                  ...c,
+                  nao_lido: Math.max((c.nao_lido || 0) + 1, 1),
+                  ultima_msg_entrada_em: row.timestamp_msg,
+                };
+              }
+              return c;
+            };
+            setContatos(prev => prev.map(ajustarNaoLido));
+            setContatoAtivo(prev => prev ? ajustarNaoLido(prev) : prev);
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
           } else if (payload.eventType === 'UPDATE') {
             setMensagens(prev => prev.map(m => m.id === row.id ? { ...m, ...row } : m));
