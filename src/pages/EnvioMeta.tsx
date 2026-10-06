@@ -1829,7 +1829,9 @@ export default function EnvioMeta() {
               type="button"
               size="sm"
               variant="outline"
-              title="Seleciona instâncias GREEN ou sem qualidade confirmada. YELLOW e RED continuam disponíveis para seleção manual."
+              title={qualidadeFiltro.length > 0
+                ? "Seleciona todas as instâncias visíveis no filtro de qualidade atual."
+                : "Seleciona instâncias GREEN ou sem qualidade confirmada. YELLOW e RED continuam disponíveis para seleção manual."}
               disabled={instanciasElegiveisSelecaoMassa.length === 0}
               onClick={() => {
                 const idsVisiveis = instanciasVisiveis.map((i) => i.id);
