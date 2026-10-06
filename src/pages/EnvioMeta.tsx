@@ -243,6 +243,7 @@ export default function EnvioMeta() {
   const [bmNomes, setBmNomes] = useState<Record<string, string>>({});
   const [bmFiltro, setBmFiltro] = useState<string[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [masterMediaUrl, setMasterMediaUrl] = useState<string | undefined>();
   const [mestres, setMestres] = useState<UtilityMaster[]>([]);
   const [filaTemplate, setFilaTemplate] = useState<Record<string, string>>({});
   const [resultadosAplicacao, setResultadosAplicacao] = useState<Array<{ instancia_id: string; ok: boolean; enfileirados?: number; erro?: string; motivo?: string }>>([]);
@@ -882,6 +883,16 @@ export default function EnvioMeta() {
   }, [templateGroup?.mestreId, instanciaIds, templates]);
   // Usa o primeiro registro do grupo como "template" para preview/variáveis.
   const template = templateGroup?.sample ?? null;
+
+  useEffect(() => {
+    let active = true;
+    setMasterMediaUrl(undefined);
+    const master = mestres.find(m => m.id === templateGroup?.mestreId);
+    if (template?.id || !master?.cabecalho_media_url) return;
+    supabase.storage.from("meta-template-media").createSignedUrl(master.cabecalho_media_url, 3600)
+      .then(({ data }) => { if (active) setMasterMediaUrl(data?.signedUrl); });
+    return () => { active = false; };
+  }, [templateId, template?.id, mestres]);
 
   // Detecta botão de URL dinâmica ({{1}} no final da URL registrada na Meta)
   const templateTemBotaoUrlDinamico = useMemo(() => {
@@ -1679,7 +1690,7 @@ export default function EnvioMeta() {
                     templates
                       .filter((t: any) => t.nome_template === templateGroup?.nome && t.idioma === templateGroup?.idioma)
                       .map((t: any) => t?.variaveis?._header_image_url)
-                      .find((u: any) => typeof u === 'string' && u.trim().length > 0) || undefined
+                      .find((u: any) => typeof u === 'string' && u.trim().length > 0) || masterMediaUrl
                   }
                 />
               </div>
@@ -1694,7 +1705,7 @@ export default function EnvioMeta() {
                       ? variaveisDoTemplate.map(([k, v]) => `{{${k}}}=${v}`).join(" · ")
                       : <span className="italic">nenhuma configurada</span>}
                   </div>
-                  <Button type="button" size="sm" variant="outline" onClick={() => setEditVarsOpen(true)}>
+                  <Button type="button" size="sm" variant="outline" disabled={!template.id} onClick={() => setEditVarsOpen(true)}>
                     <Pencil className="h-3 w-3 mr-1" /> Editar variáveis
                   </Button>
                 </div>
@@ -1723,7 +1734,7 @@ export default function EnvioMeta() {
                     size="sm"
                     variant="outline"
                     className="h-8 text-xs shrink-0"
-                    disabled={salvandoButtonUrl}
+                    disabled={salvandoButtonUrl || !template.id}
                     onClick={async () => {
                       if (await salvarButtonUrl()) toast.success('Link atualizado para os próximos envios e mensagens pendentes.');
                     }}
