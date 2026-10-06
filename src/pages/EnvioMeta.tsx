@@ -1101,11 +1101,14 @@ export default function EnvioMeta() {
   }, [instancias]);
 
   const instanciasElegiveisSelecaoMassa = useMemo(() => {
+    // Com filtro de qualidade ativo, o usuário escolheu explicitamente trabalhar
+    // com essas instâncias (ex.: RED) — a seleção em massa segue o filtro.
+    if (qualidadeFiltro.length > 0) return instanciasVisiveis;
     return instanciasVisiveis.filter((instancia) => {
       const qualidade = String(instancia.saude_quality || "").trim().toUpperCase();
       return qualidade === "GREEN" || qualidade === "UNKNOWN" || qualidade === "";
     });
-  }, [instanciasVisiveis]);
+  }, [instanciasVisiveis, qualidadeFiltro]);
 
   const toggleBmFiltro = (id: string) => {
     setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
