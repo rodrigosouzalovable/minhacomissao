@@ -1,7 +1,7 @@
 export type UtilityMaster = {
   id: string; nome: string; idioma: string; categoria: string; criado_por: string | null;
   reclassificado_marketing: boolean; corpo: string; cabecalho_tipo: string | null;
-  cabecalho_texto: string | null; rodape: string | null; botoes: unknown;
+  cabecalho_texto: string | null; rodape: string | null; botoes: unknown; cabecalho_media_url?: string | null;
 };
 export type TemplateCopy = {
   id: string; nome_template: string; idioma: string; categoria: string | null;
@@ -54,6 +54,7 @@ export function situacaoUtility(group: UtilityGroup, instanceId: string, queueSt
   if (rows.some(t => ['pending', 'in_appeal', 'pending_deletion'].includes(t.status.toLowerCase()))) return 'Em análise na Meta';
   if (queueStatus === 'PENDENTE') return 'Na fila';
   if (queueStatus === 'ENVIADO') return 'Em análise na Meta';
+  if (queueStatus === 'APPROVED') return 'Aprovado — atualize a sincronização';
   if (rows.some(t => t.status.toLowerCase() === 'rejected') || queueStatus === 'REJECTED') return 'Rejeitado';
   return 'Ausente';
 }
