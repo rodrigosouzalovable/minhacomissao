@@ -1902,6 +1902,46 @@ export default function EnvioMeta() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="sm" variant="outline">
+                  <Gauge className="h-3.5 w-3.5 mr-1.5" />
+                  {qualidadeFiltro.length > 0 ? `Qualidade (${qualidadeFiltro.length})` : "Qualidade"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel>Qualidade da instância</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {([
+                  { id: "GREEN", label: "GREEN" },
+                  { id: "YELLOW", label: "YELLOW" },
+                  { id: "RED", label: "RED" },
+                  { id: "SEM_QUALIDADE", label: "Sem qualidade (sem leitura)" },
+                ]).map((q) => {
+                  const n = qualidadesDisponiveis[q.id] || 0;
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={q.id}
+                      checked={qualidadeFiltro.includes(q.id)}
+                      onCheckedChange={() =>
+                        setQualidadeFiltro((prev) =>
+                          prev.includes(q.id) ? prev.filter((x) => x !== q.id) : [...prev, q.id],
+                        )
+                      }
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span>{q.label}</span>
+                      <span className="ml-auto pl-2 text-xs text-muted-foreground">{n}</span>
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setQualidadeFiltro([]); }}>
+                  Limpar filtro
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
           </div>
 
           {liberacaoTotalThiago && (
