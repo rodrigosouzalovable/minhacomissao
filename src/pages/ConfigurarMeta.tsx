@@ -882,6 +882,11 @@ export default function ConfigurarMeta() {
     if (error) { toast.error("Erro: " + humanizarErroDuplicado(error.message)); return; }
 
     toast.success("Instância atualizada");
+    const novoTier = editForm.messaging_limit_manual || "__auto__";
+    const tierAnterior = editInst.messaging_limit_manual || "__auto__";
+    if (patch.meta_bm_id && novoTier !== tierAnterior) {
+      await propagarTierBm(patch.meta_bm_id, novoTier, editInst.id);
+    }
     const ligouCopia = isAdmin && editForm.templates_auto_copiar && !editInst.templates_auto_copiar;
     const idEditado = editInst.id;
     setEditInst(null);
@@ -1260,16 +1265,48 @@ export default function ConfigurarMeta() {
     carregar();
   };
 
+  // Aplica o mesmo tier a todas as instâncias de uma BM (exceto `excluirId`, se informado).
+  const propagarTierBm = async (bmId: string, valor: string, excluirId?: string) => {
+    const base = () => {
+      let q = (supabase as any).from("meta_whatsapp_instances");
+      return q;
+    };
+    let erro: any = null;
+    if (valor === "__auto__") {
+      let q1 = base().update({ messaging_limit_manual: null, messaging_limit_source: "meta_api" }).eq("meta_bm_id", bmId).not("saude_tier", "is", null);
+      let q2 = base().update({ messaging_limit_manual: null, messaging_limit_source: "default" }).eq("meta_bm_id", bmId).is("saude_tier", null);
+      if (excluirId) { q1 = q1.neq("id", excluirId); q2 = q2.neq("id", excluirId); }
+      const [r1, r2] = await Promise.all([q1, q2]);
+      erro = r1.error || r2.error;
+    } else {
+      let q = base().update({ messaging_limit_manual: valor, messaging_limit_source: "manual" }).eq("meta_bm_id", bmId);
+      if (excluirId) q = q.neq("id", excluirId);
+      erro = (await q).error;
+    }
+    if (erro) toast.error("Erro ao aplicar tier na BM: " + erro.message);
+    return !erro;
+  };
+
   const salvarTierManual = async (inst: Instancia, valor: string) => {
-    const patch: any = valor === "__auto__"
-      ? { messaging_limit_manual: null, messaging_limit_source: inst.saude_tier ? "meta_api" : "default" }
-      : { messaging_limit_manual: valor, messaging_limit_source: "manual" };
-    const { error } = await (supabase as any).from("meta_whatsapp_instances").update(patch).eq("id", inst.id);
-    if (error) { toast.error(error.message); return; }
-    toast.success(valor === "__auto__" ? "Override removido — usando sync automático" : `Tier definido: ${valor.replace("TIER_", "")} — cota da BM atualizada`);
+    const bmId = (inst as any).meta_bm_id as string | null;
+    if (bmId) {
+      const irmas = instancias.filter((i: any) => i.meta_bm_id === bmId).length;
+      const bmNome = bms.find((b) => b.id === bmId)?.nome || "vinculada";
+      const rotulo = valor === "__auto__" ? "Automático" : valor.replace("TIER_", "");
+      if (irmas > 1 && !window.confirm(`Isso vai alterar o tier de ${irmas} instâncias da BM ${bmNome} para ${rotulo}. Continuar?`)) return;
+      const ok = await propagarTierBm(bmId, valor);
+      if (!ok) return;
+      toast.success(`Tier ${rotulo} aplicado a ${irmas} instância(s) da BM ${bmNome}`);
+    } else {
+      const patch: any = valor === "__auto__"
+        ? { messaging_limit_manual: null, messaging_limit_source: inst.saude_tier ? "meta_api" : "default" }
+        : { messaging_limit_manual: valor, messaging_limit_source: "manual" };
+      const { error } = await (supabase as any).from("meta_whatsapp_instances").update(patch).eq("id", inst.id);
+      if (error) { toast.error(error.message); return; }
+      toast.success(valor === "__auto__" ? "Override removido — usando sync automático" : `Tier definido: ${valor.replace("TIER_", "")}`);
+    }
     carregar();
     recarregarCotas();
-
   };
 
   // Confere a elegibilidade comercial na Meta. Dados do cartão não são
