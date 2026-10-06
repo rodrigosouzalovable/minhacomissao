@@ -183,7 +183,7 @@ export function ConsultaUmeDialog({
     }
   };
 
-  const t = consulta ? tabelaDe(consulta, tabela) : null;
+  const t = consulta ? tabelaComParcelas(consulta, tabela) : null;
   const base10 = consulta ? baseSemJuros10(consulta) : null;
 
 
