@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Catálogo Utility antes da seleção de instâncias, aplicação de faltantes, deduplicação e testes sem disparos reais.
 
 - [x] Aplicar o link salvo aos novos envios e pendentes, validar destinos e preservar histórico.
 

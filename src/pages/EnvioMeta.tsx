@@ -2613,7 +2613,7 @@ export default function EnvioMeta() {
 
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={validando || enviandoTeste || iniciandoCampanha} size="lg">
+            <Button onClick={enviar} disabled={validando || enviandoTeste || iniciandoCampanha || motivosBloqueio.length > 0} size="lg">
               {validando || iniciandoCampanha
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : agendamento.ativo
