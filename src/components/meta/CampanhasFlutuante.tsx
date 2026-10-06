@@ -102,7 +102,7 @@ export default function CampanhasFlutuante() {
                 {jobsAtivos.map((j) => {
                   const total = j.total;
                   const done = j.enviados + j.erros;
-                  const pct = Math.round((done / Math.max(total, 1)) * 100);
+                  const pct = Math.min(100, Math.round((done / Math.max(total, 1)) * 100));
                   return (
                     <div key={j.id} className="rounded-md border bg-card p-2 space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
