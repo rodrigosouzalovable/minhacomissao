@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveMetaButtonRedirect } from "./metaButtonRedirect";
+import { resolveMetaButtonRedirect } from "../src/lib/metaButtonRedirect";
 
 describe("Meta dynamic button redirects", () => {
   test("opens the supplied WhatsApp link despite the encoded template marker", () => {
