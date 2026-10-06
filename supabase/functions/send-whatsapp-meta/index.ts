@@ -502,8 +502,11 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro, manual_inbox } = requestBody;
+    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro, manual_inbox, button_url } = requestBody;
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
+    if (cliente && typeof button_url === 'string' && button_url.trim()) {
+      (cliente as any).button_url = button_url.trim();
+    }
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
