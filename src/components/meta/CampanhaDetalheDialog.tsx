@@ -199,9 +199,9 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const finalizada = ["concluido", "cancelado", "erro"].includes(job.status);
   const pausado = job.status === "pausado";
   const semWhatsApp = Number((job as any).sem_whatsapp || 0);
-  const totalProcessado = job.enviados + job.erros + semWhatsApp;
+  const totalProcessado = Math.min(job.enviados + job.erros + semWhatsApp, Math.max(job.total, 0));
 
-  const percent = Math.round((totalProcessado / Math.max(job.total, 1)) * 100);
+  const percent = Math.min(100, Math.round((totalProcessado / Math.max(job.total, 1)) * 100));
 
   const nome = job.nome_campanha || job.template_nome || "Campanha";
   const rateLimitInfo = parseRateLimitMotivo((job as any).status_motivo || resultado?.statusMotivo);
