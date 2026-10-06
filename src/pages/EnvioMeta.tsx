@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock, Power, PowerOff } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock, Power, PowerOff, Gauge } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -242,6 +242,7 @@ export default function EnvioMeta() {
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [bmNomes, setBmNomes] = useState<Record<string, string>>({});
   const [bmFiltro, setBmFiltro] = useState<string[]>([]);
+  const [qualidadeFiltro, setQualidadeFiltro] = useState<string[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [masterMediaUrl, setMasterMediaUrl] = useState<string | undefined>();
   const [mestres, setMestres] = useState<UtilityMaster[]>([]);
