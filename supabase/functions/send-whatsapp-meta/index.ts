@@ -288,6 +288,30 @@ function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId
   }
 
   if (bodyParameters.length) components.push({ type: 'body', parameters: bodyParameters });
+
+  const dynamicButtons = getDynamicUrlButtons(template);
+  if (dynamicButtons.length > 0) {
+    const savedLink = String(
+      (cliente as any)?.button_url || template?.variaveis?._button_url || '',
+    ).trim();
+    if (!savedLink) {
+      throw new Error(
+        `Template "${template.nome_template}" tem botão de URL dinâmica, mas nenhum link foi informado. ` +
+        `Preencha o campo "Link do botão" na tela de envio.`,
+      );
+    }
+    if (!/^https:\/\//i.test(savedLink)) {
+      throw new Error(`Link do botão inválido: use um endereço começando com https://`);
+    }
+    for (const btn of dynamicButtons) {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: btn.index,
+        parameters: [{ type: 'text', text: resolveButtonUrlParam(btn.url, savedLink) }],
+      });
+    }
+  }
   return components;
 }
 
