@@ -2,6 +2,7 @@
 // Retorna status (CONNECTED/FLAGGED/RESTRICTED/etc), quality_rating, tier,
 // e ban_info da WABA. Persiste snapshot em meta_whatsapp_instances.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { voltouParaGreen } from '../_shared/meta-voltou-green.ts';
 import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';

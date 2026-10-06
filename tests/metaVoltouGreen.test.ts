@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { voltouParaGreen } from "../supabase/functions/_shared/meta-voltou-green";
 
 describe("voltouParaGreen", () => {
