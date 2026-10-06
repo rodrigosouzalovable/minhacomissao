@@ -879,6 +879,61 @@ export default function EnvioMeta() {
   // Usa o primeiro registro do grupo como "template" para preview/variáveis.
   const template = templateGroup?.sample ?? null;
 
+  // Detecta botão de URL dinâmica ({{1}} no final da URL registrada na Meta)
+  const templateTemBotaoUrlDinamico = useMemo(() => {
+    const comps: any[] = Array.isArray(template?.variaveis?._components) ? template.variaveis._components : [];
+    const buttonsComp = comps.find((c: any) => String(c?.type || "").toUpperCase() === "BUTTONS");
+    const buttons: any[] = Array.isArray(buttonsComp?.buttons) ? buttonsComp.buttons : [];
+    return buttons.some(
+      (b: any) => String(b?.type || "").toUpperCase() === "URL" && /\{\{\s*\d+\s*\}\}/.test(String(b?.url || "")),
+    );
+  }, [template]);
+
+  // Carrega o link salvo do botão quando o template muda
+  useEffect(() => {
+    const salvo = template?.variaveis?._button_url;
+    setButtonUrl(typeof salvo === "string" ? salvo : "");
+  }, [template?.id]);
+
+  const salvarButtonUrl = async (): Promise<boolean> => {
+    if (!templateGroup || !templateTemBotaoUrlDinamico) return true;
+    const link = buttonUrl.trim();
+    if (!link) {
+      toast.error('Informe o link do botão (URL dinâmica) antes de enviar.');
+      return false;
+    }
+    if (!/^https:\/\//i.test(link)) {
+      toast.error('Link do botão inválido: use um endereço começando com https://');
+      return false;
+    }
+    setSalvandoButtonUrl(true);
+    try {
+      const alvo = templateGroup.rows.length > 0 ? templateGroup.rows : [templateGroup.sample];
+      for (const t of alvo) {
+        const atuais = (t.variaveis || {}) as Record<string, any>;
+        if (atuais._button_url === link) continue;
+        const { error } = await supabase
+          .from("meta_whatsapp_templates")
+          .update({ variaveis: { ...atuais, _button_url: link } })
+          .eq("id", t.id);
+        if (error) throw error;
+      }
+      setTemplates((prev) =>
+        prev.map((t) =>
+          alvo.some((a) => a.id === t.id)
+            ? { ...t, variaveis: { ...(t.variaveis || {}), _button_url: link } }
+            : t,
+        ),
+      );
+      return true;
+    } catch (e: any) {
+      toast.error("Erro ao salvar o link do botão: " + (e?.message || e));
+      return false;
+    } finally {
+      setSalvandoButtonUrl(false);
+    }
+  };
+
   // Templates compatíveis para variação: mesma quantidade de variáveis do principal
   const variantesCompativeis = useMemo(() => {
     if (!templateGroup) return [] as TemplateGroup[];
