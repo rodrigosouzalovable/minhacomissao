@@ -1,5 +1,7 @@
 # Decisões técnicas
 
+- Resolve Meta redirects before app rendering; strip leading template markers, allow HTTP(S), and preserve URL parameters to repair legacy links.
+
 - Todo novo acordo exige confirmação auditável do telefone antes da gravação e formalização por envio do termo na conversa Meta de origem, ou localizada por consulta protegida ao sufixo do telefone, ou download, mantendo o acordo pendente até uma dessas ações.
 
 - A saúde do webhook Meta distingue indisponibilidade da consulta de inscrição incorreta confirmada; só alerta após tentativa de recuperação e confirmação, para evitar avisos falsos por timeout.
