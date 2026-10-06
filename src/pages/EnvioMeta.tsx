@@ -38,6 +38,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect";
 import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
+import { snapshotMetaButtonVars } from "../../supabase/functions/_shared/meta-button-url";
 
 const NOVO_MUNDO_3144_INSTANCE_ID = "b103ac3e-5781-47c4-8e11-24a323f5f0ee";
 
@@ -1299,6 +1300,7 @@ export default function EnvioMeta() {
       const credLinha = credorByTel[k] ?? credorPadrao ?? null;
       const out: ClienteRow = { ...c };
       if (v) out.vars = v;
+      if (templateTemBotaoUrlDinamico) out.vars = snapshotMetaButtonVars(out.vars, buttonUrl.trim());
       if (credLinha) out.credor = credLinha;
       return out;
     });
