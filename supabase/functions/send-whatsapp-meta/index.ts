@@ -234,6 +234,34 @@ function buildHeaderTextParameters(template: any, cliente: ClienteData): any[] {
   return parameters;
 }
 
+// Botões URL dinâmicos: a Meta registra a URL terminando em {{1}} e espera
+// um componente button com o valor que substitui a variável. Sem isso o envio
+// falha ou sai sem o link correto.
+function getDynamicUrlButtons(template: any): { index: number; url: string }[] {
+  const components = getTemplateComponents(template);
+  const buttonsComp = components.find((c: any) => String(c?.type || '').toUpperCase() === 'BUTTONS');
+  const buttons: any[] = Array.isArray(buttonsComp?.buttons) ? buttonsComp.buttons : [];
+  const out: { index: number; url: string }[] = [];
+  buttons.forEach((b: any, idx: number) => {
+    const url = String(b?.url || '');
+    if (String(b?.type || '').toUpperCase() === 'URL' && /\{\{\s*\d+\s*\}\}/.test(url)) {
+      out.push({ index: idx, url });
+    }
+  });
+  return out;
+}
+
+function resolveButtonUrlParam(registeredUrl: string, fullLink: string): string {
+  // A Meta espera apenas a parte variável (sufixo) quando a URL registrada
+  // tem base fixa; se a base for vazia ou o link não bater, envia o link inteiro.
+  const base = registeredUrl.replace(/\{\{\s*\d+\s*\}\}.*$/, '');
+  if (base && fullLink.startsWith(base)) {
+    const suffix = fullLink.slice(base.length);
+    if (suffix) return suffix;
+  }
+  return fullLink;
+}
+
 function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId: string | null | undefined, cliente: ClienteData) {
   const components: any[] = [];
   const headerFormat = getHeaderFormat(template);
@@ -260,6 +288,30 @@ function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId
   }
 
   if (bodyParameters.length) components.push({ type: 'body', parameters: bodyParameters });
+
+  const dynamicButtons = getDynamicUrlButtons(template);
+  if (dynamicButtons.length > 0) {
+    const savedLink = String(
+      (cliente as any)?.button_url || template?.variaveis?._button_url || '',
+    ).trim();
+    if (!savedLink) {
+      throw new Error(
+        `Template "${template.nome_template}" tem botão de URL dinâmica, mas nenhum link foi informado. ` +
+        `Preencha o campo "Link do botão" na tela de envio.`,
+      );
+    }
+    if (!/^https:\/\//i.test(savedLink)) {
+      throw new Error(`Link do botão inválido: use um endereço começando com https://`);
+    }
+    for (const btn of dynamicButtons) {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: btn.index,
+        parameters: [{ type: 'text', text: resolveButtonUrlParam(btn.url, savedLink) }],
+      });
+    }
+  }
   return components;
 }
 
@@ -450,8 +502,11 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro, manual_inbox } = requestBody;
+    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro, manual_inbox, button_url } = requestBody;
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
+    if (cliente && typeof button_url === 'string' && button_url.trim()) {
+      (cliente as any).button_url = button_url.trim();
+    }
     if (!template_id || !instancia_id || !cliente?.telefone) {
       return new Response(JSON.stringify({ success: false, error: 'Parâmetros obrigatórios: template_id, instancia_id, cliente.telefone' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

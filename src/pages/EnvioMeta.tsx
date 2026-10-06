@@ -398,6 +398,8 @@ export default function EnvioMeta() {
   const [credor, setCredor] = useState<string>("__none__");
   const [credorByTel, setCredorByTel] = useState<Record<string, CredorSlug>>({});
   const [editVarsOpen, setEditVarsOpen] = useState(false);
+  const [buttonUrl, setButtonUrl] = useState("");
+  const [salvandoButtonUrl, setSalvandoButtonUrl] = useState(false);
 
   // Antirrepetição — quantos números da lista já receberam mensagem de campanha
   // nos últimos N dias (padrão do sistema). Só informativo aqui; a remoção real
@@ -877,6 +879,61 @@ export default function EnvioMeta() {
   // Usa o primeiro registro do grupo como "template" para preview/variáveis.
   const template = templateGroup?.sample ?? null;
 
+  // Detecta botão de URL dinâmica ({{1}} no final da URL registrada na Meta)
+  const templateTemBotaoUrlDinamico = useMemo(() => {
+    const comps: any[] = Array.isArray(template?.variaveis?._components) ? template.variaveis._components : [];
+    const buttonsComp = comps.find((c: any) => String(c?.type || "").toUpperCase() === "BUTTONS");
+    const buttons: any[] = Array.isArray(buttonsComp?.buttons) ? buttonsComp.buttons : [];
+    return buttons.some(
+      (b: any) => String(b?.type || "").toUpperCase() === "URL" && /\{\{\s*\d+\s*\}\}/.test(String(b?.url || "")),
+    );
+  }, [template]);
+
+  // Carrega o link salvo do botão quando o template muda
+  useEffect(() => {
+    const salvo = template?.variaveis?._button_url;
+    setButtonUrl(typeof salvo === "string" ? salvo : "");
+  }, [template?.id]);
+
+  const salvarButtonUrl = async (): Promise<boolean> => {
+    if (!templateGroup || !templateTemBotaoUrlDinamico) return true;
+    const link = buttonUrl.trim();
+    if (!link) {
+      toast.error('Informe o link do botão (URL dinâmica) antes de enviar.');
+      return false;
+    }
+    if (!/^https:\/\//i.test(link)) {
+      toast.error('Link do botão inválido: use um endereço começando com https://');
+      return false;
+    }
+    setSalvandoButtonUrl(true);
+    try {
+      const alvo = templateGroup.rows.length > 0 ? templateGroup.rows : [templateGroup.sample];
+      for (const t of alvo) {
+        const atuais = (t.variaveis || {}) as Record<string, any>;
+        if (atuais._button_url === link) continue;
+        const { error } = await supabase
+          .from("meta_whatsapp_templates")
+          .update({ variaveis: { ...atuais, _button_url: link } })
+          .eq("id", t.id);
+        if (error) throw error;
+      }
+      setTemplates((prev) =>
+        prev.map((t) =>
+          alvo.some((a) => a.id === t.id)
+            ? { ...t, variaveis: { ...(t.variaveis || {}), _button_url: link } }
+            : t,
+        ),
+      );
+      return true;
+    } catch (e: any) {
+      toast.error("Erro ao salvar o link do botão: " + (e?.message || e));
+      return false;
+    } finally {
+      setSalvandoButtonUrl(false);
+    }
+  };
+
   // Templates compatíveis para variação: mesma quantidade de variáveis do principal
   const variantesCompativeis = useMemo(() => {
     if (!templateGroup) return [] as TemplateGroup[];
@@ -1017,6 +1074,7 @@ export default function EnvioMeta() {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
     if (recipients.length === 0) return toast.error("Importe a planilha com os destinatários");
+    if (templateTemBotaoUrlDinamico && !(await salvarButtonUrl())) return;
     if (templatePorCredor) {
       const semCredor = recipients.filter((c) => !credorByTel[telSuffix8(c.telefone)]).length;
       if (semCredor > 0) {
@@ -1303,6 +1361,7 @@ export default function EnvioMeta() {
     const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
     const rows = parseRecipients(dedup.texto, isentosDedup);
     if (rows.length === 0) return toast.error("Cole ao menos um destinatário");
+    if (templateTemBotaoUrlDinamico && !(await salvarButtonUrl())) return;
 
     // usa 1ª instância marcada + 1º destinatário
     const instId = instanciaIds[0];
@@ -1313,7 +1372,7 @@ export default function EnvioMeta() {
     setEnviandoTeste(true);
     try {
       const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
-        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true, liberacao_total_parceiro: liberacaoTotalThiago },
+        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true, liberacao_total_parceiro: liberacaoTotalThiago, button_url: buttonUrl.trim() || undefined },
       });
       if (error) {
         const response = 'context' in error ? (error as { context?: Response }).context : undefined;
@@ -1611,6 +1670,36 @@ export default function EnvioMeta() {
                 <p>
                   Campos disponíveis:
                   <code className="ml-1">{"{nome} {primeiro_nome} {cpf} {atraso} {saldo} {avista} {parcelado}"}</code>
+                </p>
+              </div>
+            )}
+
+            {template && templateTemBotaoUrlDinamico && (
+              <div className="rounded-md border p-3 space-y-2">
+                <Label htmlFor="button-url-dinamica" className="text-xs font-medium">
+                  Link do botão (URL dinâmica)
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="button-url-dinamica"
+                    value={buttonUrl}
+                    onChange={(e) => setButtonUrl(e.target.value)}
+                    placeholder="https://exemplo.com/pagina"
+                    className="h-8 text-xs font-mono"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs shrink-0"
+                    disabled={salvandoButtonUrl}
+                    onClick={() => salvarButtonUrl()}
+                  >
+                    {salvandoButtonUrl ? "Salvando..." : "Salvar link"}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Este template tem um botão com link dinâmico. O endereço acima será enviado no botão e fica salvo para os próximos envios.
                 </p>
               </div>
             )}
