@@ -61,6 +61,12 @@ function tabelaDe(c: Consulta, tabela: TabelaKey): Tabela | null {
   return c.padrao;
 }
 
+/** Tabela só é utilizável quando tem ao menos uma parcela com valor. */
+function tabelaComParcelas(c: Consulta, tabela: TabelaKey): Tabela | null {
+  const t = tabelaDe(c, tabela);
+  return t && t.parcelas.length > 0 ? t : null;
+}
+
 function textoProposta(c: Consulta, tabela: TabelaKey) {
   const t = tabelaDe(c, tabela);
   if (!t) return '';
@@ -137,8 +143,21 @@ export function ConsultaUmeDialog({
       const preferida = (data as any).tabelaPadraoConfig as TabelaKey | undefined;
       // Se a tabela configurada não pode ser calculada (sem "total sem juros"),
       // cai para a tabela padrão em vez de deixar a calculadora em branco.
-      if (preferida) setTabela(tabelaDe(c, preferida) ? preferida : 'padrao');
-      else if (!tabelaDe(c, 'padrao')) setTabela('especial');
+      const escolhida: TabelaKey = preferida && tabelaComParcelas(c, preferida)
+        ? preferida
+        : tabelaComParcelas(c, 'padrao') ? 'padrao' : 'especial';
+      // No perfil essencial as tabelas Padrão/Especial não vêm na resposta;
+      // se a escolhida precisa delas e veio vazia, refaz a consulta completa.
+      if (
+        c.encontrado &&
+        c.perfil === 'essencial' &&
+        escolhida !== 'sem_juros_10' &&
+        !tabelaComParcelas(c, escolhida)
+      ) {
+        await consultar(digitos, forcar, 'completo');
+        return;
+      }
+      setTabela(escolhida);
       setConsulta(c);
       if (!c.encontrado) setErro('CPF não localizado na base da UME.');
 
@@ -164,7 +183,7 @@ export function ConsultaUmeDialog({
     }
   };
 
-  const t = consulta ? tabelaDe(consulta, tabela) : null;
+  const t = consulta ? tabelaComParcelas(consulta, tabela) : null;
   const base10 = consulta ? baseSemJuros10(consulta) : null;
 
 
