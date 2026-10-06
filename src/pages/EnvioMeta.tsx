@@ -1078,10 +1078,27 @@ export default function EnvioMeta() {
     });
   }, [instancias, bmNomes]);
 
+  const qualidadeDaInstancia = (i: Instancia): string => {
+    const q = String(i.saude_quality || "").trim().toUpperCase();
+    return ["GREEN", "YELLOW", "RED"].includes(q) ? q : "SEM_QUALIDADE";
+  };
+
   const instanciasVisiveis = useMemo(() => {
-    if (bmFiltro.length === 0) return instancias;
-    return instancias.filter((i) => bmFiltro.includes(i.meta_bm_id || SEM_BM));
-  }, [instancias, bmFiltro]);
+    let lista = instancias;
+    if (bmFiltro.length > 0) {
+      lista = lista.filter((i) => bmFiltro.includes(i.meta_bm_id || SEM_BM));
+    }
+    if (qualidadeFiltro.length > 0) {
+      lista = lista.filter((i) => qualidadeFiltro.includes(qualidadeDaInstancia(i)));
+    }
+    return lista;
+  }, [instancias, bmFiltro, qualidadeFiltro]);
+
+  const qualidadesDisponiveis = useMemo(() => {
+    const contagem: Record<string, number> = { GREEN: 0, YELLOW: 0, RED: 0, SEM_QUALIDADE: 0 };
+    for (const i of instancias) contagem[qualidadeDaInstancia(i)] = (contagem[qualidadeDaInstancia(i)] || 0) + 1;
+    return contagem;
+  }, [instancias]);
 
   const instanciasElegiveisSelecaoMassa = useMemo(() => {
     return instanciasVisiveis.filter((instancia) => {
