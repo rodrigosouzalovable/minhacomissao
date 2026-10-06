@@ -7,7 +7,7 @@
 
 # Roadmap
 
-- [ ] Fixar o link dinâmico escolhido na campanha e mostrar o destino real no botão da conversa; validar sem disparos.
+- [x] Fixar o link dinâmico escolhido na campanha e mostrar o destino real no botão da conversa; validar sem disparos.
 
 - [x] Criar base e configuração separadas para candidatos a resposta automática.
 - [x] Implementar captação diária de até 200 WhatsApps novos em todo o Brasil.
