@@ -1,6 +1,6 @@
 # Decisões técnicas
 
-- Resolve legacy Meta redirects before rendering; preserve HTTP(S) parameters. Snapshot button links in item vars; send and preview the same destination.
+- Resolve Meta redirects before rendering. Save owner-scoped live URLs atomically; template reads override stale snapshots, sent previews stay immutable.
 
 - Todo novo acordo exige confirmação auditável do telefone antes da gravação e formalização por envio do termo na conversa Meta de origem, ou localizada por consulta protegida ao sufixo do telefone, ou download, mantendo o acordo pendente até uma dessas ações.
 

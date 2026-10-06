@@ -38,7 +38,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect";
 import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
-import { snapshotMetaButtonVars } from "../../supabase/functions/_shared/meta-button-url";
+import { resolveButtonUrlParam, snapshotMetaButtonVars, validateMetaButtonLink } from "../../supabase/functions/_shared/meta-button-url";
 
 const NOVO_MUNDO_3144_INSTANCE_ID = "b103ac3e-5781-47c4-8e11-24a323f5f0ee";
 
@@ -93,7 +93,7 @@ type Template = {
   body_text: string | null;
   status: string;
   idioma: string;
-  variaveis: Record<string, string> | null;
+  variaveis: Record<string, any> | null;
   instancia_id: string;
   categoria: string | null;
 };
@@ -903,26 +903,36 @@ export default function EnvioMeta() {
       toast.error('Informe o link do botão (URL dinâmica) antes de enviar.');
       return false;
     }
-    if (!/^https:\/\//i.test(link)) {
-      toast.error('Link do botão inválido: use um endereço começando com https://');
+    try {
+      validateMetaButtonLink(link);
+      for (const row of templateGroup.rows) {
+        const components = Array.isArray(row.variaveis?._components) ? row.variaveis._components : [];
+        for (const component of components) {
+          if (String(component?.type).toUpperCase() !== 'BUTTONS') continue;
+          for (const button of component.buttons || []) {
+            if (String(button?.type).toUpperCase() === 'URL' && /\{\{/.test(String(button.url))) {
+              resolveButtonUrlParam(String(button.url), link);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Link do botão inválido.');
       return false;
     }
     setSalvandoButtonUrl(true);
     try {
-      const alvo = templateGroup.rows.length > 0 ? templateGroup.rows : [templateGroup.sample];
-      for (const t of alvo) {
-        const atuais = (t.variaveis || {}) as Record<string, any>;
-        if (atuais._button_url === link) continue;
-        const { error } = await supabase
-          .from("meta_whatsapp_templates")
-          .update({ variaveis: { ...atuais, _button_url: link } })
-          .eq("id", t.id);
-        if (error) throw error;
-      }
+      const { data, error } = await supabase.rpc('salvar_link_botao_meta', {
+        _template_id: templateGroup.sample.id,
+        _link: link,
+      });
+      if (error) throw error;
+      const ids = new Set<string>(Array.isArray(data) ? data.map((row: { template_id: string }) => row.template_id) : []);
+      if (ids.size === 0) throw new Error('Nenhum modelo foi atualizado.');
       setTemplates((prev) =>
         prev.map((t) =>
-          alvo.some((a) => a.id === t.id)
-            ? { ...t, variaveis: { ...(t.variaveis || {}), _button_url: link } }
+          ids.has(t.id)
+            ? { ...t, variaveis: { ...(t.variaveis || {}), _button_url: link, _button_url_live: true } }
             : t,
         ),
       );
@@ -1695,7 +1705,9 @@ export default function EnvioMeta() {
                     variant="outline"
                     className="h-8 text-xs shrink-0"
                     disabled={salvandoButtonUrl}
-                    onClick={() => salvarButtonUrl()}
+                    onClick={async () => {
+                      if (await salvarButtonUrl()) toast.success('Link atualizado para os próximos envios e mensagens pendentes.');
+                    }}
                   >
                     {salvandoButtonUrl ? "Salvando..." : "Salvar link"}
                   </Button>
