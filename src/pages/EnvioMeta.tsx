@@ -1074,6 +1074,7 @@ export default function EnvioMeta() {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
     if (recipients.length === 0) return toast.error("Importe a planilha com os destinatários");
+    if (templateTemBotaoUrlDinamico && !(await salvarButtonUrl())) return;
     if (templatePorCredor) {
       const semCredor = recipients.filter((c) => !credorByTel[telSuffix8(c.telefone)]).length;
       if (semCredor > 0) {
@@ -1360,6 +1361,7 @@ export default function EnvioMeta() {
     const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
     const rows = parseRecipients(dedup.texto, isentosDedup);
     if (rows.length === 0) return toast.error("Cole ao menos um destinatário");
+    if (templateTemBotaoUrlDinamico && !(await salvarButtonUrl())) return;
 
     // usa 1ª instância marcada + 1º destinatário
     const instId = instanciaIds[0];
@@ -1370,7 +1372,7 @@ export default function EnvioMeta() {
     setEnviandoTeste(true);
     try {
       const { data, error } = await supabase.functions.invoke("send-whatsapp-meta", {
-        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true, liberacao_total_parceiro: liberacaoTotalThiago },
+        body: { template_id: tplId, instancia_id: instId, cliente, modo_teste: true, liberacao_total_parceiro: liberacaoTotalThiago, button_url: buttonUrl.trim() || undefined },
       });
       if (error) {
         const response = 'context' in error ? (error as { context?: Response }).context : undefined;
