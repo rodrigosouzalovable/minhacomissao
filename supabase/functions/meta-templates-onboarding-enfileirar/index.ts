@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
+import { modelosParaCopiar } from "../_shared/meta-template-copy-candidates.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 
 const corsHeaders = {
@@ -171,20 +172,8 @@ Deno.serve(async (req) => {
         .filter((r) => ["PENDENTE", "ENVIADO", "APPROVED"].includes(String(r.status || "").toUpperCase()))
         .map((r) => r.template_mestre_id));
 
-      let candidatos: [string, number][];
-      if (idsMestreDoProprietario) {
-        const idsPermitidos = new Set(mestresPermitidos.map((m) => m.id as string));
-        candidatos = idsMestreDoProprietario
-          .filter((id) => idsPermitidos.has(id))
-          .filter((id) => !jaNoNumero.has(id))
-          .map((id, idx) => [id, idsMestreDoProprietario.length - idx] as [string, number]);
-      } else {
-        const listaAplicaveis = mestresAusentes.map((r) => r.id as string);
-        candidatos = listaAplicaveis
-          .filter((id) => !jaNoNumero.has(id) && !emProcessamento.has(id))
-          .map((id, idx) => [id, listaAplicaveis.length - idx] as [string, number])
-          .sort((a, b) => b[1] - a[1]);
-      }
+      const aplicaveis = modelosParaCopiar(mestresPermitidos, jaNoNumero, chavesReais, emProcessamento);
+      const candidatos: [string, number][] = aplicaveis.map((m, idx) => [m.id, aplicaveis.length - idx]);
 
       if (candidatos.length === 0) {
         resultados.push({
@@ -204,14 +193,19 @@ Deno.serve(async (req) => {
         agendado_para: new Date().toISOString(),
       }));
 
-      const { error: errIns } = await supabase
+      const { data: inseridos, error: errIns } = await supabase
         .from("meta_templates_onboarding_fila")
-        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true });
+        .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true }).select("template_mestre_id");
       if (errIns) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: errIns.message });
         continue;
       }
 
+      const quantidade = inseridos?.length || 0;
+      if (quantidade === 0) {
+        resultados.push({ instancia_id: instanciaId, ok: true, enfileirados: 0, motivo: "ja_na_fila" });
+        continue;
+      }
       await supabase
         .from("meta_whatsapp_instances")
         .update({
@@ -231,11 +225,11 @@ Deno.serve(async (req) => {
           `Número: *${inst.nome || inst.display_phone || instanciaId}*\n` +
           (bm ? `${bm}\n` : "") +
           (templateNome ? `Modelo: *${templateNome}*\n` : "") +
-          `Modelos na fila: *${rows.length}*\n\n` +
+          `Modelos na fila: *${quantidade}*\n\n` +
           `Envio gradual: contas tier 250 recebem no máximo 2 modelos por número/dia; demais tiers mantêm o fluxo atual. Sempre das 07h às 20h e nunca no domingo.`,
       });
 
-      resultados.push({ instancia_id: instanciaId, ok: true, enfileirados: rows.length });
+      resultados.push({ instancia_id: instanciaId, ok: true, enfileirados: quantidade });
     }
 
     const enfileirados = resultados.reduce((s, r) => s + (r.enfileirados || 0), 0);
