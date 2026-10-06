@@ -576,6 +576,12 @@ Deno.serve(async (req) => {
 
 
         await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
+        // Voltou de YELLOW/RED para GREEN: enfileira já os Utility obrigatórios faltantes.
+        if (voltouParaGreen(inst.saude_quality, qual)) {
+          supabase.functions.invoke('meta-templates-auditar-instancias', {
+            body: { auto: true, dry_run: false, instancia_id: inst.id },
+          }).catch((e: unknown) => console.warn('auditoria pós-GREEN falhou', inst.id, e));
+        }
         if (inst.meta_bm_id && r.whatsapp_business_manager_messaging_limit) {
           const tierTexto = String(r.whatsapp_business_manager_messaging_limit).toUpperCase();
           const matchTier = tierTexto.match(/(\d+(?:[.,]\d+)?)\s*([KM])?/);
