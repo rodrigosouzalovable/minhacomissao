@@ -37,8 +37,24 @@ import { useBmCotas } from "@/hooks/useBmCotas";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect";
+import { catalogoUtility, situacaoUtility, type UtilityMaster, type UtilityGroup } from "@/lib/metaUtilityCatalog";
+import { carregarUtilityMestres } from "@/lib/carregarUtilityMestres";
 import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
 import { resolveButtonUrlParam, snapshotMetaButtonVars, validateMetaButtonLink } from "../../supabase/functions/_shared/meta-button-url";
+
+function motivoAplicacao(code: string): string {
+  const motivos: Record<string, string> = {
+    instancia_de_outro_proprietario: "Instância de outro proprietário",
+    template_mestre_de_outro_proprietario: "Modelo de outro proprietário",
+    copia_automatica_desativada: "Cópia de templates desativada nesta instância",
+    instancia_de_parceiro: "Instância de parceiro não aceita esta aplicação",
+    instancia_de_teste: "Instância de teste não aceita cópia automática",
+    instancia_sem_credenciais: "Instância precisa ser reconectada",
+    somente_admin: "Somente administradores podem aplicar modelos",
+    somente_api_oficial: "Aplicação disponível somente para a API Oficial Meta",
+  };
+  return motivos[code] || code;
+}
 
 const NOVO_MUNDO_3144_INSTANCE_ID = "b103ac3e-5781-47c4-8e11-24a323f5f0ee";
 
@@ -227,6 +243,9 @@ export default function EnvioMeta() {
   const [bmNomes, setBmNomes] = useState<Record<string, string>>({});
   const [bmFiltro, setBmFiltro] = useState<string[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [mestres, setMestres] = useState<UtilityMaster[]>([]);
+  const [filaTemplate, setFilaTemplate] = useState<Record<string, string>>({});
+  const [resultadosAplicacao, setResultadosAplicacao] = useState<Array<{ instancia_id: string; ok: boolean; enfileirados?: number; erro?: string; motivo?: string }>>([]);
   const [loading, setLoading] = useState(true);
 
   const [templateId, setTemplateId] = useState<string>("");
@@ -744,8 +763,10 @@ export default function EnvioMeta() {
   };
 
   const carregar = async () => {
+    if (!user?.id) return;
     setLoading(true);
-    const [i, t, u, bm, vp] = await Promise.all([
+    try {
+    const [i, t, u, bm, vp, modelos] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
       carregarTodosMetaTemplates<Template>("*"),
 
@@ -758,6 +779,7 @@ export default function EnvioMeta() {
         .select("id, nome, business_id")
         .order("nome"),
       (supabase as any).from("meta_instance_parceiros").select("instancia_id, user_id"),
+      carregarUtilityMestres(user.id),
     ]);
 
     if (bm?.data) {
@@ -796,13 +818,16 @@ export default function EnvioMeta() {
     }
 
     setTemplates(t);
+    setMestres(modelos);
     if (u.data) setUazInstancias(u.data as any);
-    setLoading(false);
+    } catch (e) {
+      toast.error("Não foi possível atualizar os templates. Tente novamente.");
+    } finally { setLoading(false); }
   };
 
   useEffect(() => {
     carregar();
-  }, []);
+  }, [user?.id]);
 
   // Carrega caixas de mensagens disponíveis para o usuário atual (RLS restringe)
   useEffect(() => {
@@ -825,45 +850,10 @@ export default function EnvioMeta() {
 
   // Agrupa templates por (nome_template, idioma) — cada linha do dropdown é um "template lógico"
   // que pode existir em várias instâncias. `templateId` guarda a chave do grupo.
-  type TemplateGroup = {
-    key: string;
-    nome: string;
-    idioma: string;
-    categoria: string | null;
-    sample: Template;
-    rows: Template[];
-    instanciasAprovadasIds: Set<string>;
-    varsCount: number;
-  };
-  const templateGroups = useMemo<TemplateGroup[]>(() => {
-    const map = new Map<string, TemplateGroup>();
-    const base = instanciaIds.length === 0
-      ? []
-      : templates.filter((t) => instanciaIds.includes(t.instancia_id));
-    for (const t of base) {
-      // Trava anti-gasto: templates MARKETING não aparecem no dropdown de envio em massa.
-      // A versão UTILITY do mesmo template continua disponível.
-      if (String(t.categoria || '').toUpperCase() === 'MARKETING') continue;
-      const key = `${t.nome_template}::${t.idioma}`;
-      const g = map.get(key);
-      if (g) {
-        g.rows.push(t);
-        if (t.status === "approved") g.instanciasAprovadasIds.add(t.instancia_id);
-      } else {
-        map.set(key, {
-          key,
-          nome: t.nome_template,
-          idioma: t.idioma,
-          categoria: t.categoria,
-          sample: t,
-          rows: [t],
-          instanciasAprovadasIds: new Set(t.status === "approved" ? [t.instancia_id] : []),
-          varsCount: contarVariaveis(t),
-        });
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [templates, instanciaIds]);
+  type TemplateGroup = UtilityGroup;
+  const templateGroups = useMemo<TemplateGroup[]>(() => catalogoUtility(
+    templates, mestres, user?.id || "", instancias.map(i => i.id), instanciaIds, contarVariaveis,
+  ), [templates, mestres, user?.id, instancias, instanciaIds]);
 
   // Clear selected template if it disappears after instance change
   useEffect(() => {
@@ -877,6 +867,19 @@ export default function EnvioMeta() {
     () => templateGroups.find((g) => g.key === templateId) || null,
     [templateGroups, templateId],
   );
+  useEffect(() => {
+    setResultadosAplicacao([]);
+    setFilaTemplate({});
+    if (!templateGroup?.mestreId || instanciaIds.length === 0) return;
+    let ativo = true;
+    (async () => {
+      const { data, error } = await supabase.from("meta_templates_onboarding_fila")
+        .select("instancia_id,status").eq("template_mestre_id", templateGroup.mestreId || "")
+        .in("instancia_id", instanciaIds);
+      if (ativo && !error) setFilaTemplate(Object.fromEntries((data || []).map(r => [r.instancia_id, r.status])));
+    })();
+    return () => { ativo = false; };
+  }, [templateGroup?.mestreId, instanciaIds, templates]);
   // Usa o primeiro registro do grupo como "template" para preview/variáveis.
   const template = templateGroup?.sample ?? null;
 
@@ -894,10 +897,14 @@ export default function EnvioMeta() {
   useEffect(() => {
     const salvo = template?.variaveis?._button_url;
     setButtonUrl(typeof salvo === "string" ? salvo : "");
-  }, [template?.id]);
+  }, [templateId, template?.id]);
 
   const salvarButtonUrl = async (): Promise<boolean> => {
     if (!templateGroup || !templateTemBotaoUrlDinamico) return true;
+    if (!templateGroup.sample.id) {
+      toast.info("Aplique o template e aguarde a aprovação para salvar o link do botão.");
+      return false;
+    }
     const link = buttonUrl.trim();
     if (!link) {
       toast.error('Informe o link do botão (URL dinâmica) antes de enviar.');
@@ -1378,7 +1385,8 @@ export default function EnvioMeta() {
     // usa 1ª instância marcada + 1º destinatário
     const instId = instanciaIds[0];
     const instInfo = instancias.find((i) => i.id === instId);
-    const tplId = templateIdByInstance[instId] || template.id;
+    const tplId = templateIdByInstance[instId];
+    if (!tplId) return toast.error("Este template ainda não está aprovado nessa instância.");
     const cliente = rows[0];
 
     setEnviandoTeste(true);
@@ -1441,15 +1449,13 @@ export default function EnvioMeta() {
           <CardHeader>
             <CardTitle>1. Template HSM</CardTitle>
             <CardDescription>
-              Selecione as instâncias ao lado — os templates disponíveis em cada instância selecionada aparecerão aqui, com badges indicando em quais instâncias existem.
+              Templates de Utilidade
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {templateGroups.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                {instanciaIds.length === 0
-                  ? "Selecione uma ou mais instâncias acima para ver os templates disponíveis."
-                  : "Nenhum template encontrado para as instâncias selecionadas. Sincronize os templates em API Oficial Meta → Templates HSM."}
+                {loading ? "Carregando templates..." : "Nenhum template de Utilidade cadastrado disponível."}
               </p>
             ) : (
               <TemplateFavoriteSelect
@@ -1463,14 +1469,17 @@ export default function EnvioMeta() {
                   descricao: group.sample.body_text?.trim() || "Texto do template indisponível — sincronize com a Meta",
                   meta: <>
                     {group.categoria && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{group.categoria === "UTILITY" ? "Utilidade" : group.categoria}</Badge>}
-                    <Badge variant={group.instanciasAprovadasIds.size === 0 ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
-                      {group.instanciasAprovadasIds.size}/{instanciaIds.length} instâncias
+                    <Badge variant={instanciaIds.length > 0 && group.instanciasAprovadasIds.size === 0 ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
+                      {instanciaIds.length === 0 ? "Sem instâncias selecionadas" : `${group.instanciasAprovadasIds.size}/${instanciaIds.length} instâncias`}
                     </Badge>
                   </>,
                 }))}
               />
             )}
 
+            <Button size="sm" variant="outline" disabled={loading} onClick={carregar}>
+              <RefreshCw className="h-3 w-3 mr-1" /> Atualizar disponibilidade
+            </Button>
             {/* Variação de templates — só templates com a MESMA quantidade de variáveis */}
             {templateGroup && (
               <div className="rounded-md border p-3 space-y-2 bg-muted/30">
@@ -1546,7 +1555,7 @@ export default function EnvioMeta() {
                     </p>
                     <ul className="list-disc ml-5 mt-1">
                       {instanciasIncompatíveis.map((i) => (
-                        <li key={i.id}>{i.nome}</li>
+                        <li key={i.id}>{i.nome} — {templateGroup ? situacaoUtility(templateGroup, i.id, filaTemplate[i.id]) : "Ausente"}</li>
                       ))}
                     </ul>
                     <p className="mt-2 text-xs">
@@ -1556,7 +1565,7 @@ export default function EnvioMeta() {
                     <div className="mt-2 flex gap-2 flex-wrap">
                       <Button
                         size="sm"
-                        disabled={injetandoTemplate}
+                        disabled={injetandoTemplate || !isAdmin || !templateGroup.mestreId}
                         onClick={async () => {
                           if (!templateGroup) return;
                           setInjetandoTemplate(true);
@@ -1565,7 +1574,7 @@ export default function EnvioMeta() {
                               "meta-templates-onboarding-enfileirar",
                               {
                                 body: {
-                                  instancia_ids: instanciasIncompatíveis.map((i) => i.id),
+                                  instancia_ids: instanciasIncompatíveis.filter(i => !templateGroup.instanciasAprovadasIds.has(i.id)).map((i) => i.id),
                                   template_nome: templateGroup.nome,
                                   idioma: templateGroup.idioma,
                                 },
@@ -1581,6 +1590,7 @@ export default function EnvioMeta() {
                                 : null;
                               resposta = details || { success: false, error: error.message };
                             }
+                            setResultadosAplicacao(Array.isArray(resposta?.instancias) ? resposta.instancias : []);
                             if (resposta?.success === false) {
                               const err = String(resposta?.error || "");
                               if (err === "template_nao_cadastrado_como_mestre") {
@@ -1604,8 +1614,10 @@ export default function EnvioMeta() {
                                 `${n} envio(s) de template na fila. A aplicação é gradual (1 por vez, 2–5 min, 07h–20h).`,
                               );
                             } else {
-                              toast.info("Nada a aplicar: o template já está na fila ou já existe nessas instâncias.");
+                              toast.info("Nenhum novo item enfileirado. Confira a situação de cada instância abaixo.");
                             }
+                            const novos = Object.fromEntries((resposta?.instancias || []).filter((r: any) => r.enfileirados > 0).map((r: any) => [r.instancia_id, "PENDENTE"]));
+                            setFilaTemplate(prev => ({ ...prev, ...novos }));
                           } catch (e: any) {
                             toast.error(e?.message || "Falha ao aplicar o template.");
                           } finally {
@@ -1614,7 +1626,7 @@ export default function EnvioMeta() {
                         }}
                       >
                         <Send className="h-3 w-3 mr-1" />
-                        {injetandoTemplate ? "Aplicando..." : "Aplicar template nessas instâncias"}
+                        {injetandoTemplate ? "Aplicando..." : "Aplicar nas instâncias selecionadas"}
                       </Button>
 
                       <Button
@@ -1647,6 +1659,13 @@ export default function EnvioMeta() {
                         <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar templates dessas instâncias
                       </Button>
                     </div>
+                    {!isAdmin && <p className="mt-2 text-xs">Somente administradores podem aplicar modelos.</p>}
+                    {!templateGroup.mestreId && <p className="mt-2 text-xs">Cadastre este modelo na aba Template com seu usuário para aplicá-lo.</p>}
+                    {resultadosAplicacao.length > 0 && <ul className="mt-2 space-y-1">
+                      {resultadosAplicacao.map(r => <li key={r.instancia_id}>
+                        {instancias.find(i => i.id === r.instancia_id)?.nome || "Instância"}: {r.erro ? motivoAplicacao(r.erro) : r.enfileirados ? "Na fila — aguardando aplicação gradual e aprovação da Meta" : "Já existe, está em análise ou na fila; nenhum novo envio"}
+                      </li>)}
+                    </ul>}
                   </div>
                 </div>
               </div>
