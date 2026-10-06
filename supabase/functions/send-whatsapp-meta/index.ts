@@ -9,6 +9,7 @@ import { THIAGO_NOGUEIRA_USER_ID, instanciasLiberadasThiago } from '../_shared/t
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
 import { telefoneMeta } from '../_shared/meta-destinatario.ts';
 import { authorizeMetaInboxSend } from '../_shared/meta-inbox-send-auth.ts';
+import { getMetaButtonLink, resolveButtonUrlParam } from '../_shared/meta-button-url.ts';
 
 
 const corsHeaders = {
@@ -24,6 +25,7 @@ interface ClienteData {
   saldo?: number;
   vars?: Record<string, string>;
   header_vars?: Record<string, string>;
+  button_url?: string;
 }
 
 const formatPrimeiroNome = (nome: string): string => {
@@ -251,17 +253,6 @@ function getDynamicUrlButtons(template: any): { index: number; url: string }[] {
   return out;
 }
 
-function resolveButtonUrlParam(registeredUrl: string, fullLink: string): string {
-  // A Meta espera apenas a parte variável (sufixo) quando a URL registrada
-  // tem base fixa; se a base for vazia ou o link não bater, envia o link inteiro.
-  const base = registeredUrl.replace(/\{\{\s*\d+\s*\}\}.*$/, '');
-  if (base && fullLink.startsWith(base)) {
-    const suffix = fullLink.slice(base.length);
-    if (suffix) return suffix;
-  }
-  return fullLink;
-}
-
 function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId: string | null | undefined, cliente: ClienteData) {
   const components: any[] = [];
   const headerFormat = getHeaderFormat(template);
@@ -291,9 +282,7 @@ function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId
 
   const dynamicButtons = getDynamicUrlButtons(template);
   if (dynamicButtons.length > 0) {
-    const savedLink = String(
-      (cliente as any)?.button_url || template?.variaveis?._button_url || '',
-    ).trim();
+    const savedLink = getMetaButtonLink(cliente, template?.variaveis);
     if (!savedLink) {
       throw new Error(
         `Template "${template.nome_template}" tem botão de URL dinâmica, mas nenhum link foi informado. ` +
@@ -817,7 +806,9 @@ Deno.serve(async (req) => {
             templateBotoes = btnComp.buttons.map((b: any) => ({
               type: String(b?.type || '').toUpperCase(),
               text: b?.text || '',
-              url: b?.url || undefined,
+              url: String(b?.type || '').toUpperCase() === 'URL' && /\{\{\s*\d+\s*\}\}/.test(String(b?.url || ''))
+                ? getMetaButtonLink(cliente, template?.variaveis) || undefined
+                : b?.url || undefined,
               phone_number: b?.phone_number || undefined,
             }));
           }

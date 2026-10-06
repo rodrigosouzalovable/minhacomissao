@@ -1,6 +1,6 @@
 # Decisões técnicas
 
-- Resolve Meta redirects before app rendering; strip leading template markers, allow HTTP(S), and preserve URL parameters to repair legacy links.
+- Resolve legacy Meta redirects before rendering; preserve HTTP(S) parameters. Snapshot button links in item vars; send and preview the same destination.
 
 - Todo novo acordo exige confirmação auditável do telefone antes da gravação e formalização por envio do termo na conversa Meta de origem, ou localizada por consulta protegida ao sufixo do telefone, ou download, mantendo o acordo pendente até uma dessas ações.
 
