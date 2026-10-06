@@ -234,6 +234,34 @@ function buildHeaderTextParameters(template: any, cliente: ClienteData): any[] {
   return parameters;
 }
 
+// Botões URL dinâmicos: a Meta registra a URL terminando em {{1}} e espera
+// um componente button com o valor que substitui a variável. Sem isso o envio
+// falha ou sai sem o link correto.
+function getDynamicUrlButtons(template: any): { index: number; url: string }[] {
+  const components = getTemplateComponents(template);
+  const buttonsComp = components.find((c: any) => String(c?.type || '').toUpperCase() === 'BUTTONS');
+  const buttons: any[] = Array.isArray(buttonsComp?.buttons) ? buttonsComp.buttons : [];
+  const out: { index: number; url: string }[] = [];
+  buttons.forEach((b: any, idx: number) => {
+    const url = String(b?.url || '');
+    if (String(b?.type || '').toUpperCase() === 'URL' && /\{\{\s*\d+\s*\}\}/.test(url)) {
+      out.push({ index: idx, url });
+    }
+  });
+  return out;
+}
+
+function resolveButtonUrlParam(registeredUrl: string, fullLink: string): string {
+  // A Meta espera apenas a parte variável (sufixo) quando a URL registrada
+  // tem base fixa; se a base for vazia ou o link não bater, envia o link inteiro.
+  const base = registeredUrl.replace(/\{\{\s*\d+\s*\}\}.*$/, '');
+  if (base && fullLink.startsWith(base)) {
+    const suffix = fullLink.slice(base.length);
+    if (suffix) return suffix;
+  }
+  return fullLink;
+}
+
 function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId: string | null | undefined, cliente: ClienteData) {
   const components: any[] = [];
   const headerFormat = getHeaderFormat(template);
