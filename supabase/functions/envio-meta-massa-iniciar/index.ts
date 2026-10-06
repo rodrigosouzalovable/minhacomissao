@@ -338,8 +338,9 @@ Deno.serve(async (req) => {
       if (clientesEnvio.length === 0) {
         return new Response(JSON.stringify({
           success: false,
+          code: 'destinatarios_bloqueados',
           error: `Todos os ${clientes.length} destinatários estão bloqueados (${bloqueadosBlacklist} na blacklist, ${suprimidos} na supressão). Nada foi enviado.`,
-        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       console.log('[iniciar] higiene de base — suprimidos:', suprimidos, 'blacklist:', bloqueadosBlacklist);
     }
@@ -395,9 +396,10 @@ Deno.serve(async (req) => {
         if (clientesEnvio.length === 0) {
           return new Response(JSON.stringify({
             success: false,
+            code: 'contatos_repetidos',
             error: `Todos os ${antes} contatos desta lista já receberam mensagem nos últimos ${diasAnti} dia(s). Confira se a planilha importada é a correta — nada foi enviado.`,
             ignorados_repetidos: removidos,
-          }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
         // Preenche nome da campanha de origem para exibição no detalhe.
         try {

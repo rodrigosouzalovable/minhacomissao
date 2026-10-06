@@ -945,12 +945,24 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
           const ctx: any = (error as any).context;
           if (ctx && typeof ctx.json === "function") {
             const body = await ctx.json();
+            // Compatibilidade com versões antigas que retornavam HTTP 400
+            // para uma lista totalmente removida pela proteção antirrepetição.
+            if (body?.success === false && Number(body?.ignorados_repetidos) > 0) {
+              toast.warning(body.error || "Esses contatos já receberam mensagem recentemente. Nada foi enviado.", { duration: 12000 });
+              return null;
+            }
             if (body?.error) detalhe = body.error;
           }
         } catch { /* mantém a mensagem original */ }
         throw new Error(detalhe);
       }
-      if (!data?.success) throw new Error(data?.error || "Falha ao iniciar envio");
+      if (!data?.success) {
+        if (data?.code === "contatos_repetidos" || data?.code === "destinatarios_bloqueados" || Number(data?.ignorados_repetidos) > 0) {
+          toast.warning(data?.error || "Nenhum contato elegível para envio nesta lista. Nada foi enviado.", { duration: 12000 });
+          return null;
+        }
+        throw new Error(data?.error || "Falha ao iniciar envio");
+      }
 
       const removidas = Array.isArray(data?.instancias_removidas) ? data.instancias_removidas : [];
       if (removidas.length > 0) {
