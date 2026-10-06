@@ -13243,6 +13243,12 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      salvar_link_botao_meta: {
+        Args: { _link: string; _template_id: string }
+        Returns: {
+          template_id: string
+        }[]
+      }
       transferir_iago_para_humano_rodizio: {
         Args: { p_contato_id: string }
         Returns: string

@@ -551,6 +551,11 @@ Deno.serve(async (req) => {
       throw new Error('Este template não está aprovado para a instância selecionada');
     }
 
+    // Resolve from the fresh template read, not a stale worker batch. Freeze for
+    // both the Meta request and the immutable sent-message preview.
+    const destination = getMetaButtonLink(cliente, template.variaveis);
+    if (destination) cliente.button_url = destination;
+
     // Fallback: se este template não tem imagem/components cadastrados, herda de
     // qualquer instância irmã (mesmo nome_template + idioma) que já tenha configurado.
     // Evita "Sem imagem configurada" quando só 1 das N instâncias cadastrou a mídia.

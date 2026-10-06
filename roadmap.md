@@ -7,6 +7,8 @@
 
 # Roadmap
 
+- [x] Aplicar o link salvo aos novos envios e pendentes, validar destinos e preservar histórico.
+
 - [x] Fixar o link dinâmico escolhido na campanha e mostrar o destino real no botão da conversa; validar sem disparos.
 
 - [x] Criar base e configuração separadas para candidatos a resposta automática.
