@@ -2,6 +2,7 @@
 // Retorna status (CONNECTED/FLAGGED/RESTRICTED/etc), quality_rating, tier,
 // e ban_info da WABA. Persiste snapshot em meta_whatsapp_instances.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { voltouParaGreen } from '../_shared/meta-voltou-green.ts';
 import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
@@ -576,6 +577,12 @@ Deno.serve(async (req) => {
 
 
         await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
+        // Voltou de YELLOW/RED para GREEN: enfileira já os Utility obrigatórios faltantes.
+        if (voltouParaGreen(inst.saude_quality, qual)) {
+          supabase.functions.invoke('meta-templates-auditar-instancias', {
+            body: { auto: true, dry_run: false, instancia_id: inst.id },
+          }).catch((e: unknown) => console.warn('auditoria pós-GREEN falhou', inst.id, e));
+        }
         if (inst.meta_bm_id && r.whatsapp_business_manager_messaging_limit) {
           const tierTexto = String(r.whatsapp_business_manager_messaging_limit).toUpperCase();
           const matchTier = tierTexto.match(/(\d+(?:[.,]\d+)?)\s*([KM])?/);

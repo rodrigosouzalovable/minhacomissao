@@ -34,6 +34,8 @@ Deno.serve(async (req) => {
     const utilityApprovedOnly = body?.utility_approved_only === true;
     // Modo automático (cron diário): roda sem token de usuário, sempre aplicando.
     const auto = body?.auto === true;
+    const instanciaAlvo = typeof body?.instancia_id === "string" && /^[0-9a-f-]{36}$/i.test(body.instancia_id)
+      ? body.instancia_id : null;
 
     // ===== Autorização: somente admin (dispensado no modo automático) =====
     if (!auto) {
@@ -78,7 +80,9 @@ Deno.serve(async (req) => {
       .eq("ativo", true)
       .eq("provider", "meta");
 
-    const insts = ((instsRaw as any[]) || []).filter((i) => !idsParceiros.has(i.id));
+    const insts = ((instsRaw as any[]) || [])
+      .filter((i) => !idsParceiros.has(i.id))
+      .filter((i) => !instanciaAlvo || i.id === instanciaAlvo);
 
     // Na sincronização manual completa, a referência é formada somente por
     // modelos Utility que já estejam APPROVED em ao menos uma instância do
