@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock, Power, PowerOff } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock, Power, PowerOff, Gauge } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -242,6 +242,7 @@ export default function EnvioMeta() {
   const [instancias, setInstancias] = useState<Instancia[]>([]);
   const [bmNomes, setBmNomes] = useState<Record<string, string>>({});
   const [bmFiltro, setBmFiltro] = useState<string[]>([]);
+  const [qualidadeFiltro, setQualidadeFiltro] = useState<string[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [masterMediaUrl, setMasterMediaUrl] = useState<string | undefined>();
   const [mestres, setMestres] = useState<UtilityMaster[]>([]);
@@ -1077,10 +1078,27 @@ export default function EnvioMeta() {
     });
   }, [instancias, bmNomes]);
 
+  const qualidadeDaInstancia = (i: Instancia): string => {
+    const q = String(i.saude_quality || "").trim().toUpperCase();
+    return ["GREEN", "YELLOW", "RED"].includes(q) ? q : "SEM_QUALIDADE";
+  };
+
   const instanciasVisiveis = useMemo(() => {
-    if (bmFiltro.length === 0) return instancias;
-    return instancias.filter((i) => bmFiltro.includes(i.meta_bm_id || SEM_BM));
-  }, [instancias, bmFiltro]);
+    let lista = instancias;
+    if (bmFiltro.length > 0) {
+      lista = lista.filter((i) => bmFiltro.includes(i.meta_bm_id || SEM_BM));
+    }
+    if (qualidadeFiltro.length > 0) {
+      lista = lista.filter((i) => qualidadeFiltro.includes(qualidadeDaInstancia(i)));
+    }
+    return lista;
+  }, [instancias, bmFiltro, qualidadeFiltro]);
+
+  const qualidadesDisponiveis = useMemo(() => {
+    const contagem: Record<string, number> = { GREEN: 0, YELLOW: 0, RED: 0, SEM_QUALIDADE: 0 };
+    for (const i of instancias) contagem[qualidadeDaInstancia(i)] = (contagem[qualidadeDaInstancia(i)] || 0) + 1;
+    return contagem;
+  }, [instancias]);
 
   const instanciasElegiveisSelecaoMassa = useMemo(() => {
     return instanciasVisiveis.filter((instancia) => {
@@ -1879,6 +1897,46 @@ export default function EnvioMeta() {
                 </DropdownMenuItem>
 
                 <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmFiltro([]); }}>
+                  Limpar filtro
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="sm" variant="outline">
+                  <Gauge className="h-3.5 w-3.5 mr-1.5" />
+                  {qualidadeFiltro.length > 0 ? `Qualidade (${qualidadeFiltro.length})` : "Qualidade"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuLabel>Qualidade da instância</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {([
+                  { id: "GREEN", label: "GREEN" },
+                  { id: "YELLOW", label: "YELLOW" },
+                  { id: "RED", label: "RED" },
+                  { id: "SEM_QUALIDADE", label: "Sem qualidade (sem leitura)" },
+                ]).map((q) => {
+                  const n = qualidadesDisponiveis[q.id] || 0;
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={q.id}
+                      checked={qualidadeFiltro.includes(q.id)}
+                      onCheckedChange={() =>
+                        setQualidadeFiltro((prev) =>
+                          prev.includes(q.id) ? prev.filter((x) => x !== q.id) : [...prev, q.id],
+                        )
+                      }
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span>{q.label}</span>
+                      <span className="ml-auto pl-2 text-xs text-muted-foreground">{n}</span>
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setQualidadeFiltro([]); }}>
                   Limpar filtro
                 </DropdownMenuItem>
               </DropdownMenuContent>
