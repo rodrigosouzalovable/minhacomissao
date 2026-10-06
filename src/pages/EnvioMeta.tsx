@@ -1673,6 +1673,36 @@ export default function EnvioMeta() {
                 </p>
               </div>
             )}
+
+            {template && templateTemBotaoUrlDinamico && (
+              <div className="rounded-md border p-3 space-y-2">
+                <Label htmlFor="button-url-dinamica" className="text-xs font-medium">
+                  Link do botão (URL dinâmica)
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="button-url-dinamica"
+                    value={buttonUrl}
+                    onChange={(e) => setButtonUrl(e.target.value)}
+                    placeholder="https://exemplo.com/pagina"
+                    className="h-8 text-xs font-mono"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs shrink-0"
+                    disabled={salvandoButtonUrl}
+                    onClick={() => salvarButtonUrl()}
+                  >
+                    {salvandoButtonUrl ? "Salvando..." : "Salvar link"}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Este template tem um botão com link dinâmico. O endereço acima será enviado no botão e fica salvo para os próximos envios.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
