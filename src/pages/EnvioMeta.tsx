@@ -398,6 +398,8 @@ export default function EnvioMeta() {
   const [credor, setCredor] = useState<string>("__none__");
   const [credorByTel, setCredorByTel] = useState<Record<string, CredorSlug>>({});
   const [editVarsOpen, setEditVarsOpen] = useState(false);
+  const [buttonUrl, setButtonUrl] = useState("");
+  const [salvandoButtonUrl, setSalvandoButtonUrl] = useState(false);
 
   // Antirrepetição — quantos números da lista já receberam mensagem de campanha
   // nos últimos N dias (padrão do sistema). Só informativo aqui; a remoção real
