@@ -61,6 +61,12 @@ function tabelaDe(c: Consulta, tabela: TabelaKey): Tabela | null {
   return c.padrao;
 }
 
+/** Tabela só é utilizável quando tem ao menos uma parcela com valor. */
+function tabelaComParcelas(c: Consulta, tabela: TabelaKey): Tabela | null {
+  const t = tabelaDe(c, tabela);
+  return t && t.parcelas.length > 0 ? t : null;
+}
+
 function textoProposta(c: Consulta, tabela: TabelaKey) {
   const t = tabelaDe(c, tabela);
   if (!t) return '';
