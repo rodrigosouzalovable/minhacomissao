@@ -13209,6 +13209,11 @@ export type Database = {
         Returns: boolean
       }
       ponto_exigencia_ativa: { Args: never; Returns: boolean }
+      portal_consultar_carteira: {
+        Args: { p_cpf: string; p_credor: string }
+        Returns: Json
+      }
+      portal_credor_slug: { Args: { p_value: string }; Returns: string }
       portal_faixas_credor: {
         Args: { _credor: string }
         Returns: {

@@ -40,3 +40,5 @@
 - Meta payment errors share commercial classification and cached revalidation before alerts; inconclusive checks never claim unpaid billing or release protected senders.
 
 - Campaign ticks reuse send/pick handlers and pace start-to-start globally, avoiding HTTP overhead.
+
+- Public multi-creditor negotiation isolates wallet data and agreements through a scoped RPC with tested calculation rules; unverified principal never silently falls back to imported balances.

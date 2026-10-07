@@ -8,6 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Phone, Mail, Search, FileText, MessageCircle, Shield, HandshakeIcon, Clock, HelpCircle, Star, MapPin, Lock } from 'lucide-react';
 import { getCredorConfig, isValidCredorSlug } from '@/lib/credorConfig';
 import { useContatoPortal } from '@/hooks/useContatoPortal';
+import PublicPortalHome from '@/components/portal/PublicPortalHome';
 
 function formatCpfInput(value: string) {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -37,6 +38,10 @@ export default function PortalConsulta() {
   const [cpf, setCpf] = useState('');
   const [faqSearch, setFaqSearch] = useState('');
   const navigate = useNavigate();
+
+  if (creditor && ['novomundo', 'ume', 'odrescred', 'odres_cred'].includes(creditor)) {
+    return <PublicPortalHome />;
+  }
 
   if (!creditor || !isValidCredorSlug(creditor)) {
     return <Navigate to="/" replace />;

@@ -7,6 +7,30 @@ All colors MUST be HSL.
 */
 
 @layer base {
+  .portal-public {
+    --background: 210 18% 97%;
+    --foreground: 200 15% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 200 15% 15%;
+    --primary: 163 54% 25%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 210 16% 94%;
+    --muted-foreground: 200 8% 43%;
+    --accent: 160 22% 94%;
+    --accent-foreground: 163 54% 25%;
+    --border: 200 14% 86%;
+    --input: 200 14% 82%;
+    --ring: 163 54% 25%;
+  }
+  .portal-eyebrow { color: hsl(var(--primary)); font-size: 11px; font-weight: 600; letter-spacing: 0; }
+  .portal-office-logo { width: 56px; height: 48px; object-fit: contain; }
+  .portal-brands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .portal-brand { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+  .portal-brand img { width: 100%; max-width: 130px; height: 58px; object-fit: contain; }
+  .portal-brand span { color: hsl(var(--muted-foreground)); font-size: 12px; }
+}
+
+@layer base {
   :root {
     --background: 210 20% 98%;
     --foreground: 220 13% 14%;
