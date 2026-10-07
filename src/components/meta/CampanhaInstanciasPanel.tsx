@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCampaignLive } from '@/hooks/useCampaignLive';
-import { AlertTriangle, CheckCircle2, CircleOff, Loader2, RefreshCw, RotateCcw, Send, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, CircleOff, Loader2, RefreshCw, RotateCcw, Send, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -111,10 +111,15 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, canResume, ini
     }
   };
 
+  // Loading callbacks change with campaign counters; they must not reset expansion.
+  const carregarRef = useRef(carregar);
+  carregarRef.current = carregar;
   useEffect(() => {
     setOpen(initialOpen);
-    if (initialOpen) void carregar();
-  }, [initialOpen, carregar]);
+    setInstancias(null);
+    lastLive.current = 0;
+    if (initialOpen) void carregarRef.current();
+  }, [jobId, initialOpen]);
 
   const abrir = () => {
     setOpen((value) => !value);
@@ -149,6 +154,7 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, canResume, ini
           <Send className="h-4 w-4 text-muted-foreground" />
           <span>Instâncias do disparo</span>
           {instancias && <span className="text-xs font-normal text-muted-foreground">{ativas.length} ativas · {ignoradas.length} ignoradas</span>}
+          <ChevronDown aria-hidden="true" className={open ? "h-4 w-4 shrink-0 rotate-180" : "h-4 w-4 shrink-0"} />
         </Button>
         {open && (
           <Button
