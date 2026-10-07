@@ -376,10 +376,15 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   /** Instâncias da campanha: ativas (enviando) x ignoradas, com contagens deste job. */
   const listarInstanciasStatusJob = useCallback(async (jobId: string): Promise<InstanciaStatusJob[]> => {
+    if (jobs.find(j => j.id === jobId)?.user_id === uid) {
+      const { data, error } = await invokeControle(jobId, 'instancias_status');
+      if (error || !data?.success) { toast.error('Não foi possível carregar as instâncias da campanha'); return []; }
+      return data.instancias || [];
+    }
     const { data, error } = await supabase.rpc('campanha_meta_instancias_leitura', { _job_id: jobId });
     if (error) { toast.error('Não foi possível carregar as instâncias da campanha'); return []; }
     return (data || []) as unknown as InstanciaStatusJob[];
-  }, []);
+  }, [jobs, uid, invokeControle]);
 
   /** Revalida na Meta as instâncias ignoradas, recupera falhas seguras e retoma o job. */
   const revalidarInstanciasJob = useCallback(async (jobId: string): Promise<RevalidacaoInstanciasJob | null> => {
