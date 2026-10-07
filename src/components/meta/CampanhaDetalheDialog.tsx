@@ -1,3 +1,5 @@
+import CampaignSharing from './CampaignSharing';
+import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -101,7 +103,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   } = useEnvioMetaSending();
 
 
+  const { user } = useAuth();
   const job = useMemo(() => jobs.find((j) => j.id === jobId) || null, [jobs, jobId]);
+
+  const readOnly = !user || job?.user_id !== user.id;
 
   // Enquanto o diálogo está aberto, o contexto pode reler os itens; fechado, não.
   useEffect(() => {
@@ -115,7 +120,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   // Polling leve enquanto o diálogo está aberto — só refetch quando cache diverge do backend
   // e apenas com a aba visível (economia de CPU do banco).
   useEffect(() => {
-    if (!open || !jobId) return;
+    if (!open || !jobId || readOnly) return;
     const t = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       const j = jobs.find((x) => x.id === jobId);
@@ -131,7 +136,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     }, 30000);
 
     return () => clearInterval(t);
-  }, [open, jobId, jobs, recarregarItensJob, getDetalhesJob]);
+  }, [open, jobId, jobs, readOnly, recarregarItensJob, getDetalhesJob]);
 
 
 
@@ -149,7 +154,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const [salvandoRitmo, setSalvandoRitmo] = useState(false);
   const { role } = useUserRole();
 
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" && !readOnly;
 
   const carregarLivres = async () => {
     if (!jobId) return;
@@ -526,13 +531,14 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             {job.instancia_ids && <span>{job.instancia_ids.length} instância(s)</span>}
             {job.iniciado_em && <span>Iniciada em {new Date(job.iniciado_em).toLocaleString("pt-BR")}</span>}
           </DialogDescription>
+          {readOnly ? <Badge variant="outline" className="w-fit">Somente visualização</Badge> : <div><CampaignSharing jobId={job.id} /></div>}
         </DialogHeader>
 
         <div
           className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1 flex flex-col gap-3"
           style={{ overflowAnchor: "none", scrollbarGutter: "stable" }}
         >
-          {isAdmin && <CampanhaResultadoCard jobId={job.id} nome={nome} template={job.template_nome} enviadosAtual={job.enviados} />}
+          {(isAdmin || readOnly) && <CampanhaResultadoCard jobId={job.id} nome={nome} template={job.template_nome} enviadosAtual={job.enviados} />}
           <div className="rounded-md border bg-card p-3 text-xs">
             <div className="mb-2 flex items-center gap-2 text-sm font-medium"><DollarSign className="h-4 w-4" /> Custo calculado da campanha</div>
             {job.custo_brl == null ? (
@@ -578,7 +584,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                   : null}
             </div>
 
-            {cotaBloqueio && (
+            {cotaBloqueio && !readOnly && (
               <div className="text-xs rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 space-y-1.5 text-amber-800 dark:text-amber-200">
                 <div className="font-semibold">⏳ {esperaInfo.titulo}</div>
                 <div className="whitespace-pre-wrap break-words">
@@ -678,7 +684,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                     </div>
                     <div className="text-muted-foreground flex flex-wrap items-center gap-2">
                       <span>{eta.config} • Teórico: <strong>{eta.teorico}</strong></span>
-                      {!job.modo_rajada && (
+                      {!readOnly && !job.modo_rajada && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -693,7 +699,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                         </Button>
                       )}
                     </div>
-                    {editandoRitmo && !job.modo_rajada && (
+                    {!readOnly && editandoRitmo && !job.modo_rajada && (
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         <span className="text-muted-foreground">Novo delay (s):</span>
                         <Input
@@ -918,7 +924,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
            <CampanhaInstanciasPanel
              jobId={job.id}
              isAdmin={isAdmin}
-             canResume={job.status === "rodando" || job.status === "pausado"}
+             canResume={!readOnly && (job.status === "rodando" || job.status === "pausado")}
              initialOpen={abrirInstancias}
            />
 
@@ -954,7 +960,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
 
           {/* Ações */}
           <div className="min-h-[32px] flex flex-wrap items-center gap-2 shrink-0 overflow-hidden">
-            {ativa && (
+            {!readOnly && ativa && (
               <>
                 <Button size="sm" variant="secondary" onClick={() => togglePausaJob(job.id)}>
                   {pausado ? <Play className="h-3.5 w-3.5 mr-1.5" /> : <Pause className="h-3.5 w-3.5 mr-1.5" />}
@@ -965,12 +971,12 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 </Button>
               </>
             )}
-            {!ativa && job.restantes > 0 && (
+            {!readOnly && !ativa && job.restantes > 0 && (
               <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => reativarJob(job.id)}>
                 <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reativar ({job.restantes})
               </Button>
             )}
-            {job.erros > 0 && (
+            {!readOnly && job.erros > 0 && (
               <Button
                 size="sm"
                 variant="outline"
@@ -981,7 +987,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
                 <Repeat className="h-3.5 w-3.5 mr-1.5" /> {reenviandoErros ? "Devolvendo…" : `Tentar novamente (${job.erros})`}
               </Button>
             )}
-            {finalizada && (
+            {!readOnly && finalizada && (
               <Button size="sm" variant="outline" onClick={() => limparJob(job.id)}>
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Limpar
               </Button>
