@@ -9,7 +9,8 @@ import novoHome from '@/assets/logo-novo-mundo-portal.png.asset.json';
 import umeHome from '@/assets/ume-home.png.asset.json';
 import odresHome from '@/assets/odres-home-white.png.asset.json';
 
-const homeLogos = { novo_mundo: novoHome.url, ume: umeHome.url, odres_cred: odresHome.url };
+const portalAssetUrl = (url: string) => new URL(url, 'https://meusacordos.com.br').href;
+const homeLogos = { novo_mundo: portalAssetUrl(novoHome.url), ume: portalAssetUrl(umeHome.url), odres_cred: portalAssetUrl(odresHome.url) };
 const homeLinks = [['beneficios', 'Benefícios'], ['quem-somos', 'Quem somos'], ['como-funciona', 'Como funciona'], ['duvidas', 'Dúvidas']];
 
 export function PortalBrands({ home = false }: { home?: boolean }) {
