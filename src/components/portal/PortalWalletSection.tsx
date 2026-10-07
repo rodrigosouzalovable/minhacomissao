@@ -28,6 +28,7 @@ export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: Po
   const cap = wallet.credor === 'novo_mundo' ? 24 : 18;
   const max = Math.max(0, Math.min(cap, Math.floor(Math.round((total - entry) * 100) / 10000)));
   const installments = mode === 'parcelado' ? portalInstallments(total - entry, quantity, cap) : [];
+  const lastInstallment = installments[installments.length - 1];
   const today = portalBrtToday();
   const maxDate = new Date(Date.parse(`${today}T00:00:00Z`) + 10 * 86400000).toISOString().slice(0,10);
   const valid = !!terms && !hasAgreement && !!mode && total > 0 && portalPaymentDateValid(date, today) && (mode === 'avista' ? wallet.credor !== 'novo_mundo' || total >= 100 : validEntry && installments.length >= 2);
