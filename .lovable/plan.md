@@ -63,6 +63,16 @@ Interações não garantem retorno ao GREEN nem prazo de recuperação. A mensag
 - Preservar cotas de submissão: tier 250 com duas por número/dia; demais tiers seguem a fila sequencial existente.
 - Respeitar bloqueios reais, categoria Utility e aprovação da Meta. Se uma instância cair antes de possuir o modelo, permanecerá sem esse disparo até ter uma cópia aprovada, conforme sua regra de não aplicar enquanto YELLOW/RED.
 
+### 6. Conversas na AQUECIMENTO e resposta única do IAGO
+
+- Registrar todos os envios deste fluxo e as respectivas respostas na caixa **AQUECIMENTO**, com o histórico, destinatário e instância remetente corretos.
+- Não mover a instância inteira para outra caixa nem misturar o fluxo com atendimentos comuns. Se já existir uma conversa em outra caixa, preservar seu histórico e acesso; vincular o registro deste fluxo à AQUECIMENTO sem redistribuir silenciosamente o atendimento anterior.
+- Para os destinatários deste novo fluxo, o IAGO responderá somente a uma confirmação explícita da identidade empresarial: clique em **“Sim, confirmo”** ou texto inequivocamente equivalente, associado ao envio cadastral.
+- A única resposta será exatamente **“Obrigado pela confirmação”**, uma vez por confirmação desse envio, pela mesma instância e conversa autorizada.
+- Resposta automática genérica, saudação, “Não”, dúvida, áudio ou qualquer resposta sem confirmação explícita não dispara mensagem do IAGO. “Sair” aplica a blacklist e não recebe agradecimento.
+- Depois do agradecimento, nenhuma mensagem adicional do destinatário acionará outra resposta do IAGO neste fluxo: sem IA aberta, follow-up, transferência para humano ou nova confirmação repetida.
+- Preservar o comportamento já existente dos números UAZAPI da AQUECIMENTO fora das conversas identificadas como parte deste novo fluxo.
+
 ## Detalhes técnicos
 
 - Adaptar o motor de recuperação e seus auxiliares sem mudar inadvertidamente os outros fluxos que compartilham esses auxiliares.
@@ -70,6 +80,7 @@ Interações não garantem retorno ao GREEN nem prazo de recuperação. A mensag
 - Acrescentar somente os campos, reservas atômicas e índices necessários para autorização, consumo único e reposição controlada, com permissões administrativas e isolamento por dono.
 - Manter os agendamentos atuais; não adicionar polling, canal Realtime nem cron novo.
 - Mostrar no painel a fonte, nome empresarial, variáveis preenchidas, resultado e motivos de espera; separar mensagem aceita, entregue e resposta recebida.
+- Identificar persistentemente as conversas deste fluxo e tratar confirmação/saída antes do atendimento genérico do IAGO. Reservar o agradecimento de forma idempotente para que eventos simultâneos não gerem duas respostas.
 
 ## Validação antes de ativar
 
@@ -78,11 +89,13 @@ Interações não garantem retorno ao GREEN nem prazo de recuperação. A mensag
 - Testar “Sair” por clique, formatos distintos e repetição do evento; confirmar bloqueio em outras instâncias e em filas pendentes.
 - Testar reposição única com alvo de 100, limites de consultas e autorização obrigatória dos contatos novos.
 - Testar cópia automática na volta ao GREEN, cotas e espera de YELLOW/RED ou bloqueios reais.
+- Confirmar envios e respostas na AQUECIMENTO, preservando históricos, autorização por caixa e atendimentos anteriores.
+- Testar confirmação por botão/texto, repetição e eventos simultâneos: somente uma resposta exata “Obrigado pela confirmação”. Testar outras mensagens antes/depois, resposta automática, “Não” e “Sair”: nenhuma resposta adicional do IAGO.
 - Fazer prévia sem envios reais e apresentar cobertura do template e estoque elegível antes de ativar a nova seleção de destinatários.
 
 ## Alerta de custo Lovable Cloud
 
-**Esta alteração pode aumentar custos.** A reposição adicionará consultas Google e verificações de WhatsApp por lote de até 100 leads; 100 leads não equivalem necessariamente a 100 consultas. A recuperação manterá o teto atual de 10–20 mensagens/dia por remetente, mas poderá realizar mais envios quando hoje faltam destinos ou templates. A cobrança Meta depende da categoria efetiva e da janela da conversa, não apenas da categoria cadastrada.
+**Esta alteração pode aumentar custos.** A reposição adicionará consultas Google e verificações de WhatsApp por lote de até 100 leads; 100 leads não equivalem necessariamente a 100 consultas. A recuperação manterá o teto atual de 10–20 mensagens/dia por remetente, mas poderá realizar mais envios quando hoje faltam destinos ou templates. Haverá no máximo um agradecimento por envio confirmado, sem chamada de IA para compor a resposta. A cobrança Meta depende da categoria efetiva e da janela da conversa, não apenas da categoria cadastrada.
 
 O impacto adicional na Lovable Cloud será limitado por consultas paginadas e indexadas, reaproveitamento dos agendamentos e reposição somente por esgotamento, sem novas consultas contínuas. O valor em reais depende das contas Google, tarifas Meta e volume efetivo; não há estimativa monetária confiável sem esses dados.
 
