@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Recolher e expandir a lista lateral de abas com controle externo sempre acessível e preferência por usuário; testes de isolamento, persistência e armazenamento indisponível passaram, e navegador confirmou espaço liberado, recarregamento e reabertura por teclado sem erros.
 - [x] Mostrar campanhas compartilhadas na página e acompanhar ao vivo com cache de resultados e rechecagem de acesso; Guilherme validado no diálogo real, leituras iguais ao proprietário e comandos negados. Revogação real não executada para preservar o acesso solicitado.
 - [x] Exibir total/lista de instâncias aprovadas por HSM e compartilhar cada campanha somente para leitura; 12 testes passaram, consultas autenticadas verificadas e diálogo compartilhado simulado sem conceder acessos reais.
 - [x] Reduzir esperas internas da campanha, manter intervalo global mínimo de 1s e explicar pausas; funções publicadas, 18 testes passaram. Amostra após correção: 3,08s, 400 envios reais, zero erros/duplicatas; 1/s ainda limitado pelo processamento e RateLimit externo.
