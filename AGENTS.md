@@ -2,6 +2,7 @@
 
 <!-- LOVABLE:BEGIN -->
 - Campaign images persist in recipient vars keyed by name/language; use isolated send snapshots and path-keyed media caches without updating template defaults, so scheduled and resumed campaigns preserve the chosen image.
+- Campaign sharing is per-job read-only through indexed grants and scoped RPCs; never extend owner controls or realtime subscriptions.
 <!-- LOVABLE:END -->
 
 - Resolve Meta redirects before rendering; save owner-scoped URLs atomically, override stale templates, preserve sent previews.

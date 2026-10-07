@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import TemplateApprovedInstances from '@/components/meta/TemplateApprovedInstances';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -1517,14 +1518,18 @@ export default function EnvioMeta() {
                   descricao: group.sample.body_text?.trim() || "Texto do template indisponível — sincronize com a Meta",
                   meta: <>
                     {group.categoria && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{group.categoria === "UTILITY" ? "Utilidade" : group.categoria}</Badge>}
-                    <Badge variant={instanciaIds.length > 0 && group.instanciasAprovadasIds.size === 0 ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
-                      {instanciaIds.length === 0 ? "Sem instâncias selecionadas" : `${group.instanciasAprovadasIds.size}/${instanciaIds.length} instâncias`}
+                    <Badge variant={group.todasInstanciasAprovadasIds.size === 0 ? "outline" : "secondary"} className="text-[10px] px-1.5 py-0 whitespace-normal">
+                      {group.todasInstanciasAprovadasIds.size ? `${group.todasInstanciasAprovadasIds.size} instâncias com este template aprovado` : 'Nenhuma instância com este template aprovado'}
                     </Badge>
                   </>,
                 }))}
               />
             )}
 
+            {templateGroup && <div className="space-y-2">
+              <TemplateApprovedInstances instances={instancias.filter(i => templateGroup.todasInstanciasAprovadasIds.has(i.id))} selectedIds={instanciaIds} />
+              {instanciaIds.length > 0 && <p className="text-xs text-muted-foreground">{templateGroup.instanciasAprovadasIds.size} de {instanciaIds.length} selecionadas com aprovação</p>}
+            </div>}
             <Button size="sm" variant="outline" disabled={loading} onClick={carregar}>
               <RefreshCw className="h-3 w-3 mr-1" /> Atualizar disponibilidade
             </Button>

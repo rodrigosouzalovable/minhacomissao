@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import CampanhaDetalheDialog from "./CampanhaDetalheDialog";
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from "@/lib/utils";
 
 function statusColor(s: string) {
@@ -24,12 +25,19 @@ function statusLabel(s: string) {
 }
 
 export default function CampanhasFlutuante() {
+  const { user } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { veCampanhas, isLoading: permLoading } = useUserPermissions();
   const { jobs, jobsAtivos, togglePausaJob, cancelarJob, limparJob, refreshStatus } = useEnvioMetaSending();
   const [open, setOpen] = useState(false);
   const [dialogJobId, setDialogJobId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") void refreshStatus(); };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [refreshStatus]);
 
   const atualizar = async () => {
     if (refreshing) return;
@@ -48,7 +56,7 @@ export default function CampanhasFlutuante() {
   );
 
   if (roleLoading || permLoading) return null;
-  if (!isAdmin && !veCampanhas) return null;
+  if (!isAdmin && !veCampanhas && !jobs.some(j => j.user_id !== user?.id)) return null;
 
 
   const excluirCampanha = async (id: string, nome: string) => {
@@ -132,12 +140,12 @@ export default function CampanhasFlutuante() {
                         <Button size="sm" variant="secondary" className="h-7 text-xs flex-1" onClick={() => abrirDetalhe(j.id)}>
                           Ver detalhes
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => togglePausaJob(j.id)} title={j.status === "rodando" ? "Pausar" : "Retomar"}>
+                        {j.user_id === user?.id && <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => togglePausaJob(j.id)} title={j.status === "rodando" ? "Pausar" : "Retomar"}>
                           {j.status === "rodando" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive" onClick={() => cancelarJob(j.id)} title="Cancelar">
+                        </Button>}
+                        {j.user_id === user?.id && <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive" onClick={() => cancelarJob(j.id)} title="Cancelar">
                           <Square className="h-3.5 w-3.5" />
-                        </Button>
+                        </Button>}
                       </div>
                     </div>
                   );
@@ -167,7 +175,7 @@ export default function CampanhasFlutuante() {
                         </div>
                       </button>
                       <Badge className={statusColor(j.status) + " text-[10px]"}>{statusLabel(j.status)}</Badge>
-                      <Button
+                      {j.user_id === user?.id && <Button
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7 text-destructive hover:text-destructive"
@@ -175,7 +183,7 @@ export default function CampanhasFlutuante() {
                         title="Excluir campanha"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      </Button>}
                     </div>
                   );
                 })}

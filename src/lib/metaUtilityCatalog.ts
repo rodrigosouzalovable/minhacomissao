@@ -9,7 +9,7 @@ export type TemplateCopy = {
 };
 export type UtilityGroup = {
   key: string; nome: string; idioma: string; categoria: string | null; sample: TemplateCopy;
-  rows: TemplateCopy[]; mestreId?: string; instanciasAprovadasIds: Set<string>; varsCount: number;
+  rows: TemplateCopy[]; mestreId?: string; instanciasAprovadasIds: Set<string>; todasInstanciasAprovadasIds: Set<string>; varsCount: number;
 };
 
 export function catalogoUtility(copies: TemplateCopy[], masters: UtilityMaster[], userId: string,
@@ -21,11 +21,12 @@ export function catalogoUtility(copies: TemplateCopy[], masters: UtilityMaster[]
     let g = groups.get(key);
     if (!g) {
       g = { key, nome: t.nome_template, idioma: t.idioma, categoria: t.categoria,
-        sample: t, rows: [], instanciasAprovadasIds: new Set(), varsCount: countVars(t) };
+        sample: t, rows: [], instanciasAprovadasIds: new Set(), todasInstanciasAprovadasIds: new Set(), varsCount: countVars(t) };
       groups.set(key, g);
     }
     g.rows.push(t);
     if (t.status.toLowerCase() === 'approved') {
+      g.todasInstanciasAprovadasIds.add(t.instancia_id);
       if (selectedIds.includes(t.instancia_id)) g.instanciasAprovadasIds.add(t.instancia_id);
       if (g.sample.status.toLowerCase() !== 'approved') { g.sample = t; g.varsCount = countVars(t); }
     }
@@ -43,7 +44,7 @@ export function catalogoUtility(copies: TemplateCopy[], masters: UtilityMaster[]
     const sample: TemplateCopy = { id: '', instancia_id: '', nome_template: m.nome, idioma: m.idioma,
       categoria: m.categoria, status: 'draft', body_text: m.corpo, variaveis: { _components: components } };
     groups.set(key, { key, nome: m.nome, idioma: m.idioma, categoria: m.categoria, sample,
-      mestreId: m.id, rows: [], instanciasAprovadasIds: new Set(), varsCount: countVars(sample) });
+      mestreId: m.id, rows: [], instanciasAprovadasIds: new Set(), todasInstanciasAprovadasIds: new Set(), varsCount: countVars(sample) });
   }
   return [...groups.values()].sort((a, b) => a.nome.localeCompare(b.nome));
 }

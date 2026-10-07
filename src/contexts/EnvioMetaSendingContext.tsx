@@ -141,6 +141,7 @@ export type IniciarParams = {
 };
 
 export type CampanhaJob = {
+  user_id: string;
   id: string;
   status: 'rodando' | 'pausado' | 'concluido' | 'cancelado' | 'erro';
   template_nome: string | null;
@@ -285,6 +286,7 @@ function toCampanhaJob(j: any): CampanhaJob {
   const semWhatsapp = j.sem_whatsapp || 0;
   return {
     id: j.id,
+    user_id: j.user_id,
     status: j.status,
     template_nome: j.template_nome ?? null,
     nome_campanha: j.nome_campanha ?? null,
@@ -374,13 +376,15 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   /** Instâncias da campanha: ativas (enviando) x ignoradas, com contagens deste job. */
   const listarInstanciasStatusJob = useCallback(async (jobId: string): Promise<InstanciaStatusJob[]> => {
-    const { data, error } = await invokeControle(jobId, "instancias_status");
-    if (error || !data?.success) {
-      toast.error(data?.error || "Não foi possível carregar as instâncias da campanha");
-      return [];
+    if (jobs.find(j => j.id === jobId)?.user_id === uid) {
+      const { data, error } = await invokeControle(jobId, 'instancias_status');
+      if (error || !data?.success) { toast.error('Não foi possível carregar as instâncias da campanha'); return []; }
+      return data.instancias || [];
     }
-    return (data.instancias || []) as InstanciaStatusJob[];
-  }, [invokeControle]);
+    const { data, error } = await supabase.rpc('campanha_meta_instancias_leitura', { _job_id: jobId });
+    if (error) { toast.error('Não foi possível carregar as instâncias da campanha'); return []; }
+    return (data || []) as unknown as InstanciaStatusJob[];
+  }, [jobs, uid, invokeControle]);
 
   /** Revalida na Meta as instâncias ignoradas, recupera falhas seguras e retoma o job. */
   const revalidarInstanciasJob = useCallback(async (jobId: string): Promise<RevalidacaoInstanciasJob | null> => {
@@ -450,13 +454,13 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   const carregarJobs = useCallback(async () => {
     if (!uid) { setJobs([]); setItensByJob(new Map()); setLogByJob(new Map()); return; }
-    const { data } = await (supabase as any)
-      .from("envio_meta_job")
-      .select("*")
-      .eq("user_id", uid)
-      .order("iniciado_em", { ascending: false })
-      .limit(30);
-    const arr = (data || []).map(toCampanhaJob) as CampanhaJob[];
+    const [{ data }, grants] = await Promise.all([
+      supabase.from('envio_meta_job').select('*').eq('user_id', uid).order('iniciado_em', { ascending: false }).limit(30),
+      supabase.from('envio_meta_compartilhamentos').select('job_id').eq('user_id', uid).limit(1000),
+    ]);
+    const ids = (grants.data || []).map(g => g.job_id);
+    const shared = ids.length ? await supabase.from('envio_meta_job').select('*').in('id', ids).order('iniciado_em', { ascending: false }).limit(1000) : { data: [] };
+    const arr = [...new Map([...(data || []), ...(shared.data || [])].map(j => [j.id, j])).values()].map(toCampanhaJob) as CampanhaJob[];
     // Uma campanha antiga pode ter sido carregada diretamente pelo histórico e
     // estar aberta no diálogo, embora não pertença às 30 mais recentes. Mantê-la
     // evita que uma atualização após revalidar instâncias faça o diálogo perder
@@ -464,7 +468,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     setJobs((current) => {
       const idsCarregados = new Set(arr.map((job) => job.id));
       const abertasForaDaPagina = current.filter(
-        (job) => openJobsRef.current.has(job.id) && !idsCarregados.has(job.id),
+        (job) => job.user_id === uid && openJobsRef.current.has(job.id) && !idsCarregados.has(job.id),
       );
       return [...arr, ...abertasForaDaPagina];
     });
@@ -536,13 +540,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       });
       return;
     }
-    const { data } = await (supabase as any)
-      .from("meta_whatsapp_envios_log")
-      .select("wa_message_id,status,erro,enviado_em")
-      .eq("user_id", uid)
-      .in("wa_message_id", wamids)
-      .order("enviado_em", { ascending: false })
-      .limit(500);
+    const { data } = await supabase.rpc('campanha_meta_logs', { _job_id: jobId, _wamids: wamids });
 
     const m = new Map<string, { status: DeliveryStatus; erro?: string }>();
     for (const l of data || []) {
@@ -618,13 +616,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       const LOTE = 300;
       for (let i = 0; i < unicos.length; i += LOTE) {
         const lote = unicos.slice(i, i + LOTE);
-        const { data } = await (supabase as any)
-          .from("meta_whatsapp_envios_log")
-          .select("wa_message_id,status,erro,enviado_em")
-          .eq("user_id", uid)
-          .in("wa_message_id", lote)
-          .order("enviado_em", { ascending: false })
-          .limit(2000);
+        const { data } = await supabase.rpc('campanha_meta_logs', { _job_id: jobId, _wamids: lote });
         for (const l of data || []) {
           const key = String(l.wa_message_id || "");
           if (!key) continue;
@@ -667,7 +659,12 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         .eq("job_id", jobId)
         .in("status", ["pendente", "processando", "erro", "falha"]),
     ]);
-    if (!data) return;
+    if (!data) {
+      setJobs(prev => prev.filter(j => j.id !== jobId));
+      setItensByJob(prev => { const next = new Map(prev); next.delete(jobId); return next; });
+      setLogByJob(prev => { const next = new Map(prev); next.delete(jobId); return next; });
+      return;
+    }
     setJobs((prev) => prev.map((j) => {
       if (j.id !== jobId) return j;
       const enviados = data.enviados || 0;
@@ -696,7 +693,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   const ensureJobLoaded = useCallback(async (jobId: string): Promise<boolean> => {
     if (!uid) return false;
     if (jobs.some((job) => job.id === jobId)) return true;
-    const { data, error } = await (supabase as any).from("envio_meta_job").select("*").eq("id", jobId).eq("user_id", uid).maybeSingle();
+    const { data, error } = await (supabase as any).from("envio_meta_job").select("*").eq("id", jobId).maybeSingle();
     if (error || !data) return false;
     setJobs((current) => current.some((job) => job.id === jobId) ? current : [...current, toCampanhaJob(data)]);
     return true;
@@ -1079,6 +1076,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     const now = Date.now();
     for (const j of jobs) {
+      if (j.user_id !== uid) continue;
       if (!["erro", "concluido"].includes(j.status)) continue;
       if (j.restantes <= 0) continue;
       if (manuallyCanceledRef.current.has(j.id)) continue;
@@ -1096,7 +1094,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
         }
       });
     }
-  }, [jobs, reativarJobInterno, carregarJobs]);
+  }, [jobs, uid, reativarJobInterno, carregarJobs]);
 
 
 
@@ -1159,10 +1157,10 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
       if (j) return j;
     }
     // Preferir job ativo mais recente
-    const ativo = jobs.find((j) => j.status === "rodando" || j.status === "pausado");
+    const ativo = jobs.find((j) => j.user_id === uid && (j.status === "rodando" || j.status === "pausado"));
     if (ativo) return ativo;
-    return jobs[0] || null;
-  }, [jobs, lastStartedId]);
+    return jobs.find(j => j.user_id === uid) || null;
+  }, [jobs, uid, lastStartedId]);
 
   const jobsAtivos = useMemo(
     () => jobs.filter((j) => j.status === "rodando" || j.status === "pausado"),
