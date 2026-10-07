@@ -42,6 +42,9 @@ import { carregarUtilityMestres } from "@/lib/carregarUtilityMestres";
 import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
 import { resolveButtonUrlParam, snapshotMetaButtonVars, validateMetaButtonLink } from "../../supabase/functions/_shared/meta-button-url";
 
+import CampaignImagePicker, { type CampaignImage } from '@/components/meta/CampaignImagePicker';
+import { templateHasImage } from '../../supabase/functions/_shared/meta-campaign-image';
+
 function motivoAplicacao(code: string): string {
   const motivos: Record<string, string> = {
     instancia_de_outro_proprietario: "Instância de outro proprietário",
@@ -251,6 +254,9 @@ export default function EnvioMeta() {
   const [loading, setLoading] = useState(true);
 
   const [templateId, setTemplateId] = useState<string>("");
+  const [campaignImage, setCampaignImage] = useState<CampaignImage | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  useEffect(() => { setCampaignImage(null); setImageUploading(false); }, [templateId]);
   // Variação de templates: chaves adicionais (além do principal) que entram no round-robin
   const [variantesExtraKeys, setVariantesExtraKeys] = useState<string[]>([]);
 
@@ -1121,6 +1127,7 @@ export default function EnvioMeta() {
 
 
   const enviar = async () => {
+    if (imageUploading) return toast.info('Aguarde o carregamento da imagem.');
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
     if (recipients.length === 0) return toast.error("Importe a planilha com os destinatários");
@@ -1350,6 +1357,10 @@ export default function EnvioMeta() {
       const out: ClienteRow = { ...c };
       if (v) out.vars = v;
       if (templateTemBotaoUrlDinamico) out.vars = snapshotMetaButtonVars(out.vars, buttonUrl.trim());
+      if (campaignImage?.templateKey === templateId) out.vars = {
+        ...(out.vars || {}), _campaign_image_path: campaignImage.path,
+        _campaign_image_template: `${templateGroup.nome}|${templateGroup.idioma}`,
+      };
       if (credLinha) out.credor = credLinha;
       return out;
     });
@@ -1407,6 +1418,7 @@ export default function EnvioMeta() {
   };
 
   const enviarTeste = async () => {
+    if (imageUploading) return toast.info('Aguarde o carregamento da imagem.');
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Marque ao menos uma instância no card 2");
     const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
@@ -1420,6 +1432,10 @@ export default function EnvioMeta() {
     const tplId = templateIdByInstance[instId];
     if (!tplId) return toast.error("Este template ainda não está aprovado nessa instância.");
     const cliente = rows[0];
+    if (campaignImage?.templateKey === templateId) cliente.vars = {
+      ...(cliente.vars || {}), _campaign_image_path: campaignImage.path,
+      _campaign_image_template: `${templateGroup.nome}|${templateGroup.idioma}`,
+    };
 
     setEnviandoTeste(true);
     try {
@@ -1705,10 +1721,11 @@ export default function EnvioMeta() {
 
             {template && (
               <div className="mt-2">
+                {templateHasImage(template) && <CampaignImagePicker key={templateId} userId={user?.id || ''} templateKey={templateId} value={campaignImage} onChange={setCampaignImage} onBusyChange={setImageUploading} />}
                 <TemplateWhatsAppPreview
                   template={template}
                   imageUrlOverride={
-                    templates
+                    (campaignImage?.templateKey === templateId ? campaignImage.url : undefined) || templates
                       .filter((t: any) => t.nome_template === templateGroup?.nome && t.idioma === templateGroup?.idioma)
                       .map((t: any) => t?.variaveis?._header_image_url)
                       .find((u: any) => typeof u === 'string' && u.trim().length > 0) || masterMediaUrl
@@ -2676,7 +2693,7 @@ export default function EnvioMeta() {
 
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={validando || enviandoTeste || iniciandoCampanha || motivosBloqueio.length > 0} size="lg">
+            <Button onClick={enviar} disabled={imageUploading || validando || enviandoTeste || iniciandoCampanha || motivosBloqueio.length > 0} size="lg">
               {validando || iniciandoCampanha
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : agendamento.ativo

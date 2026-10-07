@@ -1,5 +1,9 @@
 # Decisões técnicas
 
+<!-- LOVABLE:BEGIN -->
+- Campaign images persist in recipient vars keyed by name/language; use isolated send snapshots and path-keyed media caches without updating template defaults, so scheduled and resumed campaigns preserve the chosen image.
+<!-- LOVABLE:END -->
+
 - Resolve Meta redirects before rendering. Save owner-scoped live URLs atomically; template reads override stale snapshots, sent previews stay immutable.
 
 - Todo novo acordo exige confirmação auditável do telefone antes da gravação e formalização por envio do termo na conversa Meta de origem, ou localizada por consulta protegida ao sufixo do telefone, ou download, mantendo o acordo pendente até uma dessas ações.

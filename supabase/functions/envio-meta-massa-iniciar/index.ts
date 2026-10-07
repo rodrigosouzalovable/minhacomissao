@@ -5,6 +5,7 @@ import { calcularJanelaEnvio } from '../_shared/metaJanelaEnvio.ts';
 import { instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
 import { telefoneMeta } from '../_shared/meta-destinatario.ts';
+import { CAMPAIGN_IMAGE_BUCKET, campaignImagePathAllowed, templateHasImage, validateCampaignImageFile } from '../_shared/meta-campaign-image.ts';
 
 
 const corsHeaders = {
@@ -431,8 +432,26 @@ Deno.serve(async (req) => {
 
     const { data: tplCats } = await supabase
       .from('meta_whatsapp_templates')
-      .select('id, nome_template, categoria')
+      .select('id, nome_template, idioma, categoria, variaveis')
       .in('id', allTemplateIds);
+    const imageChoices = new Map<string, string>();
+    for (const c of clientesEnvio) {
+      const path = c.vars?._campaign_image_path;
+      if (!path) continue;
+      if (!campaignImagePathAllowed(path, user.id)) throw new Error('Você não tem acesso à imagem desta campanha.');
+      const key = c.vars?._campaign_image_template;
+      const matching = (tplCats || []).filter((t: any) => `${t.nome_template}|${t.idioma}` === key);
+      if (!matching.length || matching.some((t: any) => !templateHasImage(t))) throw new Error('A imagem não corresponde a um template com cabeçalho de imagem.');
+      imageChoices.set(path, key || '');
+    }
+    if (imageChoices.size > 1) throw new Error('Escolha apenas uma imagem para esta campanha.');
+    for (const path of imageChoices.keys()) {
+      const authorized = createClient(Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_ANON_KEY') || '', { global: { headers: { Authorization: auth } } });
+      const { data: file, error } = await authorized.storage.from(CAMPAIGN_IMAGE_BUCKET).download(path);
+      if (error || !file) throw new Error('Não foi possível acessar a imagem desta campanha.');
+      const invalid = validateCampaignImageFile(file.type, file.size);
+      if (invalid) throw new Error(invalid);
+    }
     const marketing = (tplCats || []).find(
       (t: any) => String(t.categoria || '').toUpperCase() === 'MARKETING',
     );
