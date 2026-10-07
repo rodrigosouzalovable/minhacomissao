@@ -5,6 +5,8 @@ type: feature
 ---
 
 - Cabeçalho somente Souza e Ribeiro Advogados; Novo Mundo, UME e Odres Cred junto de Consulte suas dívidas.
+- Página inicial: restaurar azul anterior (#001a33/#003366/#004080), detalhes verdes #00a86b e logo original completa branca e legível; não usar marca minúscula com texto repetido ao lado.
+- Consulta em coluna centralizada; títulos Libre Baskerville e textos IBM Plex Sans, estilo clássico e elegante. Não alterar página de resultados por essa reformulação visual.
 - Consulta única por CPF com resultados e acordos separados por credor, sem mistura de saldos.
 - Novo Mundo mantém os descontos e condições atuais.
 - UME e Odres: à vista é principal sem juros, sem desconto adicional; parcelado é principal +10%, em 2 até 18 parcelas, todas ≥R$100.
