@@ -13,5 +13,11 @@ export function portalVisibleWallet(wallet: PortalWallet): PortalWallet | null {
   const acordos = wallet.acordos.filter(a => portalAgreementPending(a) || portalAgreementUncertain(a));
   const hasDebt = wallet.debitos.some(d => Number(d.valor_original) > 0) || (wallet.acordos.length === 0 && Number(wallet.principal) > 0);
   if (!acordos.length && !hasDebt && wallet.estado !== 'pending') return null;
+  // Public responses do not map original debts to settled agreements. Never
+  // offer a second negotiation of a potentially settled debt on that evidence.
+  if (!acordos.length && wallet.acordos.length > 0 && hasDebt) {
+    return { ...wallet, acordos, estado: 'pending', principalValidado: false,
+      mensagem: 'Há um acordo quitado e registros de débito nesta carteira. Fale com nossa equipe para confirmar se existe uma pendência distinta. Não é uma nova cobrança confirmada.' };
+  }
   return { ...wallet, acordos };
 }
