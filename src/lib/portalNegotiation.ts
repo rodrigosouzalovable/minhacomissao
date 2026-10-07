@@ -60,7 +60,7 @@ export interface PortalWallet { credor: PortalCredor; estado: 'loading' | 'ok' |
 export function portalProposalText(args: { credor: PortalCredor; nome: string; cpf: string; principal: number; total: number; installments: number[]; date: string; entrada?: number; contratos?: string[] }) {
   const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const date = args.date.split('-').reverse().join('/');
-  const final = args.installments.at(-1);
+  const final = args.installments[args.installments.length - 1];
   const first = args.installments[0];
   const parcelas = first == null ? `À vista: ${money(args.total)}.` : `${args.installments.length} parcelas: ${money(first)}${final !== first && final != null ? `, sendo a última de ${money(final)}` : ' cada'}.`;
   return `Olá! Meu nome é ${args.nome}, CPF ${args.cpf}. Quero negociar meu débito com ${PORTAL_LABELS[args.credor]}.${args.contratos?.length ? ` Contratos: ${args.contratos.join(', ')}.` : ''} Principal: ${money(args.principal)}.${args.credor !== 'novo_mundo' && first != null ? ` Acréscimo de 10%: ${money(Math.round((args.total - args.principal) * 100) / 100)}.` : ''} Total: ${money(args.total)}. ${args.entrada ? `Entrada: ${money(args.entrada)}. ` : ''}${parcelas} Primeiro pagamento: ${date}. Gostaria de confirmar as condições e solicitar o boleto.`;
