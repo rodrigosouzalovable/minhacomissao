@@ -2938,6 +2938,39 @@ export type Database = {
           },
         ]
       }
+      envio_meta_compartilhamentos: {
+        Row: {
+          criado_em: string
+          job_id: string
+          user_id: string
+        }
+        Insert: {
+          criado_em?: string
+          job_id: string
+          user_id: string
+        }
+        Update: {
+          criado_em?: string
+          job_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "envio_meta_compartilhamentos_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "envio_meta_job"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "envio_meta_compartilhamentos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       envio_meta_job: {
         Row: {
           atual_instancia: string | null
@@ -11921,6 +11954,19 @@ export type Database = {
           suffix: string
         }[]
       }
+      campanha_meta_instancias_leitura: {
+        Args: { _job_id: string }
+        Returns: Json
+      }
+      campanha_meta_logs: {
+        Args: { _job_id: string; _wamids: string[] }
+        Returns: {
+          enviado_em: string
+          erro: string
+          status: string
+          wa_message_id: string
+        }[]
+      }
       can_access_meta_folder: {
         Args: { _folder: string; _uid: string }
         Returns: boolean
@@ -12943,6 +12989,7 @@ export type Database = {
         | { Args: { p_acordo_id: string }; Returns: boolean }
       pode_google_maps_leads: { Args: { _user_id: string }; Returns: boolean }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
+      pode_ver_campanha_meta: { Args: { _job_id: string }; Returns: boolean }
       pode_ver_cliente_parceiro: {
         Args: { _cliente_id: string; _uid: string }
         Returns: boolean
@@ -13260,6 +13307,13 @@ export type Database = {
       }
       user_tenants: { Args: { _uid: string }; Returns: string[] }
       usuario_cliente_parceiro: { Args: { _uid: string }; Returns: string }
+      usuarios_compartilhar_campanha: {
+        Args: { _job_id: string }
+        Returns: {
+          id: string
+          nome: string
+        }[]
+      }
       voltar_meta_instancia_pool_manual: {
         Args: { p_instancia_id: string }
         Returns: {
