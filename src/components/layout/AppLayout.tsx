@@ -4,6 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useSidebarPreference } from '@/hooks/useSidebarPreference';
 import {
   LayoutDashboard,
   FileText,
@@ -38,6 +40,8 @@ import {
   Ban,
   FileKey2,
   Globe,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
@@ -157,6 +161,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar } = useSidebarPreference(user?.id);
   const [sidebarOrder, setSidebarOrder] = useState<string[] | null>(null);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [metaInboxUnreadCount, setMetaInboxUnreadCount] = useState(0);
@@ -390,6 +395,9 @@ export function AppLayout({ children }: AppLayoutProps) {
             variant="ghost"
             size="icon"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? 'Fechar lista de abas' : 'Abrir lista de abas'}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="app-sidebar"
             className="text-primary-foreground hover:bg-primary/80"
           >
             {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -403,9 +411,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       )}
 
       {/* Sidebar */}
-      <aside className={cn(
-        "fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out",
-        "lg:translate-x-0",
+      <aside id="app-sidebar" className={cn(
+        "fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground transform transition-transform duration-200 ease-in-out motion-reduce:transition-none",
+        sidebarCollapsed ? "lg:-translate-x-full lg:invisible lg:pointer-events-none" : "lg:translate-x-0 lg:visible",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex flex-col h-full">
@@ -475,7 +483,30 @@ export function AppLayout({ children }: AppLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
+      <main className={cn(
+        "pt-16 lg:pt-0 min-h-screen transition-[margin] duration-200 ease-in-out motion-reduce:transition-none",
+        sidebarCollapsed ? "lg:ml-0" : "lg:ml-64"
+      )}>
+        <div className="hidden lg:flex sticky top-0 z-30 h-14 shrink-0 items-center gap-3 border-b bg-background px-6">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleSidebar}
+                  aria-label={sidebarCollapsed ? 'Mostrar lista de abas' : 'Ocultar lista de abas'}
+                  aria-expanded={!sidebarCollapsed}
+                  aria-controls="app-sidebar"
+                >
+                  {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{sidebarCollapsed ? 'Mostrar lista de abas' : 'Ocultar lista de abas'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          {sidebarCollapsed && <PaymentReminders />}
+        </div>
         <div className="p-6">
           <PontoGate>{children}</PontoGate>
         </div>
