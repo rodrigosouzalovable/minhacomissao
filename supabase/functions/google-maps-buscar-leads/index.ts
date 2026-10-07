@@ -14,6 +14,7 @@ interface Body {
   enriquecer_instagram?: boolean; // busca Instagram/seguidores dos leads encontrados
   origem?: string; // identifica buscas automáticas sem misturar com buscas manuais
   max_requisicoes?: number; // teto de páginas Places consumidas nesta execução
+  owner_id?: string; // internal replenishment only; never accepted from browser callers
 }
 
 function normalizarChave(v: string | null | undefined) {
@@ -187,6 +188,12 @@ Deno.serve(async (req) => {
 
 
     const body = (await req.json()) as Body;
+    if (body.owner_id) {
+      if (!interno || !/^[0-9a-f-]{36}$/i.test(body.owner_id)) return new Response(JSON.stringify({ error: 'Proprietário interno inválido' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const { data: ownerAdmin } = await supabase.rpc('has_role', { _user_id: body.owner_id, _role: 'admin' });
+      if (ownerAdmin !== true) return new Response(JSON.stringify({ error: 'Proprietário sem autorização' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      userId = body.owner_id;
+    }
     const origemSolicitada = String(body.origem || "manual").slice(0, 60);
     const { data: poolConfig } = await supabase
       .from("meta_envio_pool_config")
@@ -359,7 +366,7 @@ Deno.serve(async (req) => {
             : `${GATEWAY_URL}/places/v1/places:searchText`;
           const authHeaders: Record<string, string> = chaveSelecionada
             ? { "X-Goog-Api-Key": chaveSelecionada.api_key }
-            : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY };
+            : { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_MAPS_API_KEY || '' };
 
           resp = await fetch(endpoint, {
             ...requestInit,
@@ -445,20 +452,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (erroGoogle && collected.length === 0) {
-      const permissionError = parseGooglePermissionError(erroGoogle.status, erroGoogle.body);
+    const falhaGoogle = erroGoogle as ErroGoogle | null;
+    if (falhaGoogle && collected.length === 0) {
+      const permissionError = parseGooglePermissionError(falhaGoogle.status, falhaGoogle.body);
       await supabase
         .from("google_maps_buscas")
-        .update({ status: "erro", erro: `[${erroGoogle.status}] ${permissionError?.message ?? erroGoogle.body}`.slice(0, 500) })
+        .update({ status: "erro", erro: `[${falhaGoogle.status}] ${permissionError?.message ?? falhaGoogle.body}`.slice(0, 500) })
         .eq("id", busca.id);
       return new Response(
         JSON.stringify({
-          error: "Falha no Google Maps",
-          status: erroGoogle.status,
-          details: erroGoogle.body,
+          status: falhaGoogle.status,
+          details: falhaGoogle.body,
           ...(permissionError ?? {}),
+          error: permissionError?.error || 'Falha no Google Maps',
         }),
-        { status: erroGoogle.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: falhaGoogle.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -534,7 +542,7 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error("google-maps-buscar-leads erro:", err);
-    return new Response(JSON.stringify({ error: String(err?.message ?? err) }), {
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

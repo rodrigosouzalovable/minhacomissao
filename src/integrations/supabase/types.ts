@@ -7028,50 +7028,198 @@ export type Database = {
           },
         ]
       }
+      meta_recuperacao_cadastral_config: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          reposicao_em: string | null
+          reposicao_resultado: Json | null
+          reposicao_token: string | null
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          reposicao_em?: string | null
+          reposicao_resultado?: Json | null
+          reposicao_token?: string | null
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          reposicao_em?: string | null
+          reposicao_resultado?: Json | null
+          reposicao_token?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_recuperacao_cadastral_config_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_recuperacao_cadastral_destinos: {
+        Row: {
+          autorizacao_origem: string | null
+          autorizado_em: string | null
+          bloqueado_em: string | null
+          consumido_em: string | null
+          criado_em: string
+          destino_instancia_id: string | null
+          fonte: string
+          lead_id: string | null
+          nome_empresa: string
+          telefone: string
+          telefone_sufixo: string
+          user_id: string
+        }
+        Insert: {
+          autorizacao_origem?: string | null
+          autorizado_em?: string | null
+          bloqueado_em?: string | null
+          consumido_em?: string | null
+          criado_em?: string
+          destino_instancia_id?: string | null
+          fonte: string
+          lead_id?: string | null
+          nome_empresa: string
+          telefone: string
+          telefone_sufixo: string
+          user_id: string
+        }
+        Update: {
+          autorizacao_origem?: string | null
+          autorizado_em?: string | null
+          bloqueado_em?: string | null
+          consumido_em?: string | null
+          criado_em?: string
+          destino_instancia_id?: string | null
+          fonte?: string
+          lead_id?: string | null
+          nome_empresa?: string
+          telefone?: string
+          telefone_sufixo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_recuperacao_cadastral_destinos_destino_instancia_id_fkey"
+            columns: ["destino_instancia_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_recuperacao_cadastral_destinos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "google_maps_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_recuperacao_cadastral_destinos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_recuperacao_log: {
         Row: {
+          agradecimento_claim_em: string | null
+          agradecimento_erro: string | null
+          agradecimento_wamid: string | null
+          cadastral: boolean
+          contato_id: string | null
           created_at: string
           destino_instancia_id: string | null
           destino_telefone: string | null
           dia: string
+          entregue_em: string | null
           enviado_em: string
           erro: string | null
+          fonte: string | null
           id: string
           instancia_id: string
+          lead_id: string | null
+          lido_em: string | null
+          nome_empresa: string | null
           resposta_em: string | null
+          resposta_tipo: string | null
           status: string
+          telefone_sufixo: string | null
           tipo: string
+          variaveis: Json | null
           wamid: string | null
         }
         Insert: {
+          agradecimento_claim_em?: string | null
+          agradecimento_erro?: string | null
+          agradecimento_wamid?: string | null
+          cadastral?: boolean
+          contato_id?: string | null
           created_at?: string
           destino_instancia_id?: string | null
           destino_telefone?: string | null
           dia?: string
+          entregue_em?: string | null
           enviado_em?: string
           erro?: string | null
+          fonte?: string | null
           id?: string
           instancia_id: string
+          lead_id?: string | null
+          lido_em?: string | null
+          nome_empresa?: string | null
           resposta_em?: string | null
+          resposta_tipo?: string | null
           status?: string
+          telefone_sufixo?: string | null
           tipo?: string
+          variaveis?: Json | null
           wamid?: string | null
         }
         Update: {
+          agradecimento_claim_em?: string | null
+          agradecimento_erro?: string | null
+          agradecimento_wamid?: string | null
+          cadastral?: boolean
+          contato_id?: string | null
           created_at?: string
           destino_instancia_id?: string | null
           destino_telefone?: string | null
           dia?: string
+          entregue_em?: string | null
           enviado_em?: string
           erro?: string | null
+          fonte?: string | null
           id?: string
           instancia_id?: string
+          lead_id?: string | null
+          lido_em?: string | null
+          nome_empresa?: string | null
           resposta_em?: string | null
+          resposta_tipo?: string | null
           status?: string
+          telefone_sufixo?: string | null
           tipo?: string
+          variaveis?: Json | null
           wamid?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "meta_recuperacao_log_contato_id_fkey"
+            columns: ["contato_id"]
+            isOneToOne: false
+            referencedRelation: "meta_whatsapp_contatos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "meta_recuperacao_log_destino_instancia_id_fkey"
             columns: ["destino_instancia_id"]
@@ -7084,6 +7232,13 @@ export type Database = {
             columns: ["instancia_id"]
             isOneToOne: false
             referencedRelation: "meta_whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_recuperacao_log_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "google_maps_leads"
             referencedColumns: ["id"]
           },
         ]
@@ -12073,6 +12228,10 @@ export type Database = {
           telefone_sufixo: string
         }[]
       }
+      blacklist_saida_cadastral: {
+        Args: { p_instancia: string; p_telefone: string; p_texto: string }
+        Returns: undefined
+      }
       buscar_aberturas_cnpj_certificado_por_telefone: {
         Args: { p_suffixes: string[] }
         Returns: {
@@ -12217,8 +12376,16 @@ export type Database = {
         Args: { p_telefone: string; p_texto: string; p_timestamp: string }
         Returns: undefined
       }
+      claim_agradecimento_cadastral: {
+        Args: { p_log: string }
+        Returns: boolean
+      }
       claim_meta_templates_sync_diario: {
         Args: { p_force?: boolean; p_lock_minutes?: number }
+        Returns: boolean
+      }
+      claim_reposicao_cadastral: {
+        Args: { p_owner: string; p_token: string }
         Returns: boolean
       }
       clara_claim_message: {
@@ -13242,6 +13409,7 @@ export type Database = {
         }[]
       }
       portal_reservar_consulta: { Args: { p_chave: string }; Returns: boolean }
+      preparar_conversa_cadastral: { Args: { p_log: string }; Returns: string }
       presenca_ao_vivo: {
         Args: never
         Returns: {
@@ -13407,6 +13575,10 @@ export type Database = {
           quantidade: number
           telefone: string
         }[]
+      }
+      reservar_recuperacao_cadastral: {
+        Args: { p_instancia: string; p_sufixo: string }
+        Returns: string
       }
       reserve_tier_250_template_slot: {
         Args: {

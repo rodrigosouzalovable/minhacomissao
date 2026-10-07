@@ -188,6 +188,14 @@ Deno.serve(async (req) => {
       waJidContato = (canon as any)?.wa_jid || null;
     }
 
+    // Automated replies obey the same persistent opt-out as campaign/reminder sends.
+    if (authorization.internal && origem === 'ia' && to) {
+      const { data: suppressed, error: suppressionError } = await supabase.from('meta_destinatario_supressao')
+        .select('telefone_sufixo').eq('telefone_sufixo', to.replace(/\D/g, '').slice(-8)).maybeSingle();
+      if (suppressionError || suppressed) return new Response(JSON.stringify({ success: false, error: 'Destinatário bloqueado ou verificação indisponível' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200,
+      });
+    }
     // ===== Instâncias NÃO OFICIAIS (espelho UAZAPI / aba Acionamento) =====
     // Não há janela de 24h nem template HSM: envia direto pela UAZAPI.
     if ((inst as any).provider === 'uazapi') {

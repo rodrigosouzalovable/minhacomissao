@@ -1,6 +1,6 @@
 // IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
 // Na PADRÃO pode escalar; na AQUECIMENTO responde curto, sem humano e sem follow-up.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.88.0';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
   ehOptOut, ehNumeroErrado, ehContextoNegociacao, ehFalecido, ehPedidoAtendenteHumano, MSG_FALECIDO, suprimirDestinatario, extrairDoc, carregarConfig, perfilIago, iagoAtendeCaixa, etiquetasAtendente, temAtendenteHumanoNoTelefone,
@@ -11,6 +11,7 @@ import {
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
 import { detectarPropostaPreviaNoHistorico, type PropostaPrevia } from '../_shared/proposta-previa.ts';
+import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-resposta.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
 
@@ -84,6 +85,15 @@ Deno.serve(async (req) => {
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
+
+    // Cadastral flow must never enter free-form AI or follow-up, even after acknowledgement.
+    if (contato.origem_aquecimento === 'recuperacao_cadastral') {
+      const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+      if (token !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) return json({ error: 'Atendimento interno obrigatório' }, 403);
+    }
+    if (await atenderRespostaCadastral(supabase, contato, String(texto || ''))) {
+      return json({ success: true, cadastral: true });
+    }
 
     // Leads do Google Maps usados no aquecimento não são atendidos pelo IAGO.
     if (String((contato as any).origem_aquecimento || '') === 'lead_google_maps') {
@@ -1110,6 +1120,7 @@ async function gerarResposta(args: {
   mensagens: string[]; escalar: boolean; motivo: string;
   escolha?: string; pagamento_hoje?: string; data_pagamento?: string;
   qualificacao?: string; qualificacao_motivo?: string;
+  nao_e_titular?: boolean | string;
 }> {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa, credorAmbiguo,

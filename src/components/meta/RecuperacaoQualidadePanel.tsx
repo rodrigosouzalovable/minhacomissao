@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock3, Flame, ShieldCheck } from 'lucide-react';
+import { Clock3, Flame, ShieldCheck, Eye } from 'lucide-react';
 
 interface InstRecup {
   id: string;
@@ -70,6 +72,18 @@ function mediana(valores: number[]) {
 
 export function RecuperacaoQualidadePanel() {
   const { user } = useAuth();
+  const [previa, setPrevia] = useState<any>(null);
+  const [verificando, setVerificando] = useState(false);
+  const [erroPrevia, setErroPrevia] = useState('');
+  async function consultarPrevia() {
+    setVerificando(true); setErroPrevia('');
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-recuperacao-tick', { body: { simulacao: true } });
+      if (error) throw error;
+      setPrevia(data);
+    } catch { setErroPrevia('Não foi possível consultar a prévia. Verifique seu acesso administrativo.'); }
+    finally { setVerificando(false); }
+  }
 
   const { data } = useQuery({
     queryKey: ['meta-recuperacao-panel', user?.id],
@@ -88,7 +102,7 @@ export function RecuperacaoQualidadePanel() {
           .returns<InstRecup[]>(),
         supabase
           .from('meta_recuperacao_log')
-          .select('instancia_id, status')
+          .select('instancia_id, status, cadastral, fonte, nome_empresa, variaveis, resposta_tipo, entregue_em, lido_em, agradecimento_wamid, erro')
           .eq('dia', dia)
           .limit(5000),
         supabase
@@ -106,7 +120,7 @@ export function RecuperacaoQualidadePanel() {
         if (!alvo) return;
         alvo.set(l.instancia_id, (alvo.get(l.instancia_id) || 0) + 1);
       });
-      return { insts: instRes.data || [], enviados, falhas, ciclos: ciclosRes.data || [] };
+      return { insts: instRes.data || [], enviados, falhas, ciclos: ciclosRes.data || [], cadastrais: (logRes.data || []).filter(l => l.cadastral).slice(-10) };
     },
   });
 
@@ -128,6 +142,18 @@ export function RecuperacaoQualidadePanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <div><div className="text-sm font-medium">Atualização cadastral · AQUECIMENTO</div><div className="text-xs text-muted-foreground">fins_de_atualizacao_cadastral</div></div>
+          <Button variant="outline" size="sm" onClick={consultarPrevia} disabled={verificando}><Eye className="mr-2 h-4 w-4" />{verificando ? 'Consultando…' : 'Prévia sem envio'}</Button>
+        </div>
+        {erroPrevia && <p className="text-sm text-destructive">{erroPrevia}</p>}
+        {previa && <div className="space-y-2 border-b pb-3">
+          <p className="text-xs text-muted-foreground">Empresas autorizadas disponíveis: {previa.estoque_elegivel ?? 0} · Nenhuma mensagem enviada nesta prévia</p>
+          {(previa.resultados || []).map((r: any, index: number) => <div key={index} className="border-l-2 pl-3 text-sm">
+            <div className="font-medium">{r.instancia}</div>
+            {r.simulado ? <><div>{r.nome_empresa} · {r.fonte === 'confirmado' ? 'Resposta automática confirmada' : r.fonte === 'candidato' ? 'Candidato' : 'UAZAPI conectado'}</div><p className="text-muted-foreground">{r.preview}</p><div className="text-xs text-muted-foreground">{'{{1}}'}: {r.variaveis?.[0]} · {'{{2}}'}: {r.variaveis?.[1]}</div></> : <div className="text-muted-foreground">{r.skip === 'aguarda_template_cadastral_aprovado' ? 'Aguardando aprovação do modelo na instância' : r.skip === 'remetente_inapto' ? 'Aguardando liberação da Meta' : 'Aguardando destino autorizado ou limites de envio'}</div>}
+          </div>)}
+        </div>}
         <div className="grid gap-2 sm:grid-cols-3">
           <div className="rounded-md border p-3">
             <div className="text-xs text-muted-foreground">Média até GREEN</div>
@@ -213,9 +239,16 @@ export function RecuperacaoQualidadePanel() {
             );
           })
         )}
+        {!!data?.cadastrais.length && <div className="space-y-2 border-t pt-3">
+          <h3 className="text-sm font-medium">Atualizações cadastrais de hoje</h3>
+          {data.cadastrais.map((l, index) => <div key={index} className="flex flex-wrap justify-between gap-2 border-b py-2 text-xs">
+            <span>{l.nome_empresa} · {l.fonte === 'candidato' ? 'Candidato' : l.fonte === 'confirmado' ? 'Confirmado' : 'UAZAPI'}</span>
+            <span>{l.status === 'falha' ? l.erro || 'Falha' : l.resposta_tipo === 'saida' ? 'SAIR · Blacklist' : l.agradecimento_wamid ? 'Confirmado · Agradecimento enviado' : l.resposta_tipo === 'negativa' ? 'Não confirmado' : l.lido_em ? 'Lida' : l.entregue_em ? 'Entregue' : 'Aceita pela Meta'}</span>
+          </div>)}
+        </div>}
         <p className="pt-1 text-xs text-muted-foreground">
-          Seus números oficiais aptos em RED/YELLOW conversam somente com UAZAPI conectado na caixa
-          AQUECIMENTO (08h–19h, intervalos de 20–40 min). Bloqueios da Meta impedem envios; após 3 dias em GREEN voltam ao pool em escada.
+          Atualização cadastral na AQUECIMENTO: empresas autorizadas e números UAZAPI com nome empresarial confirmado,
+          das 08h às 19h, com intervalos de 20–40 min e sem domingos. Bloqueios da Meta impedem envios; interações não garantem retorno ao GREEN.
           Avisos no WhatsApp: início do aquecimento, resumo às 13h e 18h, mudanças de qualidade e volta ao GREEN.
           A média usa ciclos completos do primeiro envio aceito para UAZAPI até o retorno confirmado a GREEN.
         </p>

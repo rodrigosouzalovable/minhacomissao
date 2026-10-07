@@ -6,6 +6,10 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Implementar recuperação cadastral com autorização por estoque, variáveis exatas, reservas por sufixo, reposição alvo 100 sem autorizar novos leads e template obrigatório; funções disponibilizadas, seleção nova desativada.
+- [x] Registrar fluxo na AQUECIMENTO; IAGO agradece uma única confirmação com “Obrigado pela confirmação”, silencia demais respostas e aplica blacklist em “Sair”; 18 testes passaram sem mensagens externas.
+- [x] Prévia autenticada 200: 2.126 empresas autorizadas (661 confirmadas e 1.465 candidatas), 74 cópias aprovadas; validação de todas as funções passou, compilação automática OK.
+- [ ] Ativar seleção nova após apresentar prévia e cobertura: 24 UAZAPI têm apenas apelidos técnicos, sem nome empresarial confiável; permanecem fora da seleção até o usuário fornecer nomes reais. Novos leads exigem autorização individual; teste visual autenticado ficou no login, prévia validada diretamente sem envios.
 - [x] Restaurar resultado azul da consulta, ocultar carteiras quitadas e separar pendências por credor; 24 testes e fluxos simulados desktop/celular passaram, sem alterações financeiras ou envios. Registros de dívida junto a acordo quitado exigem conferência, pois a resposta pública não identifica quais contratos foram quitados.
 - [x] Ajustar logos somente na home, ampliar Odres com letras brancas e título do portal, restaurar atalhos do cabeçalho; imagens, menu móvel, links e CPF verificados, 15 testes passaram, favicon preservado.
 - [x] Reestruturar somente a página inicial: azul anterior, logo original legível, consulta centralizada e tipografia clássica; desktop/celular, três logos, CPF e FAQ verificados; 15 testes passaram, resultados preservados.

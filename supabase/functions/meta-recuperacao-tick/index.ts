@@ -10,7 +10,9 @@
 //  - no máximo 2 conversas por destino por dia e nunca o mesmo destino em sequência
 //  - no máximo 8 números processados por execução (1 mensagem cada)
 //  - erro fatal da Meta (conta travada/pagamento) desliga a recuperação do número
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { executarRecuperacaoCadastral } from '../_shared/recuperacao-cadastral-envio.ts';
 import {
   dentroJanelaAquecimento,
   destinosAquecimento,
@@ -23,11 +25,6 @@ import {
   RECUPERACAO_AGUARDA_DESBLOQUEIO,
   bloqueioRecuperacaoMeta,
 } from "../_shared/meta-aquecimento-alvo.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const MAX_INSTANCIAS_POR_RUN = 8;
 
@@ -73,10 +70,14 @@ Deno.serve(async (req) => {
   try {
 
     const body = await req.json().catch(() => ({}));
+    if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      (body.simulacao !== undefined && typeof body.simulacao !== 'boolean') ||
+      (body.forcar !== undefined && typeof body.forcar !== 'boolean') ||
+      (body.instancia_id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(body.instancia_id)))) return json({ error: 'Parâmetros inválidos' }, 400);
     const forcar = body?.forcar === true; // teste manual ignora janela, nunca elegibilidade
     const simulacao = body?.simulacao === true;
     const instanciaId: string | undefined = body?.instancia_id;
-    if (simulacao || forcar || instanciaId) {
+    {
       const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
       if (bearer !== Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
         const { data: auth } = await supabase.auth.getUser(bearer);
@@ -157,6 +158,13 @@ Deno.serve(async (req) => {
     if (instError) throw instError;
 
     if (!insts?.length) return json({ ok: true, skipped: "nenhuma_em_recuperacao", reativadas });
+
+    const { data: cadastralCfg, error: cadastralCfgErro } = await supabase.from('meta_recuperacao_cadastral_config')
+      .select('ativo').eq('user_id', RECUPERACAO_OWNER_ID).maybeSingle();
+    if (cadastralCfgErro) throw cadastralCfgErro;
+    if (cadastralCfg?.ativo || simulacao) {
+      return json(await executarRecuperacaoCadastral(supabase, insts.filter(remetenteAptoParaRecuperacao), simulacao));
+    }
 
     const destinos = await destinosAquecimento(supabase);
     if (destinos.length === 0) {

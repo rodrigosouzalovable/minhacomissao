@@ -80,7 +80,7 @@ export async function destinosAquecimento(
     }
   }));
 
-  const destinosUazapi = espelhos
+  const destinosUazapi: DestinoAquecimento[] = espelhos
     .filter((d: any) => online.has(String(d.uazapi_instance_id)))
     .map((d: any) => ({
       id: d.id,
@@ -224,7 +224,7 @@ export async function escolherTemplateAprovado(
   if (!inst?.waba_id || !inst?.access_token) return null;
   const res = await fetch(
     `${GRAPH}/${inst.waba_id}/message_templates?status=APPROVED&limit=100&fields=name,language,status,category,components`,
-    { headers: { Authorization: `Bearer ${inst.access_token}` } },
+    { headers: { Authorization: `Bearer ${inst.access_token}` }, signal: AbortSignal.timeout(12000) },
   );
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !Array.isArray(data?.data)) return null;
@@ -352,10 +352,11 @@ export async function enviarTemplateAquecimento(
   telefone: string,
   tpl: TemplateAquecimento,
   nomeDestino?: string | null,
+  valoresExatos?: string[],
 ): Promise<{ ok: boolean; wamid?: string; erro?: string; codigo?: number }> {
   const valores = tpl.params.chaves.map((chave, idx) => {
     const primeiro = idx === 0;
-    const valor = primeiro ? primeiroNomeEmpresa(nomeDestino) : VALOR_PADRAO;
+    const valor = valoresExatos?.[idx] ?? (primeiro ? primeiroNomeEmpresa(nomeDestino) : VALOR_PADRAO);
     return tpl.params.tipo === "nomeado"
       ? { type: "text", parameter_name: chave, text: valor }
       : { type: "text", text: valor };
@@ -381,6 +382,7 @@ export async function enviarTemplateAquecimento(
       Authorization: `Bearer ${inst.access_token}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(12000),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

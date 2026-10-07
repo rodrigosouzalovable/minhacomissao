@@ -1,10 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.88.0';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { etiquetarAguardandoHumano, ehPedidoBloqueioContato, suprimirDestinatario } from '../_shared/iago.ts';
 import { resolverAtendenteChamada } from '../_shared/meta-call-atendente.ts';
 import { classificarRespostaAquecimento } from '../_shared/resposta-automatica.ts';
 import { registrarAutoRespostaSeConfirmada } from '../_shared/registrar-auto-resposta.ts';
+import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-resposta.ts';
+import { ORIGEM_CADASTRAL } from '../_shared/recuperacao-cadastral-rules.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -900,14 +902,16 @@ serve(async (req) => {
           // Conversa de lead do Google Maps usada no aquecimento: fica na caixa
           // AQUECIMENTO, sem etiqueta de atendente e sem atendimento automático.
           let _leadAquecimento = false;
+          let _cadastralContato: any = null;
           if (!isEcho && contatoIdFinal) {
             const { data: _cFolder } = await supabase
               .from('meta_whatsapp_contatos')
-              .select('folder_id, origem_aquecimento')
+              .select('id, instancia_id, telefone, bsuid, folder_id, origem_aquecimento')
               .eq('id', contatoIdFinal)
               .maybeSingle();
             _folderIdContato = (_cFolder as any)?.folder_id ?? null;
-            _leadAquecimento = String((_cFolder as any)?.origem_aquecimento || '') === 'lead_google_maps';
+            _leadAquecimento = ['lead_google_maps', ORIGEM_CADASTRAL].includes(String((_cFolder as any)?.origem_aquecimento || ''));
+            if (_cFolder?.origem_aquecimento === ORIGEM_CADASTRAL) _cadastralContato = _cFolder;
 
             // Regra: todo atendimento fica na caixa Padrão. Conversas marcadas na
             // caixa "IA" (legado) são devolvidas para a Padrão ao receber mensagem.
@@ -1360,9 +1364,15 @@ serve(async (req) => {
           }
 
           // ===== Blacklist: cliente clicou/respondeu "Bloquear contato" ou "Bloquear número" =====
+          if (!isEcho && !msgError && _cadastralContato) {
+            try {
+              const respostaBotao = m.interactive?.button_reply?.title || m.button?.text || texto;
+              await atenderRespostaCadastral(supabase, _cadastralContato, String(respostaBotao || ''), String(m.type || ''));
+            } catch (e) { console.error('[MetaWebhook] resposta cadastral protegida:', String(e).slice(0, 300)); }
+          }
           // Entra na lista de bloqueio e nunca mais recebe campanha/lembrete.
           let pediuBloqueio = false;
-          if (!isEcho && !msgError && ehPedidoBloqueioContato(texto)) {
+          if (!isEcho && !msgError && !_cadastralContato && ehPedidoBloqueioContato(texto)) {
             pediuBloqueio = true;
             try {
               const { data: cfgBl } = await supabase
@@ -1582,6 +1592,7 @@ serve(async (req) => {
             }
             if (Object.keys(patchAq).length > 0) {
               await supabase.from('meta_aquecimento_destino_log').update(patchAq).eq('wamid', waId);
+              await supabase.from('meta_recuperacao_log').update(patchAq).eq('wamid', waId).eq('cadastral', true);
             }
           } catch (_e) { /* aprendizado não bloqueia o webhook */ }
 
