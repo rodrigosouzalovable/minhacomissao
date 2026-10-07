@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useCampaignLive } from '@/hooks/useCampaignLive';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Download, MessageSquare, Handshake } from "lucide-react";
@@ -41,6 +42,16 @@ export default function CampanhaResultadoCard({ jobId, nome, template, enviadosA
   const [dados, setDados] = useState<Resultado | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erroAtualizacao, setErroAtualizacao] = useState<string | null>(null);
+  const busy = useRef(false);
+  const lastRead = useRef(0);
+  useCampaignLive([jobId], () => {
+    if (busy.current || Date.now() - lastRead.current < 15000) return;
+    busy.current = true;
+    lastRead.current = Date.now();
+    void Promise.resolve(supabase.rpc('campanha_meta_resultado_ao_vivo', { _job_id: jobId })).then(({ data, error }) => {
+      if (!error && data) setDados(data as unknown as Resultado);
+    }).finally(() => { busy.current = false; });
+  });
 
   useEffect(() => {
     let ativo = true;
@@ -63,7 +74,7 @@ export default function CampanhaResultadoCard({ jobId, nome, template, enviadosA
     setCarregando(true);
     setErroAtualizacao(null);
     try {
-      const { data, error } = await supabase.rpc("envio_meta_job_resultado_calcular" as any, {
+      const { data, error } = await supabase.rpc("campanha_meta_resultado_ao_vivo", {
         _job_id: jobId,
       });
       if (error) throw error;
@@ -152,11 +163,11 @@ export default function CampanhaResultadoCard({ jobId, nome, template, enviadosA
         </div>
       </div>
       {!dados ? (
-        <p className="text-xs text-muted-foreground">Ainda não calculado — clique em “Atualizar” para conferir as respostas.</p>
+        <p className="text-xs text-muted-foreground">Aguardando apuração das respostas.</p>
       ) : (
         <>
           <p className="text-[11px] text-muted-foreground">
-            Respostas apuradas em {new Date(dados.calculado_em).toLocaleString("pt-BR")} com {formatar(dados.enviados)} envios; clique em “Atualizar” para incluir novos envios e respostas.
+            Respostas apuradas em {new Date(dados.calculado_em).toLocaleString("pt-BR")} com {formatar(dados.enviados)} envios.
           </p>
           <p className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
             <Handshake className="h-3.5 w-3.5" /> Acordos: <strong>{formatar(dados.acordos_fechados)}</strong> ({Number(dados.taxa_acordo).toFixed(1).replace(".", ",")}%) • Valor: <strong>{brl(Number(dados.acordos_valor))}</strong> • Falhas: {formatar(dados.falhas)}

@@ -11967,6 +11967,30 @@ export type Database = {
           wa_message_id: string
         }[]
       }
+      campanha_meta_resultado_ao_vivo: {
+        Args: { _job_id: string }
+        Returns: {
+          acordos_fechados: number
+          acordos_valor: number
+          calculado_em: string
+          contatos_responderam: number
+          conversas_abertas: number
+          created_at: string
+          enviados: number
+          falhas: number
+          job_id: string
+          respostas: number
+          taxa_acordo: number
+          taxa_resposta: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "envio_meta_job_resultado"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       can_access_meta_folder: {
         Args: { _folder: string; _uid: string }
         Returns: boolean

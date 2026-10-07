@@ -1,7 +1,8 @@
 import { canManageCampaign } from '../../../supabase/functions/_shared/meta-campaign-access';
 import CampaignSharing from './CampaignSharing';
 import { useAuth } from '@/hooks/useAuth';
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useCampaignLive } from '@/hooks/useCampaignLive';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -108,6 +109,22 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const job = useMemo(() => jobs.find((j) => j.id === jobId) || null, [jobs, jobId]);
 
   const readOnly = !canManageCampaign(job?.user_id, user?.id);
+  const liveBusy = useRef(false);
+  const lastDetails = useRef(0);
+  useCampaignLive(open && jobId ? [jobId] : [], () => {
+    if (!jobId || liveBusy.current) return;
+    liveBusy.current = true;
+    void (async () => {
+      const { data, error } = await supabase.from('envio_meta_job').select('id').eq('id', jobId).maybeSingle();
+      if (error) return;
+      if (!data) { await refreshStatus(); onOpenChange(false); return; }
+      await refreshStatus();
+      if (Date.now() - lastDetails.current >= 15000) {
+        lastDetails.current = Date.now();
+        await recarregarItensJob(jobId);
+      }
+    })().finally(() => { liveBusy.current = false; });
+  });
 
   // Enquanto o diálogo está aberto, o contexto pode reler os itens; fechado, não.
   useEffect(() => {

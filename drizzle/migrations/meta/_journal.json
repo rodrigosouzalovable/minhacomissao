@@ -1009,6 +1009,13 @@
       "when": 1791380411743,
       "tag": "0143_campaign_instance_read_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1791382370894,
+      "tag": "0144_campaign_live_cached_results",
+      "breakpoints": true
     }
   ]
 }

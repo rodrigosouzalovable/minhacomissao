@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useCampaignLive } from '@/hooks/useCampaignLive';
 
 const PAGE_SIZE = 20;
 
@@ -70,16 +71,19 @@ export default function CampanhasMeta() {
     },
   });
 
-  const { data, isLoading, isFetching, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["campanhas-meta-history", user?.id, page, busca, status, folderId, instanciaId, de, ate],
     enabled: Boolean(user),
     placeholderData: (old) => old,
     queryFn: async () => {
       if (!user) return { rows: [] as any[], count: 0, delivery: new Map<string, Delivery>() };
+      const { data: grants, error: grantError } = await supabase.from('envio_meta_compartilhamentos').select('job_id').eq('user_id', user.id);
+      if (grantError) throw grantError;
+      const sharedIds = (grants || []).map(g => g.job_id);
       let query = supabase
         .from("envio_meta_job")
         .select("*", { count: "exact" })
-        .eq("user_id", user.id)
+        .or(sharedIds.length ? `user_id.eq.${user.id},id.in.(${sharedIds.join(',')})` : `user_id.eq.${user.id}`)
         .order("created_at", { ascending: false })
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
       const termo = busca.trim();
@@ -105,6 +109,7 @@ export default function CampanhasMeta() {
   const folderNames = useMemo(() => new Map(folders.map((f: any) => [f.id, f.nome])), [folders]);
   const instanceNames = useMemo(() => new Map(instances.map((i: any) => [i.id, [i.nome, i.display_phone].filter(Boolean).join(" · ")])), [instances]);
   const rows = data?.rows || [];
+  useCampaignLive(rows.filter((row: any) => row.status === 'rodando' || row.status === 'pausado').map((row: any) => row.id), () => { void refetch(); });
   const count = data?.count || 0;
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
   const totals = rows.reduce((acc: { enviados: number; erros: number; custo: number }, row: any) => ({
@@ -124,7 +129,7 @@ export default function CampanhasMeta() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold"><BarChart3 className="h-6 w-6" /> Campanhas</h1>
-            <p className="text-sm text-muted-foreground">Histórico e resultados das campanhas iniciadas pelo seu login.</p>
+            <p className="text-sm text-muted-foreground">Campanhas próprias e compartilhadas com você.</p>
           </div>
           <Badge variant="secondary">{count.toLocaleString("pt-BR")} campanhas</Badge>
         </div>
