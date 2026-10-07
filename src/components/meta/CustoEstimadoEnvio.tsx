@@ -23,10 +23,10 @@ export default function CustoEstimadoEnvio({ telefones, instanciaIds, categoria,
   const isMkt = est.categoria === "MARKETING";
   const acimaLimite = est.brl > limiteBrl;
   const cor = isMkt || acimaLimite
-    ? "border-red-500/50 bg-red-500/5"
+    ? "border-destructive/50 bg-destructive/5"
     : est.brl > limiteBrl * 0.5
-    ? "border-amber-500/50 bg-amber-500/5"
-    : "border-emerald-500/40 bg-emerald-500/5";
+    ? "border-warning/50 bg-warning/5"
+    : "border-success/40 bg-success/5";
 
   return (
     <Card className={cor}>
@@ -39,27 +39,33 @@ export default function CustoEstimadoEnvio({ telefones, instanciaIds, categoria,
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-xs text-muted-foreground">
-          {est.total.toLocaleString("pt-BR")} destinatário(s) · Categoria: <strong>{est.categoria || "—"}</strong> ·
-          {" "}Preço: {usd(est.precoUsd)}/conversa
+          <div className="text-base font-semibold text-foreground">Total previsto de envios: {est.total.toLocaleString("pt-BR")}</div>
+          Categoria: <strong>{est.categoria || "—"}</strong> · Preço estimado: {usd(est.precoUsd)}/mensagem
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div className="rounded-md border bg-background p-3">
-            <div className="text-[11px] uppercase text-muted-foreground">Cobrados</div>
-            <div className="text-2xl font-bold tabular-nums">{est.cobrados.toLocaleString("pt-BR")}</div>
+            <div className="text-[11px] uppercase text-muted-foreground">Estimados cobrados</div>
+            <div className="text-2xl font-bold tabular-nums">{est.loading ? "—" : est.cobrados.toLocaleString("pt-BR")}</div>
             <div className="text-xs text-muted-foreground">
-              {usd(est.usd)} <span className="mx-1">·</span> <strong>{brl(est.brl)}</strong>
+              {est.loading ? "Calculando…" : <>{usd(est.usd)} <span className="mx-1">·</span> <strong>{brl(est.brl)}</strong></>}
             </div>
           </div>
           <div className="rounded-md border bg-background p-3">
-            <div className="text-[11px] uppercase text-muted-foreground">Grátis (janela 24h aberta)</div>
-            <div className="text-2xl font-bold tabular-nums text-emerald-600">{est.gratis.toLocaleString("pt-BR")}</div>
+            <div className="text-[11px] uppercase text-muted-foreground">Estimados grátis{est.categoria === "UTILITY" && " (janela 24h aberta)"}</div>
+            <div className="text-2xl font-bold tabular-nums text-success">{est.loading ? "—" : est.gratis.toLocaleString("pt-BR")}</div>
             <div className="text-xs text-muted-foreground">sem cobrança da Meta</div>
           </div>
         </div>
 
+        {!est.loading && (est.incomplete || est.conservative) && (
+          <p className="text-xs text-muted-foreground">
+            {est.incomplete ? "Não foi possível confirmar todas as janelas gratuitas; a estimativa considera cobrança por segurança." : "A estimativa só considera grátis quando a janela de 24h está aberta em todos os números selecionados. A cobrança final depende do número remetente e da Meta."}
+          </p>
+        )}
+
         {acimaLimite && (
-          <div className="flex items-start gap-2 rounded-md border border-red-500/50 bg-red-500/10 p-2.5 text-xs text-red-700 dark:text-red-400">
+          <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-2.5 text-xs text-destructive">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
               <strong>Envio acima do teto de {brl(limiteBrl)}.</strong> A confirmação exigirá digitar o valor exato em reais antes de disparar.
@@ -70,7 +76,7 @@ export default function CustoEstimadoEnvio({ telefones, instanciaIds, categoria,
 
         {!acimaLimite && est.brl > 0 && (
           <div className="text-[11px] text-muted-foreground">
-            ⚠️ Este valor será debitado no cartão da Meta. Cada WABA cobra ao acumular US$ 25.
+            ⚠️ Estimativa de cobrança no cartão da Meta. Cada WABA cobra ao acumular US$ 25.
           </div>
         )}
       </CardContent>
