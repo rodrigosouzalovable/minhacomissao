@@ -25,4 +25,5 @@ test('CPF identification does not create debt, remote principal remains unchange
 test('agreements remain local and ambiguous distinct portfolios require review', () => {
   expect(portalRemoteDecision('odres_cred', true, { acordos: [{}], debitos: [] }, null)).toBe('local');
   expect(portalRemoteDecision('odres_cred', true, { acordos: [], debitos: [{}] }, { acordos: [], debitos: [{}] })).toBe('conflict');
+  expect(portalRemoteDecision('odres_cred', true, { acordos: [], debitos: [] }, { acordos: [], debitos: [{}] })).toBe('conflict');
 });

@@ -33,9 +33,9 @@ Deno.serve(async req => {
         const { data: other, error: otherError } = await service.rpc('portal_consultar_carteira', { p_cpf: body.cpf, p_credor: otherCredor });
         if (otherError || !other) throw new Error('wallet_unavailable');
         const decision = portalRemoteDecision(body.credor, identificado === true, wallet, other);
-        if (decision === 'conflict' || (other.acordos.length > 0 && wallet.debitos.length === 0)) {
+        if (decision === 'conflict') {
           // Do not turn a potentially settled/shared remote balance into a new debt.
-          if (wallet.debitos.length > 0) return json({ success: true, wallet: { ...wallet, estado: 'pending', principalValidado: false, mensagem: 'Há registros em carteiras distintas. Fale com nossa equipe para conferir os contratos e os valores de cada credor.' } });
+          if (wallet.debitos.length > 0 || other.debitos.length > 0) return json({ success: true, wallet: { ...wallet, estado: 'pending', principalValidado: false, mensagem: 'Há registros em carteiras distintas. Fale com nossa equipe para conferir os contratos e os valores de cada credor.' } });
           return json({ success: true, wallet });
         }
         if (decision === 'remote') {

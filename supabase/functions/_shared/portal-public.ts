@@ -26,6 +26,6 @@ export function portalRemoteDecision(credor: PublicCredor, identificado: boolean
   if (credor !== remotePortalCredor(identificado) || wallet.acordos.length > 0) return 'local';
   // A CPF-level directory cannot attribute contracts when both portfolios have
   // independent local evidence. Never overwrite or sum those debts blindly.
-  if (other && (other.debitos.length > 0 || other.acordos.length > 0) && wallet.debitos.length > 0) return 'conflict';
+  if (other && (other.debitos.length > 0 || other.acordos.length > 0)) return 'conflict';
   return 'remote';
 }
