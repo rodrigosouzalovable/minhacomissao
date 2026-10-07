@@ -6,7 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Trocar imagem no HSM somente para a campanha, autorizar arquivos pessoais e validar sem disparos reais.
+- [x] Trocar imagem no HSM somente para a campanha, autorizar arquivos pessoais e validar sem disparos reais.
 - [x] Catálogo Utility antes da seleção de instâncias, aplicação de faltantes, deduplicação e testes sem disparos reais.
 
 - [x] Aplicar o link salvo aos novos envios e pendentes, validar destinos e preservar histórico.

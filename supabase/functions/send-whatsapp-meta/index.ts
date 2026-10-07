@@ -638,7 +638,7 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_ANON_KEY') || '',
         { global: { headers: { Authorization: `Bearer ${authToken}` } } },
       );
-      const { data: image, error: imageError } = await storageClient.storage.from(CAMPAIGN_IMAGE_BUCKET).createSignedUrl(campaignPath, 3600);
+      const { data: image, error: imageError } = await storageClient.storage.from(CAMPAIGN_IMAGE_BUCKET).createSignedUrl(campaignPath, 60 * 60 * 24 * 365);
       if (imageError || !image?.signedUrl) throw new Error('Não foi possível acessar a imagem desta campanha.');
       template = withCampaignImage(template, image.signedUrl);
       (template as any)._campaign_image_path = campaignPath;
