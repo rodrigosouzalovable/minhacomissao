@@ -31,6 +31,47 @@ All colors MUST be HSL.
 }
 
 /* Home-only identity: results keep their existing light theme. */
+.portal-public.portal-results {
+  --background: 210 100% 10%;
+  --foreground: 0 0% 100%;
+  --card: 210 100% 14%;
+  --card-foreground: 0 0% 100%;
+  --primary: 153 100% 44%;
+  --primary-foreground: 210 100% 8%;
+  --muted: 210 70% 22%;
+  --muted-foreground: 210 28% 76%;
+  --accent: 210 75% 25%;
+  --accent-foreground: 0 0% 100%;
+  --border: 210 45% 28%;
+  --input: 210 40% 38%;
+  --ring: 153 100% 44%;
+  --destructive: 0 100% 77%;
+  --portal-warning: 38 95% 55%;
+  --portal-results-background: linear-gradient(135deg, hsl(210 100% 10%), hsl(210 100% 20%) 50%, hsl(195 100% 25%));
+  --portal-results-balance: linear-gradient(180deg, hsl(216 60% 10%), hsl(218 64% 14%));
+  background: var(--portal-results-background);
+}
+.portal-results header, .portal-results footer { background: transparent; }
+.portal-results-office-logo { width: 72px; height: 44px; object-fit: contain; filter: brightness(0) invert(1); }
+.portal-results h1, .portal-result-wallet h2 { overflow-wrap: anywhere; }
+.portal-result-creditor { width: 170px; height: 55px; object-fit: contain; object-position: left center; }
+.portal-result-creditor-ume { width: 64px; }
+.portal-result-creditor-odres_cred { width: 195px; }
+.portal-result-notice, .portal-agreement-summary { background: hsl(var(--primary) / .08); border: 1px solid hsl(var(--primary) / .22); border-radius: 8px; padding: 18px; }
+.portal-agreement-summary { color: hsl(var(--primary)); }
+.portal-installment { background: hsl(var(--foreground) / .045); border-radius: 8px; border-left: 3px solid hsl(var(--foreground) / .15); padding: 16px; min-height: 76px; }
+.portal-installment.is-paid { border-left-color: hsl(var(--primary)); }
+.portal-payment-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; border-radius: 20px; padding: 3px 8px; color: hsl(var(--portal-warning)); background: hsl(var(--portal-warning) / .12); border: 1px solid hsl(var(--portal-warning) / .3); }
+.portal-payment-badge.is-paid { color: hsl(var(--primary)); background: hsl(var(--primary) / .1); border-color: hsl(var(--primary) / .25); }
+.portal-balance { background: var(--portal-results-balance); border: 1px solid hsl(var(--border)); border-radius: 8px; padding: 24px; }
+.portal-results input { color-scheme: dark; }
+@media (max-width: 639px) {
+  .portal-results-office-logo { width: 40px; }
+  .portal-results header > div { padding-top: 14px; padding-bottom: 14px; }
+  .portal-result-creditor { width: 130px; }
+  .portal-result-creditor-ume { width: 54px; }
+  .portal-result-creditor-odres_cred { width: 145px; }
+}
 .portal-public.portal-home {
   --background: 210 100% 10%;
   --foreground: 0 0% 100%;
