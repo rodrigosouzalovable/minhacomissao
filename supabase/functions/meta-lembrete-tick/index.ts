@@ -1,6 +1,7 @@
 // Envia lembretes de boletos (D-3 e D0) via API oficial Meta.
 // Chamado 1x/dia pelo cron às 08:30 BRT. Toggle ativo/inativo em meta_lembrete_config.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { handleMetaAtrasados } from '../_shared/meta-atrasados-handler.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -62,6 +63,18 @@ Deno.serve(async (req) => {
     const force: boolean = body?.force === true;
 
     const supabase = sb();
+
+    // Wake overdue work only from the authenticated daily scheduler, never a UI simulation.
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const schedulerToken = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    if (serviceKey && schedulerToken === serviceKey && !dryRun && !force) {
+      const brtNow = nowBRT();
+      if (brtNow.getDay() !== 0) {
+        const { error: wakeError } = await supabase.rpc('meta_atrasados_continuacao', { p_iniciar: true });
+        if (wakeError) console.error('[meta-atrasados] continuação:', wakeError.message);
+        else await handleMetaAtrasados(new Request(req.url, { method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' }, body: '{}' }));
+      }
+    }
 
     const { data: cfg } = await supabase
       .from('meta_lembrete_config')

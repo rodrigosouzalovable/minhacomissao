@@ -5038,6 +5038,7 @@ export type Database = {
           ativado_em: string | null
           ativo: boolean
           atualizado_em: string
+          ciclo_ate: string | null
           criado_em: string
           id: string
           idioma: string
@@ -5054,6 +5055,7 @@ export type Database = {
           ativado_em?: string | null
           ativo?: boolean
           atualizado_em?: string
+          ciclo_ate?: string | null
           criado_em?: string
           id?: string
           idioma?: string
@@ -5070,6 +5072,7 @@ export type Database = {
           ativado_em?: string | null
           ativo?: boolean
           atualizado_em?: string
+          ciclo_ate?: string | null
           criado_em?: string
           id?: string
           idioma?: string
@@ -12856,6 +12859,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      meta_atrasados_candidatos: {
+        Args: {
+          p_dia: string
+          p_idioma: string
+          p_limite?: number
+          p_owner: string
+          p_template: string
+          p_tenant: string
+        }
+        Returns: Json
+      }
       meta_atrasados_contato: {
         Args: {
           p_credor: string
@@ -12865,6 +12879,14 @@ export type Database = {
           p_user: string
         }
         Returns: string
+      }
+      meta_atrasados_continuacao: {
+        Args: { p_iniciar?: boolean }
+        Returns: undefined
+      }
+      meta_atrasados_fila_coberta: {
+        Args: { p_pagamento: string }
+        Returns: boolean
       }
       meta_atrasados_lock: {
         Args: { p_config: string; p_token: string }

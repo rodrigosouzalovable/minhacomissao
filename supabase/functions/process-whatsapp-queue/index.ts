@@ -77,6 +77,15 @@ serve(async (req) => {
     }
 
     const mensagem = mensagensPendentes[0];
+    if (String(mensagem.tipo_lembrete).startsWith('vencido')) {
+      const { data: covered, error: coveredError } = await supabase.rpc('meta_atrasados_fila_coberta', { p_pagamento: mensagem.pagamento_id });
+      if (coveredError) throw coveredError;
+      if (covered) {
+        const { error: cancelError } = await supabase.from('whatsapp_fila').update({ status: 'erro', erro_mensagem: 'Sequência oficial Meta ativa; cancelado para evitar lembrete duplicado' }).eq('id', mensagem.id);
+        if (cancelError) throw cancelError;
+        return new Response(JSON.stringify({ success: true, enviado: false, message: 'Lembrete substituído pela sequência oficial' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
     console.log(`Processando mensagem ${mensagem.id} para ${mensagem.telefone}...`);
 
     try {
