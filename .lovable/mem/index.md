@@ -1,4 +1,5 @@
 - [Clara — oferta e escalada humana](mem://features/whatsapp/clara-oferta-escalada) — Oferta PJ A1 R$129,90, validade de 1 ano, agendamento/documentos e escalada ao admin
+- [Imagem somente da campanha](mem://features/whatsapp/imagem-somente-campanha) — Troca JPG/PNG no Envio Meta preserva o modelo original, outras campanhas e variantes.
 - [Liberação total Envio Meta do Thiago](mem://features/whatsapp/thiago-liberacao-total-envio-meta) — Thiago pode tentar por todas as instâncias próprias, ignorando travas internas; recusas da Meta continuam registradas
 - [Novo Mundo 3144 conectada](mem://features/whatsapp/novo-mundo-3144-conectada) — Pode selecionar e enviar quando CONNECTED apesar de alerta de nome/qualidade; bloqueios comerciais e retirada manual persistem
 - [Nome Meta apenas informativo](mem://features/whatsapp/meta-nome-informativo) — Nome não aprovado nunca bloqueia pool, seleção ou envio; recusas reais continuam registradas

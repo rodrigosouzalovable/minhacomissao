@@ -10,6 +10,7 @@ import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../
 import { telefoneMeta } from '../_shared/meta-destinatario.ts';
 import { authorizeMetaInboxSend } from '../_shared/meta-inbox-send-auth.ts';
 import { getMetaButtonLink, resolveButtonUrlParam } from '../_shared/meta-button-url.ts';
+import { CAMPAIGN_IMAGE_BUCKET, campaignImageForTemplate, campaignImagePathAllowed, withCampaignImage } from '../_shared/meta-campaign-image.ts';
 
 
 const corsHeaders = {
@@ -308,6 +309,9 @@ function buildMetaComponents(template: any, bodyParameters: any[], headerMediaId
 // A Meta baixa a URL do header em CADA envio quando usamos { link }. Sob rajada,
 // ou se a URL expirar/demorar, ela devolve #131053. Subindo a imagem UMA vez para
 // /{phone_number_id}/media e reutilizando o id, a Meta não baixa mais nada.
+// Bounded per-process cache keyed by immutable upload path, never by template default.
+const campaignMediaIds = new Map<string, { id: string; at: number }>();
+const campaignMediaInflight = new Map<string, Promise<string | null>>();
 const MEDIA_ID_TTL_MS = 20 * 24 * 60 * 60 * 1000; // ids da Meta duram ~30 dias
 
 function cachedMediaId(template: any, instId: string): string | null {
@@ -319,6 +323,14 @@ function cachedMediaId(template: any, instId: string): string | null {
 }
 
 async function persistMediaId(supabase: any, template: any, instId: string, mediaId: string | null) {
+  if (template._campaign_image) {
+    const key = `${instId}|${template._campaign_image_path}`;
+    if (mediaId) {
+      if (campaignMediaIds.size >= 200) campaignMediaIds.delete(campaignMediaIds.keys().next().value || '');
+      campaignMediaIds.set(key, { id: mediaId, at: Date.now() });
+    } else campaignMediaIds.delete(key);
+    return;
+  }
   const vars = { ...((template.variaveis || {}) as Record<string, any>) };
   const map = { ...((vars._header_media_ids || {}) as Record<string, any>) };
   if (mediaId) map[instId] = { id: mediaId, at: new Date().toISOString() };
@@ -363,6 +375,20 @@ async function uploadHeaderMedia(inst: any, imageUrl: string): Promise<string | 
 // (nesse caso o envio cai no fallback { link }).
 async function resolveHeaderMediaId(supabase: any, inst: any, template: any): Promise<string | null> {
   if (getHeaderFormat(template) !== 'IMAGE') return null;
+  if (template._campaign_image) {
+    const key = `${inst.id}|${template._campaign_image_path}`;
+    const cached = campaignMediaIds.get(key);
+    if (cached && Date.now() - cached.at < MEDIA_ID_TTL_MS) return cached.id;
+    const ongoing = campaignMediaInflight.get(key);
+    if (ongoing) return ongoing;
+    const upload = (async () => {
+      const id = await uploadHeaderMedia(inst, template.variaveis._header_image_url);
+      if (id) await persistMediaId(supabase, template, inst.id, id);
+      return id;
+    })();
+    campaignMediaInflight.set(key, upload);
+    try { return await upload; } finally { campaignMediaInflight.delete(key); }
+  }
   const cached = cachedMediaId(template, inst.id);
   if (cached) return cached;
   const imageUrl = template?.variaveis?._header_image_url;
@@ -543,8 +569,9 @@ Deno.serve(async (req) => {
       liberarTudoThiago = vinculadas.has(instancia_id);
     }
 
-    const { data: template } = await supabase
+    const { data: registeredTemplate } = await supabase
       .from('meta_whatsapp_templates').select('*').eq('id', template_id).maybeSingle();
+    let template = registeredTemplate;
     if (!template) throw new Error('Template não encontrado');
     if (template.status !== 'approved') throw new Error('Template não aprovado pela Meta');
     if (template.instancia_id !== instancia_id) {
@@ -603,6 +630,19 @@ Deno.serve(async (req) => {
       console.log('[send-whatsapp-meta] fallback header/components falhou:', String(e).slice(0, 200));
     }
 
+
+    const campaignPath = campaignImageForTemplate(cliente.vars, template);
+    if (campaignPath) {
+      if (!user_id || !campaignImagePathAllowed(campaignPath, user_id)) throw new Error('Você não tem acesso à imagem desta campanha.');
+      const storageClient = chamadaInterna ? supabase : createClient(
+        Deno.env.get('SUPABASE_URL') || '', Deno.env.get('SUPABASE_ANON_KEY') || '',
+        { global: { headers: { Authorization: `Bearer ${authToken}` } } },
+      );
+      const { data: image, error: imageError } = await storageClient.storage.from(CAMPAIGN_IMAGE_BUCKET).createSignedUrl(campaignPath, 60 * 60 * 24 * 365);
+      if (imageError || !image?.signedUrl) throw new Error('Não foi possível acessar a imagem desta campanha.');
+      template = withCampaignImage(template, image.signedUrl);
+      (template as any)._campaign_image_path = campaignPath;
+    }
 
     // ===== GUARDRAIL: bloqueio anti-marketing =====
     const categoria = String(template.categoria || '').toUpperCase();
@@ -740,7 +780,7 @@ Deno.serve(async (req) => {
         .update({ enviados_hoje: (inst.enviados_hoje || 0) + 1 }).eq('id', inst.id);
 
       const currentVars = (template.variaveis || {}) as Record<string, any>;
-      if (currentVars._format !== formatUsed && formatUsed !== 'none') {
+      if (!(template as any)._campaign_image && currentVars._format !== formatUsed && formatUsed !== 'none') {
         await supabase.from('meta_whatsapp_templates')
           .update({ variaveis: { ...currentVars, _format: formatUsed } }).eq('id', template.id);
       }

@@ -1,0 +1,2 @@
+CREATE POLICY "Own campaign image upload" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'meta-template-media' AND (storage.foldername(name))[1] = auth.uid()::text AND (storage.foldername(name))[2] = 'campaign-images' AND lower(storage.extension(name)) IN ('jpg','png'));
+CREATE POLICY "Own campaign image read" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'meta-template-media' AND (storage.foldername(name))[1] = auth.uid()::text AND (storage.foldername(name))[2] = 'campaign-images');
