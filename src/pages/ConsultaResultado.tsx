@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import AdminDebitosEditor from '@/components/portal/AdminDebitosEditor';
+import PublicPortalResults from '@/components/portal/PublicPortalResults';
 
 interface Debito {
   id: string;
@@ -72,6 +73,12 @@ function formatCpfFull(cpf: string) {
 }
 
 export default function ConsultaResultado() {
+  const { cpf, creditor } = useParams<{ cpf: string; creditor: string }>();
+  if (cpf && creditor && ['novomundo', 'ume', 'odrescred', 'odres_cred'].includes(creditor)) return <PublicPortalResults cpf={cpf} />;
+  return <LegacyConsultaResultado />;
+}
+
+function LegacyConsultaResultado() {
   const { cpf, creditor } = useParams<{ cpf: string; creditor: string }>();
   const [debitos, setDebitos] = useState<Debito[]>([]);
   const [loading, setLoading] = useState(true);
