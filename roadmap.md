@@ -6,6 +6,9 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Atualizar portal público para Souza e Ribeiro e três carteiras separadas, preservando Novo Mundo.
+- [ ] Validar fonte do principal Odres e autorização de custo da consulta pública UME antes de habilitar propostas.
+- [ ] Testar cálculos, isolamento por credor e apresentação do portal sem envios reais.
 - [x] Registrar autorização da continuação temporária, limitada a três horas e encerrada ao concluir; validar variáveis, GREEN obrigatório, deduplicação e busca por conteúdo sem envios reais.
 - [ ] Conferir ativação na tela autenticada e iniciar lembretes D+1/D+3/D+7 após revisão final da prévia; teste permanece na tela de login apesar de sessão renovada válida. Nenhuma configuração ativa ou mensagem enviada.
 - [x] Ampliar busca HSM no Envio Meta para nome e conteúdo, preservando favoritos; testes passaram.
