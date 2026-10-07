@@ -1601,7 +1601,17 @@ serve(async (req) => {
             // GREEN da mesma BM antes de suas próprias tentativas reais.
             const idsBloqueadosPorBm: string[] = [inst.id];
 
-            if (isRestricted) {
+            const erroPagamento = Number(errCode || 0) === 131042 || /payment|billing/i.test(errText);
+            if (isRestricted && erroPagamento) {
+              try {
+                const { revalidarPagamentoAntesDoAviso } = await import('../_shared/meta-revalidar-pagamento.ts');
+                await revalidarPagamentoAntesDoAviso(supabase, inst);
+              } catch (e) {
+                console.error('[MetaWebhook] revalidacao pagamento indisponivel', String(e).slice(0, 160));
+              }
+            }
+
+            if (isRestricted && !erroPagamento) {
               const familiaBloqueio = [131031, 131042, 131049, 131050, 368, 130429]
                 .includes(Number(errCode || 0));
               if (familiaBloqueio) {
@@ -1618,7 +1628,7 @@ serve(async (req) => {
               }
             }
 
-            if (isRestricted) {
+            if (isRestricted && !erroPagamento) {
               supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'bloqueadas', _inc: 1 }).then(() => {}, () => {});
               const motivo = errTitle || `Restrição Meta (#${errCode})`;
               // Bloqueio de conta/pagamento: pausa curta (1h) — a liberação real
@@ -1658,7 +1668,7 @@ serve(async (req) => {
                       `🚫 Instância Meta restringida/bloqueada\n\n` +
                       `Instância: *${rotuloInstancia(inst)}*\n` +
                       `Motivo: *${motivo}*${errCode ? ` (#${errCode})` : ''}\n\n` +
-                      `Pausa automática por 24h. Verifique o Business Manager da Meta.`,
+                      `Pausa preventiva de ${familiaBloqueioPausa ? '1 hora' : '24 horas'}. A retomada depende de nova confirmação da Meta, não apenas do fim da pausa. Verifique a restrição no Business Manager.`,
                     chaveIdempotencia: chave,
                     umaVezPorChave: true,
                   });

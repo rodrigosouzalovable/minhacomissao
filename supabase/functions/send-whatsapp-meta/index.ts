@@ -1036,6 +1036,27 @@ Deno.serve(async (req) => {
         restrictedCodes.some((c) => msg.includes(`#${c}`)) ||
         restrictedKeywords.some((k) => lower.includes(k));
 
+      // Payment alerts require positive commercial evidence, never a generic LIMITED.
+      if (isRestricted && /#131042|payment|billing/i.test(msg)) {
+        let verificacao: any = { estado: 'nao_confirmado', restringida: true, detalhe: 'Não foi possível concluir a verificação de pagamento.' };
+        try {
+          const { revalidarPagamentoAntesDoAviso } = await import('../_shared/meta-revalidar-pagamento.ts');
+          verificacao = await revalidarPagamentoAntesDoAviso(supabase, inst);
+        } catch (e) {
+          console.error('[send-whatsapp-meta] revalidacao pagamento falhou', String(e).slice(0, 160));
+        }
+        return new Response(JSON.stringify({
+          success: false,
+          instance_restricted: verificacao.restringida,
+          pagamento_status: verificacao.estado,
+          error: verificacao.estado === 'confirmado'
+            ? 'A Meta recusou este envio por pagamento, mas a nova consulta confirmou disponibilidade comercial. Esta mensagem não foi enviada.'
+            : verificacao.detalhe,
+          detalhe: msg,
+          instancia_id,
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       // Bloqueio de conta/pagamento: confirma agora na Meta. Se a conta estiver
       // liberada, foi falha pontual e a instancia continua no pool.
       const familiaBloqueio = [131031, 131042, 131049, 131050, 368, 130429]

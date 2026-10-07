@@ -9,3 +9,6 @@ type: feature
 - `_shared/meta-conta-bloqueada.ts` expõe `ehMotivoPagamento`; `ehMotivoBloqueioMeta` inclui pagamento/faturamento/elegibilidade.
 - `check-meta-instance-health` libera automaticamente instâncias pausadas por pagamento quando a Graph volta CONNECTED sem `ban_info` (avisa admin com texto específico).
 - UI: badge "fora do pool" explica a pendência em português; botão "Revalidar na Meta" no card da instância e botão de revalidação em lote no card da BM (`BusinessManagersManager`).
+
+- Antes de avisar pagamento pendente, revalidar automaticamente como no botão Verificar pagamento. Só avisar pendência confirmada; consulta inconclusiva não confirma cartão irregular nem banimento.
+- Cartão cadastrado não garante liberação pela Meta; disponibilidade comercial confirmada elimina somente a trava de pagamento resolvida, preservando qualidade, bloqueios reais e retirada manual.

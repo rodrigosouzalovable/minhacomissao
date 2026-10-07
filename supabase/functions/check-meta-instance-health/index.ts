@@ -1,3 +1,4 @@
+import { classificarPagamento } from '../_shared/meta-pagamento-status.ts';
 // Verifica saúde das instâncias Meta WhatsApp via Graph API.
 // Retorna status (CONNECTED/FLAGGED/RESTRICTED/etc), quality_rating, tier,
 // e ban_info da WABA. Persiste snapshot em meta_whatsapp_instances.
@@ -211,16 +212,15 @@ Deno.serve(async (req) => {
         const motivoAnteriorPagamento = /#131042|payment|billing|eligibility|pagamento/i.test(
           String(inst.pausa_automatica_motivo || ''),
         );
-        r.pagamento_status = comercialBloqueado
-          ? (motivoAnteriorPagamento ? 'pendente' : 'nao_confirmado')
-          : comercialDisponivel
-            ? 'confirmado'
-            : 'nao_confirmado';
+        const pagamentoEstado = classificarPagamento(r.phone_health, r.waba_health);
+        r.pagamento_status = pagamentoEstado === 'outra_restricao' ? 'nao_confirmado' : pagamentoEstado;
         r.pagamento_detalhe = r.pagamento_status === 'confirmado'
           ? 'A Meta informa BUSINESS e WABA disponíveis, sem bloqueio comercial ativo.'
           : r.pagamento_status === 'pendente'
             ? 'A Meta ainda informa restrição comercial na BUSINESS/WABA.'
-            : 'A Meta não retornou informação suficiente para confirmar o pagamento.';
+            : pagamentoEstado === 'outra_restricao'
+              ? 'A Meta confirmou outra restrição comercial, mas não confirmou pagamento irregular.'
+              : 'A Meta não retornou informação suficiente para confirmar o pagamento.';
         r.limitacao_numero = !comercialBloqueado && avaliaHealth(r.phone_health)
           ? (r.phone_health?.entities || []).find((e: any) =>
               String(e?.entity_type || '').toUpperCase() === 'PHONE_NUMBER' &&
@@ -278,7 +278,7 @@ Deno.serve(async (req) => {
           saude_throughput: r.throughput,
           saude_ban_info: r.ban_info,
           saude_restricoes: restricoes,
-          saude_raw: { phone: r.raw, waba: r.waba || null, restricoes, quality_lista: r.quality_lista || null },
+          saude_raw: { phone: r.raw, waba: r.waba || null, restricoes, quality_lista: r.quality_lista || null, pagamento_verificacao: { estado: pagamentoEstado, em: new Date().toISOString(), detalhe: r.pagamento_detalhe, phone: { status: r.status, quality_rating: r.quality_rating, health_status: r.phone_health } } },
           saude_checked_at: new Date().toISOString(),
           throughput_level: r.throughput?.level || null,
           meta_verified_name: r.raw?.verified_name || null,
@@ -551,7 +551,7 @@ Deno.serve(async (req) => {
         if (
           (eraBloqueioMeta || eraLimitacaoNumero) &&
           (!eraViolacaoConta || violacaoContaLiberavel) &&
-          graphOk && !notificarPausa && !liberarLimitacao3144
+          graphOk && (!eraPagamento || r.pagamento_status === 'confirmado') && !notificarPausa && !liberarLimitacao3144
         ) {
           updatePayload.pausa_automatica_ate = null;
           updatePayload.pausa_automatica_motivo = null;
