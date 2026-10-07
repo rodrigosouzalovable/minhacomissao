@@ -508,7 +508,7 @@ async function sendOne(
   throw new Error(`(#${code}) ${lastErr?.message || 'Falha Meta API'}${details ? ' | ' + details : ''}`);
 }
 
-Deno.serve(async (req) => {
+export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const requestBody = await req.json().catch(() => null);
@@ -1145,4 +1145,6 @@ Deno.serve(async (req) => {
       status: expected ? 200 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}
+
+if (import.meta.main) Deno.serve(handleSendWhatsAppMeta);

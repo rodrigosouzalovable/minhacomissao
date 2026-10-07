@@ -53,7 +53,7 @@ function faseFromDias(d: number): string {
   return 'livre';
 }
 
-Deno.serve(async (req) => {
+export async function handlePickMetaInstance(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
     const reqBody = await req.json();
@@ -412,4 +412,6 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}
+
+if (import.meta.main) Deno.serve(handlePickMetaInstance);

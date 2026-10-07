@@ -6,6 +6,9 @@ import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
 import { esperaAteJanela } from '../_shared/metaJanelaEnvio.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
 import { telefoneMeta } from '../_shared/meta-destinatario.ts';
+import { handlePickMetaInstance } from '../pick-meta-instance/index.ts';
+import { handleSendWhatsAppMeta } from '../send-whatsapp-meta/index.ts';
+import { remainingDelay, retryDelay } from '../_shared/meta-campaign-cadence.ts';
 
 
 const corsHeaders = {
@@ -731,7 +734,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     return { advanced: false, stop: true };
   }
 
-  const pickResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/pick-meta-instance`, {
+   const pickResp = await handlePickMetaInstance(new Request('http://internal/pick-meta-instance', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -748,7 +751,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     }),
 
 
-  }).then((r) => r.json()).catch((e) => ({ success: false, error: String(e) }));
+   })).then((r) => r.json()).catch((e) => ({ success: false, error: String(e) }));
 
   if (!pickResp?.success) {
     const blocked = pickResp?.blocked;
@@ -788,10 +791,10 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       return { advanced: false, stop: true };
     }
     // erro transitório genérico → respeita delay do usuário
-    const waitMs = delayUsuarioMs(job);
+    const waitMs = /rate\s*limit|retry\s+after/i.test(String(pickResp?.error || '')) ? retryDelay(pickResp) : delayUsuarioMs(job);
     await supabase.from('envio_meta_job').update({
       proximo_em: new Date(Date.now() + waitMs).toISOString(),
-      status_motivo: pickResp?.error || blocked || 'pick falhou',
+      status_motivo: pickResp?.error || blocked || 'Não foi possível selecionar o próximo número',
     }).eq('id', job.id);
     return { advanced: false, waitMs };
   }
@@ -879,14 +882,14 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   let erroMsg: string | null = null;
   let idsBloqueadosPorBm: string[] = [];
   try {
-    const sendResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-whatsapp-meta`, {
+    const sendResp = await handleSendWhatsAppMeta(new Request('http://internal/send-whatsapp-meta', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
       body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, atendente_nome: job.folder_id === '9267b296-24e6-425d-9f0e-0e4114c782d9' ? 'Clara Ribeiro de Souza' : undefined, credor: (pend as any).credor ?? job.credor ?? null, liberacao_total_parceiro: job.user_id === THIAGO_NOGUEIRA_USER_ID }),
-    }).then((r) => r.json());
+    })).then((r) => r.json());
 
     if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused || sendResp?.bm_quota_blocked) {
       await supabase.from('envio_meta_job_item')
@@ -914,7 +917,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       ok = true;
       waIdOk = sendResp?.waId || null;
     } else {
-      erroMsg = sendResp?.error || 'falha';
+      erroMsg = sendResp?.rate_limited ? `Rate limit: retry after ${retryDelay(sendResp)}ms` : sendResp?.error || 'falha';
       idsBloqueadosPorBm = Array.isArray(sendResp?.bm_blocked_instance_ids)
         ? sendResp.bm_blocked_instance_ids.filter((id: unknown) => typeof id === 'string')
         : [];
@@ -1180,7 +1183,8 @@ Deno.serve(async (req) => {
         const t0 = Date.now();
 
         const result = await processarItem(claimed);
-        let gastoMs = Date.now() - t0;
+        let ultimoInicio = t0;
+        console.log('[tick cadence]', JSON.stringify({ job_id: claimed.id, processamento_ms: Date.now() - t0, configured_ms: result.advanced ? result.delayMs : null }));
         if (result.advanced) processadosTotal++;
 
         // Delay curto (ex.: 3–6s) é menor que a granularidade do agendador
@@ -1191,7 +1195,7 @@ Deno.serve(async (req) => {
           const inicioLoop = Date.now();
           let delayMs = result.delayMs;
           while (delayMs > 0 && delayMs <= DELAY_CURTO_MS && Date.now() - inicioLoop + delayMs < ORCAMENTO_MS) {
-            const espera = Math.max(0, delayMs - gastoMs);
+            const espera = remainingDelay(ultimoInicio, delayMs, Date.now());
             if (espera > 0) await sleep(espera);
 
             // Renova a trava para que outro tick não roube a campanha no meio do laço.
@@ -1210,7 +1214,7 @@ Deno.serve(async (req) => {
               { ...renovado, worker_lock_token: claimed.worker_lock_token },
               { ignorarProximoEm: true },
             );
-            gastoMs = Date.now() - tItem;
+            ultimoInicio = tItem;
             if (!proximo.advanced) break;
             processadosTotal++;
             delayMs = proximo.delayMs;
