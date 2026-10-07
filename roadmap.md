@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Reduzir esperas internas da campanha, manter intervalo global mínimo de 1s e explicar pausas; funções publicadas, 18 testes passaram. Amostra após correção: 3,08s, 400 envios reais, zero erros/duplicatas; 1/s ainda limitado pelo processamento e RateLimit externo.
 - [x] Reativar RED/YELLOW pelo Inbox com confirmação, permissões atuais e consulta individual; 15 testes e diálogo visual validados sem envios ou reativações reais.
 - [x] Exibir e exigir todas as variáveis dos templates no início/reabertura de conversas Meta; prévia, limpeza ao trocar e parâmetros validados nos dois diálogos, 21 testes passaram, sem envios reais.
 - [x] Corrigir estimativa por remetente/categoria, separar total de envios e incluir a primeira linha sem cabeçalho; 13 testes e importação visual de três clientes validados sem disparos.

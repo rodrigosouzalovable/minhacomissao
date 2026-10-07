@@ -14,6 +14,7 @@ import { exportarParaExcel } from "@/lib/exportExcel";
 import { humanizarErroEnvio } from "@/lib/humanizarErroEnvio";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
+import { campaignWaitText } from '@/lib/metaCampaignWait';
 
 
 type Props = { jobId: string | null; open: boolean; onOpenChange: (v: boolean) => void };
@@ -572,8 +573,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
             <div className="text-xs text-muted-foreground h-4 overflow-hidden whitespace-nowrap truncate">
               {progresso && progresso.aguardandoJanela && !pausado
                 ? `${progresso.janelaMotivo || "Aguardando abertura da janela de envio"}${progresso.proximoEmSeg > 0 ? ` — inicia em ${Math.ceil(progresso.proximoEmSeg / 60)} min` : ""}`
-                : progresso && progresso.proximoEmSeg > 0 && !pausado
-                  ? `Próximo envio em ${progresso.proximoEmSeg}s`
+                : progresso && !pausado
+                  ? campaignWaitText(progresso.proximoEmSeg, motivoBruto, job.min_seg ?? 30, job.max_seg ?? 90)
                   : null}
             </div>
 

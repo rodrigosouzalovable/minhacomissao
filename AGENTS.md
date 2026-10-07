@@ -4,12 +4,12 @@
 - Campaign images persist in recipient vars keyed by name/language; use isolated send snapshots and path-keyed media caches without updating template defaults, so scheduled and resumed campaigns preserve the chosen image.
 <!-- LOVABLE:END -->
 
-- Resolve Meta redirects before rendering. Save owner-scoped live URLs atomically; template reads override stale snapshots, sent previews stay immutable.
+- Resolve Meta redirects before rendering; save owner-scoped URLs atomically, override stale templates, preserve sent previews.
 
 - Agreements require audited phone confirmation before saving; remain pending until terms are sent via source/authorized suffix-matched Meta chat or downloaded.
 - Inbox dialogs share parsing/state; require body/header values and validated button links, never guesses.
 
-- Meta webhook alerts require failed recovery and confirmed subscription errors, never query timeouts.
+- Meta webhook alerts need failed recovery and confirmed subscription errors, not timeouts.
 - Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
 
 - Inbox Meta: toda entrada recebe atendente elegível da própria caixa por atribuição atômica; envios manuais são autorizados no servidor pela caixa; IAGO roda somente na PADRÃO; abrir não conclui o não lido, que só encerra após saída confirmada e posterior à entrada; “Não lidas” filtra antes da paginação.
@@ -30,10 +30,12 @@
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
 - Parcelas vencidas são derivadas de pagamentos pendentes em acordos ativos e compartilham a consulta entre sino, alerta e Retornos; o pop-up abre uma vez às 9h e às 15h BRT, inclusive no primeiro acesso posterior à janela.
 - A comissão do funcionário usa a data efetiva do pagamento: até 30/09/2026 preserva 2/3/4/6/8/10%, e desde 01/10/2026 usa 2/3/4/5/7/9% para todos os credores; honorários do escritório permanecem separados.
-- A calculadora UME carrega primeiro cliente e totais, busca tabelas alternativas sob demanda, limita a espera externa e mantém cache de 12 horas sem polling.
+- UME loads client/totals first and alternatives on demand; bound waits, cache 12h without polling.
 - Creditor negotiation templates keep independent editable text despite shared extraction/calculation.
 - O IAGO participa do rodízio somente na PADRÃO, mas responde toda entrada UAZAPI da AQUECIMENTO com uma resposta curta, sem transferência e sem follow-up.
 - A recuperação automática de números próprios RED/YELLOW opera diariamente das 08h às 19h BRT, exceto domingos, e desativa imediatamente remetentes com bloqueio real confirmado pela Meta.
 - Contatos confirmados do Google Maps podem ser colocados na blacklist pelo Aquecimento Meta; o bloqueio por sufixo remove o contato da fonte e impede que novas detecções o recriem.
 
 - Meta payment errors share commercial classification and cached revalidation before alerts; inconclusive checks never claim unpaid billing or release protected senders.
+
+- Campaign ticks reuse send/pick handlers and pace start-to-start globally, avoiding HTTP overhead.

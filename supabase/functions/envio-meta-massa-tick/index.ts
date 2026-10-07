@@ -6,6 +6,9 @@ import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
 import { esperaAteJanela } from '../_shared/metaJanelaEnvio.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
 import { telefoneMeta } from '../_shared/meta-destinatario.ts';
+import { handlePickMetaInstance } from '../_shared/pick-meta-instance-handler.ts';
+import { handleSendWhatsAppMeta } from '../_shared/send-whatsapp-meta-handler.ts';
+import { remainingDelay, retryDelay } from '../_shared/meta-campaign-cadence.ts';
 
 
 const corsHeaders = {
@@ -121,12 +124,7 @@ function ehBloqueioTemporario(motivo: string): boolean {
 }
 
 function esperaRateLimitMs(motivo: string): number {
-  const texto = String(motivo || '');
-  const ms = texto.match(/retry\s+after\s+(\d+)\s*ms/i);
-  if (ms?.[1]) return Math.max(1_000, Math.min(5 * 60_000, Number(ms[1]) + 1_000));
-  const segundos = texto.match(/retry\s+after\s+(\d+)\s*(?:s|sec|seconds?)/i);
-  if (segundos?.[1]) return Math.max(1_000, Math.min(5 * 60_000, Number(segundos[1]) * 1_000 + 1_000));
-  return 60_000;
+  return retryDelay({ error: motivo }, 60_000);
 }
 
 // Próxima reavaliação: 5 min à frente, mas nunca depois das 08:00 BRT do
@@ -608,6 +606,7 @@ async function validarLotePendentes(job: any): Promise<void> {
 }
 
 async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}): Promise<ItemResult> {
+  const startedAt = Date.now();
 
   // O status do job já vem do claim/renovação da trava — não repetir a consulta.
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
@@ -725,13 +724,13 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
         erro: 'Todas as instâncias disponíveis já falharam na entrega para este contato',
         processado_em: new Date().toISOString(),
       }).eq('id', pend.id);
-      return { advanced: true, waitMs: 1_000 };
+      return { advanced: true, delayMs: 1_000 };
     }
     await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas saíram do envio (falhas consecutivas ou qualidade YELLOW/RED)');
     return { advanced: false, stop: true };
   }
 
-  const pickResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/pick-meta-instance`, {
+   const pickResp = await handlePickMetaInstance(new Request('http://internal/pick-meta-instance', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -748,7 +747,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     }),
 
 
-  }).then((r) => r.json()).catch((e) => ({ success: false, error: String(e) }));
+   })).then((r) => r.json()).catch((e) => ({ success: false, error: String(e) }));
 
   if (!pickResp?.success) {
     const blocked = pickResp?.blocked;
@@ -788,10 +787,10 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       return { advanced: false, stop: true };
     }
     // erro transitório genérico → respeita delay do usuário
-    const waitMs = delayUsuarioMs(job);
+    const waitMs = /rate\s*limit|retry\s+after/i.test(String(pickResp?.error || '')) ? retryDelay(pickResp) : delayUsuarioMs(job);
     await supabase.from('envio_meta_job').update({
       proximo_em: new Date(Date.now() + waitMs).toISOString(),
-      status_motivo: pickResp?.error || blocked || 'pick falhou',
+      status_motivo: pickResp?.error || blocked || 'Não foi possível selecionar o próximo número',
     }).eq('id', job.id);
     return { advanced: false, waitMs };
   }
@@ -834,7 +833,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       _job_id: job.id, _enviados_inc: 0, _erros_inc: 1,
       _proximo_em: new Date(Date.now() + 1_000).toISOString(),
     });
-    return { advanced: true, waitMs: 1_000 };
+    return { advanced: true, delayMs: 1_000 };
   }
   await supabase.from('envio_meta_job_item')
     .update({ template_id_resolvido: tplId }).eq('id', pend.id);
@@ -879,14 +878,14 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   let erroMsg: string | null = null;
   let idsBloqueadosPorBm: string[] = [];
   try {
-    const sendResp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-whatsapp-meta`, {
+    const sendResp = await handleSendWhatsAppMeta(new Request('http://internal/send-whatsapp-meta', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
       body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, atendente_nome: job.folder_id === '9267b296-24e6-425d-9f0e-0e4114c782d9' ? 'Clara Ribeiro de Souza' : undefined, credor: (pend as any).credor ?? job.credor ?? null, liberacao_total_parceiro: job.user_id === THIAGO_NOGUEIRA_USER_ID }),
-    }).then((r) => r.json());
+    })).then((r) => r.json());
 
     if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused || sendResp?.bm_quota_blocked) {
       await supabase.from('envio_meta_job_item')
@@ -914,7 +913,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       ok = true;
       waIdOk = sendResp?.waId || null;
     } else {
-      erroMsg = sendResp?.error || 'falha';
+      erroMsg = sendResp?.rate_limited ? `Rate limit: retry after ${retryDelay(sendResp)}ms` : sendResp?.error || 'falha';
       idsBloqueadosPorBm = Array.isArray(sendResp?.bm_blocked_instance_ids)
         ? sendResp.bm_blocked_instance_ids.filter((id: unknown) => typeof id === 'string')
         : [];
@@ -923,7 +922,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     erroMsg = e instanceof Error ? e.message : String(e);
   }
 
-  // Rate limit é uma espera temporária da Meta, não uma falha do número.
+  // Rate limit é uma espera temporária do serviço, não uma falha do número.
   // Mantém o contato pendente, preserva a instância no rodízio e retoma no
   // prazo informado pela própria Meta.
   if (!ok && /rate\s*limit|retry\s+after/i.test(String(erroMsg || ''))) {
@@ -938,7 +937,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
 
     await supabase.from('envio_meta_job').update({
       proximo_em: retomaEm,
-      status_motivo: `Aguardando liberação temporária da Meta até ${retomaEm}`,
+      status_motivo: `Aguardando liberação temporária do serviço até ${retomaEm}`,
     }).eq('id', job.id);
     return { advanced: false, waitMs };
   }
@@ -1098,7 +1097,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     ? Math.min(delaySec * 1000, 1_000 + Math.floor(Math.random() * 1_000))
     : delaySec * 1000;
 
-  const proximoEm = new Date(Date.now() + delayMs).toISOString();
+  const proximoEm = new Date(Date.now() + remainingDelay(startedAt, delayMs, Date.now())).toISOString();
 
   // Persiste os contadores/bloqueios de instâncias no job
   const updateJob: Record<string, unknown> = {
@@ -1180,7 +1179,8 @@ Deno.serve(async (req) => {
         const t0 = Date.now();
 
         const result = await processarItem(claimed);
-        let gastoMs = Date.now() - t0;
+        let ultimoInicio = t0;
+        console.log('[tick cadence]', JSON.stringify({ job_id: claimed.id, processamento_ms: Date.now() - t0, configured_ms: result.advanced ? result.delayMs : null }));
         if (result.advanced) processadosTotal++;
 
         // Delay curto (ex.: 3–6s) é menor que a granularidade do agendador
@@ -1191,7 +1191,7 @@ Deno.serve(async (req) => {
           const inicioLoop = Date.now();
           let delayMs = result.delayMs;
           while (delayMs > 0 && delayMs <= DELAY_CURTO_MS && Date.now() - inicioLoop + delayMs < ORCAMENTO_MS) {
-            const espera = Math.max(0, delayMs - gastoMs);
+            const espera = remainingDelay(ultimoInicio, delayMs, Date.now());
             if (espera > 0) await sleep(espera);
 
             // Renova a trava para que outro tick não roube a campanha no meio do laço.
@@ -1210,7 +1210,7 @@ Deno.serve(async (req) => {
               { ...renovado, worker_lock_token: claimed.worker_lock_token },
               { ignorarProximoEm: true },
             );
-            gastoMs = Date.now() - tItem;
+            ultimoInicio = tItem;
             if (!proximo.advanced) break;
             processadosTotal++;
             delayMs = proximo.delayMs;
