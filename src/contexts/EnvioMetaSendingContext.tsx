@@ -805,7 +805,7 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     const hasRunning = jobs.some((j) => j.status === "rodando");
     if (!hasRunning) return;
-    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    const t = setInterval(() => { if (document.visibilityState === 'visible') setTick((x) => x + 1); }, 1000);
     return () => clearInterval(t);
   }, [jobs]);
 

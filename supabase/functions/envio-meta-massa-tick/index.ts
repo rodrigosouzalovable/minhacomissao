@@ -6,8 +6,8 @@ import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
 import { esperaAteJanela } from '../_shared/metaJanelaEnvio.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
 import { telefoneMeta } from '../_shared/meta-destinatario.ts';
-import { handlePickMetaInstance } from '../pick-meta-instance/index.ts';
-import { handleSendWhatsAppMeta } from '../send-whatsapp-meta/index.ts';
+import { handlePickMetaInstance } from '../_shared/pick-meta-instance-handler.ts';
+import { handleSendWhatsAppMeta } from '../_shared/send-whatsapp-meta-handler.ts';
 import { remainingDelay, retryDelay } from '../_shared/meta-campaign-cadence.ts';
 
 
@@ -611,6 +611,7 @@ async function validarLotePendentes(job: any): Promise<void> {
 }
 
 async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}): Promise<ItemResult> {
+  const startedAt = Date.now();
 
   // O status do job já vem do claim/renovação da trava — não repetir a consulta.
   if (!job || job.status !== 'rodando') return { advanced: false, stop: true };
@@ -728,7 +729,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
         erro: 'Todas as instâncias disponíveis já falharam na entrega para este contato',
         processado_em: new Date().toISOString(),
       }).eq('id', pend.id);
-      return { advanced: true, waitMs: 1_000 };
+      return { advanced: true, delayMs: 1_000 };
     }
     await encerrarJobSemDisponibilidade(job, 'Todas as instâncias selecionadas saíram do envio (falhas consecutivas ou qualidade YELLOW/RED)');
     return { advanced: false, stop: true };
@@ -837,7 +838,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       _job_id: job.id, _enviados_inc: 0, _erros_inc: 1,
       _proximo_em: new Date(Date.now() + 1_000).toISOString(),
     });
-    return { advanced: true, waitMs: 1_000 };
+    return { advanced: true, delayMs: 1_000 };
   }
   await supabase.from('envio_meta_job_item')
     .update({ template_id_resolvido: tplId }).eq('id', pend.id);
@@ -1101,7 +1102,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     ? Math.min(delaySec * 1000, 1_000 + Math.floor(Math.random() * 1_000))
     : delaySec * 1000;
 
-  const proximoEm = new Date(Date.now() + delayMs).toISOString();
+  const proximoEm = new Date(Date.now() + remainingDelay(startedAt, delayMs, Date.now())).toISOString();
 
   // Persiste os contadores/bloqueios de instâncias no job
   const updateJob: Record<string, unknown> = {
