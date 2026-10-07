@@ -1,3 +1,4 @@
+import { fetchMetaSyncPage } from "./meta-sync-bounded.ts";
 type SupabaseClientLike = any;
 
 type MetaTemplate = {
@@ -43,7 +44,9 @@ function chunks<T>(items: T[], size: number): T[][] {
 export async function sincronizarTemplatesMeta(
   supabase: SupabaseClientLike,
   instancia: { id: string; waba_id: string | null; access_token: string | null },
+  signal: AbortSignal = AbortSignal.timeout(90_000),
 ): Promise<TemplateSyncResult> {
+  try {
   if (!instancia.waba_id || !instancia.access_token) {
     return { success: false, synced: 0, pages: 0, error: "WABA ID ou token não configurado" };
   }
@@ -53,8 +56,7 @@ export async function sincronizarTemplatesMeta(
   let nextUrl: string | null = `https://graph.facebook.com/v21.0/${instancia.waba_id}/message_templates?limit=200`;
 
   while (nextUrl && pages < MAX_GRAPH_PAGES) {
-    const response = await fetch(nextUrl, { headers: { Authorization: `Bearer ${instancia.access_token}` } });
-    const payload = await response.json().catch(() => ({}));
+    const { response, payload } = await fetchMetaSyncPage(nextUrl, instancia.access_token, signal);
     pages += 1;
 
     if (!response.ok) {
@@ -81,7 +83,7 @@ export async function sincronizarTemplatesMeta(
     .from("meta_whatsapp_templates")
     .select("nome_template,idioma,variaveis")
     .eq("instancia_id", instancia.id)
-    .range(0, 3999);
+    .range(0, 3999).abortSignal(signal);
   if (existingError) return { success: false, synced: 0, pages, error: existingError.message };
 
   const existingByKey = new Map<string, Record<string, any>>();
@@ -112,9 +114,14 @@ export async function sincronizarTemplatesMeta(
   for (const batch of chunks(rows, UPSERT_BATCH_SIZE)) {
     const { error } = await supabase
       .from("meta_whatsapp_templates")
-      .upsert(batch, { onConflict: "instancia_id,nome_template,idioma" });
+      .upsert(batch, { onConflict: "instancia_id,nome_template,idioma" }).abortSignal(signal);
     if (error) return { success: false, synced: 0, pages, error: error.message };
   }
 
   return { success: true, synced: rows.length, pages };
+  } catch (error) {
+    const timedOut = signal.aborted || (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name));
+    return { success: false, synced: 0, pages: 0, retryable: true,
+      error: timedOut ? "A Meta não respondeu dentro do prazo. Tente sincronizar novamente." : (error instanceof Error ? error.message : "Falha ao consultar a Meta") };
+  }
 }
