@@ -9,4 +9,5 @@ type: feature
 - Vincular conversa ao funcionário que lançou acordo; se não tiver acesso a caixa compatível, aguardar e mostrar motivo. Nunca ampliar acesso ou substituir por outro atendente.
 - Não enviar aos domingos; retomar segunda após 08h BRT, sem acumular etapas antigas.
 - Usuário autorizou custo com controle, estimativa e pausa; testes sem envios, ativação após conferir prévia com responsável.
+- Em 07/10/2026, autorizou também a continuação temporária de até 180 execuções/dia durante o ciclo limitado, encerrada ao concluir.
 - Busca HSM no Envio Meta deve encontrar nome e conteúdo, ignorando acentos e maiúsculas, mantendo favoritos.
