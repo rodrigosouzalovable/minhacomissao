@@ -17,7 +17,18 @@ const json = (payload: unknown, status = 200) => new Response(JSON.stringify(pay
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  // Bound ALL network operations, including auth, lock RPCs and finalization.
+  const requestDeadline = AbortSignal.timeout(115_000);
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    global: { fetch: (input, init) => fetch(input, {
+      ...init,
+      signal: AbortSignal.any([
+        requestDeadline,
+        AbortSignal.timeout(15_000),
+        ...(init?.signal ? [init.signal] : []),
+      ]),
+    }) },
+  });
   let ownsLock = false;
 
   try {
