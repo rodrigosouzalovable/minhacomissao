@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Ajustar logos somente na home, ampliar Odres com letras brancas e título do portal, restaurar atalhos do cabeçalho; imagens, menu móvel, links e CPF verificados, 15 testes passaram, favicon preservado.
 - [x] Reestruturar somente a página inicial: azul anterior, logo original legível, consulta centralizada e tipografia clássica; desktop/celular, três logos, CPF e FAQ verificados; 15 testes passaram, resultados preservados.
 - [x] Atualizar a apresentação do portal para Souza e Ribeiro e três carteiras separadas; proposta Novo Mundo validada com dados simulados.
 - [x] Registrar autorização de custo UME e confirmação de que valor original Odres representa principal sem juros.

@@ -5,6 +5,7 @@ type: feature
 ---
 
 - Cabeçalho somente Souza e Ribeiro Advogados; Novo Mundo, UME e Odres Cred junto de Consulte suas dívidas.
+- Home: usar logos enviadas Novo Mundo horizontal novomundo.com e UME; Odres maior, letras brancas e símbolo azul sobre fundo azul, sem pequenas caixas brancas uniformes. Destacar Portal de Negociação e manter atalhos Benefícios, Quem somos, Como funciona e Dúvidas no cabeçalho.
 - Página inicial: restaurar azul anterior (#001a33/#003366/#004080), detalhes verdes #00a86b e logo original completa branca e legível; não usar marca minúscula com texto repetido ao lado.
 - Consulta em coluna centralizada; títulos Libre Baskerville e textos IBM Plex Sans, estilo clássico e elegante. Não alterar página de resultados por essa reformulação visual.
 - Consulta única por CPF com resultados e acordos separados por credor, sem mistura de saldos.

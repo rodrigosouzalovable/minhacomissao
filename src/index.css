@@ -56,10 +56,15 @@ All colors MUST be HSL.
 .portal-home-office-logo { width: 264px; height: 66px; object-fit: contain; filter: brightness(0) invert(1); }
 .portal-home-consultation { padding-top: 44px; padding-bottom: 42px; background: hsl(210 100% 20%); }
 .portal-home .portal-eyebrow { font-size: 12px; }
-.portal-home-creditors { max-width: 390px; }
+.portal-home-consultation .portal-eyebrow { font-size: 18px; font-weight: 700; }
+.portal-home-creditors { max-width: 650px; }
 .portal-home .portal-brands { gap: 24px; }
 .portal-home .portal-brand { gap: 9px; }
-.portal-home .portal-brand img { height: 54px; max-width: 118px; background: hsl(var(--portal-paper)); border-radius: 4px; padding: 6px; }
+.portal-home .portal-brand { justify-content: flex-end; }
+.portal-home .portal-brand img { height: 86px; max-width: 210px; object-fit: contain; }
+.portal-home .portal-brand-ume img { width: 96px; padding: 7px; background: hsl(var(--portal-paper)); }
+.portal-home .portal-brand-odres_cred img { max-width: 230px; }
+.portal-home section[id] { scroll-margin-top: 20px; }
 .portal-home .portal-brand span { color: hsl(var(--muted-foreground)); }
 .portal-home-cpf { background: hsl(var(--portal-paper)); color: hsl(var(--portal-ink)); border-color: hsl(var(--portal-paper)); }
 .portal-home-cpf::placeholder { color: hsl(210 18% 45%); }
@@ -83,7 +88,8 @@ All colors MUST be HSL.
   .portal-home header > div { padding-top: 14px; padding-bottom: 14px; }
   .portal-home-consultation { padding-top: 28px; padding-bottom: 28px; }
   .portal-home .portal-brands { gap: 16px; }
-  .portal-home .portal-brand img { height: 46px; }
+  .portal-home .portal-brand img { height: 64px; }
+  .portal-home .portal-brand-ume img { width: 72px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .portal-home *, .portal-home *::before, .portal-home *::after { transition: none !important; animation: none !important; }
