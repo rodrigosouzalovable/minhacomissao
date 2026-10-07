@@ -13,7 +13,19 @@ export function validPublicQuery(cpf: unknown, credor: unknown): cpf is string {
 }
 
 /** Only customer-facing UME data may cross the public boundary. */
-export function publicUmeWallet(c: { encontrado: boolean; nome: string; valorSemJuros: number | null; consultadoEm: string }, agreements: unknown[]) {
+export function publicUmeWallet(c: { encontrado: boolean; nome: string; valorSemJuros: number | null; consultadoEm: string }, agreements: unknown[], credor: 'ume' | 'odres_cred' = 'ume') {
   const principal = c.encontrado && c.valorSemJuros != null && Number.isFinite(c.valorSemJuros) && c.valorSemJuros > 0 ? c.valorSemJuros : null;
-  return { credor: 'ume', estado: !c.encontrado ? 'empty' : principal == null ? 'pending' : 'ok', nome: c.encontrado ? c.nome : '', principal, principalValidado: principal != null, debitos: [], acordos: agreements, faixas: [], consultadoEm: c.consultadoEm, mensagem: c.encontrado && principal == null ? 'O principal sem juros não está disponível. Fale com nossa equipe para conferir os valores.' : undefined };
+  return { credor, estado: !c.encontrado ? 'empty' : principal == null ? 'pending' : 'ok', nome: c.encontrado ? c.nome : '', principal, principalValidado: principal != null, debitos: [], acordos: agreements, faixas: [], consultadoEm: c.consultadoEm, mensagem: c.encontrado && principal == null ? 'O principal sem juros não está disponível. Fale com nossa equipe para conferir os valores.' : undefined };
+}
+
+export function remotePortalCredor(odresIdentificado: boolean): 'ume' | 'odres_cred' {
+  return odresIdentificado ? 'odres_cred' : 'ume';
+}
+
+export function portalRemoteDecision(credor: PublicCredor, identificado: boolean, wallet: { acordos: unknown[]; debitos: unknown[] }, other: { acordos: unknown[]; debitos: unknown[] } | null) {
+  if (credor !== remotePortalCredor(identificado) || wallet.acordos.length > 0) return 'local';
+  // A CPF-level directory cannot attribute contracts when both portfolios have
+  // independent local evidence. Never overwrite or sum those debts blindly.
+  if (other && (other.debitos.length > 0 || other.acordos.length > 0)) return 'conflict';
+  return 'remote';
 }

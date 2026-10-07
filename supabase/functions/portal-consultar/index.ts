@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { consultarUme } from '../_shared/ume-desconto.ts';
-import { validPublicQuery, publicUmeWallet } from '../_shared/portal-public.ts';
+import { validPublicQuery, publicUmeWallet, portalRemoteDecision, remotePortalCredor } from '../_shared/portal-public.ts';
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 
@@ -24,9 +24,25 @@ Deno.serve(async req => {
     if (guardError || allowed !== true) return json({ success: false, message: 'Muitas consultas em pouco tempo. Aguarde para tentar novamente ou fale com nossa equipe.' });
     const { data: wallet, error } = await service.rpc('portal_consultar_carteira', { p_cpf: body.cpf, p_credor: body.credor });
     if (error || !wallet) throw new Error('wallet_unavailable');
-    if (body.credor === 'ume' && wallet.acordos.length === 0) {
-      const consulta = await consultarUme(service, body.cpf, { perfil: 'essencial', horasCache: 12, aguardarCache: true });
-      return json({ success: true, wallet: publicUmeWallet(consulta, []) });
+    if (body.credor !== 'novo_mundo') {
+      const { data: identificado, error: directoryError } = await service.rpc('portal_odres_identificado', { p_cpf: body.cpf });
+      if (directoryError) throw directoryError;
+      const remoteCredor = remotePortalCredor(identificado === true);
+      if (body.credor === remoteCredor && wallet.acordos.length === 0) {
+        const otherCredor = remoteCredor === 'odres_cred' ? 'ume' : 'odres_cred';
+        const { data: other, error: otherError } = await service.rpc('portal_consultar_carteira', { p_cpf: body.cpf, p_credor: otherCredor });
+        if (otherError || !other) throw new Error('wallet_unavailable');
+        const decision = portalRemoteDecision(body.credor, identificado === true, wallet, other);
+        if (decision === 'conflict') {
+          // Do not turn a potentially settled/shared remote balance into a new debt.
+          if (wallet.debitos.length > 0 || other.debitos.length > 0) return json({ success: true, wallet: { ...wallet, estado: 'pending', principalValidado: false, mensagem: 'Há registros em carteiras distintas. Fale com nossa equipe para conferir os contratos e os valores de cada credor.' } });
+          return json({ success: true, wallet });
+        }
+        if (decision === 'remote') {
+          const consulta = await consultarUme(service, body.cpf, { perfil: 'essencial', horasCache: 12, aguardarCache: true });
+          return json({ success: true, wallet: publicUmeWallet(consulta, [], remoteCredor) });
+        }
+      }
     }
     if (body.credor === 'odres_cred') wallet.principalValidado = typeof wallet.principal === 'number' && wallet.principal > 0;
     return json({ success: true, wallet });

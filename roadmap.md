@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Criar importação exclusiva Odres com substituição atômica de CPFs e classificar o resultado remoto sem duplicação; lista inicial publicada com 35.891 CPFs válidos. Portal real confirmou logo Odres e principal R$1.491,00; prévia visual confirmou uma repetição e zero inválidos. Página completa autenticada não abriu no teste; seção validada isoladamente com autorização real.
 - [x] Implementar recuperação cadastral com autorização por estoque, variáveis exatas, reservas por sufixo, reposição alvo 100 sem autorizar novos leads e template obrigatório; funções disponibilizadas, seleção nova desativada.
 - [x] Registrar fluxo na AQUECIMENTO; IAGO agradece uma única confirmação com “Obrigado pela confirmação”, silencia demais respostas e aplica blacklist em “Sair”; 18 testes passaram sem mensagens externas.
 - [x] Prévia autenticada 200: 2.126 empresas autorizadas (661 confirmadas e 1.465 candidatas), 74 cópias aprovadas; validação de todas as funções passou, compilação automática OK.

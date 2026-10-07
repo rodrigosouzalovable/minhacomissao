@@ -9156,6 +9156,62 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_odres_cpfs: {
+        Row: {
+          cpf: string
+          lista_id: string
+        }
+        Insert: {
+          cpf: string
+          lista_id: string
+        }
+        Update: {
+          cpf?: string
+          lista_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_odres_cpfs_lista_id_fkey"
+            columns: ["lista_id"]
+            isOneToOne: false
+            referencedRelation: "portal_odres_listas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_odres_listas: {
+        Row: {
+          ativo: boolean
+          criado_em: string
+          criado_por: string
+          id: string
+          nome_arquivo: string
+          publicado_em: string | null
+          tenant_id: string
+          total_esperado: number
+        }
+        Insert: {
+          ativo?: boolean
+          criado_em?: string
+          criado_por: string
+          id?: string
+          nome_arquivo: string
+          publicado_em?: string | null
+          tenant_id: string
+          total_esperado: number
+        }
+        Update: {
+          ativo?: boolean
+          criado_em?: string
+          criado_por?: string
+          id?: string
+          nome_arquivo?: string
+          publicado_em?: string | null
+          tenant_id?: string
+          total_esperado?: number
+        }
+        Relationships: []
+      }
       premios_semanais: {
         Row: {
           atingido_em: string
@@ -13408,6 +13464,18 @@ export type Database = {
           dias_de: number
         }[]
       }
+      portal_odres_adicionar_lote: {
+        Args: { p_cpfs: string[]; p_lista: string }
+        Returns: number
+      }
+      portal_odres_cpf_valido: { Args: { p_cpf: string }; Returns: boolean }
+      portal_odres_identificado: { Args: { p_cpf: string }; Returns: boolean }
+      portal_odres_iniciar: {
+        Args: { p_arquivo: string; p_total: number }
+        Returns: string
+      }
+      portal_odres_pode_importar: { Args: never; Returns: boolean }
+      portal_odres_publicar: { Args: { p_lista: string }; Returns: number }
       portal_reservar_consulta: { Args: { p_chave: string }; Returns: boolean }
       preparar_conversa_cadastral: { Args: { p_log: string }; Returns: string }
       presenca_ao_vivo: {

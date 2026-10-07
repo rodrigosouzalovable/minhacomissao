@@ -26,6 +26,7 @@ import { calcularComissao } from '@/lib/comissao';
 import { BatimentoCpfsPortalCard } from '@/components/BatimentoCpfsPortalCard';
 import { ConferenciaCarteiraCard } from '@/components/ConferenciaCarteiraCard';
 import CobmaisDailyImport from '@/components/CobmaisDailyImport';
+import OdresCpfImportCard from '@/components/OdresCpfImportCard';
 
 const CREDOR_MMP = 'MMP MUNDO DA MODA';
 
@@ -3092,6 +3093,8 @@ export default function ImportarDevedores() {
         )}
 
         <DescontosCredorCard />
+
+        <OdresCpfImportCard />
 
         <BatimentoCpfsPortalCard />
 
