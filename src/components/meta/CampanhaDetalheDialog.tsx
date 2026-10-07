@@ -111,6 +111,8 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const readOnly = !canManageCampaign(job?.user_id, user?.id);
   const liveBusy = useRef(false);
   const lastDetails = useRef(0);
+  const initialRefresh = useRef({ refreshCountersJob, recarregarItensJob });
+  initialRefresh.current = { refreshCountersJob, recarregarItensJob };
   useCampaignLive(open && jobId ? [jobId] : [], () => {
     if (!jobId || liveBusy.current) return;
     liveBusy.current = true;
@@ -130,10 +132,10 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   useEffect(() => {
     if (!open || !jobId) return;
     marcarJobAberto(jobId, true);
-    refreshCountersJob(jobId);
-    recarregarItensJob(jobId);
+    initialRefresh.current.refreshCountersJob(jobId);
+    initialRefresh.current.recarregarItensJob(jobId);
     return () => marcarJobAberto(jobId, false);
-  }, [open, jobId, marcarJobAberto, recarregarItensJob, refreshCountersJob]);
+  }, [open, jobId, marcarJobAberto]);
 
   // Polling leve enquanto o diálogo está aberto — só refetch quando cache diverge do backend
   // e apenas com a aba visível (economia de CPU do banco).

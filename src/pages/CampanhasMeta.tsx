@@ -109,7 +109,7 @@ export default function CampanhasMeta() {
   const folderNames = useMemo(() => new Map(folders.map((f: any) => [f.id, f.nome])), [folders]);
   const instanceNames = useMemo(() => new Map(instances.map((i: any) => [i.id, [i.nome, i.display_phone].filter(Boolean).join(" · ")])), [instances]);
   const rows = data?.rows || [];
-  useCampaignLive(rows.filter((row: any) => row.status === 'rodando' || row.status === 'pausado').map((row: any) => row.id), () => { void refetch(); });
+  useCampaignLive(rows.filter((row: any) => row.user_id !== user?.id || row.status === 'rodando' || row.status === 'pausado').map((row: any) => row.id), () => { void refetch(); });
   const count = data?.count || 0;
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
   const totals = rows.reduce((acc: { enviados: number; erros: number; custo: number }, row: any) => ({
