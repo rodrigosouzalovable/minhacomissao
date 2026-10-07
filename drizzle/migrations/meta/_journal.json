@@ -1072,6 +1072,27 @@
       "when": 1791400804696,
       "tag": "0152_portal_public_query_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1791407401775,
+      "tag": "0153_recuperacao_cadastral_controlada",
+      "breakpoints": true
+    },
+    {
+      "idx": 154,
+      "version": "7",
+      "when": 1791407568958,
+      "tag": "0154_cadastral_conversa_e_optout_atomicos",
+      "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "7",
+      "when": 1791407634952,
+      "tag": "0155_cadastral_snapshot_autorizacao_e_limites",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,8 @@
 //  - no máximo 8 números processados por execução (1 mensagem cada)
 //  - erro fatal da Meta (conta travada/pagamento) desliga a recuperação do número
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { executarRecuperacaoCadastral } from '../_shared/recuperacao-cadastral-envio.ts';
 import {
   dentroJanelaAquecimento,
   destinosAquecimento,
@@ -23,11 +25,6 @@ import {
   RECUPERACAO_AGUARDA_DESBLOQUEIO,
   bloqueioRecuperacaoMeta,
 } from "../_shared/meta-aquecimento-alvo.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const MAX_INSTANCIAS_POR_RUN = 8;
 
@@ -76,7 +73,7 @@ Deno.serve(async (req) => {
     const forcar = body?.forcar === true; // teste manual ignora janela, nunca elegibilidade
     const simulacao = body?.simulacao === true;
     const instanciaId: string | undefined = body?.instancia_id;
-    if (simulacao || forcar || instanciaId) {
+    {
       const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
       if (bearer !== Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
         const { data: auth } = await supabase.auth.getUser(bearer);
@@ -157,6 +154,13 @@ Deno.serve(async (req) => {
     if (instError) throw instError;
 
     if (!insts?.length) return json({ ok: true, skipped: "nenhuma_em_recuperacao", reativadas });
+
+    const { data: cadastralCfg, error: cadastralCfgErro } = await supabase.from('meta_recuperacao_cadastral_config')
+      .select('ativo').eq('user_id', RECUPERACAO_OWNER_ID).maybeSingle();
+    if (cadastralCfgErro) throw cadastralCfgErro;
+    if (cadastralCfg?.ativo || simulacao) {
+      return json(await executarRecuperacaoCadastral(supabase, insts.filter(remetenteAptoParaRecuperacao), simulacao));
+    }
 
     const destinos = await destinosAquecimento(supabase);
     if (destinos.length === 0) {

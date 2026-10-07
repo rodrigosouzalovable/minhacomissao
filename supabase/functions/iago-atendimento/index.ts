@@ -11,6 +11,7 @@ import {
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
 import { detectarPropostaPreviaNoHistorico, type PropostaPrevia } from '../_shared/proposta-previa.ts';
+import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-resposta.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
 
@@ -84,6 +85,11 @@ Deno.serve(async (req) => {
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
+
+    // Cadastral flow must never enter free-form AI or follow-up, even after acknowledgement.
+    if (await atenderRespostaCadastral(supabase, contato, String(texto || ''))) {
+      return json({ success: true, cadastral: true });
+    }
 
     // Leads do Google Maps usados no aquecimento não são atendidos pelo IAGO.
     if (String((contato as any).origem_aquecimento || '') === 'lead_google_maps') {

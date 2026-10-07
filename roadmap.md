@@ -6,6 +6,9 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Implementar recuperação cadastral com UAZAPI e empresas autorizadas, variáveis exatas, reposição limitada a 100 e cópia automática do template.
+- [ ] Registrar fluxo na AQUECIMENTO; IAGO agradece uma única confirmação com “Obrigado pela confirmação”, silencia demais respostas e aplica blacklist em “Sair”.
+- [ ] Validar prévia e testes sem envios reais; publicar funções e conferir estoque/cobertura antes de ativar novas fontes.
 - [x] Restaurar resultado azul da consulta, ocultar carteiras quitadas e separar pendências por credor; 24 testes e fluxos simulados desktop/celular passaram, sem alterações financeiras ou envios. Registros de dívida junto a acordo quitado exigem conferência, pois a resposta pública não identifica quais contratos foram quitados.
 - [x] Ajustar logos somente na home, ampliar Odres com letras brancas e título do portal, restaurar atalhos do cabeçalho; imagens, menu móvel, links e CPF verificados, 15 testes passaram, favicon preservado.
 - [x] Reestruturar somente a página inicial: azul anterior, logo original legível, consulta centralizada e tipografia clássica; desktop/celular, três logos, CPF e FAQ verificados; 15 testes passaram, resultados preservados.

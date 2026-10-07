@@ -16,7 +16,7 @@
 - Inbox Meta: toda entrada recebe atendente elegível da própria caixa por atribuição atômica; envios manuais são autorizados no servidor pela caixa; IAGO roda somente na PADRÃO; abrir não conclui o não lido, que só encerra após saída confirmada e posterior à entrada; “Não lidas” filtra antes da paginação.
 - Unknown Meta messages keep restricted diagnostics and show a clear content-unavailable notice.
 - Inbox pool returns reuse authorized RPCs after individual Meta health confirmation; never bypass real blocks.
-- Inbox media reads and signed URLs follow conversation-level authorization, not broad folder membership; this allows assigned staff to send attachments without exposing files in other folders.
+- Inbox media uses conversation-level authorization, never broad folder access, to isolate attachments.
 - Meta→UAZAPI migrations reuse the official instance, verify its phone and fix its inbox before disabling Meta, preserving history and preventing duplicates.
 - Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
@@ -39,4 +39,6 @@
 
 - Meta payment errors share commercial classification and cached revalidation before alerts; inconclusive checks never claim unpaid billing or release protected senders.
 
-- Campaign ticks reuse send/pick handlers and pace start-to-start globally, avoiding HTTP overhead.
+- Campaign ticks reuse handlers and pace globally start-to-start to avoid HTTP overhead.
+
+- Cadastral recovery uses owner consent snapshots, atomic suffix leases and one-time replies before generic IAGO to prevent duplicates and honor opt-outs.
