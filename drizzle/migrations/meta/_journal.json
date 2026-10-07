@@ -981,6 +981,13 @@
       "when": 1791331538191,
       "tag": "0139_tier_250_templates_mesmo_dia",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1791372141413,
+      "tag": "0140_campaign_image_owner_storage",
+      "breakpoints": true
     }
   ]
 }
