@@ -39,7 +39,7 @@ export async function revalidarPagamentoAntesDoAviso(supabase: any, inst: any) {
   const patch: any = { saude_raw: { ...(atual.saude_raw || {}), pagamento_verificacao: snapshot } };
   const motivoAnterior = String(atual.pausa_automatica_motivo || '');
   const travaPagamento = /131042|141006|payment|billing|pagamento|faturamento/i.test(motivoAnterior);
-  const outraTrava = motivoAnterior && !travaPagamento;
+  const outraTrava = motivoAnterior && (!travaPagamento || /131031|account_violation|banned|flagged|status=|quality=|qualidade|locked|banimento/i.test(motivoAnterior));
   if (podeLimparTravaPagamento(atual, estado, phone)) {
     Object.assign(patch, { estado_pool: 'ativo', pausa_automatica_ate: null, pausa_automatica_motivo: null });
   } else if (estado !== 'confirmado' && !outraTrava && !atual.pool_fora_manual) {
@@ -52,8 +52,9 @@ export async function revalidarPagamentoAntesDoAviso(supabase: any, inst: any) {
     });
   }
   // Compare-and-set: never overwrite a new ban/manual restriction from another worker.
-  let update = supabase.from('meta_whatsapp_instances').update(patch).eq('id', inst.id)
-    .eq('pool_fora_manual', atual.pool_fora_manual === true);
+  let update = supabase.from('meta_whatsapp_instances').update(patch).eq('id', inst.id);
+  update = atual.pool_fora_manual == null ? update.is('pool_fora_manual', null)
+    : update.eq('pool_fora_manual', atual.pool_fora_manual);
   update = atual.pausa_automatica_motivo == null
     ? update.is('pausa_automatica_motivo', null) : update.eq('pausa_automatica_motivo', atual.pausa_automatica_motivo);
   const { data: changed, error } = await update.select('id').maybeSingle();
