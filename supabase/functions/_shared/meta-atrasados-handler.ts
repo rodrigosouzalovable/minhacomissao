@@ -65,11 +65,11 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
           const update=async(status:string,motivo:string|null,waId:string|null=null)=>must(await db.from('meta_atrasados_envios').update({status,motivo,wa_message_id:waId,instancia_id:sender?.id,instancia_nome:sender?.nome,atendente_nome:candidate.atendente_nome,credor:candidate.empresa,mensagem:message,atualizado_em:new Date().toISOString()}).eq('id',reservation));
           if(reason){await update('pendente',reason);continue;}
           try {
-            // The contact RPC validates exact user/label membership atomically, without granting access.
-            must(await db.rpc('meta_atrasados_contato',{p_instancia:sender.id,p_telefone:tel,p_user:candidate.user_id,p_nome:candidate.cliente_nome,p_credor:({ume_novo_mundo:'novo_mundo',mundo_da_moda:'ume',odres_cred:'odres_cred'} as any)[candidate.empresa]}));
             const fresh=must(await db.from('pagamentos').select('status,data_prevista,acordos!inner(status)').eq('id',candidate.pagamento_id).maybeSingle());
             const active=must(await db.from('meta_atrasados_config').select('ativo').eq('id',cfg.id).maybeSingle());
             if(!active?.ativo||fresh?.status!=='pendente'||fresh.data_prevista!==candidate.data_prevista||fresh.acordos?.status!=='ativo'){await update('cancelado','Parcela paga, vencimento alterado, acordo encerrado ou automação pausada');continue;}
+            // Validate payment before assigning; the RPC validates exact authorized membership.
+            must(await db.rpc('meta_atrasados_contato',{p_instancia:sender.id,p_telefone:tel,p_user:candidate.user_id,p_nome:candidate.cliente_nome,p_credor:({ume_novo_mundo:'novo_mundo',mundo_da_moda:'ume',odres_cred:'odres_cred'} as any)[candidate.empresa]}));
             const response=await handleSendWhatsAppMeta(new Request('http://internal/send',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({instancia_id:sender.id,template_id:sender.template_id,user_id:cfg.owner_id,folder_id:sender.folder_id,cliente:{telefone:tel,nome:candidate.cliente_nome,cpf:candidate.cliente_cpf,vars},credor:({ume_novo_mundo:'novo_mundo',mundo_da_moda:'ume',odres_cred:'odres_cred'} as any)[candidate.empresa]})}));
             const result=await response.json();
             if(result.success===true&&result.waId){await update('aceito',null,result.waId);accepted++;}

@@ -1,11 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 // Helper: capitalize first letter, lowercase rest
 function capitalizeName(name: string): string {
@@ -50,9 +46,18 @@ serve(async (req) => {
       if (body?.user_id) filterUserId = body.user_id;
     } catch { /* no body */ }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !supabaseServiceKey) throw new Error('Serviço não configurado');
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    if (token !== supabaseServiceKey) {
+      const { data: auth, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !auth.user) return new Response(JSON.stringify({error:'Sessão inválida'}), {status:401,headers:{...corsHeaders,'Content-Type':'application/json'}});
+      const { data: admin, error: roleError } = await supabase.rpc('has_role',{_user_id:auth.user.id,_role:'admin'});
+      if (roleError) throw roleError;
+      if (!admin) filterUserId = auth.user.id;
+    }
 
     if (filterUserId) {
       console.log(`Filtrando por user_id: ${filterUserId}`);
@@ -252,7 +257,7 @@ serve(async (req) => {
 
     for (const { parcela, tipoLembrete } of parcelasFiltradas) {
       const acordo = parcela.acordos as any;
-      if (!overrideToken && tipoLembrete.startsWith('vencido')) {
+      if (tipoLembrete.startsWith('vencido')) {
         const { data: covered, error: coveredError } = await supabase.rpc('meta_atrasados_fila_coberta', { p_pagamento: parcela.id });
         if (coveredError) throw coveredError;
         if (covered) { pulados++; continue; }
