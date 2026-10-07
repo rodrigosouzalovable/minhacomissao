@@ -47,7 +47,7 @@ All colors MUST be HSL.
   --ring: 153 100% 44%;
   --destructive: 0 100% 77%;
   --portal-warning: 38 95% 55%;
-  --portal-results-background: linear-gradient(135deg, hsl(210 100% 10%), hsl(210 100% 20%) 50%, hsl(195 100% 25%));
+  --portal-results-background: linear-gradient(135deg, hsl(210 100% 10%), hsl(210 100% 20%) 50%, hsl(210 100% 25%));
   --portal-results-balance: linear-gradient(180deg, hsl(216 60% 10%), hsl(218 64% 14%));
   background: var(--portal-results-background);
 }
