@@ -30,6 +30,65 @@ All colors MUST be HSL.
   .portal-brand span { color: hsl(var(--muted-foreground)); font-size: 12px; }
 }
 
+/* Home-only identity: results keep their existing light theme. */
+.portal-public.portal-home {
+  --background: 210 100% 10%;
+  --foreground: 0 0% 100%;
+  --card: 210 100% 10%;
+  --card-foreground: 0 0% 100%;
+  --primary: 158 100% 33%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 210 100% 20%;
+  --muted-foreground: 210 24% 80%;
+  --accent: 210 100% 25%;
+  --accent-foreground: 0 0% 100%;
+  --border: 210 35% 28%;
+  --input: 210 35% 40%;
+  --ring: 158 100% 33%;
+  --destructive: 0 100% 80%;
+  --portal-paper: 0 0% 100%;
+  --portal-ink: 210 100% 10%;
+  font-family: 'IBM Plex Sans', sans-serif;
+  letter-spacing: 0;
+}
+.portal-home h1, .portal-home h2 { font-family: 'Libre Baskerville', Georgia, serif; font-weight: 400; letter-spacing: 0; }
+.portal-home header > div { padding-top: 22px; padding-bottom: 22px; }
+.portal-home-office-logo { width: 264px; height: 66px; object-fit: contain; filter: brightness(0) invert(1); }
+.portal-home-consultation { padding-top: 44px; padding-bottom: 42px; background: hsl(210 100% 20%); }
+.portal-home .portal-eyebrow { font-size: 12px; }
+.portal-home-creditors { max-width: 390px; }
+.portal-home .portal-brands { gap: 24px; }
+.portal-home .portal-brand { gap: 9px; }
+.portal-home .portal-brand img { height: 54px; max-width: 118px; background: hsl(var(--portal-paper)); border-radius: 4px; padding: 6px; }
+.portal-home .portal-brand span { color: hsl(var(--muted-foreground)); }
+.portal-home-cpf { background: hsl(var(--portal-paper)); color: hsl(var(--portal-ink)); border-color: hsl(var(--portal-paper)); }
+.portal-home-cpf::placeholder { color: hsl(210 18% 45%); }
+.portal-home .portal-home-light {
+  --background: 0 0% 100%;
+  --foreground: 210 100% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 210 100% 10%;
+  --primary: 158 100% 25%;
+  --muted-foreground: 210 15% 38%;
+  --border: 210 20% 87%;
+  --accent: 158 22% 94%;
+  --accent-foreground: 158 100% 25%;
+  background: hsl(var(--background)); color: hsl(var(--foreground));
+}
+.portal-home footer { background: hsl(var(--background)); }
+.portal-home header a, .portal-home footer a { transition: opacity 160ms ease; }
+.portal-home header a:hover, .portal-home footer a:hover { opacity: .85; }
+@media (max-width: 639px) {
+  .portal-home-office-logo { width: 208px; height: 52px; }
+  .portal-home header > div { padding-top: 14px; padding-bottom: 14px; }
+  .portal-home-consultation { padding-top: 28px; padding-bottom: 28px; }
+  .portal-home .portal-brands { gap: 16px; }
+  .portal-home .portal-brand img { height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-home *, .portal-home *::before, .portal-home *::after { transition: none !important; animation: none !important; }
+}
+
 @layer base {
   :root {
     --background: 210 20% 98%;

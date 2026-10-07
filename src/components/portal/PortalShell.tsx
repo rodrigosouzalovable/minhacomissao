@@ -9,11 +9,11 @@ export function PortalBrands() {
   return <div className="portal-brands" aria-label="Credores atendidos">{CREDOR_MARCAS_LISTA.map(m => <div key={m.slug} className="portal-brand"><img src={m.logo} alt={m.nome} /><span>{m.nome}</span></div>)}</div>;
 }
 
-export function PortalShell({ children }: { children: React.ReactNode }) {
+export function PortalShell({ children, home = false }: { children: React.ReactNode; home?: boolean }) {
   const contato = useContatoPortal();
-  return <div className="portal-public min-h-screen flex flex-col bg-background text-foreground">
+  return <div className={`portal-public ${home ? 'portal-home' : ''} min-h-screen flex flex-col bg-background text-foreground`}>
     <header className="border-b bg-card"><div className="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between gap-4">
-      <Link to="/novomundo" className="flex items-center gap-3 min-w-0"><img src={logoSouza} alt="" className="portal-office-logo" /><span className="font-semibold text-base sm:text-lg leading-tight">Souza e Ribeiro<span className="block text-xs font-normal text-muted-foreground tracking-widest mt-1">ADVOGADOS</span></span></Link>
+      <Link to="/novomundo" className="flex items-center gap-3 min-w-0"><img src={logoSouza} alt={home ? "Souza e Ribeiro Sociedade de Advogados" : ""} className={home ? "portal-home-office-logo" : "portal-office-logo"} />{!home && <span className="font-semibold text-base sm:text-lg leading-tight">Souza e Ribeiro<span className="block text-xs font-normal text-muted-foreground tracking-widest mt-1">ADVOGADOS</span></span>}</Link>
       <div className="flex items-center gap-2"><Button asChild variant="ghost" className="hidden sm:inline-flex"><a href={`https://wa.me/${contato.phone}`} target="_blank" rel="noopener noreferrer"><Phone className="w-4 h-4 mr-2" />{contato.phoneDisplay}</a></Button><Button asChild variant="ghost" size="icon"><Link to="/auth" aria-label="Área restrita" title="Área restrita"><Lock className="w-4 h-4" /></Link></Button></div>
     </div></header>
     {children}

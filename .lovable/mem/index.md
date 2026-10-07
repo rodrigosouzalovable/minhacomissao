@@ -34,7 +34,7 @@
 - [IAGO Descontos e Espera 20s](mem://features/whatsapp/iago-descontos-e-espera-20s) — Descontos manuais em iago_config sobrepõem faixas do credor; espera extra de 20s com prioridade ao humano
 - [IAGO lê proposta anterior](mem://features/whatsapp/iago-le-proposta-anterior) — Proposta em mensagem nossa anterior é retomada; proibido pedir CPF de entrada; respostas automáticas ignoradas
 - [Calculadora UME Sem Juros + 10%](mem://features/ume/calculadora-sem-juros-mais-10) — À vista usa o total sem juros; somente parcelas recebem acréscimo de 10%
-- [Portal três credores](mem://features/public-debt/portal-tres-credores) — Souza e Ribeiro; UME pública autorizada; principal Odres confirmado; +10% até 18x ≥R$100.
+- [Portal três credores](mem://features/public-debt/portal-tres-credores) — Inicial azul anterior, logo original, consulta central, Libre Baskerville/IBM Plex; regras UME/Odres.
 - [Meta Erro #100](mem://features/whatsapp/meta-numero-inacessivel-100) — Erro #100 da Graph restringe a instância, avisa admin 1x/dia e explica em PT; resposta no Inbox nunca bloqueada por qualidade
 - [Meta Conta Bloqueada #131031](mem://features/whatsapp/meta-conta-bloqueada-131031) — Só restringe quando saúde/envio confirma; erro isolado em foto/sobre é parcial e preserva perfil/pool
 - [Instâncias Meta de teste](mem://features/whatsapp/meta-testes-cadastro-separacao) — Cadastro por autorizados UAZAPI, prefixo TESTE, configuração inicial automática e isolamento comercial
