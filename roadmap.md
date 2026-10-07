@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Exibir e exigir todas as variáveis dos templates no início/reabertura de conversas Meta; prévia, limpeza ao trocar e parâmetros validados nos dois diálogos, 21 testes passaram, sem envios reais.
 - [x] Corrigir estimativa por remetente/categoria, separar total de envios e incluir a primeira linha sem cabeçalho; 13 testes e importação visual de três clientes validados sem disparos.
 - [x] Corrigir timeout da sincronização diária Meta sem novos agendamentos; testes de espera e tela validados, sem aplicar templates nos testes.
 - [x] Trocar imagem no HSM somente para a campanha, autorizar arquivos pessoais e validar sem disparos reais.

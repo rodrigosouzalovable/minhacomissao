@@ -6,9 +6,10 @@
 
 - Resolve Meta redirects before rendering. Save owner-scoped live URLs atomically; template reads override stale snapshots, sent previews stay immutable.
 
-- Todo novo acordo exige confirmação auditável do telefone antes da gravação e formalização por envio do termo na conversa Meta de origem, ou localizada por consulta protegida ao sufixo do telefone, ou download, mantendo o acordo pendente até uma dessas ações.
+- Agreements require audited phone confirmation before saving; remain pending until terms are sent via source/authorized suffix-matched Meta chat or downloaded.
+- Inbox dialogs share parsing/state; require body/header values and validated button links, never guesses.
 
-- Meta webhook health separates failed queries from confirmed subscription errors; alert only after recovery and confirmation to avoid timeout false positives.
+- Meta webhook health distinguishes query failures from subscription errors; alert only after recovery and confirmation to avoid timeout false positives.
 - Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
 
 - Inbox Meta: toda entrada recebe atendente elegível da própria caixa por atribuição atômica; envios manuais são autorizados no servidor pela caixa; IAGO roda somente na PADRÃO; abrir não conclui o não lido, que só encerra após saída confirmada e posterior à entrada; “Não lidas” filtra antes da paginação.

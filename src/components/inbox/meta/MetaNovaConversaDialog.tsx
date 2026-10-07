@@ -11,11 +11,12 @@ import { Send, Loader2 } from 'lucide-react';
 import TemplateWhatsAppPreview from '@/components/meta/TemplateWhatsAppPreview';
 import { TemplateFavoriteSelect } from '@/components/meta/TemplateFavoriteSelect';
 import { carregarTodosMetaTemplates } from '@/lib/carregarTodosMetaTemplates';
+import { useMetaTemplateForm } from '@/hooks/useMetaTemplateForm';
+import { MetaTemplateVariableFields } from './MetaTemplateVariableFields';
 
 interface MetaInst { id: string; nome: string | null; display_phone: string | null; }
 interface Template { id: string; instancia_id: string; nome_template: string; idioma: string; categoria: string; body_text: string | null; variaveis: any; }
 interface TemplateGroup { key: string; nome: string; idioma: string; sample: Template; rows: Template[]; }
-interface TemplateVariable { id: string; section: 'header' | 'body'; key: string; hint: string; }
 
 interface Props {
   open: boolean;
@@ -42,7 +43,6 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   const [carregandoTemplates, setCarregandoTemplates] = useState(false);
   const [erroTemplates, setErroTemplates] = useState('');
   const [enviando, setEnviando] = useState(false);
-  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -50,7 +50,6 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
     setTel(initialTelefone.replace(/\D/g, ''));
     setNome(initialNome);
     setTemplateKey('');
-    setVariableValues({});
     if (instancias.length === 0) { setTemplates([]); setErroTemplates(''); return; }
     let active = true;
     (async () => {
@@ -99,60 +98,21 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
   }, [selectedGroup, instancias]);
 
   useEffect(() => {
-    setVariableValues({});
     if (!selectedGroup) { setInstId(''); return; }
     const defaultCompatible = defaultInstancia && selectedGroup.rows.some(row => row.instancia_id === defaultInstancia);
     setInstId(defaultCompatible ? defaultInstancia : '');
   }, [selectedGroup, defaultInstancia]);
 
-  const templateVariables = useMemo<TemplateVariable[]>(() => {
-    if (!selectedTemplate) return [];
-    const components: any[] = Array.isArray(selectedTemplate.variaveis?._components)
-      ? selectedTemplate.variaveis._components : [];
-    const header = components.find((c: any) => c?.type === 'HEADER');
-    const body = components.find((c: any) => c?.type === 'BODY');
-    const headerText = header?.format === 'TEXT' ? (header?.text || '') : '';
-    const bodyText = body?.text || selectedTemplate.body_text || '';
-    const variables: TemplateVariable[] = [];
-    const collect = (section: 'header' | 'body', text: string, examples: unknown[]) => {
-      const seen = new Set<string>();
-      for (const match of text.matchAll(/\{\{\s*([a-zA-Z_0-9]+)\s*\}\}/g)) {
-        const key = match[1];
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const numericIndex = /^\d+$/.test(key) ? Number(key) - 1 : -1;
-        const mappedHint = selectedTemplate.variaveis?.[key];
-        const example = numericIndex >= 0 ? examples[numericIndex] : undefined;
-        variables.push({
-          id: `${section}:${key}`,
-          section,
-          key,
-          hint: String(mappedHint || example || '').replace(/[{}]/g, '').trim(),
-        });
-      }
-    };
-    const headerExamples = Array.isArray(header?.example?.header_text) ? header.example.header_text : [];
-    const bodyExampleRow = Array.isArray(body?.example?.body_text?.[0]) ? body.example.body_text[0] : [];
-    collect('header', headerText, headerExamples);
-    collect('body', bodyText, bodyExampleRow);
-    return variables;
-  }, [selectedTemplate]);
-
-  const valuesFor = (section: 'header' | 'body') => Object.fromEntries(
-    templateVariables.filter(variable => variable.section === section).map(variable => [variable.key, variableValues[variable.id] || '']),
-  );
-  const bodyValues = useMemo(() => valuesFor('body'), [templateVariables, variableValues]);
-  const headerValues = useMemo(() => valuesFor('header'), [templateVariables, variableValues]);
-  const variablesFilled = templateVariables.every(variable => (variableValues[variable.id] || '').trim() !== '');
+  const form = useMetaTemplateForm(selectedTemplate, open, nome);
 
   const enviar = async () => {
-    if (!instId || !tel.trim() || !selectedGroup || !variablesFilled) return;
+    if (!instId || !tel.trim() || !selectedGroup || !form.filled || enviando) return;
     setEnviando(true);
     try {
       const tpl = selectedGroup.rows.find(row => row.instancia_id === instId);
       if (!tpl) throw new Error('Template não encontrado');
-      const vars = Object.fromEntries(Object.entries(bodyValues).map(([key, value]) => [key, value.trim()]));
-      const headerVars = Object.fromEntries(Object.entries(headerValues).map(([key, value]) => [key, value.trim()]));
+      const vars = Object.fromEntries(Object.entries(form.bodyValues).map(([key, value]) => [key, value.trim()]));
+      const headerVars = Object.fromEntries(Object.entries(form.headerValues).map(([key, value]) => [key, value.trim()]));
       const { data, error } = await supabase.functions.invoke('send-whatsapp-meta', {
         body: {
           template_id: tpl.id,
@@ -162,6 +122,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
             nome: nome.trim() || undefined,
             ...(Object.keys(vars).length ? { vars } : {}),
             ...(Object.keys(headerVars).length ? { header_vars: headerVars } : {}),
+            ...(form.buttons.length ? { button_url: form.buttonUrl.trim() } : {}),
           },
           atendente_nome: atendenteNome?.trim() || undefined,
           folder_id: folderId ?? null,
@@ -195,7 +156,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
       const waId: string | undefined = data?.waId;
       onSent(instId, telFormat);
       onOpenChange(false);
-      setTel(''); setNome(''); setTemplateKey(''); setVariableValues({}); setInstId('');
+      setTel(''); setNome(''); setTemplateKey(''); setInstId('');
 
       // Polling assíncrono: se o webhook da Meta reportar falha (ex. Business Account locked),
       // avisa o funcionário com toast destrutivo.
@@ -253,7 +214,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
               tipo="meta"
               value={templateKey}
               onValueChange={setTemplateKey}
-              disabled={carregandoTemplates || templateGroups.length === 0}
+              disabled={carregandoTemplates || templateGroups.length === 0 || enviando}
               placeholder={templatePlaceholder}
               options={templateGroups.map(group => ({
                 value: group.key,
@@ -275,7 +236,7 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           )}
           <div className="space-y-1.5">
             <Label>Número Meta</Label>
-            <Select value={instId} onValueChange={setInstId} disabled={!selectedGroup || compatibleInstances.length === 0}>
+            <Select value={instId} onValueChange={setInstId} disabled={!selectedGroup || compatibleInstances.length === 0 || enviando}>
               <SelectTrigger><SelectValue placeholder={selectedGroup ? 'Selecione uma instância aprovada' : 'Escolha primeiro o template'} /></SelectTrigger>
               <SelectContent>
                 {compatibleInstances.map(instance => (
@@ -287,38 +248,20 @@ export function MetaNovaConversaDialog({ open, onOpenChange, instancias, default
           </div>
           <Input placeholder="Telefone (DDI+DDD+número)" value={tel} onChange={e => setTel(e.target.value)} />
           <Input placeholder="Nome do contato (opcional)" value={nome} onChange={e => setNome(e.target.value)} />
-          {templateVariables.length > 0 && (
-            <div className="space-y-2 rounded-md border p-3 bg-muted/30">
-              <p className="text-xs font-medium">
-                Preencha {templateVariables.length === 1 ? 'a variável' : `as ${templateVariables.length} variáveis`} da mensagem:
-              </p>
-              {templateVariables.map(variable => (
-                  <div key={variable.id} className="space-y-1">
-                    <label className="text-xs text-muted-foreground">
-                      {variable.section === 'header' ? 'Cabeçalho' : 'Mensagem'} {'{{'}{variable.key}{'}}'}{variable.hint ? ` — exemplo: ${variable.hint}` : ''}
-                    </label>
-                    <Input
-                      placeholder={`Valor para {{${variable.key}}}`}
-                      value={variableValues[variable.id] || ''}
-                      onChange={e => setVariableValues(prev => ({ ...prev, [variable.id]: e.target.value }))}
-                    />
-                  </div>
-              ))}
-            </div>
-          )}
+          {selectedTemplate && <MetaTemplateVariableFields form={form} disabled={enviando} />}
           {selectedTemplate && (
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Pré-visualização</p>
               <TemplateWhatsAppPreview
                 template={selectedTemplate}
                 sampleName={nome}
-                sampleVariables={bodyValues}
-                headerSampleVariables={headerValues}
+                sampleVariables={form.bodyValues}
+                headerSampleVariables={form.headerValues}
                 preserveEmptyPlaceholders
               />
             </div>
           )}
-          <Button onClick={enviar} disabled={!instId || !tel.trim() || !selectedGroup || enviando || !variablesFilled} className="w-full">
+          <Button onClick={enviar} disabled={!instId || !tel.trim() || !selectedGroup || enviando || !form.filled} className="w-full">
             {enviando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
             Enviar template
           </Button>
