@@ -10,7 +10,7 @@
 //  - no máximo 2 conversas por destino por dia e nunca o mesmo destino em sequência
 //  - no máximo 8 números processados por execução (1 mensagem cada)
 //  - erro fatal da Meta (conta travada/pagamento) desliga a recuperação do número
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { executarRecuperacaoCadastral } from '../_shared/recuperacao-cadastral-envio.ts';
 import {
