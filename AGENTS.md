@@ -9,11 +9,12 @@
 - Agreements require audited phone confirmation before saving; remain pending until terms are sent via source/authorized suffix-matched Meta chat or downloaded.
 - Inbox dialogs share parsing/state; require body/header values and validated button links, never guesses.
 
-- Meta webhook health distinguishes query failures from subscription errors; alert only after recovery and confirmation to avoid timeout false positives.
+- Meta webhook alerts require failed recovery and confirmed subscription errors, never query timeouts.
 - Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
 
 - Inbox Meta: toda entrada recebe atendente elegível da própria caixa por atribuição atômica; envios manuais são autorizados no servidor pela caixa; IAGO roda somente na PADRÃO; abrir não conclui o não lido, que só encerra após saída confirmada e posterior à entrada; “Não lidas” filtra antes da paginação.
-- Inbox Meta preserves a restricted diagnostic fragment for unknown inbound formats and shows a clear Meta-unavailable notice instead of technical placeholders.
+- Unknown Meta messages keep restricted diagnostics and show a clear content-unavailable notice.
+- Inbox pool returns reuse authorized RPCs after individual Meta health confirmation; never bypass real blocks.
 - Inbox media reads and signed URLs follow conversation-level authorization, not broad folder membership; this allows assigned staff to send attachments without exposing files in other folders.
 - Meta→UAZAPI migrations reuse the official instance, verify its phone and fix its inbox before disabling Meta, preserving history and preventing duplicates.
 - Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.

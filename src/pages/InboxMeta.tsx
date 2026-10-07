@@ -59,6 +59,8 @@ import {
 import { MetaComposer, type MetaComposerHandle } from '@/components/inbox/meta/MetaComposer';
 import { useMetaAudioRecorder } from '@/hooks/useMetaAudioRecorder';
 import { MetaInstanceHealthBanner } from '@/components/inbox/meta/MetaInstanceHealthBanner';
+import { MetaPoolReactivation } from '@/components/inbox/meta/MetaPoolReactivation';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { MetaConversationCost } from '@/components/inbox/meta/MetaConversationCost';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -145,6 +147,7 @@ function formatContatoTime(ts: string | null) {
 export default function InboxMeta() {
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { parceiroMeta } = useUserPermissions();
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -2666,6 +2669,8 @@ export default function InboxMeta() {
               </div>
 
               <MetaInstanceHealthBanner instancia={instAtiva} />
+              {instAtiva && <MetaPoolReactivation key={instAtiva.id} instancia={instAtiva} userId={user?.id} isAdmin={isAdmin} parceiroMeta={parceiroMeta}
+                onUpdated={updated => setInstancias(prev => prev.map(i => i.id === updated?.id ? { ...i, ...updated } : i))} />}
 
 
 
