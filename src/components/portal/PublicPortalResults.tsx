@@ -16,19 +16,11 @@ export default function PublicPortalResults({ cpf }: { cpf: string }) {
     if(!valid) return;
     setWallets(prev=>prev.map(w=>w.credor===credor?initialWallet(credor):w));
     try {
-      const { data,error } = await supabase.rpc('portal_consultar_carteira',{p_cpf:cpf,p_credor:credor});
+      const { data,error } = await supabase.functions.invoke('portal-consultar',{body:{cpf,credor}});
       if(error) throw error;
-      const result = data as unknown as PortalWallet;
+      if(!data?.success) throw new Error('wallet_unavailable');
+      const result = data.wallet as PortalWallet;
       if(!result || result.credor!==credor || !Array.isArray(result.debitos) || !Array.isArray(result.acordos)) throw new Error('invalid_response');
-      // Public live UME lookup remains disabled until its separate cost authorization.
-      if(credor==='ume' && result.acordos.length===0) {
-        result.estado='pending'; result.principalValidado=false; result.principal=null;
-        result.mensagem='Para conferir o principal sem juros e as condições atualizadas da UME, fale com nossa equipe pelo WhatsApp.';
-      }
-      if(credor==='odres_cred' && result.debitos.length>0 && result.acordos.length===0) {
-        result.principalValidado=false;
-        result.mensagem='A equipe precisa confirmar o principal sem juros desta carteira antes de apresentar uma proposta. Fale conosco para conferir os valores.';
-      }
       if(isCurrent())setWallets(prev=>prev.map(w=>w.credor===credor?result:w));
     } catch {
       if(isCurrent())setWallets(prev=>prev.map(w=>w.credor===credor?{...initialWallet(credor),estado:'error',mensagem:'Não foi possível consultar esta carteira agora. Tente novamente ou fale com nossa equipe. Isso não significa que não existe dívida.'}:w));

@@ -8932,6 +8932,24 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_consulta_limites: {
+        Row: {
+          chave: string
+          inicio: string
+          quantidade: number
+        }
+        Insert: {
+          chave: string
+          inicio?: string
+          quantidade?: number
+        }
+        Update: {
+          chave?: string
+          inicio?: string
+          quantidade?: number
+        }
+        Relationships: []
+      }
       portal_dominios: {
         Row: {
           ativo: boolean
@@ -13223,6 +13241,7 @@ export type Database = {
           dias_de: number
         }[]
       }
+      portal_reservar_consulta: { Args: { p_chave: string }; Returns: boolean }
       presenca_ao_vivo: {
         Args: never
         Returns: {

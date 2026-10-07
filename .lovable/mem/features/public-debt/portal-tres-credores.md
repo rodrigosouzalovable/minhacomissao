@@ -10,4 +10,5 @@ type: feature
 - UME e Odres: à vista é principal sem juros, sem desconto adicional; parcelado é principal +10%, em 2 até 18 parcelas, todas ≥R$100.
 - Preservar favicon, calculadoras internas, IAGO, comissões e acordos existentes.
 - Proposta encaminhada ao WhatsApp; não cria acordo nem desativa dívida automaticamente.
-- Consulta pública UME exige autorização explícita do impacto de custo; Odres exige fonte de principal validada.
+- Em 07/10/2026, o usuário autorizou o custo da consulta pública UME com cache de 12h e proteção contra abuso.
+- O usuário confirmou em 07/10/2026 que o valor original importado Odres Cred é o principal sem juros; pode ser usado na negociação.
