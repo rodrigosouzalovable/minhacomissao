@@ -1,4 +1,4 @@
-import { destinosAquecimento, enviarTemplateAquecimento, erroFatalMeta, FOLDERS_AQUECIMENTO_FALLBACK } from './meta-aquecimento-alvo.ts';
+import { destinosAquecimento, enviarTemplateAquecimento, escolherTemplateAprovado, erroFatalMeta, FOLDERS_AQUECIMENTO_FALLBACK } from './meta-aquecimento-alvo.ts';
 import { ORIGEM_CADASTRAL, TEMPLATE_CADASTRAL, templateCadastralValido, valoresCadastrais } from './recuperacao-cadastral-rules.ts';
 
 export async function executarRecuperacaoCadastral(db: any, insts: any[], simulacao: boolean) {
@@ -24,7 +24,7 @@ export async function executarRecuperacaoCadastral(db: any, insts: any[], simula
     (d.fonte === 'uazapi' ? online.has(d.destino_instancia_id) : !d.consumido_em));
   const resultados: any[] = [];
   const usados = new Set<string>();
-  for (const inst of insts.slice(0, 8)) {
+  for (const inst of insts.filter(i => simulacao || !i.recuperacao_proximo_envio_em || new Date(i.recuperacao_proximo_envio_em).getTime() <= Date.now()).slice(0, 8)) {
     const { data: copias, error: copiaError } = await db.from('meta_templates_instancia')
       .select('status, meta_templates_mestre!inner(nome, idioma, corpo, categoria, criado_por, reclassificado_marketing)')
       .eq('instancia_id', inst.id).eq('status', 'APPROVED')
@@ -35,6 +35,10 @@ export async function executarRecuperacaoCadastral(db: any, insts: any[], simula
     const tpl = mestre ? { name: mestre.nome, language: mestre.idioma || 'pt_BR', categoria: mestre.categoria, body: mestre.corpo,
       params: { tipo: 'posicional' as const, chaves: [...new Set<string>((String(mestre.corpo).match(/\{\{\s*\d+\s*\}\}/g) || []).map((t: string) => t.replace(/[{}\s]/g, '')))] } } : null;
     if (!templateCadastralValido(tpl) || !tpl) { resultados.push({ instancia: inst.nome, skip: 'aguarda_template_cadastral_aprovado' }); continue; }
+    if (!simulacao) {
+      const atual = await escolherTemplateAprovado(inst, TEMPLATE_CADASTRAL);
+      if (!templateCadastralValido(atual)) { resultados.push({ instancia: inst.nome, skip: 'aguarda_template_cadastral_aprovado' }); continue; }
+    }
     const { data: ultimo } = await db.from('meta_recuperacao_log').select('fonte, telefone_sufixo')
       .eq('instancia_id', inst.id).eq('cadastral', true).eq('status', 'enviado').order('enviado_em', { ascending: false }).limit(1).maybeSingle();
     const fontes = ultimo?.fonte === 'uazapi' ? ['confirmado', 'candidato', 'uazapi'] : ultimo?.fonte === 'confirmado' ? ['candidato', 'uazapi', 'confirmado'] : ['uazapi', 'confirmado', 'candidato'];

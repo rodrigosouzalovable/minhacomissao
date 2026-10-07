@@ -102,7 +102,7 @@ export function RecuperacaoQualidadePanel() {
           .returns<InstRecup[]>(),
         supabase
           .from('meta_recuperacao_log')
-          .select('instancia_id, status')
+          .select('instancia_id, status, cadastral, fonte, nome_empresa, variaveis, resposta_tipo, entregue_em, lido_em, agradecimento_wamid, erro')
           .eq('dia', dia)
           .limit(5000),
         supabase
@@ -120,7 +120,7 @@ export function RecuperacaoQualidadePanel() {
         if (!alvo) return;
         alvo.set(l.instancia_id, (alvo.get(l.instancia_id) || 0) + 1);
       });
-      return { insts: instRes.data || [], enviados, falhas, ciclos: ciclosRes.data || [] };
+      return { insts: instRes.data || [], enviados, falhas, ciclos: ciclosRes.data || [], cadastrais: (logRes.data || []).filter(l => l.cadastral).slice(-10) };
     },
   });
 
@@ -239,6 +239,13 @@ export function RecuperacaoQualidadePanel() {
             );
           })
         )}
+        {!!data?.cadastrais.length && <div className="space-y-2 border-t pt-3">
+          <h3 className="text-sm font-medium">Atualizações cadastrais de hoje</h3>
+          {data.cadastrais.map((l, index) => <div key={index} className="flex flex-wrap justify-between gap-2 border-b py-2 text-xs">
+            <span>{l.nome_empresa} · {l.fonte === 'candidato' ? 'Candidato' : l.fonte === 'confirmado' ? 'Confirmado' : 'UAZAPI'}</span>
+            <span>{l.status === 'falha' ? l.erro || 'Falha' : l.resposta_tipo === 'saida' ? 'SAIR · Blacklist' : l.agradecimento_wamid ? 'Confirmado · Agradecimento enviado' : l.resposta_tipo === 'negativa' ? 'Não confirmado' : l.lido_em ? 'Lida' : l.entregue_em ? 'Entregue' : 'Aceita pela Meta'}</span>
+          </div>)}
+        </div>}
         <p className="pt-1 text-xs text-muted-foreground">
           Atualização cadastral na AQUECIMENTO: empresas autorizadas e números UAZAPI com nome empresarial confirmado,
           das 08h às 19h, com intervalos de 20–40 min e sem domingos. Bloqueios da Meta impedem envios; interações não garantem retorno ao GREEN.

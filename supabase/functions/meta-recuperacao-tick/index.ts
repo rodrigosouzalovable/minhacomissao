@@ -70,6 +70,10 @@ Deno.serve(async (req) => {
   try {
 
     const body = await req.json().catch(() => ({}));
+    if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      (body.simulacao !== undefined && typeof body.simulacao !== 'boolean') ||
+      (body.forcar !== undefined && typeof body.forcar !== 'boolean') ||
+      (body.instancia_id !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(body.instancia_id)))) return json({ error: 'Parâmetros inválidos' }, 400);
     const forcar = body?.forcar === true; // teste manual ignora janela, nunca elegibilidade
     const simulacao = body?.simulacao === true;
     const instanciaId: string | undefined = body?.instancia_id;

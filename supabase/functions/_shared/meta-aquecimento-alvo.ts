@@ -224,7 +224,7 @@ export async function escolherTemplateAprovado(
   if (!inst?.waba_id || !inst?.access_token) return null;
   const res = await fetch(
     `${GRAPH}/${inst.waba_id}/message_templates?status=APPROVED&limit=100&fields=name,language,status,category,components`,
-    { headers: { Authorization: `Bearer ${inst.access_token}` } },
+    { headers: { Authorization: `Bearer ${inst.access_token}` }, signal: AbortSignal.timeout(12000) },
   );
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !Array.isArray(data?.data)) return null;
