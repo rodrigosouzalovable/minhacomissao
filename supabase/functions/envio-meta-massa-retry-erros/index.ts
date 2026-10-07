@@ -1,3 +1,4 @@
+import { canManageCampaign } from '../_shared/meta-campaign-access.ts';
 // Reenvia itens com status='erro' de um job — devolve-os para 'pendente',
 // zera contador de tentativas, reabre o job (status='rodando') e re-dispara
 // o worker (rajada) ou o tick (serial). O throttle e retry ficam por conta
@@ -45,7 +46,7 @@ Deno.serve(async (req) => {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    if (job.user_id !== user.id) {
+    if (!canManageCampaign(job.user_id, user.id)) {
       return new Response(JSON.stringify({ success: false, error: 'Campanha compartilhada permite somente visualização.' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

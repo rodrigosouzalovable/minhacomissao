@@ -449,12 +449,13 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
 
   const carregarJobs = useCallback(async () => {
     if (!uid) { setJobs([]); setItensByJob(new Map()); setLogByJob(new Map()); return; }
-    const { data } = await (supabase as any)
-      .from("envio_meta_job")
-      .select("*")
-      .order("iniciado_em", { ascending: false })
-      .limit(30);
-    const arr = (data || []).map(toCampanhaJob) as CampanhaJob[];
+    const [{ data }, grants] = await Promise.all([
+      supabase.from('envio_meta_job').select('*').eq('user_id', uid).order('iniciado_em', { ascending: false }).limit(30),
+      supabase.from('envio_meta_compartilhamentos').select('job_id').eq('user_id', uid).limit(1000),
+    ]);
+    const ids = (grants.data || []).map(g => g.job_id);
+    const shared = ids.length ? await supabase.from('envio_meta_job').select('*').in('id', ids).order('iniciado_em', { ascending: false }).limit(1000) : { data: [] };
+    const arr = [...(data || []), ...(shared.data || [])].map(toCampanhaJob) as CampanhaJob[];
     // Uma campanha antiga pode ter sido carregada diretamente pelo histórico e
     // estar aberta no diálogo, embora não pertença às 30 mais recentes. Mantê-la
     // evita que uma atualização após revalidar instâncias faça o diálogo perder

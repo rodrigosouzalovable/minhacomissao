@@ -1,3 +1,4 @@
+import { canManageCampaign } from '../../../supabase/functions/_shared/meta-campaign-access';
 import CampaignSharing from './CampaignSharing';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useMemo, useState } from "react";
@@ -106,7 +107,7 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
   const { user } = useAuth();
   const job = useMemo(() => jobs.find((j) => j.id === jobId) || null, [jobs, jobId]);
 
-  const readOnly = !user || job?.user_id !== user.id;
+  const readOnly = !canManageCampaign(job?.user_id, user?.id);
 
   // Enquanto o diálogo está aberto, o contexto pode reler os itens; fechado, não.
   useEffect(() => {
