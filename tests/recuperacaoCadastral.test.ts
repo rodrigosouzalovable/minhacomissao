@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { valoresCadastrais, respostaCadastral, templateCadastralValido, TEMPLATE_CADASTRAL, AGRADECIMENTO_CADASTRAL, REPOSICAO_CADASTRAL } from '../supabase/functions/_shared/recuperacao-cadastral-rules';
 describe('recuperação cadastral', () => {
   it('primeira variável tudo bem? e segunda nome empresarial completo', () => expect(valoresCadastrais('Clínica Vida Nova Ltda')).toEqual(['tudo bem?', 'Clínica Vida Nova Ltda']));
-  it('não inventa nome para apelido técnico ou ausência', () => { expect(() => valoresCadastrais('user-123')).toThrow(); expect(() => valoresCadastrais(null)).toThrow(); });
+  it('não inventa nome para apelido técnico ou ausência', () => { expect(() => valoresCadastrais('user-123')).toThrow(); expect(() => valoresCadastrais('Iphone B1')).toThrow(); expect(() => valoresCadastrais(null)).toThrow(); });
   it('somente modelo Utility solicitado com duas variáveis', () => {
     const tpl = { name: TEMPLATE_CADASTRAL, categoria: 'UTILITY', params: { chaves: ['1', '2'] } };
     expect(templateCadastralValido(tpl)).toBe(true);

@@ -4,7 +4,7 @@ export const REPOSICAO_CADASTRAL = 100;
 export const ORIGEM_CADASTRAL = 'recuperacao_cadastral';
 export function nomeEmpresaValido(nome: unknown): string | null {
   const valor = String(nome || '').replace(/\s+/g, ' ').trim();
-  if (valor.length < 3 || valor.length > 200 || /^(user-|inst[aâ]ncia|chip|ld\s*\d|thiago\s*\d)/i.test(valor)) return null;
+  if (valor.length < 3 || valor.length > 200 || /^(user-|inst[aâ]ncia|chip|ld\s*\d|thiago\s*\d|iphone|android|samsung|motorola|xiaomi|celular|teste)/i.test(valor)) return null;
   return valor;
 }
 export function valoresCadastrais(nome: unknown): [string, string] {
