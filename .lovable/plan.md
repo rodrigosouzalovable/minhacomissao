@@ -13,7 +13,7 @@ Interações não garantem retorno ao GREEN nem prazo de recuperação. A mensag
 - O modelo mestre existe como Utility, com duas variáveis e os botões **SIM, CONFIRMO.**, **NÃO** e **SAIR**. A consulta encontrou **74 cópias aprovadas**; a marcação de aplicação automática em números novos está desligada nesse mestre.
 - A recuperação atual seleciona somente UAZAPI conectados da caixa AQUECIMENTO. O template preferido não está configurado; a seleção permite outro Utility aprovado.
 - O código limita a recuperação a 08h–19h BRT, sem domingos, com 10–20 mensagens diárias por remetente, intervalos aleatórios de 20–40 minutos e redução diante de piora.
-- O reconhecimento geral de bloqueio aceita “sair da lista”, mas não a palavra isolada “SAIR”. Será necessário garantir o tratamento do botão sem depender dessa expressão.
+- O reconhecimento geral de bloqueio aceita “sair da lista”, mas não a palavra isolada “SAIR”. Outro caminho, associado ao log de aquecimento, já registra opt-out como supressão; será necessário garantir blacklist persistente para o botão também no fluxo de recuperação, sem depender daquele log.
 
 ## Alterações propostas
 
