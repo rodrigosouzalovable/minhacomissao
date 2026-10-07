@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Power, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,7 +15,24 @@ export function MetaPoolReactivation({ instancia, userId, isAdmin, parceiroMeta,
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const { toast } = useToast();
-  if ((!isAdmin && !parceiroMeta) || !podeOferecerReativacao(instancia)) return null;
+  const [eligibleId, setEligibleId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setEligibleId(null);
+    if (!userId || (!isAdmin && !parceiroMeta) || !podeOferecerReativacao(instancia)) return;
+    (async () => {
+      const { data, error } = await supabase.from('meta_whatsapp_instances')
+        .select('pool_fora_manual').eq('id', instancia.id).single();
+      if (error || !data || data.pool_fora_manual) return;
+      if (!isAdmin) {
+        const { data: own, error: ownError } = await supabase.rpc('parceiro_tem_instancia', { _uid: userId, _instancia: instancia.id });
+        if (ownError || own !== true) return;
+      }
+      if (!cancelled) setEligibleId(instancia.id);
+    })();
+    return () => { cancelled = true; };
+  }, [instancia.id, instancia.estado_pool, instancia.saude_quality, userId, isAdmin, parceiroMeta]);
+  if (eligibleId !== instancia.id || (!isAdmin && !parceiroMeta) || !podeOferecerReativacao(instancia)) return null;
   const authorized = async () => {
     if (!userId) throw new Error('Sessão inválida. Entre novamente.');
     if (isAdmin) return;
