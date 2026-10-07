@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useCampaignLive } from '@/hooks/useCampaignLive';
 import { AlertTriangle, CheckCircle2, CircleOff, Loader2, RefreshCw, RotateCcw, Send, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,12 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, canResume, ini
   const [open, setOpen] = useState(initialOpen);
   const [carregando, setCarregando] = useState(false);
   const [reativando, setReativando] = useState<string | null>(null);
+  const lastLive = useRef(0);
+  useCampaignLive(open ? [jobId] : [], () => {
+    if (carregando || Date.now() - lastLive.current < 15000) return;
+    lastLive.current = Date.now();
+    void carregar();
+  });
 
   const carregar = useCallback(async () => {
     setCarregando(true);
