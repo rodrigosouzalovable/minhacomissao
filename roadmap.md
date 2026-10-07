@@ -48,4 +48,4 @@
 - [x] Atualizar a saúde antes de aplicar templates, explicar o bloqueio Meta 141006 e reconhecer instâncias já completas.
 - [x] Recuperar importações Cobmais travadas em 5%, processar planilhas grandes em lotes e publicar automaticamente após validação integral.
 
-- [ ] Revalidar pagamento antes dos avisos Meta, separar resultados inconclusivos e validar/publicar sem envios reais.
+- [x] Revalidar pagamento antes dos avisos Meta, separar resultados inconclusivos e validar/publicar sem envios reais; 19 testes passaram.
