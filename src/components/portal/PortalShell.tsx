@@ -6,7 +6,7 @@ import { useContatoPortal } from '@/hooks/useContatoPortal';
 import logoSouza from '@/assets/logo-souza-ribeiro.png';
 import { CREDOR_MARCAS_LISTA } from '@/lib/credorMarcas';
 import novoHome from '@/assets/logo-novo-mundo-portal.png.asset.json';
-import umeHome from '@/assets/ume-home-white.jpg';
+import umeHome from '@/assets/ume-portal-transparent.png';
 import odresHome from '@/assets/odres-home-white.png.asset.json';
 
 const portalAssetUrl = (url: string) => new URL(url, 'https://meusacordos.com.br').href;
@@ -21,7 +21,7 @@ export function PortalShell({ children, home = false, results = false }: { child
   const contato = useContatoPortal();
   return <div className={`portal-public ${home ? 'portal-home' : results ? 'portal-results' : ''} min-h-screen flex flex-col bg-background text-foreground`}>
     <header className="border-b bg-card"><div className="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between gap-4">
-      <Link to="/novomundo" className="flex items-center gap-3 min-w-0"><img src={logoSouza} alt={home ? "Souza e Ribeiro Sociedade de Advogados" : ""} className={home ? "portal-home-office-logo" : results ? "portal-results-office-logo" : "portal-office-logo"} />{!home && <span className="font-semibold text-base sm:text-lg leading-tight">Souza e Ribeiro<span className="block text-xs font-normal text-muted-foreground tracking-widest mt-1">ADVOGADOS</span></span>}</Link>
+      <Link to="/novomundo" className="flex items-center gap-3 min-w-0"><img src={logoSouza} alt={home || results ? "Souza e Ribeiro Sociedade de Advogados" : ""} className={home || results ? "portal-home-office-logo" : "portal-office-logo"} />{!home && !results && <span className="font-semibold text-base sm:text-lg leading-tight">Souza e Ribeiro<span className="block text-xs font-normal text-muted-foreground tracking-widest mt-1">ADVOGADOS</span></span>}</Link>
       <div className="flex items-center gap-2">
         {home && <><nav aria-label="Navegação do portal" className="hidden lg:flex items-center gap-1">{homeLinks.map(([id, label]) => <Button key={id} asChild variant="ghost" className="px-3 text-sm"><a href={`#${id}`}>{label}</a></Button>)}</nav><Sheet><SheetTrigger asChild><Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menu"><Menu className="w-5 h-5" /></Button></SheetTrigger><SheetContent><SheetTitle>Portal de Negociação</SheetTitle><SheetDescription className="sr-only">Navegação da página inicial</SheetDescription><nav className="flex flex-col gap-3 mt-8" aria-label="Navegação móvel">{homeLinks.map(([id, label]) => <SheetClose key={id} asChild><Button asChild variant="ghost" className="justify-start"><a href={`#${id}`}>{label}</a></Button></SheetClose>)}<Button asChild variant="ghost" className="justify-start text-primary"><a href={`https://wa.me/${contato.phone}`} target="_blank" rel="noopener noreferrer"><Phone className="w-4 h-4 mr-2" />{contato.phoneDisplay}</a></Button></nav></SheetContent></Sheet></>}
         <Button asChild variant="ghost" className={`hidden sm:inline-flex ${home || results ? 'text-primary px-2' : ''}`}><a href={`https://wa.me/${contato.phone}`} target="_blank" rel="noopener noreferrer"><Phone className="w-4 h-4 mr-2" />{contato.phoneDisplay}</a></Button><Button asChild variant="ghost" size="icon"><Link to="/auth" aria-label="Área restrita" title="Área restrita"><Lock className="w-4 h-4" /></Link></Button></div>
