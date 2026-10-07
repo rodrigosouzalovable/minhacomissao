@@ -236,13 +236,8 @@ Deno.serve(async (req) => {
       avisos.push({ tipo: "conclusao", instancia_id: inst.id });
     }
 
-    // ===== 3) Janela de envio =====
-    const brt = agoraBrt();
-    const hora = brt.getUTCHours();
-    const domingo = brt.getUTCDay() === 0;
-    if (domingo || hora < Number(cfg.hora_inicio || 7) || hora >= Number(cfg.hora_fim || 20)) {
-      return json({ ok: true, skipped: "fora_da_janela", avisos });
-    }
+    // ===== 3) Envio 24/7, inclusive domingos e madrugada =====
+    // O ritmo é controlado pelo intervalo por tier (ver intervaloPorTier).
 
     const dia = diaBrt();
     const agoraIso = new Date().toISOString();
@@ -477,7 +472,15 @@ Deno.serve(async (req) => {
       }
 
       // Próximo item deste número só depois do intervalo aleatório
-      const espera = sorteio(Number(cfg.intervalo_min_seg || 120), Number(cfg.intervalo_max_seg || 300));
+      // Tier 250: 10–15 min (todos no mesmo dia, espaçados). Tier ≥2.000: 30–60s.
+      // Demais (1.000): intervalo padrão da configuração.
+      const { data: tierInst } = await supabase.rpc("meta_instance_template_tier", { p_instancia_id: inst.id });
+      const tierNum = Number(tierInst || 0);
+      const espera = tierNum === 250
+        ? sorteio(600, 900)
+        : tierNum >= 2000
+        ? sorteio(30, 60)
+        : sorteio(Number(cfg.intervalo_min_seg || 120), Number(cfg.intervalo_max_seg || 300));
       const quando = new Date(Date.now() + espera * 1000).toISOString();
       const { data: restantes } = await supabase
         .from("meta_templates_onboarding_fila")
