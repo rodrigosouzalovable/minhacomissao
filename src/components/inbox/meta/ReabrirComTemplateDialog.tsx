@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -9,6 +8,8 @@ import { Send, Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 import TemplateWhatsAppPreview from '@/components/meta/TemplateWhatsAppPreview';
 import { TemplateFavoriteSelect } from '@/components/meta/TemplateFavoriteSelect';
 import { carregarTodosMetaTemplates } from '@/lib/carregarTodosMetaTemplates';
+import { useMetaTemplateForm } from '@/hooks/useMetaTemplateForm';
+import { MetaTemplateVariableFields } from './MetaTemplateVariableFields';
 
 interface Template {
   id: string;
@@ -39,11 +40,6 @@ export function ReabrirComTemplateDialog({
   const [erro, setErro] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [enviando, setEnviando] = useState(false);
-  const [nomeVar, setNomeVar] = useState('');
-
-  useEffect(() => {
-    if (open) setNomeVar((contato_nome || '').trim().split(/\s+/)[0] || '');
-  }, [open, contato_nome]);
 
   useEffect(() => {
     if (!open || !instancia_id) return;
@@ -75,15 +71,21 @@ export function ReabrirComTemplateDialog({
     [templates, templateId],
   );
 
+  const form = useMetaTemplateForm(selectedTemplate, open, contato_nome);
+
   const enviar = async () => {
-    if (!selectedTemplate) return;
+    if (!selectedTemplate || !form.filled || enviando) return;
     setEnviando(true);
     try {
       const { data, error } = await supabase.functions.invoke('send-whatsapp-meta', {
         body: {
           template_id: selectedTemplate.id,
           instancia_id,
-          cliente: { telefone: telefone.replace(/\D/g, ''), nome: nomeVar.trim() || contato_nome || undefined },
+          cliente: {
+            telefone: telefone.replace(/\D/g, ''), nome: contato_nome || undefined,
+            vars: form.bodyValues, header_vars: form.headerValues,
+            ...(form.buttons.length ? { button_url: form.buttonUrl.trim() } : {}),
+          },
           atendente_nome: atendente_nome?.trim() || undefined,
           folder_id: folder_id ?? null,
           manual_inbox: true,
@@ -139,17 +141,12 @@ export function ReabrirComTemplateDialog({
 
         <div className="space-y-3">
           <div>
-            <Label className="text-xs">Nome do cliente (para variável)</Label>
-            <Input value={nomeVar} onChange={e => setNomeVar(e.target.value)} placeholder="Primeiro nome" />
-          </div>
-
-          <div>
             <Label className="text-xs">Template</Label>
             <TemplateFavoriteSelect
               tipo="meta"
               value={templateId}
               onValueChange={setTemplateId}
-              disabled={carregando || templates.length === 0}
+              disabled={carregando || templates.length === 0 || enviando}
               placeholder={placeholder}
               options={templates.map(template => ({
                 value: template.id,
@@ -172,10 +169,12 @@ export function ReabrirComTemplateDialog({
             </p>
           )}
 
+          {selectedTemplate && <MetaTemplateVariableFields form={form} disabled={enviando} />}
+
           {selectedTemplate && (
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Pré-visualização</p>
-              <TemplateWhatsAppPreview template={selectedTemplate} sampleName={nomeVar} />
+              <TemplateWhatsAppPreview template={selectedTemplate} sampleVariables={form.bodyValues} headerSampleVariables={form.headerValues} preserveEmptyPlaceholders />
             </div>
           )}
 
@@ -186,7 +185,7 @@ export function ReabrirComTemplateDialog({
             </span>
           </div>
 
-          <Button onClick={enviar} disabled={!selectedTemplate || enviando} className="w-full">
+          <Button onClick={enviar} disabled={!selectedTemplate || enviando || !form.filled} className="w-full">
             {enviando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
             Enviar template UTILITY
           </Button>
