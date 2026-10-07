@@ -1,0 +1,2 @@
+CREATE OR REPLACE FUNCTION public.meta_atrasados_require_consent() RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $$ BEGIN IF NEW.ativo THEN RAISE EXCEPTION 'Ativação aguardando autorização do custo da continuação temporária'; END IF; RETURN NEW; END; $$;
+CREATE TRIGGER meta_atrasados_activation_consent BEFORE INSERT OR UPDATE OF ativo ON public.meta_atrasados_config FOR EACH ROW EXECUTE FUNCTION public.meta_atrasados_require_consent();
