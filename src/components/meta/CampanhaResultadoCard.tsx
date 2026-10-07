@@ -48,7 +48,7 @@ export default function CampanhaResultadoCard({ jobId, nome, template, enviadosA
     if (busy.current || Date.now() - lastRead.current < 15000) return;
     busy.current = true;
     lastRead.current = Date.now();
-    void supabase.rpc('campanha_meta_resultado_ao_vivo', { _job_id: jobId }).then(({ data, error }) => {
+    void Promise.resolve(supabase.rpc('campanha_meta_resultado_ao_vivo', { _job_id: jobId })).then(({ data, error }) => {
       if (!error && data) setDados(data as unknown as Resultado);
     }).finally(() => { busy.current = false; });
   });

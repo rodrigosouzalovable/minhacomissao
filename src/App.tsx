@@ -12,7 +12,7 @@ import { useInitialRoute } from "@/hooks/useInitialRoute";
 import { AutoSendProvider } from "@/hooks/useAutoSend";
 import { WhatsAppSendingProvider } from "@/contexts/WhatsAppSendingContext";
 import { VoiceCampaignSendingProvider } from "@/contexts/VoiceCampaignSendingContext";
-import { EnvioMetaSendingProvider } from "@/contexts/EnvioMetaSendingContext";
+import { EnvioMetaSendingProvider, useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
 import { MetaCallProvider } from "@/contexts/MetaCallContext";
 
 import CampanhasFlutuante from "@/components/meta/CampanhasFlutuante";
@@ -202,9 +202,10 @@ function MetaCampaignRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
   const { veCampanhas, isLoading: permLoading } = useUserPermissions();
+  const { jobs } = useEnvioMetaSending();
   if (loading || roleLoading || permLoading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
   if (!user) return <Navigate to="/auth" replace />;
-  if (!isAdmin && !veCampanhas) return <Navigate to="/dashboard" replace />;
+  if (!isAdmin && !veCampanhas && !jobs.some(job => job.user_id !== user.id)) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
