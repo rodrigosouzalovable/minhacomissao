@@ -124,12 +124,7 @@ function ehBloqueioTemporario(motivo: string): boolean {
 }
 
 function esperaRateLimitMs(motivo: string): number {
-  const texto = String(motivo || '');
-  const ms = texto.match(/retry\s+after\s+(\d+)\s*ms/i);
-  if (ms?.[1]) return Math.max(1_000, Math.min(5 * 60_000, Number(ms[1]) + 1_000));
-  const segundos = texto.match(/retry\s+after\s+(\d+)\s*(?:s|sec|seconds?)/i);
-  if (segundos?.[1]) return Math.max(1_000, Math.min(5 * 60_000, Number(segundos[1]) * 1_000 + 1_000));
-  return 60_000;
+  return retryDelay({ error: motivo }, 60_000);
 }
 
 // Próxima reavaliação: 5 min à frente, mas nunca depois das 08:00 BRT do
@@ -927,7 +922,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     erroMsg = e instanceof Error ? e.message : String(e);
   }
 
-  // Rate limit é uma espera temporária da Meta, não uma falha do número.
+  // Rate limit é uma espera temporária do serviço, não uma falha do número.
   // Mantém o contato pendente, preserva a instância no rodízio e retoma no
   // prazo informado pela própria Meta.
   if (!ok && /rate\s*limit|retry\s+after/i.test(String(erroMsg || ''))) {
@@ -942,7 +937,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
 
     await supabase.from('envio_meta_job').update({
       proximo_em: retomaEm,
-      status_motivo: `Aguardando liberação temporária da Meta até ${retomaEm}`,
+      status_motivo: `Aguardando liberação temporária do serviço até ${retomaEm}`,
     }).eq('id', job.id);
     return { advanced: false, waitMs };
   }
