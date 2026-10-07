@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import { amostrasParecemValor, formatarValorBR, type FormatoValor } from "@/lib/valorBR";
 import { detectarTipoDocumento, formatarDocumentoBR, type FormatoDocumento } from "@/lib/documentoBR";
 import { normalizarCredor, type CredorSlug } from "@/lib/credorMarcas";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { metaFirstRowIsHeader, metaImportDataRows } from "@/lib/metaImportHeader";
 
 const VALOR_HEADER_RX = /(saldo|valor|d[ií]vida|debito|débito|montante|total|parcela|entrada)/i;
 
@@ -140,11 +143,10 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
   const nCols = useMemo(() => rows.reduce((m, r) => Math.max(m, (r || []).length), 0), [rows]);
 
   const firstRow = rows[0] || [];
-  const firstIsHeader = useMemo(() => {
-    if (firstRowIsData) return false;
-    const digitos = String(firstRow[0] ?? "").replace(/\D/g, "");
-    return digitos.length < 8;
-  }, [firstRow, firstRowIsData]);
+  const [headerChoice, setHeaderChoice] = useState<{ rows: any[][]; value: boolean } | null>(null);
+  const firstIsHeader = firstRowIsData ? false : headerChoice?.rows === rows
+    ? headerChoice.value : metaFirstRowIsHeader(rows);
+  useEffect(() => { if (!open) setHeaderChoice(null); }, [open]);
 
   const placeholders = useMemo(() => {
     const fromBody = template?.body_text ? extractPlaceholders(template.body_text) : [];
@@ -352,7 +354,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
 
     const headers = cols.map((c) => c.header);
 
-    const dataRows = firstIsHeader ? rows.slice(1) : rows;
+    const dataRows = metaImportDataRows(rows, firstIsHeader);
     const seen = new Set<string>();
     const out: string[] = [];
     const varsByTel: Record<string, Record<string, string>> = {};
@@ -448,6 +450,13 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
             {firstIsHeader && " A primeira linha foi detectada como cabeçalho e será ignorada."}
           </DialogDescription>
         </DialogHeader>
+
+        {!firstRowIsData && (
+          <div className="flex items-center gap-2">
+            <Checkbox id="meta-import-header" checked={firstIsHeader} onCheckedChange={(value) => setHeaderChoice({ rows, value: value === true })} />
+            <Label htmlFor="meta-import-header">A primeira linha é cabeçalho</Label>
+          </div>
+        )}
 
         {template && placeholders.length > 0 && (
           <div className="rounded-md border bg-muted/40 p-3 space-y-2">

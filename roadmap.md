@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Corrigir estimativa por remetente/categoria, separar total de envios e incluir a primeira linha sem cabeçalho; validar sem disparos.
 - [x] Corrigir timeout da sincronização diária Meta sem novos agendamentos; testes de espera e tela validados, sem aplicar templates nos testes.
 - [x] Trocar imagem no HSM somente para a campanha, autorizar arquivos pessoais e validar sem disparos reais.
 - [x] Catálogo Utility antes da seleção de instâncias, aplicação de faltantes, deduplicação e testes sem disparos reais.
