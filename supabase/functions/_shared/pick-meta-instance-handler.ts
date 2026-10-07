@@ -2,10 +2,10 @@
 // Regras: só considera estado_pool='ativo', não pausada, dentro do horário e cota.
 // Fórmula: quality × tier × idade × (1 - uso_hoje/cota_efetiva)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
-import { enviadosHojeBrtLote, tetoBase } from '../_shared/meta-freio.ts';
-import { THIAGO_NOGUEIRA_USER_ID } from '../_shared/thiago-meta-override.ts';
-import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
+import { carregarCotasBm, motivoBloqueioBm } from './bm-cotas.ts';
+import { enviadosHojeBrtLote, tetoBase } from './meta-freio.ts';
+import { THIAGO_NOGUEIRA_USER_ID } from './thiago-meta-override.ts';
+import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from './novo-mundo-3144.ts';
 
 
 const corsHeaders = {
@@ -414,4 +414,3 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
   }
 }
 
-if (import.meta.main) Deno.serve(handlePickMetaInstance);

@@ -1,16 +1,16 @@
 // Envio unitário (1 mensagem por chamada). O loop, delay, pausa e round-robin
 // vivem no frontend para permitir pausar/retomar/cancelar sem servidor extra.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
-import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
-import { carregarCotasBm, motivoBloqueioBm } from '../_shared/bm-cotas.ts';
-import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
-import { THIAGO_NOGUEIRA_USER_ID, instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
-import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from '../_shared/novo-mundo-3144.ts';
-import { telefoneMeta } from '../_shared/meta-destinatario.ts';
-import { authorizeMetaInboxSend } from '../_shared/meta-inbox-send-auth.ts';
-import { getMetaButtonLink, resolveButtonUrlParam } from '../_shared/meta-button-url.ts';
-import { CAMPAIGN_IMAGE_BUCKET, campaignImageForTemplate, campaignImagePathAllowed, withCampaignImage } from '../_shared/meta-campaign-image.ts';
+import { aplicarEtiquetaAtendente } from './etiqueta-atendente.ts';
+import { rotuloInstancia } from './rotulo-instancia.ts';
+import { carregarCotasBm, motivoBloqueioBm } from './bm-cotas.ts';
+import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from './meta-numero-inacessivel.ts';
+import { THIAGO_NOGUEIRA_USER_ID, instanciasLiberadasThiago } from './thiago-meta-override.ts';
+import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from './novo-mundo-3144.ts';
+import { telefoneMeta } from './meta-destinatario.ts';
+import { authorizeMetaInboxSend } from './meta-inbox-send-auth.ts';
+import { getMetaButtonLink, resolveButtonUrlParam } from './meta-button-url.ts';
+import { CAMPAIGN_IMAGE_BUCKET, campaignImageForTemplate, campaignImagePathAllowed, withCampaignImage } from './meta-campaign-image.ts';
 
 
 const corsHeaders = {
@@ -657,7 +657,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
             .from('meta_whatsapp_instances')
             .select('id, nome, display_phone, meta_verified_name, phone_number_id')
             .eq('id', instancia_id).maybeSingle();
-          const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+          const { notificarAdmin } = await import('./notificar-admin.ts');
           const chave = `meta_marketing_block_${template.nome_template}_${new Date().toISOString().slice(0,10)}`;
           await notificarAdmin(supabase, {
             tipo: 'meta_marketing_bloqueado',
@@ -1040,7 +1040,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
       if (isRestricted && /#131042|payment|billing/i.test(msg)) {
         let verificacao: any = { estado: 'nao_confirmado', restringida: true, detalhe: 'Não foi possível concluir a verificação de pagamento.' };
         try {
-          const { revalidarPagamentoAntesDoAviso } = await import('../_shared/meta-revalidar-pagamento.ts');
+          const { revalidarPagamentoAntesDoAviso } = await import('./meta-revalidar-pagamento.ts');
           verificacao = await revalidarPagamentoAntesDoAviso(supabase, inst);
         } catch (e) {
           console.error('[send-whatsapp-meta] revalidacao pagamento falhou', String(e).slice(0, 160));
@@ -1063,7 +1063,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
         .some((c) => msg.includes(`#${c}`));
       if (isRestricted && familiaBloqueio) {
         try {
-          const { metaConfirmaBloqueio } = await import('../_shared/meta-conta-bloqueada.ts');
+          const { metaConfirmaBloqueio } = await import('./meta-conta-bloqueada.ts');
           const confirmado = await metaConfirmaBloqueio(inst);
           if (confirmado === false) {
             console.log('[send-whatsapp-meta] bloqueio nao confirmado pela Meta:', inst.id);
@@ -1091,7 +1091,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
         let bm_blocked_instance_ids: string[] = [inst.id];
         if (familiaBloqueio && /#131031|business account.*locked/i.test(msg)) {
           try {
-            const { restringirBmBloqueada } = await import('../_shared/meta-bm-bloqueio.ts');
+            const { restringirBmBloqueada } = await import('./meta-bm-bloqueio.ts');
             const bloqueioBm = await restringirBmBloqueada(supabase, inst, 'Business Account locked (#131031)');
             bm_blocked_instance_ids = bloqueioBm.instanciaIds;
           } catch (_) { /* fallback abaixo restringe apenas a instância */ }
@@ -1105,7 +1105,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
 
         if (!jaRestrita) {
           try {
-            const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
+            const { notificarAdmin } = await import('./notificar-admin.ts');
             const chave = `meta_instancia_restrita_${inst.id}_${new Date().toISOString().slice(0, 10)}`;
             await notificarAdmin(supabase, {
               tipo: 'meta_instancia_restrita',
@@ -1147,4 +1147,3 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
   }
 }
 
-if (import.meta.main) Deno.serve(handleSendWhatsAppMeta);
