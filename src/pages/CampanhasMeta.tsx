@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, ChevronLeft, ChevronRight, Eye, Search } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -109,7 +109,12 @@ export default function CampanhasMeta() {
   const folderNames = useMemo(() => new Map(folders.map((f: any) => [f.id, f.nome])), [folders]);
   const instanceNames = useMemo(() => new Map(instances.map((i: any) => [i.id, [i.nome, i.display_phone].filter(Boolean).join(" · ")])), [instances]);
   const rows = data?.rows || [];
-  useCampaignLive(rows.filter((row: any) => row.user_id !== user?.id || row.status === 'rodando' || row.status === 'pausado').map((row: any) => row.id), () => { void refetch(); });
+  const lastLiveRead = useRef(0);
+  useCampaignLive(rows.filter((row: any) => row.user_id !== user?.id || row.status === 'rodando' || row.status === 'pausado').map((row: any) => row.id), () => {
+    if (Date.now() - lastLiveRead.current < 15000) return;
+    lastLiveRead.current = Date.now();
+    void refetch();
+  });
   const count = data?.count || 0;
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
   const totals = rows.reduce((acc: { enviados: number; erros: number; custo: number }, row: any) => ({
