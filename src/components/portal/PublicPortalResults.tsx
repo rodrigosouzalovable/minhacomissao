@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { PORTAL_CREDORES, validPortalCpf, type PortalCredor, type PortalWallet } from '@/lib/portalNegotiation';
 import { PortalShell } from './PortalShell';
 import PortalWalletSection from './PortalWalletSection';
+import { portalVisibleWallet } from '@/lib/portalWalletVisibility';
 
 const initialWallet = (credor: PortalCredor): PortalWallet => ({credor,estado:'loading',nome:'',principal:null,principalValidado:false,debitos:[],acordos:[],faixas:[]});
 
@@ -27,5 +28,9 @@ export default function PublicPortalResults({ cpf }: { cpf: string }) {
     }
   },[cpf,valid]);
   useEffect(()=>{let current=true;PORTAL_CREDORES.forEach(c=>{void load(c,()=>current);});return()=>{current=false;};},[load]);
-  return <PortalShell><main className="max-w-4xl mx-auto w-full px-5 sm:px-8 pt-8 pb-16"><Button asChild variant="ghost" className="px-0 mb-8 text-primary"><Link to="/novomundo"><ArrowLeft className="w-4 h-4 mr-2" />Voltar à consulta</Link></Button><p className="portal-eyebrow mb-3">SUA CONSULTA</p><h1 className="text-3xl sm:text-4xl font-semibold">Débitos por credor</h1><p className="text-muted-foreground mt-3 text-sm">CPF {cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4')}</p>{!valid ? <p className="text-destructive mt-8">O CPF informado é inválido. Volte à consulta e confira o número.</p> : <><p className="text-muted-foreground mt-5 text-sm leading-relaxed max-w-xl">Confira cada carteira separadamente. Uma negociação em um credor não altera seus débitos nos outros.</p><div className="mt-5">{wallets.map(wallet=><PortalWalletSection key={`${cpf}-${wallet.credor}`} wallet={wallet} cpf={cpf} retry={()=>void load(wallet.credor)} />)}</div></>}</main></PortalShell>;
+  const visible = wallets.map(portalVisibleWallet).filter((w): w is PortalWallet => w !== null);
+  const name = wallets.find(w => w.nome && w.estado !== 'error')?.nome;
+  const loading = wallets.some(w => w.estado === 'loading');
+  const pendingCount = visible.filter(w => w.estado !== 'loading' && w.estado !== 'error').length;
+  return <PortalShell results><main className="max-w-4xl mx-auto w-full px-5 sm:px-8 pt-8 pb-16"><Button asChild variant="ghost" className="px-0 mb-8 text-primary"><Link to="/novomundo"><ArrowLeft className="w-4 h-4 mr-2" />Voltar à consulta</Link></Button><h1 className="text-3xl font-bold leading-tight break-words">{name ? <>Olá, <span className="text-primary">{name}</span>!</> : 'Sua consulta'}</h1><p className="text-muted-foreground mt-2 text-sm">CPF: {cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4')}</p>{!valid ? <p className="text-destructive mt-8">O CPF informado é inválido. Volte à consulta e confira o número.</p> : <>{pendingCount > 1 && <p className="text-muted-foreground mt-5 text-sm">Suas pendências estão separadas por credor. Cada negociação é independente.</p>}{loading && <p className="text-muted-foreground mt-5 text-sm" role="status">Consultando suas pendências...</p>}{!loading && visible.length === 0 && <div className="portal-result-notice mt-8"><h2 className="font-semibold text-lg">Nenhuma pendência localizada</h2><p className="text-sm text-muted-foreground mt-2">Não encontramos dívidas em aberto ou acordos com saldo pendente para este CPF nas carteiras consultadas.</p></div>}<div className="mt-5">{visible.filter(w => w.estado !== 'loading').map(wallet=><PortalWalletSection key={`${cpf}-${wallet.credor}`} wallet={wallet} cpf={cpf} retry={()=>void load(wallet.credor)} />)}</div></>}</main></PortalShell>;
 }
