@@ -46,12 +46,9 @@ Deno.serve(async (req) => {
       });
     }
     if (job.user_id !== user.id) {
-      const { data: role } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
-      if (!role) {
-        return new Response(JSON.stringify({ success: false, error: 'sem permissão' }), {
-          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+      return new Response(JSON.stringify({ success: false, error: 'Campanha compartilhada permite somente visualização.' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Devolve todos os itens com erro para pendente e zera tentativas.

@@ -11,6 +11,12 @@ const catalog = (copies: TemplateCopy[], masters: UtilityMaster[], selected: str
   catalogoUtility(copies, masters, 'owner', ['i1', 'i2'], selected, () => 1);
 
 describe('Utility catalog independent of instance selection', () => {
+  test('counts approved accessible instances regardless of selection and deduplicates copies', () => {
+    const g = catalog([copy, { ...copy, id: 'duplicate' }, { ...copy, id: 'approved2', instancia_id: 'i2' }, { ...copy, instancia_id: 'hidden' }], [], [])[0];
+    expect([...g.todasInstanciasAprovadasIds]).toEqual(['i1', 'i2']);
+    expect(g.instanciasAprovadasIds.size).toBe(0);
+    expect(catalog([copy, { ...copy, instancia_id: 'i2', status: 'pending' }], [], ['i2'])[0].todasInstanciasAprovadasIds.size).toBe(1);
+  });
   test('own absent model is selectable before any instance and has no sending ID', () => {
     const [g] = catalog([], [master]);
     expect(g.key).toBe('utilidade::pt_BR');
