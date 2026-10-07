@@ -5033,6 +5033,134 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_atrasados_config: {
+        Row: {
+          ativado_em: string | null
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          id: string
+          idioma: string
+          lease_ate: string | null
+          lease_token: string | null
+          max_seg: number
+          min_seg: number
+          owner_id: string
+          template_nome: string
+          tenant_id: string
+          variaveis_map: Json
+        }
+        Insert: {
+          ativado_em?: string | null
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          idioma?: string
+          lease_ate?: string | null
+          lease_token?: string | null
+          max_seg?: number
+          min_seg?: number
+          owner_id?: string
+          template_nome?: string
+          tenant_id?: string
+          variaveis_map?: Json
+        }
+        Update: {
+          ativado_em?: string | null
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          idioma?: string
+          lease_ate?: string | null
+          lease_token?: string | null
+          max_seg?: number
+          min_seg?: number
+          owner_id?: string
+          template_nome?: string
+          tenant_id?: string
+          variaveis_map?: Json
+        }
+        Relationships: []
+      }
+      meta_atrasados_envios: {
+        Row: {
+          acordo_id: string
+          atendente_nome: string | null
+          atualizado_em: string
+          cliente_nome: string | null
+          config_id: string
+          credor: string | null
+          criado_em: string
+          dia_envio: string
+          etapa: number
+          id: string
+          instancia_id: string | null
+          instancia_nome: string | null
+          mensagem: string | null
+          motivo: string | null
+          pagamento_id: string
+          status: string
+          telefone: string
+          user_id: string
+          vencimento: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          acordo_id: string
+          atendente_nome?: string | null
+          atualizado_em?: string
+          cliente_nome?: string | null
+          config_id: string
+          credor?: string | null
+          criado_em?: string
+          dia_envio: string
+          etapa: number
+          id?: string
+          instancia_id?: string | null
+          instancia_nome?: string | null
+          mensagem?: string | null
+          motivo?: string | null
+          pagamento_id: string
+          status?: string
+          telefone: string
+          user_id: string
+          vencimento: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          acordo_id?: string
+          atendente_nome?: string | null
+          atualizado_em?: string
+          cliente_nome?: string | null
+          config_id?: string
+          credor?: string | null
+          criado_em?: string
+          dia_envio?: string
+          etapa?: number
+          id?: string
+          instancia_id?: string | null
+          instancia_nome?: string | null
+          mensagem?: string | null
+          motivo?: string | null
+          pagamento_id?: string
+          status?: string
+          telefone?: string
+          user_id?: string
+          vencimento?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_atrasados_envios_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "meta_atrasados_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_auto_resposta_eventos: {
         Row: {
           criado_em: string
@@ -12727,6 +12855,42 @@ export type Database = {
           nome: string
           user_id: string
         }[]
+      }
+      meta_atrasados_contato: {
+        Args: {
+          p_credor: string
+          p_instancia: string
+          p_nome: string
+          p_telefone: string
+          p_user: string
+        }
+        Returns: string
+      }
+      meta_atrasados_lock: {
+        Args: { p_config: string; p_token: string }
+        Returns: boolean
+      }
+      meta_atrasados_reservar: {
+        Args: {
+          p_config: string
+          p_dia: string
+          p_etapa: number
+          p_pagamento: string
+          p_vencimento: string
+        }
+        Returns: string
+      }
+      meta_atrasados_salvar: {
+        Args: {
+          p_ativo: boolean
+          p_idioma: string
+          p_map: Json
+          p_max?: number
+          p_min?: number
+          p_template: string
+          p_tenant: string
+        }
+        Returns: string
       }
       meta_bm_uso_24h: {
         Args: never

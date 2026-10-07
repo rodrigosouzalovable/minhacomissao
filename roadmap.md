@@ -6,6 +6,8 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Implementar lembretes Meta D+1/D+3/D+7 com prévia, controle de custo, GREEN obrigatório e atendente do acordo; validar sem envios e aguardar ativação confirmada.
+- [ ] Ampliar busca HSM no Envio Meta para nome e conteúdo, preservando favoritos.
 - [x] Corrigir abertura de Instâncias do disparo; painel permaneceu aberto durante atualizações reais no login de Guilherme, fechou e reabriu pelo teclado sem erros ou alteração de envios.
 - [x] Recolher e expandir a lista lateral de abas com controle externo sempre acessível e preferência por usuário; testes de isolamento, persistência e armazenamento indisponível passaram, e navegador confirmou espaço liberado, recarregamento e reabertura por teclado sem erros.
 - [x] Mostrar campanhas compartilhadas na página e acompanhar ao vivo com cache de resultados e rechecagem de acesso; Guilherme validado no diálogo real, leituras iguais ao proprietário e comandos negados. Revogação real não executada para preservar o acesso solicitado.

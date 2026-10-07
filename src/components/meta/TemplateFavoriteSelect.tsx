@@ -5,6 +5,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useTemplateFavoritos } from "@/hooks/useTemplateFavoritos";
+import { matchesTemplateSearch } from '@/lib/metaTemplateSearch';
 
 export type TemplateFavoriteOption = {
   value: string;
@@ -21,6 +22,7 @@ type Props = {
   options: TemplateFavoriteOption[];
   placeholder?: string;
   searchPlaceholder?: string;
+  searchContent?: boolean;
   emptyMessage?: string;
   disabled?: boolean;
   className?: string;
@@ -35,6 +37,7 @@ export function TemplateFavoriteSelect({
   options,
   placeholder = "Selecione um template",
   searchPlaceholder = "Digite o nome do template",
+  searchContent = false,
   emptyMessage = "Nenhum template encontrado.",
   disabled,
   className,
@@ -46,13 +49,13 @@ export function TemplateFavoriteSelect({
   const filtered = useMemo(() => {
     const termo = semAcento(search.trim());
     return options
-      .filter((option) => !termo || semAcento(option.nome).includes(termo))
+      .filter((option) => matchesTemplateSearch(option, termo, searchContent))
       .sort((a, b) => {
         const favA = isFavorito(a) ? 1 : 0;
         const favB = isFavorito(b) ? 1 : 0;
         return favB - favA || a.nome.localeCompare(b.nome, "pt-BR");
       });
-  }, [options, search, isFavorito]);
+  }, [options, search, isFavorito, searchContent]);
 
   return (
     <Popover modal open={open} onOpenChange={(next) => { setOpen(next); if (!next) setSearch(""); }}>
