@@ -1,0 +1,15 @@
+import { expect, test } from 'bun:test';
+import { portalTerms, portalInstallments, portalCredorFromSource, validPortalCpf, portalPaymentDateValid, portalProposalText } from '../src/lib/portalNegotiation';
+
+test('UME cash is principal without an additional discount', () => { expect(portalTerms(1000, 'ume')?.avista).toBe(1000); });
+test('Odres cash is principal without an additional discount', () => { expect(portalTerms(1000, 'odres_cred')?.avista).toBe(1000); });
+test('UME installments add exactly 10 percent', () => { expect(portalTerms(1000, 'ume')?.total).toBe(1100); });
+test('Odres installments add exactly 10 percent', () => { expect(portalTerms(1000, 'odres_cred')?.total).toBe(1100); });
+test('both new wallets have a maximum of 18 installments', () => { for (const c of ['ume', 'odres_cred'] as const) { expect(portalTerms(10000, c)?.maxParcelas).toBe(18); expect(portalInstallments(11000, 19)).toEqual([]); } });
+test('no installment below R$100 and R$1000 allows 11 not 18', () => { expect(portalTerms(1000, 'ume')?.maxParcelas).toBe(11); expect(portalInstallments(1100, 11)).toEqual(Array(11).fill(100)); expect(portalInstallments(1100, 12)).toEqual([]); expect(portalInstallments(199.99, 2)).toEqual([]); });
+test('cents remainder stays in last installment and total is exact', () => { const p = portalInstallments(1100.01, 3); expect(p).toEqual([366.67, 366.67, 366.67]); const q = portalInstallments(1100, 3); expect(q).toEqual([366.66, 366.66, 366.68]); expect(Math.round(q.reduce((a,b)=>a+b,0)*100)).toBe(110000); });
+test('Novo Mundo retains aging discounts and 24 installment limit', () => { expect(portalTerms(10000,'novo_mundo',600)).toMatchObject({ avista:5000,total:7000,maxParcelas:24 }); expect(portalTerms(10000,'novo_mundo',250)).toMatchObject({ avista:8000,total:9000 }); });
+test('existing creditor identifiers never mix UME and Novo Mundo', () => { expect(portalCredorFromSource('ume_novo_mundo_aporte')).toBe('novo_mundo'); expect(portalCredorFromSource('mundo_da_moda')).toBe('ume'); expect(portalCredorFromSource('Odres Cred')).toBe('odres_cred'); expect(portalCredorFromSource('Outro')).toBeNull(); });
+test('first payment is required and within ten calendar days', () => { expect(portalPaymentDateValid('2026-10-17','2026-10-07')).toBe(true); expect(portalPaymentDateValid('2026-10-18','2026-10-07')).toBe(false); expect(portalPaymentDateValid('','2026-10-07')).toBe(false); });
+test('CPF validates check digits rather than only length', () => { expect(validPortalCpf('529.982.247-25')).toBe(true); expect(validPortalCpf('11111111111')).toBe(false); expect(validPortalCpf('52998224724')).toBe(false); });
+test('proposal contains chosen wallet, accurate cash/total and date', () => { const text=portalProposalText({credor:'odres_cred',nome:'Cliente de teste',cpf:'52998224725',principal:1000,total:1100,installments:portalInstallments(1100,11),date:'2026-10-10'}); expect(text).toContain('Odres Cred'); expect(text).toContain('10/10/2026'); expect(text).toContain('11 parcelas'); expect(text).toContain('10%'); });
