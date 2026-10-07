@@ -1134,19 +1134,24 @@ export default function ConfigurarMeta() {
         body: { force: true, complete_utility: true },
       });
       if (error) throw error;
+      if (data?.skipped) {
+        toast.info("Uma sincronização já está em andamento. Aguarde e atualize a lista.");
+        await carregarEstadoSyncTemplates();
+        return;
+      }
       const erros = Array.isArray(data?.failures) ? data.failures.length : 0;
       const enfileirados = Number(data?.audit?.enfileirados || 0);
       const afetadas = Number(data?.audit?.instancias_afetadas || 0);
       const ignoradas = Array.isArray(data?.audit?.ignoradas) ? data.audit.ignoradas.length : 0;
       const resumoAplicacao = enfileirados > 0
         ? ` · ${enfileirados} Utility na fila de ${afetadas} instância(s) GREEN`
-        : " · cobertura Utility conferida, sem novos itens";
+        : data?.audit?.success === false ? " · conferência de cobertura pendente; tente novamente" : " · cobertura Utility conferida, sem novos itens";
       const resumoIgnoradas = ignoradas > 0 ? ` · ${ignoradas} ignorada(s) por qualidade ou bloqueio` : "";
       if (erros) toast.warning(`${data?.synced || 0} templates sincronizados; ${erros} instância(s) com ressalva${resumoAplicacao}${resumoIgnoradas}`, { duration: 9000 });
       else toast.success(`${data?.synced || 0} templates sincronizados${resumoAplicacao}${resumoIgnoradas}`, { duration: 9000 });
       await Promise.all([carregar(), carregarEstadoSyncTemplates()]);
     } catch (error) {
-      toast.error("Erro ao sincronizar: " + (error instanceof Error ? error.message : "falha inesperada"));
+      toast.warning("A sincronização não pôde ser concluída agora. Os templates já salvos foram preservados; tente novamente.", { duration: 9000 });
       await carregarEstadoSyncTemplates();
     } finally {
       setSincronizando(null);

@@ -1,12 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sincronizarTemplatesMeta } from "../_shared/sincronizar-templates-meta.ts";
+import { runBoundedSync } from "../_shared/meta-sync-bounded.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-// A ação manual precisa conferir todas as instâncias atuais em uma única
-// execução. O limite continua finito para proteger chamadas acidentais.
+// Parallel bounded reads, without new schedules or retries.
 const MAX_INSTANCES_PER_RUN = 500;
 const LOCK_MINUTES = 30;
 
@@ -17,7 +17,19 @@ const json = (payload: unknown, status = 200) => new Response(JSON.stringify(pay
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  // Bound ALL network operations, including auth, lock RPCs and finalization.
+  const requestDeadline = AbortSignal.timeout(115_000);
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    global: { fetch: (input, init) => fetch(input, {
+      ...init,
+      signal: AbortSignal.any([
+        requestDeadline,
+        AbortSignal.timeout(15_000),
+        ...(init?.signal ? [init.signal] : []),
+      ]),
+    }) },
+  });
+  let ownsLock = false;
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -51,8 +63,10 @@ Deno.serve(async (req) => {
     });
     if (lockError) return json({ success: false, error: lockError.message }, 500);
     if (lockAcquired !== true) return json({ success: true, skipped: "execucao_em_andamento_ou_ja_concluida_hoje" });
+    ownsLock = true;
 
-    const { data: partnerRows } = await supabase.from("meta_instance_parceiros").select("instancia_id");
+    const { data: partnerRows, error: partnerError } = await supabase.from("meta_instance_parceiros").select("instancia_id");
+    if (partnerError) throw partnerError;
     const partnerIds = new Set<string>((partnerRows || []).map((row: any) => row.instancia_id));
     const { data: instances, error: instancesError } = await supabase
       .from("meta_whatsapp_instances")
@@ -69,26 +83,34 @@ Deno.serve(async (req) => {
     let syncedTemplates = 0;
     const failures: Array<{ id: string; nome: string; error: string }> = [];
 
-    for (const instance of eligible) {
-      const result = await sincronizarTemplatesMeta(supabase, instance);
+    const results = await runBoundedSync(eligible,
+      (instance, signal) => sincronizarTemplatesMeta(supabase, instance, signal),
+      () => ({ success: false, synced: 0, pages: 0, error: "Prazo atingido; tente novamente para completar as instâncias pendentes." }),
+    );
+    for (let index = 0; index < eligible.length; index++) {
+      const instance = eligible[index];
+      const result = results[index];
       if (result.success) syncedTemplates += result.synced;
       else failures.push({ id: instance.id, nome: instance.nome || instance.id, error: result.error || "Falha desconhecida" });
     }
 
-    await supabase.rpc("finish_meta_templates_sync_diario", {
+    const { error: finishError } = await supabase.rpc("finish_meta_templates_sync_diario", {
       p_success: failures.length === 0,
       p_processed: eligible.length,
       p_synced: syncedTemplates,
       p_failures: failures,
     });
+    if (finishError) throw finishError;
+    ownsLock = false;
 
     const audit = await supabase.functions.invoke("meta-templates-auditar-instancias", {
+      signal: AbortSignal.timeout(15_000),
       body: {
         auto: true,
         dry_run: false,
         utility_approved_only: completeUtility,
       },
-    });
+    }).catch(() => ({ error: { message: "A conferência de cobertura não respondeu no prazo; tente novamente." }, data: null }));
 
     return json({
       success: failures.length === 0,
@@ -98,7 +120,7 @@ Deno.serve(async (req) => {
       audit: audit.error ? { success: false, error: audit.error.message } : audit.data,
     });
   } catch (error) {
-    await supabase.rpc("finish_meta_templates_sync_diario", {
+    if (ownsLock) await supabase.rpc("finish_meta_templates_sync_diario", {
       p_success: false,
       p_processed: 0,
       p_synced: 0,
