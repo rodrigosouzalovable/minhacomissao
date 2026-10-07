@@ -14,6 +14,7 @@ interface Body {
   enriquecer_instagram?: boolean; // busca Instagram/seguidores dos leads encontrados
   origem?: string; // identifica buscas automáticas sem misturar com buscas manuais
   max_requisicoes?: number; // teto de páginas Places consumidas nesta execução
+  owner_id?: string; // internal replenishment only; never accepted from browser callers
 }
 
 function normalizarChave(v: string | null | undefined) {
@@ -187,6 +188,12 @@ Deno.serve(async (req) => {
 
 
     const body = (await req.json()) as Body;
+    if (body.owner_id) {
+      if (!interno || !/^[0-9a-f-]{36}$/i.test(body.owner_id)) return new Response(JSON.stringify({ error: 'Proprietário interno inválido' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const { data: ownerAdmin } = await supabase.rpc('has_role', { _user_id: body.owner_id, _role: 'admin' });
+      if (ownerAdmin !== true) return new Response(JSON.stringify({ error: 'Proprietário sem autorização' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      userId = body.owner_id;
+    }
     const origemSolicitada = String(body.origem || "manual").slice(0, 60);
     const { data: poolConfig } = await supabase
       .from("meta_envio_pool_config")
