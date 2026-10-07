@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock3, Flame, ShieldCheck } from 'lucide-react';
+import { Clock3, Flame, ShieldCheck, Eye } from 'lucide-react';
 
 interface InstRecup {
   id: string;
@@ -70,6 +72,18 @@ function mediana(valores: number[]) {
 
 export function RecuperacaoQualidadePanel() {
   const { user } = useAuth();
+  const [previa, setPrevia] = useState<any>(null);
+  const [verificando, setVerificando] = useState(false);
+  const [erroPrevia, setErroPrevia] = useState('');
+  async function consultarPrevia() {
+    setVerificando(true); setErroPrevia('');
+    try {
+      const { data, error } = await supabase.functions.invoke('meta-recuperacao-tick', { body: { simulacao: true } });
+      if (error) throw error;
+      setPrevia(data);
+    } catch { setErroPrevia('Não foi possível consultar a prévia. Verifique seu acesso administrativo.'); }
+    finally { setVerificando(false); }
+  }
 
   const { data } = useQuery({
     queryKey: ['meta-recuperacao-panel', user?.id],
@@ -128,6 +142,18 @@ export function RecuperacaoQualidadePanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <div><div className="text-sm font-medium">Atualização cadastral · AQUECIMENTO</div><div className="text-xs text-muted-foreground">fins_de_atualizacao_cadastral</div></div>
+          <Button variant="outline" size="sm" onClick={consultarPrevia} disabled={verificando}><Eye className="mr-2 h-4 w-4" />{verificando ? 'Consultando…' : 'Prévia sem envio'}</Button>
+        </div>
+        {erroPrevia && <p className="text-sm text-destructive">{erroPrevia}</p>}
+        {previa && <div className="space-y-2 border-b pb-3">
+          <p className="text-xs text-muted-foreground">Empresas autorizadas disponíveis: {previa.estoque_elegivel ?? 0} · Nenhuma mensagem enviada nesta prévia</p>
+          {(previa.resultados || []).map((r: any, index: number) => <div key={index} className="border-l-2 pl-3 text-sm">
+            <div className="font-medium">{r.instancia}</div>
+            {r.simulado ? <><div>{r.nome_empresa} · {r.fonte === 'confirmado' ? 'Resposta automática confirmada' : r.fonte === 'candidato' ? 'Candidato' : 'UAZAPI conectado'}</div><p className="text-muted-foreground">{r.preview}</p><div className="text-xs text-muted-foreground">{'{{1}}'}: {r.variaveis?.[0]} · {'{{2}}'}: {r.variaveis?.[1]}</div></> : <div className="text-muted-foreground">{r.skip === 'aguarda_template_cadastral_aprovado' ? 'Aguardando aprovação do modelo na instância' : r.skip === 'remetente_inapto' ? 'Aguardando liberação da Meta' : 'Aguardando destino autorizado ou limites de envio'}</div>}
+          </div>)}
+        </div>}
         <div className="grid gap-2 sm:grid-cols-3">
           <div className="rounded-md border p-3">
             <div className="text-xs text-muted-foreground">Média até GREEN</div>

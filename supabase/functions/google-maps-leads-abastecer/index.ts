@@ -3,7 +3,7 @@
 //  - persegue 1.000 contatos inéditos com WhatsApp confirmado em cada dia
 //  - escolhe os nichos/cidades com melhor histórico de resposta (aquecimento_nicho_score)
 //  - busca no Google Maps, confirma quem tem WhatsApp e guarda sem duplicar telefone
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { hojeBrt } from "../_shared/meta-aquecimento-alvo.ts";
 import { notificarNumeros } from "../_shared/notificar-numeros.ts";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';

@@ -2,16 +2,24 @@ import { destinosAquecimento, enviarTemplateAquecimento, erroFatalMeta, FOLDERS_
 import { ORIGEM_CADASTRAL, TEMPLATE_CADASTRAL, templateCadastralValido, valoresCadastrais } from './recuperacao-cadastral-rules.ts';
 
 export async function executarRecuperacaoCadastral(db: any, insts: any[], simulacao: boolean) {
-  const { data: destinos, error } = await db.from('meta_recuperacao_cadastral_destinos')
-    .select('*').eq('user_id', insts[0]?.user_id || '').not('autorizado_em', 'is', null)
-    .is('bloqueado_em', null).order('criado_em').limit(1500);
-  if (error) throw error;
+  const destinos: any[] = [];
+  for (let offset = 0; offset < 5000; offset += 500) {
+    const { data: pagina, error } = await db.from('meta_recuperacao_cadastral_destinos')
+      .select('*').eq('user_id', insts[0]?.user_id || '').not('autorizado_em', 'is', null)
+      .is('bloqueado_em', null).or('fonte.eq.uazapi,consumido_em.is.null').order('telefone_sufixo').range(offset, offset + 499);
+    if (error) throw error;
+    destinos.push(...(pagina || []));
+    if ((pagina || []).length < 500) break;
+  }
   const uazapi = await destinosAquecimento(db);
   const online = new Set(uazapi.map(d => d.id));
-  const { data: supressoes, error: supErro } = await db.from('meta_destinatario_supressao')
-    .select('telefone_sufixo').in('telefone_sufixo', (destinos || []).map((d: any) => d.telefone_sufixo));
-  if (supErro) throw supErro;
-  const bloqueados = new Set((supressoes || []).map((s: any) => s.telefone_sufixo));
+  const bloqueados = new Set<string>();
+  for (let offset = 0; offset < destinos.length; offset += 200) {
+    const { data: supressoes, error: supErro } = await db.from('meta_destinatario_supressao')
+      .select('telefone_sufixo').in('telefone_sufixo', destinos.slice(offset, offset + 200).map((d: any) => d.telefone_sufixo));
+    if (supErro) throw supErro;
+    for (const s of supressoes || []) bloqueados.add(s.telefone_sufixo);
+  }
   const disponiveis = (destinos || []).filter((d: any) => !bloqueados.has(d.telefone_sufixo) &&
     (d.fonte === 'uazapi' ? online.has(d.destino_instancia_id) : !d.consumido_em));
   const resultados: any[] = [];
