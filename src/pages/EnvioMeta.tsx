@@ -1509,6 +1509,8 @@ export default function EnvioMeta() {
             ) : (
               <TemplateFavoriteSelect
                 tipo="meta"
+                searchContent
+                searchPlaceholder="Pesquisar por nome ou conteúdo"
                 value={templateId}
                 onValueChange={setTemplateId}
                 options={templateGroups.map((group) => ({
