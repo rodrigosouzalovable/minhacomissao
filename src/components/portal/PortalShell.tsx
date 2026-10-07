@@ -6,11 +6,11 @@ import { useContatoPortal } from '@/hooks/useContatoPortal';
 import logoSouza from '@/assets/logo-souza-ribeiro.png';
 import { CREDOR_MARCAS_LISTA } from '@/lib/credorMarcas';
 import novoHome from '@/assets/logo-novo-mundo-portal.png.asset.json';
-import umeHome from '@/assets/ume-home.png.asset.json';
+import umeHome from '@/assets/ume-home-white.jpg';
 import odresHome from '@/assets/odres-home-white.png.asset.json';
 
 const portalAssetUrl = (url: string) => new URL(url, 'https://meusacordos.com.br').href;
-const homeLogos = { novo_mundo: portalAssetUrl(novoHome.url), ume: portalAssetUrl(umeHome.url), odres_cred: portalAssetUrl(odresHome.url) };
+const homeLogos = { novo_mundo: portalAssetUrl(novoHome.url), ume: umeHome, odres_cred: portalAssetUrl(odresHome.url) };
 const homeLinks = [['beneficios', 'Benefícios'], ['quem-somos', 'Quem somos'], ['como-funciona', 'Como funciona'], ['duvidas', 'Dúvidas']];
 
 export function PortalBrands({ home = false }: { home?: boolean }) {
