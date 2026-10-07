@@ -26,7 +26,7 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
       if(!master) return reply({error:'Selecione um template Utility próprio'},400);
       configs=[{owner_id:uid,tenant_id:input.tenant_id,template_nome:input.template_nome,idioma:input.idioma,variaveis_map:input.variaveis_map||{'1':'nome','2':'credor','3':'vencimento'}}];
     } else {
-      configs=must(await db.from('meta_atrasados_config').select('*').eq('ativo',true).order('atualizado_em').limit(10))||[];
+      configs=must(await db.from('meta_atrasados_config').select('*').eq('ativo',true).gt('ciclo_ate',new Date().toISOString()).order('atualizado_em').limit(10))||[];
     }
     const summaries: any[]=[]; const start=Date.now();
     for(const cfg of configs){
@@ -77,11 +77,16 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
           }catch(error){await update('incerto',error instanceof Error?error.message:'Falha sem confirmação de aceitação');}
           if(Date.now()-start<65000) await new Promise(resolve=>setTimeout(resolve,(Math.max(1,cfg.min_seg)+Math.random()*Math.max(1,cfg.max_seg-cfg.min_seg))*1000));
         }
+        if(!preview){
+          const remaining=must(await db.rpc('meta_atrasados_candidatos',{p_owner:cfg.owner_id,p_tenant:cfg.tenant_id,p_dia:today,p_template:cfg.template_nome,p_idioma:cfg.idioma,p_limite:1}));
+          if(!remaining?.length) must(await db.from('meta_atrasados_config').update({ciclo_ate:null}).eq('id',cfg.id));
+        }
         const priceRows=must(await db.from('meta_tarifas_mensagem').select('valor_brl,valor_usd').eq('categoria','UTILITY').lte('vigencia_inicio',today).order('vigencia_inicio',{ascending:false}).limit(1));
         const eligible=rows.filter(r=>!r.motivo).length;
         summaries.push({rows,processados:processed,aceitos:accepted,amostra:rows.length,limite_amostra:preview?50:20,elegiveis:eligible,estimativa_brl:priceRows?.[0]?eligible*Number(priceRows[0].valor_brl):null,estimativa_usd:priceRows?.[0]?eligible*Number(priceRows[0].valor_usd):null});
       }finally{if(!preview)must(await db.from('meta_atrasados_config').update({lease_token:null,lease_ate:null}).eq('id',cfg.id).eq('lease_token',lease));}
     }
+    if(internal) must(await db.rpc('meta_atrasados_continuacao',{p_iniciar:false}));
     return reply({ok:true,preview,resumos:summaries});
   }catch(error){return reply({error:error instanceof Error?error.message:'Falha ao consultar lembretes'},500);}
 }

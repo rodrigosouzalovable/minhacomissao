@@ -252,6 +252,11 @@ serve(async (req) => {
 
     for (const { parcela, tipoLembrete } of parcelasFiltradas) {
       const acordo = parcela.acordos as any;
+      if (!overrideToken && tipoLembrete.startsWith('vencido')) {
+        const { data: covered, error: coveredError } = await supabase.rpc('meta_atrasados_fila_coberta', { p_pagamento: parcela.id });
+        if (coveredError) throw coveredError;
+        if (covered) { pulados++; continue; }
+      }
       
       if (acordo.status !== 'ativo') { pulados++; continue; }
       if (!acordo.cliente_telefone) { pulados++; continue; }
