@@ -12880,6 +12880,14 @@ export type Database = {
         }
         Returns: string
       }
+      meta_atrasados_continuacao: {
+        Args: { p_iniciar?: boolean }
+        Returns: undefined
+      }
+      meta_atrasados_fila_coberta: {
+        Args: { p_pagamento: string }
+        Returns: boolean
+      }
       meta_atrasados_lock: {
         Args: { p_config: string; p_token: string }
         Returns: boolean
