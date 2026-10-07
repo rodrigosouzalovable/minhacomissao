@@ -201,7 +201,9 @@ async function desativarInstanciaERedistribuir(
 
   try {
     const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
-    await notificarAdmin(supabase, {
+    // Payment verification/notification belongs to the send/webhook path.
+    // Do not emit a second unverified payment alert from the campaign worker.
+    if (!/131042|payment|billing|pagamento/i.test(motivo)) await notificarAdmin(supabase, {
       tipo: tipoNotif,
       mensagem:
         `⚠️ Instância desativada da campanha\n\n` +
