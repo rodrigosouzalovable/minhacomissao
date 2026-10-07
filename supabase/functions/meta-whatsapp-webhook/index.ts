@@ -1592,6 +1592,7 @@ serve(async (req) => {
             }
             if (Object.keys(patchAq).length > 0) {
               await supabase.from('meta_aquecimento_destino_log').update(patchAq).eq('wamid', waId);
+              await supabase.from('meta_recuperacao_log').update(patchAq).eq('wamid', waId).eq('cadastral', true);
             }
           } catch (_e) { /* aprendizado não bloqueia o webhook */ }
 

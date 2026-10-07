@@ -80,7 +80,7 @@ export async function destinosAquecimento(
     }
   }));
 
-  const destinosUazapi = espelhos
+  const destinosUazapi: DestinoAquecimento[] = espelhos
     .filter((d: any) => online.has(String(d.uazapi_instance_id)))
     .map((d: any) => ({
       id: d.id,

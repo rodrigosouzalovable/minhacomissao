@@ -1,8 +1,10 @@
-import { enviarTexto } from './iago.ts';
 import { AGRADECIMENTO_CADASTRAL, ORIGEM_CADASTRAL, respostaCadastral } from './recuperacao-cadastral-rules.ts';
 
 // Persistent flow marker wins over generic IAGO, including after acknowledgement.
-export async function atenderRespostaCadastral(db: any, contato: any, texto: string, tipo = 'text'): Promise<boolean> {
+export async function atenderRespostaCadastral(db: any, contato: any, texto: string, tipo = 'text', enviar = async (db: any, ct: any, msg: string) => {
+  const { enviarTexto } = await import('./iago.ts');
+  return enviarTexto(db, ct, msg);
+}): Promise<boolean> {
   if (contato?.origem_aquecimento !== ORIGEM_CADASTRAL) return false;
   const suf = String(contato.telefone || '').replace(/\D/g, '').slice(-8);
   const { data: log, error } = await db.from('meta_recuperacao_log')
@@ -31,7 +33,7 @@ export async function atenderRespostaCadastral(db: any, contato: any, texto: str
   if (!claimed) return true;
   // At-most-once: an ambiguous transport error does not release the claim for another send.
   try {
-    const result = await enviarTexto(db, contato, AGRADECIMENTO_CADASTRAL);
+    const result = await enviar(db, contato, AGRADECIMENTO_CADASTRAL);
     await db.from('meta_recuperacao_log').update({ agradecimento_wamid: result.mensagemId, agradecimento_erro: result.erro || null }).eq('id', log.id);
   } catch (e) {
     await db.from('meta_recuperacao_log').update({ agradecimento_erro: String(e).slice(0, 400) }).eq('id', log.id);

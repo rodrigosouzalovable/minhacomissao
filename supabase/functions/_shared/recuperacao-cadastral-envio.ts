@@ -72,5 +72,16 @@ export async function executarRecuperacaoCadastral(db: any, insts: any[], simula
     if (!envio.ok && erroFatalMeta(envio.codigo, envio.erro)) await db.from('meta_whatsapp_instances').update({ recuperacao_ativa: false }).eq('id', inst.id);
     resultados.push({ instancia: inst.nome, fonte: reservado.fonte, nome_empresa: reservado.nome_empresa, variaveis: valores, ok: envio.ok, erro: envio.erro || null });
   }
-  return { ok: true, cadastral: true, simulacao, resultados, estoque_elegivel: disponiveis.filter((d: any) => d.fonte !== 'uazapi').length };
+  let reposicao: any = null;
+  if (!simulacao && insts.length && !disponiveis.some((d: any) => d.fonte !== 'uazapi')) {
+    const token = crypto.randomUUID();
+    const { data: claim, error: reposicaoErro } = await db.rpc('claim_reposicao_cadastral', { p_owner: insts[0].user_id, p_token: token });
+    if (reposicaoErro) throw reposicaoErro;
+    if (claim) {
+      const result = await db.functions.invoke('google-maps-leads-abastecer', { body: { tipo: 'cadastral', owner_id: insts[0].user_id, reposicao_token: token } });
+      reposicao = result.error ? { erro: 'Reposição indisponível', alvo: 100 } : result.data;
+      await db.from('meta_recuperacao_cadastral_config').update({ reposicao_resultado: reposicao }).eq('user_id', insts[0].user_id).eq('reposicao_token', token);
+    }
+  }
+  return { ok: true, cadastral: true, simulacao, resultados, reposicao, estoque_elegivel: disponiveis.filter((d: any) => d.fonte !== 'uazapi').length };
 }

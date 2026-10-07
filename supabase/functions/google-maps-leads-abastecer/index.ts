@@ -6,11 +6,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hojeBrt } from "../_shared/meta-aquecimento-alvo.ts";
 import { notificarNumeros } from "../_shared/notificar-numeros.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { REPOSICAO_CADASTRAL } from '../_shared/recuperacao-cadastral-rules.ts';
 
 const META_WHATSAPP_DIA = 1000;
 const MAX_REQUISICOES_POR_DIA = 650;
@@ -137,6 +134,15 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
+    const cadastral = body?.tipo === 'cadastral';
+    if (cadastral) {
+      const tokenAuth = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+      if (tokenAuth !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) return json({ error: 'Acesso interno obrigatório' }, 401);
+      if (!/^[0-9a-f-]{36}$/i.test(String(body.owner_id || '')) || !/^[0-9a-f-]{36}$/i.test(String(body.reposicao_token || ''))) return json({ error: 'Pedido de reposição inválido' }, 400);
+      const { data: pedido } = await supabase.from('meta_recuperacao_cadastral_config').select('ativo, reposicao_em, reposicao_resultado')
+        .eq('user_id', body.owner_id).eq('reposicao_token', body.reposicao_token).maybeSingle();
+      if (!pedido?.ativo || pedido.reposicao_resultado || !pedido.reposicao_em || Date.now() - new Date(pedido.reposicao_em).getTime() > 600000) return json({ error: 'Reposição não autorizada ou expirada' }, 403);
+    }
     const dia = String(body?.dia || hojeBrt());
     const forcar = body?.forcar === true;
 
@@ -250,7 +256,8 @@ Deno.serve(async (req) => {
         body: {
           categoria: alvo.nicho,
           localizacao: alvo.cidade,
-          max_resultados: MAX_RESULTADOS,
+          max_resultados: cadastral ? REPOSICAO_CADASTRAL : MAX_RESULTADOS,
+          ...(cadastral ? { owner_id: body.owner_id } : {}),
           somente_novos: true,
           origem: "resgate_engajamento",
           max_requisicoes: limiteRun,
@@ -269,6 +276,25 @@ Deno.serve(async (req) => {
       "google-maps-verificar-whatsapp",
       { body: { limite: 600 } },
     );
+
+    if (cadastral) {
+      // Capturing a phone never grants consent: fresh leads remain outside the send pool.
+      const { data: novos, error: novosErro } = await supabase.from('google_maps_leads').select('id, nome, telefone, telefone_internacional, tem_whatsapp')
+        .eq('busca_id', buscaId || '00000000-0000-0000-0000-000000000000').eq('user_id', body.owner_id).limit(REPOSICAO_CADASTRAL);
+      if (novosErro) throw novosErro;
+      const registros = (novos || []).filter((l: any) => l.tem_whatsapp && l.nome && String(l.telefone_internacional || l.telefone || '').replace(/\D/g, '').length >= 10)
+        .map((l: any) => ({ user_id: body.owner_id, telefone_sufixo: String(l.telefone_internacional || l.telefone).replace(/\D/g, '').slice(-8),
+          telefone: String(l.telefone_internacional || l.telefone).replace(/\D/g, ''), nome_empresa: l.nome, fonte: 'candidato', lead_id: l.id }));
+      if (registros.length) {
+        const { error: inserirErro } = await supabase.from('meta_recuperacao_cadastral_destinos').upsert(registros, { onConflict: 'user_id,telefone_sufixo', ignoreDuplicates: true });
+        if (inserirErro) throw inserirErro;
+      }
+      const resultado = { ok: true, alvo: REPOSICAO_CADASTRAL, captados: novos?.length || 0, whatsapp_confirmado: registros.length,
+        motivo: registros.length < REPOSICAO_CADASTRAL ? 'Lote encerrado sob limites de consultas, resultados e verificação' : 'Alvo atingido',
+        aguardando_autorizacao: registros.length, busca_id: buscaId };
+      await supabase.from('meta_recuperacao_cadastral_config').update({ reposicao_resultado: resultado }).eq('user_id', body.owner_id).eq('reposicao_token', body.reposicao_token);
+      return json(resultado);
+    }
 
 
 
