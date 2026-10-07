@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Reestruturar somente a página inicial: azul anterior, logo original legível, consulta centralizada e tipografia clássica; conferir apresentação e controles.
 - [x] Atualizar a apresentação do portal para Souza e Ribeiro e três carteiras separadas; proposta Novo Mundo validada com dados simulados.
 - [x] Registrar autorização de custo UME e confirmação de que valor original Odres representa principal sem juros.
 - [x] Validar 15 testes de cálculo/privacidade e propostas UME/Odres no navegador com dados simulados, sem envios reais; compilação automática OK.
