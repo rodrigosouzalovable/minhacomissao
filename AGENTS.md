@@ -40,6 +40,3 @@
 - Meta payment errors share commercial classification and cached revalidation before alerts; inconclusive checks never claim unpaid billing or release protected senders.
 
 - Campaign ticks reuse send/pick handlers and pace start-to-start globally, avoiding HTTP overhead.
-
-
-- Public portal home styling is scoped through an opt-in shell variant; shared results must keep their existing theme and behavior.
