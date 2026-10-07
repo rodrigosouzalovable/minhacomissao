@@ -1065,6 +1065,13 @@
       "when": 1791399900858,
       "tag": "0151_public_portal_wallets_scoped",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1791400804696,
+      "tag": "0152_portal_public_query_guard",
+      "breakpoints": true
     }
   ]
 }
