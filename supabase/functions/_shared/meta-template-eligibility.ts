@@ -9,6 +9,14 @@ export function motivoBloqueioTemplate(inst: any): string | null {
     return "consulta de qualidade indisponível";
   }
   if (String(inst.meta_name_status || "").toUpperCase() === "REJECTED") return "nome reprovado";
+  const restriction = metaMessagingRestriction(inst);
+  if (restriction) return restriction;
+  if (inst.templates_auto_status === "PAUSADO_REJEICOES") return "fila pausada por reprovações";
+  if (inst.templates_auto_pausado_ate && new Date(inst.templates_auto_pausado_ate) > new Date()) return "fila pausada temporariamente";
+  return null;
+}
+
+export function metaMessagingRestriction(inst: any): string | null {
   if (inst.saude_ban_info && typeof inst.saude_ban_info === "object" && Object.keys(inst.saude_ban_info).length > 0) return "banimento informado pela Meta";
   const motivos = String(inst.pausa_automatica_motivo || "");
   if (/#?141006|payment method|payment|pagamento|billing/i.test(motivos)) {
@@ -35,7 +43,5 @@ export function motivoBloqueioTemplate(inst: any): string | null {
     }
     if (["BLOCKED", "UNAVAILABLE", "RESTRICTED"].includes(String(scope?.can_send_message || "").toUpperCase())) return "envio bloqueado na Meta";
   }
-  if (inst.templates_auto_status === "PAUSADO_REJEICOES") return "fila pausada por reprovações";
-  if (inst.templates_auto_pausado_ate && new Date(inst.templates_auto_pausado_ate) > new Date()) return "fila pausada temporariamente";
   return null;
 }

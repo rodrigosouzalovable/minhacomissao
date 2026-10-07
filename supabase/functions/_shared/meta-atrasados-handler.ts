@@ -17,7 +17,7 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
     const preview=!internal;
     if(preview && input.action!=='preview') return reply({error:'Somente prévia é permitida por esta tela'},400);
     const today=brtDate();
-    if(internal && !reminderWindow()) return reply({ok:true,skipped:'Domingo ou fora do horário de envio'});
+    if(internal && !reminderWindow()) { must(await db.rpc('meta_atrasados_continuacao',{p_iniciar:false})); return reply({ok:true,skipped:'Domingo ou fora do horário de envio'}); }
     let configs: any[];
     if(preview){
       if(typeof input.tenant_id!=='string'||typeof input.template_nome!=='string'||typeof input.idioma!=='string') return reply({error:'Configuração inválida'},400);
@@ -47,7 +47,7 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
           const suppression=must(await db.from('meta_destinatario_supressao').select('telefone_sufixo').eq('telefone_sufixo',tel.slice(-8)).maybeSingle());
           if(suppression) reason='Telefone bloqueado na blacklist/supressão';
           if(sender){
-            const inst=must(await db.from('meta_whatsapp_instances').select('id,ativo,provider,saude_status,saude_quality,qualidade_leitura_ok,saude_checked_at,estado_pool,pool_fora_manual,instancia_teste_aquecimento,pausa_automatica_ate,quarentena_ate,rate_limit_ate,saude_restricoes').eq('id',sender.id).maybeSingle());
+             const inst=must(await db.from('meta_whatsapp_instances').select('id,ativo,provider,saude_status,saude_quality,qualidade_leitura_ok,saude_checked_at,estado_pool,pool_fora_manual,instancia_teste_aquecimento,pausa_automatica_ate,pausa_automatica_motivo,saude_ban_info,quarentena_ate,rate_limit_ate,saude_restricoes').eq('id',sender.id).maybeSingle());
             if(!inst||!greenSender(inst)) reason=reason||'GREEN recente e disponibilidade não confirmados';
             const components=sender.variaveis?._components||[];
             if(components.some((c:any)=>c.type==='HEADER')||components.some((c:any)=>c.type==='BUTTONS'&&c.buttons?.some((b:any)=>b.type==='URL'&&String(b.url).includes('{{')))) reason=reason||'Template exige cabeçalho ou link adicional; selecione um modelo apenas com as variáveis mapeadas';
@@ -65,11 +65,11 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
           const update=async(status:string,motivo:string|null,waId:string|null=null)=>must(await db.from('meta_atrasados_envios').update({status,motivo,wa_message_id:waId,instancia_id:sender?.id,instancia_nome:sender?.nome,atendente_nome:candidate.atendente_nome,credor:candidate.empresa,mensagem:message,atualizado_em:new Date().toISOString()}).eq('id',reservation));
           if(reason){await update('pendente',reason);continue;}
           try {
-            // The contact RPC validates exact user/label membership atomically, without granting access.
-            must(await db.rpc('meta_atrasados_contato',{p_instancia:sender.id,p_telefone:tel,p_user:candidate.user_id,p_nome:candidate.cliente_nome,p_credor:({ume_novo_mundo:'novo_mundo',mundo_da_moda:'ume',odres_cred:'odres_cred'} as any)[candidate.empresa]}));
             const fresh=must(await db.from('pagamentos').select('status,data_prevista,acordos!inner(status)').eq('id',candidate.pagamento_id).maybeSingle());
             const active=must(await db.from('meta_atrasados_config').select('ativo').eq('id',cfg.id).maybeSingle());
             if(!active?.ativo||fresh?.status!=='pendente'||fresh.data_prevista!==candidate.data_prevista||fresh.acordos?.status!=='ativo'){await update('cancelado','Parcela paga, vencimento alterado, acordo encerrado ou automação pausada');continue;}
+            // Validate payment before assigning; the RPC validates exact authorized membership.
+            must(await db.rpc('meta_atrasados_contato',{p_instancia:sender.id,p_telefone:tel,p_user:candidate.user_id,p_nome:candidate.cliente_nome,p_credor:({ume_novo_mundo:'novo_mundo',mundo_da_moda:'ume',odres_cred:'odres_cred'} as any)[candidate.empresa]}));
             const response=await handleSendWhatsAppMeta(new Request('http://internal/send',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({instancia_id:sender.id,template_id:sender.template_id,user_id:cfg.owner_id,folder_id:sender.folder_id,cliente:{telefone:tel,nome:candidate.cliente_nome,cpf:candidate.cliente_cpf,vars},credor:({ume_novo_mundo:'novo_mundo',mundo_da_moda:'ume',odres_cred:'odres_cred'} as any)[candidate.empresa]})}));
             const result=await response.json();
             if(result.success===true&&result.waId){await update('aceito',null,result.waId);accepted++;}

@@ -6,7 +6,8 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Autorizar continuação temporária e ativar lembretes Meta D+1/D+3/D+7; implementação e prévia real validadas sem envios, ativação bloqueada até autorização do custo. Teste visual autenticado pendente por renovação de sessão inválida.
+- [x] Registrar autorização da continuação temporária, limitada a três horas e encerrada ao concluir; validar variáveis, GREEN obrigatório, deduplicação e busca por conteúdo sem envios reais.
+- [ ] Conferir ativação na tela autenticada e iniciar lembretes D+1/D+3/D+7 após revisão final da prévia; teste permanece na tela de login apesar de sessão renovada válida. Nenhuma configuração ativa ou mensagem enviada.
 - [x] Ampliar busca HSM no Envio Meta para nome e conteúdo, preservando favoritos; testes passaram.
 - [x] Corrigir abertura de Instâncias do disparo; painel permaneceu aberto durante atualizações reais no login de Guilherme, fechou e reabriu pelo teclado sem erros ou alteração de envios.
 - [x] Recolher e expandir a lista lateral de abas com controle externo sempre acessível e preferência por usuário; testes de isolamento, persistência e armazenamento indisponível passaram, e navegador confirmou espaço liberado, recarregamento e reabertura por teclado sem erros.
