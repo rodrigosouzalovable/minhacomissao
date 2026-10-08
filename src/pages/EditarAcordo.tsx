@@ -193,9 +193,7 @@ export default function EditarAcordo() {
         const telefone = form.clienteTelefone.trim();
         if (telefone.length > 15) throw new Error('Telefone inválido.');
         if (empresa === empresaOriginal && alteradas.length === 0 && telefone === telefoneOriginal) {
-          void invalidarRecebimentos(queryClient);
-        void invalidarRecebimentos(queryClient);
-      navigate(`/acordos/${id}`);
+          navigate(`/acordos/${id}`);
           return;
         }
         if (alteradas.length || telefone !== telefoneOriginal) {
@@ -214,8 +212,7 @@ export default function EditarAcordo() {
           description: 'As alterações foram salvas.',
         });
         void invalidarRecebimentos(queryClient);
-        void invalidarRecebimentos(queryClient);
-      navigate(`/acordos/${id}`);
+        navigate(`/acordos/${id}`);
         return;
       }
 

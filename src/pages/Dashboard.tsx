@@ -313,7 +313,7 @@ export default function Dashboard() {
                       />
                       <Bar dataKey="novoMundo" name="NOVO MUNDO" stackId="comissao" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="ume" name="UME" stackId="comissao" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="odres" name={getEmpresaLabel('odres_cred')} stackId="comissao" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="odres" name={getEmpresaLabel('odres_cred')} stackId="comissao" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
