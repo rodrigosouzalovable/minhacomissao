@@ -13,7 +13,7 @@
 - Meta webhook alerts need failed recovery and confirmed subscription errors, not timeouts.
 - Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
 
-- Inbox Meta: toda entrada recebe atendente elegível da própria caixa por atribuição atômica; envios manuais são autorizados no servidor pela caixa; IAGO roda somente na PADRÃO; abrir não conclui o não lido, que só encerra após saída confirmada e posterior à entrada; “Não lidas” filtra antes da paginação.
+- Inbox atomically assigns eligible box members and authorizes sends server-side; IAGO rotates only in PADRÃO. Unread filters precede pagination; opening never clears unread, only confirmed later outgoing does.
 - Unknown Meta messages keep restricted diagnostics and show a clear content-unavailable notice.
 - Inbox pool returns reuse authorized RPCs after individual Meta health confirmation; never bypass real blocks.
 - Inbox media uses conversation-level authorization, never broad folder access, to isolate attachments.
@@ -27,15 +27,15 @@
 - Campaign results match replies/agreements by normalized phone suffix/CPF and indexed time windows for fast manual checks without polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.
 - Navigation uses explicitly granted tabs; `parceiro_meta` scopes instances, never grants extra screens.
-- A captação nacional de candidatos a resposta automática tem agenda, configuração e trava próprias; usa o teto diário de consultas e limites mensais por conta Google, nunca um bloqueio diário em dólares, e não dispara mensagens.
+- National lead capture has separate scheduling/config/locks, daily query and monthly Google-account limits, never dollar caps or message sends.
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
-- Parcelas vencidas são derivadas de pagamentos pendentes em acordos ativos e compartilham a consulta entre sino, alerta e Retornos; o pop-up abre uma vez às 9h e às 15h BRT, inclusive no primeiro acesso posterior à janela.
-- A comissão do funcionário usa a data efetiva do pagamento: até 30/09/2026 preserva 2/3/4/6/8/10%, e desde 01/10/2026 usa 2/3/4/5/7/9% para todos os credores; honorários do escritório permanecem separados.
+- Overdue uses pending payments in active agreements, shared across bell/alerts/Retornos; popup once at 9h/15h BRT, including later first access.
+- Employee commission uses actual payment date and creditor-independent date tiers; office fees remain separate.
 - UME loads client/totals first and alternatives on demand; bound waits, cache 12h without polling.
 - Creditor negotiation templates keep independent editable text despite shared extraction/calculation.
 - O IAGO participa do rodízio somente na PADRÃO, mas responde toda entrada UAZAPI da AQUECIMENTO com uma resposta curta, sem transferência e sem follow-up.
 - A recuperação automática de números próprios RED/YELLOW opera diariamente das 08h às 19h BRT, exceto domingos, e desativa imediatamente remetentes com bloqueio real confirmado pela Meta.
-- Contatos confirmados do Google Maps podem ser colocados na blacklist pelo Aquecimento Meta; o bloqueio por sufixo remove o contato da fonte e impede que novas detecções o recriem.
+- Maps blacklist matches suffixes, removes source contacts and prevents recreation.
 
 - Meta payment errors share commercial classification and cached revalidation before alerts; inconclusive checks never claim unpaid billing or release protected senders.
 
@@ -44,3 +44,4 @@
 - Cadastral recovery uses owner consent snapshots, atomic suffix leases and one-time replies before generic IAGO to prevent duplicates and honor opt-outs.
 
 - Manual Meta checks batch all owner-connected instances; automatic checks remain due-only to limit cost and timeouts.
+- Overdue audits owner-admin cost consent; isolated scheduler credentials start bounded cycles and stop after drain.

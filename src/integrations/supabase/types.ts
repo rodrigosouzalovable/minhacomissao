@@ -5040,6 +5040,7 @@ export type Database = {
           atualizado_em: string
           ciclo_ate: string | null
           criado_em: string
+          custo_autorizado_em: string | null
           id: string
           idioma: string
           lease_ate: string | null
@@ -5057,6 +5058,7 @@ export type Database = {
           atualizado_em?: string
           ciclo_ate?: string | null
           criado_em?: string
+          custo_autorizado_em?: string | null
           id?: string
           idioma?: string
           lease_ate?: string | null
@@ -5074,6 +5076,7 @@ export type Database = {
           atualizado_em?: string
           ciclo_ate?: string | null
           criado_em?: string
+          custo_autorizado_em?: string | null
           id?: string
           idioma?: string
           lease_ate?: string | null
@@ -13154,6 +13157,10 @@ export type Database = {
           p_tenant: string
         }
         Returns: string
+      }
+      meta_atrasados_scheduler_autorizado: {
+        Args: { p_token: string }
+        Returns: boolean
       }
       meta_bm_uso_24h: {
         Args: never

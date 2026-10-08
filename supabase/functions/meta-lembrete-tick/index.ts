@@ -67,7 +67,8 @@ Deno.serve(async (req) => {
     // Wake overdue work only from the authenticated daily scheduler, never a UI simulation.
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const schedulerToken = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-    if (serviceKey && schedulerToken === serviceKey && !dryRun && !force) {
+    const trustedScheduler = serviceKey && (schedulerToken === serviceKey || (schedulerToken && (await supabase.rpc('meta_atrasados_scheduler_autorizado', { p_token: schedulerToken })).data === true));
+    if (trustedScheduler && !dryRun && !force) {
       const brtNow = nowBRT();
       if (brtNow.getDay() !== 0) {
         const { error: wakeError } = await supabase.rpc('meta_atrasados_continuacao', { p_iniciar: true });

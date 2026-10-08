@@ -13,6 +13,7 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
   let internal=token===key; let uid: string | undefined;
   try {
     const input=await req.json().catch(()=>({}));
+    if(!internal && token) internal=must(await db.rpc('meta_atrasados_scheduler_autorizado',{p_token:token}))===true;
     if(!internal){const auth=await db.auth.getUser(token); uid=auth.data.user?.id; if(auth.error||!uid) return reply({error:'Sessão inválida'},401); const admin=must(await db.rpc('has_role',{_user_id:uid,_role:'admin'})); if(!admin) return reply({error:'Acesso restrito ao administrador'},403);}
     const preview=!internal;
     if(preview && input.action!=='preview') return reply({error:'Somente prévia é permitida por esta tela'},400);
