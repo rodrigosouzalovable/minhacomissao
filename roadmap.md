@@ -6,7 +6,8 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Corrigir origem de alertas de violação e revalidar individualmente limites informativos de nome; preservar bloqueios reais e conferir o final 6444 sem mensagens.
+- [x] Corrigir origem de alertas de violação e revalidar individualmente limites informativos de nome; 19 testes passaram, compilação OK e regra validada com saúde real do 6444, sem mensagens.
+- [ ] Confirmar liberação efetiva do 6444 após disponibilização da função atualizada; consulta real ainda executou a versão anterior e manteve a pausa.
 - [x] Separar médias e medianas da queda detectada até GREEN e do primeiro envio até GREEN, com amostras independentes e histórico parcial excluído; oito testes passaram e compilação OK, sem novas consultas ou alterações nos disparos e limites.
 - [x] Corrigir autenticação do agendamento existente de recuperação: credencial exclusiva restrita, espera HTTP de 90s, 20 testes passaram; teste normal aceitou oito envios e rodada automática das 18h aceitou mais cinco, sem falhas; frequência e limites preservados. Instâncias sem template aprovado continuam aguardando.
 - [x] Ativar recuperação cadastral diária RED/YELLOW com Google Maps autorizado e resposta única na AQUECIMENTO; consentimento registrado, três envios aceitos sem falhas e caixa correta confirmada. Até 20 mensagens/dia por número, 08h–19h BRT, sem domingos; instâncias sem template aprovado aguardam.
