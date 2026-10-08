@@ -6,8 +6,8 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Ativar recuperação cadastral diária RED/YELLOW com Google Maps autorizado e resposta única na AQUECIMENTO; aguardando confirmação da estimativa de custo antes dos envios.
-- [ ] Medir envios e respostas por fonte e ciclo até GREEN, com ajustes conservadores sem aumento automático de volume; aguardando confirmação de custo do fluxo.
+- [x] Ativar recuperação cadastral diária RED/YELLOW com Google Maps autorizado e resposta única na AQUECIMENTO; consentimento registrado, três envios aceitos sem falhas e caixa correta confirmada. Até 20 mensagens/dia por número, 08h–19h BRT, sem domingos; instâncias sem template aprovado aguardam.
+- [x] Medir envios e respostas por fonte e ciclo até GREEN, sem aumento automático de volume; contadores verificados no banco, 16 testes passaram e compilação OK. Validação visual do painel não concluída: navegação autenticada retorna ao login.
 - [x] Incluir Odres Cred nos recebimentos e separar os três credores; resumos invalidados após pagamentos, oito testes passaram e consulta protegida confirmou R$36.021,25 = Novo Mundo R$25.976,88 + UME R$6.258,18 + Odres R$3.786,19. Ranking validado isoladamente com dados reais, sem erros; navegação autenticada completa permanece retornando ao login. Regras financeiras preservadas.
 - [x] Corrigir busca por telefone em todas as conversas autorizadas, independente dos filtros, com caixa/atendente; três testes passaram e compilação OK, sem envios. Validação autenticada do final 9476 não concluída: sessão aceita, mas navegação retorna ao login.
 - [x] Liberar o botão de aplicação de mestre Utility após reclassificação de uma cópia; 18 testes passaram, tela autenticada confirmou botão habilitado e aplicação simulada em 57 destinos, sem submissões reais; autorização, deduplicação e bloqueios preservados, compilação OK.
@@ -17,7 +17,7 @@
 - [x] Implementar recuperação cadastral com autorização por estoque, variáveis exatas, reservas por sufixo, reposição alvo 100 sem autorizar novos leads e template obrigatório; funções disponibilizadas, seleção nova desativada.
 - [x] Registrar fluxo na AQUECIMENTO; IAGO agradece uma única confirmação com “Obrigado pela confirmação”, silencia demais respostas e aplica blacklist em “Sair”; 18 testes passaram sem mensagens externas.
 - [x] Prévia autenticada 200: 2.126 empresas autorizadas (661 confirmadas e 1.465 candidatas), 74 cópias aprovadas; validação de todas as funções passou, compilação automática OK.
-- [ ] Ativar seleção nova após apresentar prévia e cobertura: 24 UAZAPI têm apenas apelidos técnicos, sem nome empresarial confiável; permanecem fora da seleção até o usuário fornecer nomes reais. Novos leads exigem autorização individual; teste visual autenticado ficou no login, prévia validada diretamente sem envios.
+- [ ] Incluir os 24 UAZAPI na seleção cadastral quando o usuário fornecer nomes empresariais reais; apelidos técnicos não são confirmação de nome. Google Maps autorizado já ativo; novos leads continuam exigindo autorização individual.
 - [x] Restaurar resultado azul da consulta, ocultar carteiras quitadas e separar pendências por credor; 24 testes e fluxos simulados desktop/celular passaram, sem alterações financeiras ou envios. Registros de dívida junto a acordo quitado exigem conferência, pois a resposta pública não identifica quais contratos foram quitados.
 - [x] Ajustar logos somente na home, ampliar Odres com letras brancas e título do portal, restaurar atalhos do cabeçalho; imagens, menu móvel, links e CPF verificados, 15 testes passaram, favicon preservado.
 - [x] Reestruturar somente a página inicial: azul anterior, logo original legível, consulta centralizada e tipografia clássica; desktop/celular, três logos, CPF e FAQ verificados; 15 testes passaram, resultados preservados.
