@@ -1,3 +1,5 @@
+import { useMetaMes } from '@/hooks/useMetaMes';
+import { RecebimentosCredores } from './RecebimentosCredores';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -15,58 +17,8 @@ function fmt(v: number) {
 }
 
 export function MetaMesBanner() {
-  const { user } = useAuth();
   const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
-  const mesAno = format(now, 'yyyy-MM');
-
-  const { data: meta } = useQuery({
-    queryKey: ['meta-banner', user?.id, mesAno],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('metas_funcionarios' as any)
-        .select('valor_meta')
-        .eq('user_id', user!.id)
-        .eq('mes_ano', mesAno)
-        .maybeSingle();
-      return data as any;
-    },
-    enabled: !!user?.id,
-  });
-
-  const { data: pagamentos } = useQuery({
-    queryKey: ['meta-banner-pag', user?.id, mesAno],
-    queryFn: async () => {
-      const { data: acordos } = await supabase.from('acordos').select('id').eq('user_id', user!.id);
-      if (!acordos?.length) return [];
-      const { data } = await supabase
-        .from('pagamentos')
-        .select('valor_parcela, data_paga')
-        .in('acordo_id', acordos.map(a => a.id))
-        .eq('status', 'pago')
-        .gte('data_paga', format(monthStart, 'yyyy-MM-dd'))
-        .lte('data_paga', format(monthEnd, 'yyyy-MM-dd'));
-      return data || [];
-    },
-    enabled: !!user?.id,
-    staleTime: 10 * 60 * 1000,
-    refetchInterval: () => (document.visibilityState === 'visible' ? 15 * 60 * 1000 : false),
-    refetchIntervalInBackground: false,
-  });
-
-  const valorMeta = meta ? Number(meta.valor_meta) : 0;
-  const recebido = (pagamentos || []).reduce((s, p) => s + Number(p.valor_parcela), 0);
-
-  const { diasUteisTotal, diasUteisDecorridos, diasUteisRestantes } = useMemo(() => {
-    const all = eachDayOfInterval({ start: monthStart, end: monthEnd }).filter(d => !isWeekend(d));
-    const decorridos = all.filter(d => !isAfter(d, now)).length;
-    return {
-      diasUteisTotal: all.length,
-      diasUteisDecorridos: decorridos,
-      diasUteisRestantes: all.length - decorridos,
-    };
-  }, [now.toDateString()]);
+  const { valorMeta, recebido, porCredor, diasUteisTotal, diasUteisDecorridos, diasUteisRestantes } = useMetaMes();
 
   if (valorMeta <= 0) {
     return (
@@ -155,7 +107,7 @@ export function MetaMesBanner() {
         <Card><CardContent className="pt-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-emerald-500/10"><DollarSign className="h-5 w-5 text-emerald-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Já Recebido</p><p className="text-lg font-bold text-emerald-600">{fmt(recebido)}</p></div>
+            <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">Já Recebido</p><p className="text-lg font-bold text-emerald-600">{fmt(recebido)}</p><RecebimentosCredores className="mt-2" valores={porCredor} /></div>
           </div>
         </CardContent></Card>
         <Card><CardContent className="pt-4">

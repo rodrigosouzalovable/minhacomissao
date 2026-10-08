@@ -1,3 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
+import { RecebimentosCredores } from './RecebimentosCredores';
+import { getEmpresaLabel } from '@/lib/empresaLabels';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -28,6 +31,7 @@ interface FuncionarioData {
   percentualEquipe: number;
   novoMundoRecebido: number;
   umeRecebido: number;
+  odresRecebido: number;
 }
 
 interface EvolucaoDiaria {
@@ -64,6 +68,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
   const [totalRecebido, setTotalRecebido] = useState(0);
   const [totalNovoMundo, setTotalNovoMundo] = useState(0);
   const [totalUme, setTotalUme] = useState(0);
+  const [totalOdres, setTotalOdres] = useState(0);
   const [funcionarios, setFuncionarios] = useState<FuncionarioData[]>([]);
   const [evolucaoDiaria, setEvolucaoDiaria] = useState<EvolucaoDiaria[]>([]);
   const [totalFuncionarios, setTotalFuncionarios] = useState(0);
@@ -129,150 +134,63 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
     fetchMeta();
   }, [mesAno]);
 
-  useEffect(() => {
-    async function fetchData() {
-      if (metaValor === 0) {
-        setLoading(false);
-        return;
-      }
-      
-      setLoading(true);
-      
-      const dataInicioStr = format(dataInicio, 'yyyy-MM-dd');
-      const dataFimStr = format(dataFim, 'yyyy-MM-dd');
-
-      // Buscar total de funcionários ativos
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, nome');
-
-      if (profilesError) {
-        console.error('Erro ao buscar profiles:', profilesError);
-        setLoading(false);
-        return;
-      }
-
-      const profileMap: Record<string, string> = {};
-      profiles?.forEach(p => {
-        profileMap[p.id] = p.nome;
-      });
-
-      setTotalFuncionarios(profiles?.length || 0);
-
-      // Buscar pagamentos do mês
-      const { data: pagamentos, error: pagamentosError } = await supabase
-        .from('pagamentos')
-        .select('valor_parcela, acordo_id, data_paga')
-        .eq('status', 'pago')
-        .gte('data_paga', dataInicioStr)
-        .lte('data_paga', dataFimStr);
-
-      if (pagamentosError) {
-        console.error('Erro ao buscar pagamentos:', pagamentosError);
-        setLoading(false);
-        return;
-      }
-
-      // Buscar acordos para mapear user_id
-      const acordoIds = [...new Set(pagamentos?.map(p => p.acordo_id) || [])];
-      
-      const acordoUserMap: Record<string, string> = {};
-      const acordoEmpresaMap: Record<string, string> = {};
-      if (acordoIds.length > 0) {
-        const { data: acordos } = await supabase
-          .from('acordos')
-          .select('id, user_id, empresa')
-          .in('id', acordoIds);
-        
-        acordos?.forEach(a => {
-          acordoUserMap[a.id] = a.user_id;
-          acordoEmpresaMap[a.id] = a.empresa;
-        });
-      }
-
-      // Calcular totais
-      let total = 0;
-      const valoresPorFuncionario: Record<string, number> = {};
-      const novoMundoPorFuncionario: Record<string, number> = {};
-      const umePorFuncionario: Record<string, number> = {};
+  const { data: recebimentos, isFetching: carregandoRecebimentos } = useQuery({
+    queryKey: ['metas-mensal', mesAno],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data: ranking, error } = await supabase.rpc('ranking_mensal_por_credor_v2', { p_mes_ano: mesAno });
+      if (error) throw error;
+      const rows = ranking || [];
+      const idsVisiveis = new Set(rows.map(r => r.user_id));
       const valoresPorDia: Record<string, number> = {};
-      let novoMundoTotal = 0;
-      let umeTotal = 0;
-
-      pagamentos?.forEach(p => {
-        const valor = Number(p.valor_parcela) || 0;
-        total += valor;
-
-        const userId = acordoUserMap[p.acordo_id];
-        if (userId) {
-          valoresPorFuncionario[userId] = (valoresPorFuncionario[userId] || 0) + valor;
-          if (acordoEmpresaMap[p.acordo_id] === 'ume_novo_mundo') {
-            novoMundoPorFuncionario[userId] = (novoMundoPorFuncionario[userId] || 0) + valor;
-            novoMundoTotal += valor;
-          }
-          if (acordoEmpresaMap[p.acordo_id] === 'mundo_da_moda') {
-            umePorFuncionario[userId] = (umePorFuncionario[userId] || 0) + valor;
-            umeTotal += valor;
-          }
+      // Paginação evita perder parcelas acima do limite de resposta.
+      for (let offset = 0; ; offset += 1000) {
+        const { data, error: pgError } = await supabase.from('pagamentos')
+          .select('id, valor_parcela, data_paga, acordos!inner(user_id)')
+          .eq('status', 'pago')
+          .gte('data_paga', format(dataInicio, 'yyyy-MM-dd'))
+          .lte('data_paga', format(dataFim, 'yyyy-MM-dd'))
+          .order('id').range(offset, offset + 999);
+        if (pgError) throw pgError;
+        for (const p of data || []) {
+          if (p.data_paga && idsVisiveis.has(p.acordos.user_id)) valoresPorDia[p.data_paga] = (valoresPorDia[p.data_paga] || 0) + Number(p.valor_parcela);
         }
-
-        if (p.data_paga) {
-          valoresPorDia[p.data_paga] = (valoresPorDia[p.data_paga] || 0) + valor;
-        }
-      });
-
-      setTotalRecebido(total);
-      setTotalNovoMundo(novoMundoTotal);
-      setTotalUme(umeTotal);
-
-      // Calcular dados por funcionário
-      const metaIndividual = metaValor / (profiles?.length || 1);
-      const funcionariosData: FuncionarioData[] = profiles?.map(p => {
-        const recebido = valoresPorFuncionario[p.id] || 0;
-        const faltante = Math.max(0, metaIndividual - recebido);
-        return {
-          userId: p.id,
-          nome: p.nome,
-          totalRecebido: recebido,
-          metaIndividual,
-          faltante,
-          porDia: diasUteisRestantes > 0 ? faltante / diasUteisRestantes : 0,
-          percentualEquipe: total > 0 ? (recebido / total) * 100 : 0,
-          novoMundoRecebido: novoMundoPorFuncionario[p.id] || 0,
-          umeRecebido: umePorFuncionario[p.id] || 0,
-        };
-      }).sort((a, b) => b.totalRecebido - a.totalRecebido) || [];
-
-      setFuncionarios(funcionariosData);
-
-      // Calcular evolução diária (mantém dias corridos para visualização)
-      const evolucao: EvolucaoDiaria[] = [];
-      let acumulado = 0;
-      const metaDiaria = metaValor / totalDiasUteisMes;
-
-      for (let i = 0; i < diasPassados; i++) {
-        const data = new Date(dataInicio);
-        data.setDate(data.getDate() + i);
-        const dataStr = format(data, 'yyyy-MM-dd');
-        
-        acumulado += valoresPorDia[dataStr] || 0;
-        
-        // Calcular quantos dias úteis passaram até esta data
-        const diasUteisAteData = calcularDiasUteisRestantes(dataInicio, data);
-        
-        evolucao.push({
-          dia: format(data, 'dd/MM'),
-          acumulado,
-          metaIdeal: metaDiaria * diasUteisAteData,
-        });
+        if (!data || data.length < 1000) break;
       }
+      return { rows, valoresPorDia };
+    },
+  });
 
-      setEvolucaoDiaria(evolucao);
-      setLoading(false);
+  useEffect(() => {
+    setLoading(carregandoRecebimentos && !recebimentos);
+    if (!recebimentos) return;
+    const { rows, valoresPorDia } = recebimentos;
+    const total = rows.reduce((s, r) => s + Number(r.total_recebido), 0);
+    setTotalRecebido(total);
+    setTotalNovoMundo(rows.reduce((s, r) => s + Number(r.novo_mundo_recebido), 0));
+    setTotalUme(rows.reduce((s, r) => s + Number(r.ume_recebido), 0));
+    setTotalOdres(rows.reduce((s, r) => s + Number(r.odres_cred_recebido), 0));
+    setTotalFuncionarios(rows.length);
+    const metaIndividual = metaValor / (rows.length || 1);
+    setFuncionarios(rows.map(p => {
+      const recebido = Number(p.total_recebido);
+      const faltante = Math.max(0, metaIndividual - recebido);
+      return { userId: p.user_id, nome: p.nome, totalRecebido: recebido, metaIndividual, faltante,
+        porDia: diasUteisRestantes > 0 ? faltante / diasUteisRestantes : 0,
+        percentualEquipe: total > 0 ? recebido / total * 100 : 0,
+        novoMundoRecebido: Number(p.novo_mundo_recebido), umeRecebido: Number(p.ume_recebido), odresRecebido: Number(p.odres_cred_recebido) };
+    }));
+    const evolucao: EvolucaoDiaria[] = [];
+    let acumulado = 0;
+    const metaDiaria = metaValor / totalDiasUteisMes;
+    for (let i = 0; i < diasPassados; i++) {
+      const data = new Date(dataInicio);
+      data.setDate(data.getDate() + i);
+      acumulado += valoresPorDia[format(data, 'yyyy-MM-dd')] || 0;
+      evolucao.push({ dia: format(data, 'dd/MM'), acumulado, metaIdeal: metaDiaria * calcularDiasUteisRestantes(dataInicio, data) });
     }
-
-    fetchData();
-  }, [mesAno, metaValor, dataInicio, dataFim, diasPassados, diasUteisRestantes, totalDiasUteisMes]);
+    setEvolucaoDiaria(evolucao);
+  }, [recebimentos, carregandoRecebimentos, metaValor, dataInicio, diasPassados, diasUteisRestantes, totalDiasUteisMes]);
 
   // Formatação de moeda para input
   const formatCurrencyInput = (value: string) => {
@@ -525,7 +443,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
               <div>
                 <p className="text-sm text-muted-foreground">Já Recebido</p>
                 <p className="text-xl font-bold text-green-500">{formatCurrency(totalRecebido)}</p>
-                <p className="text-xs text-muted-foreground">NOVO MUNDO {formatCurrency(totalNovoMundo)} · UME {formatCurrency(totalUme)}</p>
+                <RecebimentosCredores className="mt-2" valores={{ ume_novo_mundo: totalNovoMundo, mundo_da_moda: totalUme, odres_cred: totalOdres }} />
               </div>
             </div>
           </CardContent>
@@ -664,9 +582,10 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-0.5 text-right text-xs sm:grid-cols-3 sm:gap-3">
+                  <div className="grid grid-cols-2 gap-2 text-right text-xs sm:grid-cols-4 sm:gap-3">
                     <span><span className="text-muted-foreground">NOVO MUNDO</span><br /><strong>{formatCurrency(func.novoMundoRecebido)}</strong></span>
                     <span><span className="text-muted-foreground">UME</span><br /><strong>{formatCurrency(func.umeRecebido)}</strong></span>
+                    <span><span className="text-muted-foreground">{getEmpresaLabel('odres_cred')}</span><br /><strong>{formatCurrency(func.odresRecebido)}</strong></span>
                     <span><span className="text-muted-foreground">Total</span><br /><strong className="text-green-500">{formatCurrency(func.totalRecebido)}</strong></span>
                   </div>
                 </div>
@@ -699,7 +618,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
                   <div className="relative">
                     <Progress value={Math.min(100, percentualMeta)} className="h-2" />
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
+                  <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
                     <div>
                       <span className="text-muted-foreground">Recebido: </span>
                       <span className="font-medium text-green-500">{formatCurrency(func.totalRecebido)}</span>
@@ -714,6 +633,7 @@ export function MetasMensal({ mesAno }: MetasMensalProps) {
                     </div>
                     <div><span className="text-muted-foreground">NOVO MUNDO: </span><span className="font-medium">{formatCurrency(func.novoMundoRecebido)}</span></div>
                     <div><span className="text-muted-foreground">UME: </span><span className="font-medium">{formatCurrency(func.umeRecebido)}</span></div>
+                    <div><span className="text-muted-foreground">{getEmpresaLabel('odres_cred')}: </span><span className="font-medium">{formatCurrency(func.odresRecebido)}</span></div>
                   </div>
                 </div>
               );

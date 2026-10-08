@@ -13520,6 +13520,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      ranking_mensal_por_credor_v2: {
+        Args: { p_mes_ano?: string }
+        Returns: {
+          nome: string
+          novo_mundo_recebido: number
+          odres_cred_recebido: number
+          total_recebido: number
+          ume_recebido: number
+          user_id: string
+        }[]
+      }
       registrar_auto_resposta_geral: {
         Args: {
           _cidade?: string

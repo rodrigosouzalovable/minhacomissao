@@ -1,3 +1,5 @@
+import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { CopyButton } from '@/components/CopyButton';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -34,6 +36,7 @@ type Acordo = Tables<'acordos'>;
 type Pagamento = Tables<'pagamentos'>;
 
 export default function AcordoDetalhe() {
+  const queryClient = useQueryClient();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
@@ -283,6 +286,7 @@ export default function AcordoDetalhe() {
         setAcordo({ ...acordo, status: resultado.status_acordo });
       }
 
+      void invalidarRecebimentos(queryClient);
       toast({
         title: 'Parcela marcada como paga!',
         description: 'A comissão foi liberada.',
@@ -336,6 +340,7 @@ export default function AcordoDetalhe() {
         setAcordo({ ...acordo, status: resultado.status_acordo });
       }
 
+      void invalidarRecebimentos(queryClient);
       toast({
         title: 'Parcela desmarcada',
         description: 'O pagamento foi revertido para pendente.',
@@ -370,6 +375,7 @@ export default function AcordoDetalhe() {
         comissao_total?: number;
       } | null;
       const dataPersistida = resultado?.data_paga || novaData;
+      void invalidarRecebimentos(queryClient);
 
       setPagamentos(prev =>
         prev.map(p =>
@@ -472,6 +478,7 @@ export default function AcordoDetalhe() {
       setEditandoValorParcela(null);
       setNovoValorParcela('');
 
+      void invalidarRecebimentos(queryClient);
       toast({
         title: 'Parcela atualizada!',
         description: `Novo valor: ${formatarMoeda(valorPersistido)} • Total: ${formatarMoeda(totalPersistido)}`,
@@ -488,6 +495,7 @@ export default function AcordoDetalhe() {
       const { error } = await supabase.rpc('delete_acordo_atomico' as any, { p_acordo_id: acordo.id });
       if (error) throw error;
 
+      void invalidarRecebimentos(queryClient);
       toast({
         title: 'Acordo excluído',
         description: 'O acordo foi removido com sucesso.',

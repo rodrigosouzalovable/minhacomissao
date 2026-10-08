@@ -30,7 +30,8 @@
 - National lead capture has separate scheduling/config/locks, daily query and monthly Google-account limits, never dollar caps or message sends.
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
 - Overdue uses pending payments in active agreements, shared across bell/alerts/Retornos; popup once at 9h/15h BRT, including later first access.
-- Employee commission uses actual payment date and creditor-independent date tiers; office fees remain separate.
+- Employee commission uses payment dates and independent tiers; office fees stay separate.
+- Receipt views share a versioned ranking RPC and success cache invalidation for consistent totals without polling.
 - UME loads client/totals first and alternatives on demand; bound waits, cache 12h without polling.
 - Creditor negotiation templates keep independent editable text despite shared extraction/calculation.
 - O IAGO participa do rodízio somente na PADRÃO, mas responde toda entrada UAZAPI da AQUECIMENTO com uma resposta curta, sem transferência e sem follow-up.

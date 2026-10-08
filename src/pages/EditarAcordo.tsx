@@ -1,3 +1,5 @@
+import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -54,6 +56,7 @@ const formatPhone = (value: string) => {
 };
 
 export default function EditarAcordo() {
+  const queryClient = useQueryClient();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { isAdmin, loading: loadingRole } = useUserRole();
@@ -208,6 +211,7 @@ export default function EditarAcordo() {
           title: 'Acordo atualizado!',
           description: 'As alterações foram salvas.',
         });
+        void invalidarRecebimentos(queryClient);
         navigate(`/acordos/${id}`);
         return;
       }
@@ -334,6 +338,7 @@ export default function EditarAcordo() {
         description: `As alterações foram salvas com sucesso.`,
       });
 
+      void invalidarRecebimentos(queryClient);
       navigate(`/acordos/${id}`);
     } catch (err) {
       if (err instanceof z.ZodError) {

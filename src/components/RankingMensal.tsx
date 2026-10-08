@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getEmpresaLabel } from '@/lib/empresaLabels';
 import { Trophy } from 'lucide-react';
 
 interface RankingItem {
@@ -10,6 +11,7 @@ interface RankingItem {
   nome: string;
   novo_mundo_recebido: number;
   ume_recebido: number;
+  odres_cred_recebido: number;
   total_recebido: number;
 }
 
@@ -22,7 +24,7 @@ export function RankingMensal() {
   const { data: ranking, isLoading } = useQuery({
     queryKey: ['ranking-mensal'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('ranking_mensal_por_credor' as any);
+      const { data, error } = await supabase.rpc('ranking_mensal_por_credor_v2');
       if (error) throw error;
       return (data as RankingItem[]) || [];
     },
@@ -31,6 +33,8 @@ export function RankingMensal() {
   const totalEquipe = ranking?.reduce((sum, r) => sum + Number(r.total_recebido), 0) || 0;
   const totalNovoMundo = ranking?.reduce((sum, r) => sum + Number(r.novo_mundo_recebido), 0) || 0;
   const totalUme = ranking?.reduce((sum, r) => sum + Number(r.ume_recebido), 0) || 0;
+
+  const totalOdres = ranking?.reduce((sum, r) => sum + Number(r.odres_cred_recebido), 0) || 0;
 
   return (
     <Card>
@@ -62,7 +66,7 @@ export function RankingMensal() {
                 return (
                   <div
                     key={item.user_id}
-                    className="flex items-center gap-3 rounded-lg border p-3"
+                    className="grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-3 rounded-lg border p-3"
                   >
                     <span className="text-lg font-bold w-8 text-center shrink-0">
                       {index < 3 ? medalhas[index] : `${index + 1}º`}
@@ -81,18 +85,20 @@ export function RankingMensal() {
                         </span>
                       </div>
                     </div>
-                    <div className="grid shrink-0 grid-cols-1 gap-0.5 text-right text-xs sm:grid-cols-3 sm:gap-4">
+                    <div className="col-span-2 grid min-w-0 grid-cols-2 gap-2 text-right text-xs sm:grid-cols-4 sm:gap-4">
                       <span><span className="text-muted-foreground">NOVO MUNDO</span><br /><strong>{formatarMoeda(Number(item.novo_mundo_recebido))}</strong></span>
                       <span><span className="text-muted-foreground">UME</span><br /><strong>{formatarMoeda(Number(item.ume_recebido))}</strong></span>
+                      <span><span className="text-muted-foreground">{getEmpresaLabel('odres_cred')}</span><br /><strong>{formatarMoeda(Number(item.odres_cred_recebido))}</strong></span>
                       <span><span className="text-muted-foreground">Total</span><br /><strong className="text-green-600 dark:text-green-400">{formatarMoeda(Number(item.total_recebido))}</strong></span>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="mt-3 grid grid-cols-1 gap-1 border-t pt-3 text-right text-sm sm:grid-cols-3">
+            <div className="mt-3 grid grid-cols-1 gap-1 border-t pt-3 text-right text-sm sm:grid-cols-2">
               <span><span className="text-muted-foreground">NOVO MUNDO: </span><strong>{formatarMoeda(totalNovoMundo)}</strong></span>
               <span><span className="text-muted-foreground">UME: </span><strong>{formatarMoeda(totalUme)}</strong></span>
+              <span><span className="text-muted-foreground">{getEmpresaLabel('odres_cred')}: </span><strong>{formatarMoeda(totalOdres)}</strong></span>
               <span><span className="text-muted-foreground">Total: </span><strong className="text-green-600 dark:text-green-400">{formatarMoeda(totalEquipe)}</strong></span>
             </div>
           </ScrollArea>

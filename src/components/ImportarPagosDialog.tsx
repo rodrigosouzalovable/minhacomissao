@@ -1,3 +1,5 @@
+import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -54,6 +56,7 @@ function mesAnoDe(dataIso: string): string {
 }
 
 export function ImportarPagosDialog({ onImported }: { onImported?: () => void }) {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -268,6 +271,7 @@ export function ImportarPagosDialog({ onImported }: { onImported?: () => void })
         title: 'Importação concluída',
         description: `${ok} parcela(s) marcada(s) como paga(s). ${erro > 0 ? `${erro} erro(s).` : ''}`,
       });
+      void invalidarRecebimentos(queryClient);
       onImported?.();
       setOpen(false);
       reset();
