@@ -53,7 +53,6 @@ Deno.serve(async (req) => {
     let modelosQuery = supabase
       .from("meta_templates_mestre")
       .select("id, nome, idioma, criado_por, categoria")
-      .eq("reclassificado_marketing", false)
       .order("criado_em", { ascending: true });
     modelosQuery = modelosQuery.eq("categoria", "UTILITY").eq("injetar_em_novos", true);
     const { data: marcados } = await modelosQuery;

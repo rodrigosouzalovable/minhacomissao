@@ -1,3 +1,4 @@
+import { registroReclassificacao } from "../_shared/meta-template-distribution.ts";
 // Confere na Meta o status dos templates que ainda estão aguardando resposta.
 // Regras (plano aprovado):
 //  - só olha itens em aberto (PENDING/ENVIADO) cuja próxima conferência já venceu;
@@ -128,7 +129,7 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
         const remotoById = new Map(remotos.map((t) => [String(t.id), t]));
         const remotoByName = new Map(remotos.map((t) => [`${t.name}|${t.language}`, t]));
 
-        // ===== Meta reclassificou o modelo para MARKETING? Para de subir. =====
+        // Reclassification is recorded per copy; it does not stop distribution.
         const virouMarketing = remotos.filter(
           (t) => String(t.category || "").toUpperCase() === "MARKETING",
         );
@@ -140,33 +141,17 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
             .eq("idioma", t.language)
             .eq("criado_por", inst.user_id)
             .maybeSingle();
-          if (!mestre || mestre.categoria !== "UTILITY" || mestre.reclassificado_marketing === true) continue;
+          if (!mestre || mestre.categoria !== "UTILITY") continue;
 
           await supabase.from("meta_whatsapp_templates").update({ categoria: "MARKETING" })
             .eq("instancia_id", inst.id).eq("nome_template", t.name).eq("idioma", t.language);
 
           await supabase
             .from("meta_templates_mestre")
-            .update({
-              reclassificado_marketing: true,
-              categoria_meta: "MARKETING",
-              injetar_em_novos: false,
-              usar_em_leads: false,
-            })
+            .update(registroReclassificacao())
             .eq("id", mestre.id);
 
-          // Cancela o que ainda não foi enviado para a Meta.
-          const { data: cancelados } = await supabase
-            .from("meta_templates_onboarding_fila")
-            .update({
-              status: "CANCELADO",
-              motivo: "modelo reclassificado como MARKETING pela Meta",
-              finalizado_em: new Date().toISOString(),
-            })
-            .eq("template_mestre_id", mestre.id)
-            .in("status", ["PENDENTE", "AGENDADO"])
-            .select("id");
-
+          if (mestre.reclassificado_marketing === true) continue;
           await notificarAdmin(supabase, {
             tipo: "template_reclassificado_marketing",
             destinatarios: DESTINO_AVISO,
@@ -176,9 +161,8 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
               `🚫 *Modelo virou MARKETING na Meta*\n\n` +
               `Modelo: *${mestre.nome}*\n` +
               `${await linhaBmInstancia(supabase, inst)}\n` +
-              `Ele saiu da injeção em números novos e do aquecimento de leads. ` +
-              `Itens cancelados na fila: *${(cancelados || []).length}*.\n\n` +
-              `Só subimos modelos de utilidade.`,
+              `A distribuição continua nas demais instâncias. A categoria real é preservada; ` +
+              `disparos Marketing continuam sujeitos ao bloqueio de custos.`,
           });
         }
 

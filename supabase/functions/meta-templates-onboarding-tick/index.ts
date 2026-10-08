@@ -1,3 +1,4 @@
+import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 // Copia templates aprovados para números novos da API Oficial, de forma gradual.
 // Roda de carona no tick de 10 minutos já existente (sem cron novo).
 //
@@ -295,7 +296,7 @@ Deno.serve(async (req) => {
       // de todos os HSM. A inserção é feita somente por funções autenticadas;
       // ainda exigimos o mesmo proprietário e uma categoria segura.
       const categoriaMestre = String(mestreItem?.categoria || "").toUpperCase();
-      const permitidoPelaFila = categoriaMestre === "UTILITY" && mestreItem?.reclassificado_marketing !== true;
+      const permitidoPelaFila = !!mestreItem && podeDistribuirModelo(mestreItem, inst.user_id, true);
       if (!mestreItem || mestreItem.criado_por !== inst.user_id || !permitidoPelaFila) {
         await supabase.from("meta_templates_onboarding_fila").update({
           status: "CANCELADO",
@@ -311,15 +312,12 @@ Deno.serve(async (req) => {
         const nomeadas = String((mestreItem as any).corpo || "").match(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g) || [];
         const categoria = String((mestreItem as any).categoria || "").toUpperCase();
         const categoriaInvalida = categoria !== "UTILITY";
-        const reclassificadoInconsistente = (mestreItem as any).reclassificado_marketing === true;
-        if (nomeadas.length > 0 || categoriaInvalida || reclassificadoInconsistente) {
+        if (nomeadas.length > 0 || categoriaInvalida) {
           await supabase
             .from("meta_templates_onboarding_fila")
             .update({
               status: "CANCELADO",
-              motivo: reclassificadoInconsistente
-                ? "modelo reclassificado como MARKETING; salve-o nessa categoria antes de reenviar"
-                : categoriaInvalida
+              motivo: categoriaInvalida
                 ? "categoria incompatível com a aplicação automática"
                 : "modelo usa variável com nome; use {{1}}, {{2}}...",
               finalizado_em: new Date().toISOString(),

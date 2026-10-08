@@ -546,7 +546,6 @@ export default function MetaTemplates() {
     if (erroCarregamento) { toast.error("Atualize a lista antes de enviar."); return; }
     if (!selMestre) { toast.error("Selecione um template"); return; }
     if (modo !== "replicar" && selInst.size === 0) { toast.error("Selecione ao menos uma instância"); return; }
-    if (mestres.find((m) => m.id === selMestre)?.reclassificado_marketing) { toast.error("Modelo reclassificado como Marketing; crie uma versão corrigida."); return; }
 
     setEnviando(true);
     const { data, error } = await supabase.functions.invoke("meta-criar-template-lote", {
@@ -717,7 +716,7 @@ export default function MetaTemplates() {
 
   const marcarTodosInjecao = async (valor: boolean) => {
     if (!usuarioId) return;
-    const ids = mestres.filter((m) => !m.reclassificado_marketing || !valor).map((m) => m.id);
+    const ids = mestres.filter((m) => m.categoria === "UTILITY" || !valor).map((m) => m.id);
     if (ids.length === 0) return;
     const { error } = await supabase
       .from("meta_templates_mestre")
@@ -762,7 +761,7 @@ export default function MetaTemplates() {
 
   const selecionarAusentes = (mestreId: string) => {
     const mestre = mestres.find((m) => m.id === mestreId);
-    if (!mestre || mestre.reclassificado_marketing || erroCarregamento) return;
+    if (!mestre || erroCarregamento) return;
     const comRegistro = new Set(templInst.filter((t) => t.template_mestre_id === mestreId).map((t) => t.instancia_id));
     const comModeloNaMeta = new Set(templMeta.filter((t) =>
       t.nome_template.toLowerCase() === mestre.nome.toLowerCase() && t.idioma === mestre.idioma &&
@@ -1392,14 +1391,14 @@ export default function MetaTemplates() {
                   <p>Se preferir reduzir esse risco, envie um <b>piloto</b>, aguarde a aprovação e depois clique em <b>Replicar nas demais</b>.</p>
                   <p><b>Tier 250:</b> no máximo 2 submissões de templates por número/dia, inclusive em envios manuais.</p>
                   <p>Aprovar um template MARKETING não libera disparos a clientes; o bloqueio de custos permanece ativo.</p>
-                    {mestres.find((m) => m.id === selMestre)?.reclassificado_marketing && <p className="text-destructive">Este modelo virou Marketing na Meta. Não será enviado aos demais números. Exclua ou crie uma versão corrigida com outro nome.</p>}
+                    {mestres.find((m) => m.id === selMestre)?.reclassificado_marketing && <p className="text-destructive">Uma cópia foi reclassificada como Marketing. A aplicação continua nos demais números; isso não libera disparos Marketing.</p>}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
                     onClick={() => enviarLote("piloto")}
-                    disabled={enviando || !!erroCarregamento || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
+                    disabled={enviando || !!erroCarregamento || !selMestre || selInst.size === 0}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar piloto (1 número)
@@ -1407,12 +1406,12 @@ export default function MetaTemplates() {
                   <Button
                     variant="outline"
                     onClick={() => enviarLote("replicar")}
-                    disabled={enviando || !!erroCarregamento || !selMestre || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}
+                    disabled={enviando || !!erroCarregamento || !selMestre}
                   >
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                     Replicar nas demais
                   </Button>
-                  <Button onClick={() => enviarLote()} disabled={enviando || !!erroCarregamento || !selMestre || selInst.size === 0 || !!mestres.find((m) => m.id === selMestre)?.reclassificado_marketing}>
+                  <Button onClick={() => enviarLote()} disabled={enviando || !!erroCarregamento || !selMestre || selInst.size === 0}>
                     {enviando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                     Enviar para todas agora ({selInst.size})
                   </Button>
@@ -1512,7 +1511,7 @@ export default function MetaTemplates() {
                         size="sm"
                         variant="outline"
                         onClick={() => reenviarFalhas(m.id)}
-                        disabled={enviando || !!erroCarregamento || contarFalhas(m.id) === 0 || !!m.reclassificado_marketing}
+                        disabled={enviando || !!erroCarregamento || contarFalhas(m.id) === 0}
                         title={contarFalhas(m.id) === 0 ? "Nenhuma falha para reenviar" : undefined}
                       >
                         <RefreshCw className="w-3 h-3 mr-1" /> Reenviar falhas ({contarFalhas(m.id)})
@@ -1532,7 +1531,7 @@ export default function MetaTemplates() {
                   </CardHeader>
                   <CardContent>
                     {lote && <p className="mb-2 text-xs text-muted-foreground">Último lote registrado: {lote.total_instancias} número(s) processado(s) · {lote.sucessos} aceitos pela Meta · {lote.falhas} falhas. Aceito não significa aprovado.</p>}
-                    {!m.reclassificado_marketing && <Button size="sm" variant="outline" className="mb-3" onClick={() => selecionarAusentes(m.id)} disabled={loading || !!erroCarregamento}>Selecionar números sem registro</Button>}
+                    {<Button size="sm" variant="outline" className="mb-3" onClick={() => selecionarAusentes(m.id)} disabled={loading || !!erroCarregamento}>Selecionar números sem registro</Button>}
                     <details>
                       <summary className="cursor-pointer text-sm text-muted-foreground">Ver detalhes por instância ({filhas.length})</summary>
                       <div className="mt-2 space-y-1">
@@ -1623,7 +1622,7 @@ export default function MetaTemplates() {
                     />
                   </div>
 
-                  {["UTILITY", "MARKETING"].includes(m.categoria) && !m.reclassificado_marketing && <div className="flex items-center gap-2 rounded-md border p-3">
+                  {m.categoria === "UTILITY" && <div className="flex items-center gap-2 rounded-md border p-3">
                     <Checkbox
                       checked={!!m.injetar_em_novos}
                       onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
@@ -1640,7 +1639,6 @@ export default function MetaTemplates() {
                     {m.reclassificado_marketing && <Button variant="outline" onClick={() => novaVersao(m)}>Criar versão corrigida</Button>}
                     <Button
                       onClick={() => { setSelMestre(m.id); setMestreDialog(null); }}
-                      disabled={!!m.reclassificado_marketing}
                     >
                       <Send className="w-4 h-4 mr-2" /> Usar no envio em lote
                     </Button>
@@ -1686,7 +1684,7 @@ export default function MetaTemplates() {
             <div className="max-h-72 overflow-y-auto rounded-md border divide-y">
               {mestresFiltrados.map((m) => (
                 <label key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/50">
-                  <Checkbox disabled={!!m.reclassificado_marketing}
+                  <Checkbox disabled={m.categoria !== "UTILITY"}
                     checked={!!m.injetar_em_novos}
                     onCheckedChange={(v) => alternarInjecao(m.id, !!v)}
                   />

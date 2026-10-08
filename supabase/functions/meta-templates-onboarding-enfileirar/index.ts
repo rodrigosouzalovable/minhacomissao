@@ -6,6 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { modelosParaCopiar } from "../_shared/meta-template-copy-candidates.ts";
+import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 
 const corsHeaders = {
@@ -79,8 +80,7 @@ Deno.serve(async (req) => {
         return json({ success: false, error: "template_nao_cadastrado_como_mestre" });
       }
       mestresEspecificos = encontrados.filter((m) =>
-        String(m.categoria || "").toUpperCase() === "UTILITY" &&
-        m.reclassificado_marketing !== true
+        podeDistribuirModelo(m, m.criado_por, true)
       );
       if (mestresEspecificos.length === 0) {
         return json({ success: false, error: "template_mestre_nao_elegivel" });
@@ -151,7 +151,6 @@ Deno.serve(async (req) => {
         .select("id,nome,idioma,categoria,criado_por,injetar_em_novos,reclassificado_marketing")
         .eq("criado_por", inst.user_id)
         .eq("categoria", "UTILITY")
-        .eq("reclassificado_marketing", false)
         .order("criado_em", { ascending: true });
       // A marcação “injetar em números novos” vale apenas para o fluxo automático.
       // Uma aplicação manual pode usar qualquer mestre Utility seguro do proprietário.

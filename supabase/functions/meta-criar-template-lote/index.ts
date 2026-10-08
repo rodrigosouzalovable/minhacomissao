@@ -1,3 +1,5 @@
+import { podeDistribuirModelo, preservarSubmissao, registroReclassificacao } from "../_shared/meta-template-distribution.ts";
+import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -265,9 +267,6 @@ serve(async (req) => {
     if (!(["UTILITY", "MARKETING"].includes(categoria))) {
       problemas.push("Somente modelos de UTILIDADE ou MARKETING podem ser enviados por esta área.");
     }
-    if (mestre.reclassificado_marketing === true && categoria !== "MARKETING") {
-      problemas.push("A Meta reclassificou este modelo de UTILIDADE como MARKETING. Cadastre um novo modelo na categoria MARKETING antes de reenviar.");
-    }
     if (problemas.length > 0) {
       return new Response(
         JSON.stringify({ success: false, error: problemas.join(" "), validacao: problemas }),
@@ -292,7 +291,7 @@ serve(async (req) => {
     }
 
     let query = supabase.from("meta_whatsapp_instances")
-      .select("id, nome, user_id, waba_id, phone_number_id, access_token, ativo, meta_bm_id")
+      .select("id, nome, user_id, waba_id, phone_number_id, access_token, ativo, meta_bm_id, provider, saude_status, saude_quality, qualidade_leitura_ok, qualidade_leitura_erro, meta_name_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, templates_auto_status, templates_auto_pausado_ate")
       .eq("provider", "meta");
     if (idsFalhas) {
       query = query.in("id", idsFalhas);
@@ -323,6 +322,26 @@ serve(async (req) => {
       );
     }
 
+
+    const ignoradas: any[] = [];
+    const candidatas: any[] = [];
+    for (const inst of instancias) {
+      const bloqueio = motivoBloqueioTemplate(inst);
+      if (bloqueio || !podeDistribuirModelo(mestre, inst.user_id)) {
+        ignoradas.push({ instancia_id: inst.id, motivo: bloqueio || "proprietario_incompativel" });
+        continue;
+      }
+      const { data: existente, error: erroExistente } = await supabase.from("meta_templates_instancia")
+        .select("status").eq("instancia_id", inst.id).eq("template_mestre_id", mestre_id).maybeSingle();
+      if (erroExistente) throw erroExistente;
+      if (preservarSubmissao(existente?.status) || existente?.status === "ENVIADO") {
+        ignoradas.push({ instancia_id: inst.id, motivo: "submissao_existente_preservada" });
+        continue;
+      }
+      candidatas.push(inst);
+    }
+    instancias = candidatas;
+    if (instancias.length === 0) return new Response(JSON.stringify({ success: true, queued: false, total: 0, ignoradas, message: "Cópias existentes preservadas; demais números aguardam elegibilidade." }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     // ===== Modo replicar: só permitido depois de o piloto ser aprovado =====
     if (modo === "replicar") {
@@ -467,38 +486,12 @@ serve(async (req) => {
       const detalhes: any[] = [];
       let sucessos = 0;
       let falhas = 0;
-      let interrompido = false;
-      let motivoInterrupcao = "Interrompido: a Meta reclassificou o modelo como Marketing.";
-
-      const bloquearReclassificado = async (inst: any) => {
-        interrompido = true;
-        motivoInterrupcao = "Interrompido: a Meta reclassificou o modelo como Marketing.";
-        await supabase.from("meta_templates_mestre").update({
-          reclassificado_marketing: true, categoria_meta: "MARKETING",
-          injetar_em_novos: false, usar_em_leads: false,
-        }).eq("id", mestre_id).eq("categoria", "UTILITY");
-        await supabase.from("meta_templates_onboarding_fila").update({
-          status: "CANCELADO", motivo: "modelo reclassificado como MARKETING pela Meta",
-          finalizado_em: new Date().toISOString(),
-        }).eq("template_mestre_id", mestre_id).in("status", ["PENDENTE", "AGENDADO"]);
-        console.log(`Template ${mestre_id} reclassificado na instância ${inst.id}; lote interrompido`);
+      const registrarReclassificado = async () => {
+        await supabase.from("meta_templates_mestre").update(registroReclassificacao())
+          .eq("id", mestre_id).eq("categoria", "UTILITY");
       };
 
       for (const inst of instancias) {
-        if (!interrompido) {
-          const { data: atual } = await supabase.from("meta_templates_mestre")
-            .select("reclassificado_marketing").eq("id", mestre_id).maybeSingle();
-          if (categoria === "UTILITY" && atual?.reclassificado_marketing === true) interrompido = true;
-        }
-        if (interrompido) {
-          await supabase.from("meta_templates_instancia").upsert({
-            template_mestre_id: mestre_id, instancia_id: inst.id,
-            status: "FALHA_ENVIO", erro: motivoInterrupcao,
-          }, { onConflict: "template_mestre_id,instancia_id" });
-          await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", motivoInterrupcao);
-          detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, interrompido: true });
-          continue;
-        }
         if (apenas_falhas) {
           const { data: cur } = await supabase
             .from("meta_templates_instancia").select("status")
@@ -613,14 +606,9 @@ serve(async (req) => {
                status: String(data?.status || "pending").toLowerCase(),
              }, { onConflict: "instancia_id,nome_template,idioma" });
              if (categoria === "UTILITY" && categoriaReal === "MARKETING") {
-               await bloquearReclassificado(inst);
+               await registrarReclassificado();
              }
            }
-            if (res.ok && categoria === "UTILITY" && !categoriaReal) {
-              interrompido = true;
-              motivoInterrupcao = "Interrompido: a categoria ainda não foi confirmada pela Meta. Verifique o status antes de reenviar.";
-            }
-
           if (!res.ok) {
             falhas++;
             const errMsg = descreverErroMeta(data, res.status);
@@ -666,7 +654,7 @@ serve(async (req) => {
           await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", msg);
         }
 
-        await sleep(400);
+        await sleep(1000 + Math.floor(Math.random() * 500));
       }
 
       await supabase.from("meta_templates_lote_log").insert({
@@ -695,6 +683,7 @@ serve(async (req) => {
         selecionadas: Array.isArray(instancia_ids) ? new Set(instancia_ids).size : instancias.length + adiadasTier250.length,
         instancias: instancias.map((inst) => ({ id: inst.id, nome: inst.nome })),
         adiadas: adiadasTier250,
+        ignoradas,
         adiadas_tier_250: adiadasTier250.length,
         message: adiadasTier250.length > 0
           ? `${instancias.length} envio(s) iniciado(s); ${adiadasTier250.length} número(s) tier 250 atingiram o limite diário.`
