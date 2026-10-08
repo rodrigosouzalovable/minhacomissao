@@ -1,3 +1,6 @@
+import { RecebimentosCredores } from '@/components/RecebimentosCredores';
+import { totaisCredorVazios } from '@/lib/recebimentosPorCredor';
+import { EMPRESAS_ACORDO, type EmpresaAcordo } from '@/lib/empresaLabels';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -289,6 +292,16 @@ export default function Financeiro() {
       );
       return acc + r.comissaoEscritorio;
     }, 0);
+  }, [pagamentosPagos]);
+
+  const receitaComissaoPorCredor = useMemo(() => {
+    const totais = totaisCredorVazios();
+    for (const p of pagamentosPagos) {
+      const credor = p.acordos.empresa as EmpresaAcordo;
+      if (!EMPRESAS_ACORDO.includes(credor)) continue;
+      totais[credor] += calcularRepartePagamento(Number(p.valor_parcela), p.acordos.dias_atraso || 0, credor, p.data_paga).comissaoEscritorio;
+    }
+    return totais;
   }, [pagamentosPagos]);
 
   const totalReceitasCadastradas = useMemo(() => {
@@ -689,6 +702,7 @@ export default function Financeiro() {
                   <p className="text-xs text-muted-foreground">
                     Comissão: {formatarMoeda(totalReceitaComissao)} | Outras: {formatarMoeda(totalReceitasCadastradas)}
                   </p>
+                  <RecebimentosCredores className="mt-2" valores={receitaComissaoPorCredor} />
                 </CardContent>
               </Card>
 

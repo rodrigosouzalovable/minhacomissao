@@ -1,3 +1,4 @@
+import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CopyButton } from '@/components/CopyButton';
@@ -165,15 +166,7 @@ export default function EquipeAcordos() {
       setAcordos((atuais) => atuais.map((item) =>
         item.id === acordo.id ? { ...item, empresa: novoCredor } : item
       ));
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['ranking-mensal'] }),
-        queryClient.invalidateQueries({ queryKey: ['mural-top3'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-        queryClient.invalidateQueries({ queryKey: ['historico-mes'] }),
-        queryClient.invalidateQueries({ queryKey: ['metas-mensal'] }),
-        queryClient.invalidateQueries({ queryKey: ['meus-acordos'] }),
-        queryClient.invalidateQueries({ queryKey: ['user-acordos'] }),
-      ]);
+      await invalidarRecebimentos(queryClient);
       toast({
         title: 'Credor atualizado',
         description: `${acordo.cliente_nome} agora está em ${getEmpresaLabel(novoCredor)}.`,

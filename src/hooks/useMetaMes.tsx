@@ -1,3 +1,5 @@
+import { totaisCredorVazios } from '@/lib/recebimentosPorCredor';
+import { EMPRESAS_ACORDO, type EmpresaAcordo } from '@/lib/empresaLabels';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,10 +16,11 @@ export function useMetaMes() {
   const { data: meta } = useQuery({
     queryKey: ['meta-banner', user?.id, mesAno],
     queryFn: async () => {
+      if (!user) return null;
       const { data } = await supabase
         .from('metas_funcionarios' as any)
         .select('valor_meta')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .eq('mes_ano', mesAno)
         .maybeSingle();
       return data as any;
@@ -28,16 +31,21 @@ export function useMetaMes() {
   const { data: pagamentos } = useQuery({
     queryKey: ['meta-banner-pag', user?.id, mesAno],
     queryFn: async () => {
-      const { data: acordos } = await supabase.from('acordos').select('id').eq('user_id', user!.id);
-      if (!acordos?.length) return [];
-      const { data } = await supabase
-        .from('pagamentos')
-        .select('valor_parcela, data_paga')
-        .in('acordo_id', acordos.map(a => a.id))
-        .eq('status', 'pago')
-        .gte('data_paga', format(monthStart, 'yyyy-MM-dd'))
-        .lte('data_paga', format(monthEnd, 'yyyy-MM-dd'));
-      return data || [];
+      if (!user) return [];
+      const pagamentos = [];
+      for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await supabase.from('pagamentos')
+          .select('id, valor_parcela, data_paga, acordos!inner(user_id, empresa)')
+          .eq('acordos.user_id', user.id)
+          .eq('status', 'pago')
+          .gte('data_paga', format(monthStart, 'yyyy-MM-dd'))
+          .lte('data_paga', format(monthEnd, 'yyyy-MM-dd'))
+          .order('id').range(offset, offset + 999);
+        if (error) throw error;
+        pagamentos.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      return pagamentos;
     },
     enabled: !!user?.id,
     staleTime: 10 * 60 * 1000,
@@ -46,7 +54,12 @@ export function useMetaMes() {
   });
 
   const valorMeta = meta ? Number(meta.valor_meta) : 0;
-  const recebido = (pagamentos || []).reduce((s, p) => s + Number(p.valor_parcela), 0);
+  const porCredor = totaisCredorVazios();
+  for (const p of pagamentos || []) {
+    const credor = p.acordos.empresa as EmpresaAcordo;
+    if (EMPRESAS_ACORDO.includes(credor)) porCredor[credor] += Number(p.valor_parcela);
+  }
+  const recebido = Object.values(porCredor).reduce((s, v) => s + v, 0);
 
   const { diasUteisTotal, diasUteisDecorridos, diasUteisRestantes } = useMemo(() => {
     const all = eachDayOfInterval({ start: monthStart, end: monthEnd }).filter(d => !isWeekend(d));
@@ -61,5 +74,5 @@ export function useMetaMes() {
 
   const projecao = diasUteisDecorridos > 0 ? (recebido / diasUteisDecorridos) * diasUteisTotal : 0;
 
-  return { valorMeta, recebido, projecao, diasUteisTotal, diasUteisDecorridos, diasUteisRestantes };
+  return { valorMeta, recebido, porCredor, projecao, diasUteisTotal, diasUteisDecorridos, diasUteisRestantes };
 }
