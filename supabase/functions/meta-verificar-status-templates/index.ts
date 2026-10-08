@@ -1,4 +1,5 @@
 import { registroReclassificacao } from "../_shared/meta-template-distribution.ts";
+import { manualInstanceIds, validManualBatch } from './manual-scope.ts';
 // Confere na Meta o status dos templates que ainda estão aguardando resposta.
 // Regras (plano aprovado):
 //  - só olha itens em aberto (PENDING/ENVIADO) cuja próxima conferência já venceu;
@@ -53,6 +54,26 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
       if (!dono) return new Response(JSON.stringify({ success: false, error: "Sessão inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (body?.listar === true) {
+      if (!dono) throw new Error('A conferência manual exige sessão de usuário.');
+      const rows: any[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await supabase.from('meta_whatsapp_instances')
+          .select('id,user_id,ativo,provider,saude_status').eq('user_id', dono)
+          .eq('ativo', true).eq('provider', 'meta').eq('saude_status', 'CONNECTED')
+          .order('id').range(offset, offset + 999);
+        if (error) throw error;
+        rows.push(...(data || []));
+        if ((data?.length || 0) < 1000) break;
+      }
+      return new Response(JSON.stringify({ success: true, instancia_ids: manualInstanceIds(rows, dono) }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const manual = body?.instancia_ids !== undefined;
+    if (manual && (!dono || !forcar || !validManualBatch(body.instancia_ids))) {
+      return new Response(JSON.stringify({ success: false, error: 'Lote manual inválido.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     // ===== 1) Itens em aberto que já venceram a conferência =====
     let qAbertos = supabase
       .from("meta_templates_instancia")
@@ -74,7 +95,7 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
       const permitidos = new Set((meus || []).map((m) => m.id));
       registros = registros.filter((r) => permitidos.has(r.template_mestre_id));
     }
-    const instIds = Array.from(
+    const instIds: string[] = manual ? body.instancia_ids : Array.from(
       new Set([
         ...(registros.map((r) => r.instancia_id)),
       ]),
@@ -92,9 +113,11 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
       .select("id, nome, display_phone, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, saude_quality, user_id")
       .in("id", instIds);
     if (dono) qInstancias = qInstancias.eq("user_id", dono);
+    if (manual) qInstancias = qInstancias.eq('ativo', true).eq('provider', 'meta').eq('saude_status', 'CONNECTED');
     const { data: instancias, error: erroInstancias } = await qInstancias;
     if (erroInstancias) throw erroInstancias;
     const total = instancias?.length || 0;
+    if (manual && total !== instIds.length) throw new Error('Uma instância do lote não está mais conectada ou autorizada. Atualize e tente novamente.');
     let conferidas = 0;
     progresso?.({ type: "start", total });
 
@@ -126,6 +149,28 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
         }
 
         const remotos: any[] = data.data || [];
+        let next = data?.paging?.cursors?.after;
+        let hasNext = !!data?.paging?.next;
+        let pages = 1;
+        while (hasNext && next && pages < 20) {
+          const pageRes = await fetch(`https://graph.facebook.com/v21.0/${inst.waba_id}/message_templates?fields=name,language,status,id,rejected_reason,category&limit=200&after=${encodeURIComponent(next)}`, {
+            headers: { Authorization: `Bearer ${inst.access_token}` }, signal: AbortSignal.timeout(12_000),
+          });
+          const pageData = await pageRes.json();
+          if (!pageRes.ok) throw new Error(pageData?.error?.message || 'Falha na paginação Meta');
+          remotos.push(...(pageData.data || []));
+          next = pageData?.paging?.cursors?.after;
+          hasNext = !!pageData?.paging?.next;
+          pages++;
+        }
+        if (hasNext) throw new Error('Catálogo excede o limite de páginas da conferência.');
+        if (manual && remotos.length) {
+          const { error } = await supabase.from('meta_whatsapp_templates').upsert(remotos.map(t => ({
+            instancia_id: inst.id, nome_template: t.name, idioma: t.language,
+            status: String(t.status || 'PENDING').toLowerCase(), categoria: t.category,
+          })), { onConflict: 'instancia_id,nome_template,idioma' });
+          if (error) throw error;
+        }
         const remotoById = new Map(remotos.map((t) => [String(t.id), t]));
         const remotoByName = new Map(remotos.map((t) => [`${t.name}|${t.language}`, t]));
 
@@ -183,8 +228,12 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
             .eq("status", "REJECTED")
             .is("motivo_rejeicao", null),
         ]);
-        const locais = [...(locPend.data || []), ...(locRej.data || [])]
-          .filter((row) => !dono || registros.some((r) => r.instancia_id === inst.id && r.template_mestre_id === row.template_mestre_id));
+        const todos = manual ? await supabase.from('meta_templates_instancia')
+          .select('id, meta_template_id, template_mestre_id, status, motivo_rejeicao, criado_em, verificacoes')
+          .eq('instancia_id', inst.id) : null;
+        if (todos?.error) throw todos.error;
+        const locais = (manual ? (todos?.data || []) : [...(locPend.data || []), ...(locRej.data || [])])
+          .filter((row) => manual || !dono || registros.some((r) => r.instancia_id === inst.id && r.template_mestre_id === row.template_mestre_id));
 
         for (const local of locais || []) {
           let remoto: any = null;
@@ -319,8 +368,8 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
           bm: (await linhaBmInstancia(supabase, inst)).replace(/^BM: \*|\*$/g, ''),
           qualidade: (inst.saude_quality || 'SEM LEITURA').toString().toUpperCase(),
         });
-      } catch (_e) {
-        // segue para próxima instância
+      } catch (error) {
+        progresso?.({ type: 'failure', nome: rotuloInstancia(inst), error: error instanceof Error ? error.message : 'Falha na conferência' });
       } finally {
         progresso?.({ type: "progress", done: ++conferidas, total, nome: rotuloInstancia(inst) });
       }
