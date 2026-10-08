@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Corrigir busca por telefone em todas as conversas autorizadas, independente dos filtros, com caixa/atendente e teste do final 9476 sem envios.
 - [x] Liberar o botão de aplicação de mestre Utility após reclassificação de uma cópia; 18 testes passaram, tela autenticada confirmou botão habilitado e aplicação simulada em 57 destinos, sem submissões reais; autorização, deduplicação e bloqueios preservados, compilação OK.
 - [x] Conferir todas as instâncias conectadas no botão manual em lotes com total global; teste real chegou a 154/154, 150 consultas bem-sucedidas e 4 falhas de acesso Meta isoladas. Nove testes passaram, função publicada e compilação OK; custo autorizado, sem novo agendamento.
 - [x] Distribuição não para após reclassificação Marketing; 27 cópias faltantes reenviadas e aceitas como PENDING, 23 aprovadas e 36 pendentes anteriores preservadas. 20 testes passaram, funções publicadas, tela e compilação verificadas; demais números aguardam qualidade, permissões/bloqueios ou pausa existente, sem mensagens a clientes.
