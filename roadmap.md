@@ -22,7 +22,7 @@
 - [x] Validar 15 testes de cálculo/privacidade e propostas UME/Odres no navegador com dados simulados, sem envios reais; compilação automática OK.
 - [x] Liberar consulta pública UME com cache de 12h e propostas Odres; limitar consultas no servidor, fechar RPC direta ao público e conferir resposta real UME sem dados internos.
 - [x] Registrar autorização da continuação temporária, limitada a três horas e encerrada ao concluir; validar variáveis, GREEN obrigatório, deduplicação e busca por conteúdo sem envios reais.
-- [ ] Conferir ativação na tela autenticada e iniciar lembretes D+1/D+3/D+7 após revisão final da prévia; teste permanece na tela de login apesar de sessão renovada válida. Nenhuma configuração ativa ou mensagem enviada.
+- [ ] Concluir início do ciclo D+1/D+3/D+7 hoje; consentimento auditável e ativação autenticada confirmados, prévia real com 48 elegíveis de 50 e estimativa R$1,68 da amostra.
 - [x] Ampliar busca HSM no Envio Meta para nome e conteúdo, preservando favoritos; testes passaram.
 - [x] Corrigir abertura de Instâncias do disparo; painel permaneceu aberto durante atualizações reais no login de Guilherme, fechou e reabriu pelo teclado sem erros ou alteração de envios.
 - [x] Recolher e expandir a lista lateral de abas com controle externo sempre acessível e preferência por usuário; testes de isolamento, persistência e armazenamento indisponível passaram, e navegador confirmou espaço liberado, recarregamento e reabertura por teclado sem erros.
