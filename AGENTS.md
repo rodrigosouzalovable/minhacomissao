@@ -44,4 +44,4 @@
 - Cadastral recovery uses owner consent snapshots, atomic suffix leases and one-time replies before generic IAGO to prevent duplicates and honor opt-outs.
 
 - Manual Meta checks batch all owner-connected instances; automatic checks remain due-only to limit cost and timeouts.
-- Overdue activation audits owner-admin cost consent; isolated scheduler credentials start bounded cycles that stop after drain.
+- Overdue audits owner-admin cost consent; isolated scheduler credentials start bounded cycles and stop after drain.
