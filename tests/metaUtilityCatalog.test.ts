@@ -37,10 +37,25 @@ describe('Utility catalog independent of instance selection', () => {
     expect(situacaoUtility(result[0], 'i2')).toBe('Em análise na Meta');
     expect(catalog([copy], [master], ['i2'])[0].instanciasAprovadasIds.size).toBe(0);
   });
-  test('excludes foreign masters, Marketing and reclassified masters', () => {
-    expect(catalog([], [{ ...master, criado_por: 'other' }, { ...master, categoria: 'MARKETING' },
-      { ...master, reclassificado_marketing: true }])).toEqual([]);
+  test('excludes foreign masters and Marketing masters even when reclassified', () => {
+    expect(catalog([], [{ ...master, criado_por: 'other', reclassificado_marketing: true },
+      { ...master, categoria: 'MARKETING', reclassificado_marketing: true }])).toEqual([]);
     expect(catalog([{ ...copy, categoria: 'MARKETING' }, { ...copy, instancia_id: 'hidden' }], [])).toEqual([]);
+  });
+  test('retains the own Utility master for application after one copy becomes Marketing', () => {
+    const [g] = catalog([copy, { ...copy, id: 'marketing', instancia_id: 'i2', categoria: 'MARKETING' }],
+      [{ ...master, reclassificado_marketing: true }], ['i1', 'i2']);
+    expect(g.mestreId).toBe('m1');
+    expect(g.sample.id).toBe('t1');
+    expect([...g.instanciasAprovadasIds]).toEqual(['i1']);
+    expect([...g.todasInstanciasAprovadasIds]).toEqual(['i1']);
+    expect(situacaoUtility(g, 'i2')).toBe('Ausente');
+  });
+  test('an absent reclassified Utility master stays selectable without a sending ID', () => {
+    const [g] = catalog([], [{ ...master, reclassificado_marketing: true }]);
+    expect(g.mestreId).toBe('m1');
+    expect(g.sample.id).toBe('');
+    expect(g.todasInstanciasAprovadasIds.size).toBe(0);
   });
   test('known queue and rejection statuses are distinct from absent', () => {
     const g = catalog([], [master])[0];

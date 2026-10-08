@@ -32,7 +32,9 @@ export function catalogoUtility(copies: TemplateCopy[], masters: UtilityMaster[]
     }
   }
   for (const m of masters) {
-    if (m.criado_por !== userId || m.categoria.toUpperCase() !== 'UTILITY' || m.reclassificado_marketing) continue;
+    // A Marketing copy must not hide the owner's Utility master or prevent distribution.
+    // Sending approvals remain derived exclusively from actual Utility copies above.
+    if (m.criado_por !== userId || m.categoria.toUpperCase() !== 'UTILITY') continue;
     const key = `${m.nome}::${m.idioma}`;
     const g = groups.get(key);
     if (g) { g.mestreId = m.id; continue; }

@@ -1653,7 +1653,7 @@ export default function EnvioMeta() {
                                   "Este template ainda não está cadastrado como modelo mestre. Cadastre-o na aba Template antes de aplicar.",
                                 );
                               } else if (err === "template_mestre_nao_elegivel") {
-                                toast.error("Este modelo não pode ser copiado: ele não é Utility ou foi reclassificado como Marketing.");
+                                toast.error("Este modelo não pode ser copiado: o modelo mestre não é de Utilidade.");
                               } else if (err === "template_mestre_de_outro_proprietario") {
                                 toast.error("Este modelo mestre pertence a outro usuário e não pode ser aplicado nestas instâncias.");
                               } else if (err === "somente_admin") {
