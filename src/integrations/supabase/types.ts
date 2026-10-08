@@ -12293,6 +12293,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      ativar_recuperacao_cadastral_autorizada: {
+        Args: { p_owner: string }
+        Returns: boolean
+      }
       atribuir_atendente_conversa: {
         Args: { p_contato_id: string; p_etiqueta_preferida?: string }
         Returns: string
