@@ -21,7 +21,7 @@
 - Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
 - Cobmais diário envia o XLSX a armazenamento privado e processa no servidor; staging/publicação são atômicos, chave = CPF+credor+contrato+parcela e vencimento é substituível.
-- Meta stays owner-scoped; shared flows read authorized copies. Distribution continues on Marketing reclassification; messaging still needs approved copies.
+- Meta stays owner-scoped; catalogs retain own Utility master links after copy reclassification so distribution continues; messaging still needs approved Utility copies.
 - Automatic copies use selected owner Utility on verified CONNECTED GREEN/UNKNOWN only; preserve blocks, tier 250 two/day and sequential queues. Manual HSM sync requires an approved Utility source to avoid drafts.
 - Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
 - Campaign results match replies/agreements by normalized phone suffix/CPF and indexed time windows for fast manual checks without polling.

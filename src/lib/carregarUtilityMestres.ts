@@ -5,7 +5,7 @@ export async function carregarUtilityMestres(userId: string): Promise<UtilityMas
   const rows: UtilityMaster[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from('meta_templates_mestre').select('*')
-      .eq('criado_por', userId).eq('categoria', 'UTILITY').eq('reclassificado_marketing', false)
+      .eq('criado_por', userId).eq('categoria', 'UTILITY')
       .order('nome').order('id').range(offset, offset + 999);
     if (error) throw error;
     rows.push(...(data ?? []));
