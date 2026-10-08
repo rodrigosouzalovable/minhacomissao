@@ -48,6 +48,6 @@ export function invalidarRecebimentos(client: QueryClient) {
   return Promise.all([
     'ranking-mensal', 'mural-top3', 'dashboard', 'historico-mes', 'metas-mensal',
     'meta-banner-pag', 'meus-acordos', 'meus-pagamentos', 'user-acordos', 'user-pagamentos',
-    'payment-reminders', 'overdue-installments',
+    'payment-reminders', 'overdue-installments', 'pagamentos-pagos-financeiro', 'acordos',
   ].map(key => client.invalidateQueries({ queryKey: [key] })));
 }

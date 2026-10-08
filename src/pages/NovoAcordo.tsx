@@ -1,3 +1,5 @@
+import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -77,6 +79,7 @@ const parseCurrency = (value: string): number => {
   return parseFloat(cleaned) || 0;
 };
 export default function NovoAcordo() {
+  const queryClient = useQueryClient();
   const {
     user
   } = useAuth();
@@ -504,6 +507,7 @@ export default function NovoAcordo() {
         status: p.status
       })));
       if (parcelasError) throw new Error(parcelasError.message || 'Falha ao criar parcelas');
+      void invalidarRecebimentos(queryClient);
       const operadorEscolhido = operadores.find(o => o.id === selectedUserId);
       const operadorLabel = isAdmin && selectedUserId && selectedUserId !== user.id && operadorEscolhido
         ? ` — vinculado a ${operadorEscolhido.nome || operadorEscolhido.email || 'operador'}`

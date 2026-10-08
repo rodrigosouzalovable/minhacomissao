@@ -1,6 +1,7 @@
+import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -72,6 +73,7 @@ const parseCurrency = (value: string): number => {
 };
 
 export default function NovoAcordoAdmin() {
+  const queryClient = useQueryClient();
   const { userId } = useParams<{ userId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -403,6 +405,7 @@ export default function NovoAcordoAdmin() {
         .insert(pagamentosData);
 
       if (parcelasError) throw new Error(parcelasError.message || 'Falha ao criar parcelas');
+      void invalidarRecebimentos(queryClient);
 
       // Verificar se todas as parcelas foram marcadas como pagas
       const todasPagas = parcelas.every(p => parcelasPagas[p.numero_parcela]?.pago);
