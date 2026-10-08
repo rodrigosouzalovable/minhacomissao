@@ -13158,6 +13158,10 @@ export type Database = {
         }
         Returns: string
       }
+      meta_atrasados_scheduler_autorizado: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
       meta_bm_uso_24h: {
         Args: never
         Returns: {
