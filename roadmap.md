@@ -6,7 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [x] Corrigir autenticação do agendamento existente de recuperação: credencial exclusiva restrita, espera HTTP de 90s, 20 testes passaram e execução normal aceitou oito envios sem falhas; frequência e limites preservados.
+- [x] Corrigir autenticação do agendamento existente de recuperação: credencial exclusiva restrita, espera HTTP de 90s, 20 testes passaram; teste normal aceitou oito envios e rodada automática das 18h aceitou mais cinco, sem falhas; frequência e limites preservados. Instâncias sem template aprovado continuam aguardando.
 - [x] Ativar recuperação cadastral diária RED/YELLOW com Google Maps autorizado e resposta única na AQUECIMENTO; consentimento registrado, três envios aceitos sem falhas e caixa correta confirmada. Até 20 mensagens/dia por número, 08h–19h BRT, sem domingos; instâncias sem template aprovado aguardam.
 - [x] Medir envios e respostas por fonte e ciclo até GREEN, sem aumento automático de volume; contadores verificados no banco, 16 testes passaram e compilação OK. Validação visual do painel não concluída: navegação autenticada retorna ao login.
 - [x] Incluir Odres Cred nos recebimentos e separar os três credores; resumos invalidados após pagamentos, oito testes passaram e consulta protegida confirmou R$36.021,25 = Novo Mundo R$25.976,88 + UME R$6.258,18 + Odres R$3.786,19. Ranking validado isoladamente com dados reais, sem erros; navegação autenticada completa permanece retornando ao login. Regras financeiras preservadas.
