@@ -1,4 +1,4 @@
-import { destinosAquecimento, enviarTemplateAquecimento, escolherTemplateAprovado, erroFatalMeta, FOLDERS_AQUECIMENTO_FALLBACK } from './meta-aquecimento-alvo.ts';
+import { destinosAquecimento, enviarTemplateAquecimento, escolherTemplateAprovado, erroFatalMeta, FOLDERS_AQUECIMENTO_FALLBACK, hojeBrt } from './meta-aquecimento-alvo.ts';
 import { ORIGEM_CADASTRAL, TEMPLATE_CADASTRAL, templateCadastralValido, valoresCadastrais } from './recuperacao-cadastral-rules.ts';
 
 export async function executarRecuperacaoCadastral(db: any, insts: any[], simulacao: boolean) {
@@ -11,7 +11,8 @@ export async function executarRecuperacaoCadastral(db: any, insts: any[], simula
     destinos.push(...(pagina || []));
     if ((pagina || []).length < 500) break;
   }
-  const uazapi = await destinosAquecimento(db);
+  if (!insts.length) return { ok: true, cadastral: true, simulacao, resultados: [], estoque_elegivel: 0 };
+  const uazapi = destinos.some(d => d.fonte === 'uazapi') ? await destinosAquecimento(db) : [];
   const online = new Set(uazapi.map(d => d.id));
   const bloqueados = new Set<string>();
   for (let offset = 0; offset < destinos.length; offset += 200) {
@@ -24,20 +25,31 @@ export async function executarRecuperacaoCadastral(db: any, insts: any[], simula
     (d.fonte === 'uazapi' ? online.has(d.destino_instancia_id) : !d.consumido_em));
   const resultados: any[] = [];
   const usados = new Set<string>();
-  for (const inst of insts.filter(i => simulacao || !i.recuperacao_proximo_envio_em || new Date(i.recuperacao_proximo_envio_em).getTime() <= Date.now()).slice(0, 8)) {
-    const { data: copias, error: copiaError } = await db.from('meta_templates_instancia')
-      .select('status, meta_templates_mestre!inner(nome, idioma, corpo, categoria, criado_por, reclassificado_marketing)')
-      .eq('instancia_id', inst.id).eq('status', 'APPROVED')
-      .eq('meta_templates_mestre.nome', TEMPLATE_CADASTRAL).eq('meta_templates_mestre.criado_por', inst.user_id)
-      .eq('meta_templates_mestre.categoria', 'UTILITY').eq('meta_templates_mestre.reclassificado_marketing', false).limit(1);
-    if (copiaError) throw copiaError;
-    const mestre = copias?.[0]?.meta_templates_mestre;
+  const { data: copias, error: copiaError } = await db.from('meta_templates_instancia')
+    .select('instancia_id, meta_templates_mestre!inner(nome, idioma, corpo, categoria, criado_por, reclassificado_marketing)')
+    .in('instancia_id', insts.map(i => i.id)).eq('status', 'APPROVED')
+    .eq('meta_templates_mestre.nome', TEMPLATE_CADASTRAL).eq('meta_templates_mestre.criado_por', insts[0].user_id)
+    .eq('meta_templates_mestre.categoria', 'UTILITY').eq('meta_templates_mestre.reclassificado_marketing', false);
+  if (copiaError) throw copiaError;
+  const { data: logsHoje, error: logError } = await db.from('meta_recuperacao_log')
+    .select('instancia_id').eq('dia', hojeBrt()).in('status', ['reservado', 'enviado']).in('instancia_id', insts.map(i => i.id)).limit(5000);
+  if (logError) throw logError;
+  const contagens = new Map<string, number>();
+  for (const l of logsHoje || []) contagens.set(l.instancia_id, (contagens.get(l.instancia_id) || 0) + 1);
+  const fila = insts.filter(i => simulacao || !i.recuperacao_proximo_envio_em || new Date(i.recuperacao_proximo_envio_em).getTime() <= Date.now())
+    .sort((a, b) => (contagens.get(a.id) || 0) - (contagens.get(b.id) || 0) || Date.parse(a.recuperacao_proximo_envio_em || '1970-01-01') - Date.parse(b.recuperacao_proximo_envio_em || '1970-01-01'));
+  let processadas = 0;
+  for (const inst of fila) {
+    if (processadas >= 8) break;
+    const mestre = copias?.find((c: any) => c.instancia_id === inst.id)?.meta_templates_mestre;
     const tpl = mestre ? { name: mestre.nome, language: mestre.idioma || 'pt_BR', categoria: mestre.categoria, body: mestre.corpo,
       params: { tipo: 'posicional' as const, chaves: [...new Set<string>((String(mestre.corpo).match(/\{\{\s*\d+\s*\}\}/g) || []).map((t: string) => t.replace(/[{}\s]/g, '')))] } } : null;
     if (!templateCadastralValido(tpl) || !tpl) { resultados.push({ instancia: inst.nome, skip: 'aguarda_template_cadastral_aprovado' }); continue; }
     if (!simulacao) {
-      const atual = await escolherTemplateAprovado(inst, TEMPLATE_CADASTRAL);
-      if (!templateCadastralValido(atual)) { resultados.push({ instancia: inst.nome, skip: 'aguarda_template_cadastral_aprovado' }); continue; }
+      try {
+        const atual = await escolherTemplateAprovado(inst, TEMPLATE_CADASTRAL);
+        if (!templateCadastralValido(atual)) { resultados.push({ instancia: inst.nome, skip: 'aguarda_template_cadastral_aprovado' }); continue; }
+      } catch { resultados.push({ instancia: inst.nome, skip: 'consulta_template_inconclusiva' }); continue; }
     }
     const { data: ultimo } = await db.from('meta_recuperacao_log').select('fonte, telefone_sufixo')
       .eq('instancia_id', inst.id).eq('cadastral', true).eq('status', 'enviado').order('enviado_em', { ascending: false }).limit(1).maybeSingle();
@@ -57,6 +69,7 @@ export async function executarRecuperacaoCadastral(db: any, insts: any[], simula
     }
     if (!reservado) { resultados.push({ instancia: inst.nome, skip: 'sem_destino_autorizado_ou_aguardando_limites' }); continue; }
     usados.add(reservado.telefone_sufixo);
+    processadas++;
     const valores = valoresCadastrais(reservado.nome_empresa);
     const preview = String(tpl.body).replace(/\{\{\s*1\s*\}\}/g, valores[0]).replace(/\{\{\s*2\s*\}\}/g, valores[1]);
     if (simulacao) { resultados.push({ instancia: inst.nome, fonte: reservado.fonte, nome_empresa: reservado.nome_empresa, variaveis: valores, preview, simulado: true }); continue; }
