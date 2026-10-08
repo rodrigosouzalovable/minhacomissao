@@ -70,6 +70,7 @@ import {
 } from '@/components/ui/popover';
 import { humanizarErroEnvio } from '@/lib/humanizarErroEnvio';
 import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
+import { inboxPhoneSearch, inboxPhoneSearchQuery } from '@/lib/metaInboxPhoneSearch';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 
 interface MetaInstance {
@@ -199,6 +200,8 @@ export default function InboxMeta() {
   const [mensagens, setMensagens] = useState<MetaMensagem[]>([]);
   const [busca, setBusca] = useState('');
   const [buscaDebounced, setBuscaDebounced] = useState('');
+  const buscaTelefoneGlobal = inboxPhoneSearch(busca) !== null;
+  const [buscandoTelefone, setBuscandoTelefone] = useState(false);
 
   // texto local vive no Composer (evita re-render do inbox inteiro por tecla)
   const [enviando, setEnviando] = useState(false);
@@ -385,11 +388,11 @@ export default function InboxMeta() {
 
   const fetchEtiquetas = useCallback(async () => {
     if (!user) return;
-    const { data } = currentFolderId
+    const { data } = currentFolderId && !buscaTelefoneGlobal
       ? await (supabase as any).rpc('meta_etiquetas_da_caixa', { _folder: currentFolderId })
       : await supabase.from('meta_whatsapp_etiquetas').select('id, nome, cor, ativa').order('nome');
     setEtiquetas(((data as any[]) ?? []).map((e) => ({ ...e, ativa: e.ativa !== false })) as MetaEtiqueta[]);
-  }, [user, currentFolderId]);
+  }, [user, currentFolderId, buscaTelefoneGlobal]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
   const fetchContatosNaoCliente = useCallback(async (contatoIds?: string[]) => {
@@ -759,6 +762,27 @@ export default function InboxMeta() {
     const request = ++contatosRequestRef.current;
     const selectCols = 'id, instancia_id, telefone, nome, nome_perfil, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
 
+    const phoneSuffix = inboxPhoneSearch(buscaDebounced);
+    if (phoneSuffix) {
+      setBuscandoTelefone(true);
+      const { data, error } = await inboxPhoneSearchQuery(
+        supabase.from('meta_whatsapp_contatos').select(selectCols), phoneSuffix, limiteContatos,
+      );
+      if (request !== contatosRequestRef.current) return;
+      setBuscandoTelefone(false);
+      if (error) {
+        setContatos([]);
+        toast({ title: 'Não foi possível pesquisar', description: 'Tente novamente em instantes.', variant: 'destructive' });
+        return;
+      }
+      const lista = (data as MetaContato[]) ?? [];
+      setContatos(lista);
+      contatoIdsRef.current = lista.map(c => c.id);
+      void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current), fetchContatosNaoCliente(contatoIdsRef.current)]);
+      return;
+    }
+    setBuscandoTelefone(false);
+
     // Etiquetas e Meus Clientes: paginação diretamente no banco, sem varrer todos os vínculos.
     if (modoMeusClientes || filtroEtiqueta.size > 0) {
       const etiquetaIds = modoMeusClientes ? (minhaEtiquetaId ? [minhaEtiquetaId] : []) : Array.from(filtroEtiqueta);
@@ -871,7 +895,7 @@ export default function InboxMeta() {
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
     void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current), fetchContatosNaoCliente(contatoIdsRef.current)]);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, fetchContatosNaoCliente, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, filtroLeitura, instancias]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, fetchContatosNaoCliente, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, filtroLeitura, instancias, toast]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -1186,6 +1210,7 @@ export default function InboxMeta() {
             (bTemDigito && bDigits.length >= 4 && instDigits.includes(bDigits));
           if (!matchTexto && !matchTel && !matchInst) return false;
         }
+        if (buscaTelefoneGlobal) return true;
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
         if (filtroJanela24h) {
           if (!c.ultima_msg_entrada_em) return false;
@@ -1236,7 +1261,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, filtroQualifs, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento]);
+  }, [contatos, busca, buscaTelefoneGlobal, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, filtroQualifs, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento]);
 
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
@@ -2193,7 +2218,11 @@ export default function InboxMeta() {
           </div>
           <ScrollArea className="flex-1 w-full max-w-full overflow-hidden">
             <div className="w-full sm:w-[360px] max-w-full overflow-hidden">
-              {contatosFiltrados.length === 0 ? (
+              {buscaTelefoneGlobal && (buscandoTelefone || busca.trim() !== buscaDebounced.trim()) ? (
+                <div role="status" className="p-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Pesquisando…
+                </div>
+              ) : contatosFiltrados.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
                 {abaAtiva === 'arquivados' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa.'}
               </div>
@@ -2225,8 +2254,8 @@ export default function InboxMeta() {
                   etiquetasBloqueadas={etiquetasBloqueadas[c.id] ?? new Set()}
                   fixado={c.fixado}
                   arquivado={c.arquivado}
-                  folderId={currentFolderId}
-                  canManageFolder={podeAdministrarCaixaAtual}
+                    folderId={c.folder_id ?? null}
+                   canManageFolder={podeAdministrarCaixaAtual && (c.folder_id ?? null) === currentFolderId}
                   podeExcluir={isAdmin && !c.ultima_msg_entrada_em}
                   mostrarQualificacao={qualificacaoAtivaNaCaixa}
                   mostrarDispensaResposta={alertaEsperaAtivoNaCaixa}
@@ -2245,7 +2274,15 @@ export default function InboxMeta() {
                   onArquivarToggle={handleArquivar}
                 >
                   <button
-                    onClick={() => selMultipla ? toggleSel(c.id) : setContatoAtivo(c)}
+                    onClick={() => {
+                      if (selMultipla) { toggleSel(c.id); return; }
+                      if (buscaTelefoneGlobal) {
+                        escolhaManualFolderRef.current = true;
+                        setCurrentFolderId(c.folder_id ?? null);
+                        setAbaAtiva(c.arquivado ? 'arquivados' : 'conversas');
+                      }
+                      setContatoAtivo(c);
+                    }}
                     onDoubleClick={() => { if (!selMultipla) { setSelMultipla(true); toggleSel(c.id); } }}
                     title={alertaEsperaAtivoNaCaixa && esp.nivel !== 'ok' ? `Cliente aguardando resposta há ${esp.min}min` : undefined}
                     className={cn(
@@ -2322,11 +2359,17 @@ export default function InboxMeta() {
                         <Badge variant="secondary" className="text-[8px] py-0 h-3.5 px-1 shrink-0">Não oficial</Badge>
                       )}
                     </div>
+                    {buscaTelefoneGlobal && (
+                      <div className="text-[10px] text-muted-foreground truncate">
+                        {c.folder_id ? (folders.find(f => f.id === c.folder_id)?.nome || 'Caixa autorizada') : 'PADRÃO'}
+                        {' · '}{formatTelefone(c.telefone)}
+                      </div>
+                    )}
                   </button>
                 </MetaConversaContextMenu>
               );
             })}
-            {contatos.length >= limiteContatos && (!(modoMeusClientes || filtroEtiqueta.size > 0) || !taggedPageRef.current.exhausted) && (
+            {contatos.length >= limiteContatos && (buscaTelefoneGlobal || !(modoMeusClientes || filtroEtiqueta.size > 0) || !taggedPageRef.current.exhausted) && (
               <div className="p-3">
                 <Button
                   variant="outline"
