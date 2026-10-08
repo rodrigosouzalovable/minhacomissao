@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
       const { data: mestres, error: mestresError } = await q;
       if (mestresError) throw mestresError;
-      const encontrados = ((mestres as any[]) || []) as typeof mestresEspecificos;
+      const encontrados = ((mestres as any[]) || []) as NonNullable<typeof mestresEspecificos>;
       if (encontrados.length === 0) {
         // Erro de negócio: responder 200 permite que a tela mostre a orientação
         // sem transformar o caso esperado em RUNTIME_ERROR do invoke.
