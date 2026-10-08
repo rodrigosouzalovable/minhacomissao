@@ -57,14 +57,15 @@ Deno.serve(async (req) => {
     // Modelo específico (opcional): injeta apenas esse template.
     const templateNome = String(body?.template_nome || "").trim();
     const templateIdioma = String(body?.idioma || "").trim();
-    let mestresEspecificos: Array<{
+    type MestreEspecifico = {
       id: string;
       nome: string;
       idioma: string;
       criado_por: string | null;
       categoria: string;
       reclassificado_marketing: boolean;
-    }> | null = null;
+    };
+    let mestresEspecificos: MestreEspecifico[] | null = null;
     if (templateNome) {
       let q = supabase
         .from("meta_templates_mestre")
@@ -73,7 +74,7 @@ Deno.serve(async (req) => {
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
       const { data: mestres, error: mestresError } = await q;
       if (mestresError) throw mestresError;
-      const encontrados = ((mestres as any[]) || []) as NonNullable<typeof mestresEspecificos>;
+      const encontrados = ((mestres as any[]) || []) as MestreEspecifico[];
       if (encontrados.length === 0) {
         // Erro de negócio: responder 200 permite que a tela mostre a orientação
         // sem transformar o caso esperado em RUNTIME_ERROR do invoke.
