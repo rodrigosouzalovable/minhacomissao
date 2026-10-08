@@ -6,7 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Distribuir modelos sem interrupção por Marketing; preservar cópias e retomar duvidas_ou_informacoes_gui_2 nas faltantes elegíveis, validar e publicar sem disparos a clientes.
+- [x] Distribuição não para após reclassificação Marketing; 27 cópias faltantes reenviadas e aceitas como PENDING, 23 aprovadas e 36 pendentes anteriores preservadas. 20 testes passaram, funções publicadas, tela e compilação verificadas; demais números aguardam qualidade, permissões/bloqueios ou pausa existente, sem mensagens a clientes.
 - [x] Criar importação exclusiva Odres com substituição atômica de CPFs e classificar o resultado remoto sem duplicação; lista inicial publicada com 35.891 CPFs válidos. Portal real confirmou logo Odres e principal R$1.491,00; prévia visual confirmou uma repetição e zero inválidos. Página completa autenticada não abriu no teste; seção validada isoladamente com autorização real.
 - [x] Implementar recuperação cadastral com autorização por estoque, variáveis exatas, reservas por sufixo, reposição alvo 100 sem autorizar novos leads e template obrigatório; funções disponibilizadas, seleção nova desativada.
 - [x] Registrar fluxo na AQUECIMENTO; IAGO agradece uma única confirmação com “Obrigado pela confirmação”, silencia demais respostas e aplica blacklist em “Sair”; 18 testes passaram sem mensagens externas.
