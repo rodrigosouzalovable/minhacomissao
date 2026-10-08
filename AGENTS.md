@@ -42,7 +42,7 @@
 
 - Campaign ticks reuse handlers and pace globally start-to-start to avoid HTTP overhead.
 
-- Cadastral recovery uses owner consent snapshots, atomic suffix leases and one-time replies before generic IAGO to prevent duplicates and honor opt-outs.
+- Cadastral recovery uses consent snapshots, atomic suffix leases and one-time replies before IAGO; count accepted transitions/replies within quality cycles, excluding preventive sends, without automatic volume escalation.
 
 - Manual Meta checks batch all owner-connected instances; automatic checks remain due-only to limit cost and timeouts.
 - Overdue audits owner-admin cost consent; isolated scheduler credentials start bounded cycles and stop after drain.
