@@ -29,13 +29,13 @@
 - Navigation uses explicitly granted tabs; `parceiro_meta` scopes instances, never grants extra screens.
 - National lead capture has separate scheduling/config/locks, daily query and monthly Google-account limits, never dollar caps or message sends.
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
-- Parcelas vencidas são derivadas de pagamentos pendentes em acordos ativos e compartilham a consulta entre sino, alerta e Retornos; o pop-up abre uma vez às 9h e às 15h BRT, inclusive no primeiro acesso posterior à janela.
-- A comissão do funcionário usa a data efetiva do pagamento: até 30/09/2026 preserva 2/3/4/6/8/10%, e desde 01/10/2026 usa 2/3/4/5/7/9% para todos os credores; honorários do escritório permanecem separados.
+- Overdue uses pending payments in active agreements, shared across bell/alerts/Retornos; popup once at 9h/15h BRT, including later first access.
+- Employee commission uses actual payment date and creditor-independent date tiers; office fees remain separate.
 - UME loads client/totals first and alternatives on demand; bound waits, cache 12h without polling.
 - Creditor negotiation templates keep independent editable text despite shared extraction/calculation.
 - O IAGO participa do rodízio somente na PADRÃO, mas responde toda entrada UAZAPI da AQUECIMENTO com uma resposta curta, sem transferência e sem follow-up.
 - A recuperação automática de números próprios RED/YELLOW opera diariamente das 08h às 19h BRT, exceto domingos, e desativa imediatamente remetentes com bloqueio real confirmado pela Meta.
-- Contatos confirmados do Google Maps podem ser colocados na blacklist pelo Aquecimento Meta; o bloqueio por sufixo remove o contato da fonte e impede que novas detecções o recriem.
+- Maps blacklist matches suffixes, removes source contacts and prevents recreation.
 
 - Meta payment errors share commercial classification and cached revalidation before alerts; inconclusive checks never claim unpaid billing or release protected senders.
 
