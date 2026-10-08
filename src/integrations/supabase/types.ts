@@ -5040,6 +5040,7 @@ export type Database = {
           atualizado_em: string
           ciclo_ate: string | null
           criado_em: string
+          custo_autorizado_em: string | null
           id: string
           idioma: string
           lease_ate: string | null
@@ -5057,6 +5058,7 @@ export type Database = {
           atualizado_em?: string
           ciclo_ate?: string | null
           criado_em?: string
+          custo_autorizado_em?: string | null
           id?: string
           idioma?: string
           lease_ate?: string | null
@@ -5074,6 +5076,7 @@ export type Database = {
           atualizado_em?: string
           ciclo_ate?: string | null
           criado_em?: string
+          custo_autorizado_em?: string | null
           id?: string
           idioma?: string
           lease_ate?: string | null
