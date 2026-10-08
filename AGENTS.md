@@ -21,8 +21,8 @@
 - Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
 - Cobmais diário envia o XLSX a armazenamento privado e processa no servidor; staging/publicação são atômicos, chave = CPF+credor+contrato+parcela e vencimento é substituível.
-- Meta stays owner-scoped; shared flows read authorized copies. Utility catalogs merge masters and copies, but sending requires approved copy IDs; batches stop on Marketing.
-- A cópia automática de modelos Meta usa apenas Utility selecionado do mesmo dono em números CONNECTED com qualidade GREEN ou UNKNOWN verificada e sem bloqueio real; YELLOW/RED aguardam, tier 250 reserva duas submissões por número/dia e tiers 1.000/2.000 seguem a fila sequencial. A sincronização manual de HSM mantém a exigência de Utility aprovado na origem para evitar copiar rascunhos.
+- Meta stays owner-scoped; shared flows read authorized copies. Distribution continues on Marketing reclassification; messaging still needs approved copies.
+- Automatic copies use selected owner Utility on verified CONNECTED GREEN/UNKNOWN only; preserve blocks, tier 250 two/day and sequential queues. Manual HSM sync requires an approved Utility source to avoid drafts.
 - Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
 - Campaign results match replies/agreements by normalized phone suffix/CPF and indexed time windows for fast manual checks without polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.
