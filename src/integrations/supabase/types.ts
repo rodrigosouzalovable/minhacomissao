@@ -6922,12 +6922,16 @@ export type Database = {
           atualizado_em: string
           caiu_em: string
           criado_em: string
+          envios_google_maps_aceitos: number
+          envios_recuperacao_aceitos: number
           envios_uazapi_aceitos: number
           id: string
           instancia_id: string
           precisao: string
+          primeiro_envio_recuperacao_em: string | null
           primeiro_envio_uazapi_em: string | null
           qualidade_origem: string
+          respostas_recuperacao: number
           user_id: string
           voltou_green_em: string | null
         }
@@ -6936,12 +6940,16 @@ export type Database = {
           atualizado_em?: string
           caiu_em: string
           criado_em?: string
+          envios_google_maps_aceitos?: number
+          envios_recuperacao_aceitos?: number
           envios_uazapi_aceitos?: number
           id?: string
           instancia_id: string
           precisao?: string
+          primeiro_envio_recuperacao_em?: string | null
           primeiro_envio_uazapi_em?: string | null
           qualidade_origem: string
+          respostas_recuperacao?: number
           user_id: string
           voltou_green_em?: string | null
         }
@@ -6950,12 +6958,16 @@ export type Database = {
           atualizado_em?: string
           caiu_em?: string
           criado_em?: string
+          envios_google_maps_aceitos?: number
+          envios_recuperacao_aceitos?: number
           envios_uazapi_aceitos?: number
           id?: string
           instancia_id?: string
           precisao?: string
+          primeiro_envio_recuperacao_em?: string | null
           primeiro_envio_uazapi_em?: string | null
           qualidade_origem?: string
+          respostas_recuperacao?: number
           user_id?: string
           voltou_green_em?: string | null
         }
@@ -7035,6 +7047,9 @@ export type Database = {
         Row: {
           ativo: boolean
           criado_em: string
+          custo_autorizado_em: string | null
+          custo_autorizado_por: string | null
+          custo_limite_diario_brl: number | null
           reposicao_em: string | null
           reposicao_resultado: Json | null
           reposicao_token: string | null
@@ -7043,6 +7058,9 @@ export type Database = {
         Insert: {
           ativo?: boolean
           criado_em?: string
+          custo_autorizado_em?: string | null
+          custo_autorizado_por?: string | null
+          custo_limite_diario_brl?: number | null
           reposicao_em?: string | null
           reposicao_resultado?: Json | null
           reposicao_token?: string | null
@@ -7051,6 +7069,9 @@ export type Database = {
         Update: {
           ativo?: boolean
           criado_em?: string
+          custo_autorizado_em?: string | null
+          custo_autorizado_por?: string | null
+          custo_limite_diario_brl?: number | null
           reposicao_em?: string | null
           reposicao_resultado?: Json | null
           reposicao_token?: string | null
