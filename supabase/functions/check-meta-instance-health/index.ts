@@ -8,6 +8,7 @@ import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-in
 import { linhaBmInstancia } from '../_shared/rotulo-instancia.ts';
 import { isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
 import { isInformationalDisplayNameLimit } from '../_shared/meta-name-status.ts';
+import { accountViolationHealthConfirmed, accountViolationReleasable } from '../_shared/meta-account-violation.ts';
 import { RECUPERACAO_OWNER_ID, RECUPERACAO_AGUARDA_DESBLOQUEIO, bloqueioRecuperacaoMeta } from '../_shared/meta-aquecimento-alvo.ts';
 
 const corsHeaders = {
@@ -205,10 +206,9 @@ Deno.serve(async (req) => {
         // ACCOUNT_VIOLATION chega pelo webhook e pausa preventivamente toda a BM.
         // Para desfazer essa trava exigimos confirmação positiva (não apenas ausência
         // de erro) em todas as entidades relevantes retornadas pela própria Meta.
-        const envioDisponivelConfirmado =
-          String(r.phone_health?.can_send_message || '').toUpperCase() === 'AVAILABLE' &&
-          statusPhone.includes('AVAILABLE') &&
-          comercialDisponivel;
+        const envioDisponivelConfirmado = accountViolationHealthConfirmed(
+          r.phone_health, r.waba_health, String(inst.phone_number_id), String(inst.waba_id),
+        );
         const motivoAnteriorPagamento = /#131042|payment|billing|eligibility|pagamento/i.test(
           String(inst.pausa_automatica_motivo || ''),
         );
@@ -522,9 +522,12 @@ Deno.serve(async (req) => {
         // A liberação global ignora somente a cor de qualidade; nunca pode
         // ignorar uma limitação explícita de envio retornada pela Meta.
         const saudavel = (liberacaoGlobal || qual === 'GREEN') && !quarentenaAtiva && !restritoMeta;
-        const violacaoContaLiberavel = eraViolacaoConta && graphOk && qual === 'GREEN' &&
-          semBanAgora && !quarentenaAtiva && !restritoMeta && envioDisponivelConfirmado &&
-          inst.recuperacao_ativa !== true;
+        const violacaoContaLiberavel = eraViolacaoConta && accountViolationReleasable({
+          status: st, quality: qual, banInfo: r.ban_info,
+          graphOk: graphOk && !r.waba_error && phoneResp.ok,
+          quarantineActive: quarentenaAtiva, recoveryActive: inst.recuperacao_ativa === true,
+          healthConfirmed: envioDisponivelConfirmado,
+        });
 
         const liberarLimitacao3144 = conectado3144 && graphOk && !comercialBloqueado && (
           !r.limitacao_numero || ['nome', 'qualidade'].includes(String(r.limitacao_tipo || ''))
