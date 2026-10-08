@@ -353,7 +353,7 @@ serve(async (req) => {
         .select("status").eq("instancia_id", inst.id).eq("nome_template", mestre.nome)
         .eq("idioma", mestre.idioma || "pt_BR").maybeSingle();
       if (erroRemoto) throw erroRemoto;
-      if (preservarSubmissao(remoto?.status)) {
+      if (remoto && preservarSubmissao(remoto.status)) {
         const { error: mirrorError } = await supabase.from("meta_templates_instancia").upsert({
           template_mestre_id: mestre_id, instancia_id: inst.id, waba_id: inst.waba_id,
           phone_number_id: inst.phone_number_id, status: String(remoto.status).toUpperCase(), erro: null,
