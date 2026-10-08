@@ -1,3 +1,4 @@
+import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 // Copia templates aprovados para números novos da API Oficial, de forma gradual.
 // Roda de carona no tick de 10 minutos já existente (sem cron novo).
 //
@@ -7,7 +8,7 @@
 //  - 1 modelo por vez por número, intervalo aleatório de 2 a 5 min
 //  - 2 reprovações seguidas → pausa a fila do número e avisa
 //  - erro de limite/bloqueio da Meta → pausa 24h nesse número
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";
@@ -295,7 +296,7 @@ Deno.serve(async (req) => {
       // de todos os HSM. A inserção é feita somente por funções autenticadas;
       // ainda exigimos o mesmo proprietário e uma categoria segura.
       const categoriaMestre = String(mestreItem?.categoria || "").toUpperCase();
-      const permitidoPelaFila = categoriaMestre === "UTILITY" && mestreItem?.reclassificado_marketing !== true;
+      const permitidoPelaFila = !!mestreItem && podeDistribuirModelo(mestreItem, inst.user_id, true);
       if (!mestreItem || mestreItem.criado_por !== inst.user_id || !permitidoPelaFila) {
         await supabase.from("meta_templates_onboarding_fila").update({
           status: "CANCELADO",
@@ -311,15 +312,12 @@ Deno.serve(async (req) => {
         const nomeadas = String((mestreItem as any).corpo || "").match(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g) || [];
         const categoria = String((mestreItem as any).categoria || "").toUpperCase();
         const categoriaInvalida = categoria !== "UTILITY";
-        const reclassificadoInconsistente = (mestreItem as any).reclassificado_marketing === true;
-        if (nomeadas.length > 0 || categoriaInvalida || reclassificadoInconsistente) {
+        if (nomeadas.length > 0 || categoriaInvalida) {
           await supabase
             .from("meta_templates_onboarding_fila")
             .update({
               status: "CANCELADO",
-              motivo: reclassificadoInconsistente
-                ? "modelo reclassificado como MARKETING; salve-o nessa categoria antes de reenviar"
-                : categoriaInvalida
+              motivo: categoriaInvalida
                 ? "categoria incompatível com a aplicação automática"
                 : "modelo usa variável com nome; use {{1}}, {{2}}...",
               finalizado_em: new Date().toISOString(),
@@ -399,6 +397,26 @@ Deno.serve(async (req) => {
             .update({ status: "PENDENTE", enviado_em: null, motivo: "limite diário tier 250: próximo dia útil", tentativas: 0 })
             .eq("id", proximo.id);
           processados.push({ instancia_id: inst.id, ok: true, adiado: "limite_tier_250" });
+          continue;
+        }
+        else if (Number(res?.total || 0) === 0) {
+          const { data: copia } = await supabase.from("meta_templates_instancia")
+            .select("status").eq("instancia_id", inst.id)
+            .eq("template_mestre_id", proximo.template_mestre_id).maybeSingle();
+          const statusReal = String(copia?.status || "").toUpperCase();
+          if (["APPROVED", "PENDING", "IN_APPEAL", "PENDING_DELETION"].includes(statusReal)) {
+            await supabase.from("meta_templates_onboarding_fila").update({
+              status: statusReal, motivo: "cópia existente preservada",
+              finalizado_em: statusReal === "APPROVED" ? new Date().toISOString() : null,
+            }).eq("id", proximo.id);
+          } else {
+            const motivo = String(res?.ignoradas?.[0]?.motivo || "consulta Meta inconclusiva");
+            await supabase.from("meta_templates_onboarding_fila").update({
+              status: "PENDENTE", enviado_em: null, motivo,
+              agendado_para: new Date(Date.now() + 300_000).toISOString(),
+            }).eq("id", proximo.id);
+          }
+          processados.push({ instancia_id: inst.id, ok: true, sem_submissao: true });
           continue;
         }
       } catch (e) {

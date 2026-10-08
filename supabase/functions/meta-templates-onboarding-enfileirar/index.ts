@@ -2,10 +2,11 @@
 // Só administradores podem chamar. Avisa no WhatsApp quando a fila começa.
 // Também aceita instancia_ids[] + template_nome/idioma para injetar UM modelo
 // específico apenas nas instâncias que ainda não o possuem (usado no Envio Meta).
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { modelosParaCopiar } from "../_shared/meta-template-copy-candidates.ts";
+import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 
 const corsHeaders = {
@@ -56,14 +57,15 @@ Deno.serve(async (req) => {
     // Modelo específico (opcional): injeta apenas esse template.
     const templateNome = String(body?.template_nome || "").trim();
     const templateIdioma = String(body?.idioma || "").trim();
-    let mestresEspecificos: Array<{
+    type MestreEspecifico = {
       id: string;
       nome: string;
       idioma: string;
       criado_por: string | null;
       categoria: string;
       reclassificado_marketing: boolean;
-    }> | null = null;
+    };
+    let mestresEspecificos: MestreEspecifico[] | null = null;
     if (templateNome) {
       let q = supabase
         .from("meta_templates_mestre")
@@ -72,15 +74,14 @@ Deno.serve(async (req) => {
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
       const { data: mestres, error: mestresError } = await q;
       if (mestresError) throw mestresError;
-      const encontrados = ((mestres as any[]) || []) as typeof mestresEspecificos;
+      const encontrados = ((mestres as any[]) || []) as MestreEspecifico[];
       if (encontrados.length === 0) {
         // Erro de negócio: responder 200 permite que a tela mostre a orientação
         // sem transformar o caso esperado em RUNTIME_ERROR do invoke.
         return json({ success: false, error: "template_nao_cadastrado_como_mestre" });
       }
       mestresEspecificos = encontrados.filter((m) =>
-        String(m.categoria || "").toUpperCase() === "UTILITY" &&
-        m.reclassificado_marketing !== true
+        podeDistribuirModelo(m, m.criado_por, true)
       );
       if (mestresEspecificos.length === 0) {
         return json({ success: false, error: "template_mestre_nao_elegivel" });
@@ -151,7 +152,6 @@ Deno.serve(async (req) => {
         .select("id,nome,idioma,categoria,criado_por,injetar_em_novos,reclassificado_marketing")
         .eq("criado_por", inst.user_id)
         .eq("categoria", "UTILITY")
-        .eq("reclassificado_marketing", false)
         .order("criado_em", { ascending: true });
       // A marcação “injetar em números novos” vale apenas para o fluxo automático.
       // Uma aplicação manual pode usar qualquer mestre Utility seguro do proprietário.
