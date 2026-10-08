@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Clock3, Flame, ShieldCheck, Eye } from 'lucide-react';
-import { recoveryAverages } from '@/lib/metaRecoveryMetrics';
+import { recoveryAverages, recoveryTimingSummary } from '@/lib/metaRecoveryMetrics';
 
 interface InstRecup {
   id: string;
@@ -54,13 +54,6 @@ function formatarDuracao(ms: number | null) {
   const dias = Math.floor(horas / 24);
   const restoHoras = horas % 24;
   return restoHoras ? `${dias}d ${restoHoras}h` : `${dias}d`;
-}
-
-function mediana(valores: number[]) {
-  if (!valores.length) return null;
-  const ordenados = [...valores].sort((a, b) => a - b);
-  const meio = Math.floor(ordenados.length / 2);
-  return ordenados.length % 2 ? ordenados[meio] : (ordenados[meio - 1] + ordenados[meio]) / 2;
 }
 
 export function RecuperacaoQualidadePanel() {
@@ -128,10 +121,7 @@ export function RecuperacaoQualidadePanel() {
   const insts = data?.insts || [];
   const ciclos = data?.ciclos || [];
   const concluidos = ciclos.filter((c) => c.precisao === 'exata' && c.voltou_green_em && c.primeiro_envio_recuperacao_em);
-  const tempos = concluidos.map((c) =>
-    new Date(c.voltou_green_em as string).getTime() - new Date(c.primeiro_envio_recuperacao_em as string).getTime()
-  ).filter((v) => v >= 0);
-  const media = tempos.length ? tempos.reduce((total, valor) => total + valor, 0) / tempos.length : null;
+  const tempos = recoveryTimingSummary(ciclos);
   const medias = recoveryAverages(concluidos);
   const ciclosPorInstancia = new Map(ciclos.filter((c) => !c.voltou_green_em).map((c) => [c.instancia_id, c]));
 
@@ -161,25 +151,26 @@ export function RecuperacaoQualidadePanel() {
             {r.simulado ? <><div>{r.nome_empresa} · {r.fonte === 'confirmado' ? 'Resposta automática confirmada' : r.fonte === 'candidato' ? 'Candidato' : 'UAZAPI conectado'}</div><p className="text-muted-foreground">{r.preview}</p><div className="text-xs text-muted-foreground">{'{{1}}'}: {r.variaveis?.[0]} · {'{{2}}'}: {r.variaveis?.[1]}</div></> : <div className="text-muted-foreground">{r.skip === 'aguarda_template_cadastral_aprovado' ? 'Aguardando aprovação do modelo na instância' : r.skip === 'remetente_inapto' ? 'Aguardando liberação da Meta' : 'Aguardando destino autorizado ou limites de envio'}</div>}
           </div>)}
         </div>}
-        <div className="grid gap-2 sm:grid-cols-3">
-          <div className="rounded-md border p-3">
-            <div className="text-xs text-muted-foreground">Média até GREEN</div>
-            <div className="mt-1 text-lg font-semibold">{formatarDuracao(media)}</div>
-          </div>
-          <div className="rounded-md border p-3">
-            <div className="text-xs text-muted-foreground">Mediana até GREEN</div>
-            <div className="mt-1 text-lg font-semibold">{formatarDuracao(mediana(tempos))}</div>
-          </div>
-          <div className="rounded-md border p-3">
-            <div className="text-xs text-muted-foreground">Recuperações exatas</div>
-            <div className="mt-1 text-lg font-semibold">{tempos.length}</div>
-          </div>
+        <div className="grid gap-4 border-b py-3 sm:grid-cols-2">
+          {[
+            { label: 'Queda detectada → GREEN', summary: tempos.fromDrop },
+            { label: 'Primeiro envio → GREEN', summary: tempos.fromFirstSend },
+          ].map(({ label, summary }) => (
+            <div key={label} className="min-w-0 space-y-2">
+              <h3 className="text-sm font-medium">{label}</h3>
+              <dl className="grid grid-cols-2 gap-2">
+                <div><dt className="text-xs text-muted-foreground">Média</dt><dd className="text-lg font-semibold">{formatarDuracao(summary.mean)}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Mediana</dt><dd className="text-lg font-semibold">{formatarDuracao(summary.median)}</dd></div>
+              </dl>
+              <div className="text-xs text-muted-foreground">{summary.count} ciclo(s) concluído(s) · histórico parcial excluído</div>
+            </div>
+          ))}
         </div>
         <div className="flex flex-wrap gap-x-5 gap-y-2 py-2 text-sm">
           <span>Média observada por dia: <strong>{medias.daily?.toFixed(1) ?? '—'}</strong></span>
           <span>Média acumulada até GREEN: <strong>{medias.accepted?.toFixed(1) ?? '—'}</strong></span>
         </div>
-        {tempos.length === 0 && (
+        {tempos.fromFirstSend.count === 0 && (
           <div className="flex items-center gap-2 rounded-md border p-2 text-xs text-muted-foreground">
             <Clock3 className="h-4 w-4 shrink-0" />
             Nenhum ciclo completo medido após envio de recuperação.
