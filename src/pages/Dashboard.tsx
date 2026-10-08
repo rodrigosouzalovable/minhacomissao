@@ -1,3 +1,5 @@
+import { RecebimentosCredores } from '@/components/RecebimentosCredores';
+import { getEmpresaLabel } from '@/lib/empresaLabels';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -76,16 +78,19 @@ export default function Dashboard() {
         lista.reduce((sum, p) => sum + (p.acordos?.empresa === empresa ? Number(p.comissao_parcela) : 0), 0);
       const comissaoRecebidaNovoMundo = somarComissaoEmpresa(pagamentosPagos, 'ume_novo_mundo');
       const comissaoRecebidaUme = somarComissaoEmpresa(pagamentosPagos, 'mundo_da_moda');
+      const comissaoRecebidaOdres = somarComissaoEmpresa(pagamentosPagos, 'odres_cred');
+      const comissaoPendenteOdres = somarComissaoEmpresa(pagamentosPendentes, 'odres_cred');
       const comissaoPendenteNovoMundo = somarComissaoEmpresa(pagamentosPendentes, 'ume_novo_mundo');
       const comissaoPendenteUme = somarComissaoEmpresa(pagamentosPendentes, 'mundo_da_moda');
 
-      const comissoesPorMes: Record<string, { novoMundo: number; ume: number }> = {};
+      const comissoesPorMes: Record<string, { novoMundo: number; ume: number; odres: number }> = {};
       pagamentosPagos.forEach(p => {
         if (p.data_paga) {
           const mes = new Date(p.data_paga).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-          comissoesPorMes[mes] ||= { novoMundo: 0, ume: 0 };
+          comissoesPorMes[mes] ||= { novoMundo: 0, ume: 0, odres: 0 };
           if (p.acordos?.empresa === 'ume_novo_mundo') comissoesPorMes[mes].novoMundo += Number(p.comissao_parcela);
           if (p.acordos?.empresa === 'mundo_da_moda') comissoesPorMes[mes].ume += Number(p.comissao_parcela);
+          if (p.acordos?.empresa === 'odres_cred') comissoesPorMes[mes].odres += Number(p.comissao_parcela);
         }
       });
 
@@ -139,9 +144,11 @@ export default function Dashboard() {
         comissaoPendente,
         comissaoPendenteNovoMundo,
         comissaoPendenteUme,
+        comissaoPendenteOdres,
         comissaoRecebida,
         comissaoRecebidaNovoMundo,
         comissaoRecebidaUme,
+        comissaoRecebidaOdres,
         ultimosAcordos: acordos.slice(0, 5),
         comissoesPorMes: Object.entries(comissoesPorMes).map(([mes, valores]) => ({ mes, ...valores })),
         comparativo,
@@ -267,7 +274,7 @@ export default function Dashboard() {
                   <div className="text-2xl font-bold text-warning">
                     {formatarMoeda(data?.comissaoPendente || 0)}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">NOVO MUNDO {formatarMoeda(data?.comissaoPendenteNovoMundo || 0)} · UME {formatarMoeda(data?.comissaoPendenteUme || 0)}</p>
+                  <RecebimentosCredores className="mt-2" valores={{ ume_novo_mundo: data?.comissaoPendenteNovoMundo || 0, mundo_da_moda: data?.comissaoPendenteUme || 0, odres_cred: data?.comissaoPendenteOdres || 0 }} />
                 </CardContent>
               </Card>
 
@@ -280,7 +287,7 @@ export default function Dashboard() {
                   <div className="text-2xl font-bold text-secondary">
                     {formatarMoeda(data?.comissaoRecebida || 0)}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">NOVO MUNDO {formatarMoeda(data?.comissaoRecebidaNovoMundo || 0)} · UME {formatarMoeda(data?.comissaoRecebidaUme || 0)}</p>
+                  <RecebimentosCredores className="mt-2" valores={{ ume_novo_mundo: data?.comissaoRecebidaNovoMundo || 0, mundo_da_moda: data?.comissaoRecebidaUme || 0, odres_cred: data?.comissaoRecebidaOdres || 0 }} />
                 </CardContent>
               </Card>
             </>
@@ -306,6 +313,7 @@ export default function Dashboard() {
                       />
                       <Bar dataKey="novoMundo" name="NOVO MUNDO" stackId="comissao" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="ume" name="UME" stackId="comissao" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="odres" name={getEmpresaLabel('odres_cred')} stackId="comissao" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -336,7 +344,7 @@ export default function Dashboard() {
                       <div>
                         <p className="font-medium">{acordo.cliente_nome}</p>
                         <p className="text-sm text-muted-foreground">
-                          {formatarData(acordo.criado_em)}
+                          {getEmpresaLabel(acordo.empresa)} · {formatarData(acordo.criado_em)}
                         </p>
                       </div>
                       <div className="text-right">

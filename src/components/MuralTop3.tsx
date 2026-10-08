@@ -1,3 +1,4 @@
+import { RecebimentosCredores } from './RecebimentosCredores';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -25,7 +26,7 @@ export function MuralTop3() {
   const { data: ranking } = useQuery({
     queryKey: ['mural-top3'],
     queryFn: async () => {
-      const { data } = await supabase.rpc('ranking_mensal_por_credor' as any);
+      const { data } = await supabase.rpc('ranking_mensal_por_credor_v2');
       const arr = (data as any[]) || [];
       return arr.slice(0, 3);
     },
@@ -57,10 +58,7 @@ export function MuralTop3() {
             />
             <p className="text-sm font-semibold text-center truncate w-full">{p.item.nome}</p>
             <p className="text-xs text-emerald-600 font-bold">{fmt(Number(p.item.total_recebido))}</p>
-            <p className="text-[11px] text-muted-foreground text-center leading-4">
-              NOVO MUNDO {fmt(Number(p.item.novo_mundo_recebido))}<br />
-              UME {fmt(Number(p.item.ume_recebido))}
-            </p>
+            <RecebimentosCredores className="w-full text-[11px]" valores={{ ume_novo_mundo: Number(p.item.novo_mundo_recebido), mundo_da_moda: Number(p.item.ume_recebido), odres_cred: Number(p.item.odres_cred_recebido) }} />
             <div
               className={cn(
                 'w-full rounded-t-lg flex items-start justify-center pt-2 text-3xl bg-gradient-to-b',

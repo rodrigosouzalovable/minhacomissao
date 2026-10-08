@@ -1,3 +1,4 @@
+import { RecebimentosCredores } from './RecebimentosCredores';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,11 +43,14 @@ export function HistoricoMesesCard() {
       const ini = format(startOfMonth(ref), 'yyyy-MM-dd');
       const fim = format(endOfMonth(ref), 'yyyy-MM-dd');
 
+      if (!user) throw new Error('Faça login para consultar recebimentos.');
+
       // Meu resultado
-      const { data: acordos } = await supabase.from('acordos').select('id, empresa').eq('user_id', user!.id);
+      const { data: acordos } = await supabase.from('acordos').select('id, empresa').eq('user_id', user.id);
       let meuTotal = 0;
       let meuNovoMundo = 0;
       let meuUme = 0;
+      let meuOdres = 0;
       let meuQtd = 0;
       const ids = (acordos || []).map((a) => a.id);
       const empresaPorAcordo = new Map((acordos || []).map((a) => [a.id, a.empresa]));
@@ -64,6 +68,7 @@ export function HistoricoMesesCard() {
             meuQtd += 1;
             if (empresaPorAcordo.get(p.acordo_id) === 'ume_novo_mundo') meuNovoMundo += Number(p.valor_parcela || 0);
             if (empresaPorAcordo.get(p.acordo_id) === 'mundo_da_moda') meuUme += Number(p.valor_parcela || 0);
+            if (empresaPorAcordo.get(p.acordo_id) === 'odres_cred') meuOdres += Number(p.valor_parcela || 0);
           });
         }
       }
@@ -72,7 +77,7 @@ export function HistoricoMesesCard() {
       const { data: metaRow } = await supabase
         .from('metas_funcionarios')
         .select('valor_meta')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .eq('mes_ano', mesAno)
         .maybeSingle();
 
@@ -80,14 +85,16 @@ export function HistoricoMesesCard() {
       let equipeTotal: number | null = null;
       let equipeNovoMundo = 0;
       let equipeUme = 0;
+      let equipeOdres = 0;
       let equipeMeta = 0;
       let equipeParticipantes = 0;
       if (isAdmin) {
-        const { data: ranking } = await supabase.rpc('ranking_mensal_por_credor' as any, { p_mes_ano: mesAno });
-        const rows = (ranking || []) as { total_recebido: number; novo_mundo_recebido: number; ume_recebido: number }[];
+        const { data: ranking } = await supabase.rpc('ranking_mensal_por_credor_v2', { p_mes_ano: mesAno });
+        const rows = (ranking || []) as { total_recebido: number; novo_mundo_recebido: number; ume_recebido: number; odres_cred_recebido: number }[];
         equipeTotal = rows.reduce((s, r) => s + Number(r.total_recebido || 0), 0);
         equipeNovoMundo = rows.reduce((s, r) => s + Number(r.novo_mundo_recebido || 0), 0);
         equipeUme = rows.reduce((s, r) => s + Number(r.ume_recebido || 0), 0);
+        equipeOdres = rows.reduce((s, r) => s + Number(r.odres_cred_recebido || 0), 0);
         equipeParticipantes = rows.filter((r) => Number(r.total_recebido || 0) > 0).length;
         const { data: metaGlobal } = await supabase
           .from('metas_mensais')
@@ -101,12 +108,14 @@ export function HistoricoMesesCard() {
         meuTotal,
         meuNovoMundo,
         meuUme,
+        meuOdres,
         meuQtd,
         meuTicket: meuQtd > 0 ? meuTotal / meuQtd : 0,
         minhaMeta: Number(metaRow?.valor_meta || 0),
         equipeTotal,
         equipeNovoMundo,
         equipeUme,
+        equipeOdres,
         equipeMeta,
         equipeParticipantes,
       };
@@ -170,10 +179,7 @@ export function HistoricoMesesCard() {
                   )}
                 </div>
                 <p className="text-3xl font-bold tabular-nums">{formatarMoeda(data?.meuTotal || 0)}</p>
-                <div className="grid grid-cols-2 gap-3 rounded-md bg-muted/40 p-3 text-sm">
-                  <div><p className="text-xs text-muted-foreground">NOVO MUNDO</p><p className="font-semibold">{formatarMoeda(data?.meuNovoMundo || 0)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">UME</p><p className="font-semibold">{formatarMoeda(data?.meuUme || 0)}</p></div>
-                </div>
+                <RecebimentosCredores valores={{ ume_novo_mundo: data?.meuNovoMundo || 0, mundo_da_moda: data?.meuUme || 0, odres_cred: data?.meuOdres || 0 }} />
                 {data && data.minhaMeta > 0 && (
                   <>
                     <Progress value={pct(data.meuTotal, data.minhaMeta)} className="h-2" />
@@ -209,10 +215,7 @@ export function HistoricoMesesCard() {
                     )}
                   </div>
                   <p className="text-3xl font-bold tabular-nums">{formatarMoeda(data.equipeTotal)}</p>
-                  <div className="grid grid-cols-2 gap-3 rounded-md bg-muted/40 p-3 text-sm">
-                    <div><p className="text-xs text-muted-foreground">NOVO MUNDO</p><p className="font-semibold">{formatarMoeda(data.equipeNovoMundo)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">UME</p><p className="font-semibold">{formatarMoeda(data.equipeUme)}</p></div>
-                  </div>
+                <RecebimentosCredores valores={{ ume_novo_mundo: data.equipeNovoMundo, mundo_da_moda: data.equipeUme, odres_cred: data.equipeOdres }} />
                   {data.equipeMeta > 0 && (
                     <>
                       <Progress value={pct(data.equipeTotal, data.equipeMeta)} className="h-2" />
