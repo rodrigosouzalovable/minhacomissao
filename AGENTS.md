@@ -4,6 +4,7 @@
 - Campaign images persist in recipient vars keyed by name/language; use isolated send snapshots and path-keyed media caches without updating template defaults, so scheduled and resumed campaigns preserve the chosen image.
 - Campaign sharing is per-job read-only through indexed grants and scoped RPCs; never extend owner controls or realtime subscriptions.
 - Recovery timing reuses loaded exact cycles with independent drop-to-GREEN and accepted-first-send-to-GREEN samples, distinguishing waiting from sending without extra queries.
+- Account-violation pauses retain source WABA and require positive matching entity health before individual release; only pending-name limits with GREEN/UNKNOWN are informational, never bans, mixed restrictions, quarantine or recovery.
 <!-- LOVABLE:END -->
 
 - Resolve Meta redirects before rendering; save owner-scoped URLs atomically, override stale templates, preserve sent previews.

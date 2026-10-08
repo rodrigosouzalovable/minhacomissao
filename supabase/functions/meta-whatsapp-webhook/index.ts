@@ -385,13 +385,13 @@ serve(async (req) => {
                 await supabase.from('meta_whatsapp_instances').update({
                   estado_pool: 'restrita',
                   pausa_automatica_ate: null,
-                  pausa_automatica_motivo: `ACCOUNT_VIOLATION:${tipoViolacao}`,
+                  pausa_automatica_motivo: `ACCOUNT_VIOLATION:${tipoViolacao};WABA=${wabaIdEntry}`,
                   recuperacao_ativa: false,
                   recuperacao_proximo_envio_em: null,
                 }).in('id', ids);
                 await supabase.from('meta_aquecimento_trilha').update({
                   status: 'pausada',
-                  motivo: `ACCOUNT_VIOLATION:${tipoViolacao}`,
+                  motivo: `ACCOUNT_VIOLATION:${tipoViolacao};WABA=${wabaIdEntry}`,
                   atualizado_em: new Date().toISOString(),
                 }).in('instancia_id', ids).eq('dia', new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10));
               }

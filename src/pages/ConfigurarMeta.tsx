@@ -2170,6 +2170,9 @@ export default function ConfigurarMeta() {
                         {(inst as any).pausa_automatica_motivo && (
                           (() => {
                             const motivo = String((inst as any).pausa_automatica_motivo);
+                            const violacaoConta = /ACCOUNT_VIOLATION/i.test(motivo);
+                            const wabaOrigem = motivo.match(/;WABA=([^;]+)/i)?.[1];
+                            const alertaHerdado = !!wabaOrigem && wabaOrigem !== inst.waba_id;
                             const pagamento = /#131042|payment|billing|eligibility|pagamento/i.test(motivo);
                             const nomeStatus = String(inst.meta_name_status || inst.saude_name_status || "").toUpperCase();
                             const phoneHealth = inst.saude_restricoes?.phone_health;
@@ -2190,7 +2193,9 @@ export default function ConfigurarMeta() {
                                 className="text-[10px] max-w-[420px] whitespace-normal text-left leading-snug"
                                 title={motivo}
                               >
-                                {pagamento
+                                {violacaoConta
+                                  ? `fora do pool: ${alertaHerdado ? "pausa preventiva por alerta em outra conta da mesma BM" : wabaOrigem ? "alerta de violação recebido para esta conta WhatsApp" : "pausa preventiva por alerta de violação em uma conta desta BM"}. Aguardando revalidação individual; não confirma spam atual deste número.`
+                                  : pagamento
                                   ? "fora do pool: pendência de pagamento da Business Manager (#131042) — troque/regularize o cartão e as faturas na BM. Volta ao pool automaticamente após a revalidação."
                                   : phoneLimitado && qualidade
                                     ? `fora do pool: restrição de qualidade/reputação confirmada pela Meta${detalhePhone ? ` — ${detalhePhone}` : "."}`
