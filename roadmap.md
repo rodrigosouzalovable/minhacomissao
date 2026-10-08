@@ -6,6 +6,8 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Ativar recuperação cadastral diária RED/YELLOW com Google Maps autorizado e resposta única na AQUECIMENTO; aguardando confirmação da estimativa de custo antes dos envios.
+- [ ] Medir envios e respostas por fonte e ciclo até GREEN, com ajustes conservadores sem aumento automático de volume; aguardando confirmação de custo do fluxo.
 - [x] Incluir Odres Cred nos recebimentos e separar os três credores; resumos invalidados após pagamentos, oito testes passaram e consulta protegida confirmou R$36.021,25 = Novo Mundo R$25.976,88 + UME R$6.258,18 + Odres R$3.786,19. Ranking validado isoladamente com dados reais, sem erros; navegação autenticada completa permanece retornando ao login. Regras financeiras preservadas.
 - [x] Corrigir busca por telefone em todas as conversas autorizadas, independente dos filtros, com caixa/atendente; três testes passaram e compilação OK, sem envios. Validação autenticada do final 9476 não concluída: sessão aceita, mas navegação retorna ao login.
 - [x] Liberar o botão de aplicação de mestre Utility após reclassificação de uma cópia; 18 testes passaram, tela autenticada confirmou botão habilitado e aplicação simulada em 57 destinos, sem submissões reais; autorização, deduplicação e bloqueios preservados, compilação OK.
