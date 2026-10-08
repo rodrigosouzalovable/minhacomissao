@@ -43,4 +43,4 @@
 
 - Cadastral recovery uses owner consent snapshots, atomic suffix leases and one-time replies before generic IAGO to prevent duplicates and honor opt-outs.
 
-- Manual Meta template checks snapshot all owner-connected instances and stream bounded batches; automatic checks retain due-only limits to control cost and timeouts.
+- Manual Meta checks batch all owner-connected instances; automatic checks remain due-only to limit cost and timeouts.
