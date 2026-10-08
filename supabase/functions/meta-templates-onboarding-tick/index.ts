@@ -399,6 +399,26 @@ Deno.serve(async (req) => {
           processados.push({ instancia_id: inst.id, ok: true, adiado: "limite_tier_250" });
           continue;
         }
+        else if (Number(res?.total || 0) === 0) {
+          const { data: copia } = await supabase.from("meta_templates_instancia")
+            .select("status").eq("instancia_id", inst.id)
+            .eq("template_mestre_id", proximo.template_mestre_id).maybeSingle();
+          const statusReal = String(copia?.status || "").toUpperCase();
+          if (["APPROVED", "PENDING", "IN_APPEAL", "PENDING_DELETION"].includes(statusReal)) {
+            await supabase.from("meta_templates_onboarding_fila").update({
+              status: statusReal, motivo: "cópia existente preservada",
+              finalizado_em: statusReal === "APPROVED" ? new Date().toISOString() : null,
+            }).eq("id", proximo.id);
+          } else {
+            const motivo = String(res?.ignoradas?.[0]?.motivo || "consulta Meta inconclusiva");
+            await supabase.from("meta_templates_onboarding_fila").update({
+              status: "PENDENTE", enviado_em: null, motivo,
+              agendado_para: new Date(Date.now() + 300_000).toISOString(),
+            }).eq("id", proximo.id);
+          }
+          processados.push({ instancia_id: inst.id, ok: true, sem_submissao: true });
+          continue;
+        }
       } catch (e) {
         erroEnvio = String(e);
       }

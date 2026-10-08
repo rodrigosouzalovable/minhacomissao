@@ -336,7 +336,7 @@ serve(async (req) => {
       const { data: existente, error: erroExistente } = await supabase.from("meta_templates_instancia")
         .select("status").eq("instancia_id", inst.id).eq("template_mestre_id", mestre_id).maybeSingle();
       if (erroExistente) throw erroExistente;
-      if (preservarSubmissao(existente?.status) || existente?.status === "ENVIADO") {
+      if (preservarSubmissao(existente?.status)) {
         ignoradas.push({ instancia_id: inst.id, motivo: "submissao_existente_preservada" });
         continue;
       }
