@@ -2,7 +2,7 @@
 // Só administradores podem chamar. Avisa no WhatsApp quando a fila começa.
 // Também aceita instancia_ids[] + template_nome/idioma para injetar UM modelo
 // específico apenas nas instâncias que ainda não o possuem (usado no Envio Meta).
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { modelosParaCopiar } from "../_shared/meta-template-copy-candidates.ts";

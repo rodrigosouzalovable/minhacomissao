@@ -1,3 +1,4 @@
+import { sincronizarTemplatesMeta } from "../_shared/sincronizar-templates-meta.ts";
 import { podeDistribuirModelo, preservarSubmissao, registroReclassificacao } from "../_shared/meta-template-distribution.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -325,6 +326,7 @@ serve(async (req) => {
 
     const ignoradas: any[] = [];
     const candidatas: any[] = [];
+    const wabasSelecionadas = new Set<string>();
     for (const inst of instancias) {
       const bloqueio = motivoBloqueioTemplate(inst);
       if (bloqueio || !podeDistribuirModelo(mestre, inst.user_id)) {
@@ -338,6 +340,28 @@ serve(async (req) => {
         ignoradas.push({ instancia_id: inst.id, motivo: "submissao_existente_preservada" });
         continue;
       }
+      if (wabasSelecionadas.has(inst.waba_id)) {
+        ignoradas.push({ instancia_id: inst.id, motivo: "mesma_waba_ja_selecionada" });
+        continue;
+      }
+      const sync = await sincronizarTemplatesMeta(supabase, inst, AbortSignal.timeout(15_000));
+      if (!sync.success) {
+        ignoradas.push({ instancia_id: inst.id, motivo: sync.error || "consulta_meta_inconclusiva" });
+        continue;
+      }
+      const { data: remoto, error: erroRemoto } = await supabase.from("meta_whatsapp_templates")
+        .select("status").eq("instancia_id", inst.id).eq("nome_template", mestre.nome)
+        .eq("idioma", mestre.idioma || "pt_BR").maybeSingle();
+      if (erroRemoto) throw erroRemoto;
+      if (preservarSubmissao(remoto?.status)) {
+        ignoradas.push({ instancia_id: inst.id, motivo: "modelo_existente_na_meta" });
+        continue;
+      }
+      if (remoto) {
+        ignoradas.push({ instancia_id: inst.id, motivo: "modelo_existente_exige_revisao_na_meta" });
+        continue;
+      }
+      wabasSelecionadas.add(inst.waba_id);
       candidatas.push(inst);
     }
     instancias = candidatas;

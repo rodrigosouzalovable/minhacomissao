@@ -1,7 +1,7 @@
 // Audita instâncias da API Oficial Meta e enfileira somente os templates
 // automáticos criados pelo mesmo proprietário da instância.
 // Somente administrador. dry_run=true devolve apenas o relatório.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";

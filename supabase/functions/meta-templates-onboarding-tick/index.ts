@@ -8,7 +8,7 @@ import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 //  - 1 modelo por vez por número, intervalo aleatório de 2 a 5 min
 //  - 2 reprovações seguidas → pausa a fila do número e avisa
 //  - erro de limite/bloqueio da Meta → pausa 24h nesse número
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";

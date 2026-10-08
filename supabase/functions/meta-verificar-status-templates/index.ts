@@ -8,7 +8,7 @@ import { registroReclassificacao } from "../_shared/meta-template-distribution.t
 //  - avisa no WhatsApp do admin quando todos os modelos de um número ficam aprovados
 //    e quando um modelo passa de 48h preso em análise.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
 
