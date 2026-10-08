@@ -620,43 +620,61 @@ export default function MetaTemplates() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error("Sua sessão expirou. Entre novamente.");
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-verificar-status-templates`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({ forcar: true }),
-      });
-      if (!response.ok || !response.body) throw new Error(`Falha na verificação (${response.status}).`);
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let terminou = false;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const eventos = buffer.split("\n\n");
-        buffer = eventos.pop() || "";
-        for (const evento of eventos) {
-          const linha = evento.split("\n").find((s) => s.startsWith("data: "));
-          if (!linha) continue;
-          const dados = JSON.parse(linha.slice(6));
-          if (dados.type === "start") setVerificacao((v) => ({ ...v, total: dados.total }));
-          if (dados.type === "progress") setVerificacao((v) => ({ ...v, concluidas: dados.done, total: dados.total, nome: dados.nome }));
-          if (dados.type === "failure") setVerificacao((v) => ({ ...v, falhas: v.falhas + 1, erro: `Não foi possível conferir ${dados.nome}: ${dados.error}` }));
-          if (dados.type === "error") throw new Error(dados.error || "Falha na verificação.");
-          if (dados.type === "complete") {
-            terminou = true;
-            setStatusDialog({ open: true, atualizados: dados.atualizados ?? 0, aprovados: dados.aprovados ?? 0, instancias: dados.instancias ?? 0, resumo: dados.resumo || [] });
-            await carregar();
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        "Content-Type": "application/json",
+      };
+      const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-verificar-status-templates`;
+      const listing = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ listar: true }) });
+      const list = await listing.json();
+      if (!listing.ok || !list.success) throw new Error(list.error || 'Falha ao listar instâncias conectadas.');
+      const ids: string[] = list.instancia_ids || [];
+      setVerificacao(v => ({ ...v, total: ids.length }));
+      let atualizados = 0;
+      let aprovados = 0;
+      const resumo: typeof statusDialog.resumo = [];
+      for (let offset = 0; offset < ids.length; offset += 5) {
+        const batch = ids.slice(offset, offset + 5);
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST', headers: { ...headers, Accept: 'text/event-stream' },
+            body: JSON.stringify({ forcar: true, instancia_ids: batch }),
+          });
+          if (!response.ok || !response.body) throw new Error(`Falha na verificação (${response.status}).`);
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let terminou = false;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const eventos = buffer.split('\n\n');
+            buffer = eventos.pop() || '';
+            for (const evento of eventos) {
+              const linha = evento.split('\n').find(s => s.startsWith('data: '));
+              if (!linha) continue;
+              const dados = JSON.parse(linha.slice(6));
+              if (dados.type === 'progress') setVerificacao(v => ({ ...v, concluidas: offset + dados.done, nome: dados.nome }));
+              if (dados.type === 'failure') setVerificacao(v => ({ ...v, falhas: v.falhas + 1, erro: `Não foi possível conferir ${dados.nome}: ${dados.error}` }));
+              if (dados.type === 'error') throw new Error(dados.error || 'Falha na verificação.');
+              if (dados.type === 'complete') {
+                terminou = true;
+                atualizados += dados.atualizados || 0;
+                aprovados += dados.aprovados || 0;
+                resumo.push(...(dados.resumo || []));
+              }
+            }
           }
+          if (!terminou) throw new Error('Conferência deste lote interrompida; os demais continuam.');
+        } catch (error) {
+          setVerificacao(v => ({ ...v, falhas: v.falhas + batch.length, erro: error instanceof Error ? error.message : 'Falha neste lote; os demais continuam.' }));
         }
+        setVerificacao(v => ({ ...v, concluidas: offset + batch.length }));
       }
-      if (!terminou) throw new Error("Verificação interrompida antes da conclusão.");
+      setStatusDialog({ open: true, atualizados, aprovados, instancias: resumo.length, resumo });
+      await carregar();
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Falha na verificação";
       setVerificacao((v) => ({ ...v, erro: msg }));

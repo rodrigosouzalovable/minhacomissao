@@ -140,7 +140,7 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
       try {
         const res = await fetch(
           `https://graph.facebook.com/v21.0/${inst.waba_id}/message_templates?fields=name,language,status,id,rejected_reason,category&limit=200`,
-          { headers: { Authorization: `Bearer ${inst.access_token}` } },
+          { headers: { Authorization: `Bearer ${inst.access_token}` }, signal: AbortSignal.timeout(12_000) },
         );
         const data = await res.json();
         if (!res.ok) {
@@ -275,7 +275,7 @@ async function verificar(req: Request, progresso?: (evento: unknown) => void): P
             try {
               const detRes = await fetch(
                 `https://graph.facebook.com/v21.0/${remoto.id}?fields=status,rejected_reason,quality_score,category,name,language`,
-                { headers: { Authorization: `Bearer ${inst.access_token}` } },
+                { headers: { Authorization: `Bearer ${inst.access_token}` }, signal: AbortSignal.timeout(12_000) },
               );
               const det = await detRes.json();
               if (detRes.ok) {
