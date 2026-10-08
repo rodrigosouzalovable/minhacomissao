@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Conferir todas as instâncias conectadas no botão manual, em lotes com total global e falhas isoladas; custo autorizado, sem novo agendamento.
 - [x] Distribuição não para após reclassificação Marketing; 27 cópias faltantes reenviadas e aceitas como PENDING, 23 aprovadas e 36 pendentes anteriores preservadas. 20 testes passaram, funções publicadas, tela e compilação verificadas; demais números aguardam qualidade, permissões/bloqueios ou pausa existente, sem mensagens a clientes.
 - [x] Criar importação exclusiva Odres com substituição atômica de CPFs e classificar o resultado remoto sem duplicação; lista inicial publicada com 35.891 CPFs válidos. Portal real confirmou logo Odres e principal R$1.491,00; prévia visual confirmou uma repetição e zero inválidos. Página completa autenticada não abriu no teste; seção validada isoladamente com autorização real.
 - [x] Implementar recuperação cadastral com autorização por estoque, variáveis exatas, reservas por sufixo, reposição alvo 100 sem autorizar novos leads e template obrigatório; funções disponibilizadas, seleção nova desativada.
