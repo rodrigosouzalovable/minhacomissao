@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Separar médias e medianas da queda detectada até GREEN e do primeiro envio até GREEN; preservar disparos e limites.
 - [x] Corrigir autenticação do agendamento existente de recuperação: credencial exclusiva restrita, espera HTTP de 90s, 20 testes passaram; teste normal aceitou oito envios e rodada automática das 18h aceitou mais cinco, sem falhas; frequência e limites preservados. Instâncias sem template aprovado continuam aguardando.
 - [x] Ativar recuperação cadastral diária RED/YELLOW com Google Maps autorizado e resposta única na AQUECIMENTO; consentimento registrado, três envios aceitos sem falhas e caixa correta confirmada. Até 20 mensagens/dia por número, 08h–19h BRT, sem domingos; instâncias sem template aprovado aguardam.
 - [x] Medir envios e respostas por fonte e ciclo até GREEN, sem aumento automático de volume; contadores verificados no banco, 16 testes passaram e compilação OK. Validação visual do painel não concluída: navegação autenticada retorna ao login.
