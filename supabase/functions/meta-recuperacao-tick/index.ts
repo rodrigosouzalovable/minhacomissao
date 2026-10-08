@@ -13,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { executarRecuperacaoCadastral } from '../_shared/recuperacao-cadastral-envio.ts';
+import { schedulerAutorizado } from './scheduler-auth.ts';
 import {
   dentroJanelaAquecimento,
   destinosAquecimento,
@@ -79,7 +80,8 @@ Deno.serve(async (req) => {
     const instanciaId: string | undefined = body?.instancia_id;
     {
       const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-      if (bearer !== Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+      if (bearer !== Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") &&
+          !await schedulerAutorizado(supabase, bearer, body)) {
         const { data: auth } = await supabase.auth.getUser(bearer);
         if (!auth.user?.id) return json({ error: "Não autorizado" }, 401);
         const { data: admin } = await supabase.rpc("has_role", { _user_id: auth.user.id, _role: "admin" });
@@ -87,6 +89,7 @@ Deno.serve(async (req) => {
       }
     }
 
+    console.log('[recuperacao] execução autorizada', { simulacao, forcar });
     // A simulação não pode acionar nem mesmo trabalhos auxiliares.
     if (!simulacao) {
       try { await supabase.functions.invoke("meta-templates-onboarding-tick", { body: {} }); }
@@ -163,7 +166,13 @@ Deno.serve(async (req) => {
       .select('ativo').eq('user_id', RECUPERACAO_OWNER_ID).maybeSingle();
     if (cadastralCfgErro) throw cadastralCfgErro;
     if (cadastralCfg?.ativo || simulacao) {
-      return json(await executarRecuperacaoCadastral(supabase, insts.filter(remetenteAptoParaRecuperacao), simulacao));
+      const resultado = await executarRecuperacaoCadastral(supabase, insts.filter(remetenteAptoParaRecuperacao), simulacao);
+      console.log('[recuperacao] conclusão cadastral', {
+        aceitos: resultado.resultados.filter((r: any) => r.ok === true).length,
+        falhas: resultado.resultados.filter((r: any) => r.ok === false).length,
+        adiados: resultado.resultados.filter((r: any) => r.skip).map((r: any) => r.skip),
+      });
+      return json(resultado);
     }
 
     const destinos = await destinosAquecimento(supabase);

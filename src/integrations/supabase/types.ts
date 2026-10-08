@@ -13448,6 +13448,10 @@ export type Database = {
         Args: { _folder?: string }
         Returns: number
       }
+      meta_recuperacao_scheduler_autorizado: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
       meta_rodizio_status_caixa: {
         Args: { _folder?: string }
         Returns: {

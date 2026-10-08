@@ -1135,6 +1135,13 @@
       "when": 1791482604352,
       "tag": "0161_ativar_recuperacao_cadastral_admin_auditada",
       "breakpoints": true
+    },
+    {
+      "idx": 162,
+      "version": "7",
+      "when": 1791492866972,
+      "tag": "0162_recovery_trusted_scheduler_auth",
+      "breakpoints": true
     }
   ]
 }
