@@ -13280,6 +13280,26 @@ export type Database = {
           contato_id: string
         }[]
       }
+      meta_inbox_phone_search: {
+        Args: { p_limit?: number; p_suffix: string }
+        Returns: {
+          arquivado: boolean
+          cpf: string
+          credor: string
+          fixado: boolean
+          folder_id: string
+          id: string
+          instancia_id: string
+          nao_lido: number
+          nome: string
+          nome_perfil: string
+          sla_dispensado_em: string
+          telefone: string
+          ultima_mensagem: string
+          ultima_mensagem_em: string
+          ultima_msg_entrada_em: string
+        }[]
+      }
       meta_inbox_tagged_contacts_page: {
         Args: {
           p_arquivado?: boolean
