@@ -19,10 +19,11 @@ export function conferirContatosNovoMundo(rows: unknown[][]) {
   if (data.length > NOVO_MUNDO_MAX) throw new Error('Envie um arquivo com até 5.000 contatos, além do cabeçalho.');
   if (!data.length) throw new Error('A planilha não contém contatos.');
   let invalidos = 0, duplicados = 0;
+  const coincidencias: { telefone: string; mantido: string; linha: number }[] = [];
   const contatos: NovoMundoContato[] = [];
   const seen = new Map<string, NovoMundoContato>();
   const conflitos = new Set<string>();
-  for (const row of data) {
+  for (const [index, row] of data.entries()) {
     const telefone = telefoneNovoMundo(row[0]);
     const var1 = String(row[1] ?? '');
     const var2 = String(row[2] ?? '');
@@ -31,13 +32,15 @@ export function conferirContatosNovoMundo(rows: unknown[][]) {
     const previous = seen.get(suffix);
     if (previous) {
       duplicados++;
-      if (previous.var1 !== var1 || previous.var2 !== var2) conflitos.add(suffix);
+      if (previous.telefone !== telefone) {
+        coincidencias.push({ telefone, mantido: previous.telefone, linha: index + (header ? 2 : 1) });
+      } else if (previous.var1 !== var1 || previous.var2 !== var2) conflitos.add(suffix);
       continue;
     }
     const contato = { telefone, var1, var2 };
     seen.set(suffix, contato); contatos.push(contato);
   }
-  return { contatos, total: data.length, invalidos, duplicados, conflitos: [...conflitos] };
+  return { contatos, total: data.length, invalidos, duplicados, coincidencias, conflitos: [...conflitos] };
 }
 export function capacidadeNovoMundo(pendentes: number, novos: number) {
   return novos >= 0 && pendentes >= 0 && pendentes + novos <= NOVO_MUNDO_MAX;
