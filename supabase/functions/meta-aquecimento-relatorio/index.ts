@@ -285,12 +285,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      const carencia = new Date(Date.now() - 15 * 86400000).toISOString();
-      const { count: estoque } = await supabase
+        const { count: estoque } = await supabase
         .from("google_maps_leads")
         .select("id", { count: "exact", head: true })
         .eq("tem_whatsapp", true)
-        .or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`);
+        .is('usado_aquecimento_em', null);
       linhas.push(`   📇 Contatos disponíveis na lista: ${estoque ?? 0}`);
     } catch (_e) {
       // relatório não falha por causa deste bloco
