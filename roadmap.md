@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Corrigir timeout da busca numérica no Inbox; validar 1649, acesso, erro e nova tentativa sem envios.
 - [x] Adicionar PDF e print no Novo Acordo com parcelas exatas, revisão e telefone/atraso/credor manuais; 17 testes passaram, PDF real conferido no formulário e print na função publicada retornou 12 parcelas/R$1.215,48. Nenhum acordo salvo.
 - [x] Corrigir seleção nacional dos números 8799/2300 com telefone ausente e número completo no nome; excluir banidos inclusive com filtro ativo e mostrar BANNED em vermelho. 23 testes passaram e compilação OK, sem envios; conferência visual autenticada bloqueada por retorno ao login.
 - [x] Corrigir classificação dos brasileiros sem nono dígito nas imagens, preservando exclusão +1 555; 32 testes passaram e compilação OK, sem disparos. Conferência visual continua bloqueada: sessão autorizada retorna ao login.

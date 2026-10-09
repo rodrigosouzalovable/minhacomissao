@@ -1,4 +1,4 @@
-/** Numeric searches use the existing authenticated contact SELECT (RLS remains authoritative). */
+/** Numeric searches use the indexed SECURITY INVOKER query (RLS remains authoritative). */
 export function inboxPhoneSearch(value: string): string | null {
   const trimmed = value.trim();
   if (!/^[\d\s()+.\-]+$/.test(trimmed)) return null;
@@ -6,12 +6,7 @@ export function inboxPhoneSearch(value: string): string | null {
   return digits.length >= 4 ? digits.slice(-8) : null;
 }
 
-export function inboxPhoneSearchQuery<T extends {
-  like: (column: string, pattern: string) => T;
-  order: (column: string, options: { ascending: boolean; nullsFirst: boolean }) => T;
-  limit: (count: number) => T;
-}>(query: T, suffix: string, limit: number): T {
-  return query.like('telefone', `%${suffix}`)
-    .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
-    .limit(limit);
+export function inboxPhoneSearchArgs(suffix: string, limit: number) {
+  if (!/^\d{4,8}$/.test(suffix)) throw new Error('Sufixo de telefone inválido');
+  return { p_suffix: suffix, p_limit: Math.max(1, Math.min(2000, Math.trunc(limit) || 200)) };
 }

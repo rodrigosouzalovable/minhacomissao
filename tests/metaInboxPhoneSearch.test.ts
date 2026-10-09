@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { inboxPhoneSearch, inboxPhoneSearchQuery } from '../src/lib/metaInboxPhoneSearch';
+import { inboxPhoneSearch, inboxPhoneSearchArgs } from '../src/lib/metaInboxPhoneSearch';
 
 describe('Busca global autorizada por telefone no Inbox', () => {
   test('últimos quatro dígitos e telefone formatado encontram o mesmo sufixo', () => {
@@ -12,18 +12,18 @@ describe('Busca global autorizada por telefone no Inbox', () => {
     expect(inboxPhoneSearch('947')).toBeNull();
     expect(inboxPhoneSearch('')).toBeNull();
   });
-  test('consulta paginada não restringe caixa, instância, etiqueta, arquivadas ou leitura', () => {
-    const calls: unknown[] = [];
-    const query = {
-      like(column: string, pattern: string) { calls.push(['like', column, pattern]); return this; },
-      order(column: string, options: unknown) { calls.push(['order', column, options]); return this; },
-      limit(count: number) { calls.push(['limit', count]); return this; },
-    };
-    inboxPhoneSearchQuery(query, '9476', 200);
-    expect(calls).toEqual([
-      ['like', 'telefone', '%9476'],
-      ['order', 'ultima_mensagem_em', { ascending: false, nullsFirst: false }],
-      ['limit', 200],
-    ]);
+  test('consulta não restringe caixa, instância, etiqueta, arquivadas ou leitura', () => {
+    expect(inboxPhoneSearchArgs('9476', 200)).toEqual({ p_suffix: '9476', p_limit: 200 });
+  });
+  test('final 1649 é encontrado com ou sem nono dígito', () => {
+    expect(inboxPhoneSearch('1649')).toBe('1649');
+    expect(inboxPhoneSearch('98711649')).toBe('98711649');
+    expect(inboxPhoneSearch('+55 (61) 9871-1649')).toBe('98711649');
+    expect(inboxPhoneSearch('+55 (61) 99871-1649')).toBe('98711649');
+  });
+  test('valida sufixos e limita paginação', () => {
+    expect(() => inboxPhoneSearchArgs('%1649', 200)).toThrow();
+    expect(() => inboxPhoneSearchArgs('164', 200)).toThrow();
+    expect(inboxPhoneSearchArgs('1649', 9999).p_limit).toBe(2000);
   });
 });

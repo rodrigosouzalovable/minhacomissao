@@ -70,7 +70,7 @@ import {
 } from '@/components/ui/popover';
 import { humanizarErroEnvio } from '@/lib/humanizarErroEnvio';
 import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
-import { inboxPhoneSearch, inboxPhoneSearchQuery } from '@/lib/metaInboxPhoneSearch';
+import { inboxPhoneSearch, inboxPhoneSearchArgs } from '@/lib/metaInboxPhoneSearch';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 
 interface MetaInstance {
@@ -202,6 +202,7 @@ export default function InboxMeta() {
   const [buscaDebounced, setBuscaDebounced] = useState('');
   const buscaTelefoneGlobal = inboxPhoneSearch(busca) !== null;
   const [buscandoTelefone, setBuscandoTelefone] = useState(false);
+  const [erroBuscaTelefone, setErroBuscaTelefone] = useState(false);
 
   // texto local vive no Composer (evita re-render do inbox inteiro por tecla)
   const [enviando, setEnviando] = useState(false);
@@ -765,14 +766,16 @@ export default function InboxMeta() {
     const phoneSuffix = inboxPhoneSearch(buscaDebounced);
     if (phoneSuffix) {
       setBuscandoTelefone(true);
-      const { data, error } = await inboxPhoneSearchQuery(
-        supabase.from('meta_whatsapp_contatos').select(selectCols), phoneSuffix, limiteContatos,
-      );
+      setErroBuscaTelefone(false);
+      const { data, error } = await supabase.rpc('meta_inbox_phone_search', inboxPhoneSearchArgs(phoneSuffix, limiteContatos));
       if (request !== contatosRequestRef.current) return;
       setBuscandoTelefone(false);
       if (error) {
         setContatos([]);
-        toast({ title: 'Não foi possível pesquisar', description: 'Tente novamente em instantes.', variant: 'destructive' });
+        contatoIdsRef.current = [];
+        setErroBuscaTelefone(true);
+        console.error('Inbox phone search failed', { code: error.code });
+        toast({ title: 'Não foi possível concluir a pesquisa', description: 'Tente novamente pelo botão abaixo da pesquisa.', variant: 'destructive' });
         return;
       }
       const lista = (data as MetaContato[]) ?? [];
@@ -782,6 +785,7 @@ export default function InboxMeta() {
       return;
     }
     setBuscandoTelefone(false);
+    setErroBuscaTelefone(false);
 
     // Etiquetas e Meus Clientes: paginação diretamente no banco, sem varrer todos os vínculos.
     if (modoMeusClientes || filtroEtiqueta.size > 0) {
@@ -1787,7 +1791,7 @@ export default function InboxMeta() {
             <div className="flex gap-1.5">
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome ou telefone..."
+                <Input value={busca} onChange={e => { contatosRequestRef.current += 1; setErroBuscaTelefone(false); setBusca(e.target.value); }} placeholder="Buscar por nome ou telefone..."
                   className="pl-7 h-8 text-xs" />
               </div>
               <Popover open={filtroEtOpen} onOpenChange={setFiltroEtOpen}>
@@ -2222,9 +2226,14 @@ export default function InboxMeta() {
                 <div role="status" className="p-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Pesquisando…
                 </div>
+              ) : buscaTelefoneGlobal && erroBuscaTelefone ? (
+                <div role="alert" className="p-6 text-center text-xs text-muted-foreground space-y-2">
+                  <p>Não foi possível concluir a pesquisa.</p>
+                  <Button variant="outline" size="sm" onClick={() => void fetchContatos()}>Tentar novamente</Button>
+                </div>
               ) : contatosFiltrados.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
-                {abaAtiva === 'arquivados' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa.'}
+                {buscaTelefoneGlobal ? 'Nenhuma conversa encontrada.' : abaAtiva === 'arquivados' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa.'}
               </div>
             ) : contatosFiltrados.map(c => {
               const inst = instancias.find(i => i.id === c.instancia_id);

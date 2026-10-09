@@ -49,4 +49,4 @@
 
 - Manual Meta checks batch all owner-connected instances; automatic checks remain due-only to limit cost and timeouts.
 - Overdue audits owner-admin cost consent; isolated scheduler credentials start bounded cycles and stop after drain.
-- Inbox numeric suffix searches use bounded authenticated contact SELECTs independently of presentation filters; RLS remains authoritative and opening selects the result's actual box to preserve context.
+- Inbox phone searches use indexed reverse-normalized ranges via bounded SECURITY INVOKER RPC; RLS applies before pagination, filters do not hide matches, and opening selects the actual box.
