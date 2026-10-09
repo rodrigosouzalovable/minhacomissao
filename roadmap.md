@@ -6,7 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Corrigir aviso GREEN incorreto: separar liberação manual e qualidade real, testar/publicar e reconsultar 7554/5462 sem campanhas.
+- [x] Corrigir aviso GREEN incorreto: liberação manual separada da qualidade real/horário, 30 testes passaram e função publicada; Meta direta e lista confirmaram RED em 7554/5462 às 16h19 BRT, zero dias GREEN e pool autorizado preservado. Aviso calculado RED conferido sem campanhas ou mensagem corretiva.
 - [x] Corrigir LIMITED por qualidade nos disparos manuais: 44 testes passaram, funções publicadas e consulta atual da Meta liberou 7554/5462; seleção do próximo remetente confirmou duas candidatas sem descartes. Sem mensagens reais, limites preservados e compilação OK.
 - [x] Corrigir diagnóstico da aplicação de templates na Medroma: erro 141006 confirmado na saúde real, códigos das restrições preservados e orientação de Faturamento/Verificar pagamento por instância; 15 testes passaram e compilação OK. Aplicação continua aguardando regularização do pagamento pela Meta, sem contornar bloqueios ou enviar mensagens.
 - [x] Impedir reutilização permanente entre recuperação e aquecimento: 3.587 sufixos históricos protegidos, reserva atômica global e consentimento preservado; 22 testes passaram, simulação publicada HTTP 200 com 1.410 destinos inéditos, sem envios reais.
