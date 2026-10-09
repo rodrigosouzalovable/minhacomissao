@@ -6,6 +6,7 @@ import { carregarCotasBm, motivoBloqueioBm } from './bm-cotas.ts';
 import { enviadosHojeBrtLote, tetoBase } from './meta-freio.ts';
 import { THIAGO_NOGUEIRA_USER_ID } from './thiago-meta-override.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from './novo-mundo-3144.ts';
+import { classifyMessagingHealth, hasBan, isQualityOnlyHold } from './meta-messaging-health.ts';
 
 
 const corsHeaders = {
@@ -162,6 +163,11 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
     const reprovadosGuardrail: any[] = [];
     for (const inst of insts) {
       const rotulo = inst.nome || inst.phone_number_id || inst.id;
+      const messagingHealth = classifyMessagingHealth(inst.saude_restricoes?.phone_health, inst.saude_restricoes?.waba_health);
+      if (hasBan(inst.saude_ban_info) || messagingHealth.restriction) {
+        descartados.push(`${rotulo}: ${hasBan(inst.saude_ban_info) ? 'banimento confirmado pela Meta' : messagingHealth.restriction}`);
+        continue;
+      }
       const liberar3144Conectada = isNovoMundo3144Connected(inst);
       const liberarPool3144 = liberar3144Conectada && isDisplayNameOrQualityRestriction(inst.pausa_automatica_motivo);
       if (inst.pool_fora_manual === true && !liberacaoTotalThiago) {
@@ -198,7 +204,7 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
       }
 
       const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
-      const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
+      const pausaPorQualidade = isQualityOnlyHold(inst.pausa_automatica_motivo) && messagingHealth.confirmed;
       const pausaPorStatus = motivoPausaLower.startsWith('status=');
       const pausaAtiva = !!inst.pausa_automatica_ate && new Date(inst.pausa_automatica_ate) > new Date();
       const estadoBloqueado = inst.estado_pool === 'restrita' || inst.estado_pool === 'pausado';

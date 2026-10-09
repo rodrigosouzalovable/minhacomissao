@@ -1,4 +1,5 @@
 import { classificarPagamento } from '../_shared/meta-pagamento-status.ts';
+import { classifyMessagingHealth, isQualityOnlyHold } from '../_shared/meta-messaging-health.ts';
 // Verifica saúde das instâncias Meta WhatsApp via Graph API.
 // Retorna status (CONNECTED/FLAGGED/RESTRICTED/etc), quality_rating, tier,
 // e ban_info da WABA. Persiste snapshot em meta_whatsapp_instances.
@@ -230,7 +231,10 @@ Deno.serve(async (req) => {
         const nomeAtual = String(r.name_status || '').toUpperCase();
         const detalheLimitacao = String(r.limitacao_numero || '');
         const limitacaoNomeInformativa = isInformationalDisplayNameLimit(detalheLimitacao, nomeAtual);
-        const restritoMeta = restritoMetaBruto && !limitacaoNomeInformativa;
+        const messagingHealth = classifyMessagingHealth(r.phone_health, r.waba_health);
+        const restritoMeta = !!messagingHealth.restriction && !limitacaoNomeInformativa;
+        r.envio_health_confirmado = messagingHealth.confirmed;
+        r.aviso_qualidade_cota = messagingHealth.qualityLimited;
         r.restrito_meta = restritoMeta;
         r.limitacao_nome_informativa = limitacaoNomeInformativa;
         const limitacaoPorQualidade = /quality|customer.*block|blocking your phone|spam|complaint|reputation/i.test(detalheLimitacao) ||
@@ -254,9 +258,10 @@ Deno.serve(async (req) => {
               (estado === 'LIMITED' && (e?.additional_info || []).some((info: unknown) =>
                 /quality rating|messaging limit.*quality|reputation/i.test(String(info))));
           });
-        const apenasQualidadeLimitada = r.limitacao_tipo === 'qualidade' &&
-          telefoneLimitadoSomentePorQualidade && !comercialBloqueado;
-        r.limitacao_motivo = limitacaoNomeInformativa
+        const apenasQualidadeLimitada = messagingHealth.qualityLimited;
+        r.limitacao_motivo = apenasQualidadeLimitada
+          ? 'Aviso de qualidade/cota da Meta — o limite poderá diminuir se a qualidade não melhorar; não é bloqueio total'
+          : messagingHealth.restriction || (limitacaoNomeInformativa
           ? null
           : r.limitacao_numero
           ? r.limitacao_tipo === 'nome'
@@ -264,7 +269,7 @@ Deno.serve(async (req) => {
             : r.limitacao_tipo === 'qualidade'
               ? 'Restrição de qualidade/reputação confirmada pela Meta'
               : 'Restrição de envio no número confirmada pela Meta'
-          : null;
+          : null);
 
         r.restricoes = restricoes;
 
@@ -521,7 +526,7 @@ Deno.serve(async (req) => {
         const quarentenaAtiva = !!quarentenaAlvo && new Date(quarentenaAlvo).getTime() > Date.now();
         // A liberação global ignora somente a cor de qualidade; nunca pode
         // ignorar uma limitação explícita de envio retornada pela Meta.
-        const saudavel = (liberacaoGlobal || qual === 'GREEN') && !quarentenaAtiva && !restritoMeta;
+        const saudavel = (liberacaoGlobal || qual === 'GREEN') && (!quarentenaAtiva || liberacaoGlobal) && !restritoMeta && messagingHealth.confirmed;
         const violacaoContaLiberavel = eraViolacaoConta && accountViolationReleasable({
           status: st, quality: qual, banInfo: r.ban_info,
           graphOk: graphOk && !r.waba_error && phoneResp.ok,
@@ -535,7 +540,7 @@ Deno.serve(async (req) => {
 
         // Limitações que mencionam apenas o nome são informativas para todas as
         // instâncias. Outras limitações explícitas continuam restringindo.
-        if (r.limitacao_numero && !limitacaoNomeInformativa && !pausaViolacaoConta && !liberarLimitacao3144) {
+        if (r.limitacao_numero && !apenasQualidadeLimitada && !limitacaoNomeInformativa && !pausaViolacaoConta && !liberarLimitacao3144) {
           updatePayload.estado_pool = 'restrita';
           updatePayload.pausa_automatica_motivo = r.limitacao_motivo;
         }
@@ -551,6 +556,14 @@ Deno.serve(async (req) => {
         }
 
         const eraLimitacaoNumero = /nome de exibição|display name|restrição de qualidade|restricao de qualidade|restrição de envio no número|restricao de envio no numero/i.test(motivoAtual);
+        // Clear only quality holds, never a simultaneous account/security/manual hold.
+        if (graphOk && messagingHealth.confirmed && liberadaManual &&
+            isQualityOnlyHold(motivoAtual) && !eraViolacaoConta && !notificarPausa) {
+          updatePayload.pausa_automatica_ate = null;
+          updatePayload.pausa_automatica_motivo = null;
+          updatePayload.estado_pool = inst.pool_fora_manual === true ? 'fora_manual' : 'ativo';
+          r.liberada = inst.pool_fora_manual !== true;
+        }
         if (
           (eraBloqueioMeta || eraLimitacaoNumero) &&
           (!eraViolacaoConta || violacaoContaLiberavel) &&
