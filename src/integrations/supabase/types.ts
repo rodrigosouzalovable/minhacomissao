@@ -12461,6 +12461,10 @@ export type Database = {
         Args: { p_instancia: string; p_telefone: string; p_texto: string }
         Returns: undefined
       }
+      blacklist_saida_novo_mundo: {
+        Args: { p_instancia: string; p_telefone: string; p_texto: string }
+        Returns: undefined
+      }
       buscar_aberturas_cnpj_certificado_por_telefone: {
         Args: { p_suffixes: string[] }
         Returns: {

@@ -1191,6 +1191,13 @@
       "when": 1791577986322,
       "tag": "0169_novo_mundo_lease_ciclo",
       "breakpoints": true
+    },
+    {
+      "idx": 170,
+      "version": "7",
+      "when": 1791578117185,
+      "tag": "0170_novo_mundo_optout_e_guardas",
+      "breakpoints": true
     }
   ]
 }
