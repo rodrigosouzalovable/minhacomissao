@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Excluir internacionais da seleção manual/em massa e das contagens de instâncias Meta; preservar cadastros e pool, validar testes e tela sem disparos.
 - [x] Corrigir origem de alertas de violação e revalidar individualmente limites informativos de nome; 19 testes passaram, compilação OK e regra validada com saúde real do 6444, sem mensagens.
 - [ ] Confirmar liberação efetiva do 6444 após disponibilização da função atualizada; consulta real ainda executou a versão anterior e manteve a pausa.
 - [x] Separar médias e medianas da queda detectada até GREEN e do primeiro envio até GREEN, com amostras independentes e histórico parcial excluído; oito testes passaram e compilação OK, sem novas consultas ou alterações nos disparos e limites.
