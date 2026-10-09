@@ -8,6 +8,7 @@ import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } 
 import { THIAGO_NOGUEIRA_USER_ID, instanciasLiberadasThiago } from './thiago-meta-override.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from './novo-mundo-3144.ts';
 import { telefoneMeta } from './meta-destinatario.ts';
+import { classifyMessagingHealth, hasBan, isQualityOnlyHold } from './meta-messaging-health.ts';
 import { authorizeMetaInboxSend } from './meta-inbox-send-auth.ts';
 import { getMetaButtonLink, resolveButtonUrlParam } from './meta-button-url.ts';
 import { CAMPAIGN_IMAGE_BUCKET, campaignImageForTemplate, campaignImagePathAllowed, withCampaignImage } from './meta-campaign-image.ts';
@@ -684,6 +685,13 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
     const { data: inst } = await supabase
       .from('meta_whatsapp_instances').select('*').eq('id', instancia_id).eq('ativo', true).maybeSingle();
     if (!inst) throw new Error('Instância Meta não encontrada/ativa');
+    const messagingHealth = classifyMessagingHealth(inst.saude_restricoes?.phone_health, inst.saude_restricoes?.waba_health);
+    if (hasBan(inst.saude_ban_info) || messagingHealth.restriction) {
+      return new Response(JSON.stringify({ success: false,
+        error: hasBan(inst.saude_ban_info) ? 'Banimento confirmado pela Meta' : messagingHealth.restriction,
+        instance_restricted: true, instancia_id,
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     if (inst.instancia_teste_aquecimento === true && !isTeste) {
       return new Response(JSON.stringify({
         success: false,
@@ -727,7 +735,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
     const motivoPausaLower = String(inst.pausa_automatica_motivo || '').toLowerCase();
     const liberar3144 = isNovoMundo3144Connected(inst) && isDisplayNameOrQualityRestriction(inst.pausa_automatica_motivo);
     const pausaPorStatus = motivoPausaLower.startsWith('status=');
-    const pausaPorQualidade = motivoPausaLower.startsWith('quality=');
+    const pausaPorQualidade = isQualityOnlyHold(inst.pausa_automatica_motivo) && messagingHealth.confirmed;
     // Liberação manual (botão "Retomar") ou chave global "Liberar YELLOW/RED"
     // também ignoram bloqueios por qualidade (status/restrição real da Meta continua bloqueando).
     const liberacaoGlobal = cfg?.liberar_qualidade_global === true;

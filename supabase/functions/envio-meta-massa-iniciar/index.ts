@@ -5,6 +5,7 @@ import { calcularJanelaEnvio } from '../_shared/metaJanelaEnvio.ts';
 import { instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
 import { telefoneMeta } from '../_shared/meta-destinatario.ts';
+import { classifyMessagingHealth, hasBan, isQualityOnlyHold } from '../_shared/meta-messaging-health.ts';
 import { CAMPAIGN_IMAGE_BUCKET, campaignImagePathAllowed, templateHasImage, validateCampaignImageFile } from '../_shared/meta-campaign-image.ts';
 
 
@@ -150,7 +151,6 @@ Deno.serve(async (req) => {
         motivos.push(`${rotulo}: instância de teste é exclusiva da caixa AQUECIMENTO`);
         continue;
       }
-      if (liberadasThiago.has(id)) continue;
       if (r.pool_fora_manual === true) {
         badIds.add(id);
         motivos.push(`${rotulo}: fora do pool manualmente`);
@@ -161,6 +161,13 @@ Deno.serve(async (req) => {
         motivos.push(`${rotulo}: não foi possível confirmar a liberação na Meta${fresh?.error ? ` — ${fresh.error}` : ''}`);
         continue;
       }
+      const health = classifyMessagingHealth(fresh.phone_health, fresh.waba_health);
+      if (hasBan(fresh.ban_info) || !health.confirmed) {
+        badIds.add(id);
+        motivos.push(`${rotulo}: ${hasBan(fresh.ban_info) ? 'banimento confirmado pela Meta' : health.restriction || 'consulta de restrições incompleta — verifique a saúde e tente novamente'}`);
+        continue;
+      }
+      if (liberadasThiago.has(id)) continue;
       const motivoPausa = String(r.pausa_automatica_motivo || '');
       const motivoLower = motivoPausa.toLowerCase();
       const pausaAtiva = !!r.pausa_automatica_ate && new Date(r.pausa_automatica_ate).getTime() > Date.now();
@@ -174,12 +181,12 @@ Deno.serve(async (req) => {
         motivos.push(`${rotulo}: status ${status} confirmado pela Meta`);
         continue;
       }
-      if (r.estado_pool !== 'ativo' && !motivoLower.startsWith('quality=') && !liberarPool3144) {
+      if (r.estado_pool !== 'ativo' && !isQualityOnlyHold(motivoPausa) && !liberarPool3144) {
         badIds.add(id);
         motivos.push(`${rotulo}: fora do pool${motivoPausa ? ` — ${motivoPausa}` : ''}`);
         continue;
       }
-      if (pausaAtiva && !motivoLower.startsWith('quality=') && !liberarPool3144) {
+      if (pausaAtiva && !isQualityOnlyHold(motivoPausa) && !liberarPool3144) {
         badIds.add(id);
         motivos.push(`${rotulo}: bloqueio ainda ativo — ${motivoPausa || 'restrição confirmada'}`);
         continue;

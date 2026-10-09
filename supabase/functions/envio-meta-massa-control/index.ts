@@ -1,6 +1,7 @@
 // Controla um job de envio massa Meta: pausar / retomar / cancelar / limpar.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { enviadosHojeBrt } from '../_shared/meta-freio.ts';
+import { classifyMessagingHealth, hasBan } from '../_shared/meta-messaging-health.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -528,7 +529,7 @@ Deno.serve(async (req) => {
 
       const { data: insts } = await supabase
         .from('meta_whatsapp_instances')
-        .select('id, nome, display_phone, ativo, provider, saude_quality, estado_pool, recuperacao_ativa, tier_diario, instancia_teste_aquecimento')
+        .select('id, nome, display_phone, ativo, provider, saude_quality, estado_pool, recuperacao_ativa, tier_diario, instancia_teste_aquecimento, saude_restricoes, saude_ban_info, pool_fora_manual')
         .eq('ativo', true)
         .eq('provider', 'meta')
         .eq('instancia_teste_aquecimento', false);
@@ -545,6 +546,7 @@ Deno.serve(async (req) => {
       const liberacaoGlobalLivres = cfgLib?.liberar_qualidade_global === true || cfgLib?.sem_teto_global === true;
 
        const livres = (insts || [])
+         .filter((i: any) => !i.pool_fora_manual && !hasBan(i.saude_ban_info) && classifyMessagingHealth(i.saude_restricoes?.phone_health, i.saude_restricoes?.waba_health).confirmed)
          .filter((i: any) => !jaNoJob.includes(i.id))
          .filter((i: any) => liberacaoGlobalLivres || (!i.recuperacao_ativa && i.estado_pool !== 'restrita'))
          .filter((i: any) => liberacaoGlobalLivres || ['GREEN', ''].includes(String(i.saude_quality || '').toUpperCase()))
