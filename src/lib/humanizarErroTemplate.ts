@@ -5,7 +5,7 @@ export function humanizarErroTemplate(erroBruto?: string | null): string {
   const s = raw.toLowerCase();
 
   if (s.includes("141006") || s.includes("payment method") || s.includes("método de pagamento")) {
-    return "A Meta bloqueou esta conta por problema no método de pagamento (código 141006). Revise a cobrança em Faturamento e tente novamente após a liberação da Meta.";
+    return "A Meta informou problema no método de pagamento desta conta WhatsApp (código 141006). Abra Faturamento no card, confira o cartão e eventuais pendências da conta WhatsApp vinculada — não apenas da BM. Depois clique em Verificar pagamento e tente aplicar novamente após a Meta confirmar a liberação.";
   }
 
   if (
