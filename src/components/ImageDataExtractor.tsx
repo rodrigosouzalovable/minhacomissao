@@ -2,20 +2,12 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Image, X, Sparkles, Loader2, Clipboard } from 'lucide-react';
+import { Upload, Image, X, Sparkles, Loader2, Clipboard, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
-export interface ExtractedData {
-  cliente_nome: string | null;
-  cliente_cpf: string | null;
-  cliente_telefone: string | null;
-  valor_total: number | null;
-  parcelas: number | null;
-  valor_parcela: number | null;
-  data_primeiro_pagamento: string | null;
-  dias_atraso: number | null;
-  empresa?: 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred' | null;
-}
+import { normalizarDocumentoAcordo, type DadosDocumentoAcordo } from '@/lib/acordoDocumento';
+import { lerPdfAcordo } from '@/lib/lerPdfAcordo';
+export type ExtractedData = DadosDocumentoAcordo;
 
 interface ImageDataExtractorProps {
   onDataExtracted: (data: ExtractedData) => void;
@@ -23,6 +15,7 @@ interface ImageDataExtractorProps {
 
 export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -30,11 +23,13 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
 
   // Processa arquivo de imagem e converte para base64
   const processImageFile = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) {
+    if (isExtracting) return;
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf && !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       toast({
         variant: 'destructive',
         title: 'Arquivo inválido',
-        description: 'Por favor, selecione uma imagem (PNG, JPG, etc.)',
+        description: 'Selecione um PDF, PNG, JPG ou WEBP.',
       });
       return;
     }
@@ -42,19 +37,23 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
     if (file.size > 10 * 1024 * 1024) {
       toast({
         variant: 'destructive',
-        title: 'Imagem muito grande',
+        title: 'Arquivo muito grande',
         description: 'O tamanho máximo permitido é 10MB.',
       });
       return;
     }
 
+    if (!file.size) { toast({ variant: 'destructive', title: 'Arquivo vazio' }); return; }
+    setPdfFile(isPdf ? file : null);
+    setImagePreview(null);
+    if (isPdf) return;
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
       setImagePreview(result);
     };
     reader.readAsDataURL(file);
-  }, [toast]);
+  }, [toast, isExtracting]);
 
   // Handler para seleção de arquivo via input
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,6 +112,7 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
   // Limpar imagem
   const clearImage = () => {
     setImagePreview(null);
+    setPdfFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -120,7 +120,7 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
 
   // Extrair dados via IA
   const extractData = async () => {
-    if (!imagePreview) {
+    if (!imagePreview && !pdfFile) {
       toast({
         variant: 'destructive',
         title: 'Nenhuma imagem',
@@ -132,11 +132,20 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
     setIsExtracting(true);
 
     try {
+      if (pdfFile) {
+        const result = await lerPdfAcordo(pdfFile);
+        onDataExtracted(result);
+        return;
+      }
       const { data, error } = await supabase.functions.invoke('extract-acordo-data', {
-        body: { image: imagePreview }
+        body: { image: imagePreview, detailed: true }
       });
 
       if (error) {
+        if (error.context instanceof Response) {
+          const detail = await error.context.json().catch(() => null);
+          if (detail?.error) throw new Error(detail.error);
+        }
         // Tratar erros específicos
         if (error.message?.includes('429') || error.message?.includes('rate')) {
           toast({
@@ -169,7 +178,7 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
         description: 'Revise as informações antes de salvar o acordo.',
       });
 
-      onDataExtracted(data.data);
+      onDataExtracted(normalizarDocumentoAcordo(data.data));
 
     } catch (error) {
       console.error('Erro na extração:', error);
@@ -188,15 +197,15 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          Preencher com IA
+          Importar PDF ou print
         </CardTitle>
         <CardDescription>
-          Cole um print de tela (Ctrl+V) ou arraste uma imagem do sistema de cobrança para extrair os dados automaticamente.
+          Comprovante do acordo
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Área de Upload */}
-        {!imagePreview ? (
+        {!imagePreview && !pdfFile ? (
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
               isDragOver 
@@ -211,7 +220,7 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="application/pdf,image/png,image/jpeg,image/webp"
               className="hidden"
               onChange={handleFileSelect}
             />
@@ -220,14 +229,14 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
                 <Upload className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>
-                <p className="font-medium">Arraste uma imagem ou clique para selecionar</p>
+                <p className="font-medium">PDF ou print do acordo</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Também aceita <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs">Ctrl+V</kbd> para colar prints
                 </p>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clipboard className="h-4 w-4" />
-                <span>PNG, JPG, WEBP - máx. 10MB</span>
+                <span>PDF, PNG, JPG, WEBP — máx. 10MB</span>
               </div>
             </div>
           </div>
@@ -235,11 +244,11 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
           <div className="space-y-4">
             {/* Preview da imagem */}
             <div className="relative rounded-lg overflow-hidden border bg-muted/20">
-              <img
+              {pdfFile ? <div className="flex items-center gap-3 p-6 pr-14"><FileText className="h-8 w-8 shrink-0 text-primary" /><span className="break-all font-medium">{pdfFile.name}</span></div> : <img
                 src={imagePreview}
                 alt="Preview do print"
                 className="w-full max-h-[400px] object-contain"
-              />
+              />}
               <Button
                 variant="destructive"
                 size="icon"
@@ -261,26 +270,19 @@ export function ImageDataExtractor({ onDataExtracted }: ImageDataExtractorProps)
               {isExtracting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Extraindo dados com IA...
+                  Lendo documento...
                 </>
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  Extrair Dados com IA
+                  {pdfFile ? 'Ler PDF' : 'Extrair dados do print'}
                 </>
               )}
             </Button>
           </div>
         )}
 
-        {/* Dica */}
-        <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md">
-          <p className="font-medium mb-1">💡 Dica:</p>
-          <p>
-            A IA irá extrair automaticamente: nome do cliente, CPF, telefone, valor total, 
-            número de parcelas, valor das parcelas, data do primeiro pagamento e dias em atraso.
-          </p>
-        </div>
+
       </CardContent>
     </Card>
   );

@@ -1,6 +1,7 @@
 # Decisões técnicas
 
 <!-- LOVABLE:BEGIN -->
+- Agreement documents use local PDF text parsing and validated individual installment rows; imported dates/values persist exactly and summary-only screenshots retain the existing schedule generator to avoid invented document rows.
 - Campaign images persist in recipient vars keyed by name/language; use isolated send snapshots and path-keyed media caches without updating template defaults, so scheduled and resumed campaigns preserve the chosen image.
 - Campaign sharing is per-job read-only through indexed grants and scoped RPCs; never extend owner controls or realtime subscriptions.
 - Recovery timing reuses loaded exact cycles with independent drop-to-GREEN and accepted-first-send-to-GREEN samples, distinguishing waiting from sending without extra queries.
