@@ -6,6 +6,8 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Impedir reutilização permanente entre recuperação e aquecimento: 3.587 sufixos históricos protegidos, reserva atômica global e consentimento preservado; 22 testes passaram, simulação publicada HTTP 200 com 1.410 destinos inéditos, sem envios reais.
+- [ ] Antecipar reposição de novos leads com maior chance de resposta; aguarda autorização explícita do possível aumento de pesquisas/custo.
 - [x] Corrigir timeout da busca numérica no Inbox: 1649 passou de erro 57014 em 8s para 67ms; conversa/mensagens, telefone formatado, arquivadas e nova tentativa validados no navegador. RPC invoker preserva RLS, acesso anônimo negado; 11 testes passaram, sem envios.
 - [x] Adicionar PDF e print no Novo Acordo com parcelas exatas, revisão e telefone/atraso/credor manuais; 17 testes passaram, PDF real conferido no formulário e print na função publicada retornou 12 parcelas/R$1.215,48. Nenhum acordo salvo.
 - [x] Corrigir seleção nacional dos números 8799/2300 com telefone ausente e número completo no nome; excluir banidos inclusive com filtro ativo e mostrar BANNED em vermelho. 23 testes passaram e compilação OK, sem envios; conferência visual autenticada bloqueada por retorno ao login.

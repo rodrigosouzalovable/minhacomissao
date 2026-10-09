@@ -1,4 +1,5 @@
 import { destinosAquecimento, enviarTemplateAquecimento, escolherTemplateAprovado, erroFatalMeta, FOLDERS_AQUECIMENTO_FALLBACK, hojeBrt } from './meta-aquecimento-alvo.ts';
+import { filtrarMapsIneditos } from './maps-aquecimento-unico.ts';
 import { ORIGEM_CADASTRAL, TEMPLATE_CADASTRAL, templateCadastralValido, valoresCadastrais } from './recuperacao-cadastral-rules.ts';
 
 export async function executarRecuperacaoCadastral(db: any, insts: any[], simulacao: boolean) {
@@ -21,8 +22,10 @@ export async function executarRecuperacaoCadastral(db: any, insts: any[], simula
     if (supErro) throw supErro;
     for (const s of supressoes || []) bloqueados.add(s.telefone_sufixo);
   }
-  const disponiveis = (destinos || []).filter((d: any) => !bloqueados.has(d.telefone_sufixo) &&
+  const elegiveis = destinos.filter((d: any) => !bloqueados.has(d.telefone_sufixo) &&
     (d.fonte === 'uazapi' ? online.has(d.destino_instancia_id) : !d.consumido_em));
+  const disponiveis = [...elegiveis.filter((d: any) => d.fonte === 'uazapi'),
+    ...await filtrarMapsIneditos(db, elegiveis.filter((d: any) => d.fonte !== 'uazapi'))];
   const resultados: any[] = [];
   const usados = new Set<string>();
   const { data: copias, error: copiaError } = await db.from('meta_templates_instancia')
@@ -62,6 +65,7 @@ export async function executarRecuperacaoCadastral(db: any, insts: any[], simula
         try { valoresCadastrais(d.nome_empresa); } catch { continue; }
         if (simulacao) { reservado = d; break; }
         const { data: id, error: reservaError } = await db.rpc('reservar_recuperacao_cadastral', { p_instancia: inst.id, p_sufixo: d.telefone_sufixo });
+        if (reservaError?.code === '23505') continue;
         if (reservaError) throw reservaError;
         if (id) { reservado = d; logId = id; break; }
       }

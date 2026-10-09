@@ -6748,6 +6748,27 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_maps_aquecimento_consumidos: {
+        Row: {
+          instancia_id: string | null
+          origem: string
+          primeiro_uso_em: string
+          telefone_sufixo: string
+        }
+        Insert: {
+          instancia_id?: string | null
+          origem: string
+          primeiro_uso_em?: string
+          telefone_sufixo: string
+        }
+        Update: {
+          instancia_id?: string | null
+          origem?: string
+          primeiro_uso_em?: string
+          telefone_sufixo?: string
+        }
+        Relationships: []
+      }
       meta_mensagem_custos: {
         Row: {
           categoria: string
@@ -13713,6 +13734,10 @@ export type Database = {
           quantidade: number
           telefone: string
         }[]
+      }
+      reservar_maps_aquecimento_unico: {
+        Args: { p_instancia: string; p_sufixo: string }
+        Returns: boolean
       }
       reservar_recuperacao_cadastral: {
         Args: { p_instancia: string; p_sufixo: string }

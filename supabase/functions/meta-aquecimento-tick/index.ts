@@ -26,7 +26,6 @@ import {
   proximoTier,
   tierAtual,
   custoDoTemplate,
-  devolverLead,
   leadsParaAquecimento,
   marcarLeadUsado,
   pausarInstanciasDaBm,
@@ -36,6 +35,7 @@ import {
   taxaRespostaRecenteLeads,
   autoRespondedoresParaAquecimento,
 } from '../_shared/meta-aquecimento-inteligente.ts';
+import { reservarMapsAquecimentoUnico } from '../_shared/maps-aquecimento-unico.ts';
 import { notificarNumeros } from '../_shared/notificar-numeros.ts';
 import { avaliarPiloto, carregarPilotosAtivos, dataBrtDiasAtras, GREEN_SOUL_BM_ID, telefoneChave } from '../_shared/meta-bm-escalada-piloto.ts';
 
@@ -460,6 +460,10 @@ Deno.serve(async (req) => {
           cidade = lead.cidade;
         }
 
+        if (leadId && !await reservarMapsAquecimentoUnico(supabase, inst.id, telefone)) {
+          resultados.push({ instancia: inst.nome, skipped: 'lead_ja_utilizado_ou_sem_autorizacao' });
+          continue;
+        }
         const envio = await enviarTemplateAquecimento(inst, telefone, tpl, nomeDestino);
 
         await supabase.from('meta_aquecimento_destino_log').insert({
@@ -492,10 +496,9 @@ Deno.serve(async (req) => {
           });
         }
 
-        if (leadId && fonte === 'lead') {
-          // Falha não gasta o lead: ele volta para a fila.
-          if (envio.ok) await marcarLeadUsado(supabase, leadId, 'enviado');
-          else await devolverLead(supabase, leadId);
+        if (leadId) {
+          // Never release a permanent claim, including after uncertain transport.
+          await marcarLeadUsado(supabase, leadId, envio.ok ? 'enviado' : 'falha_sem_reenvio');
         }
 
         // Conversa do lead fica na caixa AQUECIMENTO, com a mensagem real enviada.

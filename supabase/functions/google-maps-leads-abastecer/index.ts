@@ -158,7 +158,6 @@ Deno.serve(async (req) => {
     try {
 
     // ===== Progresso diário: só contam contatos inéditos captados hoje e confirmados =====
-    const carencia = new Date(Date.now() - 15 * 86400000).toISOString();
     const inicioDia = new Date(`${dia}T00:00:00-03:00`).toISOString();
     const fimDia = new Date(`${dia}T23:59:59-03:00`).toISOString();
     const { count: confirmadosHoje } = await supabase
@@ -171,7 +170,7 @@ Deno.serve(async (req) => {
       .from("google_maps_leads")
       .select("id", { count: "exact", head: true })
       .eq("tem_whatsapp", true)
-      .or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`);
+      .is('usado_aquecimento_em', null);
 
     if (!forcar && (confirmadosHoje ?? 0) >= META_WHATSAPP_DIA) {
       return json({ ok: true, skipped: "meta_diaria_atingida", confirmados_hoje: confirmadosHoje ?? 0, meta: META_WHATSAPP_DIA });
@@ -303,7 +302,7 @@ Deno.serve(async (req) => {
       .from("google_maps_leads")
       .select("id", { count: "exact", head: true })
       .eq("tem_whatsapp", true)
-      .or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`);
+      .is('usado_aquecimento_em', null);
 
     const { count: confirmadosDepois } = await supabase
       .from("google_maps_leads")

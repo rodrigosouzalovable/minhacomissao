@@ -3,6 +3,7 @@
 // Maps de nichos que respondem bem, sempre respeitando o orçamento diário.
 
 import { hojeBrt } from "./meta-aquecimento-alvo.ts";
+import { filtrarMapsIneditos } from "./maps-aquecimento-unico.ts";
 
 export interface Orcamento {
   dia: string;
@@ -107,7 +108,7 @@ export async function autoRespondedoresParaAquecimento(
     .in("telefone_sufixo", sufixos.slice(0, 500));
   const suprimidos = new Set((supressoes || []).map((item: any) => String(item.telefone_sufixo)));
 
-  return candidatos
+  return (await filtrarMapsIneditos(supabase, candidatos))
     .filter((item) => !suprimidos.has(item.telefone.slice(-8)))
     .slice(0, limite);
 }
@@ -121,8 +122,7 @@ function cidadeDoEndereco(endereco?: string | null): string {
 
 /**
  * Leads com WhatsApp confirmado, ordenados pelo score do nicho.
- * Entram os nunca usados e também os já usados há mais de 15 dias (carência),
- * com prioridade para quem já respondeu alguma vez.
+ * Somente inéditos, com proteção permanente compartilhada com recuperação.
  */
 export async function leadsParaAquecimento(
   supabase: any,
@@ -152,12 +152,11 @@ export async function leadsParaAquecimento(
     }
   }
 
-  const carencia = new Date(Date.now() - 15 * 86400000).toISOString();
   const { data: leads } = await supabase
     .from("google_maps_leads")
     .select("id, nome, telefone, telefone_internacional, categoria, endereco, usado_aquecimento_em, resultado_aquecimento")
     .eq("tem_whatsapp", true)
-    .or(`usado_aquecimento_em.is.null,usado_aquecimento_em.lt.${carencia}`)
+    .is('usado_aquecimento_em', null)
     .limit(600);
 
 
@@ -192,7 +191,7 @@ export async function leadsParaAquecimento(
     (l.respondedor ? 100 : 0) +
     (l.nunca_usado ? 10 : 0);
 
-  return candidatos
+  return (await filtrarMapsIneditos(supabase, candidatos))
     .filter((l: LeadAquecimento) => !suprimidos.has(l.telefone.slice(-8)))
     .sort((a: LeadAquecimento, b: LeadAquecimento) => peso(b) - peso(a))
     .slice(0, limite);
