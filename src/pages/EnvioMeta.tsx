@@ -41,7 +41,7 @@ import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect
 import { catalogoUtility, situacaoUtility, type UtilityMaster, type UtilityGroup } from "@/lib/metaUtilityCatalog";
 import { carregarUtilityMestres } from "@/lib/carregarUtilityMestres";
 import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
-import { isBrazilianInstancePhone, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from "@/lib/metaNationalInstances";
+import { isBrazilianInstance, isBannedInstance, instanceDisplayPhone, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from "@/lib/metaNationalInstances";
 import { partitionRecipientLines, validRecipientPhone } from "@/lib/metaRecipientValidation";
 import { resolveButtonUrlParam, snapshotMetaButtonVars, validateMetaButtonLink } from "../../supabase/functions/_shared/meta-button-url";
 
@@ -1126,7 +1126,7 @@ export default function EnvioMeta() {
 
   const toggleInstancia = (inst: Instancia) => {
     const selecionada = instanciaIds.includes(inst.id);
-    if (!selecionada && !isBrazilianInstancePhone(inst.display_phone)) return;
+    if (!selecionada && (!isBrazilianInstance(inst) || isBannedInstance(inst))) return;
     setInstanciaIds((prev) => selecionada ? prev.filter((x) => x !== inst.id) : [...prev, inst.id]);
   };
 
@@ -1137,7 +1137,7 @@ export default function EnvioMeta() {
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
     if (nationalSelectionIds(instanciaIds, instancias).length !== instanciaIds.length) {
       setInstanciaIds((prev) => nationalSelectionIds(prev, instancias));
-      return toast.error("Selecione somente instâncias com telefone brasileiro identificado para iniciar ou agendar o disparo.");
+      return toast.error("Instâncias internacionais ou banidas foram removidas. Confira a seleção antes de iniciar ou agendar o disparo.");
     }
     const recipientLines = partitionRecipientLines(recipientsRaw);
     if (recipients.length === 0) {
@@ -1864,8 +1864,8 @@ export default function EnvioMeta() {
               size="sm"
               variant="outline"
               title={qualidadeFiltro.length > 0
-                ? "Seleciona apenas instâncias nacionais visíveis no filtro de qualidade atual."
-                : "Seleciona instâncias nacionais GREEN ou sem qualidade confirmada. Nacionais YELLOW e RED continuam disponíveis para seleção manual."}
+                ? "Seleciona apenas instâncias nacionais não banidas visíveis no filtro de qualidade atual."
+                : "Seleciona instâncias nacionais GREEN ou sem qualidade confirmada, excluindo banidas. Nacionais YELLOW e RED continuam disponíveis para seleção manual."}
               disabled={instanciasElegiveisSelecaoMassa.length === 0}
               onClick={() => {
                 const idsVisiveis = instanciasVisiveis.map((i) => i.id);
@@ -2004,14 +2004,15 @@ export default function EnvioMeta() {
           <div className="space-y-2">
             {instanciasVisiveis.map((i) => {
               const isEditing = editingId === i.id;
-              const nacional = isBrazilianInstancePhone(i.display_phone);
+              const nacional = isBrazilianInstance(i);
+              const banida = isBannedInstance(i);
               const cotaBm = cotaDaBm(i.meta_bm_id);
               const semSaldoBm = bmSemSaldo(i.meta_bm_id);
               return (
               <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm ? "border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
-                  disabled={!nacional || ativandoPoolTodos || ativandoPoolId === i.id}
+                  disabled={!nacional || banida || ativandoPoolTodos || ativandoPoolId === i.id}
                   aria-label={`Selecionar ${i.nome}`}
                   onCheckedChange={() => toggleInstancia(i)}
                 />
@@ -2024,7 +2025,7 @@ export default function EnvioMeta() {
                 </Avatar>
 
                 <div className="flex-1 min-w-0">
-                  {!nacional && <Badge variant="secondary">{i.display_phone ? "Fora da seleção nacional" : "Telefone não identificado"}</Badge>}
+                  {!nacional && <Badge variant="secondary">{instanceDisplayPhone(i) ? "Fora da seleção nacional" : "Telefone não identificado"}</Badge>}
                   {isEditing ? (
                     <div
                       className="space-y-1.5"
@@ -2093,7 +2094,7 @@ export default function EnvioMeta() {
                               <AlertTriangle className="h-3 w-3" /> Nome REJECTED — tentativa permitida
                             </Badge>
                           )}
-                          {i.saude_ban_info && (
+                          {banida && (
                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-1">
                               <AlertTriangle className="h-3 w-3" /> BANIDO
                             </Badge>

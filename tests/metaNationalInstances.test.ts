@@ -1,7 +1,43 @@
 import { describe, expect, test } from 'bun:test';
-import { isBrazilianInstancePhone, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from '../src/lib/metaNationalInstances';
+import { isBrazilianInstancePhone, isBrazilianInstance, isBannedInstance, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from '../src/lib/metaNationalInstances';
 
 describe('Instâncias nacionais no Envio Meta e contagens', () => {
+  test('seleciona os nacionais 8799 e 2300 com telefone ausente e nome completo', () => {
+    const rows = [
+      { id: '8799', nome: 'SOUZA 62 8269-8799', display_phone: null, saude_quality: 'GREEN' },
+      { id: '2300', nome: 'SOUZA 62 8270-2300', display_phone: '', saude_quality: 'GREEN' },
+      { id: '7201', nome: 'TESTE 1 555-945-7201', display_phone: null, saude_quality: 'GREEN' },
+    ];
+    expect(nationalSelectionIds(['8799', '2300', '7201'], rows)).toEqual(['8799', '2300']);
+    expect(nationalMassSelection(rows, false).map((i) => i.id)).toEqual(['8799', '2300']);
+    expect(nationalInstanceCount(rows)).toBe(2);
+  });
+  test('telefone Meta prevalece sobre nome e não usa identificadores arbitrários', () => {
+    expect(isBrazilianInstance({ nome: 'SOUZA 62 8269-8799', display_phone: '+1 555-945-7201' })).toBe(false);
+    expect(isBrazilianInstance({ nome: 'Instância 6282698799' })).toBe(false);
+    expect(isBrazilianInstance({ nome: 'SOUZA 62 8269-8799 EXTRA' })).toBe(false);
+    expect(isBrazilianInstance({ nome: 'SOUZA', saude_raw: { display_phone_number: '+55 62 8269-8799' } })).toBe(true);
+  });
+  test('BANNED não entra em Selecionar todas mesmo com qualidade GREEN ou filtro ativo', () => {
+    const rows = [
+      { id: 'banned', display_phone: '+55 62 8269-8799', saude_status: ' banned ', saude_quality: 'GREEN' },
+      { id: 'ok', display_phone: '+55 62 8270-2300', saude_status: 'CONNECTED', saude_quality: 'GREEN' },
+    ];
+    expect(nationalMassSelection(rows, false).map((i) => i.id)).toEqual(['ok']);
+    expect(nationalMassSelection(rows, true).map((i) => i.id)).toEqual(['ok']);
+    expect(nationalSelectionIds(['banned', 'ok'], rows)).toEqual(['ok']);
+    expect(nationalInstanceCount(rows)).toBe(2); // Banimento não muda a nacionalidade.
+  });
+  test('banimento informado exclui seleção; objeto vazio não confirma banimento', () => {
+    const rows = [
+      { id: 'ban-info', display_phone: '+55 62 8269-8799', saude_status: 'CONNECTED', saude_quality: 'GREEN', saude_ban_info: { reason: 'SPAM' } },
+      { id: 'empty', display_phone: '+55 62 8270-2300', saude_status: 'CONNECTED', saude_quality: 'GREEN', saude_ban_info: {} },
+    ];
+    expect(nationalMassSelection(rows, true).map((i) => i.id)).toEqual(['empty']);
+    expect(isBannedInstance({ saude_ban_info: 'banned' })).toBe(true);
+    expect(isBannedInstance({ saude_status: 'RESTRICTED', saude_ban_info: null })).toBe(false);
+    expect(isBannedInstance({ saude_quality: 'RED' } as { saude_status?: string })).toBe(false);
+  });
   test('reconhece DDI brasileiro em formatos Meta', () => {
     for (const phone of ['5562982756444', '+55 (62) 98275-6444', '0055 62 98275-6444', '+55 62 3275-6444']) {
       expect(isBrazilianInstancePhone(phone)).toBe(true);

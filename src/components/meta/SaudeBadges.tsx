@@ -3,11 +3,11 @@ import { AlertTriangle } from "lucide-react";
 
 export function SaudeBadgeStatus({ status }: { status?: string | null }) {
   if (!status) return null;
-  const s = status.toUpperCase();
+  const s = status.trim().toUpperCase();
   const variant: any =
     s === "CONNECTED"
       ? "default"
-      : s === "FLAGGED" || s === "RESTRICTED" || s === "DISCONNECTED"
+      : s === "FLAGGED" || s === "RESTRICTED" || s === "DISCONNECTED" || s === "BANNED"
       ? "destructive"
       : "secondary";
   const cls = s === "CONNECTED" ? "bg-green-600 hover:bg-green-600 text-white" : "";
