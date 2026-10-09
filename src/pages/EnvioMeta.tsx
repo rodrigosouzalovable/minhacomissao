@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import BmInstanceFilter from "@/components/meta/BmInstanceFilter";
 import TemplateApprovedInstances from '@/components/meta/TemplateApprovedInstances';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1120,10 +1121,6 @@ export default function EnvioMeta() {
     return nationalMassSelection(instanciasVisiveis, qualidadeFiltro.length > 0);
   }, [instanciasVisiveis, qualidadeFiltro]);
 
-  const toggleBmFiltro = (id: string) => {
-    setBmFiltro((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
-
   const toggleInstancia = (inst: Instancia) => {
     const selecionada = instanciaIds.includes(inst.id);
     if (!selecionada && (!isBrazilianInstance(inst) || isBannedInstance(inst))) return;
@@ -1890,56 +1887,20 @@ export default function EnvioMeta() {
               {sincronizandoPerfis ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
               Sincronizar perfis
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" size="sm" variant="outline" disabled={bmsDisponiveis.length === 0}>
-                  <Building2 className="h-3.5 w-3.5 mr-1.5" />
-                  {bmFiltro.length > 0 ? `BMs (${bmFiltro.length})` : "BMs"}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-auto">
-                <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {bmsDisponiveis.map((bm) => {
-                  const c = bm.id === SEM_BM ? null : cotaDaBm(bm.id);
-                  const esgotada = bm.id !== SEM_BM && bmSemSaldo(bm.id);
-                  return (
-                  <DropdownMenuCheckboxItem
-                    key={bm.id}
-                    checked={bmFiltro.includes(bm.id)}
-                    onCheckedChange={() => toggleBmFiltro(bm.id)}
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    <span className="truncate">{bm.nome}</span>
-                    <span className={`ml-auto pl-2 text-xs ${esgotada ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-                      {c
-                        ? c.tier_ilimitado
-                          ? `${bm.qtd} • ∞`
-                          : `${bm.qtd} • ${c.enviados_24h}/${c.tier_diario}`
-                        : bm.qtd}
-                    </span>
-                  </DropdownMenuCheckboxItem>
-                  );
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    const todas = bmsDisponiveis.map((b) => b.id);
-                    const tudoMarcado = todas.length > 0 && todas.every((id) => bmFiltro.includes(id));
-                    setBmFiltro(tudoMarcado ? [] : todas);
-                  }}
-                >
-                  {bmsDisponiveis.length > 0 && bmsDisponiveis.every((b) => bmFiltro.includes(b.id))
-                    ? "Desmarcar todas"
-                    : "Selecionar todas"}
-                </DropdownMenuItem>
-
-                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmFiltro([]); }}>
-                  Limpar filtro
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <BmInstanceFilter
+              selected={bmFiltro}
+              onChange={setBmFiltro}
+              bms={bmsDisponiveis.map((bm) => {
+                const c = bm.id === SEM_BM ? null : cotaDaBm(bm.id);
+                return {
+                  ...bm,
+                  exhausted: bm.id !== SEM_BM && bmSemSaldo(bm.id),
+                  summary: c
+                    ? c.tier_ilimitado ? `${bm.qtd} • ∞` : `${bm.qtd} • ${c.enviados_24h}/${c.tier_diario}`
+                    : bm.qtd,
+                };
+              })}
+            />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
