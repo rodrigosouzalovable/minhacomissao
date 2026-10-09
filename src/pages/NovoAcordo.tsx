@@ -1,3 +1,5 @@
+import { dataDocumentoISO, normalizarDocumentoAcordo, pagamentosDocumento, totalParcelasDocumento, validarParcelasDocumento, type ParcelaDocumento } from '@/lib/acordoDocumento';
+import { ParcelasDocumentoEditor } from '@/components/acordos/ParcelasDocumentoEditor';
 import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -151,6 +153,7 @@ export default function NovoAcordo() {
       .order('ordem', { ascending: true })
       .then(({ data }) => setInstancias((data as any) || []));
   }, [user, isAdmin, selectedUserId]);
+  const [parcelasDocumento, setParcelasDocumento] = useState<ParcelaDocumento[]>([]);
   const [activeTab, setActiveTab] = useState('ai');
   const [form, setForm] = useState({
     clienteNome: '',
@@ -175,44 +178,22 @@ export default function NovoAcordo() {
 
   // Handler para dados extraídos pela IA
   const handleDataExtracted = (data: ExtractedData) => {
-    // Formata CPF se vier sem formatação
-    let formattedCpf = data.cliente_cpf || '';
-    if (formattedCpf && !formattedCpf.includes('.')) {
-      formattedCpf = formatCpf(formattedCpf);
-    }
-
-    // Formata telefone se vier sem formatação
-    let formattedPhone = data.cliente_telefone || '';
-    if (formattedPhone && !formattedPhone.includes('(')) {
-      formattedPhone = formatPhone(formattedPhone);
-    }
-
-    // Formata data de DD/MM/AAAA para YYYY-MM-DD (formato do input date)
-    let formattedDate = '';
-    if (data.data_primeiro_pagamento) {
-      const parts = data.data_primeiro_pagamento.split('/');
-      if (parts.length === 3) {
-        formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-      }
-    }
-
-    // IA apenas SUGERE o credor (NM-AP / NM-I); a seleção final é sempre manual
-    let credorDetectadoLabel = '';
-    if (data.empresa === 'mundo_da_moda' || data.empresa === 'ume_novo_mundo' || data.empresa === 'odres_cred') {
-      credorDetectadoLabel = getEmpresaLabel(data.empresa);
-      setEmpresaSugerida(credorDetectadoLabel);
-    }
-
+    const documento = normalizarDocumentoAcordo(data);
+    const rows = documento.parcelas_detalhadas || [];
+    setParcelasDocumento(rows);
+    setEmpresa(null);
+    setEmpresaSugerida('');
+    setTelefoneConfirmado('');
     setForm({
-      clienteNome: data.cliente_nome || '',
-      clienteCpf: formattedCpf,
-      clienteTelefone: formattedPhone,
-      valorTotal: data.valor_total ? formatCurrencyDisplay(data.valor_total) : '',
-      parcelas: data.parcelas?.toString() || '',
-      valorPrimeiraParcela: data.valor_parcela ? formatCurrencyDisplay(data.valor_parcela) : '',
-      valorDemaisParcelas: data.valor_parcela ? formatCurrencyDisplay(data.valor_parcela) : '',
-      dataPrimeiroPagamento: formattedDate,
-      diasAtraso: data.dias_atraso?.toString() || '',
+      clienteNome: documento.cliente_nome || '',
+      clienteCpf: formatCpf(documento.cliente_cpf || ''),
+      clienteTelefone: '',
+      valorTotal: documento.valor_total ? formatCurrencyDisplay(documento.valor_total) : '',
+      parcelas: documento.parcelas?.toString() || '',
+      valorPrimeiraParcela: documento.valor_parcela ? formatCurrencyDisplay(documento.valor_parcela) : '',
+      valorDemaisParcelas: documento.valor_parcela ? formatCurrencyDisplay(documento.valor_parcela) : '',
+      dataPrimeiroPagamento: documento.data_primeiro_pagamento ? dataDocumentoISO(documento.data_primeiro_pagamento) : '',
+      diasAtraso: '',
       observacoes: ''
     });
 
@@ -221,9 +202,7 @@ export default function NovoAcordo() {
 
     toast({
       title: 'Dados extraídos!',
-      description: credorDetectadoLabel
-        ? `A IA sugeriu o credor ${credorDetectadoLabel}, mas a seleção é manual. Revise os dados antes de salvar.`
-        : 'Revise as informações na aba "Preencher Manualmente" antes de salvar.',
+      description: 'Confira as parcelas e preencha telefone, dias de atraso e credor antes de salvar.',
     });
   };
 
@@ -351,6 +330,18 @@ export default function NovoAcordo() {
     const valorDemaisParcelas = parseCurrency(form.valorDemaisParcelas);
     if (parcelas <= 0 || diasAtraso < 0 || valorTotal <= 0 || !empresa) return null;
 
+    if (parcelasDocumento.length) {
+      const percentual = calcularPercentualComissaoMundoDaModa(diasAtraso);
+      return {
+        percentual, valorTotal: totalParcelasDocumento(parcelasDocumento),
+        valorPrimeiraParcela: parcelasDocumento[0]?.valor ?? 0,
+        valorDemaisParcelas: parcelasDocumento[1]?.valor ?? parcelasDocumento[0]?.valor ?? 0,
+        comissaoPrimeiraParcela: Math.round((parcelasDocumento[0]?.valor ?? 0) * percentual) / 100,
+        comissaoDemaisParcelas: Math.round((parcelasDocumento[1]?.valor ?? parcelasDocumento[0]?.valor ?? 0) * percentual) / 100,
+        comissaoTotal: parcelasDocumento.reduce((sum, row) => sum + Math.round(row.valor * percentual) / 100, 0),
+        usarValoresEspecificos: true as const,
+      };
+    }
     // Se valores das parcelas foram especificados, usa eles
     const usarValoresEspecificos = valorPrimeiraParcela > 0 && valorDemaisParcelas > 0;
 
@@ -385,7 +376,7 @@ export default function NovoAcordo() {
       comissaoTotal: Math.round(comissaoTotal * 100) / 100,
       usarValoresEspecificos: false as const
     };
-  }, [form.valorTotal, form.parcelas, form.diasAtraso, form.valorPrimeiraParcela, form.valorDemaisParcelas, empresa]);
+  }, [form.valorTotal, form.parcelas, form.diasAtraso, form.valorPrimeiraParcela, form.valorDemaisParcelas, empresa, parcelasDocumento]);
 
   // Validação da soma das parcelas
   const validacaoSomaParcelas = useMemo(() => {
@@ -394,6 +385,11 @@ export default function NovoAcordo() {
     const valorPrimeira = parseCurrency(form.valorPrimeiraParcela);
     const valorDemais = parseCurrency(form.valorDemaisParcelas);
 
+    if (parcelasDocumento.length) {
+      const somaParcelas = totalParcelasDocumento(parcelasDocumento);
+      const diferenca = Math.abs(somaParcelas - valorTotal);
+      return { valido: Math.round(diferenca * 100) === 0, diferenca, somaParcelas };
+    }
     // Só valida se tiver mais de 1 parcela e valores preenchidos
     if (numParcelas <= 1 || valorPrimeira <= 0 || valorDemais <= 0) {
       return {
@@ -414,7 +410,7 @@ export default function NovoAcordo() {
       diferenca,
       somaParcelas
     };
-  }, [form.parcelas, form.valorTotal, form.valorPrimeiraParcela, form.valorDemaisParcelas]);
+  }, [form.parcelas, form.valorTotal, form.valorPrimeiraParcela, form.valorDemaisParcelas, parcelasDocumento]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -433,8 +429,13 @@ export default function NovoAcordo() {
       const valorPrimeiraParcela = parseCurrency(form.valorPrimeiraParcela);
       const valorDemaisParcelas = parseCurrency(form.valorDemaisParcelas);
 
+      if (parcelasDocumento.length) {
+        validarParcelasDocumento(parcelasDocumento, parseCurrency(form.valorTotal));
+        if (numParcelas !== parcelasDocumento.length) throw new Error('Quantidade de parcelas divergente.');
+        if (form.dataPrimeiroPagamento !== parcelasDocumento[0]?.data_vencimento) throw new Error('Confira o primeiro vencimento.');
+      }
       // Validação condicional: se parcelas > 1, exige valores das parcelas
-      if (numParcelas > 1) {
+      if (numParcelas > 1 && !parcelasDocumento.length) {
         if (!form.valorPrimeiraParcela || valorPrimeiraParcela <= 0) {
           throw new Error('Valor da primeira parcela é obrigatório para acordos com mais de 1 parcela');
         }
@@ -493,7 +494,9 @@ export default function NovoAcordo() {
       if (acordoError) throw new Error(acordoError.message || 'Falha ao criar acordo');
 
       // Gerar parcelas: comissão em todas as parcelas (NOVO MUNDO e UME)
-      const parcelas = calculo.usarValoresEspecificos
+      const parcelas = parcelasDocumento.length
+        ? pagamentosDocumento(parcelasDocumento, calculo.percentual)
+        : calculo.usarValoresEspecificos
         ? gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas, calculo.valorPrimeiraParcela, calculo.comissaoPrimeiraParcela)
         : gerarParcelasMundoDaModa(new Date(validated.dataPrimeiroPagamento), validated.parcelas, calculo.valorDemaisParcelas, calculo.comissaoDemaisParcelas);
       const {
@@ -827,15 +830,15 @@ export default function NovoAcordo() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="valorTotal">Valor Total do Acordo (R$) *</Label>
-                <Input id="valorTotal" placeholder="Digite o valor (ex: 2094,96)" value={form.valorTotal} onChange={e => handleCurrencyRealtime(e.target.value, 'valorTotal')} required />
+                <Input id="valorTotal" placeholder="Digite o valor (ex: 2094,96)" value={form.valorTotal} readOnly={parcelasDocumento.length > 0} onChange={e => handleCurrencyRealtime(e.target.value, 'valorTotal')} required />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="parcelas">Número de Parcelas *</Label>
-                <Input id="parcelas" type="text" inputMode="numeric" min="1" max="120" placeholder="1" value={form.parcelas} onChange={handleParcelasChange} required />
+                <Input id="parcelas" type="text" inputMode="numeric" min="1" max="120" placeholder="1" value={form.parcelas} readOnly={parcelasDocumento.length > 0} onChange={handleParcelasChange} required />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              {!parcelasDocumento.length && <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="valorPrimeiraParcela">
                     Valor da Primeira Parcela (R$) {parseInt(form.parcelas) !== 1 && '*'}
@@ -849,8 +852,16 @@ export default function NovoAcordo() {
                   </Label>
                   <Input id="valorDemaisParcelas" placeholder="Ex: 300,50" value={form.valorDemaisParcelas} onChange={e => handleCurrencyWithCentsChange(e.target.value, 'valorDemaisParcelas')} onBlur={() => handleCurrencyWithCentsBlur('valorDemaisParcelas')} required={parseInt(form.parcelas) !== 1} />
                 </div>
-              </div>
+              </div>}
 
+              {parcelasDocumento.length > 0 && <ParcelasDocumentoEditor rows={parcelasDocumento} onChange={rows => {
+                setParcelasDocumento(rows);
+                setForm(current => ({ ...current,
+                  valorTotal: formatCurrencyDisplay(totalParcelasDocumento(rows)),
+                  parcelas: String(rows.length),
+                  dataPrimeiroPagamento: rows[0]?.data_vencimento || '',
+                }));
+              }} />}
               {/* Alerta de validação da soma das parcelas */}
               {!validacaoSomaParcelas.valido && <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -865,7 +876,7 @@ export default function NovoAcordo() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="dataPrimeiroPagamento">Data do 1º Pagamento *</Label>
-                  <Input id="dataPrimeiroPagamento" type="date" value={form.dataPrimeiroPagamento} onChange={e => setForm({
+                  <Input id="dataPrimeiroPagamento" type="date" readOnly={parcelasDocumento.length > 0} value={form.dataPrimeiroPagamento} onChange={e => setForm({
                   ...form,
                   dataPrimeiroPagamento: e.target.value
                 })} required />
