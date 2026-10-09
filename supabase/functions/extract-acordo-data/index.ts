@@ -57,9 +57,8 @@ serve(async req => {
       baseURL: 'https://ai.gateway.lovable.dev/v1', apiKey: key, model: 'openai/gpt-6-astra',
     }, [{ role: 'user', content: [{ type: 'image', image: new URL(image) }] }], prompt,
       { schema: agreementSchema, schemaName: 'acordo_documento' });
-    const text = await result.text;
-    if (!text.trim()) return json({ error: 'A leitura não retornou dados. Confira o documento.' }, 422);
-    const extracted = JSON.parse(text);
+    const extracted = await result.output as Record<string, unknown>;
+    if (!extracted) return json({ error: 'A leitura não retornou dados. Confira o documento.' }, 422);
     if (!extracted.cliente_nome && !extracted.cliente_cpf && !extracted.valor_total) {
       return json({ error: 'Não foi possível reconhecer um acordo nesta imagem.' }, 422);
     }

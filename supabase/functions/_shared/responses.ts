@@ -1,5 +1,5 @@
 import { createOpenAI } from "npm:@ai-sdk/openai@3";
-import { streamText, jsonSchema, type ModelMessage } from "npm:ai@6";
+import { streamText, Output, jsonSchema, type ModelMessage } from "npm:ai@6";
 
 import {
   createLovableAiGatewayRunIdFetch,
@@ -25,6 +25,7 @@ export function createResponsesCall(
   const result = streamText({
     model: provider.responses(config.model),
     maxRetries: 0,
+    ...(structured ? { output: Output.object({ schema: jsonSchema(structured.schema), name: structured.schemaName }) } : {}),
     // AI SDK 6 lacks `instructions`: rename this key to `system` there.
     ...(instructions ? { system: instructions } : {}),
     messages,
@@ -32,7 +33,6 @@ export function createResponsesCall(
     providerOptions: {
       openai: {
         store: false,
-        ...(structured ? { textFormat: { type: "json_schema", name: structured.schemaName, strict: true, schema: structured.schema } } : {}),
         ...(reasoning
           ? {
               forceReasoning: true,
