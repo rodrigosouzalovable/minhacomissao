@@ -6858,16 +6858,22 @@ export type Database = {
         Row: {
           ativo: boolean
           atualizado_em: string
+          lease_ate: string | null
+          lease_token: string | null
           user_id: string
         }
         Insert: {
           ativo?: boolean
           atualizado_em?: string
+          lease_ate?: string | null
+          lease_token?: string | null
           user_id: string
         }
         Update: {
           ativo?: boolean
           atualizado_em?: string
+          lease_ate?: string | null
+          lease_token?: string | null
           user_id?: string
         }
         Relationships: []
@@ -12603,6 +12609,10 @@ export type Database = {
         Args: { p_log: string }
         Returns: boolean
       }
+      claim_base_novo_mundo: {
+        Args: { p_owner: string; p_token: string }
+        Returns: boolean
+      }
       claim_meta_templates_sync_diario: {
         Args: { p_force?: boolean; p_lock_minutes?: number }
         Returns: boolean
@@ -13860,6 +13870,10 @@ export type Database = {
           quantidade: number
           telefone: string
         }[]
+      }
+      release_base_novo_mundo: {
+        Args: { p_owner: string; p_token: string }
+        Returns: undefined
       }
       reservar_maps_aquecimento_unico: {
         Args: { p_instancia: string; p_sufixo: string }

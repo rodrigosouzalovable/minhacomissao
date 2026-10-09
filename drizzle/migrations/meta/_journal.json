@@ -1184,6 +1184,13 @@
       "when": 1791577946110,
       "tag": "0168_novo_mundo_cadastral_fila_limitada",
       "breakpoints": true
+    },
+    {
+      "idx": 169,
+      "version": "7",
+      "when": 1791577986322,
+      "tag": "0169_novo_mundo_lease_ciclo",
+      "breakpoints": true
     }
   ]
 }

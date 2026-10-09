@@ -1,0 +1,2 @@
+export { conferirContatosNovoMundo, capacidadeNovoMundo, NOVO_MUNDO_MAX, NOVO_MUNDO_AVISO } from '../../supabase/functions/_shared/novo-mundo-contatos-rules';
+export type { NovoMundoContato } from '../../supabase/functions/_shared/novo-mundo-contatos-rules';
