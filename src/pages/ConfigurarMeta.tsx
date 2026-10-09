@@ -33,6 +33,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import ParceirosMetaTab from "@/components/meta/ParceirosMetaTab";
 import { isInformationalDisplayNameLimit, isMetaDisplayNameUsable } from "@/lib/metaNameStatus";
 import { humanizarErroTemplate } from "@/lib/humanizarErroTemplate";
+import { nationalInstanceCount } from "@/lib/metaNationalInstances";
 
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
@@ -1580,7 +1581,7 @@ export default function ConfigurarMeta() {
 
       <Tabs defaultValue="instancias">
         <TabsList>
-          <TabsTrigger value="instancias">Instâncias ({instanciasFiltradas.length})</TabsTrigger>
+          <TabsTrigger value="instancias">Instâncias ({nationalInstanceCount(instanciasFiltradas)})</TabsTrigger>
           <TabsTrigger value="templates">Templates HSM ({templates.length})</TabsTrigger>
           {isAdmin && (
             <>
@@ -1696,7 +1697,7 @@ export default function ConfigurarMeta() {
                     >
                       <span className="whitespace-nowrap">{bm.nome}</span>
                       <span className="ml-auto pl-2 text-xs text-muted-foreground">
-                        {instancias.filter((i) => i.meta_bm_id === bm.id).length}
+                        {nationalInstanceCount(instancias.filter((i) => i.meta_bm_id === bm.id))}
                       </span>
                     </DropdownMenuCheckboxItem>
                   ))}
@@ -1707,7 +1708,7 @@ export default function ConfigurarMeta() {
                   >
                     <span className="whitespace-nowrap text-muted-foreground">Sem BM vinculada</span>
                     <span className="ml-auto pl-2 text-xs text-muted-foreground">
-                      {instancias.filter((i) => !i.meta_bm_id).length}
+                      {nationalInstanceCount(instancias.filter((i) => !i.meta_bm_id))}
                     </span>
                   </DropdownMenuCheckboxItem>
                   <DropdownMenuSeparator />
