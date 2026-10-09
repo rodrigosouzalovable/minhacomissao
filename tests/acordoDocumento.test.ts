@@ -18,6 +18,7 @@ describe('Comprovantes Novo Acordo', () => {
     const result = parseComprovanteAcordo(text);
     expect(result.cliente_nome).toBe('Weriky Jose Soares dos Santos');
     expect(result.cliente_cpf).toBe('43730700839');
+    expect(parseComprovanteAcordo(text.replace('Jose Soares', 'Jose   Soares')).cliente_nome).toBe('Weriky Jose Soares dos Santos');
   });
   test('total negociado é 12x101,29, nunca o saldo antes do desconto', () => {
     const result = parseComprovanteAcordo(text);
