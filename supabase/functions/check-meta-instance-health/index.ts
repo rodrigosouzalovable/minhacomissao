@@ -1,5 +1,6 @@
 import { classificarPagamento } from '../_shared/meta-pagamento-status.ts';
 import { classifyMessagingHealth, isQualityOnlyHold } from '../_shared/meta-messaging-health.ts';
+import { releaseNotificationState, qualityReadingLine } from '../_shared/meta-health-notification.ts';
 // Verifica saúde das instâncias Meta WhatsApp via Graph API.
 // Retorna status (CONNECTED/FLAGGED/RESTRICTED/etc), quality_rating, tier,
 // e ban_info da WABA. Persiste snapshot em meta_whatsapp_instances.
@@ -433,7 +434,7 @@ Deno.serve(async (req) => {
         // ===== Volta para GREEN: conta os dias e encerra a recuperação =====
         let alertaRecuperado: string | null = null;
         let alertaProgressoGreen: { texto: string; dias: number } | null = null;
-        if (qual === 'GREEN') {
+        if (leituraOk && qual === 'GREEN') {
           // Voltou de YELLOW/RED para GREEN: marca para reconferir quais
           // templates ainda faltam neste número e retomar a sincronização.
           if (qualAnterior === 'YELLOW' || qualAnterior === 'RED') {
@@ -472,8 +473,8 @@ Deno.serve(async (req) => {
                 `Número: *${inst.nome || inst.display_phone}*\n` +
                 `${await linhaBmInstancia(supabase, inst)}\n` +
                 (qualAnterior && qualAnterior !== 'GREEN'
-                  ? `Subiu de ${qualAnterior} para GREEN — o aquecimento está funcionando.\n`
-                  : `Mantendo GREEN com o aquecimento automático.\n`) +
+                  ? `Subiu de ${qualAnterior} para GREEN na leitura da Meta; isso não comprova a causa da melhora.\n`
+                  : `A leitura da Meta continua GREEN.\n`) +
                 `O aquecimento continua até completar ${diasGreenAlta} dias seguidos.\n` +
                 `${linhaPrevisao(qual, diasGreen, diasGreenAlta)}`,
             };
@@ -592,9 +593,10 @@ Deno.serve(async (req) => {
         }
 
 
-        await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
+        const { error: snapshotError } = await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
+        if (snapshotError) throw snapshotError;
         // Voltou de YELLOW/RED para GREEN: enfileira já os Utility obrigatórios faltantes.
-        if (voltouParaGreen(inst.saude_quality, qual)) {
+        if (leituraOk && voltouParaGreen(inst.saude_quality, qual)) {
           supabase.functions.invoke('meta-templates-auditar-instancias', {
             body: { auto: true, dry_run: false, instancia_id: inst.id },
           }).catch((e: unknown) => console.warn('auditoria pós-GREEN falhou', inst.id, e));
@@ -646,31 +648,28 @@ Deno.serve(async (req) => {
             const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
             const bmLinha = await linhaBmInstancia(supabase, inst);
             const hojeBrt = new Date().toISOString().slice(0, 10);
-            const causa = r.liberada_pagamento
-              ? `A pendência de pagamento/elegibilidade da Business Manager foi regularizada — a Meta voltou a aceitar a conexão.`
-              : `A Meta voltou a responder normalmente (CONNECTED, sem bloqueio de conta).`;
-            const diasGreenAtual = Number(
-              updatePayload.dias_green_consecutivos ?? inst.dias_green_consecutivos ?? 0,
-            );
-            const mensagem = r.liberada
-              ? `✅ *Bloqueio da Meta liberado*\n\n` +
-                `Número: *${inst.nome || inst.display_phone}*\n` +
-                `${bmLinha}\n` +
-                `${causa} Qualidade GREEN e sem restrição — o número voltou para o pool de envios.`
-              : `⚠️ *Bloqueio da Meta liberado — número ainda NÃO liberado para campanhas*\n\n` +
-                `Número: *${inst.nome || inst.display_phone}*\n` +
-                `${bmLinha}\n` +
-                `${causa}\n` +
-                (r.fora_pool_manual
-                  ? `O número permanece *fora do pool manualmente*`
-                  : `Mas o número continua ${qual === 'GREEN' ? 'com pendência' : `com qualidade *${qual || 'desconhecida'}*`}`) +
-                (restritoMeta ? ` e *restrito pela Meta* (envio limitado no painel)` : '') +
-                (quarentenaAtiva
-                  ? ` e em quarentena até ${new Date(quarentenaAlvo).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
-                  : '') +
-                `.\n` +
-                `Segue fora das campanhas e em aquecimento automático — atende normalmente as conversas recebidas.\n` +
-                `${linhaPrevisao(qual, diasGreenAtual, diasGreenAlta)}`;
+            const aviso = releaseNotificationState({ quality: qual, readingConfirmed: leituraOk,
+              previousHold: motivoAtual, poolReleased: r.liberada === true,
+              manuallyOutside: inst.pool_fora_manual === true, messagingRestricted: restritoMeta });
+            const titulo = aviso.event === 'manual_quality_release'
+              ? 'Seleção manual liberada — qualidade não alterada'
+              : 'Restrição anterior revalidada';
+            const causa = aviso.event === 'manual_quality_release'
+              ? 'A trava local por qualidade foi removida pela autorização de seleção manual. Isso não significa recuperação para GREEN nem desbloqueio de conta pela Meta.'
+              : r.liberada_pagamento
+                ? 'A Meta confirmou a regularização da restrição comercial anterior.'
+                : 'A verificação atual permitiu remover a trava anterior; a qualidade é informada separadamente abaixo.';
+            const mensagem = `ℹ️ *${titulo}*\n\n` +
+              `Número: *${inst.nome || inst.display_phone}*\n${bmLinha}\n${causa}\n` +
+              `${qualityReadingLine(qual, leituraOk, updatePayload.saude_checked_at)}\n` +
+              (aviso.poolAvailable
+                ? 'O número está disponível no pool conforme as permissões e limites existentes.'
+                : aviso.manuallyOutside
+                  ? 'O número permanece fora do pool por decisão manual.'
+                  : 'O número continua fora das campanhas; há impedimentos restantes.') +
+              (messagingHealth.qualityLimited
+                ? '\nA Meta mantém o aviso de que a cota poderá diminuir se a qualidade não melhorar.' : '') +
+              (restritoMeta ? `\nRestrição atual: ${messagingHealth.restriction}.` : '');
 
             await notificarAdmin(supabase, {
               tipo: 'meta_bloqueio_liberado',
@@ -711,7 +710,7 @@ Deno.serve(async (req) => {
             const { notificarAdmin } = await import('../_shared/notificar-admin.ts');
             await notificarAdmin(supabase, {
               tipo: 'meta_qualidade_progresso_green',
-              mensagem: alertaProgressoGreen.texto,
+              mensagem: `${alertaProgressoGreen.texto}\n${qualityReadingLine(qual, leituraOk, updatePayload.saude_checked_at)}`,
               chaveIdempotencia: `meta_green_dia${alertaProgressoGreen.dias}_${inst.id}_${hojeBrtDia}`,
               umaVezPorChave: true,
             });
@@ -731,7 +730,7 @@ Deno.serve(async (req) => {
             await notificarAdmin(supabase, {
               tipo: 'meta_qualidade_recuperada',
               mensagem:
-                `${alertaRecuperado}\n` +
+                `${alertaRecuperado}\n${qualityReadingLine(qual, leituraOk, updatePayload.saude_checked_at)}\n` +
                 `📨 Total de mensagens de aquecimento enviadas por este número: ${totalAquec ?? 0}.`,
               chaveIdempotencia: `meta_recuperado_${inst.id}_${new Date().toISOString().slice(0, 10)}`,
               umaVezPorChave: true,
