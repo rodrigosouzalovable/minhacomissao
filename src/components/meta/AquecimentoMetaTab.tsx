@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { NovoMundoContatosCard } from "./NovoMundoContatosCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -155,21 +156,6 @@ export function AquecimentoMetaTab() {
     },
   });
 
-  const { data: selecionadas } = useQuery({
-    queryKey: ["aq-selecao"],
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("meta_whatsapp_instances")
-        .select("id, nome, display_phone, saude_quality, saude_tier, tier_diario, messaging_limit_synced_at, aquecimento_meta_ativo, meta_bm_id, estado_pool, pausa_automatica_motivo, bm:meta_business_managers(nome, tier_diario)")
-        .eq("provider", "meta")
-        .eq("ativo", true)
-        .order("nome", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
   const { data: autoRespondedores, isLoading: carregandoAuto } = useQuery({
     queryKey: ["aq-auto-respondedores", paginaAuto, buscaAuto],
     staleTime: 60_000,
@@ -234,36 +220,6 @@ export function AquecimentoMetaTab() {
         custo: (buscas ?? []).reduce((s, b) => s + Number(b.custo_estimado_usd || 0), 0),
       };
     },
-  });
-
-  const alternarSelecao = useMutation({
-    mutationFn: async ({ id, valor }: { id: string; valor: boolean }) => {
-      const { error } = await supabase
-        .from("meta_whatsapp_instances")
-        .update({ aquecimento_meta_ativo: valor })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["aq-selecao"] });
-      qc.invalidateQueries({ queryKey: ["aq-trilhas", dia] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Falha ao atualizar"),
-  });
-
-  const rodar = useMutation({
-    mutationFn: async (fn: string) => {
-      const { data, error } = await supabase.functions.invoke(fn, { body: { forcar: true } });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (d: any) => {
-      toast.success(d?.skipped ? `Nada a fazer: ${d.skipped}` : "Executado com sucesso");
-      qc.invalidateQueries({ queryKey: ["aq-trilhas", dia] });
-      qc.invalidateQueries({ queryKey: ["aq-logs", dia] });
-      qc.invalidateQueries({ queryKey: ["aq-orcamento", dia] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Falha ao executar"),
   });
 
   const salvarTeto = useMutation({
@@ -441,65 +397,7 @@ export function AquecimentoMetaTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={() => rodar.mutate("meta-aquecimento-planejar")} disabled={rodar.isPending}>
-          <Brain className="h-4 w-4 mr-1" /> Planejar agora (IA)
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => rodar.mutate("meta-aquecimento-tick")} disabled={rodar.isPending}>
-          <Play className="h-4 w-4 mr-1" /> Disparar ciclo
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => rodar.mutate("meta-aquecimento-aprender")} disabled={rodar.isPending}>
-          <RefreshCw className="h-4 w-4 mr-1" /> Recalcular nichos
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => enviarRelatorio.mutate()}
-          disabled={enviarRelatorio.isPending}
-        >
-          {enviarRelatorio.isPending ? (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4 mr-1" />
-          )}
-          Enviar relatório no WhatsApp
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Flame className="h-4 w-4" /> Números em aquecimento
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Só os números marcados aqui entram no motor de aquecimento de tier. Nada é aquecido (nem gasto) enquanto nenhum estiver marcado.
-          </p>
-          {(selecionadas ?? []).filter((i: any) => i.aquecimento_meta_ativo).length === 0 && (
-            <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-              Nenhum número selecionado — o motor está parado. Marque os números das novas BMs abaixo.
-            </div>
-          )}
-          <div className="divide-y rounded-md border">
-            {(selecionadas ?? []).map((i: any) => (
-              <div key={i.id} className="flex items-center justify-between gap-3 p-2">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{i.nome || i.display_phone}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {i.display_phone} · {String(i.saude_quality || "UNKNOWN")} · {i.tier_diario ?? "-"}/dia
-                  </div>
-                </div>
-                <Switch
-                  checked={!!i.aquecimento_meta_ativo}
-                  disabled={alternarSelecao.isPending}
-                  onCheckedChange={(v) => alternarSelecao.mutate({ id: i.id, valor: v })}
-                />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <NovoMundoContatosCard />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>

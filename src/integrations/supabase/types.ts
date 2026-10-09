@@ -6854,6 +6854,123 @@ export type Database = {
           },
         ]
       }
+      meta_novo_mundo_config: {
+        Row: {
+          ativo: boolean
+          atualizado_em: string
+          lease_ate: string | null
+          lease_token: string | null
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          atualizado_em?: string
+          lease_ate?: string | null
+          lease_token?: string | null
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          atualizado_em?: string
+          lease_ate?: string | null
+          lease_token?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      meta_novo_mundo_contatos: {
+        Row: {
+          criado_em: string
+          estado: string
+          id: string
+          log_id: string | null
+          lote_id: string
+          telefone: string
+          telefone_sufixo: string
+          user_id: string
+          var1: string
+          var2: string
+        }
+        Insert: {
+          criado_em?: string
+          estado?: string
+          id?: string
+          log_id?: string | null
+          lote_id: string
+          telefone: string
+          telefone_sufixo: string
+          user_id: string
+          var1: string
+          var2: string
+        }
+        Update: {
+          criado_em?: string
+          estado?: string
+          id?: string
+          log_id?: string | null
+          lote_id?: string
+          telefone?: string
+          telefone_sufixo?: string
+          user_id?: string
+          var1?: string
+          var2?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_novo_mundo_contatos_log_id_fkey"
+            columns: ["log_id"]
+            isOneToOne: false
+            referencedRelation: "meta_recuperacao_log"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_novo_mundo_contatos_lote_id_fkey"
+            columns: ["lote_id"]
+            isOneToOne: false
+            referencedRelation: "meta_novo_mundo_lotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_novo_mundo_lotes: {
+        Row: {
+          adicionados: number
+          arquivo: string
+          autorizacao: string
+          autorizado_em: string
+          criado_em: string
+          descartados: number
+          id: string
+          recebido: number
+          resumo: Json
+          user_id: string
+        }
+        Insert: {
+          adicionados: number
+          arquivo: string
+          autorizacao: string
+          autorizado_em?: string
+          criado_em?: string
+          descartados: number
+          id?: string
+          recebido: number
+          resumo?: Json
+          user_id: string
+        }
+        Update: {
+          adicionados?: number
+          arquivo?: string
+          autorizacao?: string
+          autorizado_em?: string
+          criado_em?: string
+          descartados?: number
+          id?: string
+          recebido?: number
+          resumo?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       meta_partner_client_users: {
         Row: {
           cliente_id: string
@@ -7183,6 +7300,7 @@ export type Database = {
           cadastral: boolean
           contato_id: string | null
           created_at: string
+          custo_reservado_brl: number | null
           destino_instancia_id: string | null
           destino_telefone: string | null
           dia: string
@@ -7210,6 +7328,7 @@ export type Database = {
           cadastral?: boolean
           contato_id?: string | null
           created_at?: string
+          custo_reservado_brl?: number | null
           destino_instancia_id?: string | null
           destino_telefone?: string | null
           dia?: string
@@ -7237,6 +7356,7 @@ export type Database = {
           cadastral?: boolean
           contato_id?: string | null
           created_at?: string
+          custo_reservado_brl?: number | null
           destino_instancia_id?: string | null
           destino_telefone?: string | null
           dia?: string
@@ -12219,6 +12339,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      ativar_base_novo_mundo: { Args: { p_ativo: boolean }; Returns: undefined }
       ativar_meta_instancia_pool: {
         Args: { p_instancia_id: string }
         Returns: {
@@ -12337,6 +12458,10 @@ export type Database = {
         }[]
       }
       blacklist_saida_cadastral: {
+        Args: { p_instancia: string; p_telefone: string; p_texto: string }
+        Returns: undefined
+      }
+      blacklist_saida_novo_mundo: {
         Args: { p_instancia: string; p_telefone: string; p_texto: string }
         Returns: undefined
       }
@@ -12486,6 +12611,10 @@ export type Database = {
       }
       claim_agradecimento_cadastral: {
         Args: { p_log: string }
+        Returns: boolean
+      }
+      claim_base_novo_mundo: {
+        Args: { p_owner: string; p_token: string }
         Returns: boolean
       }
       claim_meta_templates_sync_diario: {
@@ -13014,6 +13143,16 @@ export type Database = {
       iago_finish_message: {
         Args: { p_contato_id: string; p_entrada_id: string }
         Returns: undefined
+      }
+      importar_contatos_novo_mundo: {
+        Args: {
+          p_arquivo: string
+          p_autorizado: boolean
+          p_resumo: Json
+          p_rows: Json
+          p_simulacao?: boolean
+        }
+        Returns: Json
       }
       incrementar_meta_contato_nao_lido: {
         Args: { _contato_id: string; _entrada_em: string }
@@ -13558,6 +13697,7 @@ export type Database = {
       portal_odres_publicar: { Args: { p_lista: string }; Returns: number }
       portal_reservar_consulta: { Args: { p_chave: string }; Returns: boolean }
       preparar_conversa_cadastral: { Args: { p_log: string }; Returns: string }
+      preparar_conversa_novo_mundo: { Args: { p_log: string }; Returns: string }
       presenca_ao_vivo: {
         Args: never
         Returns: {
@@ -13735,10 +13875,15 @@ export type Database = {
           telefone: string
         }[]
       }
+      release_base_novo_mundo: {
+        Args: { p_owner: string; p_token: string }
+        Returns: undefined
+      }
       reservar_maps_aquecimento_unico: {
         Args: { p_instancia: string; p_sufixo: string }
         Returns: boolean
       }
+      reservar_novo_mundo: { Args: { p_instancia: string }; Returns: string }
       reservar_recuperacao_cadastral: {
         Args: { p_instancia: string; p_sufixo: string }
         Returns: string
@@ -13761,6 +13906,7 @@ export type Database = {
           tentativas: number
         }[]
       }
+      resumo_base_novo_mundo: { Args: never; Returns: Json }
       retirar_meta_instancia_pool_manual: {
         Args: { p_instancia_id: string }
         Returns: {

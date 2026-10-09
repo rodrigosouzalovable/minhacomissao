@@ -1,11 +1,12 @@
 import { AGRADECIMENTO_CADASTRAL, ORIGEM_CADASTRAL, respostaCadastral } from './recuperacao-cadastral-rules.ts';
+import { NOVO_MUNDO_ORIGEM } from './novo-mundo-contatos-rules.ts';
 
 // Persistent flow marker wins over generic IAGO, including after acknowledgement.
 export async function atenderRespostaCadastral(db: any, contato: any, texto: string, tipo = 'text', enviar = async (db: any, ct: any, msg: string) => {
   const { enviarTexto } = await import('./iago.ts');
   return enviarTexto(db, ct, msg);
 }): Promise<boolean> {
-  if (contato?.origem_aquecimento !== ORIGEM_CADASTRAL) return false;
+  if (![ORIGEM_CADASTRAL, NOVO_MUNDO_ORIGEM].includes(contato?.origem_aquecimento)) return false;
   const suf = String(contato.telefone || '').replace(/\D/g, '').slice(-8);
   const { data: log, error } = await db.from('meta_recuperacao_log')
     .select('id, status, agradecimento_claim_em, resposta_tipo')
@@ -15,7 +16,7 @@ export async function atenderRespostaCadastral(db: any, contato: any, texto: str
   if (!log) return true;
   const resposta = ['text', 'texto', 'button', 'interactive'].includes(tipo) ? respostaCadastral(texto) : 'outra';
   if (resposta === 'saida') {
-    const { error: saidaErro } = await db.rpc('blacklist_saida_cadastral', {
+    const { error: saidaErro } = await db.rpc(contato.origem_aquecimento === NOVO_MUNDO_ORIGEM ? 'blacklist_saida_novo_mundo' : 'blacklist_saida_cadastral', {
       p_instancia: contato.instancia_id, p_telefone: contato.telefone, p_texto: texto,
     });
     if (saidaErro) throw saidaErro;
@@ -24,7 +25,7 @@ export async function atenderRespostaCadastral(db: any, contato: any, texto: str
   await db.from('iago_conversa_estado').update({ followup_em: null, followup_feito: true }).eq('contato_id', contato.id);
   if (resposta === 'negativa') {
     await db.from('meta_recuperacao_log').update({ resposta_tipo: 'negativa', resposta_em: new Date().toISOString() }).eq('id', log.id).neq('resposta_tipo', 'saida');
-    await db.from('meta_recuperacao_cadastral_destinos').update({ bloqueado_em: new Date().toISOString() }).eq('telefone_sufixo', suf);
+    if (contato.origem_aquecimento === ORIGEM_CADASTRAL) await db.from('meta_recuperacao_cadastral_destinos').update({ bloqueado_em: new Date().toISOString() }).eq('telefone_sufixo', suf);
     return true;
   }
   if (resposta !== 'confirmacao' || log.status !== 'enviado' || log.agradecimento_claim_em) return true;

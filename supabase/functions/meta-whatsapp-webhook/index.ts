@@ -7,6 +7,7 @@ import { classificarRespostaAquecimento } from '../_shared/resposta-automatica.t
 import { registrarAutoRespostaSeConfirmada } from '../_shared/registrar-auto-resposta.ts';
 import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-resposta.ts';
 import { ORIGEM_CADASTRAL } from '../_shared/recuperacao-cadastral-rules.ts';
+import { NOVO_MUNDO_ORIGEM } from '../_shared/novo-mundo-contatos-rules.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -910,8 +911,8 @@ serve(async (req) => {
               .eq('id', contatoIdFinal)
               .maybeSingle();
             _folderIdContato = (_cFolder as any)?.folder_id ?? null;
-            _leadAquecimento = ['lead_google_maps', ORIGEM_CADASTRAL].includes(String((_cFolder as any)?.origem_aquecimento || ''));
-            if (_cFolder?.origem_aquecimento === ORIGEM_CADASTRAL) _cadastralContato = _cFolder;
+            _leadAquecimento = ['lead_google_maps', ORIGEM_CADASTRAL, NOVO_MUNDO_ORIGEM].includes(String((_cFolder as any)?.origem_aquecimento || ''));
+            if ([ORIGEM_CADASTRAL, NOVO_MUNDO_ORIGEM].includes(String(_cFolder?.origem_aquecimento || ''))) _cadastralContato = _cFolder;
 
             // Regra: todo atendimento fica na caixa Padrão. Conversas marcadas na
             // caixa "IA" (legado) são devolvidas para a Padrão ao receber mensagem.
