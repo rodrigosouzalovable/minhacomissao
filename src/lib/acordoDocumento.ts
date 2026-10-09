@@ -75,7 +75,7 @@ export function normalizarDocumentoAcordo(data: DadosDocumentoAcordo): DadosDocu
 
 export function parseComprovanteAcordo(text: string): DadosDocumentoAcordo {
   const source = text.replace(/\u00a0/g, ' ').replace(/\r/g, '');
-  const name = source.match(/Cliente\s*:\s*([^\n]+?)(?=\s+CPF\s*:|\n|$)/i)?.[1]?.trim();
+  const name = source.match(/Cliente\s*:\s*([^\n]+?)(?=\s+CPF\s*:|\n|$)/i)?.[1]?.trim().replace(/\s+/g, ' ');
   const cpf = source.match(/CPF\s*:\s*([\d.\-]+)/i)?.[1]?.replace(/\D/g, '');
   const section = source.match(/PARCELAS[\s\S]*?(?=Valor da D[ií]vida|Desconto\s*:|Total parcelas\s*:|$)/i)?.[0];
   if (!name || !cpf || !section) {
