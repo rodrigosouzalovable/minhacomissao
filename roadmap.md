@@ -6,7 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Corrigir classificação LIMITED por qualidade nos disparos manuais, preservar bloqueios reais e revalidar Hospital Med sem enviar mensagens.
+- [x] Corrigir LIMITED por qualidade nos disparos manuais: 44 testes passaram, funções publicadas e consulta atual da Meta liberou 7554/5462; seleção do próximo remetente confirmou duas candidatas sem descartes. Sem mensagens reais, limites preservados e compilação OK.
 - [x] Corrigir diagnóstico da aplicação de templates na Medroma: erro 141006 confirmado na saúde real, códigos das restrições preservados e orientação de Faturamento/Verificar pagamento por instância; 15 testes passaram e compilação OK. Aplicação continua aguardando regularização do pagamento pela Meta, sem contornar bloqueios ou enviar mensagens.
 - [x] Impedir reutilização permanente entre recuperação e aquecimento: 3.587 sufixos históricos protegidos, reserva atômica global e consentimento preservado; 22 testes passaram, simulação publicada HTTP 200 com 1.410 destinos inéditos, sem envios reais.
 - [ ] Antecipar reposição de novos leads com maior chance de resposta; aguarda autorização explícita do possível aumento de pesquisas/custo.
