@@ -42,6 +42,7 @@ import { catalogoUtility, situacaoUtility, type UtilityMaster, type UtilityGroup
 import { carregarUtilityMestres } from "@/lib/carregarUtilityMestres";
 import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
 import { isBrazilianInstancePhone, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from "@/lib/metaNationalInstances";
+import { partitionRecipientLines, validRecipientPhone } from "@/lib/metaRecipientValidation";
 import { resolveButtonUrlParam, snapshotMetaButtonVars, validateMetaButtonLink } from "../../supabase/functions/_shared/meta-button-url";
 
 import CampaignImagePicker, { type CampaignImage } from '@/components/meta/CampaignImagePicker';
@@ -183,13 +184,13 @@ function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
     const thirdAsDoc = normalizeDocument(parts[2] || "");
     const cpf = thirdAsDoc || (!parts[2] && secondAsDoc ? secondAsDoc : (parts[2] || "").replace(/\D/g, ""));
     const nome = !parts[2] && secondAsDoc ? "" : (parts[1] || "");
-    const key = normalizeTelKey(telefone);
+    const key = validRecipientPhone(telefone);
     if (!key) continue;
     // Números nossos (UAZAPI) são isentos de deduplicação: mantemos todas as repetições.
     if (seen.has(key) && !isentos?.has(telSuffix8(telefone))) continue;
     seen.add(key);
     rows.push({
-      telefone: telefone.trim().startsWith("+") ? telefone.trim() : key,
+      telefone: key,
       nome,
       cpf,
       atraso: parts[3] || "",
@@ -1138,7 +1139,15 @@ export default function EnvioMeta() {
       setInstanciaIds((prev) => nationalSelectionIds(prev, instancias));
       return toast.error("Selecione somente instâncias com telefone brasileiro identificado para iniciar ou agendar o disparo.");
     }
-    if (recipients.length === 0) return toast.error("Importe a planilha com os destinatários");
+    const recipientLines = partitionRecipientLines(recipientsRaw);
+    if (recipients.length === 0) {
+      return toast.error(recipientLines.ignored > 0
+        ? `Nenhum destinatário com telefone válido. ${recipientLines.ignored} número(s) incompleto(s) ou com DDI inválido foram ignorados. Nada foi enviado.`
+        : "Importe a planilha com os destinatários");
+    }
+    if (recipientLines.ignored > 0) {
+      toast.info(`${recipientLines.ignored} número(s) incompleto(s) ou com DDI inválido ignorado(s). O envio seguirá apenas para os demais destinatários válidos.`);
+    }
     if (templateTemBotaoUrlDinamico && !(await salvarButtonUrl())) return;
     if (templatePorCredor) {
       const semCredor = recipients.filter((c) => !credorByTel[telSuffix8(c.telefone)]).length;
@@ -1238,7 +1247,7 @@ export default function EnvioMeta() {
     }
 
     // Deduplica destinatários antes de qualquer coisa
-    const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
+    const dedup = dedupRecipientsRaw(recipientLines.validRaw, isentosDedup);
     if (dedup.duplicados > 0) {
       setRecipientsRaw(dedup.texto);
       toast.message(
@@ -1248,12 +1257,6 @@ export default function EnvioMeta() {
     }
     const recipientsDedup = parseRecipients(dedup.texto, isentosDedup);
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
-    const ambiguous = recipientsDedup.filter((c) => {
-      const raw = c.telefone.replace(/\D/g, "");
-      const final = normalizeTelKey(c.telefone);
-      return !/^[1-9]\d{7,14}$/.test(final) || (!c.telefone.startsWith("+") && !raw.startsWith("55") && !/^1555\d{7}$/.test(raw) && raw.length !== 10 && raw.length !== 11);
-    });
-    if (ambiguous.length) return toast.error(`Confira o DDI de ${ambiguous.length} número(s): ${ambiguous[0].telefone}`);
 
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
