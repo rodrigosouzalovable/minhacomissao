@@ -19,6 +19,22 @@ describe('Base consentida Novo Mundo', () => {
     expect(telefoneNovoMundo('+1 555-945-7201')).toBeNull();
     expect(conferirContatosNovoMundo([['98988105168','','Nome'],row]).invalidos).toBe(1);
   });
+  test('DDDs distintos com mesmo final não são conflito de variáveis', () => {
+    const r = conferirContatosNovoMundo([
+      ['Telefone', '{{1}}', '{{2}}'],
+      ['92995088757', 'tudo bem?', 'Cliente A'],
+      ['99995088757', 'oi', 'Cliente B'],
+      ['93991507594', 'tudo bem?', 'Cliente C'],
+      ['98991507594', 'oi', 'Cliente D'],
+    ]);
+    expect(r.conflitos).toEqual([]);
+    expect(r.coincidencias).toEqual([
+      { telefone: '5599995088757', mantido: '5592995088757', linha: 3 },
+      { telefone: '5598991507594', mantido: '5593991507594', linha: 5 },
+    ]);
+    expect(r.contatos.map(c => c.var2)).toEqual(['Cliente A', 'Cliente C']);
+    expect(r.duplicados - r.coincidencias.length).toBe(0);
+  });
   test('estoque nunca excede 5000 nem sobrescreve saldo', () => {
     expect(capacidadeNovoMundo(4900,100)).toBe(true); expect(capacidadeNovoMundo(4900,101)).toBe(false);
   });
