@@ -7825,6 +7825,7 @@ export type Database = {
           origem_aquecimento: string | null
           sla_dispensado_em: string | null
           telefone: string | null
+          telefone_busca_invertido: string | null
           telefone_visivel: boolean
           tenant_id: string
           ultima_interacao_em: string | null
@@ -7854,6 +7855,7 @@ export type Database = {
           origem_aquecimento?: string | null
           sla_dispensado_em?: string | null
           telefone?: string | null
+          telefone_busca_invertido?: string | null
           telefone_visivel?: boolean
           tenant_id?: string
           ultima_interacao_em?: string | null
@@ -7883,6 +7885,7 @@ export type Database = {
           origem_aquecimento?: string | null
           sla_dispensado_em?: string | null
           telefone?: string | null
+          telefone_busca_invertido?: string | null
           telefone_visivel?: boolean
           tenant_id?: string
           ultima_interacao_em?: string | null
