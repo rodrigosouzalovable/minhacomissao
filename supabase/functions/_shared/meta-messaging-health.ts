@@ -7,7 +7,7 @@ const relevant = new Set(['PHONE_NUMBER', 'WABA', 'BUSINESS', 'APP']);
 function qualityAdvisory(entity: HealthEntity): boolean {
   return entity.entity_type === 'PHONE_NUMBER' && entity.can_send_message === 'LIMITED' &&
     Array.isArray(entity.additional_info) && entity.additional_info.length > 0 &&
-    entity.additional_info.every(info => /messaging limit will decrease if your quality rating doesn.t improve|quality rating|messaging limit.*quality|reputation/i.test(String(info))) &&
+    entity.additional_info.every(info => /^Your messaging limit will decrease if your quality rating doesn.t improve[.!]?$/i.test(String(info).trim())) &&
     (entity.errors || []).every(error => [138024, 138025].includes(Number(error.error_code)));
 }
 
@@ -38,7 +38,7 @@ export function classifyMessagingHealth(phone: Health, waba: Health) {
 }
 
 export function isQualityOnlyHold(reason: unknown): boolean {
-  return /^quality=|^Restrição de qualidade\/reputação confirmada pela Meta$|^Aviso de qualidade\/cota da Meta/i.test(String(reason || ''));
+  return /^quality=(YELLOW|RED)( em irmão)?$|^Restrição de qualidade\/reputação confirmada pela Meta$|^Aviso de qualidade\/cota da Meta — o limite poderá diminuir se a qualidade não melhorar; não é bloqueio total$/i.test(String(reason || ''));
 }
 
 export function hasBan(info: unknown): boolean {
