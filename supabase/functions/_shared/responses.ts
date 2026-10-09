@@ -1,5 +1,5 @@
 import { createOpenAI } from "npm:@ai-sdk/openai@3";
-import { streamText, type ModelMessage } from "npm:ai@6";
+import { streamText, jsonSchema, type ModelMessage } from "npm:ai@6";
 
 import {
   createLovableAiGatewayRunIdFetch,
@@ -12,6 +12,7 @@ export function createResponsesCall(
   config: { baseURL: string; apiKey: string; model: string },
   messages: ModelMessage[],
   instructions?: string,
+  structured?: { schema: Record<string, unknown>; schemaName: string },
 ) {
   const runIdFetch = createLovableAiGatewayRunIdFetch(getLovableAiGatewayRunId(request));
   const provider = createOpenAI({
@@ -23,6 +24,7 @@ export function createResponsesCall(
   const reasoning = config.model !== "openai/chat-latest";
   const result = streamText({
     model: provider.responses(config.model),
+    maxRetries: 0,
     // AI SDK 6 lacks `instructions`: rename this key to `system` there.
     ...(instructions ? { system: instructions } : {}),
     messages,
@@ -30,6 +32,7 @@ export function createResponsesCall(
     providerOptions: {
       openai: {
         store: false,
+        ...(structured ? { textFormat: { type: "json_schema", name: structured.schemaName, strict: true, schema: structured.schema } } : {}),
         ...(reasoning
           ? {
               forceReasoning: true,
