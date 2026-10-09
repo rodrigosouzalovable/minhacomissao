@@ -8,7 +8,7 @@ import { detectarTipoDocumento, formatarDocumentoBR, type FormatoDocumento } fro
 import { normalizarCredor, type CredorSlug } from "@/lib/credorMarcas";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { metaFirstRowIsHeader, metaImportDataRows } from "@/lib/metaImportHeader";
+import { metaFirstRowIsHeader, metaImportDataRows, metaHeaderVariable, metaHeaderMappingIssues } from "@/lib/metaImportHeader";
 
 const VALOR_HEADER_RX = /(saldo|valor|d[ií]vida|debito|débito|montante|total|parcela|entrada)/i;
 
@@ -37,6 +37,8 @@ const HEADER_HINTS: Array<{ role: string; rx: RegExp }> = [
 function detectRoleFromHeader(header: string): string {
   const h = String(header || "").trim();
   if (!h) return "ignore";
+  const variable = metaHeaderVariable(h);
+  if (variable) return `tplvar:${variable}`;
   for (const { role, rx } of HEADER_HINTS) {
     if (rx.test(h)) return role;
   }
@@ -190,7 +192,9 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
     for (let c = 0; c < nCols; c++) {
       let role: string = "ignore";
       if (firstIsHeader) role = detectRoleFromHeader(String(firstRow[c] ?? ""));
-      if (role === "ignore") {
+      const explicitVariable = firstIsHeader ? metaHeaderVariable(firstRow[c]) : null;
+      if (explicitVariable && !placeholders.includes(explicitVariable)) role = "ignore";
+      if (role === "ignore" && !explicitVariable) {
         const samples = rows.slice(firstIsHeader ? 1 : 0, firstIsHeader ? 6 : 5).map((r) => String((r || [])[c] ?? ""));
         role = detectRoleFromSample(samples);
       }
@@ -199,17 +203,17 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
       initial.push(role);
     }
     if (!initial.includes("telefone")) {
-      const idx = initial.findIndex((r) => r === "ignore");
+      const idx = initial.findIndex((r, c) => r === "ignore" && !(firstIsHeader && metaHeaderVariable(firstRow[c])));
       if (idx >= 0) initial[idx] = "telefone";
-      else if (initial.length > 0) initial[0] = "telefone";
+      else if (!firstIsHeader && initial.length > 0) initial[0] = "telefone";
     }
     if (!initial.includes("cpf")) {
-      const idx = initial.findIndex((role, c) => role !== "telefone" && columnLooksLikeDocument(rows, c, firstIsHeader));
+      const idx = initial.findIndex((role, c) => role === "ignore" && !(firstIsHeader && metaHeaderVariable(firstRow[c])) && columnLooksLikeDocument(rows, c, firstIsHeader));
       if (idx >= 0) initial[idx] = "cpf";
     }
     // Coluna monetária sem papel: sugere a próxima variável livre do template (ou Saldo).
     for (let c = 0; c < nCols; c++) {
-      if (initial[c] !== "ignore" || !colunasMonetarias.has(c)) continue;
+      if (initial[c] !== "ignore" || !colunasMonetarias.has(c) || (firstIsHeader && metaHeaderVariable(firstRow[c]))) continue;
       const livre = placeholders.find((k) => !initial.includes(`tplvar:${k}`));
       if (livre) initial[c] = `tplvar:${livre}`;
       else if (!initial.includes("saldo")) initial[c] = "saldo";
@@ -227,11 +231,11 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
         const sample = rows[firstIsHeader ? 1 : 0]?.[c];
         fmts[c] = detectarTipoDocumento(sample);
       } else {
-        fmts[c] = colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
+        fmts[c] = firstIsHeader && metaHeaderVariable(firstRow[c]) ? "raw" : colunasMonetarias.has(c) || headerValor ? "brl" : "raw";
       }
     }
     setFormatoPorColuna(fmts);
-  }, [open, nCols, firstIsHeader, colunasMonetarias, placeholders]);
+  }, [open, rows, nCols, firstIsHeader, colunasMonetarias, placeholders]);
 
   const setCol = (idx: number, role: string) => {
     setMapping((prev) => {
@@ -286,6 +290,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
   };
 
   const confirmar = () => {
+    if (headerIssues.length) { toast.error(headerIssues[0]); return; }
     const idxTel = mapping.findIndex((r) => r === "telefone");
     if (idxTel < 0) { toast.error("Selecione qual coluna é o Telefone"); return; }
     const idxNome = mapping.findIndex((r) => r === "nome");
@@ -399,6 +404,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
 
 
   const bodyPreview = template?.body_text || "";
+  const headerIssues = firstIsHeader ? metaHeaderMappingIssues(firstRow, mapping, placeholders) : [];
 
   // Primeira linha de dados — usada como exemplo na prévia do template.
   const linhaExemplo: any[] = (firstIsHeader ? rows[1] : rows[0]) || [];
@@ -479,6 +485,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
         )}
 
 
+        {headerIssues.length > 0 && <ul className="text-sm text-destructive" aria-label="Pendências do cabeçalho">{headerIssues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
         <div className="overflow-auto max-h-[50vh] border rounded-md">
           <table className="w-full text-xs">
             <thead className="bg-muted sticky top-0">
