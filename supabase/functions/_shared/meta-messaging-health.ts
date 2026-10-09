@@ -11,6 +11,13 @@ function qualityAdvisory(entity: HealthEntity): boolean {
     (entity.errors || []).every(error => [138024, 138025].includes(Number(error.error_code)));
 }
 
+function nameAdvisory(entity: HealthEntity): boolean {
+  return entity.entity_type === 'PHONE_NUMBER' && entity.can_send_message === 'LIMITED' &&
+    Array.isArray(entity.additional_info) && entity.additional_info.length > 0 &&
+    entity.additional_info.every(info => /^Your display name has not been approved yet\.( Your message limit will increase after the display name is approved\.)?$/i.test(String(info).trim())) &&
+    (entity.errors || []).every(error => [138024, 138025].includes(Number(error.error_code)));
+}
+
 export function classifyMessagingHealth(phone: Health, waba: Health) {
   let restriction: string | null = null;
   let qualityLimited = false;
@@ -21,13 +28,14 @@ export function classifyMessagingHealth(phone: Health, waba: Health) {
       if (!relevant.has(String(e.entity_type))) continue;
       const state = String(e.can_send_message || '').toUpperCase();
       if (state === 'LIMITED' && qualityAdvisory(e) && commercialAvailable) { qualityLimited = true; continue; }
+      if (state === 'LIMITED' && nameAdvisory(e) && commercialAvailable) continue;
       if (blocked.has(state) || state === 'LIMITED') {
         const codes = (e.errors || []).filter(error => ![138024, 138025].includes(Number(error.error_code))).map(error => error.error_code).join(', ');
         restriction = `Restrição de mensagens na ${e.entity_type} confirmada pela Meta (${state}${codes ? `; código ${codes}` : ''})`;
       }
     }
     const root = String(h?.can_send_message || '').toUpperCase();
-    if (blocked.has(root) || (root === 'LIMITED' && !(h?.entities?.some(qualityAdvisory) && commercialAvailable))) {
+    if (blocked.has(root) || (root === 'LIMITED' && !(h?.entities?.some(e => qualityAdvisory(e) || nameAdvisory(e)) && commercialAvailable))) {
       restriction ||= `Restrição de mensagens confirmada pela Meta (${root})`;
     }
   }

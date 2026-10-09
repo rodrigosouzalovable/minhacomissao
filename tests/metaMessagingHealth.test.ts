@@ -33,9 +33,18 @@ describe('manual campaign messaging health', () => {
     expect(classifyMessagingHealth(phone, null).confirmed).toBe(false);
   });
   it('never classifies a simultaneous security hold as quality only', () => {
+    expect(isQualityOnlyHold('quality=RED ACCOUNT_VIOLATION:SPAM')).toBe(false);
     expect(isQualityOnlyHold('ACCOUNT_VIOLATION:SPAM')).toBe(false);
     expect(isQualityOnlyHold('Restrição de qualidade/reputação confirmada pela Meta')).toBe(true);
     expect(hasBan({ ban_state: 'BANNED' })).toBe(true);
     expect(hasBan({})).toBe(false);
+  });
+  it('rejects mixed quality and spam details', () => {
+    expect(classifyMessagingHealth({ ...phone, entities: [{ ...phone.entities[0], additional_info: ["Your messaging limit will decrease if your quality rating doesn't improve", 'SPAM restriction'] }, ...commercial] }, waba).confirmed).toBe(false);
+  });
+  it('preserves informational pending name but not mixed name/payment restriction', () => {
+    const name = { ...phone.entities[0], additional_info: ['Your display name has not been approved yet.'] };
+    expect(classifyMessagingHealth({ ...phone, entities: [name, ...commercial] }, waba).confirmed).toBe(true);
+    expect(classifyMessagingHealth({ ...phone, entities: [{ ...name, additional_info: [...name.additional_info, 'Payment blocked'] }, ...commercial] }, waba).confirmed).toBe(false);
   });
 });
