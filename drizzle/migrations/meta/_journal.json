@@ -1198,6 +1198,13 @@
       "when": 1791578117185,
       "tag": "0170_novo_mundo_optout_e_guardas",
       "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1791578283811,
+      "tag": "0171_novo_mundo_cota_bm_atomica",
+      "breakpoints": true
     }
   ]
 }

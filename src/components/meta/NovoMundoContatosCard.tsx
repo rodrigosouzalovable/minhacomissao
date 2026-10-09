@@ -39,6 +39,8 @@ export function NovoMundoContatosCard() {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', sheetRows: 5003 });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       if (!sheet) throw new Error('Planilha vazia.');
+      const fullRange = sheet['!fullref'] || sheet['!ref'];
+      if (fullRange && XLSX.utils.decode_range(fullRange).e.r >= 5001) throw new Error('Envie no máximo 5.000 contatos, além do cabeçalho. Divida a base em lotes.');
       const checked = conferirContatosNovoMundo(XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: '' }));
       if (checked.conflitos.length) throw new Error(`${checked.conflitos.length} telefones repetidos com variáveis diferentes. Revise o arquivo.`);
       if (!checked.contatos.length) throw new Error('Nenhum contato válido no arquivo.');

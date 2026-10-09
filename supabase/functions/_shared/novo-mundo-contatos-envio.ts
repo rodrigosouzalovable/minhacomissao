@@ -39,7 +39,9 @@ export async function executarBaseNovoMundo(db: any, insts: any[], simulacao: bo
       if (!telefoneNovoMundo(inst.display_phone) || (inst.recuperacao_proximo_envio_em && Date.parse(inst.recuperacao_proximo_envio_em) > Date.now())) continue;
       if (simulacao) { resultados.push({ instancia: inst.nome, simulado: true, fonte: 'novo_mundo' }); continue; }
       if (!await confirmarSaude(inst)) { resultados.push({ instancia: inst.nome, skip: 'saude_meta_inconclusiva_ou_inapta' }); continue; }
-      const tpl = await escolherTemplateAprovado(inst, TEMPLATE_CADASTRAL);
+      let tpl;
+      try { tpl = await escolherTemplateAprovado(inst, TEMPLATE_CADASTRAL); }
+      catch { resultados.push({ instancia: inst.nome, skip: 'consulta_template_inconclusiva' }); continue; }
       if (!tpl || !templateCadastralValido(tpl)) { resultados.push({ instancia: inst.nome, skip: 'aguarda_template_utility_aprovado' }); continue; }
       const { data: logId, error: reservationError } = await db.rpc('reservar_novo_mundo', { p_instancia: inst.id });
       if (reservationError) { resultados.push({ instancia: inst.nome, skip: reservationError.message }); break; }
