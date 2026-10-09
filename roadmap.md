@@ -6,7 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Corrigir seleção nacional com telefone ausente e número completo no nome; excluir banidos da seleção e mostrar BANNED em vermelho, com testes sem envios.
+- [x] Corrigir seleção nacional dos números 8799/2300 com telefone ausente e número completo no nome; excluir banidos inclusive com filtro ativo e mostrar BANNED em vermelho. 23 testes passaram e compilação OK, sem envios; conferência visual autenticada bloqueada por retorno ao login.
 - [x] Corrigir classificação dos brasileiros sem nono dígito nas imagens, preservando exclusão +1 555; 32 testes passaram e compilação OK, sem disparos. Conferência visual continua bloqueada: sessão autorizada retorna ao login.
 - [x] Ignorar destinatários incompletos/DDI inválido antes de contagem, custo e disparo/agendamento, preservando válidos e blacklist; 29 testes passaram, sem envios reais.
 - [x] Excluir internacionais da seleção manual/em massa e das contagens geral/por BM; limpar seleção antiga e validar antes de novo envio/agendamento, preservando cadastros, pool e campanhas em execução. 25 testes passaram e compilação OK, sem disparos.
