@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Implementar base Novo Mundo: lotes até 5.000, estoque atômico, consumo sob teto compartilhado, PADRÃO e validação sem disparos.
 - [x] Adicionar busca por nome e redimensionamento somente no menu BMs; cinco testes passaram e navegador autenticado confirmou busca, resultado vazio, marcações preservadas, limpeza e tamanho mantido ao reabrir. Compilação OK, sem disparos ou novas consultas.
 - [x] Corrigir aviso GREEN incorreto: liberação manual separada da qualidade real/horário, 30 testes passaram e função publicada; Meta direta e lista confirmaram RED em 7554/5462 às 16h19 BRT, zero dias GREEN e pool autorizado preservado. Aviso calculado RED conferido sem campanhas ou mensagem corretiva.
 - [x] Corrigir LIMITED por qualidade nos disparos manuais: 44 testes passaram, funções publicadas e consulta atual da Meta liberou 7554/5462; seleção do próximo remetente confirmou duas candidatas sem descartes. Sem mensagens reais, limites preservados e compilação OK.
