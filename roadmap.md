@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Corrigir diagnóstico da aplicação de templates na Medroma: mostrar erro Meta e orientação por instância, preservando bloqueios reais e validando pagamento 141006.
 - [x] Impedir reutilização permanente entre recuperação e aquecimento: 3.587 sufixos históricos protegidos, reserva atômica global e consentimento preservado; 22 testes passaram, simulação publicada HTTP 200 com 1.410 destinos inéditos, sem envios reais.
 - [ ] Antecipar reposição de novos leads com maior chance de resposta; aguarda autorização explícita do possível aumento de pesquisas/custo.
 - [x] Corrigir timeout da busca numérica no Inbox: 1649 passou de erro 57014 em 8s para 67ms; conversa/mensagens, telefone formatado, arquivadas e nova tentativa validados no navegador. RPC invoker preserva RLS, acesso anônimo negado; 11 testes passaram, sem envios.
