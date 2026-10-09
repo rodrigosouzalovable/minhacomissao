@@ -48,7 +48,10 @@ export default function BmInstanceFilter({ bms, selected, onChange }: {
             {search && <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-9 w-9" aria-label="Limpar busca de BM" title="Limpar busca" onClick={() => setSearch("")}><X className="h-4 w-4" /></Button>}
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-1">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
+          onWheelCapture={(event) => event.stopPropagation()}
+        >
           {visible.length === 0 ? <p className="p-3 text-sm text-muted-foreground">Nenhuma BM encontrada.</p> : visible.map((bm) => (
             <label key={bm.id} className="flex items-center gap-2 rounded-sm px-2 py-2 text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground">
               <Checkbox checked={selected.includes(bm.id)} aria-label={`Filtrar ${bm.nome}`} onCheckedChange={() => onChange(selected.includes(bm.id) ? selected.filter((id) => id !== bm.id) : [...selected, bm.id])} />
