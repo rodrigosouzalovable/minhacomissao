@@ -13,7 +13,7 @@ describe('Instâncias nacionais no Envio Meta e contagens', () => {
     expect(isBrazilianInstancePhone('55982756444')).toBe(true); // DDD 55, not DDI
   });
   test('internacionais da imagem não são brasileiros com ou sem sinal +', () => {
-    for (const phone of ['+1 555-360-7120', '15553607120', '+1 555-382-6927', '15553826927', '0015553989636']) {
+    for (const phone of ['+1 555-945-7201', '15559457201', '0015559457201', '+1 555-360-7120', '15553607120', '+1 555-382-6927', '15553826927', '0015553989636']) {
       expect(isBrazilianInstancePhone(phone)).toBe(false);
     }
   });
@@ -23,9 +23,36 @@ describe('Instâncias nacionais no Envio Meta e contagens', () => {
     }
   });
   test('DDI isolado, DDD inválido, ausentes e identificadores não contam', () => {
-    for (const phone of [null, undefined, '', '55', '5523982756444', '556298275644', 'TESTE 5562982756444', '123456789012345']) {
+    for (const phone of [null, undefined, '', '55', '5523982756444', '556218275644', 'TESTE 5562982756444', '123456789012345']) {
       expect(isBrazilianInstancePhone(phone)).toBe(false);
     }
+  });
+  test('brasileiros da imagem sem nono dígito são nacionais em todos os formatos', () => {
+    for (const phone of ['+55 62 8243-5419', '+55 62 8243-5531', '556282435419', '556282435531', '00556282435419', '(62) 8243-5419', '6282435531']) {
+      expect(isBrazilianInstancePhone(phone)).toBe(true);
+    }
+  });
+  test('formatos antigos continuam nacionais em todos os prefixos de celular', () => {
+    for (const prefix of ['6', '7', '8', '9']) {
+      expect(isBrazilianInstancePhone(`+55 62 ${prefix}243-5419`)).toBe(true);
+    }
+    expect(isBrazilianInstancePhone('+55 62 1243-5419')).toBe(false);
+    expect(isBrazilianInstancePhone('+55 23 8243-5419')).toBe(false);
+    expect(isBrazilianInstancePhone('+55 62 8243-541')).toBe(false);
+  });
+  test('seleção individual, em massa e contagens preservam brasileiros antigos, excluindo +1 555', () => {
+    const legacyInstances = [
+      { id: '5419', display_phone: '+55 62 8243-5419', saude_quality: 'GREEN', meta_bm_id: 'a' },
+      { id: '5531', display_phone: '+55 62 8243-5531', saude_quality: 'UNKNOWN', meta_bm_id: 'b' },
+      { id: '7201', display_phone: '+1 555-945-7201', saude_quality: 'GREEN', meta_bm_id: 'a' },
+    ];
+    expect(nationalSelectionIds(['5419', '5531', '7201'], legacyInstances)).toEqual(['5419', '5531']);
+    expect(nationalMassSelection(legacyInstances, false).map((i) => i.id)).toEqual(['5419', '5531']);
+    expect(nationalMassSelection(legacyInstances, true).map((i) => i.id)).toEqual(['5419', '5531']);
+    expect(nationalInstanceCount(legacyInstances)).toBe(2);
+    expect(nationalInstanceCount(legacyInstances.filter((i) => i.meta_bm_id === 'a'))).toBe(1);
+    expect(nationalInstanceCount(legacyInstances.filter((i) => i.meta_bm_id === 'b'))).toBe(1);
+    expect(legacyInstances[0].display_phone).toBe('+55 62 8243-5419');
   });
   const instances = [
     { id: 'br-green', display_phone: '+55 62 98275-6444', saude_quality: 'GREEN', meta_bm_id: 'a', instancia_teste_aquecimento: false },

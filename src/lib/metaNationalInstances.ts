@@ -22,7 +22,9 @@ export function isBrazilianInstancePhone(raw?: string | null): boolean {
   }
   if (!BRAZIL_DDDS.has(digits.slice(0, 2))) return false;
   const subscriber = digits.slice(2);
-  return /^[2-5]\d{7}$/.test(subscriber) || /^9\d{8}$/.test(subscriber);
+  // Meta may display Brazilian mobiles in the legacy eight-digit format.
+  // This is country classification, not a reason to rewrite the saved phone.
+  return /^[2-9]\d{7}$/.test(subscriber) || /^9\d{8}$/.test(subscriber);
 }
 
 export function nationalInstanceCount(instances: readonly Pick<MetaPhoneInstance, 'display_phone'>[]): number {
