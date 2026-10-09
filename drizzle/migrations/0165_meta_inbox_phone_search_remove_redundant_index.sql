@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.idx_meta_contatos_phone_reverse;
