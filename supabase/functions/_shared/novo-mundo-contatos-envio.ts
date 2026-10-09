@@ -29,7 +29,7 @@ export async function executarBaseNovoMundo(db: any, insts: any[], simulacao: bo
     if (error) throw error;
     if (!data) return { ok: true, fonte: 'novo_mundo', resultados, skipped: 'ciclo_em_execucao_ou_base_pausada' };
   }
-  const deadline = Date.now() + 70_000;
+  const deadline = Date.now() + 40_000;
   try {
     const { data: stock, error: stockError } = await db.from('meta_novo_mundo_contatos').select('id').eq('user_id', owner).eq('estado', 'pendente').limit(1);
     if (stockError) throw stockError;
