@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { atenderRespostaCadastral } from '../supabase/functions/_shared/recuperacao-cadastral-resposta';
 
-function fixture() {
+function fixture(origem = 'recuperacao_cadastral') {
   const state = { claim: false, saida: false, tipo: null as string | null, sends: [] as string[] };
   const db: any = {
     from: (table: string) => {
@@ -12,7 +12,7 @@ function fixture() {
       return q;
     },
     rpc: async (fn: string) => {
-      if (fn === 'blacklist_saida_cadastral') { state.saida = true; state.tipo = 'saida'; return { error: null }; }
+      if (fn === 'blacklist_saida_cadastral' || fn === 'blacklist_saida_novo_mundo') { state.saida = true; state.tipo = 'saida'; return { error: null }; }
       if (fn === 'claim_agradecimento_cadastral') {
         const claimed = !state.claim && !state.saida && state.tipo !== 'negativa';
         if (claimed) state.claim = true;
@@ -21,12 +21,21 @@ function fixture() {
       throw Error('RPC inesperada');
     },
   };
-  const contato = { id: 'ct', instancia_id: 'inst', telefone: '5562999999999', origem_aquecimento: 'recuperacao_cadastral' };
+  const contato = { id: 'ct', instancia_id: 'inst', telefone: '5562999999999', origem_aquecimento: origem };
   const enviar = async (_db: any, _ct: any, msg: string) => { state.sends.push(msg); return { mensagemId: 'sent', destinatarioInvalido: false }; };
   return { state, run: (t: string, tipo = 'text') => atenderRespostaCadastral(db, contato, t, tipo, enviar) };
 }
 
 describe('IAGO cadastral sem envios externos', () => {
+  it('Novo Mundo agradece apenas uma confirmação e silencia todo o restante', async () => {
+    const f = fixture('recuperacao_novo_mundo');
+    await f.run('Olá'); await f.run('sim'); await f.run('sim'); await f.run('Quero negociar');
+    expect(f.state.sends).toEqual(['Obrigado pela confirmação']);
+  });
+  it('Novo Mundo SAIR bloqueia permanentemente sem agradecimento posterior', async () => {
+    const f = fixture('recuperacao_novo_mundo'); await f.run('SAIR'); await f.run('sim');
+    expect(f.state.saida).toBe(true); expect(f.state.sends).toEqual([]);
+  });
   it('uma única resposta exata em confirmações concorrentes e posteriores', async () => {
     const f = fixture();
     await Promise.all([f.run('SIM, CONFIRMO.', 'button'), f.run('sim'), f.run('confirmo')]);
