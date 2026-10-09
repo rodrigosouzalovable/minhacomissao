@@ -41,6 +41,7 @@ import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect
 import { catalogoUtility, situacaoUtility, type UtilityMaster, type UtilityGroup } from "@/lib/metaUtilityCatalog";
 import { carregarUtilityMestres } from "@/lib/carregarUtilityMestres";
 import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
+import { isBrazilianInstancePhone, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from "@/lib/metaNationalInstances";
 import { resolveButtonUrlParam, snapshotMetaButtonVars, validateMetaButtonLink } from "../../supabase/functions/_shared/meta-button-url";
 
 import CampaignImagePicker, { type CampaignImage } from '@/components/meta/CampaignImagePicker';
@@ -262,6 +263,14 @@ export default function EnvioMeta() {
   const [variantesExtraKeys, setVariantesExtraKeys] = useState<string[]>([]);
 
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
+  // Also removes stale selections when a phone is edited or instances reload.
+  useEffect(() => {
+    if (loading) return;
+    setInstanciaIds((prev) => {
+      const next = nationalSelectionIds(prev, instancias);
+      return next.length === prev.length ? prev : next;
+    });
+  }, [instancias, loading]);
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [recipientsHeaders, setRecipientsHeaders] = useState<string[]>([]);
   const [editAsText, setEditAsText] = useState<boolean>(false);
@@ -822,8 +831,7 @@ export default function EnvioMeta() {
         return { ...inst, tier_diario: efetivo ?? inst.tier_diario ?? 250 };
       });
       setInstancias(mapped as any);
-      const idsDisponiveis = new Set(mapped.map((inst) => inst.id));
-      setInstanciaIds((prev) => prev.filter((id) => idsDisponiveis.has(id)));
+      setInstanciaIds((prev) => nationalSelectionIds(prev, mapped));
     }
 
     setTemplates(t);
@@ -1108,13 +1116,7 @@ export default function EnvioMeta() {
   }, [instancias]);
 
   const instanciasElegiveisSelecaoMassa = useMemo(() => {
-    // Com filtro de qualidade ativo, o usuário escolheu explicitamente trabalhar
-    // com essas instâncias (ex.: RED) — a seleção em massa segue o filtro.
-    if (qualidadeFiltro.length > 0) return instanciasVisiveis;
-    return instanciasVisiveis.filter((instancia) => {
-      const qualidade = String(instancia.saude_quality || "").trim().toUpperCase();
-      return qualidade === "GREEN" || qualidade === "UNKNOWN" || qualidade === "";
-    });
+    return nationalMassSelection(instanciasVisiveis, qualidadeFiltro.length > 0);
   }, [instanciasVisiveis, qualidadeFiltro]);
 
   const toggleBmFiltro = (id: string) => {
@@ -1123,6 +1125,7 @@ export default function EnvioMeta() {
 
   const toggleInstancia = (inst: Instancia) => {
     const selecionada = instanciaIds.includes(inst.id);
+    if (!selecionada && !isBrazilianInstancePhone(inst.display_phone)) return;
     setInstanciaIds((prev) => selecionada ? prev.filter((x) => x !== inst.id) : [...prev, inst.id]);
   };
 
@@ -1131,6 +1134,10 @@ export default function EnvioMeta() {
     if (imageUploading) return toast.info('Aguarde o carregamento da imagem.');
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
+    if (nationalSelectionIds(instanciaIds, instancias).length !== instanciaIds.length) {
+      setInstanciaIds((prev) => nationalSelectionIds(prev, instancias));
+      return toast.error("Selecione somente instâncias com telefone brasileiro identificado para iniciar ou agendar o disparo.");
+    }
     if (recipients.length === 0) return toast.error("Importe a planilha com os destinatários");
     if (templateTemBotaoUrlDinamico && !(await salvarButtonUrl())) return;
     if (templatePorCredor) {
@@ -1810,7 +1817,7 @@ export default function EnvioMeta() {
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="text-sm">
                   <div className="font-medium">
-                    {instanciaIds.length} de {instancias.length} selecionadas
+                    {instanciaIds.length} de {nationalInstanceCount(instancias)} selecionadas
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Round-robin entre as instâncias marcadas.
@@ -1854,8 +1861,8 @@ export default function EnvioMeta() {
               size="sm"
               variant="outline"
               title={qualidadeFiltro.length > 0
-                ? "Seleciona todas as instâncias visíveis no filtro de qualidade atual."
-                : "Seleciona instâncias GREEN ou sem qualidade confirmada. YELLOW e RED continuam disponíveis para seleção manual."}
+                ? "Seleciona apenas instâncias nacionais visíveis no filtro de qualidade atual."
+                : "Seleciona instâncias nacionais GREEN ou sem qualidade confirmada. Nacionais YELLOW e RED continuam disponíveis para seleção manual."}
               disabled={instanciasElegiveisSelecaoMassa.length === 0}
               onClick={() => {
                 const idsVisiveis = instanciasVisiveis.map((i) => i.id);
@@ -1864,7 +1871,7 @@ export default function EnvioMeta() {
                 if (todasMarcadas) {
                   setInstanciaIds((prev) => prev.filter((id) => !idsVisiveis.includes(id)));
                 } else {
-                  setInstanciaIds((prev) => Array.from(new Set([...prev, ...idsElegiveis])));
+                  setInstanciaIds((prev) => nationalSelectionIds(Array.from(new Set([...prev, ...idsElegiveis])), instancias));
                 }
               }}
             >
@@ -1994,13 +2001,15 @@ export default function EnvioMeta() {
           <div className="space-y-2">
             {instanciasVisiveis.map((i) => {
               const isEditing = editingId === i.id;
+              const nacional = isBrazilianInstancePhone(i.display_phone);
               const cotaBm = cotaDaBm(i.meta_bm_id);
               const semSaldoBm = bmSemSaldo(i.meta_bm_id);
               return (
               <label key={i.id} className={`flex items-center gap-3 p-2 rounded border hover:bg-muted/40 cursor-pointer ${semSaldoBm ? "border-destructive/50" : ""}`}>
                 <Checkbox
                   checked={instanciaIds.includes(i.id)}
-                  disabled={ativandoPoolTodos || ativandoPoolId === i.id}
+                  disabled={!nacional || ativandoPoolTodos || ativandoPoolId === i.id}
+                  aria-label={`Selecionar ${i.nome}`}
                   onCheckedChange={() => toggleInstancia(i)}
                 />
 
@@ -2012,6 +2021,7 @@ export default function EnvioMeta() {
                 </Avatar>
 
                 <div className="flex-1 min-w-0">
+                  {!nacional && <Badge variant="secondary">{i.display_phone ? "Fora da seleção nacional" : "Telefone não identificado"}</Badge>}
                   {isEditing ? (
                     <div
                       className="space-y-1.5"
