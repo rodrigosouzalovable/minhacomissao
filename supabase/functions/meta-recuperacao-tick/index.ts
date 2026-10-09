@@ -13,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { executarRecuperacaoCadastral } from '../_shared/recuperacao-cadastral-envio.ts';
+import { executarBaseNovoMundo } from '../_shared/novo-mundo-contatos-envio.ts';
 import { schedulerAutorizado } from './scheduler-auth.ts';
 import {
   dentroJanelaAquecimento,
@@ -161,6 +162,13 @@ Deno.serve(async (req) => {
     if (instError) throw instError;
 
     if (!insts?.length) return json({ ok: true, skipped: "nenhuma_em_recuperacao", reativadas });
+
+    const { data: novoMundoCfg, error: novoMundoErro } = await supabase.from('meta_novo_mundo_config')
+      .select('ativo').eq('user_id', RECUPERACAO_OWNER_ID).maybeSingle();
+    if (novoMundoErro) throw novoMundoErro;
+    if (novoMundoCfg?.ativo) {
+      return json(await executarBaseNovoMundo(supabase, insts.filter(remetenteAptoParaRecuperacao), simulacao));
+    }
 
     const { data: cadastralCfg, error: cadastralCfgErro } = await supabase.from('meta_recuperacao_cadastral_config')
       .select('ativo').eq('user_id', RECUPERACAO_OWNER_ID).maybeSingle();

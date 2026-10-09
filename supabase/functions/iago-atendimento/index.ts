@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
 
     // Cadastral flow must never enter free-form AI or follow-up, even after acknowledgement.
-    if (contato.origem_aquecimento === 'recuperacao_cadastral') {
+    if (['recuperacao_cadastral', 'recuperacao_novo_mundo'].includes(String(contato.origem_aquecimento))) {
       const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
       if (token !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) return json({ error: 'Atendimento interno obrigatório' }, 403);
     }
