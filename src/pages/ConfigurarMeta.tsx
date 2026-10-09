@@ -1065,7 +1065,7 @@ export default function ConfigurarMeta() {
       if (filaData?.success === false) throw new Error(filaData?.error || "Não foi possível iniciar a aplicação");
       const bloqueioFila = filaData?.instancias?.find((item: { ok: boolean; erro?: string }) => !item.ok)?.erro;
       if (bloqueioFila) {
-        toast.warning("Aplicação aguardando", {
+        toast.warning(`Aplicação aguardando · ${inst.nome}`, {
           description: humanizarErroTemplate(bloqueioFila),
           duration: 12000,
         });
@@ -1090,12 +1090,13 @@ export default function ConfigurarMeta() {
       }
       await carregar();
     } catch (e: any) {
-      toast.error("Não foi possível aplicar os templates", {
+      toast.error(`Não foi possível aplicar os templates · ${inst.nome}`, {
         description: humanizarErroTemplate(e.message),
         duration: 12000,
       });
+    } finally {
+      setSincronizando(null);
     }
-    setSincronizando(null);
   };
 
   const sincronizarPerfil = async (inst: Instancia) => {

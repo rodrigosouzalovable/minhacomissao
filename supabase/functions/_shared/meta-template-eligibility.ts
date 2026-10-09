@@ -33,10 +33,18 @@ export function metaMessagingRestriction(inst: any): string | null {
       const detail = Array.isArray(entity?.additional_info)
         ? entity.additional_info.map((item: unknown) => String(item)).join(" ")
         : String(entity?.additional_info || "");
-      if (/#?141006|payment method|payment|pagamento|billing/i.test(detail)) {
-        return "A Meta bloqueou esta conta por problema no método de pagamento (código 141006). Revise a cobrança em Faturamento e tente novamente após a liberação da Meta";
+      const errors = Array.isArray(entity?.errors) ? entity.errors : [];
+      const errorDetail = errors.map((error: any) =>
+        [error?.error_code, error?.error_description, error?.possible_solution].filter(Boolean).join(" ")
+      ).join(" ");
+      if (["BLOCKED", "UNAVAILABLE", "RESTRICTED", "LIMITED"].includes(status) && /#?141006|payment method|payment|pagamento|billing/i.test(`${detail} ${errorDetail}`)) {
+        return "A Meta bloqueou esta conta WhatsApp por problema no método de pagamento (código 141006). Abra Faturamento desta instância, confira o cartão e eventuais pendências da conta WhatsApp vinculada, depois clique em Verificar pagamento. Tente aplicar novamente somente após a Meta confirmar a liberação.";
       }
-      if (["BLOCKED", "UNAVAILABLE", "RESTRICTED"].includes(status)) return `envio bloqueado na ${type}`;
+      if (["BLOCKED", "UNAVAILABLE", "RESTRICTED"].includes(status)) {
+        const codes = errors.map((error: any) => String(error?.error_code || "")).filter(Boolean).join(", ");
+        const scopeLabel = type === "WABA" ? "conta WhatsApp" : type === "BUSINESS" ? "empresa" : "número";
+        return `A Meta restringiu esta ${scopeLabel}${codes ? ` (código ${codes})` : " (sem código informado)"}. Abra WhatsApp Manager desta instância e confira as restrições da conta. Após resolver, verifique a saúde e tente aplicar novamente.`;
+      }
       if (status === "LIMITED") {
         if (!/display name has not been approved|quality|reputation|messaging limit/i.test(detail)) return `envio limitado na ${type}`;
       }
