@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Reconhecer cabeçalhos e preencher variáveis automaticamente nas importações Novo Mundo e Envio Meta; validar sem gravar lotes ou enviar mensagens.
 - [x] Corrigir falso conflito na importação Novo Mundo: CNAO_14 tem 4.999 contatos, zero telefones completos repetidos e duas coincidências de final com DDD diferente; prévia segue com 4.997, exclusões detalhadas e proteção por sufixo mantida. Dez testes passaram e compilação OK, sem gravar ou enviar.
 - [x] Implementar base Novo Mundo: lotes/estoque até 5.000, importação atômica, sufixos permanentes, teto compartilhado e PADRÃO; prévia autenticada e consentimento validados sem gravar lote nem enviar, base vazia/pausada, funções disponibilizadas e compilação OK.
 - [x] Adicionar busca por nome e redimensionamento somente no menu BMs; cinco testes passaram e navegador autenticado confirmou busca, resultado vazio, marcações preservadas, limpeza e tamanho mantido ao reabrir. Compilação OK, sem disparos ou novas consultas.
