@@ -593,6 +593,11 @@ Deno.serve(async (req) => {
         }
 
 
+        // Reconcile the obsolete blanket LIMITED label without clearing any independent hold.
+        if (graphOk && messagingHealth.qualityLimited && !notificarPausa &&
+            /^Restrição de mensagens na PHONE_NUMBER confirmada pela Meta \(LIMITED\)$/.test(motivoAtual)) {
+          updatePayload.pausa_automatica_motivo = r.limitacao_motivo;
+        }
         const { error: snapshotError } = await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
         if (snapshotError) throw snapshotError;
         // Voltou de YELLOW/RED para GREEN: enfileira já os Utility obrigatórios faltantes.
