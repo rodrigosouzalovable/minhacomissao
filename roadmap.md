@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Padronizar os cinco seletores de BM com busca/redimensionamento e herdar tier sem propagar alterações implícitas; testar e conferir no navegador sem salvar instâncias reais.
 - [x] Selecionar instâncias GREEN com template aprovado pelo botão HSM e remover o quadro de custos: 23 testes passaram; navegador autenticado confirmou 39 elegíveis/39 marcadas em Acessar Instâncias, banidas e RED desmarcadas, quadro removido e compilação OK. Sem disparos reais.
 - [x] Conferir quatro falhas 131026 (entrega impossível, sem causa específica) e aplicar aumento autorizado único de 30%: metas 13–26, 19 metas ativas atualizadas e teto R$26,39; redução por piora em 5 e intervalos 20–40min preservados. Rotina publicada, 26 testes passaram e compilação OK, sem mensagens de teste.
 - [x] Corrigir avisos LIMITED dos números YELLOW/RED vinculados ao Thiago, validar isolamento e bloqueios reais, publicar consumidores e revalidar sem mensagens de teste; seis números confirmados pela Meta sem bloqueio total e checkbox do 8277-3441 selecionado no login autorizado.
