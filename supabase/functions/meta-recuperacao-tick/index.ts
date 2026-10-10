@@ -5,7 +5,7 @@
 //
 // Limites obrigatórios (anti-ban e anti-storm):
 //  - 08h–19h BRT, nunca domingo
-//  - 10 a 20 mensagens/dia por número (5 se a qualidade piorou de novo)
+//  - 13 a 26 mensagens/dia por número (5 se a qualidade piorou de novo)
 //  - intervalo aleatório de 20 a 40 min entre mensagens do mesmo número
 //  - no máximo 2 conversas por destino por dia e nunca o mesmo destino em sequência
 //  - no máximo 8 números processados por execução (1 mensagem cada)
@@ -15,6 +15,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { executarRecuperacaoCadastral } from '../_shared/recuperacao-cadastral-envio.ts';
 import { executarBaseNovoMundo } from '../_shared/novo-mundo-contatos-envio.ts';
 import { schedulerAutorizado } from './scheduler-auth.ts';
+import { metaRecuperacao, RECUPERACAO_MIN_DIA, RECUPERACAO_MAX_DIA } from '../_shared/recuperacao-volume.ts';
 import {
   dentroJanelaAquecimento,
   destinosAquecimento,
@@ -104,8 +105,8 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: "recuperacao_desativada" });
     }
 
-    const msgsMin = Math.min(20, Math.max(1, Number(cfg?.recuperacao_msgs_min_dia ?? 10)));
-    const msgsMax = Math.min(20, Math.max(msgsMin, Number(cfg?.recuperacao_msgs_max_dia ?? 20)));
+    const msgsMin = metaRecuperacao(Number(cfg?.recuperacao_msgs_min_dia ?? RECUPERACAO_MIN_DIA));
+    const msgsMax = metaRecuperacao(Math.max(msgsMin, Number(cfg?.recuperacao_msgs_max_dia ?? RECUPERACAO_MAX_DIA)));
     const reativadas: string[] = [];
 
     // A própria rotina de recuperação reconcilia números aptos antes de enviar.
@@ -246,7 +247,7 @@ Deno.serve(async (req) => {
       }
 
       // Meta do dia (sorteada 1x por dia)
-      let metaDia = Math.min(20, Number(inst.recuperacao_msgs_meta_dia || 0));
+      let metaDia = inst.recuperacao_msgs_meta_dia ? metaRecuperacao(Number(inst.recuperacao_msgs_meta_dia)) : 0;
       if (!metaDia) {
         metaDia = sorteio(msgsMin, msgsMax);
         if (!simulacao) await supabase.from("meta_whatsapp_instances")
