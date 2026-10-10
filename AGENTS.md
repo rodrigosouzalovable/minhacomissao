@@ -34,7 +34,7 @@
 - Navigation uses explicitly granted tabs; `parceiro_meta` scopes instances, never grants extra screens.
 - National lead capture has separate scheduling/config/locks, daily query and monthly Google-account limits, never dollar caps or message sends.
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
-- Overdue uses pending payments in active agreements, shared across bell/alerts/Retornos; popup once at 9h/15h BRT, including later first access.
+- Overdue lists share pending payments in active agreements across the bell and Retornos; scheduled-return alerts remain isolated from overdue queries to avoid automatic overdue popups and redundant fetching.
 - Employee commission uses payment dates and independent tiers; office fees stay separate.
 - Receipt views share a versioned ranking RPC and success cache invalidation for consistent totals without polling.
 - UME loads client/totals first and alternatives on demand; bound waits, cache 12h without polling.
