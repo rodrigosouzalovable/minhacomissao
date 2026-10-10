@@ -7,7 +7,7 @@ export type InheritedBmTier = { value: string; limit: number; source: string; un
 export function tierNumber(value?: string | null): number | null {
   if (!value) return null;
   const key = value.replace(/^MESSAGING_LIMIT_/, "");
-  return BM_TIER_VALUES[key] ?? null;
+  return BM_TIER_VALUES[key] ?? BM_TIER_VALUES[`TIER_${key}`] ?? null;
 }
 
 export function resolveBmTier(bm: Bm | undefined, instances: Instance[], quota?: Quota | null, excludeId?: string): InheritedBmTier | null {

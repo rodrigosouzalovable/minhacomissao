@@ -68,7 +68,7 @@ export default function BmInstanceFilter({ bms, selected, onChange, single = fal
             </label>
           ))}
         </div>
-        <div className="shrink-0 border-t p-2 pr-8 flex flex-wrap gap-1 relative">
+        <div className="min-h-8 shrink-0 border-t p-2 pr-8 flex flex-wrap gap-1 relative">
           {!single && <><Button type="button" variant="ghost" size="sm" disabled={visible.length === 0} onClick={() => onChange(toggleVisibleBms(selected, visible.map((bm) => bm.id)))}>{allVisibleSelected ? "Desmarcar todas" : "Selecionar todas"}</Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => onChange([])}>Limpar filtro</Button></>}
           <Button
