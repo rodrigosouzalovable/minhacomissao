@@ -15,6 +15,8 @@ export interface DadosDocumentoAcordo {
   dias_atraso: number | null;
   empresa?: 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred' | null;
   parcelas_detalhadas?: ParcelaDocumento[];
+  valor_total_documento?: number | null;
+  divergencia_valor_documento?: boolean;
 }
 
 export function dataDocumentoISO(value: string): string {
@@ -53,8 +55,9 @@ export function validarParcelasDocumento(rows: ParcelaDocumento[], total?: numbe
 /** Um comprovante não autoriza usar o telefone do suporte nem inferir atraso/credor. */
 export function normalizarDocumentoAcordo(data: DadosDocumentoAcordo): DadosDocumentoAcordo {
   const rows = data.parcelas_detalhadas?.length
-    ? validarParcelasDocumento(data.parcelas_detalhadas, data.valor_total)
+    ? validarParcelasDocumento(data.parcelas_detalhadas)
     : undefined;
+  const totalDocumento = data.valor_total_documento ?? data.valor_total;
   const cpf = data.cliente_cpf?.replace(/\D/g, '') || null;
   if (cpf && cpf.length !== 11) throw new Error('CPF incompleto no documento. Confira o arquivo.');
   return {
@@ -64,6 +67,8 @@ export function normalizarDocumentoAcordo(data: DadosDocumentoAcordo): DadosDocu
     dias_atraso: null,
     empresa: null,
     ...(rows ? {
+      valor_total_documento: totalDocumento,
+      divergencia_valor_documento: totalDocumento != null && Math.round(totalDocumento * 100) !== Math.round(totalParcelasDocumento(rows) * 100),
       parcelas_detalhadas: rows,
       parcelas: rows.length,
       valor_total: totalParcelasDocumento(rows),

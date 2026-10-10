@@ -48,8 +48,18 @@ describe('Comprovantes Novo Acordo', () => {
     expect(result.map(row => [row.data_prevista, row.valor_parcela, row.comissao_parcela])).toEqual([['2026-10-09', 100, 3], ['2026-11-11', 111.29, 3.34]]);
     expect(result.every(row => row.status === 'pendente')).toBe(true);
   });
-  test('soma divergente não importa', () => {
-    expect(() => parseComprovanteAcordo(text.replace('1.215,48', '1.215,49'))).toThrow('soma');
+  test('soma divergente importa todas as parcelas para correção manual', () => {
+    const result = parseComprovanteAcordo(text.replace('1.215,48', '1.315,49'));
+    expect(result.valor_total).toBe(1215.48);
+    expect(result.valor_total_documento).toBe(1315.49);
+    expect(result.divergencia_valor_documento).toBe(true);
+    expect(result.parcelas_detalhadas).toHaveLength(12);
+    expect(result.parcelas_detalhadas?.[0]?.valor).toBe(101.29);
+    expect(normalizarDocumentoAcordo(result).divergencia_valor_documento).toBe(true);
+    expect(pagamentosDocumento(result.parcelas_detalhadas ?? [], 3)).toHaveLength(12);
+  });
+  test('documento sem divergência não gera aviso', () => {
+    expect(parseComprovanteAcordo(text).divergencia_valor_documento).toBe(false);
   });
   test('datas inexistentes, tabela vazia, CPF inválido e valores inválidos não importam', () => {
     expect(() => dataDocumentoISO('31/02/27')).toThrow();
