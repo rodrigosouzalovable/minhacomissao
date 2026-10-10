@@ -275,9 +275,11 @@ export function PoolMetaPanel() {
   const checarSaude = async () => {
     setChecando(true);
     try {
-      const { error } = await supabase.functions.invoke("check-meta-instance-health", { body: {} });
+      const { data, error } = await supabase.functions.invoke("check-meta-instance-health", { body: {} });
       if (error) throw error;
-      toast.success("Saúde de todos os números atualizada");
+      const inconclusivas = (data?.results || []).filter((r: any) => !!r.error).length;
+      if (inconclusivas > 0) toast.warning(`${inconclusivas} consulta(s) inconclusiva(s); as demais foram atualizadas. Isso não confirma bloqueio.`);
+      else toast.success("Saúde de todos os números atualizada");
       await carregar();
     } catch (e: any) {
       toast.error("Erro: " + (e?.message || e));

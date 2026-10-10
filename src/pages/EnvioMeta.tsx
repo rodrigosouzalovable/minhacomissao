@@ -606,11 +606,12 @@ export default function EnvioMeta() {
         setInstanciaIds((prev) => prev.filter((id) => !inelegiveis.has(id)));
       }
       const comRestricao = results.filter((r) =>
-        r.error || r.ban_info || r.restrito_meta === true ||
-        ["FLAGGED", "RESTRICTED", "BANNED"].includes(String(r.status || "").toUpperCase()),
+        !r.error && (r.ban_info || r.restrito_meta === true ||
+        ["FLAGGED", "RESTRICTED", "BANNED"].includes(String(r.status || "").toUpperCase())),
       );
-      if (comRestricao.length > 0) {
-        toast.warning(`${results.length - comRestricao.length} saudável(is) e ${comRestricao.length} restrita(s) após consultar a Meta`);
+      const inconclusivas = results.filter((r) => !!r.error).length;
+      if (comRestricao.length > 0 || inconclusivas > 0) {
+        toast.warning(`${results.length - comRestricao.length - inconclusivas} sem restrição confirmada, ${comRestricao.length} restrita(s) e ${inconclusivas} consulta(s) inconclusiva(s). Consultas inconclusivas não confirmam bloqueio.`);
       } else {
         toast.success(`Todas as ${results.length} instância(s) OK`);
       }
