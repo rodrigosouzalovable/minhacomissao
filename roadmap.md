@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Conferir falhas de entrega e aplicar aumento autorizado de 30% nas metas e teto de recuperação, preservando proteções.
 - [x] Corrigir avisos LIMITED dos números YELLOW/RED vinculados ao Thiago, validar isolamento e bloqueios reais, publicar consumidores e revalidar sem mensagens de teste; seis números confirmados pela Meta sem bloqueio total e checkbox do 8277-3441 selecionado no login autorizado.
 - [x] Corrigir fila Novo Mundo parada: aprovados filtrados antes do limite de ciclo, consultas inconclusivas adiadas e reserva Novo Mundo separada da Maps sem perder proteção global/consentimento. Função publicada, 28 testes passaram e ciclo normal iniciado: 10 aceites Meta, 6 enviados e 4 falhas posteriores, 4 entregues às 08h53; dez mensagens registradas na PADRÃO. Metas locais elegíveis somam até 153 tentativas (107 RED/46 YELLOW), sujeitas à Meta e ao teto; tela administrativa não validada no navegador pois /novomundo abriu o portal público.
 - [x] Reconhecer cabeçalhos e preencher variáveis automaticamente nas importações Novo Mundo e Envio Meta; 20 testes passaram e as duas conferências foram verificadas no navegador com dados simulados, preservando B/C e o primeiro cliente sem cabeçalho. Sem gravar lotes ou enviar mensagens; compilação OK.
