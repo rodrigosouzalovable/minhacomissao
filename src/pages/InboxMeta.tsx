@@ -2947,7 +2947,7 @@ export default function InboxMeta() {
                     </DropdownMenu>
                     <MetaComposer
                       ref={composerRef}
-                      disabled={!janelaInfo.aberta || enviando}
+                      disabled={!janelaInfo.aberta}
                       enviando={enviando}
                       placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : '🔒 Janela 24h fechada — envie template UTILITY para reabrir'}
                       onSend={(t) => enviar(t)}

@@ -92,6 +92,15 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
 
   useEffect(() => { setTexto(''); }, [conversationKey]);
 
+  useEffect(() => {
+    if (disabled) return;
+    const frame = requestAnimationFrame(() => {
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+      taRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [conversationKey, disabled]);
+
   // Reagir a mudanças de largura (abrir/fechar painéis) e carregamento de fontes
   useEffect(() => {
     const ta = taRef.current;
@@ -107,11 +116,12 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
 
   const submit = useCallback(() => {
     const t = texto.trim();
-    if (!t) return;
+    if (disabled || enviando || !t) return;
     setTexto('');
     onSend(t);
+    taRef.current?.focus({ preventScroll: true });
     // Altura é resetada pelo useEffect ao limpar texto
-  }, [texto, onSend]);
+  }, [texto, onSend, disabled, enviando]);
 
   const doAppend = useCallback((t: string) => {
     setTexto(prev => (prev ? `${prev} ${t}` : t));
@@ -256,7 +266,7 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
           rows={1}
         />
       </div>
-      <Button onClick={submit} disabled={disabled || !texto.trim()} size="icon" className="shrink-0">
+      <Button onClick={submit} disabled={disabled || enviando || !texto.trim()} aria-label="Enviar mensagem" size="icon" className="shrink-0">
         {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
       </Button>
     </>
