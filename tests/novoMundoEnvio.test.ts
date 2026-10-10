@@ -16,8 +16,8 @@ test('simulação com estoque mantém reserva e envio desligados', async () => {
   expect(result.resultados).toEqual([{ instancia: 'Teste', simulado: true, fonte: 'novo_mundo' }]);
   expect(reservations).toBe(0);
 });
-test('teto compartilhado mantém R$20,30 e reposição avisa em 500', () => {
-  expect(NOVO_MUNDO_TETO).toBe(20.30); expect(NOVO_MUNDO_AVISO).toBe(500);
+test('teto autorizado é R$26,39 e reposição avisa em 500', () => {
+  expect(NOVO_MUNDO_TETO).toBe(26.39); expect(NOVO_MUNDO_AVISO).toBe(500);
 });
 
 test('cópias ausentes no início não impedem os oito remetentes aprovados posteriores', async () => {

@@ -1212,6 +1212,13 @@
       "when": 1791633019303,
       "tag": "0172_novo_mundo_reserva_sem_dupla_claim",
       "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1791639376181,
+      "tag": "0173_recuperacao_aumento_autorizado_30",
+      "breakpoints": true
     }
   ]
 }

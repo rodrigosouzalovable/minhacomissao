@@ -12450,6 +12450,7 @@ export type Database = {
         Args: { p_contato_id: string; p_somente_ia?: boolean }
         Returns: string
       }
+      autorizar_aumento_recuperacao_30: { Args: never; Returns: Json }
       blacklist_aquecimento_auto_respondedor: {
         Args: { _respondedor_id: string }
         Returns: {

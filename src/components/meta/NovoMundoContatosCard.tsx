@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Upload, RefreshCw, Pause, Play, Loader2, AlertTriangle } from 'lucide-react';
 import { conferirContatosNovoMundo, NOVO_MUNDO_MAX, NOVO_MUNDO_AVISO } from '@/lib/novoMundoContatos';
 import { toast } from 'sonner';
+import { RECUPERACAO_MAX_DIA, RECUPERACAO_TETO_BRL } from '../../../supabase/functions/_shared/recuperacao-volume';
 
 type Resumo = { disponiveis: number; reservados: number; aceitos: number; entregues: number; respondidos: number; falhas: number; bloqueados: number; descartados: number; ativo: boolean; custo_hoje: number; teto: number; ultimo_lote?: { arquivo: string; adicionados: number } };
 type Conferencia = { total: number; adicionados: number; bloqueados: number; ja_utilizados: number; ja_pendentes: number; invalidos: number; duplicados: number };
@@ -79,7 +80,7 @@ export function NovoMundoContatosCard() {
         <div><div className="text-sm text-muted-foreground">Falhas / bloqueados</div><div className="text-xl font-semibold">{resumo?.falhas ?? 0} / {resumo?.bloqueados ?? 0}</div></div>
       </div>
       <Progress value={(saldo + (resumo?.reservados ?? 0)) / NOVO_MUNDO_MAX * 100} />
-      <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground"><span>Capacidade livre: {livre.toLocaleString('pt-BR')} · Reservados: {resumo?.reservados ?? 0}</span><span>Recuperação hoje: R$ {Number(resumo?.custo_hoje ?? 0).toFixed(2)} / R$ {Number(resumo?.teto ?? 20.30).toFixed(2)} compartilhados</span></div>
+      <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground"><span>Capacidade livre: {livre.toLocaleString('pt-BR')} · Reservados: {resumo?.reservados ?? 0}</span><span>Recuperação hoje: R$ {Number(resumo?.custo_hoje ?? 0).toFixed(2)} / R$ {Number(resumo?.teto ?? RECUPERACAO_TETO_BRL).toFixed(2)} compartilhados</span></div>
       {resumo && saldo <= NOVO_MUNDO_AVISO && <p className="flex items-center gap-2 text-sm text-destructive"><AlertTriangle className="h-4 w-4 shrink-0" />{saldo === 0 ? 'Estoque esgotado. A base não enviará até receber contatos novos.' : 'Estoque baixo. Importe contatos novos antes de esgotar.'}</p>}
       {resumo?.ultimo_lote && <p className="text-xs text-muted-foreground break-all">Último lote: {resumo.ultimo_lote.arquivo} · {resumo.ultimo_lote.adicionados} adicionados · Descartados no total: {resumo.descartados}</p>}
     </>}
@@ -95,6 +96,6 @@ export function NovoMundoContatosCard() {
         <DialogFooter><Button variant="outline" disabled={importar.isPending} onClick={() => setPrevia(null)}>Cancelar</Button><Button disabled={!consentimento || importar.isPending || !previa?.resumo.adicionados} onClick={() => importar.mutate()}>{importar.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirmar importação</Button></DialogFooter>
       </DialogContent>
     </Dialog>
-    <Dialog open={confirmarAtivacao} onOpenChange={setConfirmarAtivacao}><DialogContent><DialogHeader><DialogTitle>Ativar base Novo Mundo?</DialogTitle><DialogDescription>Os próximos ciclos usarão esta base, sem alternar para Google Maps enquanto estiver ativa. Envios das 08h às 19h, exceto domingos, até 20 por número/dia e dentro do teto compartilhado de R$ {Number(resumo?.teto ?? 20.30).toFixed(2)}. Apenas números RED/YELLOW elegíveis e template Utility aprovado; recuperação para GREEN não é garantida.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setConfirmarAtivacao(false)}>Cancelar</Button><Button onClick={() => ativar.mutate(true)} disabled={ativar.isPending}>Confirmar ativação</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={confirmarAtivacao} onOpenChange={setConfirmarAtivacao}><DialogContent><DialogHeader><DialogTitle>Ativar base Novo Mundo?</DialogTitle><DialogDescription>Os próximos ciclos usarão esta base, sem alternar para Google Maps enquanto estiver ativa. Envios das 08h às 19h, exceto domingos, até {RECUPERACAO_MAX_DIA} por número/dia e dentro do teto compartilhado de R$ {Number(resumo?.teto ?? RECUPERACAO_TETO_BRL).toFixed(2)}. Apenas números RED/YELLOW elegíveis e template Utility aprovado; recuperação para GREEN não é garantida.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setConfirmarAtivacao(false)}>Cancelar</Button><Button onClick={() => ativar.mutate(true)} disabled={ativar.isPending}>Confirmar ativação</Button></DialogFooter></DialogContent></Dialog>
   </section>;
 }
