@@ -48,3 +48,33 @@ describe('manual campaign messaging health', () => {
     expect(classifyMessagingHealth({ ...phone, entities: [{ ...name, additional_info: [...name.additional_info, 'Payment blocked'] }, ...commercial] }, waba).confirmed).toBe(false);
   });
 });
+describe('Thiago and unknown LIMITED', () => {
+  it('treats LIMITED without additional info as a quality advisory rather than a block', () => {
+    const limitedPhone = { 
+      entities: [
+        { entity_type: 'PHONE_NUMBER', can_send_message: 'LIMITED', additional_info: [] },
+        ...commercial 
+      ] 
+    };
+    // Currently this fails (returns confirmed: false, restriction set)
+    const result = classifyMessagingHealth(limitedPhone, waba);
+    expect(result.confirmed).toBe(true);
+    expect(result.restriction).toBeNull();
+  });
+
+  it('recognizes variations of quality warning strings', () => {
+    const qualityPhone = { 
+      entities: [
+        { 
+          entity_type: 'PHONE_NUMBER', 
+          can_send_message: 'LIMITED', 
+          additional_info: ["Your messaging limit will decrease if your quality rating doesn't improve. See the messaging health tab in the WhatsApp Manager."] 
+        },
+        ...commercial 
+      ] 
+    };
+    const result = classifyMessagingHealth(qualityPhone, waba);
+    expect(result.confirmed).toBe(true);
+    expect(result.restriction).toBeNull();
+  });
+});

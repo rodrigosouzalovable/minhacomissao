@@ -164,7 +164,7 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
     for (const inst of insts) {
       const rotulo = inst.nome || inst.phone_number_id || inst.id;
       const messagingHealth = classifyMessagingHealth(inst.saude_restricoes?.phone_health, inst.saude_restricoes?.waba_health);
-      if (hasBan(inst.saude_ban_info) || messagingHealth.restriction) {
+      if (!liberacaoTotalThiago && (hasBan(inst.saude_ban_info) || messagingHealth.restriction)) {
         descartados.push(`${rotulo}: ${hasBan(inst.saude_ban_info) ? 'banimento confirmado pela Meta' : messagingHealth.restriction}`);
         continue;
       }
