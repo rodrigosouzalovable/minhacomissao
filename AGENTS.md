@@ -51,3 +51,5 @@
 - Manual Meta checks batch all owner-connected instances; automatic checks remain due-only to limit cost and timeouts.
 - Overdue audits owner-admin cost consent; isolated scheduler credentials start bounded cycles and stop after drain.
 - Inbox phone searches use indexed reverse-normalized ranges via bounded SECURITY INVOKER RPC; RLS applies before pagination, filters do not hide matches, and opening selects the actual box.
+
+- Meta health checks use a request deadline, bounded database/Graph reads and request-local token-scoped caching; incomplete reads preserve prior state and return per-instance errors instead of timing out the whole request.
