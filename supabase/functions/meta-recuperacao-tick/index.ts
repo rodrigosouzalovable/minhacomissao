@@ -167,7 +167,13 @@ Deno.serve(async (req) => {
       .select('ativo').eq('user_id', RECUPERACAO_OWNER_ID).maybeSingle();
     if (novoMundoErro) throw novoMundoErro;
     if (novoMundoCfg?.ativo) {
-      return json(await executarBaseNovoMundo(supabase, insts.filter(remetenteAptoParaRecuperacao), simulacao));
+      const resultado = await executarBaseNovoMundo(supabase, insts.filter(remetenteAptoParaRecuperacao), simulacao);
+      console.log('[recuperacao] conclusão Novo Mundo', {
+        aceitos: resultado.resultados.filter((r: any) => r.ok === true).length,
+        falhas: resultado.resultados.filter((r: any) => r.ok === false).length,
+        adiados: resultado.resultados.filter((r: any) => r.skip).map((r: any) => r.skip),
+      });
+      return json(resultado);
     }
 
     const { data: cadastralCfg, error: cadastralCfgErro } = await supabase.from('meta_recuperacao_cadastral_config')
