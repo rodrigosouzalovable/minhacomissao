@@ -17,7 +17,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
-import CustoEnvioCard, { type CustoEnvioCardHandle } from "@/components/meta/CustoEnvioCard";
 import CustoEstimadoEnvio, { LIMITE_CUSTO_BRL_DEFAULT } from "@/components/meta/CustoEstimadoEnvio";
 import { calcularCustoEstimado } from "@/hooks/useCustoEstimadoEnvio";
 import { checkUazapiConnection, isResultConnected } from "@/lib/uazapiConnectionCache";
@@ -353,7 +352,6 @@ export default function EnvioMeta() {
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
   const [instanciasDialogOpen, setInstanciasDialogOpen] = useState<boolean>(false);
   const [ativandoPoolTodos, setAtivandoPoolTodos] = useState<boolean>(false);
-  const custoRef = useRef<CustoEnvioCardHandle>(null);
   const custoEstimativaRef = useRef<Awaited<ReturnType<typeof calcularCustoEstimado>> | null>(null);
   const [checandoSaude, setChecandoSaude] = useState<boolean>(false);
   const [detalheSaude, setDetalheSaude] = useState<Instancia | null>(null);
@@ -982,6 +980,10 @@ export default function EnvioMeta() {
   };
 
   // Templates compatíveis para variação: mesma quantidade de variáveis do principal
+  const instanciasGreenAprovadasIds = useMemo(() =>
+    approvedGreenSelectionIds(instancias, templateGroup?.todasInstanciasAprovadasIds ?? new Set<string>()),
+  [instancias, templateGroup]);
+
   const variantesCompativeis = useMemo(() => {
     if (!templateGroup) return [] as TemplateGroup[];
     return templateGroups.filter((g) => g.key !== templateGroup.key && g.varsCount === templateGroup.varsCount);
@@ -1400,7 +1402,6 @@ export default function EnvioMeta() {
 
       onAfterEnvio: () => {
         carregar();
-        custoRef.current?.refetch();
       },
     });
     setIniciandoCampanha(false);
@@ -1491,8 +1492,6 @@ export default function EnvioMeta() {
         </Button>
       </div>
 
-      <CustoEnvioCard ref={custoRef} />
-
       <EnviosTotaisCards />
 
 
@@ -1536,7 +1535,11 @@ export default function EnvioMeta() {
             )}
 
             {templateGroup && <div className="space-y-2">
-              <TemplateApprovedInstances instances={instancias.filter(i => templateGroup.todasInstanciasAprovadasIds.has(i.id))} selectedIds={instanciaIds} />
+              <TemplateApprovedInstances count={instanciasGreenAprovadasIds.length} disabled={loading || ativandoPoolTodos || ativandoPoolId !== null} onSelect={() => {
+                setInstanciaIds(instanciasGreenAprovadasIds);
+                setBmFiltro([]);
+                setQualidadeFiltro([]);
+              }} />
               {instanciaIds.length > 0 && <p className="text-xs text-muted-foreground">{templateGroup.instanciasAprovadasIds.size} de {instanciaIds.length} selecionadas com aprovação</p>}
             </div>}
             <Button size="sm" variant="outline" disabled={loading} onClick={carregar}>
