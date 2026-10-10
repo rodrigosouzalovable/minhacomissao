@@ -41,7 +41,7 @@ import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect
 import { catalogoUtility, situacaoUtility, type UtilityMaster, type UtilityGroup } from "@/lib/metaUtilityCatalog";
 import { carregarUtilityMestres } from "@/lib/carregarUtilityMestres";
 import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
-import { isBrazilianInstance, isBannedInstance, instanceDisplayPhone, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from "@/lib/metaNationalInstances";
+import { approvedGreenSelectionIds, isBrazilianInstance, isBannedInstance, instanceDisplayPhone, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from "@/lib/metaNationalInstances";
 import { partitionRecipientLines, validRecipientPhone } from "@/lib/metaRecipientValidation";
 import { resolveButtonUrlParam, snapshotMetaButtonVars, validateMetaButtonLink } from "../../supabase/functions/_shared/meta-button-url";
 
