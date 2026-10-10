@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Corrigir fila Novo Mundo parada, iniciar ciclo autorizado e verificar mensagens na PADRÃO e metas RED/YELLOW de hoje.
 - [x] Reconhecer cabeçalhos e preencher variáveis automaticamente nas importações Novo Mundo e Envio Meta; 20 testes passaram e as duas conferências foram verificadas no navegador com dados simulados, preservando B/C e o primeiro cliente sem cabeçalho. Sem gravar lotes ou enviar mensagens; compilação OK.
 - [x] Corrigir falso conflito na importação Novo Mundo: CNAO_14 tem 4.999 contatos, zero telefones completos repetidos e duas coincidências de final com DDD diferente; prévia segue com 4.997, exclusões detalhadas e proteção por sufixo mantida. Dez testes passaram e compilação OK, sem gravar ou enviar.
 - [x] Implementar base Novo Mundo: lotes/estoque até 5.000, importação atômica, sufixos permanentes, teto compartilhado e PADRÃO; prévia autenticada e consentimento validados sem gravar lote nem enviar, base vazia/pausada, funções disponibilizadas e compilação OK.
