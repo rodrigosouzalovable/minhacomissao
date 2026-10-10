@@ -48,33 +48,33 @@ describe('manual campaign messaging health', () => {
     expect(classifyMessagingHealth({ ...phone, entities: [{ ...name, additional_info: [...name.additional_info, 'Payment blocked'] }, ...commercial] }, waba).confirmed).toBe(false);
   });
 });
-describe('Thiago and unknown LIMITED', () => {
-  it('treats LIMITED without additional info as a quality advisory rather than a block', () => {
-    const limitedPhone = { 
-      entities: [
-        { entity_type: 'PHONE_NUMBER', can_send_message: 'LIMITED', additional_info: [] },
-        ...commercial 
-      ] 
-    };
-    // Currently this fails (returns confirmed: false, restriction set)
-    const result = classifyMessagingHealth(limitedPhone, waba);
-    expect(result.confirmed).toBe(true);
-    expect(result.restriction).toBeNull();
+describe('Thiago observed quality/cota advisories', () => {
+  const quality = "Your customers were blocking your phone number. If your quality rating doesn't improve, you will not be able to increase your messaging limit.";
+  const name = 'Your display name has not been approved yet. Your message limit will increase after the display name is approved.';
+  const snapshot = (additional_info: string[], errors = [{ error_code: 138024 }]) => ({ ...phone,
+    entities: [{ ...phone.entities[0], additional_info, errors }, ...commercial],
   });
-
-  it('recognizes variations of quality warning strings', () => {
-    const qualityPhone = { 
-      entities: [
-        { 
-          entity_type: 'PHONE_NUMBER', 
-          can_send_message: 'LIMITED', 
-          additional_info: ["Your messaging limit will decrease if your quality rating doesn't improve. See the messaging health tab in the WhatsApp Manager."] 
-        },
-        ...commercial 
-      ] 
-    };
-    const result = classifyMessagingHealth(qualityPhone, waba);
-    expect(result.confirmed).toBe(true);
-    expect(result.restriction).toBeNull();
+  for (const info of [quality, `${name} ${quality}`, `${name} Your messaging limit will decrease if your quality rating doesn't improve`]) {
+    it(`allows the complete observed advisory: ${info}`, () => {
+      expect(classifyMessagingHealth(snapshot([info]), waba)).toEqual({ restriction: null, qualityLimited: true, confirmed: true });
+    });
+  }
+  it('allows recognized advisories supplied as separate entries', () => {
+    expect(classifyMessagingHealth(snapshot([name, quality]), waba).confirmed).toBe(true);
+  });
+  it('keeps an empty LIMITED explanation blocked', () => {
+    expect(classifyMessagingHealth(snapshot([]), waba).confirmed).toBe(false);
+  });
+  it('rejects unrecognized trailing text even after a known advisory', () => {
+    expect(classifyMessagingHealth(snapshot([`${quality} SPAM restriction`]), waba).confirmed).toBe(false);
+  });
+  it('does not ignore a real messaging error accompanying a quality advisory', () => {
+    expect(classifyMessagingHealth(snapshot([quality], [{ error_code: 131031 }]), waba).confirmed).toBe(false);
+  });
+  it('never releases the observed advisory when WABA consultation is missing', () => {
+    expect(classifyMessagingHealth(snapshot([quality]), null).confirmed).toBe(false);
+  });
+  it('never releases a commercial payment block accompanying the observed advisory', () => {
+    expect(classifyMessagingHealth(snapshot([quality]), { entities: [{ entity_type: 'WABA', can_send_message: 'BLOCKED', errors: [{ error_code: 141006 }] }, commercial[1]] }).confirmed).toBe(false);
   });
 });
