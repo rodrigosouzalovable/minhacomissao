@@ -63,6 +63,17 @@ export function nationalSelectionIds(ids: readonly string[], instances: readonly
   return ids.filter((id) => allowed.has(id));
 }
 
+/** Select from the authorized loaded list only; approval and GREEN are both required. */
+export function approvedGreenSelectionIds<T extends MetaPhoneInstance & { saude_quality?: string | null }>(
+  instances: readonly T[], approvedIds: ReadonlySet<string>,
+): string[] {
+  return [...new Set(instances.filter((instance) =>
+    approvedIds.has(instance.id) &&
+    String(instance.saude_quality ?? '').trim().toUpperCase() === 'GREEN' &&
+    isBrazilianInstance(instance) && !isBannedInstance(instance)
+  ).map((instance) => instance.id))];
+}
+
 export function nationalMassSelection<T extends MetaPhoneInstance & { saude_quality?: string | null }>(
   visible: readonly T[], qualityFilterActive: boolean,
 ): T[] {
