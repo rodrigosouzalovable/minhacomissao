@@ -4,7 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { carregarCotasBm, motivoBloqueioBm } from './bm-cotas.ts';
 import { enviadosHojeBrtLote, tetoBase } from './meta-freio.ts';
-import { THIAGO_NOGUEIRA_USER_ID } from './thiago-meta-override.ts';
+import { THIAGO_NOGUEIRA_USER_ID, instanciasLiberadasThiago } from './thiago-meta-override.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from './novo-mundo-3144.ts';
 import { classifyMessagingHealth, hasBan, isQualityOnlyHold } from './meta-messaging-health.ts';
 
@@ -61,7 +61,7 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
     const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = reqBody;
     const authToken = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     const chamadaInterna = authToken === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const liberacaoTotalThiago = chamadaInterna && user_id === THIAGO_NOGUEIRA_USER_ID && reqBody?.liberacao_total_parceiro === true;
+    const solicitaLiberacaoThiago = chamadaInterna && user_id === THIAGO_NOGUEIRA_USER_ID && reqBody?.liberacao_total_parceiro === true;
     // contexto 'aquecimento' = recuperação/aquecimento interno (YELLOW/RED permitidos).
     // Qualquer outro valor é tratado como CAMPANHA: exige GREEN confirmado.
     const modoCampanha = String(reqBody?.contexto || 'campanha') !== 'aquecimento';
@@ -79,6 +79,9 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
 
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const liberadasThiago = solicitaLiberacaoThiago
+      ? await instanciasLiberadasThiago(supabase, user_id, instancia_ids)
+      : new Set<string>();
 
     const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
     // Chave global "Liberar YELLOW/RED": quando ligada vale para TODOS os contextos,
@@ -163,6 +166,11 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
     const reprovadosGuardrail: any[] = [];
     for (const inst of insts) {
       const rotulo = inst.nome || inst.phone_number_id || inst.id;
+      if (solicitaLiberacaoThiago && !liberadasThiago.has(inst.id)) {
+        descartados.push(`${rotulo}: instância não vinculada ao parceiro autorizado`);
+        continue;
+      }
+      const liberacaoTotalThiago = liberadasThiago.has(inst.id);
       const messagingHealth = classifyMessagingHealth(inst.saude_restricoes?.phone_health, inst.saude_restricoes?.waba_health);
       if (hasBan(inst.saude_ban_info) || messagingHealth.restriction) {
         descartados.push(`${rotulo}: ${hasBan(inst.saude_ban_info) ? 'banimento confirmado pela Meta' : messagingHealth.restriction}`);
