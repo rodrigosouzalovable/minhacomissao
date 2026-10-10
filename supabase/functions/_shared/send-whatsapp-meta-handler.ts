@@ -562,7 +562,16 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
       }
     }
     const user_id = chamadaInterna ? requestedUserId : authenticatedUserId;
-    let liberarTudoThiago = chamadaInterna && user_id === THIAGO_NOGUEIRA_USER_ID && liberacao_total_parceiro === true;
+    let liberarTudoThiago = false;
+    if (chamadaInterna && user_id === THIAGO_NOGUEIRA_USER_ID && liberacao_total_parceiro === true) {
+      const vinculadas = await instanciasLiberadasThiago(supabase, user_id, [instancia_id]);
+      if (!vinculadas.has(instancia_id)) {
+        return new Response(JSON.stringify({ success: false, error: 'Instância não vinculada ao parceiro autorizado' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      liberarTudoThiago = true;
+    }
     if (!chamadaInterna && liberacao_total_parceiro === true) {
       const { data: authData } = await supabase.auth.getUser(authToken);
       const uid = authData?.user?.id;

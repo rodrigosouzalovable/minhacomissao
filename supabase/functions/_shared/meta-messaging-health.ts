@@ -3,19 +3,40 @@ type Health = { can_send_message?: string; entities?: HealthEntity[] } | null | 
 const blocked = new Set(['BLOCKED', 'RESTRICTED', 'UNAVAILABLE']);
 const relevant = new Set(['PHONE_NUMBER', 'WABA', 'BUSINESS', 'APP']);
 
-// Only this explicit advisory is informational; quality color alone is not evidence.
+// Consume only known complete advisories, including Meta's concatenated name/quality text.
+// Unknown trailing text, non-SIP errors and empty details remain restrictions.
+function informationalAdvisory(entity: HealthEntity): { quality: boolean; name: boolean } | null {
+  if (entity.entity_type !== 'PHONE_NUMBER' || entity.can_send_message !== 'LIMITED' ||
+      !Array.isArray(entity.additional_info) || entity.additional_info.length === 0 ||
+      !(entity.errors || []).every(error => [138024, 138025].includes(Number(error.error_code)))) return null;
+  const patterns = [
+    { kind: 'quality', expression: /^Your messaging limit will decrease if your quality rating doesn['’]t improve(?:[.!](?=\s|$)|(?=$))/i },
+    { kind: 'quality', expression: /^Your customers were blocking your phone number\. If your quality rating doesn['’]t improve, you will not be able to increase your messaging limit(?:[.!](?=\s|$)|(?=$))/i },
+    { kind: 'name', expression: /^Your display name has not been approved yet\.(?: Your message limit will increase after the display name is approved\.)?/i },
+  ];
+  let quality = false;
+  let name = false;
+  for (const info of entity.additional_info) {
+    if (typeof info !== 'string' || !info.trim()) return null;
+    let remaining = info.trim();
+    while (remaining) {
+      const matched = patterns.map(pattern => ({ ...pattern, match: remaining.match(pattern.expression) }))
+        .find(pattern => pattern.match);
+      if (!matched?.match) return null;
+      quality ||= matched.kind === 'quality';
+      name ||= matched.kind === 'name';
+      remaining = remaining.slice(matched.match[0].length).trim();
+    }
+  }
+  return { quality, name };
+}
+
 function qualityAdvisory(entity: HealthEntity): boolean {
-  return entity.entity_type === 'PHONE_NUMBER' && entity.can_send_message === 'LIMITED' &&
-    Array.isArray(entity.additional_info) && entity.additional_info.length > 0 &&
-    entity.additional_info.every(info => /^Your messaging limit will decrease if your quality rating doesn.t improve[.!]?$/i.test(String(info).trim())) &&
-    (entity.errors || []).every(error => [138024, 138025].includes(Number(error.error_code)));
+  return informationalAdvisory(entity)?.quality === true;
 }
 
 function nameAdvisory(entity: HealthEntity): boolean {
-  return entity.entity_type === 'PHONE_NUMBER' && entity.can_send_message === 'LIMITED' &&
-    Array.isArray(entity.additional_info) && entity.additional_info.length > 0 &&
-    entity.additional_info.every(info => /^Your display name has not been approved yet\.( Your message limit will increase after the display name is approved\.)?$/i.test(String(info).trim())) &&
-    (entity.errors || []).every(error => [138024, 138025].includes(Number(error.error_code)));
+  return informationalAdvisory(entity)?.name === true;
 }
 
 export function classifyMessagingHealth(phone: Health, waba: Health) {

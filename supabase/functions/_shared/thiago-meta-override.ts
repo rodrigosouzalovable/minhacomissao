@@ -7,7 +7,7 @@ export async function instanciasLiberadasThiago(
 ): Promise<Set<string>> {
   if (userId !== THIAGO_NOGUEIRA_USER_ID || instanciaIds.length === 0) return new Set();
 
-  const [{ data: permissao }, { data: vinculos }] = await Promise.all([
+  const [{ data: permissao, error: permissaoError }, { data: vinculos, error: vinculosError }] = await Promise.all([
     supabase
       .from('user_permissions')
       .select('parceiro_meta')
@@ -20,6 +20,8 @@ export async function instanciasLiberadasThiago(
       .in('instancia_id', instanciaIds),
   ]);
 
-  if (permissao?.parceiro_meta !== true) return new Set();
-  return new Set((vinculos || []).map((row: any) => String(row.instancia_id)));
+  if (permissaoError || vinculosError || permissao?.parceiro_meta !== true) return new Set();
+  const solicitadas = new Set(instanciaIds);
+  return new Set<string>((vinculos || []).map((row: any) => String(row.instancia_id))
+    .filter((id: string) => solicitadas.has(id)));
 }
