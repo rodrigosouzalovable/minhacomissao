@@ -34,7 +34,7 @@
 - Navigation uses explicitly granted tabs; `parceiro_meta` scopes instances, never grants extra screens.
 - National lead capture has separate scheduling/config/locks, daily query and monthly Google-account limits, never dollar caps or message sends.
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
-- Overdue lists share pending payments in active agreements across the bell and Retornos; scheduled-return alerts remain isolated from overdue queries to avoid automatic overdue popups and redundant fetching.
+- Bell/Retornos share pending payments of active agreements; scheduled-return alerts avoid overdue queries, preventing popups and redundant fetching.
 - Employee commission uses payment dates and independent tiers; office fees stay separate.
 - Receipt views share a versioned ranking RPC and success cache invalidation for consistent totals without polling.
 - UME loads client/totals first and alternatives on demand; bound waits, cache 12h without polling.
@@ -50,5 +50,5 @@
 
 - Manual Meta checks batch all owner-connected instances; automatic checks remain due-only to limit cost and timeouts.
 - Overdue audits owner-admin cost consent; isolated scheduler credentials start bounded cycles and stop after drain.
-- Inbox phone searches use indexed reverse-normalized ranges via bounded SECURITY INVOKER RPC; RLS applies before pagination, filters do not hide matches, and opening selects the actual box.
+- Inbox phone search uses indexed reverse-normalized ranges and bounded SECURITY INVOKER RPC; RLS precedes pagination, filters preserve matches, opening selects the actual box.
 
