@@ -9,6 +9,11 @@ from playwright.async_api import async_playwright, expect
 
 HTML = '''<html><head><link rel="stylesheet" href="/src/index.css"></head>
 <body><div id="composer"></div><script type="module">
+import RefreshRuntime from '/@react-refresh';
+RefreshRuntime.injectIntoGlobalHook(window);
+window.$RefreshReg$=()=>{};
+window.$RefreshSig$=()=>(type)=>type;
+window.__vite_plugin_react_preamble_installed__=true;
 import React from '/node_modules/.vite/deps/react.js';
 import {createRoot} from '/node_modules/.vite/deps/react-dom_client.js';
 import {MetaComposer} from '/src/components/inbox/meta/MetaComposer.tsx';
@@ -23,6 +28,7 @@ async def main():
     async with async_playwright() as p:
         browser=await p.chromium.launch(headless=True)
         page=await browser.new_page(viewport={'width':1280,'height':1800})
+        page.on('pageerror',lambda error:print(str(error),file=sys.stderr))
         await page.route('**/__composer-interaction',lambda route:route.fulfill(body=HTML,content_type='text/html'))
         await page.goto('http://localhost:8080/__composer-interaction')
         field=page.get_by_role('textbox')
