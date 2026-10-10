@@ -1205,6 +1205,13 @@
       "when": 1791578283811,
       "tag": "0171_novo_mundo_cota_bm_atomica",
       "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1791633019303,
+      "tag": "0172_novo_mundo_reserva_sem_dupla_claim",
+      "breakpoints": true
     }
   ]
 }
