@@ -1,3 +1,4 @@
+- [Sem popup de parcelas atrasadas](mem://features/notificacoes/sem-popup-parcelas-atrasadas) — Retirado o aviso automático das 9h/15h; consulta manual e demais lembretes permanecem.
 - [Clara — oferta e escalada humana](mem://features/whatsapp/clara-oferta-escalada) — Oferta PJ A1 R$129,90, validade de 1 ano, agendamento/documentos e escalada ao admin
 - [Lembretes de atrasados Meta](mem://features/whatsapp/lembretes-atrasados-meta) — D+1/D+3/D+7, GREEN, etiqueta do funcionário e pendência sem caixa compatível; ativação com custo.
 - [Imagem somente da campanha](mem://features/whatsapp/imagem-somente-campanha) — Troca JPG/PNG no Envio Meta preserva o modelo original, outras campanhas e variantes.
