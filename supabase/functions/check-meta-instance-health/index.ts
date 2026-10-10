@@ -1,3 +1,4 @@
+import { fetchMetaSyncPage, runBoundedSync } from '../_shared/meta-sync-bounded.ts';
 import { classificarPagamento } from '../_shared/meta-pagamento-status.ts';
 import { classifyMessagingHealth, isQualityOnlyHold } from '../_shared/meta-messaging-health.ts';
 import { releaseNotificationState, qualityReadingLine } from '../_shared/meta-health-notification.ts';
@@ -20,20 +21,11 @@ const corsHeaders = {
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
-async function fetchJson(url: string, token: string) {
-  // Timeout por chamada: sem isso uma resposta lenta da Meta derruba toda a
-  // verificação por 504 na edge function.
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(12_000),
-  });
-  const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, data };
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  const deadline = new AbortController();
+  const deadlineTimer = setTimeout(() => deadline.abort(), 100_000);
   try {
     const body = await req.json().catch(() => ({}));
     const instanciaId: string | undefined = body?.instancia_id;
@@ -41,10 +33,15 @@ Deno.serve(async (req) => {
       ? Array.from(new Set(body.instancia_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0))).slice(0, 100)
       : [];
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
+    const url = Deno.env.get('SUPABASE_URL');
+    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!url || !key) throw new Error('Configuração do serviço indisponível');
+    const clientFor = (signal: AbortSignal) => createClient(url, key, {
+      global: { fetch: (input, init) => fetch(input, {
+        ...init, signal: AbortSignal.any([signal, deadline.signal, AbortSignal.timeout(12_000), ...(init?.signal ? [init.signal] : [])]),
+      }) },
+    });
+    const supabase = clientFor(deadline.signal);
 
     let query = supabase.from('meta_whatsapp_instances').select('*').eq('ativo', true);
     if (instanciaId) query = query.eq('id', instanciaId);
@@ -60,10 +57,24 @@ Deno.serve(async (req) => {
       : { data: [] };
     const businessIdPorBm = new Map((bms || []).map((bm: any) => [String(bm.id), String(bm.business_id || '')]));
 
-    const results: any[] = [];
+    const { data: cfg, error: configError } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
+    if (configError) throw configError;
+    // Request-local cache: never reuse another owner's token or a stale health reading.
+    const reads = new Map<string, Promise<{ ok: boolean; status: number; data: any }>>();
+    const fetchJson = (url: string, token: string, signal: AbortSignal) => {
+      const cacheKey = JSON.stringify([token, url]);
+      let read = reads.get(cacheKey);
+      if (!read) {
+        read = fetchMetaSyncPage(url, token, AbortSignal.any([signal, deadline.signal]))
+          .then(({ response, payload }) => ({ ok: response.ok, status: response.status, data: payload }));
+        reads.set(cacheKey, read);
+      }
+      return read;
+    };
     // Processa as instâncias em paralelo com concorrência limitada (evita 504).
     const CONCORRENCIA = 4;
-    const verificar = async (inst: any) => {
+    const verificar = async (inst: any, signal: AbortSignal) => {
+      const supabase = clientFor(signal);
       const r: any = {
         instancia_id: inst.id,
         nome: inst.nome,
@@ -77,10 +88,19 @@ Deno.serve(async (req) => {
         ].join(',');
 
 
-        const phoneResp = await fetchJson(
-          `${GRAPH}/${inst.phone_number_id}?fields=${fields}`,
-          inst.access_token,
-        );
+        const businessId = String(inst.business_id || businessIdPorBm.get(String(inst.meta_bm_id)) || '');
+        const optionalRead = (path: string | null) => path
+          ? fetchJson(`${GRAPH}/${path}`, inst.access_token, signal).catch(() => ({ ok: false, status: 0, data: { error: { message: 'Consulta Meta inconclusiva' } } }))
+          : Promise.resolve({ ok: false, status: 0, data: {} as any });
+        const [phoneResp, wabaResp, listResp, restrResp, phoneHealth, businessResp] = await Promise.all([
+          fetchJson(`${GRAPH}/${inst.phone_number_id}?fields=${fields}`, inst.access_token, signal),
+          optionalRead(inst.waba_id ? `${inst.waba_id}?fields=account_review_status,business_verification_status,ban_info,name,status` : null),
+          optionalRead(inst.waba_id ? `${inst.waba_id}/phone_numbers?fields=id,display_phone_number,quality_rating,messaging_limit_tier,name_status,status&limit=100` : null),
+          optionalRead(inst.waba_id ? `${inst.waba_id}?fields=health_status` : null),
+          optionalRead(`${inst.phone_number_id}?fields=health_status`),
+          optionalRead(businessId ? `${businessId}?fields=whatsapp_business_manager_messaging_limit` : null),
+        ]);
+        signal.throwIfAborted();
         if (!phoneResp.ok) {
           r.error = phoneResp.data?.error?.message || `HTTP ${phoneResp.status}`;
           r.raw = phoneResp.data;
@@ -96,10 +116,7 @@ Deno.serve(async (req) => {
         }
 
         if (inst.waba_id) {
-          const wabaResp = await fetchJson(
-            `${GRAPH}/${inst.waba_id}?fields=account_review_status,business_verification_status,ban_info,name,status`,
-            inst.access_token,
-          );
+
           if (wabaResp.ok) {
             r.waba = wabaResp.data;
             r.ban_info = wabaResp.data.ban_info || null;
@@ -110,10 +127,7 @@ Deno.serve(async (req) => {
           // Segunda fonte de qualidade: lista phone_numbers da WABA — é a mesma
           // origem do portfólio da Meta e às vezes traz a classificação real
           // quando a leitura direta do número devolve UNKNOWN.
-          const listResp = await fetchJson(
-            `${GRAPH}/${inst.waba_id}/phone_numbers?fields=id,display_phone_number,quality_rating,messaging_limit_tier,name_status,status&limit=100`,
-            inst.access_token,
-          );
+
           if (listResp.ok && Array.isArray(listResp.data?.data)) {
             const row = listResp.data.data.find((p: any) => String(p?.id) === String(inst.phone_number_id));
             if (row) {
@@ -141,27 +155,17 @@ Deno.serve(async (req) => {
           // Restrições de envio da WABA (ex.: RESTRICTED_BIZ_INITIATED_MESSAGING).
           // Chamada separada porque o campo não existe em todas as contas/versões —
           // um erro aqui não pode derrubar o restante do check.
-          const restrResp = await fetchJson(
-            `${GRAPH}/${inst.waba_id}?fields=health_status`,
-            inst.access_token,
-          );
+
           if (restrResp.ok) r.waba_health = restrResp.data?.health_status || null;
         }
 
 
         // Restrição no próprio número (health_status), também isolada.
-        const phoneHealth = await fetchJson(
-          `${GRAPH}/${inst.phone_number_id}?fields=health_status`,
-          inst.access_token,
-        );
+
         if (phoneHealth.ok) r.phone_health = phoneHealth.data?.health_status || null;
 
-        const businessId = String(inst.business_id || businessIdPorBm.get(String(inst.meta_bm_id)) || '');
         if (businessId) {
-          const businessResp = await fetchJson(
-            `${GRAPH}/${businessId}?fields=whatsapp_business_manager_messaging_limit`,
-            inst.access_token,
-          );
+
           if (businessResp.ok) {
             r.whatsapp_business_manager_messaging_limit = businessResp.data?.whatsapp_business_manager_messaging_limit || null;
             if (r.whatsapp_business_manager_messaging_limit) {
@@ -315,7 +319,6 @@ Deno.serve(async (req) => {
 
         // ===== Auto-pausa por qualidade =====
         const qual = String(r.quality_rating || '').toUpperCase();
-        const { data: cfg } = await supabase.from('meta_envio_pool_config').select('*').eq('id', 1).maybeSingle();
         const dur = (cfg?.duracao_pausa_yellow_horas ?? 48) * 3600 * 1000;
 
         let notificarPausa: { motivo: string; alcance: 'numero' | 'waba' } | null = null;
@@ -598,6 +601,8 @@ Deno.serve(async (req) => {
             /^Restrição de mensagens na PHONE_NUMBER confirmada pela Meta \(LIMITED\)$/.test(motivoAtual)) {
           updatePayload.pausa_automatica_motivo = r.limitacao_motivo;
         }
+        signal.throwIfAborted();
+        deadline.signal.throwIfAborted();
         const { error: snapshotError } = await supabase.from('meta_whatsapp_instances').update(updatePayload).eq('id', inst.id);
         if (snapshotError) throw snapshotError;
         // Voltou de YELLOW/RED para GREEN: enfileira já os Utility obrigatórios faltantes.
@@ -771,27 +776,23 @@ Deno.serve(async (req) => {
       } catch (e) {
         r.error = e instanceof Error ? e.message : String(e);
       }
-      results.push(r);
+      return r;
     };
 
-    const fila = [...(instancias || [])];
-    await Promise.all(
-      Array.from({ length: Math.min(CONCORRENCIA, fila.length) }, async () => {
-        while (fila.length) {
-          const inst = fila.shift();
-          if (!inst) break;
-          await verificar(inst);
-        }
-      }),
-    );
+    const results = await runBoundedSync(instancias || [], verificar, (inst: any) => ({
+      instancia_id: inst.id, nome: inst.nome, display_phone: inst.display_phone,
+      error: 'Prazo da verificação atingido; leitura inconclusiva. O estado anterior foi preservado.',
+      inconclusivo: true,
+    }), CONCORRENCIA, 80_000);
 
-
-    return new Response(JSON.stringify({ results }), {
+    return new Response(JSON.stringify({ results, partial: results.some((r: any) => !!r.error) }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'erro' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+  } finally {
+    clearTimeout(deadlineTimer);
   }
 });

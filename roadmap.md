@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Corrigir timeout 504 da verificação Meta: prazo total, consultas paralelas e cache por token; 45 testes passaram, função publicada e consulta real de 235 instâncias retornou HTTP 200 em 66s (54 leituras inconclusivas, sem erro global).
 - [x] Permitir importar acordo com soma divergente, avisar e preservar parcelas para correção manual sem salvar automaticamente; dez testes passaram e compilação OK. PDF original da captura não foi anexado, então a validação usou comprovante simulado com divergência.
 - [x] Padronizar os cinco seletores de BM com busca/redimensionamento e herdar tier sem propagar alterações implícitas; 15 testes passaram, busca/rolagem/expansão/retração/reabertura e formulários conferidos no navegador, compilação OK. Sem salvar instâncias ou enviar mensagens reais.
 - [x] Selecionar instâncias GREEN com template aprovado pelo botão HSM e remover o quadro de custos: 23 testes passaram; navegador autenticado confirmou 39 elegíveis/39 marcadas em Acessar Instâncias, banidas e RED desmarcadas, quadro removido e compilação OK. Sem disparos reais.

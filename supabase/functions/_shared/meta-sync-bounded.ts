@@ -11,12 +11,23 @@ export async function runBoundedSync<T, R>(items: T[], process: (item: T, signal
         const item = items[index];
         try {
           controller.signal.throwIfAborted();
-          results[index] = await process(item, controller.signal);
+          results[index] = await withAbortDeadline(() => process(item, controller.signal), controller.signal);
         } catch (error) { results[index] = onFailure(item, error); }
       }
     }));
     return results;
   } finally { clearTimeout(timer); }
+}
+
+// Also bound dependencies that fail to observe cancellation. Late completions
+// are consumed but cannot replace the returned incomplete result.
+async function withAbortDeadline<T>(work: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(new DOMException('Verification deadline reached', 'AbortError'));
+    signal.addEventListener('abort', abort, { once: true });
+    Promise.resolve().then(work).then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+  });
 }
 
 export async function fetchMetaSyncPage(url: string, token: string, parent?: AbortSignal, timeoutMs = 12_000) {

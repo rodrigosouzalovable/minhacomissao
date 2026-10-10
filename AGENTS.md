@@ -44,10 +44,10 @@
 
 - Meta payment errors share commercial classification and cached revalidation before alerts; inconclusive checks never claim unpaid billing or release protected senders.
 
-- Campaign ticks reuse handlers and pace globally start-to-start to avoid HTTP overhead.
 
 - Maps warming/recovery share permanent global suffix claims with historical backfill, consent and opt-out checks; never release after delay or transport uncertainty. Preserve one-time replies and volume limits.
 
 - Manual Meta checks batch all owner-connected instances; automatic checks remain due-only to limit cost and timeouts.
 - Overdue audits owner-admin cost consent; isolated scheduler credentials start bounded cycles and stop after drain.
 - Inbox phone searches use indexed reverse-normalized ranges via bounded SECURITY INVOKER RPC; RLS applies before pagination, filters do not hide matches, and opening selects the actual box.
+

@@ -34,4 +34,13 @@ describe('bounded Meta sync', () => {
     try { await expect(fetchMetaSyncPage('https://graph.facebook.com/test', 'test', undefined, 10)).rejects.toThrow('aborted'); }
     finally { globalThis.fetch = original; }
   });
+  test('returns incomplete results even when a dependency ignores cancellation', async () => {
+    const started: number[] = [];
+    const result = await runBoundedSync([1, 2, 3], async item => {
+      started.push(item);
+      return new Promise<number>(() => {});
+    }, () => -1, 1, 10);
+    expect(result).toEqual([-1, -1, -1]);
+    expect(started).toEqual([1]);
+  });
 });
