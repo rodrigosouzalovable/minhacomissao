@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         continue;
       }
       const health = classifyMessagingHealth(fresh.phone_health, fresh.waba_health);
-      if (hasBan(fresh.ban_info) || !health.confirmed) {
+      if (!liberadasThiago.has(id) && (hasBan(fresh.ban_info) || !health.confirmed)) {
         badIds.add(id);
         motivos.push(`${rotulo}: ${hasBan(fresh.ban_info) ? 'banimento confirmado pela Meta' : health.restriction || 'consulta de restrições incompleta — verifique a saúde e tente novamente'}`);
         continue;
