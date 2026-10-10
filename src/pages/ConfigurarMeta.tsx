@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import BmInstanceFilter from "@/components/meta/BmInstanceFilter";
+import { BM_TIER_VALUES, resolveBmTier, inheritedTierPatch, shouldPropagateBmTier } from "@/lib/metaBmTier";
 import { useBmCotas } from "@/hooks/useBmCotas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Plus, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, X, Power, AlertTriangle, ExternalLink, Pencil, Building2, Gauge } from "lucide-react";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuCheckboxItem, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 import { MetaHealthStatusRow } from "@/components/meta/SaudeBadges";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -95,6 +97,9 @@ type BM = {
   business_id: string | null;
   ativo: boolean;
   padrao: boolean;
+  tier_diario: number | null;
+  tier_manual: boolean | null;
+  tier_ilimitado: boolean | null;
 };
 
 type Template = {
@@ -319,6 +324,9 @@ export default function ConfigurarMeta() {
     instancia_teste_aquecimento: false,
   });
   const [salvandoEdit, setSalvandoEdit] = useState(false);
+  const [editTierTouched, setEditTierTouched] = useState(false);
+  const [formTierTouched, setFormTierTouched] = useState(false);
+  const [editBmChanged, setEditBmChanged] = useState(false);
   const [form, setForm] = useState({
     nome: "",
     phone_number_id: "",
@@ -385,7 +393,7 @@ export default function ConfigurarMeta() {
     const [i, t, b, vp] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").order("criado_em", { ascending: false }),
       carregarTodosTemplates(),
-      supabase.from("meta_business_managers").select("id,nome,business_id,ativo,padrao").eq("ativo", true).order("padrao", { ascending: false }).order("nome", { ascending: true }),
+      supabase.from("meta_business_managers").select("id,nome,business_id,ativo,padrao,tier_diario,tier_manual,tier_ilimitado").eq("ativo", true).order("padrao", { ascending: false }).order("nome", { ascending: true }),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
     ]);
     if (i.data) {
@@ -657,25 +665,31 @@ export default function ConfigurarMeta() {
     return msg;
   };
 
-  const TIER_VALORES: Record<string, number> = {
-    TIER_250: 250,
-    TIER_1K: 1000,
-    TIER_2K: 2000,
-    TIER_10K: 10000,
-    TIER_100K: 100000,
-    TIER_UNLIMITED: 1000000,
+  const tierDaBm = (id: string, excludeId?: string) => resolveBmTier(bms.find((bm) => bm.id === id), instancias, cotaDaBm(id), excludeId);
+  const bmOptions = [{ id: "__none__", nome: "— Não vinculada —" }, ...bms.map((bm) => ({ id: bm.id, nome: `${bm.nome}${bm.padrao ? " ⭐" : ""}${bm.business_id ? ` (${bm.business_id})` : ""}` }))];
+  const escolherBm = (id: string, editing: boolean) => {
+    const tier = tierDaBm(id, editing ? editInst?.id : undefined);
+    if (editing) {
+      if (id === editForm.meta_bm_id) return;
+      setEditBmChanged(true);
+      setEditTierTouched(false);
+      setEditForm((prev) => ({ ...prev, meta_bm_id: id, messaging_limit_manual: tier?.value ?? "__auto__" }));
+    } else {
+      if (id === form.meta_bm_id) return;
+      setFormTierTouched(false);
+      setForm((prev) => ({ ...prev, meta_bm_id: id, messaging_limit_manual: tier?.value ?? "__auto__" }));
+    }
   };
-
-  const camposBmTier = (f: { meta_bm_id: string; messaging_limit_manual: string }) => {
-    const bm = f.meta_bm_id !== "__none__" ? bms.find((b) => b.id === f.meta_bm_id) : null;
+  const rotuloAutomaticoBm = (id: string, excludeId?: string) => {
+    const tier = tierDaBm(id, excludeId);
+    return tier ? `Automático (BM: ${tier.unlimited ? "Ilimitado" : tier.limit.toLocaleString("pt-BR") + "/dia"})` : "Automático (padrão TIER_1K)";
+  };
+  const camposBmTier = (f: { meta_bm_id: string; messaging_limit_manual: string }, touched = false, excludeId?: string) => {
+    const bm = bms.find((b) => b.id === f.meta_bm_id);
+    const inherited = tierDaBm(f.meta_bm_id, excludeId);
     const manual = f.messaging_limit_manual !== "__auto__" ? f.messaging_limit_manual : null;
-    return {
-      meta_bm_id: bm ? bm.id : null,
-      business_id: (bm as any)?.business_id || null,
-      messaging_limit_manual: manual,
-      messaging_limit_source: manual ? "manual" : "padrao",
-      tier_diario: manual ? TIER_VALORES[manual] || 250 : 1000,
-    };
+    const tierPatch = touched ? { messaging_limit_manual: manual, messaging_limit_source: manual ? "manual" : "default", tier_diario: manual ? BM_TIER_VALUES[manual] ?? 1000 : inherited?.limit ?? 1000 } : inheritedTierPatch(inherited);
+    return { meta_bm_id: bm?.id ?? null, business_id: bm?.business_id ?? null, ...tierPatch };
   };
 
   const FORM_VAZIO = {
@@ -696,7 +710,7 @@ export default function ConfigurarMeta() {
     const patch: any = {
       nome: form.nome.trim(),
       waba_id: form.waba_id.trim(),
-      ...camposBmTier(form),
+      ...camposBmTier(form, formTierTouched),
     };
     if (form.access_token.trim()) patch.access_token = form.access_token.trim();
     const { error } = await supabase
@@ -740,7 +754,7 @@ export default function ConfigurarMeta() {
         phone_number_id: form.phone_number_id.trim(),
         waba_id: form.waba_id.trim(),
         access_token: form.access_token.trim(),
-        ...camposBmTier(form),
+        ...camposBmTier(form, formTierTouched),
         aquecimento_meta_ativo: isAdmin ? form.aquecimento_meta_ativo : false,
         templates_auto_copiar: isAdmin ? form.templates_auto_copiar && !form.instancia_teste_aquecimento : false,
         instancia_teste_aquecimento: isAdmin ? form.instancia_teste_aquecimento : false,
@@ -823,6 +837,8 @@ export default function ConfigurarMeta() {
 
   const abrirEdicao = (inst: Instancia) => {
     setEditInst(inst);
+    setEditTierTouched(false);
+    setEditBmChanged(false);
     setEditForm({
       nome: inst.nome || "",
       phone_number_id: inst.phone_number_id || "",
@@ -843,6 +859,9 @@ export default function ConfigurarMeta() {
       toast.error("Preencha nome, Phone Number ID e WABA ID");
       return;
     }
+    const targetBm = bms.find((bm) => bm.id === editForm.meta_bm_id);
+    const peerCount = instancias.filter((i) => i.meta_bm_id === editForm.meta_bm_id && i.id !== editInst.id).length;
+    if (targetBm && peerCount > 0 && shouldPropagateBmTier(editTierTouched, editForm.messaging_limit_manual, editInst.messaging_limit_manual || "__auto__") && !window.confirm(`Isso vai alterar o tier de ${peerCount + 1} instâncias da BM ${targetBm.nome}. Continuar?`)) return;
     setSalvandoEdit(true);
     const { data: conflito } = await supabase
       .from("meta_whatsapp_instances")
@@ -859,7 +878,7 @@ export default function ConfigurarMeta() {
       nome: editForm.nome.trim(),
       phone_number_id: editForm.phone_number_id.trim(),
       waba_id: editForm.waba_id.trim(),
-      ...camposBmTier(editForm),
+      ...((editBmChanged || editTierTouched) ? camposBmTier(editForm, editTierTouched, editInst.id) : { meta_bm_id: editInst.meta_bm_id ?? null, business_id: editInst.business_id }),
       ...(isAdmin ? { aquecimento_meta_ativo: editForm.aquecimento_meta_ativo } : {}),
       ...(isAdmin ? { templates_auto_copiar: editForm.templates_auto_copiar } : {}),
       ...(isAdmin ? {
@@ -885,7 +904,7 @@ export default function ConfigurarMeta() {
     toast.success("Instância atualizada");
     const novoTier = editForm.messaging_limit_manual || "__auto__";
     const tierAnterior = editInst.messaging_limit_manual || "__auto__";
-    if (patch.meta_bm_id && novoTier !== tierAnterior) {
+    if (patch.meta_bm_id && shouldPropagateBmTier(editTierTouched, novoTier, tierAnterior)) {
       await propagarTierBm(patch.meta_bm_id, novoTier, editInst.id);
     }
     const ligouCopia = isAdmin && editForm.templates_auto_copiar && !editInst.templates_auto_copiar;
@@ -1201,11 +1220,14 @@ export default function ConfigurarMeta() {
   };
 
   const vincularBM = async (inst: Instancia, bmId: string) => {
-    const val = bmId === "__none__" ? null : bmId;
-    const { error } = await (supabase as any).from("meta_whatsapp_instances").update({ meta_bm_id: val }).eq("id", inst.id);
+    if (bmId === (inst.meta_bm_id || "__none__")) return;
+    const bm = bms.find((b) => b.id === bmId);
+    const patch = { meta_bm_id: bm?.id ?? null, business_id: bm?.business_id ?? null, ...inheritedTierPatch(tierDaBm(bmId, inst.id)) };
+    const { error } = await (supabase as any).from("meta_whatsapp_instances").update(patch).eq("id", inst.id);
     if (error) { toast.error(error.message); return; }
-    toast.success("BM vinculada");
+    toast.success("BM vinculada com o limite herdado");
     carregar();
+    recarregarCotas();
   };
 
   const salvarAquecimentoCertificado = async (inst: Instancia, ativo: boolean) => {
@@ -1679,64 +1701,14 @@ export default function ConfigurarMeta() {
                 )}
                 Verificar saúde dos webhooks
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" disabled={bms.length === 0}>
-                    <Building2 className="h-4 w-4 mr-2" />
-                    {bmSel.size > 0 ? `BMs (${bmSel.size})` : "BMs"}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="max-w-[90vw] max-h-[70vh] overflow-auto">
-                  <DropdownMenuLabel>Business Managers</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {bms.map((bm) => (
-                    <DropdownMenuCheckboxItem
-                      key={bm.id}
-                      checked={bmSel.has(bm.id)}
-                      onCheckedChange={() => toggleBmSel(bm.id)}
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      <span className="whitespace-nowrap">{bm.nome}</span>
-                      <span className="ml-auto pl-2 text-xs text-muted-foreground">
-                        {nationalInstanceCount(instancias.filter((i) => i.meta_bm_id === bm.id))}
-                      </span>
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                  <DropdownMenuCheckboxItem
-                    checked={bmSel.has("__none__")}
-                    onCheckedChange={() => toggleBmSel("__none__")}
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    <span className="whitespace-nowrap text-muted-foreground">Sem BM vinculada</span>
-                    <span className="ml-auto pl-2 text-xs text-muted-foreground">
-                      {nationalInstanceCount(instancias.filter((i) => !i.meta_bm_id))}
-                    </span>
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      const todas = bms.map((b) => b.id);
-                      const tudoMarcado = todas.length > 0 && todas.every((id) => bmSel.has(id)) && !bmSel.has("__none__");
-                      setBmSel(tudoMarcado ? new Set() : new Set([...todas, "__none__"]));
-                    }}
-                  >
-                    {bms.length > 0 && bms.every((b) => bmSel.has(b.id)) && bmSel.has("__none__")
-                      ? "Desmarcar todas"
-                      : "Selecionar todas"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setBmSel(new Set()); }}>
-                    Limpar filtro
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <BmInstanceFilter bms={[...bms.map((bm) => ({ id: bm.id, nome: bm.nome, summary: nationalInstanceCount(instancias.filter((i) => i.meta_bm_id === bm.id)) })), { id: "__none__", nome: "Sem BM vinculada", summary: nationalInstanceCount(instancias.filter((i) => !i.meta_bm_id)) }]} selected={Array.from(bmSel)} onChange={(ids) => setBmSel(new Set(ids))} />
               {isAdmin && (
                 <Button variant="outline" onClick={verificarTemplatesTodas} disabled={auditando}>
                   {auditando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
                   Verificar templates de todas as instâncias
                 </Button>
               )}
-              <Button onClick={() => setDialogOpen(true)}>
+              <Button onClick={() => { setFormTierTouched(false); setDialogOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" /> Nova instância
               </Button>
 
@@ -2055,22 +2027,7 @@ export default function ConfigurarMeta() {
                       {/* Business Manager */}
                       <div className="pt-3 border-t border-border/60 flex flex-wrap items-center gap-2 text-xs">
                         <span className="font-semibold">Business Manager:</span>
-                        <Select
-                          value={inst.meta_bm_id || "__none__"}
-                          onValueChange={(v) => vincularBM(inst, v)}
-                        >
-                          <SelectTrigger className="h-7 w-full sm:w-[260px] text-xs">
-                            <SelectValue placeholder="Selecionar BM" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">— Não vinculada —</SelectItem>
-                            {bms.map((b) => (
-                              <SelectItem key={b.id} value={b.id}>
-                                {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <BmInstanceFilter single bms={bmOptions} selected={[inst.meta_bm_id || "__none__"]} onChange={(ids) => { if (ids[0]) vincularBM(inst, ids[0]); }} triggerClassName="h-7 w-full sm:w-[260px] text-xs" />
                         {bms.length === 0 && (
                           <span className="text-[10px] text-muted-foreground">Cadastre BMs em "Business Managers" para vincular</span>
                         )}
@@ -2118,7 +2075,7 @@ export default function ConfigurarMeta() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__auto__">
-                              🔄 Automático {inst.saude_tier ? `(Meta: ${inst.saude_tier.replace("MESSAGING_LIMIT_TIER_", "").replace("MESSAGING_LIMIT_", "")})` : "(padrão TIER_1K)"}
+                              🔄 {rotuloAutomaticoBm(inst.meta_bm_id || "__none__")}
                             </SelectItem>
                             <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
                             <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
@@ -2129,7 +2086,7 @@ export default function ConfigurarMeta() {
                           </SelectContent>
                         </Select>
                         <Badge variant="outline" className="text-[10px]">
-                          Fonte: {inst.messaging_limit_source === "manual" ? "manual" : inst.messaging_limit_source === "meta_api" ? "sync Meta" : "padrão"}
+                          Fonte: {inst.messaging_limit_source === "manual" ? "manual" : inst.messaging_limit_source === "bm" ? "BM" : inst.messaging_limit_source === "meta_api" ? "sync Meta" : "padrão"}
                         </Badge>
                         {inst.messaging_limit_synced_at && (
                           <span className="text-muted-foreground text-[10px]">
@@ -2389,17 +2346,7 @@ export default function ConfigurarMeta() {
             </div>
             <div>
               <Label>Business Manager</Label>
-              <Select value={form.meta_bm_id} onValueChange={(v) => setForm({ ...form, meta_bm_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecionar BM" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Não vinculada —</SelectItem>
-                  {bms.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <BmInstanceFilter single bms={bmOptions} selected={[form.meta_bm_id]} onChange={(ids) => { if (ids[0]) escolherBm(ids[0], false); }} triggerClassName="h-10 w-full" />
               <p className="text-xs text-muted-foreground mt-1">
                 {bms.length === 0
                   ? 'Cadastre BMs em "Business Managers" para vincular'
@@ -2412,10 +2359,10 @@ export default function ConfigurarMeta() {
             </div>
             <div>
               <Label>Limite de mensagens</Label>
-              <Select value={form.messaging_limit_manual} onValueChange={(v) => setForm({ ...form, messaging_limit_manual: v })}>
+              <Select value={form.messaging_limit_manual} onValueChange={(v) => { setFormTierTouched(true); setForm({ ...form, messaging_limit_manual: v }); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__auto__">🔄 Automático (padrão TIER_1K)</SelectItem>
+                  <SelectItem value="__auto__">🔄 {rotuloAutomaticoBm(form.meta_bm_id)}</SelectItem>
                   <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
                   <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
                   <SelectItem value="TIER_2K">✋ TIER_2K (2.000/dia)</SelectItem>
@@ -2500,17 +2447,7 @@ export default function ConfigurarMeta() {
             </div>
             <div>
               <Label>Business Manager</Label>
-              <Select value={editForm.meta_bm_id} onValueChange={(v) => setEditForm({ ...editForm, meta_bm_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecionar BM" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Não vinculada —</SelectItem>
-                  {bms.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.nome}{b.padrao ? " ⭐" : ""}{b.business_id ? ` (${b.business_id})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <BmInstanceFilter single bms={bmOptions} selected={[editForm.meta_bm_id]} onChange={(ids) => { if (ids[0]) escolherBm(ids[0], true); }} triggerClassName="h-10 w-full" />
               <p className="text-xs text-muted-foreground mt-1">
                 {bms.length === 0
                   ? 'Cadastre BMs em "Business Managers" para vincular'
@@ -2524,10 +2461,10 @@ export default function ConfigurarMeta() {
             </div>
             <div>
               <Label>Limite de mensagens</Label>
-              <Select value={editForm.messaging_limit_manual} onValueChange={(v) => setEditForm({ ...editForm, messaging_limit_manual: v })}>
+              <Select value={editForm.messaging_limit_manual} onValueChange={(v) => { setEditTierTouched(true); setEditForm({ ...editForm, messaging_limit_manual: v }); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__auto__">🔄 Automático (padrão TIER_1K)</SelectItem>
+                  <SelectItem value="__auto__">🔄 {rotuloAutomaticoBm(editForm.meta_bm_id, editInst?.id)}</SelectItem>
                   <SelectItem value="TIER_250">✋ TIER_250 (250/dia)</SelectItem>
                   <SelectItem value="TIER_1K">✋ TIER_1K (1.000/dia)</SelectItem>
                   <SelectItem value="TIER_2K">✋ TIER_2K (2.000/dia)</SelectItem>
