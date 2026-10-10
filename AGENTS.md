@@ -13,6 +13,7 @@
 
 - Agreements require audited phone confirmation before saving; remain pending until terms are sent via source/authorized suffix-matched Meta chat or downloaded.
 - Inbox dialogs share parsing/state; require body/header values and validated button links, never guesses.
+- Meta composer keeps editing during sends; guard submission and focus on activation only to preserve drafts and dialog focus.
 
 - Meta webhook alerts need failed recovery and confirmed subscription errors, not timeouts.
 - Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
