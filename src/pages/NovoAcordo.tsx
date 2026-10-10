@@ -154,6 +154,7 @@ export default function NovoAcordo() {
       .then(({ data }) => setInstancias((data as any) || []));
   }, [user, isAdmin, selectedUserId]);
   const [parcelasDocumento, setParcelasDocumento] = useState<ParcelaDocumento[]>([]);
+  const [totalDocumentoDivergente, setTotalDocumentoDivergente] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('ai');
   const [form, setForm] = useState({
     clienteNome: '',
@@ -181,6 +182,7 @@ export default function NovoAcordo() {
     const documento = normalizarDocumentoAcordo(data);
     const rows = documento.parcelas_detalhadas || [];
     setParcelasDocumento(rows);
+    setTotalDocumentoDivergente(documento.divergencia_valor_documento ? documento.valor_total_documento ?? null : null);
     setEmpresa(null);
     setEmpresaSugerida('');
     setTelefoneConfirmado('');
@@ -598,6 +600,14 @@ export default function NovoAcordo() {
           </TabsContent>
 
           <TabsContent value="manual" className="space-y-6">
+            {totalDocumentoDivergente !== null && <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Documento importado com divergência de valor</AlertTitle>
+              <AlertDescription>
+                Total informado no documento: {formatarMoeda(totalDocumentoDivergente)}. Soma das parcelas importadas: {formatarMoeda(totalParcelasDocumento(parcelasDocumento))}.
+                O acordo usa a soma das parcelas. Você pode continuar o lançamento e corrigir os valores manualmente.
+              </AlertDescription>
+            </Alert>}
             <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
               {isAdmin && (
                 <Card className="border-primary/40">

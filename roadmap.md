@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Permitir importar acordo com soma divergente, avisar e preservar parcelas para correção manual sem salvar automaticamente.
 - [x] Padronizar os cinco seletores de BM com busca/redimensionamento e herdar tier sem propagar alterações implícitas; 15 testes passaram, busca/rolagem/expansão/retração/reabertura e formulários conferidos no navegador, compilação OK. Sem salvar instâncias ou enviar mensagens reais.
 - [x] Selecionar instâncias GREEN com template aprovado pelo botão HSM e remover o quadro de custos: 23 testes passaram; navegador autenticado confirmou 39 elegíveis/39 marcadas em Acessar Instâncias, banidas e RED desmarcadas, quadro removido e compilação OK. Sem disparos reais.
 - [x] Conferir quatro falhas 131026 (entrega impossível, sem causa específica) e aplicar aumento autorizado único de 30%: metas 13–26, 19 metas ativas atualizadas e teto R$26,39; redução por piora em 5 e intervalos 20–40min preservados. Rotina publicada, 26 testes passaram e compilação OK, sem mensagens de teste.
