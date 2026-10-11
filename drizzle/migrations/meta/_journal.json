@@ -1233,6 +1233,13 @@
       "when": 1791725625838,
       "tag": "0175_exclude_current_template_from_legacy_quota",
       "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "7",
+      "when": 1791731977981,
+      "tag": "0176_atomic_meta_template_pacing",
+      "breakpoints": true
     }
   ]
 }

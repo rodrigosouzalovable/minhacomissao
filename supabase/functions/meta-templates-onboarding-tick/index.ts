@@ -1,3 +1,4 @@
+import { templateIntervalSeconds } from "../_shared/meta-template-pacing.ts";
 import { nextTemplateDay } from "../_shared/meta-template-completion.ts";
 import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 // Copia templates aprovados para números novos da API Oficial, de forma gradual.
@@ -70,20 +71,32 @@ Deno.serve(async (req) => {
     // ===== 1) Reconciliação: fecha itens já respondidos pela Meta =====
     const { data: emVoo } = await supabase
       .from("meta_templates_onboarding_fila")
-      .select("id, instancia_id, template_mestre_id, status, tentativas")
+      .select("id, instancia_id, template_mestre_id, status, tentativas, enviado_em, motivo")
       .eq("status", "ENVIADO")
       .limit(200);
 
     const avisos: any[] = [];
 
     for (const item of (emVoo as any[]) || []) {
-      const { data: ti } = await supabase
+      const { data: ti, error: tiError } = await supabase
         .from("meta_templates_instancia")
         .select("status, erro, motivo_rejeicao")
         .eq("instancia_id", item.instancia_id)
         .eq("template_mestre_id", item.template_mestre_id)
         .maybeSingle();
-      if (!ti) continue;
+      if (tiError) continue;
+      if (!ti) {
+        // A interrupted admission has no submission record. Requeue only after
+        // the lease expired; the submitter checks Meta again before any POST.
+        if (item.enviado_em && Date.now() - new Date(item.enviado_em).getTime() > 600_000) {
+          await supabase.from("meta_templates_onboarding_fila").update({
+            status: "PENDENTE", enviado_em: null,
+            motivo: "aplicacao_manual: admissão interrompida; conferir Meta antes de retomar",
+            agendado_para: new Date().toISOString(),
+          }).eq("id", item.id).eq("status", "ENVIADO");
+        }
+        continue;
+      }
       const st = String(ti.status || "").toUpperCase();
       if (!["APPROVED", "REJECTED", "FALHA_ENVIO"].includes(st)) continue;
 
@@ -242,7 +255,7 @@ Deno.serve(async (req) => {
     }
 
     // ===== 3) Envio 24/7, inclusive domingos e madrugada =====
-    // O ritmo é controlado pelo intervalo por tier (ver intervaloPorTier).
+    // Todos os tiers usam a mesma reserva atômica de 120–300 segundos.
 
     const dia = diaBrt();
     const agoraIso = new Date().toISOString();
@@ -377,11 +390,12 @@ Deno.serve(async (req) => {
       }
 
       // Marca antes de submeter (evita duplicidade se o tick rodar de novo)
-      await supabase
+      const { data: claimed, error: claimError } = await supabase
         .from("meta_templates_onboarding_fila")
         .update({ status: "ENVIADO", enviado_em: new Date().toISOString(), tentativas: 1 })
-        .eq("id", proximo.id)
-        .eq("status", "PENDENTE");
+        .eq("id", proximo.id).eq("status", "PENDENTE").select("id");
+      if (claimError) throw claimError;
+      if (!claimed?.length) continue;
 
       let erroEnvio: string | null = null;
       try {
@@ -398,12 +412,14 @@ Deno.serve(async (req) => {
         const res = await resposta.json().catch(() => ({}));
         if (!resposta.ok) erroEnvio = String((res as any)?.error || `Falha ao submeter modelo (HTTP ${resposta.status})`);
         else if ((res as any)?.success === false) erroEnvio = String((res as any)?.error || "falha");
-        else if (Number((res as any)?.total || 0) === 0 && Number((res as any)?.adiadas_tier_250 || 0) > 0) {
+        else if (Number(res?.total || 0) === 0 && res?.adiadas?.length) {
+          const adiada = res.adiadas.find((r: any) => r.instancia_id === inst.id);
+          const quota = adiada?.motivo === "limite_tier_250";
           await supabase
             .from("meta_templates_onboarding_fila")
-            .update({ status: "PENDENTE", enviado_em: null, motivo: manualPrefix + "limite diário tier 250: próximo dia BRT, inclusive domingo", agendado_para: nextTemplateDay().toISOString(), tentativas: 0 })
+            .update({ status: "PENDENTE", enviado_em: null, motivo: manualPrefix + (quota ? "limite diário tier 250: próximo dia BRT, inclusive domingo" : "aguardando intervalo de 2–5 minutos ou aplicação em andamento na BM"), agendado_para: adiada?.agendado_para || (quota ? nextTemplateDay().toISOString() : new Date(Date.now() + 120_000).toISOString()), tentativas: 0 })
             .eq("id", proximo.id);
-          processados.push({ instancia_id: inst.id, ok: true, adiado: "limite_tier_250" });
+          processados.push({ instancia_id: inst.id, ok: true, adiado: quota ? "limite_tier_250" : "intervalo_2_5_min" });
           continue;
         }
         else if (Number(res?.total || 0) === 0) {
@@ -497,15 +513,7 @@ Deno.serve(async (req) => {
       }
 
       // Próximo item deste número só depois do intervalo aleatório
-      // Tier 250: 10–15 min, máximo dois por dia BRT. Tier ≥2.000: 30–60s.
-      // Demais (1.000): intervalo padrão da configuração.
-      const { data: tierInst } = await supabase.rpc("meta_instance_template_tier", { p_instancia_id: inst.id });
-      const tierNum = Number(tierInst || 0);
-      const espera = tierNum === 250
-        ? sorteio(600, 900)
-        : tierNum >= 2000
-        ? sorteio(30, 60)
-        : sorteio(Number(cfg.intervalo_min_seg || 120), Number(cfg.intervalo_max_seg || 300));
+      const espera = templateIntervalSeconds();
       const quando = new Date(Date.now() + espera * 1000).toISOString();
       const { data: restantes } = await supabase
         .from("meta_templates_onboarding_fila")
@@ -517,7 +525,7 @@ Deno.serve(async (req) => {
         await supabase
           .from("meta_templates_onboarding_fila")
           .update({ agendado_para: quando })
-          .in("id", ids);
+          .in("id", ids).lt("agendado_para", quando);
       }
 
       processados.push({ instancia_id: inst.id, ok: true, proximo_em_seg: espera });

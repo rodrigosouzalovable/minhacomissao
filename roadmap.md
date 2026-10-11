@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Aplicar intervalo aleatório de 2–5 minutos por número/conta em todos os caminhos de templates, com trava por BM, fila e operação 24/7.
 - [x] Corrigir aplicação manual do template selecionado no Envio Meta: submissão em lotes de cinco, resultados por número e retomada segura sem duplicação; três funções publicadas, testes passaram e navegador confirmou 76/76 em 16 lotes simulados num clique, sem submissões reais; compilação OK.
 - [x] Completar templates Utility próprios pré-aprovados: reserva tier 250 corrigida, 498 falhas internas recuperadas, 1.177 aplicações enfileiradas e 17 registros de envio nos cinco minutos seguintes; botão confere/aplica em lotes, novos números e painel completo 24/7. 33 testes passaram; navegador confirmou 25 lotes simulados em um clique, sem segundo botão; 30 falhas internas permanecem em números bloqueados/banidos, protegidas até liberação real. Compilação OK.
 - [x] Liberar digitação durante envio no Inbox Meta e foco automático; quatro testes de interação passaram no navegador, sem mensagens reais; compilação OK.

@@ -20,6 +20,10 @@ type Resumo = {
   numerosComPendencia: number;
   ultimaConferencia: string | null;
   proximaConferencia: string | null;
+  proximaAplicacao: string | null;
+  aguardandoIntervalo: number;
+  aguardandoCota: number;
+  motivoEspera: string | null;
 };
 
 
@@ -51,10 +55,10 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
       setResumo(null);
       return;
     }
-    let linhas: Array<{ instancia_id: string; status: string }>;
+    let linhas: Array<{ instancia_id: string; status: string; agendado_para: string; motivo: string | null }>;
     try {
       linhas = await readAllTemplateRows(() => supabase.from("meta_templates_onboarding_fila")
-        .select("id,instancia_id,status").in("instancia_id", instanciaIds).neq("status", "CANCELADO"));
+        .select("id,instancia_id,status,agendado_para,motivo").in("instancia_id", instanciaIds).neq("status", "CANCELADO"));
     } catch { return; }
     if (linhas.length === 0) {
       setResumo(null);
@@ -85,6 +89,7 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
       .in("status", ["PENDING", "ENVIADO"])).catch(() => []);
     const ultimas = confs.map((c) => c.ultima_verificacao_em).filter(Boolean) as string[];
     const proximas = confs.map((c) => c.proxima_verificacao_em).filter(Boolean) as string[];
+    const fila = linhas.filter(r => r.status === "PENDENTE").sort((a, b) => a.agendado_para.localeCompare(b.agendado_para));
 
     setResumo({
       total: linhas.length,
@@ -95,6 +100,10 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
       numerosComPendencia: pendentesPorInst.size,
       ultimaConferencia: ultimas.length > 0 ? ultimas.sort().slice(-1)[0] : null,
       proximaConferencia: proximas.length > 0 ? proximas.sort()[0] : null,
+      proximaAplicacao: fila[0]?.agendado_para || null,
+      aguardandoIntervalo: fila.filter(r => /intervalo|andamento na BM/i.test(r.motivo || "")).length,
+      aguardandoCota: fila.filter(r => /cota|limite diário/i.test(r.motivo || "")).length,
+      motivoEspera: fila[0]?.motivo?.replace(/^aplicacao_manual:\s*/, "") || null,
     });
 
   }, [instanciaIds.join(",")]);
@@ -168,9 +177,14 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
           <span>Números com pendência: {resumo.numerosComPendencia}</span>
           <span>Última conferência: {rotuloRelativo(resumo.ultimaConferencia)}</span>
           <span>Próxima conferência: {rotuloFuturo(resumo.proximaConferencia)}</span>
+          <span>Próxima aplicação: {rotuloFuturo(resumo.proximaAplicacao)}{resumo.proximaAplicacao ? ` · ${new Date(resumo.proximaAplicacao).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} BRT` : ""}</span>
+          <span>Aguardando intervalo: {resumo.aguardandoIntervalo}</span>
+          <span>Aguardando cota: {resumo.aguardandoCota}</span>
         </div>
+        {resumo.motivoEspera && <p className="text-xs text-muted-foreground">{resumo.motivoEspera}</p>}
         <p className="text-[11px] text-muted-foreground">
-          Aplicação 24h, inclusive domingos, um modelo por vez. Tier 250: até dois modelos por número/dia; demais tiers mantêm intervalos sequenciais.
+          Aplicação 24h, inclusive domingos, com intervalo de 2–5 minutos por número em todos os tiers. Tier 250: até dois modelos por número/dia.
+          O horário indicado é o mínimo permitido; a rotina pode iniciar depois dele.
           A aprovação na Meta é conferida a cada 30 minutos e para de ser consultada assim que sai o resultado.
         </p>
 

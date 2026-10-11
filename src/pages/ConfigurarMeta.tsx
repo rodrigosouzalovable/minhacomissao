@@ -826,7 +826,7 @@ export default function ConfigurarMeta() {
         toast.message("Nenhum modelo aprovado disponível para copiar agora.", { duration: 4000 });
       } else {
         toast.success(
-          `${total} modelos Utility na fila. Tier 250: até 2 por número/dia; tiers 1.000 e 2.000: um por vez, com intervalo.`,
+          `${total} modelos Utility na fila. Intervalo de 2–5 minutos por número, 24/7. Tier 250: até 2 por número/dia.`,
           { id: toastId, duration: 9000 },
         );
       }
@@ -2412,7 +2412,7 @@ export default function ConfigurarMeta() {
                 <div>
                   <Label>Copiar templates aprovados automaticamente</Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                     Copia os modelos Utility selecionados para novos números, um por vez das 07h às 20h (nunca no domingo). Tier 250: até 2 por número/dia; tiers 1.000 e 2.000: todos, com intervalo.
+                     Copia os modelos Utility selecionados para novos números, 24h por dia, inclusive domingos, com intervalo de 2–5 minutos por número em todos os tiers. Tier 250: até 2 por número/dia.
                   </p>
                 </div>
                 <Switch
@@ -2516,7 +2516,7 @@ export default function ConfigurarMeta() {
                 <div>
                   <Label>Copiar templates aprovados automaticamente</Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                     Copia os modelos Utility selecionados para novos números, um por vez das 07h às 20h (nunca no domingo). Tier 250: até 2 por número/dia; tiers 1.000 e 2.000: todos, com intervalo.
+                     Copia os modelos Utility selecionados para novos números, 24h por dia, inclusive domingos, com intervalo de 2–5 minutos por número em todos os tiers. Tier 250: até 2 por número/dia.
                   </p>
                 </div>
                 <Switch

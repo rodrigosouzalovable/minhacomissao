@@ -572,9 +572,9 @@ export default function MetaTemplates() {
     setTab("status");
     toast.success(
       adiadas > 0
-        ? `${(data as any)?.total || 0} envio(s) iniciado(s). ${adiadas} número(s) tier 250 chegaram ao limite de 2 hoje.`
+        ? `${(data as any)?.total || 0} aplicação(ões) iniciada(s). ${adiadas} número(s) aguardam a cota diária; os demais seguem o intervalo de 2–5 minutos.`
         : modo === "piloto"
-          ? "Piloto enviado. Aguarde a aprovação da Meta e depois clique em 'Replicar nas demais'."
+          ? ((data as any)?.message || "Piloto iniciado ou na fila. Aguarde a aprovação da Meta antes de replicar.")
           : ((data as any)?.message || "Processamento iniciado. Acompanhe pela aba Status."),
     );
     carregar();
@@ -1464,7 +1464,7 @@ export default function MetaTemplates() {
               }).length;
               return <div className="space-y-2 border p-3 text-sm">
                 <div className="flex items-center justify-between gap-2"><strong>Aplicação · {modelo?.nome || "Template"}</strong><div className="flex items-center gap-2"><span>{concluidos}/{loteAtual.ids.length} processados</span><Button variant="ghost" size="icon" title="Atualizar aplicação" onClick={carregar} disabled={loading}><RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /></Button></div></div>
-                <p className="text-xs text-muted-foreground">Selecionadas: {loteAtual.selecionadas.length} · submetidas: {loteAtual.ids.length} · adiadas pelo limite diário: {loteAtual.adiadas.length} · sem registro: {semRegistro.length}</p>
+                <p className="text-xs text-muted-foreground">Selecionadas: {loteAtual.selecionadas.length} · aplicações iniciadas: {loteAtual.ids.length} · na fila por intervalo ou cota: {loteAtual.adiadas.length} · sem registro: {semRegistro.length}</p>
                 {semRegistro.length > 0 && <p className="text-xs text-destructive">Nem todos os números selecionados entraram no processamento. Confira os números sem registro antes de tentar novamente.</p>}
                 <Progress value={loteAtual.ids.length ? 100 * concluidos / loteAtual.ids.length : 100} />
                 <p className="text-xs text-muted-foreground">Processamento concluído não significa aprovação pela Meta.</p>
@@ -1474,7 +1474,7 @@ export default function MetaTemplates() {
                   const real = templMeta.find((t) => t.instancia_id === id && t.nome_template === modelo?.nome && t.idioma === modelo?.idioma);
                   return <div key={id} className="flex flex-wrap items-center justify-between gap-2 py-1">
                     <span>{inst?.nome || "Número não visível nesta tela"} · {inst?.display_phone || ""}</span>
-                    <div className="flex gap-2"><Badge variant="outline">{adiadas.has(id) ? "Adiado (limite diário)" : !agendadas.has(id) ? "Sem registro" : item?.status === "ENVIADO" ? "Processando" : item?.status || "Aguardando"}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge>}</div>
+                    <div className="flex gap-2"><Badge variant="outline">{item?.status || (adiadas.has(id) ? "Na fila (intervalo ou cota)" : !agendadas.has(id) ? "Sem registro" : "Processando")}</Badge>{real?.categoria && <Badge variant={real.categoria.toUpperCase() === "MARKETING" ? "destructive" : "secondary"}>{real.categoria.toUpperCase() === "MARKETING" ? "Marketing" : real.categoria.toUpperCase() === "UTILITY" ? "Utilidade" : real.categoria}</Badge>}</div>
                   </div>;
                 })}</div>
               </div>;

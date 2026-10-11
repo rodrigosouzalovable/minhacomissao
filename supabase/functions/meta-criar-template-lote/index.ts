@@ -1,3 +1,5 @@
+import { claimTemplatePacing, finishTemplatePacing, deferTemplate } from "../_shared/meta-template-pacing.ts";
+import { nextTemplateDay } from "../_shared/meta-template-completion.ts";
 import { sincronizarTemplatesMeta } from "../_shared/sincronizar-templates-meta.ts";
 import { podeDistribuirModelo, preservarSubmissao, registroReclassificacao } from "../_shared/meta-template-distribution.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
@@ -10,7 +12,6 @@ import {
 
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const MEDIA_BUCKET = "meta-template-media";
 
@@ -31,7 +32,7 @@ async function obterHeaderHandle(params: {
   startUrl.searchParams.set("file_name", fileName);
   startUrl.searchParams.set("access_token", accessToken);
 
-  const startRes = await fetch(startUrl.toString(), { method: "POST" });
+  const startRes = await fetch(startUrl.toString(), { method: "POST", signal: AbortSignal.timeout(20_000) });
   const startData = await startRes.json();
   if (!startRes.ok || !startData?.id) {
     throw new Error(
@@ -49,6 +50,7 @@ async function obterHeaderHandle(params: {
       "Content-Type": fileType,
     },
     body: fileBytes,
+    signal: AbortSignal.timeout(20_000),
   });
   const uploadData = await uploadRes.json();
   if (!uploadRes.ok || !uploadData?.h) {
@@ -399,42 +401,6 @@ serve(async (req) => {
       instancias = instancias.slice(0, 1);
     }
 
-    // Proteção única para todos os caminhos (manual, piloto, replicação, reenvio e fila).
-    // Tier 250 reserva no máximo duas submissões por número no dia BRT.
-    const instanciasProtegidas: any[] = [];
-    const adiadasTier250: any[] = [];
-    for (const inst of instancias) {
-      const reserva = await reservarEnvioTemplateTier250(
-        supabase,
-        inst.id,
-        mestre_id,
-        apenas_falhas ? "reenvio_manual" : modo === "piloto" ? "piloto" : modo === "replicar" ? "replicacao" : "manual",
-      );
-      if (reserva === "limit_reached") {
-        adiadasTier250.push({ instancia_id: inst.id, nome: inst.nome, motivo: "limite_tier_250" });
-      } else if (reserva === "already_reserved") {
-        adiadasTier250.push({ instancia_id: inst.id, nome: inst.nome, motivo: "template_ja_reservado_hoje" });
-      } else {
-        instanciasProtegidas.push(inst);
-      }
-    }
-    instancias = instanciasProtegidas;
-    if (instancias.length === 0) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          queued: false,
-          total: 0,
-          selecionadas: Array.isArray(instancia_ids) ? new Set(instancia_ids).size : instancias.length + adiadasTier250.length,
-          adiadas_tier_250: adiadasTier250.length,
-          instancias: [],
-          adiadas: adiadasTier250,
-          message: "Limite seguro de 2 templates por número/dia atingido. Os próximos ficam para o dia seguinte.",
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
     // Se o mestre usa cabeçalho de mídia, pré-carregamos o arquivo do Storage
     const precisaMidia =
       ["IMAGE", "VIDEO", "DOCUMENT"].includes(mestre.cabecalho_tipo || "") &&
@@ -486,6 +452,41 @@ serve(async (req) => {
 
 
 
+    // Atomic admission shared by manual, replication, retries and worker.
+    const admitidas: any[] = [];
+    const adiadas: any[] = [];
+    const pacingTokens = new Map<string, string>();
+    for (const inst of instancias) {
+      const pacing = await claimTemplatePacing(supabase, inst.id, mestre_id);
+      if (!pacing.allowed) {
+        if (pacing.existing) {
+          ignoradas.push({ instancia_id: inst.id, motivo: "submissao_existente_preservada" });
+          continue;
+        }
+        await deferTemplate(supabase, inst.id, mestre_id, pacing.next_allowed_at, "aguardando intervalo de 2–5 minutos ou aplicação em andamento na BM");
+        adiadas.push({ instancia_id: inst.id, motivo: "intervalo_2_5_min", agendado_para: pacing.next_allowed_at });
+        continue;
+      }
+      try {
+        const reserva = await reservarEnvioTemplateTier250(supabase, inst.id, mestre_id,
+          apenas_falhas ? "reenvio_manual" : modo === "piloto" ? "piloto" : modo === "replicar" ? "replicacao" : "manual");
+        if (reserva === "limit_reached" || reserva === "already_reserved") {
+          const quando = nextTemplateDay().toISOString();
+          await deferTemplate(supabase, inst.id, mestre_id, quando, "aguardando cota diária tier 250");
+          adiadas.push({ instancia_id: inst.id, motivo: "limite_tier_250", agendado_para: quando });
+          await finishTemplatePacing(supabase, pacing.token);
+          continue;
+        }
+        if (pacing.token) pacingTokens.set(inst.id, pacing.token);
+        admitidas.push(inst);
+      } catch (error) {
+        await finishTemplatePacing(supabase, pacing.token);
+        throw error;
+      }
+    }
+    instancias = admitidas;
+    const adiadasTier250 = adiadas.filter(item => item.motivo === "limite_tier_250");
+
     // pré-marca como ENVIADO só em envio normal (no reenvio de falhas não mexemos no status em massa)
     if (!apenas_falhas) {
       const preRows = instancias.map((inst) => ({
@@ -500,7 +501,10 @@ serve(async (req) => {
         const { error: preError } = await supabase.from("meta_templates_instancia")
           .upsert(preRows, { onConflict: "template_mestre_id,instancia_id" });
         if (preError) {
-          await Promise.all(instancias.map((inst) => finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", preError.message)));
+          await Promise.all(instancias.map(async (inst) => {
+            await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", preError.message);
+            await finishTemplatePacing(supabase, pacingTokens.get(inst.id));
+          }));
           throw new Error(`Não foi possível registrar o envio: ${preError.message}`);
         }
       }
@@ -522,7 +526,10 @@ serve(async (req) => {
           const { data: cur } = await supabase
             .from("meta_templates_instancia").select("status")
             .eq("template_mestre_id", mestre_id).eq("instancia_id", inst.id).maybeSingle();
-          if (cur && !["FALHA_ENVIO", "REJECTED"].includes(cur.status)) continue;
+          if (cur && !["FALHA_ENVIO", "REJECTED"].includes(cur.status)) {
+            await finishTemplatePacing(supabase, pacingTokens.get(inst.id));
+            continue;
+          }
         }
 
         if (!inst.waba_id || !inst.access_token) {
@@ -537,6 +544,7 @@ serve(async (req) => {
           }, { onConflict: "template_mestre_id,instancia_id" });
           detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: "credenciais ausentes" });
           await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", "credenciais ausentes");
+          await finishTemplatePacing(supabase, pacingTokens.get(inst.id));
           continue;
         }
 
@@ -609,6 +617,7 @@ serve(async (req) => {
                 "Content-Type": "application/json",
               },
               body: JSON.stringify(payload),
+              signal: AbortSignal.timeout(45_000),
             },
           );
           const data = await res.json();
@@ -620,7 +629,7 @@ serve(async (req) => {
              try {
                const categoriaRes = await fetch(
                  `https://graph.facebook.com/v21.0/${encodeURIComponent(String(data.id))}?fields=name,language,category,status`,
-                 { headers: { Authorization: `Bearer ${inst.access_token}` } },
+                 { headers: { Authorization: `Bearer ${inst.access_token}` }, signal: AbortSignal.timeout(10_000) },
                );
                if (categoriaRes.ok) categoriaReal = String((await categoriaRes.json())?.category || "").toUpperCase();
              } catch (error) { console.warn("Categoria da Meta ainda indisponível", error); }
@@ -678,9 +687,9 @@ serve(async (req) => {
           }, { onConflict: "template_mestre_id,instancia_id" });
           detalhes.push({ instancia_id: inst.id, nome: inst.nome, ok: false, erro: msg });
           await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", msg);
+        } finally {
+          await finishTemplatePacing(supabase, pacingTokens.get(inst.id));
         }
-
-        await sleep(1000 + Math.floor(Math.random() * 500));
       }
 
       await supabase.from("meta_templates_lote_log").insert({
@@ -708,12 +717,10 @@ serve(async (req) => {
         total: instancias.length,
         selecionadas: Array.isArray(instancia_ids) ? new Set(instancia_ids).size : instancias.length + adiadasTier250.length,
         instancias: instancias.map((inst) => ({ id: inst.id, nome: inst.nome })),
-        adiadas: adiadasTier250,
+        adiadas,
         ignoradas,
         adiadas_tier_250: adiadasTier250.length,
-        message: adiadasTier250.length > 0
-          ? `${instancias.length} envio(s) iniciado(s); ${adiadasTier250.length} número(s) tier 250 atingiram o limite diário.`
-          : "Processamento iniciado em background. Acompanhe pela aba Status.",
+        message: `${instancias.length} aplicação(ões) iniciada(s); ${adiadas.length} na fila por intervalo ou cota. Aplicação gradual 24/7; aprovação depende da Meta.`,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 202 },
     );
