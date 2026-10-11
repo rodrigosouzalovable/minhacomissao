@@ -109,6 +109,7 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
       body: {
         auto: true,
+        instancia_ids: eligible.filter((_, index) => results[index].success).map(i => i.id),
         dry_run: false,
         utility_approved_only: true,
       },

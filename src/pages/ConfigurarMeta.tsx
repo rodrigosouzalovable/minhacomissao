@@ -543,39 +543,42 @@ export default function ConfigurarMeta() {
     total_a_enfileirar: number;
   };
   const [auditando, setAuditando] = useState(false);
-  const [injetando, setInjetando] = useState(false);
+  const [auditProgress, setAuditProgress] = useState(0);
   const [auditoria, setAuditoria] = useState<Auditoria | null>(null);
 
   const verificarTemplatesTodas = async () => {
     setAuditando(true);
-    const { data, error } = await supabase.functions.invoke("meta-templates-auditar-instancias", {
-      body: { dry_run: true },
-    });
-    setAuditando(false);
-    if (error) return toast.error("Erro na verificação: " + error.message);
-    if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
-    if (data.erro_amigavel === "nenhum_modelo_marcado") {
-      return toast.error('Nenhum modelo está marcado como "Injetar em números novos" na aba Templates Meta.');
+    setAuditProgress(0);
+    let result: Auditoria = { modelos: 0, verificadas: 0, completas: 0, ignoradas: [], instancias: [], total_a_enfileirar: 0 };
+    let queued = 0;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Faça login novamente.");
+      const { data: own, error: ownError } = await supabase.from("meta_whatsapp_instances")
+        .select("id").eq("user_id", user.id).eq("provider", "meta").eq("ativo", true).order("id");
+      if (ownError) throw ownError;
+      const ids = (own || []).map(i => i.id);
+      for (let offset = 0; offset < ids.length; offset += 8) {
+        const { data, error } = await supabase.functions.invoke("meta-templates-auditar-instancias", {
+          body: { dry_run: false, sync: true, instancia_ids: ids.slice(offset, offset + 8) },
+        });
+        if (error || !data?.success) throw new Error(error?.message || data?.error || "Consulta não concluída.");
+        result = { modelos: Math.max(result.modelos, data.modelos || 0),
+          verificadas: result.verificadas + (data.verificadas || 0), completas: result.completas + (data.completas || 0),
+          ignoradas: [...result.ignoradas, ...(data.ignoradas || [])], instancias: [...result.instancias, ...(data.instancias || [])],
+          total_a_enfileirar: result.total_a_enfileirar + (data.enfileirados || 0) };
+        queued += data.enfileirados || 0;
+        setAuditProgress(Math.round(Math.min(ids.length, offset + 8) / ids.length * 100));
+      }
+      toast.success(`${queued} modelos na fila; aplicação 24h, inclusive domingos. Tier 250: até dois por dia.`);
+      await carregar();
+    } catch (error) {
+      toast.error(`Conferência interrompida: ${error instanceof Error ? error.message : "Tente novamente"}. Os lotes concluídos foram preservados.`);
+    } finally {
+      setAuditoria(result);
+      setAuditando(false);
     }
-    setAuditoria(data as Auditoria);
   };
-
-  const iniciarInjecaoFaltantes = async () => {
-    setInjetando(true);
-    const { data, error } = await supabase.functions.invoke("meta-templates-auditar-instancias", {
-      body: { dry_run: false },
-    });
-    setInjetando(false);
-    if (error) return toast.error("Erro ao iniciar: " + error.message);
-    if (!data?.success) return toast.error("Falha: " + (data?.error || "desconhecido"));
-    toast.success(
-      `${data.enfileirados} Utility na fila de ${data.instancias_afetadas} número(s); ${data.ignoradas?.length || 0} número(s) aguardam liberação. Tier 250: até 2/dia; tiers 1.000 e 2.000: 1 por vez, com intervalo de 2–5 min.`,
-    );
-    setAuditoria(null);
-    carregar();
-  };
-
-
 
   const carregarToken = async () => {
     if (parceiroMeta) {
@@ -2667,7 +2670,7 @@ export default function ConfigurarMeta() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Modelos marcados</p>
+                  <p className="text-xs text-muted-foreground">Modelos pré-aprovados</p>
                   <p className="text-lg font-semibold">{auditoria.modelos}</p>
                 </div>
                 <div className="rounded-lg border p-3">
@@ -2679,7 +2682,7 @@ export default function ConfigurarMeta() {
                   <p className="text-lg font-semibold">{auditoria.completas}</p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Modelos a injetar</p>
+                  <p className="text-xs text-muted-foreground">Modelos enfileirados</p>
                   <p className="text-lg font-semibold">{auditoria.total_a_enfileirar}</p>
                 </div>
               </div>
@@ -2710,7 +2713,7 @@ export default function ConfigurarMeta() {
                           <TableCell>
                             {i.a_enfileirar > 0
                               ? i.a_enfileirar
-                              : <span className="text-xs text-muted-foreground">já na fila</span>}
+                              : <span className="text-xs text-muted-foreground">em espera / já na fila</span>}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -2718,7 +2721,7 @@ export default function ConfigurarMeta() {
                 </Table>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Todos os números verificados já possuem os modelos marcados.
+                  Todos os números verificados já possuem os modelos pré-aprovados.
                 </p>
               )}
 
@@ -2736,20 +2739,13 @@ export default function ConfigurarMeta() {
               )}
 
               <p className="text-xs text-muted-foreground">
-                A injeção é gradual: 1 modelo por vez, com intervalo de 2 a 5 minutos, das 07h às 20h e nunca no domingo.
-                A fila continua no dia seguinte se não terminar.
+                Aplicação gradual 24 horas por dia, inclusive domingos. Tier 250: até dois modelos por número/dia; demais tiers seguem sequencialmente. Bloqueios reais e reprovações permanecem protegidos.
               </p>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setAuditoria(null)}>Fechar</Button>
-            <Button
-              onClick={iniciarInjecaoFaltantes}
-              disabled={injetando || !auditoria || auditoria.total_a_enfileirar === 0}
-            >
-              {injetando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Iniciar injeção dos faltantes
-            </Button>
+
           </DialogFooter>
         </DialogContent>
       </Dialog>

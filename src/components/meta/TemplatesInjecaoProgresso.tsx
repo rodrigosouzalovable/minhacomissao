@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Clock, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { readAllTemplateRows } from "../../../supabase/functions/_shared/meta-template-completion";
 
 
 type Props = { instanciaIds: string[] };
@@ -22,56 +23,6 @@ type Resumo = {
 };
 
 
-const HORA_INICIO = 7;
-const HORA_FIM = 20;
-const MINUTOS_MEDIOS = 3.5;
-
-// Avança "minutos" apenas dentro da janela 07h–20h BRT, pulando domingo.
-function previsaoTermino(minutos: number): Date | null {
-  if (minutos <= 0) return null;
-  let cursor = new Date(Date.now() - 3 * 60 * 60 * 1000); // agora em BRT (via UTC deslocado)
-  let restante = minutos;
-  let guarda = 0;
-  while (restante > 0 && guarda < 400) {
-    guarda++;
-    const hora = cursor.getUTCHours() + cursor.getUTCMinutes() / 60;
-    const domingo = cursor.getUTCDay() === 0;
-    if (domingo || hora >= HORA_FIM) {
-      // pula para o próximo dia útil às 07h
-      cursor = new Date(cursor.getTime() + 24 * 3600 * 1000);
-      cursor.setUTCHours(HORA_INICIO, 0, 0, 0);
-      continue;
-    }
-    if (hora < HORA_INICIO) {
-      cursor.setUTCHours(HORA_INICIO, 0, 0, 0);
-      continue;
-    }
-    const disponivel = (HORA_FIM - hora) * 60;
-    const usar = Math.min(disponivel, restante);
-    cursor = new Date(cursor.getTime() + usar * 60000);
-    restante -= usar;
-  }
-  // volta de BRT para tempo real (UTC + 3h de deslocamento aplicado antes)
-  return new Date(cursor.getTime() + 3 * 60 * 60 * 1000);
-}
-
-function rotuloPrevisao(d: Date | null): string {
-  if (!d) return "—";
-  const fmt = (dt: Date) =>
-    dt.toLocaleString("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  const dia = (dt: Date) =>
-    dt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-  const hojeDia = dia(new Date());
-  const amanhaDia = dia(new Date(Date.now() + 86400000));
-  const alvo = dia(d);
-  if (alvo === hojeDia) return `hoje ~${fmt(d)}`;
-  if (alvo === amanhaDia) return `amanhã ~${fmt(d)}`;
-  return `${alvo} ~${fmt(d)}`;
-}
 function rotuloRelativo(iso: string | null): string {
   if (!iso) return "ainda não conferido";
   const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -100,11 +51,11 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
       setResumo(null);
       return;
     }
-    const { data } = await supabase
-      .from("meta_templates_onboarding_fila")
-      .select("instancia_id, status")
-      .in("instancia_id", instanciaIds);
-    const linhas = (data as any[]) ?? [];
+    let linhas: Array<{ instancia_id: string; status: string }>;
+    try {
+      linhas = await readAllTemplateRows(() => supabase.from("meta_templates_onboarding_fila")
+        .select("id,instancia_id,status").in("instancia_id", instanciaIds).neq("status", "CANCELADO"));
+    } catch { return; }
     if (linhas.length === 0) {
       setResumo(null);
       return;
@@ -129,12 +80,9 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
       }
     }
     // Conferência de aprovação na Meta (última feita / próxima programada)
-    const { data: conf } = await supabase
-      .from("meta_templates_instancia")
-      .select("ultima_verificacao_em, proxima_verificacao_em")
-      .in("instancia_id", instanciaIds)
-      .in("status", ["PENDING", "ENVIADO"]);
-    const confs = (conf as any[]) ?? [];
+    const confs = await readAllTemplateRows(() => supabase.from("meta_templates_instancia")
+      .select("id,ultima_verificacao_em,proxima_verificacao_em").in("instancia_id", instanciaIds)
+      .in("status", ["PENDING", "ENVIADO"])).catch(() => []);
     const ultimas = confs.map((c) => c.ultima_verificacao_em).filter(Boolean) as string[];
     const proximas = confs.map((c) => c.proxima_verificacao_em).filter(Boolean) as string[];
 
@@ -167,9 +115,7 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
   if (!resumo) return null;
 
   const pct = resumo.total > 0 ? Math.round((resumo.concluidos / resumo.total) * 100) : 0;
-  const numerosAtivos = Math.max(1, resumo.numerosComPendencia);
-  const minutos = (resumo.pendentes / numerosAtivos) * MINUTOS_MEDIOS;
-  const previsao = resumo.pendentes > 0 ? rotuloPrevisao(previsaoTermino(minutos)) : "concluído";
+  const previsao = resumo.pendentes > 0 ? "conforme cota e aprovação da Meta" : resumo.emVoo > 0 ? "aguardando Meta" : resumo.problemas > 0 ? "há itens com falha" : "concluído";
 
   return (
     <Card className="border-blue-500/40 bg-blue-50/40">
@@ -224,7 +170,7 @@ export default function TemplatesInjecaoProgresso({ instanciaIds }: Props) {
           <span>Próxima conferência: {rotuloFuturo(resumo.proximaConferencia)}</span>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          1 modelo por vez em cada número, com intervalo de 2 a 5 minutos, das 07h às 20h e nunca no domingo.
+          Aplicação 24h, inclusive domingos, um modelo por vez. Tier 250: até dois modelos por número/dia; demais tiers mantêm intervalos sequenciais.
           A aprovação na Meta é conferida a cada 30 minutos e para de ser consultada assim que sai o resultado.
         </p>
 

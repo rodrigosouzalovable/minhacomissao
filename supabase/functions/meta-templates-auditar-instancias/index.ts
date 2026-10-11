@@ -26,17 +26,19 @@ const json = (payload: unknown, status = 200) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return json({ success: false, error: "Configuração indisponível" }, 500);
+  const deadline = AbortSignal.timeout(110_000);
+  const supabase = createClient(url, key, { global: { fetch: (input, init) => fetch(input, { ...init,
+    signal: AbortSignal.any([deadline, AbortSignal.timeout(65_000), ...(init?.signal ? [init.signal] : [])]) }) } });
 
   try {
     const body = await req.json().catch(() => ({}));
     const dryRun = body?.dry_run !== false;
     const utilityApprovedOnly = true;
     let requester: string | null = null;
-    const selectedIds = Array.isArray(body?.instancia_ids) ? body.instancia_ids.slice(0, 8) : null;
+    const selectedIds = Array.isArray(body?.instancia_ids) ? body.instancia_ids.slice(0, body?.auto === true ? 500 : 8) : null;
     // Modo automático (cron diário): roda sem token de usuário, sempre aplicando.
     const auto = body?.auto === true;
     const instanciaAlvo = typeof body?.instancia_id === "string" && /^[0-9a-f-]{36}$/i.test(body.instancia_id)
@@ -78,9 +80,10 @@ Deno.serve(async (req) => {
     }
 
     // ===== Instâncias próprias da API Oficial =====
-    const { data: parceirosRows } = await supabase
+    const { data: parceirosRows, error: partnerError } = await supabase
       .from("meta_instance_parceiros")
       .select("instancia_id");
+    if (partnerError) throw partnerError;
     const idsParceiros = new Set<string>(((parceirosRows as any[]) || []).map((p) => p.instancia_id));
 
     const { data: instsRaw, error: instancesError } = await supabase
@@ -216,13 +219,20 @@ Deno.serve(async (req) => {
         prioridade: r._novos.length - idx,
         agendado_para: new Date().toISOString(),
       }));
+      const recoverIds = rows.map(row => terminalRows.get(`${r.id}|${row.template_mestre_id}`))
+        .filter(prior => prior && isInternalSlotFailure(prior.motivo)).map(prior => prior.id);
       let count = 0;
-      for (const row of rows) {
-        const prior = terminalRows.get(`${r.id}|${row.template_mestre_id}`);
-        const query = prior && isInternalSlotFailure(prior.motivo)
-          ? supabase.from("meta_templates_onboarding_fila").update({ ...row, enviado_em: null, finalizado_em: null, tentativas: 0, motivo: "Reserva interna corrigida; aguardando aplicação" }).eq("id", prior.id).eq("status", prior.status).select("id")
-          : supabase.from("meta_templates_onboarding_fila").upsert(row, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true }).select("id");
-        const { data, error } = await query;
+      if (recoverIds.length) {
+        const { data, error } = await supabase.from("meta_templates_onboarding_fila")
+          .update({ status: "PENDENTE", enviado_em: null, finalizado_em: null, tentativas: 0, agendado_para: new Date().toISOString(), motivo: "Reserva interna corrigida; aguardando aplicação" })
+          .in("id", recoverIds).like("motivo", "%meta_template_daily_reservations_slot_check%").select("id");
+        if (error) throw error;
+        count += data?.length || 0;
+      }
+      const fresh = rows.filter(row => !terminalRows.has(`${r.id}|${row.template_mestre_id}`));
+      if (fresh.length) {
+        const { data, error } = await supabase.from("meta_templates_onboarding_fila")
+          .upsert(fresh, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true }).select("id");
         if (error) throw error;
         count += data?.length || 0;
       }

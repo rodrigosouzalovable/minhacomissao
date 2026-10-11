@@ -1,9 +1,10 @@
+import { nextTemplateDay } from "../_shared/meta-template-completion.ts";
 import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 // Copia templates aprovados para números novos da API Oficial, de forma gradual.
-// Roda de carona no tick de 10 minutos já existente (sem cron novo).
+// Reutiliza o agendamento existente, sem nova rotina.
 //
 // Regras anti-ban:
-//  - 07h às 20h BRT, nunca domingo
+//  - Aplicação 24/7, inclusive domingos
 //  - dose diária: 3 no 1º dia, 5 no 2º, 8 no 3º, 10/dia depois
 //  - 1 modelo por vez por número, intervalo aleatório de 2 a 5 min
 //  - 2 reprovações seguidas → pausa a fila do número e avisa
@@ -394,7 +395,7 @@ Deno.serve(async (req) => {
         else if (Number((res as any)?.total || 0) === 0 && Number((res as any)?.adiadas_tier_250 || 0) > 0) {
           await supabase
             .from("meta_templates_onboarding_fila")
-            .update({ status: "PENDENTE", enviado_em: null, motivo: "limite diário tier 250: próximo dia útil", tentativas: 0 })
+            .update({ status: "PENDENTE", enviado_em: null, motivo: "limite diário tier 250: próximo dia BRT, inclusive domingo", agendado_para: nextTemplateDay().toISOString(), tentativas: 0 })
             .eq("id", proximo.id);
           processados.push({ instancia_id: inst.id, ok: true, adiado: "limite_tier_250" });
           continue;
@@ -490,7 +491,7 @@ Deno.serve(async (req) => {
       }
 
       // Próximo item deste número só depois do intervalo aleatório
-      // Tier 250: 10–15 min (todos no mesmo dia, espaçados). Tier ≥2.000: 30–60s.
+      // Tier 250: 10–15 min, máximo dois por dia BRT. Tier ≥2.000: 30–60s.
       // Demais (1.000): intervalo padrão da configuração.
       const { data: tierInst } = await supabase.rpc("meta_instance_template_tier", { p_instancia_id: inst.id });
       const tierNum = Number(tierInst || 0);
