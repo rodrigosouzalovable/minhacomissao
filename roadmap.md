@@ -6,7 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Aplicar intervalo aleatório 2–5 minutos também na BM inteira, inclusive entre números diferentes; validar reserva e liberação sem submissões reais.
+- [x] Intervalo aleatório 2–5 minutos aplicado à BM inteira, inclusive números/WABAs diferentes; reserva e liberação testadas sem submissões reais. 17 testes passaram, regra e permissões conferidas no ambiente ativo; compilação OK.
 - [x] Excluir cotas de BMs banidas do resumo diário Meta, preservar banimentos parciais e histórico; 40 testes passaram e página real confirmou limite/disponível 50.000 e 38 BMs, sem erros ou envios. Compilação OK.
 - [x] Aplicar intervalo aleatório 120–300s por número/WABA, trava sequencial por BM e 24/7 em todos os caminhos; funções publicadas, pendentes reorganizados sem alterar submetidos, 23 testes passaram, painel validado com fila simulada e reservas reais registradas em 11/10/2026.
 - [x] Corrigir aplicação manual do template selecionado no Envio Meta: submissão em lotes de cinco, resultados por número e retomada segura sem duplicação; três funções publicadas, testes passaram e navegador confirmou 76/76 em 16 lotes simulados num clique, sem submissões reais; compilação OK.
