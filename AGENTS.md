@@ -17,19 +17,19 @@
 - Meta composer keeps editing during sends; guard submission and focus on activation only to preserve drafts and dialog focus.
 
 - Meta webhook alerts need failed recovery and confirmed subscription errors, not timeouts.
-- Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
+- Installment values/payment dates use atomic recalculation RPCs; due dates and payments use dedicated authenticated RPCs.
 
 - Inbox assignments/sends are atomic and authorized; IAGO rotates in PADRÃO only. Unread filtering precedes pagination; opening does not clear unread.
 - Unknown Meta messages keep restricted diagnostics and show a clear content-unavailable notice.
 - Inbox pool returns reuse authorized RPCs after individual Meta health confirmation; never bypass real blocks.
 - Inbox media uses conversation-level authorization, never broad folder access, to isolate attachments.
 - Meta→UAZAPI migration reuses the instance, verifies phone/inbox before disabling Meta, and preserves history.
-- Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.
+- Certificate reservations belong to one instance; Meta refusal fails only that contact, preserving other sends and quotas.
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
 - Cobmais diário envia o XLSX a armazenamento privado e processa no servidor; staging/publicação são atômicos, chave = CPF+credor+contrato+parcela e vencimento é substituível.
 - Meta stays owner-scoped; catalogs retain own Utility master links after copy reclassification so distribution continues; messaging still needs approved Utility copies.
 - Template completion shares owner-scoped approved sources, pagination and atomic tier reservations.
-- Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
+- Clara logs automatic replies without closing; consecutive messages resolve offer, validity, scheduling and documents before AI.
 - Campaign results use indexed suffix/CPF and time windows, without polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.
 - Navigation uses explicitly granted tabs; `parceiro_meta` scopes instances, never grants extra screens.
