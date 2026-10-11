@@ -187,10 +187,16 @@ Deno.serve(async (req) => {
     }
 
     // ===== 2) Conclusão: números sem nada pendente =====
+    // Reuse this worker for specific manual deferrals without enabling automatic copying.
+    const { data: manualRows, error: manualError } = await supabase.from('meta_templates_onboarding_fila')
+      .select('instancia_id').eq('status', 'PENDENTE').like('motivo', 'aplicacao_manual:%')
+      .lte('agendado_para', new Date().toISOString()).limit(200);
+    if (manualError) throw manualError;
+    const manualIds = [...new Set((manualRows || []).map(r => r.instancia_id))];
     const { data: instsAtivas } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome, display_phone, user_id, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, ativo, saude_quality, saude_status, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider, qualidade_leitura_ok, qualidade_leitura_erro, meta_name_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, instancia_teste_aquecimento")
-      .eq("templates_auto_copiar", true);
+      .select("id, nome, display_phone, user_id, meta_verified_name, phone_number_id, meta_bm_id, business_id, waba_id, access_token, ativo, saude_quality, saude_status, templates_auto_status, templates_auto_pausado_ate, templates_auto_iniciado_em, templates_auto_rejeicoes_seguidas, provider, qualidade_leitura_ok, qualidade_leitura_erro, meta_name_status, saude_ban_info, saude_restricoes, pausa_automatica_motivo, instancia_teste_aquecimento, templates_auto_copiar")
+      .or(manualIds.length ? `templates_auto_copiar.eq.true,id.in.(${manualIds.join(",")})` : "templates_auto_copiar.eq.true");
 
     const elegiveis = ((instsAtivas as any[]) || []).filter(
       (i) => !i.instancia_teste_aquecimento && motivoBloqueioTemplate(i) === null,
@@ -271,16 +277,19 @@ Deno.serve(async (req) => {
       }
 
 
-      const { data: proximo } = await supabase
+      let proximoQuery = supabase
         .from("meta_templates_onboarding_fila")
-        .select("id, template_mestre_id")
+        .select("id, template_mestre_id, motivo")
         .eq("instancia_id", inst.id)
         .eq("status", "PENDENTE")
         .lte("agendado_para", agoraIso)
         .order("prioridade", { ascending: false })
         .order("criado_em", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+      if (inst.templates_auto_copiar !== true) proximoQuery = proximoQuery.like("motivo", "aplicacao_manual:%");
+      const { data: proximo, error: proximoError } = await proximoQuery.maybeSingle();
+      if (proximoError) throw proximoError;
+      const manualPrefix = inst.templates_auto_copiar !== true ? "aplicacao_manual: " : "";
       if (!proximo) continue;
 
       // Última checagem: se o modelo já existe nesse número na Meta, não reenvia.
@@ -392,7 +401,7 @@ Deno.serve(async (req) => {
         else if (Number((res as any)?.total || 0) === 0 && Number((res as any)?.adiadas_tier_250 || 0) > 0) {
           await supabase
             .from("meta_templates_onboarding_fila")
-            .update({ status: "PENDENTE", enviado_em: null, motivo: "limite diário tier 250: próximo dia BRT, inclusive domingo", agendado_para: nextTemplateDay().toISOString(), tentativas: 0 })
+            .update({ status: "PENDENTE", enviado_em: null, motivo: manualPrefix + "limite diário tier 250: próximo dia BRT, inclusive domingo", agendado_para: nextTemplateDay().toISOString(), tentativas: 0 })
             .eq("id", proximo.id);
           processados.push({ instancia_id: inst.id, ok: true, adiado: "limite_tier_250" });
           continue;
@@ -410,7 +419,7 @@ Deno.serve(async (req) => {
           } else {
             const motivo = String(res?.ignoradas?.[0]?.motivo || "consulta Meta inconclusiva");
             await supabase.from("meta_templates_onboarding_fila").update({
-              status: "PENDENTE", enviado_em: null, motivo,
+              status: "PENDENTE", enviado_em: null, motivo: manualPrefix + motivo,
               agendado_para: new Date(Date.now() + 300_000).toISOString(),
             }).eq("id", proximo.id);
           }
@@ -448,7 +457,7 @@ Deno.serve(async (req) => {
             .from("meta_templates_onboarding_fila")
             .update({
               status: "PENDENTE",
-              motivo: erroEnvio.slice(0, 1000),
+              motivo: manualPrefix + erroEnvio.slice(0, 1000),
               tentativas: 2,
               agendado_para: new Date(Date.now() + esperaSeg * 1000).toISOString(),
               finalizado_em: null,

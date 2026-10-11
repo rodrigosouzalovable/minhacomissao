@@ -5,7 +5,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
-import { approvedOwnerModels, readAllTemplateRows } from "../_shared/meta-template-completion.ts";
+import { approvedOwnerModels, readAllTemplateRows, nextTemplateDay } from "../_shared/meta-template-completion.ts";
+import { queueRecoveryDecision } from "../_shared/meta-template-queue-recovery.ts";
 import { modelosParaCopiar } from "../_shared/meta-template-copy-candidates.ts";
 import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
@@ -23,10 +24,10 @@ const json = (payload: unknown, status = 200) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return json({ success: false, error: "Configuração indisponível" }, 500);
+  const supabase = createClient(url, key);
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -55,6 +56,9 @@ Deno.serve(async (req) => {
     // Modelo específico (opcional): injeta apenas esse template.
     const templateNome = String(body?.template_nome || "").trim();
     const templateIdioma = String(body?.idioma || "").trim();
+    const manualDefer = body?.manual_defer === true && !interno;
+    const mestreId = typeof body?.mestre_id === "string" ? body.mestre_id : "";
+    if (manualDefer && (!templateNome || !/^[0-9a-f-]{36}$/i.test(mestreId) || listaInstancias.length > 5)) return json({ success: false, error: "Dados de aplicação manual inválidos" }, 400);
     type MestreEspecifico = {
       id: string;
       nome: string;
@@ -70,6 +74,7 @@ Deno.serve(async (req) => {
         .select("id, nome, idioma, criado_por, categoria, reclassificado_marketing")
         .eq("nome", templateNome);
       if (templateIdioma) q = q.eq("idioma", templateIdioma);
+      if (mestreId) q = q.eq("id", mestreId);
       const { data: mestres, error: mestresError } = await q;
       if (mestresError) throw mestresError;
       const encontrados = ((mestres as any[]) || []) as MestreEspecifico[];
@@ -124,17 +129,18 @@ Deno.serve(async (req) => {
         continue;
       }
       const bloqueio = motivoBloqueioTemplate(inst);
-      if (bloqueio || inst.instancia_teste_aquecimento || inst.templates_auto_copiar !== true) {
+      if (bloqueio || inst.instancia_teste_aquecimento || (!manualDefer && inst.templates_auto_copiar !== true)) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: bloqueio || (inst.instancia_teste_aquecimento ? "instancia_de_teste" : "copia_automatica_desativada") });
         continue;
       }
 
       // Modelos já processados internamente e templates reais conhecidos nesse número.
-      const { data: aprovados } = await supabase
+      const { data: aprovados, error: aprovadosError } = await supabase
         .from("meta_templates_instancia")
         .select("template_mestre_id, instancia_id, status")
         .eq("instancia_id", instanciaId);
 
+      if (aprovadosError) throw aprovadosError;
       const jaNoNumero = new Set<string>();
       for (const r of (aprovados as any[]) || []) {
         if (r.instancia_id === instanciaId) {
@@ -165,27 +171,33 @@ Deno.serve(async (req) => {
         const copies = sourceIds.length ? await readAllTemplateRows(() => supabase.from("meta_whatsapp_templates").select("id,instancia_id,nome_template,idioma,status,categoria").in("instancia_id", sourceIds).eq("status", "approved").eq("categoria", "UTILITY")) : [];
         mestresPermitidos = approvedOwnerModels(mestresPermitidos, copies, new Map((sources || []).map(i => [i.id, i.user_id])));
       }
-      const { data: reais } = await supabase.from("meta_whatsapp_templates")
+      const { data: reais, error: reaisError } = await supabase.from("meta_whatsapp_templates")
         .select("nome_template,idioma,status").eq("instancia_id", instanciaId);
+      if (reaisError) throw reaisError;
       const chavesReais = new Set(((reais as any[]) || [])
         .filter((r) => ["approved", "pending", "in_appeal", "pending_deletion"].includes(String(r.status || "").toLowerCase()))
         .map((r) => `${r.nome_template}|${r.idioma || "pt_BR"}`));
       const mestresAusentes = mestresPermitidos.filter((m) => !chavesReais.has(`${m.nome}|${m.idioma || "pt_BR"}`));
-      const { data: filaAtual } = await supabase.from("meta_templates_onboarding_fila")
-        .select("template_mestre_id,status").eq("instancia_id", instanciaId);
+      const { data: filaAtual, error: filaError } = await supabase.from("meta_templates_onboarding_fila")
+        .select("id,template_mestre_id,status,motivo").eq("instancia_id", instanciaId);
+      if (filaError) throw filaError;
       const emProcessamento = new Set(((filaAtual as any[]) || [])
         .filter((r) => ["PENDENTE", "ENVIADO", "APPROVED"].includes(String(r.status || "").toUpperCase()))
         .map((r) => r.template_mestre_id));
 
-      const aplicaveis = modelosParaCopiar(mestresPermitidos, jaNoNumero, chavesReais, emProcessamento);
+      const terminalRows = new Map<string, any>((filaAtual || []).map(r => [r.template_mestre_id, r]));
+      const aplicaveis = modelosParaCopiar(mestresPermitidos, jaNoNumero, chavesReais, emProcessamento)
+        .filter(m => queueRecoveryDecision(terminalRows.get(m.id)) !== "terminal");
       const candidatos: [string, number][] = aplicaveis.map((m, idx) => [m.id, aplicaveis.length - idx]);
 
       if (candidatos.length === 0) {
+        const terminal = mestresPermitidos.map(m => terminalRows.get(m.id)).find(r => queueRecoveryDecision(r) === "terminal");
         resultados.push({
           instancia_id: instanciaId,
-          ok: true,
+          ok: !terminal,
           enfileirados: 0,
-          motivo: "nenhum_modelo_pendente",
+          motivo: terminal?.motivo || "nenhum_modelo_pendente",
+          ...(terminal ? { erro: terminal.motivo || "Aplicação anterior encerrada; revise o motivo" } : {}),
         });
         continue;
       }
@@ -195,9 +207,21 @@ Deno.serve(async (req) => {
         template_mestre_id: mestreId,
         status: "PENDENTE",
         prioridade: votos,
-        agendado_para: new Date().toISOString(),
+        agendado_para: manualDefer ? nextTemplateDay().toISOString() : new Date().toISOString(),
+        ...(manualDefer ? { motivo: "aplicacao_manual: aguardando cota diária" } : {}),
       }));
 
+      const recoverIds = aplicaveis.map(m => terminalRows.get(m.id)).filter(r => r && queueRecoveryDecision(r) === 'recover').map(r => r.id);
+      let recuperados = 0;
+      if (recoverIds.length) {
+        const { data, error } = await supabase.from('meta_templates_onboarding_fila').update({
+          status: 'PENDENTE', tentativas: 0, enviado_em: null, finalizado_em: null,
+          motivo: manualDefer ? 'aplicacao_manual: aguardando cota diária' : null,
+          agendado_para: manualDefer ? nextTemplateDay().toISOString() : new Date().toISOString(),
+        }).in('id', recoverIds).like('motivo', '%meta_template_daily_reservations_slot_check%').select('id');
+        if (error) throw error;
+        recuperados = data?.length || 0;
+      }
       const { data: inseridos, error: errIns } = await supabase
         .from("meta_templates_onboarding_fila")
         .upsert(rows, { onConflict: "instancia_id,template_mestre_id", ignoreDuplicates: true }).select("template_mestre_id");
@@ -206,12 +230,12 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const quantidade = inseridos?.length || 0;
+      const quantidade = (inseridos?.length || 0) + recuperados;
       if (quantidade === 0) {
         resultados.push({ instancia_id: instanciaId, ok: true, enfileirados: 0, motivo: "ja_na_fila" });
         continue;
       }
-      await supabase
+      if (!manualDefer) await supabase
         .from("meta_whatsapp_instances")
         .update({
           templates_auto_copiar: true,
@@ -220,6 +244,7 @@ Deno.serve(async (req) => {
         })
         .eq("id", instanciaId);
 
+      if (!manualDefer) {
       const bm = await linhaBmInstancia(supabase, inst).catch(() => "");
       await notificarAdmin(supabase, {
         tipo: "templates_onboarding_inicio",
@@ -234,6 +259,7 @@ Deno.serve(async (req) => {
           `Envio gradual: contas tier 250 recebem no máximo 2 modelos por número/dia; demais tiers mantêm o fluxo atual. 24 horas por dia, inclusive domingos.`,
       });
 
+      }
       resultados.push({ instancia_id: instanciaId, ok: true, enfileirados: quantidade });
     }
 
