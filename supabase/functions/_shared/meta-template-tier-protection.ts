@@ -1,4 +1,4 @@
-export const TIER_250_TEMPLATE_LIMIT = 40;
+export const TIER_250_TEMPLATE_LIMIT = 2;
 
 export async function reservarEnvioTemplateTier250(
   supabase: any,
