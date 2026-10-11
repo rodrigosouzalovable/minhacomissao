@@ -7,7 +7,7 @@
 - Recovery timings separate quality/delivery evidence using loaded cycles.
 - Meta violation pauses require matching-entity confirmation; inconclusive reads never imply bans.
 - Recovery volume changes use authenticated idempotent consent and shared atomic budgets.
-- Template paths share atomic number/WABA cooldowns and a BM lease; selected-model deferrals reuse the worker without enabling broad copying.
+- Template paths share atomic number/WABA cooldowns and a BM lease; selected-model deferrals reuse the worker without broad copying.
 <!-- LOVABLE:END -->
 
 - Resolve Meta redirects before rendering; save owner-scoped URLs atomically, override stale templates, preserve sent previews.
