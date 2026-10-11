@@ -7,7 +7,7 @@
 - Recovery timings use loaded cycles and separate quality and delivery evidence.
 - Meta violation pauses require matching-entity confirmation; inconclusive reads never imply bans.
 - Recovery volume changes use authenticated idempotent consent and shared atomic budgets.
-- All template paths share atomic number/WABA cooldowns and a BM lease; specific-model deferrals reuse the existing worker without enabling broad copying, preventing concurrent bursts and duplicates.
+- Template paths share atomic number/WABA cooldowns and a BM lease; selected-model deferrals reuse the worker without enabling broad copying.
 <!-- LOVABLE:END -->
 
 - Resolve Meta redirects before rendering; save owner-scoped URLs atomically, override stale templates, preserve sent previews.
@@ -33,7 +33,7 @@
 - Campaign results use indexed suffix/CPF and time windows, without polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.
 - Navigation uses explicitly granted tabs; `parceiro_meta` scopes instances, never grants extra screens.
-- National lead capture has separate scheduling/config/locks, daily query and monthly Google-account limits, never dollar caps or message sends.
+- National leads have separate locks/scheduling and daily/monthly Google-account limits; no message sends or dollar caps.
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
 - Bell/Retornos share pending payments of active agreements; scheduled-return alerts avoid overdue queries, preventing popups and redundant fetching.
 - Employee commission uses payment dates and independent tiers; office fees stay separate.
