@@ -608,6 +608,7 @@ Deno.serve(async (req) => {
         // Voltou de YELLOW/RED para GREEN: enfileira já os Utility obrigatórios faltantes.
         if (leituraOk && voltouParaGreen(inst.saude_quality, qual)) {
           supabase.functions.invoke('meta-templates-auditar-instancias', {
+            headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
             body: { auto: true, dry_run: false, instancia_id: inst.id },
           }).catch((e: unknown) => console.warn('auditoria pós-GREEN falhou', inst.id, e));
         }
