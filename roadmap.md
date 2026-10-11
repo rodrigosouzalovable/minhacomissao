@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Completar templates Utility próprios pré-aprovados: corrigir reserva tier 250, recuperar falhas internas, botão confere/aplica, novos números e painel completo 24/7; validar e iniciar aplicação autorizada.
 - [x] Liberar digitação durante envio no Inbox Meta e foco automático; quatro testes de interação passaram no navegador, sem mensagens reais; compilação OK.
 - [x] Corrigir timeout 504 da verificação Meta: prazo total, consultas paralelas e cache por token; 45 testes passaram, função publicada e consulta real de 235 instâncias retornou HTTP 200 em 66s (54 leituras inconclusivas, sem erro global).
 - [x] Permitir importar acordo com soma divergente, avisar e preservar parcelas para correção manual sem salvar automaticamente; dez testes passaram e compilação OK. PDF original da captura não foi anexado, então a validação usou comprovante simulado com divergência.
