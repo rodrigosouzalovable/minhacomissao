@@ -6,7 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Excluir cotas de BMs banidas do resumo diário Meta, preservar banimentos parciais e validar atualização/testes sem envios.
+- [x] Excluir cotas de BMs banidas do resumo diário Meta, preservar banimentos parciais e histórico; 40 testes passaram e página real confirmou limite/disponível 50.000 e 38 BMs, sem erros ou envios. Compilação OK.
 - [x] Aplicar intervalo aleatório 120–300s por número/WABA, trava sequencial por BM e 24/7 em todos os caminhos; funções publicadas, pendentes reorganizados sem alterar submetidos, 23 testes passaram, painel validado com fila simulada e reservas reais registradas em 11/10/2026.
 - [x] Corrigir aplicação manual do template selecionado no Envio Meta: submissão em lotes de cinco, resultados por número e retomada segura sem duplicação; três funções publicadas, testes passaram e navegador confirmou 76/76 em 16 lotes simulados num clique, sem submissões reais; compilação OK.
 - [x] Completar templates Utility próprios pré-aprovados: reserva tier 250 corrigida, 498 falhas internas recuperadas, 1.177 aplicações enfileiradas e 17 registros de envio nos cinco minutos seguintes; botão confere/aplica em lotes, novos números e painel completo 24/7. 33 testes passaram; navegador confirmou 25 lotes simulados em um clique, sem segundo botão; 30 falhas internas permanecem em números bloqueados/banidos, protegidas até liberação real. Compilação OK.
