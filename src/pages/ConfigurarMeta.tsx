@@ -1708,7 +1708,7 @@ export default function ConfigurarMeta() {
               {isAdmin && (
                 <Button variant="outline" onClick={verificarTemplatesTodas} disabled={auditando}>
                   {auditando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-                  Verificar templates de todas as instâncias
+                  {auditando ? `Conferindo e aplicando · ${auditProgress}%` : "Verificar templates de todas as instâncias"}
                 </Button>
               )}
               <Button onClick={() => { setFormTierTouched(false); setDialogOpen(true); }}>
