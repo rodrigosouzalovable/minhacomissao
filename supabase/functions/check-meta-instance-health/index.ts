@@ -14,10 +14,7 @@ import { isInformationalDisplayNameLimit } from '../_shared/meta-name-status.ts'
 import { accountViolationHealthConfirmed, accountViolationReleasable } from '../_shared/meta-account-violation.ts';
 import { RECUPERACAO_OWNER_ID, RECUPERACAO_AGUARDA_DESBLOQUEIO, bloqueioRecuperacaoMeta } from '../_shared/meta-aquecimento-alvo.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 

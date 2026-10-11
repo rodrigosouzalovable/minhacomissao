@@ -2,10 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sincronizarTemplatesMeta } from "../_shared/sincronizar-templates-meta.ts";
 import { runBoundedSync } from "../_shared/meta-sync-bounded.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 // Parallel bounded reads, without new schedules or retries.
 const MAX_INSTANCES_PER_RUN = 500;
 const LOCK_MINUTES = 30;

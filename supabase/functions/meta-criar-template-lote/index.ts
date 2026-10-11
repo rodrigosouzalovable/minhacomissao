@@ -8,10 +8,7 @@ import {
   reservarEnvioTemplateTier250,
 } from "../_shared/meta-template-tier-protection.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

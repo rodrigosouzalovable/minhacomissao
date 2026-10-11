@@ -1,4 +1,3 @@
-export const TEMPLATE_TIER_250_DAILY_LIMIT = 2;
 export const templateKey = (name: string, language?: string | null) => `${name}|${language || 'pt_BR'}`;
 
 export async function readAllTemplateRows<T = any>(query: () => any): Promise<T[]> {

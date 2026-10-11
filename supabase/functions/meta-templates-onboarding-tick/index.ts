@@ -15,10 +15,7 @@ import { rotuloInstancia, linhaBmInstancia } from "../_shared/rotulo-instancia.t
 import { ehErroTemporario, humanizarErroTemplate } from "../_shared/humanizar-erro-template.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const DESTINO_AVISO = ["5562991672674"];
 const MAX_INSTANCIAS_POR_RUN = 10;

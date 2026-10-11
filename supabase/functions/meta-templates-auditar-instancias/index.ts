@@ -10,10 +10,7 @@ import { runBoundedSync } from "../_shared/meta-sync-bounded.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
 
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const DESTINO_AVISO = ["5562991672674"];
 
