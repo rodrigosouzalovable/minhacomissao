@@ -27,7 +27,7 @@
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
 - Cobmais diário envia o XLSX a armazenamento privado e processa no servidor; staging/publicação são atômicos, chave = CPF+credor+contrato+parcela e vencimento é substituível.
 - Meta stays owner-scoped; catalogs retain own Utility master links after copy reclassification so distribution continues; messaging still needs approved Utility copies.
-- Automatic copies use selected owner Utility on verified CONNECTED GREEN/UNKNOWN only; preserve blocks, tier 250 two/day and sequential queues. Manual HSM sync requires an approved Utility source to avoid drafts.
+- Template completion shares owner-scoped approved-source selection and paginated reads across manual/automatic paths; preserve eligibility and atomic tier reservations to avoid drafts, duplicates and truncated totals.
 - Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
 - Campaign results match replies/agreements by normalized phone suffix/CPF and indexed time windows for fast manual checks without polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.

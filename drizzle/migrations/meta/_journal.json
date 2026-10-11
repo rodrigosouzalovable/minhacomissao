@@ -1219,6 +1219,20 @@
       "when": 1791639376181,
       "tag": "0173_recuperacao_aumento_autorizado_30",
       "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "7",
+      "when": 1791725402408,
+      "tag": "0174_restore_template_tier250_two_slots",
+      "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1791725625838,
+      "tag": "0175_exclude_current_template_from_legacy_quota",
+      "breakpoints": true
     }
   ]
 }

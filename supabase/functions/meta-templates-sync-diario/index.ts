@@ -2,10 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sincronizarTemplatesMeta } from "../_shared/sincronizar-templates-meta.ts";
 import { runBoundedSync } from "../_shared/meta-sync-bounded.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 // Parallel bounded reads, without new schedules or retries.
 const MAX_INSTANCES_PER_RUN = 500;
 const LOCK_MINUTES = 30;
@@ -35,7 +32,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const auto = body?.auto === true;
     const force = body?.force === true;
-    const completeUtility = body?.complete_utility === true && !auto;
+    const serviceToken = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (auto && (!serviceToken || req.headers.get("Authorization") !== `Bearer ${serviceToken}`)) return json({ success: false, error: "Acesso interno obrigatório" }, 403);
 
     if (!auto) {
       const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
@@ -104,11 +102,13 @@ Deno.serve(async (req) => {
     ownsLock = false;
 
     const audit = await supabase.functions.invoke("meta-templates-auditar-instancias", {
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(60_000),
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
       body: {
         auto: true,
+        instancia_ids: eligible.filter((_, index) => results[index].success).map(i => i.id),
         dry_run: false,
-        utility_approved_only: completeUtility,
+        utility_approved_only: true,
       },
     }).catch(() => ({ error: { message: "A conferência de cobertura não respondeu no prazo; tente novamente." }, data: null }));
 
