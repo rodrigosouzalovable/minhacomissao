@@ -7,6 +7,7 @@
 - Recovery timing reuses loaded exact cycles with independent drop-to-GREEN and accepted-first-send-to-GREEN samples, distinguishing waiting from sending without extra queries.
 - Account-violation pauses retain source WABA and require positive matching entity health before individual release; only pending-name limits with GREEN/UNKNOWN are informational, never bans, mixed restrictions, quarantine or recovery.
 - Recovery volume uses shared constants and atomic reservations; budget changes require authenticated owner-admin idempotent authorization to prevent compounded targets and preserve safety reductions.
+- Manual template application uses bounded direct submissions and per-number results; quota deferrals reuse the worker without enabling automatic copying, avoiding duplicates.
 <!-- LOVABLE:END -->
 
 - Resolve Meta redirects before rendering; save owner-scoped URLs atomically, override stale templates, preserve sent previews.

@@ -11,6 +11,7 @@ describe('distribution independent of reclassification', () => {
   it('preserves approved and pending copies', () => {
     expect(preservarSubmissao('APPROVED')).toBe(true);
     expect(preservarSubmissao('pending')).toBe(true);
+    expect(preservarSubmissao('ENVIADO')).toBe(true);
     expect(preservarSubmissao('FALHA_ENVIO')).toBe(false);
   });
   it('keeps category warning and distribution selection without enabling messages', () => {

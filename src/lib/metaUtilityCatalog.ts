@@ -58,6 +58,8 @@ export function situacaoUtility(group: UtilityGroup, instanceId: string, queueSt
   if (queueStatus === 'PENDENTE') return 'Na fila';
   if (queueStatus === 'ENVIADO') return 'Em análise na Meta';
   if (queueStatus === 'APPROVED') return 'Aprovado — atualize a sincronização';
+  if (queueStatus === 'FALHA_ENVIO') return 'Falha na aplicação — confira o motivo abaixo';
+  if (queueStatus === 'CANCELADO') return 'Aplicação encerrada — requer revisão';
   if (rows.some(t => t.status.toLowerCase() === 'rejected') || queueStatus === 'REJECTED') return 'Rejeitado';
   return 'Ausente';
 }

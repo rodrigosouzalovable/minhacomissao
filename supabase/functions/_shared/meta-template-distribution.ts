@@ -5,7 +5,7 @@ export function podeDistribuirModelo(mestre: { categoria?: string; criado_por?: 
 }
 
 export function preservarSubmissao(status: unknown): boolean {
-  return ['APPROVED', 'PENDING', 'IN_APPEAL', 'PENDING_DELETION'].includes(String(status || '').toUpperCase());
+  return ['APPROVED', 'PENDING', 'ENVIADO', 'IN_APPEAL', 'PENDING_DELETION'].includes(String(status || '').toUpperCase());
 }
 
 export function registroReclassificacao() {

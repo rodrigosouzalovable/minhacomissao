@@ -39,6 +39,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect";
 import { catalogoUtility, situacaoUtility, type UtilityMaster, type UtilityGroup } from "@/lib/metaUtilityCatalog";
+import { applyManualTemplate, type ManualTemplateResult } from "@/lib/metaManualTemplateApplication";
 import { carregarUtilityMestres } from "@/lib/carregarUtilityMestres";
 import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
 import { approvedGreenSelectionIds, isBrazilianInstance, isBannedInstance, instanceDisplayPhone, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from "@/lib/metaNationalInstances";
@@ -253,7 +254,9 @@ export default function EnvioMeta() {
   const [masterMediaUrl, setMasterMediaUrl] = useState<string | undefined>();
   const [mestres, setMestres] = useState<UtilityMaster[]>([]);
   const [filaTemplate, setFilaTemplate] = useState<Record<string, string>>({});
-  const [resultadosAplicacao, setResultadosAplicacao] = useState<Array<{ instancia_id: string; ok: boolean; enfileirados?: number; erro?: string; motivo?: string }>>([]);
+  const [resultadosAplicacao, setResultadosAplicacao] = useState<ManualTemplateResult[]>([]);
+  const [aplicacaoProgress, setAplicacaoProgress] = useState({ done: 0, total: 0 });
+  const aplicacaoRef = useRef(false);
   const [loading, setLoading] = useState(true);
 
   const [templateId, setTemplateId] = useState<string>("");
@@ -886,7 +889,6 @@ export default function EnvioMeta() {
     [templateGroups, templateId],
   );
   useEffect(() => {
-    setResultadosAplicacao([]);
     setFilaTemplate({});
     if (!templateGroup?.mestreId || instanciaIds.length === 0) return;
     let ativo = true;
@@ -898,6 +900,7 @@ export default function EnvioMeta() {
     })();
     return () => { ativo = false; };
   }, [templateGroup?.mestreId, instanciaIds, templates]);
+  useEffect(() => { setResultadosAplicacao([]); }, [templateId, instanciaIds]);
   // Usa o primeiro registro do grupo como "template" para preview/variáveis.
   const template = templateGroup?.sample ?? null;
 
@@ -1633,66 +1636,58 @@ export default function EnvioMeta() {
                         size="sm"
                         disabled={injetandoTemplate || !isAdmin || !templateGroup.mestreId}
                         onClick={async () => {
-                          if (!templateGroup) return;
+                          const mestreId = templateGroup?.mestreId;
+                          if (!mestreId || aplicacaoRef.current) return;
+                          const ids = instanciasIncompatíveis.map(i => i.id);
+                          aplicacaoRef.current = true;
                           setInjetandoTemplate(true);
-                          try {
-                            const { data, error } = await supabase.functions.invoke(
-                              "meta-templates-onboarding-enfileirar",
-                              {
-                                body: {
-                                  instancia_ids: instanciasIncompatíveis.filter(i => !templateGroup.instanciasAprovadasIds.has(i.id)).map((i) => i.id),
-                                  template_nome: templateGroup.nome,
-                                  idioma: templateGroup.idioma,
-                                },
-                              },
-                            );
-                            let resposta = data as any;
+                          setResultadosAplicacao([]);
+                          setAplicacaoProgress({ done: 0, total: ids.length });
+                          const invoke = async (name: string, body: unknown) => {
+                            const { data, error } = await supabase.functions.invoke(name, { body });
                             if (error) {
-                              const response = "context" in error
-                                ? (error as { context?: Response }).context
-                                : undefined;
-                              const details = response
-                                ? await response.clone().json().catch(() => null)
-                                : null;
-                              resposta = details || { success: false, error: error.message };
+                              const response = "context" in error ? (error as { context?: Response }).context : undefined;
+                              const details = response ? await response.clone().json().catch(() => null) : null;
+                              throw new Error(details?.error || error.message);
                             }
-                            setResultadosAplicacao(Array.isArray(resposta?.instancias) ? resposta.instancias : []);
-                            if (resposta?.success === false) {
-                              const err = String(resposta?.error || "");
-                              if (err === "template_nao_cadastrado_como_mestre") {
-                                toast.error(
-                                  "Este template ainda não está cadastrado como modelo mestre. Cadastre-o na aba Template antes de aplicar.",
-                                );
-                              } else if (err === "template_mestre_nao_elegivel") {
-                                toast.error("Este modelo não pode ser copiado: o modelo mestre não é de Utilidade.");
-                              } else if (err === "template_mestre_de_outro_proprietario") {
-                                toast.error("Este modelo mestre pertence a outro usuário e não pode ser aplicado nestas instâncias.");
-                              } else if (err === "somente_admin") {
-                                toast.error("Apenas o administrador pode aplicar templates.");
-                              } else {
-                                toast.error(err || "Não foi possível aplicar o template.");
-                              }
-                              return;
-                            }
-                            const n = Number(resposta?.enfileirados || 0);
-                            if (n > 0) {
-                              toast.success(
-                                `${n} envio(s) de template na fila. A aplicação é gradual (1 por vez, 2–5 min, 07h–20h).`,
-                              );
-                            } else {
-                              toast.info("Nenhum novo item enfileirado. Confira a situação de cada instância abaixo.");
-                            }
-                            const novos = Object.fromEntries((resposta?.instancias || []).filter((r: any) => r.enfileirados > 0).map((r: any) => [r.instancia_id, "PENDENTE"]));
-                            setFilaTemplate(prev => ({ ...prev, ...novos }));
-                          } catch (e: any) {
-                            toast.error(e?.message || "Falha ao aplicar o template.");
+                            if (!data || data.success !== true) throw new Error(data?.error || "Não foi possível confirmar a aplicação.");
+                            return data;
+                          };
+                          try {
+                            // The submission function synchronizes each number before creating a copy.
+                            const results = await applyManualTemplate(mestreId, ids,
+                              body => invoke("meta-criar-template-lote", body),
+                              async deferredIds => {
+                                const response = await invoke("meta-templates-onboarding-enfileirar", {
+                                  instancia_ids: deferredIds, mestre_id: mestreId,
+                                  template_nome: templateGroup.nome, idioma: templateGroup.idioma,
+                                  manual_defer: true,
+                                });
+                                const failed = response.instancias?.find((r: any) => !r.ok);
+                                if (failed) throw new Error(failed.erro || failed.motivo || "Falha ao manter a aplicação na fila.");
+                              },
+                              (results, done, total) => {
+                                setResultadosAplicacao(results);
+                                setAplicacaoProgress({ done, total });
+                                const queue = Object.fromEntries(results.filter(r => ['PENDENTE', 'ENVIADO', 'FALHA_ENVIO'].includes(r.status)).map(r => [r.instancia_id, r.status]));
+                                setFilaTemplate(prev => ({ ...prev, ...queue }));
+                              });
+                            const started = results.filter(r => r.status === 'ENVIADO').length;
+                            const deferred = results.filter(r => r.status === 'PENDENTE').length;
+                            const failed = results.filter(r => r.status === 'FALHA_ENVIO').length;
+                            const summary = `${results.length} conferidas • ${started} aplicações iniciadas • ${deferred} na fila • ${failed} não aplicadas`;
+                            if (failed) toast.warning(summary); else toast.success(summary);
+                            await carregar();
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : "Falha ao aplicar o template.");
                           } finally {
+                            aplicacaoRef.current = false;
                             setInjetandoTemplate(false);
                           }
                         }}
                       >
                         <Send className="h-3 w-3 mr-1" />
-                        {injetandoTemplate ? "Aplicando..." : "Aplicar nas instâncias selecionadas"}
+                        {injetandoTemplate ? `Aplicando ${aplicacaoProgress.done}/${aplicacaoProgress.total}...` : "Aplicar nas instâncias selecionadas"}
                       </Button>
 
                       <Button
@@ -1727,13 +1722,21 @@ export default function EnvioMeta() {
                     </div>
                     {!isAdmin && <p className="mt-2 text-xs">Somente administradores podem aplicar modelos.</p>}
                     {!templateGroup.mestreId && <p className="mt-2 text-xs">Cadastre este modelo na aba Template com seu usuário para aplicá-lo.</p>}
-                    {resultadosAplicacao.length > 0 && <ul className="mt-2 space-y-1">
-                      {resultadosAplicacao.map(r => <li key={r.instancia_id}>
-                        {instancias.find(i => i.id === r.instancia_id)?.nome || "Instância"}: {r.erro ? motivoAplicacao(r.erro) : r.enfileirados ? "Na fila — aguardando aplicação gradual e aprovação da Meta" : "Já existe, está em análise ou na fila; nenhum novo envio"}
-                      </li>)}
-                    </ul>}
+
                   </div>
                 </div>
+              </div>
+            )}
+
+            {resultadosAplicacao.length > 0 && (
+              <div className="mt-3 text-sm" role="status" aria-label="Resultado da aplicação">
+                <p className="font-medium">Aplicação de templates — {aplicacaoProgress.done}/{aplicacaoProgress.total} conferidas</p>
+                <p className="text-xs text-muted-foreground">Aplicação 24 horas, inclusive domingos; aprovação depende da Meta. Tier 250: até dois templates por número/dia.</p>
+                <ul className="mt-2 max-h-64 overflow-y-auto space-y-1">
+                  {resultadosAplicacao.map(r => <li key={r.instancia_id}>
+                    {instancias.find(i => i.id === r.instancia_id)?.nome || "Instância"}: {motivoAplicacao(r.motivo || r.status)}
+                  </li>)}
+                </ul>
               </div>
             )}
 
