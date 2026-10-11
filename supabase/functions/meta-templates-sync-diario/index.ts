@@ -35,7 +35,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const auto = body?.auto === true;
     const force = body?.force === true;
-    const completeUtility = body?.complete_utility === true && !auto;
+    const serviceToken = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (auto && (!serviceToken || req.headers.get("Authorization") !== `Bearer ${serviceToken}`)) return json({ success: false, error: "Acesso interno obrigatório" }, 403);
 
     if (!auto) {
       const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
@@ -104,11 +105,12 @@ Deno.serve(async (req) => {
     ownsLock = false;
 
     const audit = await supabase.functions.invoke("meta-templates-auditar-instancias", {
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(60_000),
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
       body: {
         auto: true,
         dry_run: false,
-        utility_approved_only: completeUtility,
+        utility_approved_only: true,
       },
     }).catch(() => ({ error: { message: "A conferência de cobertura não respondeu no prazo; tente novamente." }, data: null }));
 

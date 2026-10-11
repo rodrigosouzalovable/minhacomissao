@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
+import { approvedOwnerModels, readAllTemplateRows } from "../_shared/meta-template-completion.ts";
 import { modelosParaCopiar } from "../_shared/meta-template-copy-candidates.ts";
 import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
@@ -156,10 +157,17 @@ Deno.serve(async (req) => {
       // A marcação “injetar em números novos” vale apenas para o fluxo automático.
       // Uma aplicação manual pode usar qualquer mestre Utility seguro do proprietário.
       if (idsMestreDoProprietario) mestresQuery = mestresQuery.in("id", idsMestreDoProprietario);
-      else mestresQuery = mestresQuery.eq("injetar_em_novos", true);
+
       const { data: mestresValidos, error: mestresError } = await mestresQuery;
       if (mestresError) throw mestresError;
-      const mestresPermitidos = (mestresValidos as any[]) || [];
+      let mestresPermitidos = (mestresValidos as any[]) || [];
+      if (!templateNome) {
+        const { data: sources, error: sourceError } = await supabase.from("meta_whatsapp_instances").select("id,user_id").eq("user_id", inst.user_id).eq("provider", "meta");
+        if (sourceError) throw sourceError;
+        const sourceIds = (sources || []).map(i => i.id);
+        const copies = sourceIds.length ? await readAllTemplateRows(() => supabase.from("meta_whatsapp_templates").select("id,instancia_id,nome_template,idioma,status,categoria").in("instancia_id", sourceIds).eq("status", "approved").eq("categoria", "UTILITY")) : [];
+        mestresPermitidos = approvedOwnerModels(mestresPermitidos, copies, new Map((sources || []).map(i => [i.id, i.user_id])));
+      }
       const { data: reais } = await supabase.from("meta_whatsapp_templates")
         .select("nome_template,idioma,status").eq("instancia_id", instanciaId);
       const chavesReais = new Set(((reais as any[]) || [])
@@ -226,7 +234,7 @@ Deno.serve(async (req) => {
           (bm ? `${bm}\n` : "") +
           (templateNome ? `Modelo: *${templateNome}*\n` : "") +
           `Modelos na fila: *${quantidade}*\n\n` +
-          `Envio gradual: contas tier 250 recebem no máximo 2 modelos por número/dia; demais tiers mantêm o fluxo atual. Sempre das 07h às 20h e nunca no domingo.`,
+          `Envio gradual: contas tier 250 recebem no máximo 2 modelos por número/dia; demais tiers mantêm o fluxo atual. 24 horas por dia, inclusive domingos.`,
       });
 
       resultados.push({ instancia_id: instanciaId, ok: true, enfileirados: quantidade });
