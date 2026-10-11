@@ -2721,7 +2721,9 @@ export default function ConfigurarMeta() {
                 </Table>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Todos os números verificados já possuem os modelos pré-aprovados.
+                  {auditoria.verificadas > 0 && auditoria.completas === auditoria.verificadas
+                    ? "Todos os números verificados já possuem os modelos pré-aprovados."
+                    : "Consulte os itens enfileirados e os números em espera no painel de aplicação."}
                 </p>
               )}
 
