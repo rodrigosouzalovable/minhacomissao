@@ -36,6 +36,7 @@ import ParceirosMetaTab from "@/components/meta/ParceirosMetaTab";
 import { isInformationalDisplayNameLimit, isMetaDisplayNameUsable } from "@/lib/metaNameStatus";
 import { humanizarErroTemplate } from "@/lib/humanizarErroTemplate";
 import { nationalInstanceCount } from "@/lib/metaNationalInstances";
+import { summarizeBmQuotas } from "@/lib/metaBmQuotaSummary";
 
 
 const PROJECT_REF = "cymdrkeukockakfzjeen";
@@ -131,6 +132,7 @@ export default function ConfigurarMeta() {
   const { parceiroMeta } = useUserPermissions();
   const { isAdmin } = useUserRole();
   const [instancias, setInstancias] = useState<Instancia[]>([]);
+  const [instanciasCotas, setInstanciasCotas] = useState<Instancia[]>([]);
   const [certificadoProgresso, setCertificadoProgresso] = useState<Record<string, { enviados: number; reservados: number; falhas: number }>>({});
   const [certificadoMetas, setCertificadoMetas] = useState<Record<string, string>>({});
   const [certificadoBusy, setCertificadoBusy] = useState<string | null>(null);
@@ -151,17 +153,8 @@ export default function ConfigurarMeta() {
   const [bms, setBms] = useState<BM[]>([]);
 
   const resumoCotasBm = useMemo(() => {
-    const bmsConectadas = Object.values(cotas).filter((cota) => cota.instancias > 0);
-    const bmsIlimitadas = bmsConectadas.filter((cota) => cota.tier_ilimitado);
-    const bmsLimitadas = bmsConectadas.filter((cota) => !cota.tier_ilimitado);
-    return {
-      quantidade: bmsConectadas.length,
-      ilimitadas: bmsIlimitadas.length,
-      limite: bmsLimitadas.reduce((total, cota) => total + cota.tier_diario, 0),
-      usados: bmsLimitadas.reduce((total, cota) => total + cota.enviados_24h, 0),
-      restantes: bmsLimitadas.reduce((total, cota) => total + cota.restantes, 0),
-    };
-  }, [cotas]);
+    return summarizeBmQuotas(Object.values(cotas), instanciasCotas, bms);
+  }, [cotas, instanciasCotas, bms]);
   const [editPhoneId, setEditPhoneId] = useState<string | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
   const [editObservacaoId, setEditObservacaoId] = useState<string | null>(null);
@@ -399,6 +392,7 @@ export default function ConfigurarMeta() {
     if (i.data) {
       // Somente números oficiais (exclui espelhos UAZAPI da aba Acionamento)
       let lista = (i.data as Instancia[]).filter((x) => ((x as any).provider ?? "meta") === "meta");
+      setInstanciasCotas(lista);
       if (!parceiroMeta) {
         // Números vinculados a parceiros não aparecem para admin/funcionários
         const idsParceiro = new Set(((vp.data as any[]) ?? []).map((r) => r.instancia_id as string));
@@ -1437,11 +1431,11 @@ export default function ConfigurarMeta() {
               <div className="min-w-0">
                 <p className="text-sm font-medium">Limite diário total das BMs</p>
                 <p className="text-xs text-muted-foreground">
-                  Cada BM ativa com número Meta ativo é somada uma única vez.
+                  Cada BM ativa com número Meta ativo é somada uma única vez. BMs banidas não entram no saldo.
                 </p>
               </div>
             </div>
-            {loadingCotas ? (
+            {loadingCotas || loading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Calculando limites…
               </div>
