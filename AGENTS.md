@@ -1,36 +1,36 @@
 # Decisões técnicas
 
 <!-- LOVABLE:BEGIN -->
-- Agreement documents use local PDF text parsing and validated individual installment rows; imported dates/values persist exactly and summary-only screenshots retain the existing schedule generator to avoid invented document rows.
-- Campaign images persist in recipient vars keyed by name/language; use isolated send snapshots and path-keyed media caches without updating template defaults, so scheduled and resumed campaigns preserve the chosen image.
-- Campaign sharing is per-job read-only through indexed grants and scoped RPCs; never extend owner controls or realtime subscriptions.
-- Recovery timing reuses loaded exact cycles with independent drop-to-GREEN and accepted-first-send-to-GREEN samples, distinguishing waiting from sending without extra queries.
-- Account-violation pauses retain source WABA and require positive matching entity health before individual release; only pending-name limits with GREEN/UNKNOWN are informational, never bans, mixed restrictions, quarantine or recovery.
-- Recovery volume uses shared constants and atomic reservations; budget changes require authenticated owner-admin idempotent authorization to prevent compounded targets and preserve safety reductions.
-- Manual template application uses bounded direct submissions and per-number results; quota deferrals reuse the worker without enabling automatic copying, avoiding duplicates.
+- Imported agreement documents preserve validated installments and manual review; never invent missing rows.
+- Campaign media uses persisted recipient overrides and isolated send snapshots to preserve history.
+- Campaign sharing is indexed, scoped and read-only without extra realtime channels.
+- Recovery timings use loaded cycles and separate quality and delivery evidence.
+- Meta violation pauses require matching-entity confirmation; inconclusive reads never imply bans.
+- Recovery volume changes use authenticated idempotent consent and shared atomic budgets.
+- All template paths share atomic number/WABA cooldowns and a BM lease; specific-model deferrals reuse the existing worker without enabling broad copying, preventing concurrent bursts and duplicates.
 <!-- LOVABLE:END -->
 
 - Resolve Meta redirects before rendering; save owner-scoped URLs atomically, override stale templates, preserve sent previews.
 
-- Agreements require audited phone confirmation before saving; remain pending until terms are sent via source/authorized suffix-matched Meta chat or downloaded.
+- Agreements need audited phone confirmation and sent/downloaded terms before completion.
 - Inbox dialogs share parsing/state; require body/header values and validated button links, never guesses.
 - Meta composer keeps editing during sends; guard submission and focus on activation only to preserve drafts and dialog focus.
 
 - Meta webhook alerts need failed recovery and confirmed subscription errors, not timeouts.
 - Valores de parcelas próprias, inclusive pagas, e suas datas efetivas de pagamento usam RPC atômica com recálculo de totais e comissões; vencimentos e baixas seguem RPCs autenticadas específicas.
 
-- Inbox atomically assigns eligible box members and authorizes sends server-side; IAGO rotates only in PADRÃO. Unread filters precede pagination; opening never clears unread, only confirmed later outgoing does.
+- Inbox assignments/sends are atomic and authorized; IAGO rotates in PADRÃO only. Unread filtering precedes pagination; opening does not clear unread.
 - Unknown Meta messages keep restricted diagnostics and show a clear content-unavailable notice.
 - Inbox pool returns reuse authorized RPCs after individual Meta health confirmation; never bypass real blocks.
 - Inbox media uses conversation-level authorization, never broad folder access, to isolate attachments.
-- Meta→UAZAPI migrations reuse the official instance, verify its phone and fix its inbox before disabling Meta, preserving history and preventing duplicates.
+- Meta→UAZAPI migration reuses the instance, verifies phone/inbox before disabling Meta, and preserves history.
 - Reservas do Certificado são vinculadas a uma única instância: recusa da Meta marca só o contato como falha e não interrompe as demais, para preservar a cota e a auditabilidade por número.
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
 - Cobmais diário envia o XLSX a armazenamento privado e processa no servidor; staging/publicação são atômicos, chave = CPF+credor+contrato+parcela e vencimento é substituível.
 - Meta stays owner-scoped; catalogs retain own Utility master links after copy reclassification so distribution continues; messaging still needs approved Utility copies.
-- Template completion shares owner-scoped approved-source selection and paginated reads across manual/automatic paths; preserve eligibility and atomic tier reservations to avoid drafts, duplicates and truncated totals.
+- Template completion shares owner-scoped approved sources, pagination and atomic tier reservations.
 - Resposta automática é registrada sem encerrar Clara; ela interpreta mensagens consecutivas e resolve oferta→validade→agendamento→documentos por etapa antes da IA.
-- Campaign results match replies/agreements by normalized phone suffix/CPF and indexed time windows for fast manual checks without polling.
+- Campaign results use indexed suffix/CPF and time windows, without polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.
 - Navigation uses explicitly granted tabs; `parceiro_meta` scopes instances, never grants extra screens.
 - National lead capture has separate scheduling/config/locks, daily query and monthly Google-account limits, never dollar caps or message sends.
@@ -47,9 +47,9 @@
 - Meta payment errors share commercial classification and cached revalidation before alerts; inconclusive checks never claim unpaid billing or release protected senders.
 
 
-- Maps warming/recovery share permanent global suffix claims with historical backfill, consent and opt-out checks; never release after delay or transport uncertainty. Preserve one-time replies and volume limits.
+- Maps warming/recovery share permanent suffix claims, consent/opt-out checks and one-time replies; uncertainty never releases claims.
 
 - Manual Meta checks batch all owner-connected instances; automatic checks remain due-only to limit cost and timeouts.
 - Overdue audits owner-admin cost consent; isolated scheduler credentials start bounded cycles and stop after drain.
-- Inbox phone search uses indexed reverse-normalized ranges and bounded SECURITY INVOKER RPC; RLS precedes pagination, filters preserve matches, opening selects the actual box.
+- Inbox phone search uses indexed reverse ranges and bounded invoker RPC; RLS precedes pagination; opening selects the actual box.
 
