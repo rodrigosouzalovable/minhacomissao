@@ -4,7 +4,7 @@
 - Imported agreement documents preserve validated installments and manual review; never invent missing rows.
 - Campaign media uses persisted recipient overrides and isolated send snapshots to preserve history.
 - Campaign sharing is scoped read-only; no extra realtime channels.
-- Recovery timings use loaded cycles and separate quality and delivery evidence.
+- Recovery timings separate quality/delivery evidence using loaded cycles.
 - Meta violation pauses require matching-entity confirmation; inconclusive reads never imply bans.
 - Recovery volume changes use authenticated idempotent consent and shared atomic budgets.
 - Template paths share atomic number/WABA cooldowns and a BM lease; selected-model deferrals reuse the worker without enabling broad copying.
