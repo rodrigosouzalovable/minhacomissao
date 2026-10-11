@@ -7540,6 +7540,30 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_template_pacing: {
+        Row: {
+          lease_token: string | null
+          lease_until: string | null
+          next_allowed_at: string
+          scope_key: string
+          updated_at: string
+        }
+        Insert: {
+          lease_token?: string | null
+          lease_until?: string | null
+          next_allowed_at?: string
+          scope_key: string
+          updated_at?: string
+        }
+        Update: {
+          lease_token?: string | null
+          lease_until?: string | null
+          next_allowed_at?: string
+          scope_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meta_templates_instancia: {
         Row: {
           atualizado_em: string
@@ -12618,6 +12642,10 @@ export type Database = {
         Args: { p_owner: string; p_token: string }
         Returns: boolean
       }
+      claim_meta_template_pacing: {
+        Args: { p_instancia_id: string; p_mestre_id: string }
+        Returns: Json
+      }
       claim_meta_templates_sync_diario: {
         Args: { p_force?: boolean; p_lock_minutes?: number }
         Returns: boolean
@@ -12899,6 +12927,10 @@ export type Database = {
           p_status: string
         }
         Returns: number
+      }
+      finish_meta_template_pacing: {
+        Args: { p_token: string }
+        Returns: undefined
       }
       finish_meta_templates_sync_diario: {
         Args: {

@@ -29,7 +29,7 @@ export async function applyManualTemplate(
       }
       for (const id of batch) {
         if (started.has(id)) results.push({ instancia_id: id, status: 'ENVIADO', motivo: 'Aplicação iniciada — aguardando a Meta' });
-        else if (deferred.has(id)) results.push({ instancia_id: id, status: deferError ? 'FALHA_ENVIO' : 'PENDENTE', motivo: deferError || 'Na fila — aguardando disponibilidade da cota diária' });
+        else if (deferred.has(id)) results.push({ instancia_id: id, status: deferError ? 'FALHA_ENVIO' : 'PENDENTE', motivo: deferError || (deferred.get(id) === 'intervalo_2_5_min' ? 'Na fila — aguardando intervalo de 2–5 minutos' : 'Na fila — aguardando disponibilidade da cota diária') });
         else {
           const reason = ignored.get(id);
           const existing = ['submissao_existente_preservada', 'modelo_existente_na_meta'].includes(reason || '');
