@@ -41,7 +41,9 @@ export async function executarBaseNovoMundo(db: any, insts: any[], simulacao: bo
       .eq('meta_templates_mestre.categoria', 'UTILITY').eq('meta_templates_mestre.criado_por', owner);
     if (copiesError) throw copiesError;
     const approved = new Set((copies || []).filter((copy: any) => !copy.meta_templates_mestre?.reclassificado_marketing).map((copy: any) => copy.instancia_id));
+    // Quarantined senders are skipped up front so they never block the rest of the queue.
     const eligible = insts.filter(inst => approved.has(inst.id) && telefoneNovoMundo(inst.display_phone) &&
+      !(inst.quarentena_ate && Date.parse(inst.quarentena_ate) > Date.now()) &&
       (!inst.recuperacao_proximo_envio_em || Date.parse(inst.recuperacao_proximo_envio_em) <= Date.now()));
     const defer = async (inst: any, reason: string) => {
       resultados.push({ instancia: inst.nome, skip: reason });
@@ -59,7 +61,7 @@ export async function executarBaseNovoMundo(db: any, insts: any[], simulacao: bo
       catch { await defer(inst, 'consulta_template_inconclusiva'); continue; }
       if (!tpl || !templateCadastralValido(tpl)) { await defer(inst, 'aguarda_template_utility_aprovado'); continue; }
       const { data: logId, error: reservationError } = await db.rpc('reservar_novo_mundo', { p_instancia: inst.id });
-      if (reservationError) { resultados.push({ instancia: inst.nome, skip: reservationError.message }); break; }
+      if (reservationError) { await defer(inst, reservationError.message); continue; }
       if (!logId) { resultados.push({ instancia: inst.nome, skip: 'estoque_ou_limites_indisponiveis' }); continue; }
       const { data: log, error: logError } = await db.from('meta_recuperacao_log').select('id,destino_telefone,telefone_sufixo,variaveis,nome_empresa').eq('id', logId).single();
       if (logError || !log) throw logError || new Error('Reserva indisponível');
