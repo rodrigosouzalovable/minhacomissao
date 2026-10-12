@@ -147,16 +147,21 @@ export async function notificarNumeros(
     return { success: enviadosFila > 0, enviados: enviadosFila, erros, instanciaUsadaPorDestino };
   }
 
-  // Idempotência global (mesmo tipo+chave = pula tudo)
+  // Idempotência por destino: o envio a um destino (ex.: número pessoal) nunca bloqueia os demais (ex.: grupos).
+  let pendentes = directDestinations;
   if (params.chaveIdempotencia) {
-    const { data: ja } = await supabase
+    const chaves = directDestinations.map((d) => `${params.chaveIdempotencia}:${normalizarNumero(d)}`);
+    const { data: jaEnviados } = await supabase
       .from("admin_notificacoes_log")
-      .select("id")
+      .select("chave_idempotencia")
       .eq("tipo", params.tipo)
-      .like("chave_idempotencia", `${params.chaveIdempotencia}%`)
-      .limit(1)
-      .maybeSingle();
-    if (ja) return { success: false, enviados: 0, erros: [], skipped: "ja_enviado" };
+      .eq("status", "enviado")
+      .in("chave_idempotencia", chaves);
+    const feitos = new Set((jaEnviados || []).map((r: any) => r.chave_idempotencia));
+    pendentes = directDestinations.filter((d) => !feitos.has(`${params.chaveIdempotencia}:${normalizarNumero(d)}`));
+    if (!pendentes.length) {
+      return { success: enviadosFila > 0, enviados: enviadosFila, erros, skipped: enviadosFila ? undefined : "ja_enviado", instanciaUsadaPorDestino };
+    }
   }
 
   const { data: insts } = await supabase
