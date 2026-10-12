@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import BmInstanceFilter from "@/components/meta/BmInstanceFilter";
 import TemplateApprovedInstances from '@/components/meta/TemplateApprovedInstances';
+import { instanciaAptaParaTemplate } from '@/lib/metaTemplateApplyEligibility';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -985,7 +986,7 @@ export default function EnvioMeta() {
 
   // Templates compatíveis para variação: mesma quantidade de variáveis do principal
   const instanciasGreenAprovadasIds = useMemo(() =>
-    approvedGreenSelectionIds(instancias, templateGroup?.todasInstanciasAprovadasIds ?? new Set<string>()),
+    approvedGreenSelectionIds(instancias.filter(instanciaAptaParaTemplate), templateGroup?.todasInstanciasAprovadasIds ?? new Set<string>()),
   [instancias, templateGroup]);
 
   const variantesCompativeis = useMemo(() => {
@@ -1036,6 +1037,8 @@ export default function EnvioMeta() {
       (i) => instanciaIds.includes(i.id) && !variantesGroups.every((g) => g.instanciasAprovadasIds.has(i.id)),
     );
   }, [variantesGroups, instanciaIds, instancias]);
+  const faltantesAptas = useMemo(() => instanciasIncompatíveis.filter(instanciaAptaParaTemplate), [instanciasIncompatíveis]);
+  const faltantesIgnoradas = instanciasIncompatíveis.length - faltantesAptas.length;
 
   // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
   const isentosDedup = useMemo(() => {
@@ -1620,10 +1623,11 @@ export default function EnvioMeta() {
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <p className="font-medium">
-                      Este template não está aprovado em {instanciasIncompatíveis.length} instância(s) selecionada(s):
+                      Este template não está aprovado em {faltantesAptas.length} instância(s) ativa(s) selecionada(s):
                     </p>
+                    {faltantesIgnoradas > 0 && <p className="text-xs mt-1">{faltantesIgnoradas} banida(s), bloqueada(s) ou desconectada(s) ignorada(s) — remova-as da seleção.</p>}
                     <ul className="list-disc ml-5 mt-1">
-                      {instanciasIncompatíveis.map((i) => (
+                      {faltantesAptas.map((i) => (
                         <li key={i.id}>{i.nome} — {templateGroup ? situacaoUtility(templateGroup, i.id, filaTemplate[i.id]) : "Ausente"}</li>
                       ))}
                     </ul>
@@ -1638,7 +1642,7 @@ export default function EnvioMeta() {
                         onClick={async () => {
                           const mestreId = templateGroup?.mestreId;
                           if (!mestreId || aplicacaoRef.current) return;
-                          const ids = instanciasIncompatíveis.map(i => i.id);
+                          const ids = faltantesAptas.map(i => i.id);
                           aplicacaoRef.current = true;
                           setInjetandoTemplate(true);
                           setResultadosAplicacao([]);
