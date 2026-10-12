@@ -1,5 +1,5 @@
 import { templateIntervalSeconds } from "../_shared/meta-template-pacing.ts";
-import { nextTemplateDay } from "../_shared/meta-template-completion.ts";
+import { nextTemplateDay, isGhostSubmission } from "../_shared/meta-template-completion.ts";
 import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 // Copia templates aprovados para números novos da API Oficial, de forma gradual.
 // Reutiliza o agendamento existente, sem nova rotina.
@@ -351,10 +351,13 @@ Deno.serve(async (req) => {
         // A criação pode ter sido iniciada manualmente antes de o tick alcançar
         // a fila. PENDING significa submissão real, não autorização para reenviar.
         const { data: submissao } = await supabase.from("meta_templates_instancia")
-          .select("status,meta_template_id,erro")
+          .select("status,meta_template_id,erro,atualizado_em")
           .eq("instancia_id", inst.id).eq("template_mestre_id", proximo.template_mestre_id)
           .maybeSingle();
-        if (submissao && ["PENDING", "ENVIADO", "APPROVED"].includes(String(submissao.status).toUpperCase())) {
+        const { data: realAgora } = await supabase.from("meta_whatsapp_templates").select("id")
+          .eq("instancia_id", inst.id).eq("nome_template", mestreItem.nome).limit(1).maybeSingle();
+        const fantasma = isGhostSubmission(submissao as any, !!realAgora);
+        if (!fantasma && submissao && ["PENDING", "ENVIADO", "APPROVED"].includes(String(submissao.status).toUpperCase())) {
           await supabase.from("meta_templates_onboarding_fila").update({
             status: submissao.status === "APPROVED" ? "APPROVED" : "ENVIADO",
             motivo: submissao.status === "APPROVED" ? "aprovado pela Meta" : "enviado; aguardando aprovação da Meta",

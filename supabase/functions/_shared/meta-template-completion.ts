@@ -26,3 +26,10 @@ export function nextTemplateDay(now = new Date()): Date {
   brt.setUTCHours(0, 0, 0, 0);
   return new Date(brt.getTime() + 3 * 3600_000);
 }
+/** ENVIADO/PENDING without a Meta id that is older than 12h and absent from a fresh Meta read never reached Meta. */
+export function isGhostSubmission(row: { status?: string | null; meta_template_id?: string | null; atualizado_em?: string | null } | null | undefined, realExists: boolean, now = Date.now()): boolean {
+  if (!row || realExists || row.meta_template_id) return false;
+  if (!["ENVIADO", "PENDING"].includes(String(row.status || "").toUpperCase())) return false;
+  const t = row.atualizado_em ? new Date(row.atualizado_em).getTime() : NaN;
+  return Number.isFinite(t) && now - t > 12 * 3600_000;
+}
