@@ -140,13 +140,14 @@ Deno.serve(async (req) => {
     // são liberados para reaplicação (nunca chegaram à Meta).
     const mestrePorId = new Map(lista.map((m: any) => [m.id, m]));
     const fantasmas: string[] = [];
+    const fantasmaPares: any[] = [];
     const jaTem = new Map<string, Set<string>>();
     if (idsElegiveis.length > 0) {
       const existentes = await readAllTemplateRows(() => supabase.from("meta_templates_instancia").select("id,instancia_id, template_mestre_id, status, meta_template_id, atualizado_em").in("instancia_id", idsElegiveis));
       for (const r of ((existentes as any[]) || [])) {
         const m: any = mestrePorId.get(r.template_mestre_id);
         const real = !!m && (jaTemNome.get(r.instancia_id)?.has(`${m.nome}|${m.idioma}`) ?? false);
-        if (!auto && body?.sync === true && m && isGhostSubmission(r, real)) { fantasmas.push(r.id); continue; }
+        if (!auto && body?.sync === true && m && isGhostSubmission(r, real)) { fantasmas.push(r.id); fantasmaPares.push(r); continue; }
         if (["APPROVED", "PENDING", "IN_APPEAL", "ENVIADO"].includes(String(r.status || "").toUpperCase())) {
           if (!jaTem.has(r.instancia_id)) jaTem.set(r.instancia_id, new Set());
           jaTem.get(r.instancia_id)?.add(r.template_mestre_id);
@@ -157,6 +158,12 @@ Deno.serve(async (req) => {
       await supabase.from("meta_templates_instancia").update({
         status: "FALHA_ENVIO", erro: "Registro sem submissão real: ausente na Meta; liberado para reaplicação", atualizado_em: new Date().toISOString(),
       }).in("id", fantasmas).is("meta_template_id", null);
+      for (const g of fantasmaPares) {
+        await supabase.from("meta_templates_onboarding_fila").update({
+          status: "PENDENTE", enviado_em: null, finalizado_em: null, tentativas: 0,
+          agendado_para: new Date().toISOString(), motivo: "Registro fantasma liberado; conferir Meta antes de aplicar",
+        }).eq("instancia_id", g.instancia_id).eq("template_mestre_id", g.template_mestre_id);
+      }
     }
 
     // Itens já na fila (não repetir contagem de pendentes)
