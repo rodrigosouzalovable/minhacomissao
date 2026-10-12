@@ -6,8 +6,8 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
-- [ ] Verify monitoring finding about scheduled payment-reminder authentication against the active job.
-- [ ] Isolate manual template admission failures and verify reservation cleanup without real submissions.
+- [x] Payment-reminder finding is stale: active cron has no caller for check-payment-reminders or job 8; preserved authentication and schedules.
+- [x] Isolated template admission errors per number, preserved terminal rows and peer reservations; 18 tests passed and meta-criar-template-lote deployed without real submissions.
 - [x] Intervalo aleatório 2–5 minutos aplicado à BM inteira, inclusive números/WABAs diferentes; reserva e liberação testadas sem submissões reais. 17 testes passaram, regra e permissões conferidas no ambiente ativo; compilação OK.
 - [x] Excluir cotas de BMs banidas do resumo diário Meta, preservar banimentos parciais e histórico; 40 testes passaram e página real confirmou limite/disponível 50.000 e 38 BMs, sem erros ou envios. Compilação OK.
 - [x] Aplicar intervalo aleatório 120–300s por número/WABA, trava sequencial por BM e 24/7 em todos os caminhos; funções publicadas, pendentes reorganizados sem alterar submetidos, 23 testes passaram, painel validado com fila simulada e reservas reais registradas em 11/10/2026.
