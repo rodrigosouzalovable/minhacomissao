@@ -986,7 +986,7 @@ export default function EnvioMeta() {
 
   // Templates compatíveis para variação: mesma quantidade de variáveis do principal
   const instanciasGreenAprovadasIds = useMemo(() =>
-    approvedGreenSelectionIds(instancias, templateGroup?.todasInstanciasAprovadasIds ?? new Set<string>()),
+    approvedGreenSelectionIds(instancias.filter(instanciaAptaParaTemplate), templateGroup?.todasInstanciasAprovadasIds ?? new Set<string>()),
   [instancias, templateGroup]);
 
   const variantesCompativeis = useMemo(() => {
