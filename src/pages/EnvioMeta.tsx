@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import BmInstanceFilter from "@/components/meta/BmInstanceFilter";
 import TemplateApprovedInstances from '@/components/meta/TemplateApprovedInstances';
+import { instanciaAptaParaTemplate } from '@/lib/metaTemplateApplyEligibility';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -1036,6 +1037,8 @@ export default function EnvioMeta() {
       (i) => instanciaIds.includes(i.id) && !variantesGroups.every((g) => g.instanciasAprovadasIds.has(i.id)),
     );
   }, [variantesGroups, instanciaIds, instancias]);
+  const faltantesAptas = useMemo(() => instanciasIncompatíveis.filter(instanciaAptaParaTemplate), [instanciasIncompatíveis]);
+  const faltantesIgnoradas = instanciasIncompatíveis.length - faltantesAptas.length;
 
   // Sufixos (8 dígitos) dos nossos números conectados na UAZAPI — isentos de deduplicação.
   const isentosDedup = useMemo(() => {
