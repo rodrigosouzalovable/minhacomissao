@@ -1,5 +1,5 @@
-import { claimTemplatePacing, finishTemplatePacing, deferTemplate } from "../_shared/meta-template-pacing.ts";
-import { nextTemplateDay } from "../_shared/meta-template-completion.ts";
+import { finishTemplatePacing } from "../_shared/meta-template-pacing.ts";
+import { admitTemplateInstances } from "../_shared/meta-template-admission.ts";
 import { sincronizarTemplatesMeta } from "../_shared/sincronizar-templates-meta.ts";
 import { podeDistribuirModelo, preservarSubmissao, registroReclassificacao } from "../_shared/meta-template-distribution.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
@@ -7,7 +7,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   finalizarEnvioTemplateTier250,
-  reservarEnvioTemplateTier250,
 } from "../_shared/meta-template-tier-protection.ts";
 
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -453,38 +452,12 @@ serve(async (req) => {
 
 
     // Atomic admission shared by manual, replication, retries and worker.
-    const admitidas: any[] = [];
-    const adiadas: any[] = [];
-    const pacingTokens = new Map<string, string>();
-    for (const inst of instancias) {
-      const pacing = await claimTemplatePacing(supabase, inst.id, mestre_id);
-      if (!pacing.allowed) {
-        if (pacing.existing) {
-          ignoradas.push({ instancia_id: inst.id, motivo: "submissao_existente_preservada" });
-          continue;
-        }
-        await deferTemplate(supabase, inst.id, mestre_id, pacing.next_allowed_at, "aguardando intervalo de 2–5 minutos ou aplicação em andamento na BM");
-        adiadas.push({ instancia_id: inst.id, motivo: "intervalo_2_5_min", agendado_para: pacing.next_allowed_at });
-        continue;
-      }
-      try {
-        const reserva = await reservarEnvioTemplateTier250(supabase, inst.id, mestre_id,
-          apenas_falhas ? "reenvio_manual" : modo === "piloto" ? "piloto" : modo === "replicar" ? "replicacao" : "manual");
-        if (reserva === "limit_reached" || reserva === "already_reserved") {
-          const quando = nextTemplateDay().toISOString();
-          await deferTemplate(supabase, inst.id, mestre_id, quando, "aguardando cota diária tier 250");
-          adiadas.push({ instancia_id: inst.id, motivo: "limite_tier_250", agendado_para: quando });
-          await finishTemplatePacing(supabase, pacing.token);
-          continue;
-        }
-        if (pacing.token) pacingTokens.set(inst.id, pacing.token);
-        admitidas.push(inst);
-      } catch (error) {
-        await finishTemplatePacing(supabase, pacing.token);
-        throw error;
-      }
-    }
-    instancias = admitidas;
+    const admission = await admitTemplateInstances(supabase, instancias, mestre_id,
+      apenas_falhas ? "reenvio_manual" : modo === "piloto" ? "piloto" : modo === "replicar" ? "replicacao" : "manual");
+    const adiadas = admission.deferred;
+    const pacingTokens = admission.tokens;
+    ignoradas.push(...admission.ignored);
+    instancias = admission.admitted;
     const adiadasTier250 = adiadas.filter(item => item.motivo === "limite_tier_250");
 
     // pré-marca como ENVIADO só em envio normal (no reenvio de falhas não mexemos no status em massa)
@@ -527,6 +500,7 @@ serve(async (req) => {
             .from("meta_templates_instancia").select("status")
             .eq("template_mestre_id", mestre_id).eq("instancia_id", inst.id).maybeSingle();
           if (cur && !["FALHA_ENVIO", "REJECTED"].includes(cur.status)) {
+            await finalizarEnvioTemplateTier250(supabase, inst.id, mestre_id, "FALHA", "Submissão anterior preservada antes do processamento");
             await finishTemplatePacing(supabase, pacingTokens.get(inst.id));
             continue;
           }
