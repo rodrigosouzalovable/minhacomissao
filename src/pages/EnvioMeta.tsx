@@ -1623,10 +1623,11 @@ export default function EnvioMeta() {
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <p className="font-medium">
-                      Este template não está aprovado em {instanciasIncompatíveis.length} instância(s) selecionada(s):
+                      Este template não está aprovado em {faltantesAptas.length} instância(s) ativa(s) selecionada(s):
                     </p>
+                    {faltantesIgnoradas > 0 && <p className="text-xs mt-1">{faltantesIgnoradas} banida(s), bloqueada(s) ou desconectada(s) ignorada(s) — remova-as da seleção.</p>}
                     <ul className="list-disc ml-5 mt-1">
-                      {instanciasIncompatíveis.map((i) => (
+                      {faltantesAptas.map((i) => (
                         <li key={i.id}>{i.nome} — {templateGroup ? situacaoUtility(templateGroup, i.id, filaTemplate[i.id]) : "Ausente"}</li>
                       ))}
                     </ul>
@@ -1641,7 +1642,7 @@ export default function EnvioMeta() {
                         onClick={async () => {
                           const mestreId = templateGroup?.mestreId;
                           if (!mestreId || aplicacaoRef.current) return;
-                          const ids = instanciasIncompatíveis.map(i => i.id);
+                          const ids = faltantesAptas.map(i => i.id);
                           aplicacaoRef.current = true;
                           setInjetandoTemplate(true);
                           setResultadosAplicacao([]);
