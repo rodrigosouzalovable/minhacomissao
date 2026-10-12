@@ -193,7 +193,7 @@ export async function notificarNumeros(
   let cursor = 0;
   const mortas = new Set<string>(); // instâncias descartadas nesta execução (banida/desconectada/token)
 
-  for (const rawDest of directDestinations) {
+  for (const rawDest of pendentes) {
     const numero = normalizarNumero(rawDest);
     let sucesso = false;
     let ultimoErro = "sem_tentativas";
@@ -282,7 +282,7 @@ export async function notificarNumeros(
     }
 
     // Destinos externos ao número pessoal mantêm o fluxo próprio com jitter curto.
-    if (rawDest !== directDestinations[directDestinations.length - 1]) {
+    if (rawDest !== pendentes[pendentes.length - 1]) {
       await new Promise((r) => setTimeout(r, 1000 + Math.floor(Math.random() * 2001)));
     }
   }
