@@ -4,7 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 import { linhaBmInstancia } from "../_shared/rotulo-instancia.ts";
-import { approvedOwnerModels, readAllTemplateRows, isInternalSlotFailure } from "../_shared/meta-template-completion.ts";
+import { approvedOwnerModels, readAllTemplateRows, isInternalSlotFailure, isGhostSubmission } from "../_shared/meta-template-completion.ts";
 import { sincronizarTemplatesMeta } from "../_shared/sincronizar-templates-meta.ts";
 import { runBoundedSync } from "../_shared/meta-sync-bounded.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
@@ -121,21 +121,9 @@ Deno.serve(async (req) => {
         motivo: motivoIgnorar(i) || "indisponível",
       }));
 
-    // ===== O que cada instância já possui =====
-    const idsElegiveis = elegiveis.map((i) => i.id);
-    const jaTem = new Map<string, Set<string>>();
-    if (idsElegiveis.length > 0) {
-      const existentes = await readAllTemplateRows(() => supabase.from("meta_templates_instancia").select("id,instancia_id, template_mestre_id, status").in("instancia_id", idsElegiveis));
-      for (const r of ((existentes as any[]) || [])) {
-        if (["APPROVED", "PENDING", "IN_APPEAL", "ENVIADO"].includes(String(r.status || "").toUpperCase())) {
-          if (!jaTem.has(r.instancia_id)) jaTem.set(r.instancia_id, new Set());
-          jaTem.get(r.instancia_id)?.add(r.template_mestre_id);
-        }
-      }
-    }
-
     // Templates REAIS existentes na Meta (nome|idioma) — cobre números conectados
     // antes da injeção automática existir.
+    const idsElegiveis = elegiveis.map((i) => i.id);
     const jaTemNome = new Map<string, Set<string>>();
     if (idsElegiveis.length > 0) {
       const reais = await readAllTemplateRows(() => supabase.from("meta_whatsapp_templates").select("id,instancia_id, nome_template, idioma, status").in("instancia_id", idsElegiveis));
@@ -145,6 +133,30 @@ Deno.serve(async (req) => {
         if (!jaTemNome.has(r.instancia_id)) jaTemNome.set(r.instancia_id, new Set());
         jaTemNome.get(r.instancia_id)?.add(`${r.nome_template}|${String(r.idioma || "pt_BR")}`);
       }
+    }
+
+    // ===== O que cada instância já possui =====
+    // Registros sem id da Meta, antigos e ausentes numa leitura fresca da Meta
+    // são liberados para reaplicação (nunca chegaram à Meta).
+    const mestrePorId = new Map(lista.map((m: any) => [m.id, m]));
+    const fantasmas: string[] = [];
+    const jaTem = new Map<string, Set<string>>();
+    if (idsElegiveis.length > 0) {
+      const existentes = await readAllTemplateRows(() => supabase.from("meta_templates_instancia").select("id,instancia_id, template_mestre_id, status, meta_template_id, atualizado_em").in("instancia_id", idsElegiveis));
+      for (const r of ((existentes as any[]) || [])) {
+        const m: any = mestrePorId.get(r.template_mestre_id);
+        const real = !!m && (jaTemNome.get(r.instancia_id)?.has(`${m.nome}|${m.idioma}`) ?? false);
+        if (!auto && body?.sync === true && m && isGhostSubmission(r, real)) { fantasmas.push(r.id); continue; }
+        if (["APPROVED", "PENDING", "IN_APPEAL", "ENVIADO"].includes(String(r.status || "").toUpperCase())) {
+          if (!jaTem.has(r.instancia_id)) jaTem.set(r.instancia_id, new Set());
+          jaTem.get(r.instancia_id)?.add(r.template_mestre_id);
+        }
+      }
+    }
+    if (fantasmas.length) {
+      await supabase.from("meta_templates_instancia").update({
+        status: "FALHA_ENVIO", erro: "Registro sem submissão real: ausente na Meta; liberado para reaplicação", atualizado_em: new Date().toISOString(),
+      }).in("id", fantasmas).is("meta_template_id", null);
     }
 
     // Itens já na fila (não repetir contagem de pendentes)
