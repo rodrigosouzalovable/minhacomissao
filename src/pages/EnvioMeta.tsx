@@ -1425,6 +1425,8 @@ export default function EnvioMeta() {
 
     setRecipientsRaw("");
     setRecipientsHeaders([]);
+    setRecipientRoles([]);
+    setImportedTemplateKey("");
     setVarsByTel({});
     setCredorByTel({});
     setValidacaoPreview(null);
@@ -2594,7 +2596,7 @@ export default function EnvioMeta() {
                   onClick={async () => {
                     const validSet = new Set(validacaoPreview.valid.map((t) => normalizeTelKey(t)));
                     const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
-                    const linhas = dedup.recipientRecordLines(texto).filter(Boolean);
+                    const linhas = recipientRecordLines(dedup.texto);
                     const usarHeaders = recipientsHeaders.length > 0;
                     const colHeaders = usarHeaders ? recipientsHeaders : ["Telefone", "Nome", "CPF/CNPJ", "Atraso", "Saldo"];
                     const dados: Record<string, any>[] = [];
