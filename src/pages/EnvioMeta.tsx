@@ -31,6 +31,7 @@ import { Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
 import { CREDOR_MARCAS_LISTA, type CredorSlug } from "@/lib/credorMarcas";
+import { recipientRecordLines, mappedRecipientFields } from "@/lib/metaRecipientRecords";
 import { splitLinhaEnvio, parseNumeroBR } from "@/lib/valorBR";
 import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemplateDialog";
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
@@ -176,8 +177,8 @@ function normalizeDocument(value: string): string {
 
 
 
-function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
-  const linhas = input.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+function parseRecipients(input: string, isentos?: Set<string>, roles?: string[]): ClienteRow[] {
+  const linhas = recipientRecordLines(input);
   const rows: ClienteRow[] = [];
   const seen = new Set<string>();
   for (const linha of linhas) {
@@ -192,12 +193,14 @@ function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
     // Números nossos (UAZAPI) são isentos de deduplicação: mantemos todas as repetições.
     if (seen.has(key) && !isentos?.has(telSuffix8(telefone))) continue;
     seen.add(key);
+    const mapped = roles?.length ? mappedRecipientFields(parts, roles) : null;
     rows.push({
+      ...(mapped || {}),
       telefone: key,
-      nome,
-      cpf,
-      atraso: parts[3] || "",
-      saldo: parseNumeroBR(parts[4]) ?? 0,
+      nome: mapped?.nome ?? nome,
+      cpf: mapped?.cpf ?? cpf,
+      atraso: mapped?.atraso ?? (parts[3] || ""),
+      saldo: mapped?.saldo ?? (parseNumeroBR(parts[4]) ?? 0),
     });
   }
   return rows;
@@ -206,7 +209,7 @@ function parseRecipients(input: string, isentos?: Set<string>): ClienteRow[] {
 // Reescreve o textarea sem duplicados, retornando quantos foram removidos.
 // Telefones em `isentos` (números nossos da UAZAPI) nunca são removidos.
 function dedupRecipientsRaw(raw: string, isentos?: Set<string>): { texto: string; duplicados: number; preservados: number } {
-  const linhas = raw.split(/\r?\n/);
+  const linhas = recipientRecordLines(raw);
   const seen = new Set<string>();
   const out: string[] = [];
   let dup = 0;
@@ -279,6 +282,8 @@ export default function EnvioMeta() {
   }, [instancias, loading]);
   const [recipientsRaw, setRecipientsRaw] = useState<string>("");
   const [recipientsHeaders, setRecipientsHeaders] = useState<string[]>([]);
+  const [recipientRoles, setRecipientRoles] = useState<string[]>([]);
+  const [importedTemplateKey, setImportedTemplateKey] = useState("");
   const [editAsText, setEditAsText] = useState<boolean>(false);
   // CPF obrigatório na importação — sempre começa ligado.
   const [cpfObrigatorio, setCpfObrigatorio] = useState<boolean>(true);
@@ -533,7 +538,7 @@ export default function EnvioMeta() {
       toast.message(`${duplicados} duplicado(s) removido(s) antes da validação`);
     }
 
-    const numeros = parseRecipients(texto, isentosDedup).map((r) => r.telefone);
+    const numeros = parseRecipients(texto, isentosDedup, recipientRoles).map((r) => r.telefone);
     if (numeros.length === 0) return toast.error("Adicione destinatários primeiro");
     setValidando(true);
     try {
@@ -558,7 +563,7 @@ export default function EnvioMeta() {
         });
         if (registrarError) throw registrarError;
         const invalidSet = new Set(preview.invalid.map((t) => normalizeTelKey(t)));
-        const linhas = texto.split(/\r?\n/).filter((linha) => {
+        const linhas = recipientRecordLines(texto).filter((linha) => {
           const tel = splitLinhaEnvio(linha.trim())[0] || "";
           return !invalidSet.has(normalizeTelKey(tel));
         });
@@ -1051,7 +1056,7 @@ export default function EnvioMeta() {
     return s;
   }, [uazInstancias]);
 
-  const recipients = useMemo(() => parseRecipients(recipientsRaw, isentosDedup), [recipientsRaw, isentosDedup]);
+  const recipients = useMemo(() => parseRecipients(recipientsRaw, isentosDedup, recipientRoles), [recipientsRaw, isentosDedup, recipientRoles]);
 
   // Motivos que impedem disparar/agendar — exibidos na tela para não travar o botão sem explicação.
   const motivosBloqueio = useMemo(() => {
@@ -1262,7 +1267,7 @@ export default function EnvioMeta() {
         (dedup.preservados ? ` • 🟦 ${dedup.preservados} linha(s) de números UAZAPI mantidas` : "")
       );
     }
-    const recipientsDedup = parseRecipients(dedup.texto, isentosDedup);
+    const recipientsDedup = parseRecipients(dedup.texto, isentosDedup, recipientRoles);
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
 
     const lo = Math.max(1, Number(minSec) || 1);
@@ -1370,7 +1375,7 @@ export default function EnvioMeta() {
     const credorPadrao = credor === "__none__" ? null : credor;
     const clientesComVars: ClienteRow[] = clientesFinal.map((c) => {
       const k = varKey(c.telefone);
-      const v = hasVars ? varsByTel[k] : undefined;
+      const v = recipientRoles.length ? c.vars : hasVars ? varsByTel[k] : undefined;
       const credLinha = credorByTel[k] ?? credorPadrao ?? null;
       const out: ClienteRow = { ...c };
       if (v) out.vars = v;
@@ -1420,6 +1425,8 @@ export default function EnvioMeta() {
 
     setRecipientsRaw("");
     setRecipientsHeaders([]);
+    setRecipientRoles([]);
+    setImportedTemplateKey("");
     setVarsByTel({});
     setCredorByTel({});
     setValidacaoPreview(null);
@@ -1439,7 +1446,7 @@ export default function EnvioMeta() {
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Marque ao menos uma instância no card 2");
     const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
-    const rows = parseRecipients(dedup.texto, isentosDedup);
+    const rows = parseRecipients(dedup.texto, isentosDedup, recipientRoles);
     if (rows.length === 0) return toast.error("Cole ao menos um destinatário");
     if (templateTemBotaoUrlDinamico && !(await salvarButtonUrl())) return;
 
@@ -1750,6 +1757,8 @@ export default function EnvioMeta() {
                 {templateHasImage(template) && <CampaignImagePicker key={templateId} userId={user?.id || ''} templateKey={templateId} value={campaignImage} onChange={setCampaignImage} onBusyChange={setImageUploading} />}
                 <TemplateWhatsAppPreview
                   template={template}
+                  sampleVariables={importedTemplateKey === templateId ? recipients[0]?.vars : undefined}
+                  preserveEmptyPlaceholders
                   imageUrlOverride={
                     (campaignImage?.templateKey === templateId ? campaignImage.url : undefined) || templates
                       .filter((t: any) => t.nome_template === templateGroup?.nome && t.idioma === templateGroup?.idioma)
@@ -2267,19 +2276,19 @@ export default function EnvioMeta() {
                   <thead className="bg-muted sticky top-0">
                     <tr>
                       {recipientsHeaders.map((h, i) => (
-                        <th key={i} className="text-left px-2 py-1.5 border-b whitespace-nowrap font-semibold">
+                        <th key={i} className="text-left px-2 py-1.5 border-b min-w-[190px] max-w-[300px] whitespace-normal font-semibold">
                           {h}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {recipientsRaw.split(/\r?\n/).filter(Boolean).map((linha, ri) => {
+                    {recipientRecordLines(recipientsRaw).map((linha, ri) => {
                       const cells = splitLinhaEnvio(linha);
                       return (
                         <tr key={ri} className="border-b last:border-0 hover:bg-muted/40">
                           {recipientsHeaders.map((_, ci) => (
-                            <td key={ci} className="px-2 py-1 align-top max-w-[280px] truncate" title={cells[ci] || ""}>
+                            <td key={ci} className="px-2 py-2 align-top min-w-[190px] max-w-[300px] whitespace-pre-wrap break-words" title={cells[ci] || ""}>
                               {cells[ci] || <span className="text-muted-foreground/50">—</span>}
                             </td>
                           ))}
@@ -2304,11 +2313,11 @@ export default function EnvioMeta() {
                   setRecipientsRaw(e.target.value);
                   setValidacaoPreview(null);
                   setVarsByTel({});
-                  setRecipientsHeaders([]);
+
                 }}
                 onKeyDown={(e) => {
                   if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
-                  const linhas = recipientsRaw.split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean);
+                  const linhas = recipientRecordLines(recipientsRaw);
                   const ultimaLinha = linhas[linhas.length - 1] || "";
                   if (!ultimaLinha || !/[,;\t]/.test(ultimaLinha)) return;
                   e.preventDefault();
@@ -2321,7 +2330,7 @@ export default function EnvioMeta() {
                 onPaste={(e) => {
                   const text = e.clipboardData.getData("text");
                   if (!text) return;
-                  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+                  const lines = recipientRecordLines(text);
                   if (lines.length === 0) return;
                   const isExcel = lines.some((line) => line.includes("\t"));
                   const rows = lines.map((line) => isExcel
@@ -2330,7 +2339,7 @@ export default function EnvioMeta() {
                   const hasMultipleColumns = isExcel || rows.some((row) => row.length > 1);
                   if (hasMultipleColumns) {
                     e.preventDefault();
-                    const existingLines = recipientsRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                    const existingLines = recipientRecordLines(recipientsRaw);
                     const allRows = [...existingLines.map(l => splitLinhaEnvio(l)), ...rows];
                     setMapDlg({
                       open: true,
@@ -2343,7 +2352,7 @@ export default function EnvioMeta() {
                     const selectionStart = textarea.selectionStart ?? recipientsRaw.length;
                     const selectionEnd = textarea.selectionEnd ?? selectionStart;
                     const textoComColagem = `${recipientsRaw.slice(0, selectionStart)}${text}${recipientsRaw.slice(selectionEnd)}`;
-                    const linhasComColagem = textoComColagem.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+                    const linhasComColagem = recipientRecordLines(textoComColagem);
                     void removerSemWhatsAppConhecidos(linhasComColagem).then(({ linhas: filtradas, removidos }) => {
                       setRecipientsRaw(filtradas.join("\n"));
                       setValidacaoPreview(null);
@@ -2587,7 +2596,7 @@ export default function EnvioMeta() {
                   onClick={async () => {
                     const validSet = new Set(validacaoPreview.valid.map((t) => normalizeTelKey(t)));
                     const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
-                    const linhas = dedup.texto.split(/\r?\n/).filter(Boolean);
+                    const linhas = recipientRecordLines(dedup.texto);
                     const usarHeaders = recipientsHeaders.length > 0;
                     const colHeaders = usarHeaders ? recipientsHeaders : ["Telefone", "Nome", "CPF/CNPJ", "Atraso", "Saldo"];
                     const dados: Record<string, any>[] = [];
@@ -2957,7 +2966,7 @@ export default function EnvioMeta() {
           body_text: (template as any).body_text || "",
           variaveis: template.variaveis || null,
         } : null}
-        onConfirm={async (linhas, stats, novosVars, headers, credByTel) => {
+        onConfirm={async (linhas, stats, novosVars, headers, credByTel, roles) => {
           let linhasFiltradas = linhas;
           let removidosSemWhatsApp = 0;
           try {
@@ -2970,6 +2979,8 @@ export default function EnvioMeta() {
           }
           setRecipientsRaw(linhasFiltradas.join("\n"));
           setRecipientsHeaders(headers || []);
+          setRecipientRoles(roles || []);
+          setImportedTemplateKey(templateId);
           setEditAsText(false);
           setValidacaoPreview(null);
           setVarsByTel(novosVars || {});

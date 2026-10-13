@@ -9,6 +9,8 @@ import { normalizarCredor, type CredorSlug } from "@/lib/credorMarcas";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { metaFirstRowIsHeader, metaImportDataRows, metaHeaderVariable, metaHeaderMappingIssues } from "@/lib/metaImportHeader";
+import { serializeRecipientRecord } from '@/lib/metaRecipientRecords';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const VALOR_HEADER_RX = /(saldo|valor|d[ií]vida|debito|débito|montante|total|parcela|entrada)/i;
 
@@ -120,6 +122,7 @@ type Props = {
     varsByTel: Record<string, Record<string, string>>,
     headers: string[],
     credorByTel?: Record<string, CredorSlug>,
+    roles?: string[],
   ) => void;
 };
 
@@ -395,10 +398,11 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
         if (cred) credorByTel[key] = cred;
       }
 
-      out.push(cols.map((c) => c.get(arr)).join(", "));
+      out.push(serializeRecipientRecord(cols.map((c) => c.get(arr))));
     }
     if (out.length === 0) { toast.error("Nenhum telefone válido encontrado após mapeamento"); return; }
-    onConfirm(out, { total: out.length, ignorados, duplicados, preservados }, varsByTel, headers, credorByTel);
+    const outputRoles = ['telefone', ...['nome', 'cpf', 'atraso', 'saldo'].filter(role => mapping.includes(role)), ...placeholders.filter(key => tplByKey.has(key)).map(key => `tplvar:${key}`)];
+    onConfirm(out, { total: out.length, ignorados, duplicados, preservados }, varsByTel, headers, credorByTel, outputRoles);
     onOpenChange(false);
   };
 
@@ -448,7 +452,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-4xl w-[calc(100%-2rem)] h-[90dvh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{firstRowIsData ? "Definir informações dos destinatários" : "Mapear colunas da planilha"}</DialogTitle>
           <DialogDescription>
@@ -457,6 +461,8 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
           </DialogDescription>
         </DialogHeader>
 
+        <ScrollArea type="always" className="flex-1 min-h-0 min-w-0 w-full pr-4 [&_[data-radix-scroll-area-viewport]>div]:!block">
+        <div className="space-y-4 min-w-0">
         {!firstRowIsData && (
           <div className="flex items-center gap-2">
             <Checkbox id="meta-import-header" checked={firstIsHeader} onCheckedChange={(value) => setHeaderChoice({ rows, value: value === true })} />
@@ -469,7 +475,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
             <div className="text-xs font-semibold uppercase text-muted-foreground">
               Template: {template.nome_template}
             </div>
-            <div className="text-xs whitespace-pre-wrap font-mono leading-relaxed">{previewNodes}</div>
+            <div className="text-xs whitespace-pre-wrap break-words font-mono leading-relaxed">{previewNodes}</div>
             <div className="text-[10px] text-muted-foreground">
               Exemplo com os dados da primeira linha da planilha.
             </div>
@@ -586,7 +592,9 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
           </table>
         </div>
 
-        <DialogFooter>
+        </div>
+        </ScrollArea>
+        <DialogFooter className="shrink-0 border-t pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={confirmar}>Confirmar e importar</Button>
         </DialogFooter>

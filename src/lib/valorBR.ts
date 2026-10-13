@@ -1,6 +1,8 @@
 // Formatação de valores monetários da planilha importada (Envio Meta) e
 // split de linhas CSV que preserva a vírgula decimal de valores em reais.
 
+import Papa from 'papaparse';
+
 export type FormatoValor = "brl" | "numero" | "raw";
 
 /** Converte "4607.58" | "4.607,58" | "R$ 4607,58" em número. Retorna null se não for numérico. */
@@ -64,6 +66,9 @@ const SENTINELA = "\u0000";
  * decimal de valores em reais (ex.: "R$ 4.607,58" continua uma única célula).
  */
 export function splitLinhaEnvio(linha: string): string[] {
+  if (linha.trimStart().startsWith('"')) {
+    return Papa.parse<string[]>(linha, { delimiter: ',', skipEmptyLines: 'greedy' }).data[0] ?? [];
+  }
   const protegida = String(linha ?? "").replace(/(\d),(\d{1,2})(?!\d)/g, `$1${SENTINELA}$2`);
   return protegida
     .split(/[,;\t]/)
