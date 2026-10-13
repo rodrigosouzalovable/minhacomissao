@@ -49,7 +49,7 @@ describe('Utility catalog independent of instance selection', () => {
     expect(g.sample.id).toBe('t1');
     expect([...g.instanciasAprovadasIds]).toEqual(['i1']);
     expect([...g.todasInstanciasAprovadasIds]).toEqual(['i1']);
-    expect(situacaoUtility(g, 'i2')).toBe('Ausente');
+    expect(situacaoUtility(g, 'i2')).toBe('Aprovado pela Meta como Marketing — não pode ser usado como Utilidade');
   });
   test('an absent reclassified Utility master stays selectable without a sending ID', () => {
     const [g] = catalog([], [{ ...master, reclassificado_marketing: true }]);
