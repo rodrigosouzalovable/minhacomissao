@@ -46,6 +46,7 @@ import { carregarTodosMetaTemplates } from "@/lib/carregarTodosMetaTemplates";
 import { approvedGreenSelectionIds, isBrazilianInstance, isBannedInstance, instanceDisplayPhone, nationalInstanceCount, nationalMassSelection, nationalSelectionIds } from "@/lib/metaNationalInstances";
 import { partitionRecipientLines, validRecipientPhone } from "@/lib/metaRecipientValidation";
 import { resolveButtonUrlParam, snapshotMetaButtonVars, validateMetaButtonLink } from "../../supabase/functions/_shared/meta-button-url";
+import { WhatsappLinkGenerator } from "@/components/meta/WhatsappLinkGenerator";
 
 import CampaignImagePicker, { type CampaignImage } from '@/components/meta/CampaignImagePicker';
 import { templateHasImage } from '../../supabase/functions/_shared/meta-campaign-image';
@@ -1808,6 +1809,7 @@ export default function EnvioMeta() {
                 <p className="text-[11px] text-muted-foreground">
                   Este template tem um botão com link dinâmico. O endereço acima será enviado no botão e fica salvo para os próximos envios.
                 </p>
+                <WhatsappLinkGenerator onGerar={setButtonUrl} />
               </div>
             )}
           </CardContent>
