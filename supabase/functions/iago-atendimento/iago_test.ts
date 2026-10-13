@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { ehPedidoAtendenteHumano, extrairDoc, garantirApresentacaoVirtual } from '../_shared/iago.ts';
+import { ehPropostaPortal, ehPedidoAtendenteHumano, extrairDoc, garantirApresentacaoVirtual } from '../_shared/iago.ts';
 
 Deno.test('detecta pedidos explícitos de atendimento humano', () => {
   const pedidos = [
@@ -31,4 +31,10 @@ Deno.test('não confunde conversa comum com pedido de humano', () => {
     'Pode explicar novamente?',
   ];
   for (const texto of comuns) assertEquals(ehPedidoAtendenteHumano(texto), false, texto);
+});
+Deno.test('detecta proposta vinda do portal de negociação', () => {
+  const msg = 'Olá! Meu nome é Luana, CPF 45713755819. Quero negociar meu débito com Odres Cred. Principal: R$ 1.388,00. Total: R$ 1.526,80. 15 parcelas: R$ 101,78. Primeiro pagamento: 23/10/2026. Gostaria de confirmar as condições e solicitar o boleto.';
+  assertEquals(ehPropostaPortal(msg), true);
+  assertEquals(ehPropostaPortal(msg.replace('Odres Cred', 'Lojas Novo Mundo')), true);
+  assertEquals(ehPropostaPortal('Quero negociar meu débito'), false);
 });

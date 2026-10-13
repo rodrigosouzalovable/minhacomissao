@@ -392,6 +392,15 @@ export async function etiquetasAtendente(supabase: any, contatoId: string): Prom
  */
 export const FOLDER_AQUECIMENTO_INBOX = '4f7a52c0-9c86-4b80-8867-4ade7a6df441';
 
+/** Mensagem pronta enviada pelo cliente a partir do portal de negociação. */
+export function ehPropostaPortal(texto: string): boolean {
+  const t = norm(texto).replace(/\s+/g, ' ').trim();
+  if (!t) return false;
+  return /quero negociar (o )?meu debito com/.test(t)
+    && /\bcpf\b/.test(t)
+    && /(gostaria de confirmar as condicoes|solicitar o boleto)/.test(t);
+}
+
 /** Pedido explícito para deixar o atendimento virtual e falar com uma pessoa. */
 export function ehPedidoAtendenteHumano(texto: string): boolean {
   const t = norm(texto).replace(/\s+/g, ' ').trim();
