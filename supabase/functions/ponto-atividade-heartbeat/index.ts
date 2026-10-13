@@ -1,6 +1,7 @@
 // Recebe o batimento de atividade do funcionário e mantém presença + janelas de inatividade.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
-import { dataBRT } from "../_shared/ponto.ts";
+import { dataBRT, horaBRT, diaSemanaBRT } from "../_shared/ponto.ts";
+import { notificarNumeros } from "../_shared/notificar-numeros.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,6 +44,22 @@ Deno.serve(async (req) => {
     const agora = new Date();
     const agoraISO = agora.toISOString();
 
+    const avisar = async (mensagemFn: (nome: string) => string, chave: string) => {
+      try {
+        if (diaSemanaBRT(agora) === 0) return;
+        const { data: perfil } = await admin.from("profiles").select("nome").eq("id", userId).maybeSingle();
+        const nome = (perfil as { nome?: string } | null)?.nome || "Funcionário";
+        await notificarNumeros(admin, {
+          tipo: "ponto_inatividade",
+          mensagem: mensagemFn(nome),
+          destinatarios: ["62991672674"],
+          chaveIdempotencia: chave,
+        });
+      } catch (e) {
+        console.error("[heartbeat] falha ao notificar", e);
+      }
+    };
+
     // Janela de inatividade aberta (se houver)
     const { data: aberta } = await admin
       .from("atividade_inatividade")
@@ -54,11 +71,18 @@ Deno.serve(async (req) => {
     if (estado === "inativo") {
       if (!aberta) {
         const inicio = inativoDesde ?? agoraISO;
-        await admin.from("atividade_inatividade").insert({
+        const { data: nova } = await admin.from("atividade_inatividade").insert({
           user_id: userId,
           data: dataBRT(agora),
           inicio,
-        });
+        }).select("id").maybeSingle();
+        if (nova?.id) {
+          const desde = horaBRT(new Date(inicio));
+          await avisar(
+            (nome) => `*INATIVIDADE*\nFuncionário *${nome}* está há 10 minutos sem mexer no sistema (desde ${desde}${pagina ? `, página ${pagina}` : ""}).`,
+            `inatividade:${nova.id}:inicio`,
+          );
+        }
       }
       await admin.from("atividade_presenca").upsert({
         user_id: userId,
@@ -78,6 +102,13 @@ Deno.serve(async (req) => {
         .from("atividade_inatividade")
         .update({ fim: agoraISO, duracao_seg: dur })
         .eq("id", aberta.id);
+      if (dur >= 600) {
+        const min = Math.round(dur / 60);
+        await avisar(
+          (nome) => `*RETORNO*\nFuncionário *${nome}* voltou ao sistema após ${min} minutos parado (às ${horaBRT(agora)}).`,
+          `inatividade:${aberta.id}:fim`,
+        );
+      }
     }
 
     await admin.from("atividade_presenca").upsert({
