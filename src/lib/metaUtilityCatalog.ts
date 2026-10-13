@@ -55,7 +55,9 @@ export function situacaoUtility(group: UtilityGroup, instanceId: string, queueSt
   const rows = group.rows.filter(t => t.instancia_id === instanceId);
   if (rows.some(t => t.status.toLowerCase() === 'approved' && t.categoria?.toUpperCase() === 'UTILITY')) return 'Aprovado';
   if (rows.some(t => ['pending', 'in_appeal', 'pending_deletion'].includes(t.status.toLowerCase()))) return 'Em análise na Meta';
-  if (queueStatus === 'PENDENTE') return 'Na fila';
+  if (rows.some(t => t.status.toLowerCase() === 'approved' && t.categoria?.toUpperCase() === 'MARKETING'))
+    return 'Aprovado pela Meta como Marketing — não pode ser usado como Utilidade';
+  if (queueStatus === 'PENDENTE') return 'Na fila (aplicação gradual 2–5 min)';
   if (queueStatus === 'ENVIADO') return 'Em análise na Meta';
   if (queueStatus === 'APPROVED') return 'Aprovado — atualize a sincronização';
   if (queueStatus === 'FALHA_ENVIO') return 'Falha na aplicação — confira o motivo abaixo';
