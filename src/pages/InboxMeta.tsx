@@ -1491,7 +1491,15 @@ export default function InboxMeta() {
             break;
           }
           if (!data?.success) throw new Error(data?.error || 'Falha');
-          setMensagens(prev => prev.filter(m => m.id !== tempId));
+          // Mantém a mensagem visível: troca o id temporário pelo real.
+          // Se o Realtime já trouxe a linha real, apenas remove a temporária.
+          const realId = (data as any)?.mensagem_id as string | null;
+          setMensagens(prev => {
+            if (realId && prev.some(m => m.id === realId)) return prev.filter(m => m.id !== tempId);
+            return prev.map(m => m.id === tempId
+              ? { ...m, id: realId || tempId, wa_message_id: (data as any)?.waId || m.wa_message_id, status_envio: 'enviada' }
+              : m);
+          });
         } catch (e: any) {
           setMensagens(prev => prev.map(m => m.id === tempId ? { ...m, status_envio: 'erro' } : m));
           toast({ title: 'Erro ao enviar', description: humanizarErroEnvio(e.message), variant: 'destructive', duration: 12000 });
