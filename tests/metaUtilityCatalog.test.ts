@@ -49,7 +49,7 @@ describe('Utility catalog independent of instance selection', () => {
     expect(g.sample.id).toBe('t1');
     expect([...g.instanciasAprovadasIds]).toEqual(['i1']);
     expect([...g.todasInstanciasAprovadasIds]).toEqual(['i1']);
-    expect(situacaoUtility(g, 'i2')).toBe('Ausente');
+    expect(situacaoUtility(g, 'i2')).toBe('Aprovado pela Meta como Marketing — não pode ser usado como Utilidade');
   });
   test('an absent reclassified Utility master stays selectable without a sending ID', () => {
     const [g] = catalog([], [{ ...master, reclassificado_marketing: true }]);
@@ -78,5 +78,15 @@ describe('Specific application does not submit existing models', () => {
   });
   test('only genuinely absent models are returned', () => {
     expect(modelosParaCopiar([master], new Set(), new Set(), new Set()).map(m => m.id)).toEqual(['m1']);
+  });
+});
+describe('reclassificação Marketing', () => {
+  test('mostra Marketing em vez de pedir sincronização', () => {
+    const copies = [
+      { id: 'a', instancia_id: 'i1', nome_template: 'x', idioma: 'pt_BR', categoria: 'UTILITY', status: 'approved', body_text: 'b', variaveis: null },
+      { id: 'b', instancia_id: 'i2', nome_template: 'x', idioma: 'pt_BR', categoria: 'MARKETING', status: 'approved', body_text: 'b', variaveis: null },
+    ];
+    const [g] = catalogoUtility(copies as any, [], 'u', ['i1', 'i2'], ['i1', 'i2'], () => 0);
+    expect(situacaoUtility(g, 'i2', 'APPROVED')).toBe('Aprovado pela Meta como Marketing — não pode ser usado como Utilidade');
   });
 });
