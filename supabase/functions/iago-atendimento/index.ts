@@ -415,6 +415,40 @@ Deno.serve(async (req) => {
       return json({ success: true, etapa: 'optout' });
     }
 
+    if (!modoAquecimento && ehPropostaPortal(textoAtual)) {
+      const confirmacao = 'Recebemos sua proposta. Vou transferir para uma pessoa da nossa equipe confirmar as condições e enviar o boleto. Só um momento, por favor.';
+      const envio = await enviarTexto(supabase, contato, confirmacao);
+      const agoraIso = new Date().toISOString();
+      const idsIA: string[] = Array.isArray(estado.contexto?.msgs_ia) ? estado.contexto.msgs_ia : [];
+      await supabase.from('iago_conversa_estado').update({
+        etapa: 'aguardando_humano',
+        aguardando_humano: true,
+        followup_em: null,
+        followup_feito: true,
+        followup_etapa: 3,
+        ultima_msg_em: agoraIso,
+        ultima_msg_cliente_em: agoraIso,
+        contexto: {
+          ...(estado.contexto || {}),
+          msgs_ia: [...idsIA, ...(envio.mensagemId ? [envio.mensagemId] : [])].slice(-30),
+          ultimo_envio_ia: new Date(Date.now() + 2000).toISOString(),
+          ultimo_motivo: 'proposta enviada pelo portal de negociação',
+          transferencia_humana_definitiva: true,
+          apresentacao_feita: true,
+        },
+      }).eq('id', estado.id);
+      const etiquetaAtendenteId = await transferirParaHumano('proposta enviada pelo portal de negociação');
+      await avisarEmergencia(supabase,
+        `🧾 *IAGO — proposta recebida pelo portal*\n\n` +
+        `Telefone: ${(contato as any).telefone || (contato as any).bsuid}\n` +
+        `Mensagem: "${textoAtual.slice(0, 400)}"\n\n` +
+        (etiquetaAtendenteId ? 'A conversa foi encaminhada pelo rodízio da caixa.' : 'Nenhum atendente elegível foi encontrado; a conversa permanece aguardando humano.'),
+        contato_id,
+      );
+      await finalizarEntrada();
+      return json({ success: true, etapa: 'aguardando_humano', motivo: 'proposta do portal' });
+    }
+
     if (modoCaixaPadrao && ehPedidoAtendenteHumano(textoAtual)) {
       const confirmacao = 'Claro. Vou transferir seu atendimento para uma pessoa da nossa equipe. Só um momento, por favor.';
       const envio = await enviarTexto(supabase, contato, confirmacao);
