@@ -81,7 +81,7 @@ describe('Specific application does not submit existing models', () => {
   });
 });
 describe('reclassificação Marketing', () => {
-  it('mostra Marketing em vez de pedir sincronização', () => {
+  test('mostra Marketing em vez de pedir sincronização', () => {
     const copies = [
       { id: 'a', instancia_id: 'i1', nome_template: 'x', idioma: 'pt_BR', categoria: 'UTILITY', status: 'approved', body_text: 'b', variaveis: null },
       { id: 'b', instancia_id: 'i2', nome_template: 'x', idioma: 'pt_BR', categoria: 'MARKETING', status: 'approved', body_text: 'b', variaveis: null },
