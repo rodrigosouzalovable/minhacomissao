@@ -461,8 +461,8 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea type="always" className="flex-1 min-h-0 pr-4">
-        <div className="space-y-4">
+        <ScrollArea type="always" className="flex-1 min-h-0 min-w-0 w-full pr-4 [&_[data-radix-scroll-area-viewport]>div]:!block">
+        <div className="space-y-4 min-w-0">
         {!firstRowIsData && (
           <div className="flex items-center gap-2">
             <Checkbox id="meta-import-header" checked={firstIsHeader} onCheckedChange={(value) => setHeaderChoice({ rows, value: value === true })} />
@@ -475,7 +475,7 @@ export default function MapearColunasImportDialog({ open, onOpenChange, rows, fi
             <div className="text-xs font-semibold uppercase text-muted-foreground">
               Template: {template.nome_template}
             </div>
-            <div className="text-xs whitespace-pre-wrap font-mono leading-relaxed">{previewNodes}</div>
+            <div className="text-xs whitespace-pre-wrap break-words font-mono leading-relaxed">{previewNodes}</div>
             <div className="text-[10px] text-muted-foreground">
               Exemplo com os dados da primeira linha da planilha.
             </div>
