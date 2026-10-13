@@ -80,3 +80,13 @@ describe('Specific application does not submit existing models', () => {
     expect(modelosParaCopiar([master], new Set(), new Set(), new Set()).map(m => m.id)).toEqual(['m1']);
   });
 });
+describe('reclassificação Marketing', () => {
+  it('mostra Marketing em vez de pedir sincronização', () => {
+    const copies = [
+      { id: 'a', instancia_id: 'i1', nome_template: 'x', idioma: 'pt_BR', categoria: 'UTILITY', status: 'approved', body_text: 'b', variaveis: null },
+      { id: 'b', instancia_id: 'i2', nome_template: 'x', idioma: 'pt_BR', categoria: 'MARKETING', status: 'approved', body_text: 'b', variaveis: null },
+    ];
+    const [g] = catalogoUtility(copies as any, [], 'u', ['i1', 'i2'], ['i1', 'i2'], () => 0);
+    expect(situacaoUtility(g, 'i2', 'APPROVED')).toBe('Aprovado pela Meta como Marketing — não pode ser usado como Utilidade');
+  });
+});
