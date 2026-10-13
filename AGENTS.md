@@ -1,4 +1,5 @@
 # Decisões técnicas
+- Meta recipient imports use quoted record serialization and explicit column roles; multiline variables never define recipient boundaries or standard fields.
 
 <!-- LOVABLE:BEGIN -->
 - Imported agreement documents preserve validated installments and manual review; never invent missing rows.

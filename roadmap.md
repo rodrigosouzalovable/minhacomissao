@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Corrigir rolagem da importação Meta, preservar registros multilinha e preencher prévia principal; testar arquivo de 99 clientes sem disparos.
 - [x] Payment-reminder finding is stale: active cron has no caller for check-payment-reminders or job 8; preserved authentication and schedules.
 - [x] Isolated template admission errors per number, preserved terminal rows and peer reservations; 18 tests passed and meta-criar-template-lote deployed without real submissions.
 - [x] Intervalo aleatório 2–5 minutos aplicado à BM inteira, inclusive números/WABAs diferentes; reserva e liberação testadas sem submissões reais. 17 testes passaram, regra e permissões conferidas no ambiente ativo; compilação OK.

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { telefoneMeta } from '../../supabase/functions/_shared/meta-destinatario';
 import { splitLinhaEnvio } from './valorBR';
+import { recipientRecordLines } from './metaRecipientRecords';
 
 const recipientPhoneSchema = z.string().trim().min(1).max(80).regex(/^[+\d\s().-]+$/);
 
@@ -13,7 +14,7 @@ export function validRecipientPhone(value: string): string | null {
 export function partitionRecipientLines(input: string): { validRaw: string; ignored: number } {
   const valid: string[] = [];
   let ignored = 0;
-  for (const line of input.split(/\r?\n/)) {
+  for (const line of recipientRecordLines(input)) {
     if (!line.trim()) continue;
     const phone = splitLinhaEnvio(line.trim())[0] || '';
     if (validRecipientPhone(phone)) valid.push(line);
