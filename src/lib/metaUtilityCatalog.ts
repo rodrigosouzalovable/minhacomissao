@@ -65,7 +65,7 @@ export function situacaoUtility(group: UtilityGroup, instanceId: string, queueSt
   if (rows.some(t => ['pending', 'in_appeal', 'pending_deletion'].includes(t.status.toLowerCase()))) return 'Em análise na Meta';
   if (group.marketingIds?.has(instanceId))
     return 'Aprovado pela Meta como Marketing — não pode ser usado como Utilidade';
-  if (queueStatus === 'PENDENTE') return 'Na fila (aplicação gradual 2–5 min)';
+  if (queueStatus === 'PENDENTE') return 'Na fila';
   if (queueStatus === 'ENVIADO') return 'Em análise na Meta';
   if (queueStatus === 'APPROVED') return 'Aprovado — atualize a sincronização';
   if (queueStatus === 'FALHA_ENVIO') return 'Falha na aplicação — confira o motivo abaixo';
