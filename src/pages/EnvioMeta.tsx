@@ -472,7 +472,7 @@ export default function EnvioMeta() {
   // acontece no servidor ao iniciar a campanha.
   const contarJaEnviadosRecentes = async (
     telefones: string[],
-  ): Promise<{ total: number; dias: number }> => {
+  ): Promise<{ total: number; dias: number; lista: RecenteItem[] }> => {
     const suf = (t: string) => {
       const d = String(t || "").replace(/\D/g, "");
       return d.length >= 8 ? d.slice(-8) : d;
@@ -481,28 +481,45 @@ export default function EnvioMeta() {
       const { data: cfg } = await supabase
         .from("meta_envio_pool_config").select("antirrepeticao_dias").eq("id", 1).maybeSingle();
       const dias = Math.max(0, Math.min(60, Number((cfg as any)?.antirrepeticao_dias ?? 1)));
-      if (dias === 0) return { total: 0, dias: 0 };
+      if (dias === 0) return { total: 0, dias: 0, lista: [] };
       const desde = new Date(Date.now() - dias * 86400000).toISOString();
       const alvo = new Set(telefones.map(suf).filter(Boolean));
-      const recentes = new Set<string>();
+      const porSufixo = new Map<string, { telefone: string; processado_em: string; job_id: string | null }>();
       const PAGE = 1000;
       for (let from = 0; from < 60000; from += PAGE) {
         const { data, error } = await supabase
           .from("envio_meta_job_item")
-          .select("telefone")
+          .select("telefone,processado_em,job_id")
           .eq("status", "enviado")
           .gte("processado_em", desde)
+          .order("processado_em", { ascending: false })
           .range(from, from + PAGE - 1);
         if (error) break;
         (data || []).forEach((r: any) => {
           const s = suf(r.telefone);
-          if (s && alvo.has(s)) recentes.add(s);
+          if (s && alvo.has(s) && !porSufixo.has(s)) {
+            porSufixo.set(s, { telefone: r.telefone, processado_em: r.processado_em, job_id: r.job_id || null });
+          }
         });
         if (!data || data.length < PAGE) break;
       }
-      return { total: recentes.size, dias };
+      const jobIds = Array.from(new Set(Array.from(porSufixo.values()).map((r) => r.job_id).filter(Boolean))) as string[];
+      const nomesJob = new Map<string, string>();
+      for (let i = 0; i < jobIds.length; i += 200) {
+        const { data: jobs } = await supabase
+          .from("envio_meta_job")
+          .select("id,nome")
+          .in("id", jobIds.slice(i, i + 200));
+        (jobs || []).forEach((j: any) => nomesJob.set(j.id, j.nome || ""));
+      }
+      const lista: RecenteItem[] = Array.from(porSufixo.values()).map((r) => ({
+        telefone: r.telefone,
+        ultimoEnvio: r.processado_em ? new Date(r.processado_em).toLocaleString("pt-BR") : "",
+        campanha: (r.job_id && nomesJob.get(r.job_id)) || "",
+      }));
+      return { total: porSufixo.size, dias, lista };
     } catch {
-      return { total: 0, dias: 0 };
+      return { total: 0, dias: 0, lista: [] };
     }
   };
 
