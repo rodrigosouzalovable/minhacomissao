@@ -88,7 +88,8 @@ export async function chamarUme(
 export const umeApi = {
   simularBoletos: (amb: UmeAmbiente, idsOrdem: Array<string | number>, data: string) => {
     const qs = new URLSearchParams();
-    idsOrdem.forEach((id, i) => qs.set(i === 0 ? 'id_order' : `id_order${i + 1}`, String(id)));
+    // A API real valida "installmentsIds" (o manual cita id_order).
+    idsOrdem.forEach((id) => qs.append('installmentsIds', String(id)));
     qs.set('date', data);
     return chamarUme(amb, 'GET', `/contracts/simulate-multiple-installments?${qs}`);
   },
