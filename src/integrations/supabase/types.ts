@@ -392,6 +392,7 @@ export type Database = {
           fila_processando_id: string | null
           id: number
           instancia_notificacao_id: string | null
+          notificacoes_pausadas: boolean
           notificar_chip_desconectado: boolean
           notificar_chip_pausado: boolean
           notificar_proxies_faltando: boolean
@@ -407,6 +408,7 @@ export type Database = {
           fila_processando_id?: string | null
           id?: number
           instancia_notificacao_id?: string | null
+          notificacoes_pausadas?: boolean
           notificar_chip_desconectado?: boolean
           notificar_chip_pausado?: boolean
           notificar_proxies_faltando?: boolean
@@ -422,6 +424,7 @@ export type Database = {
           fila_processando_id?: string | null
           id?: number
           instancia_notificacao_id?: string | null
+          notificacoes_pausadas?: boolean
           notificar_chip_desconectado?: boolean
           notificar_chip_pausado?: boolean
           notificar_proxies_faltando?: boolean
