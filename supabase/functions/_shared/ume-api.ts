@@ -97,9 +97,9 @@ export const umeApi = {
   gerarBoletoUnico: (amb: UmeAmbiente, borrowerId: string, dueDate: string) =>
     chamarUme(amb, 'POST', '/invoices/chatbot', { borrowerId, dueDate, generatedAt: UME_ASSESSORIA }),
   simularRenegociacao: (amb: UmeAmbiente, p: UmeRenegociacao) =>
-    chamarUme(amb, 'POST', '/renegotiations/simulations', { ...p, generatedAt: UME_ASSESSORIA }),
+    chamarUme(amb, 'POST', '/renegotiations/simulations', corpoReneg(p)),
   fecharAcordo: (amb: UmeAmbiente, p: UmeRenegociacao) =>
-    chamarUme(amb, 'POST', '/renegotiations', { ...p, generatedAt: UME_ASSESSORIA }),
+    chamarUme(amb, 'POST', '/renegotiations', corpoReneg(p)),
 };
 
 export interface UmeRenegociacao {
@@ -109,4 +109,10 @@ export interface UmeRenegociacao {
   firstPaymentDueDate: string;
   numberOfPayments: number;
   interestRate: number;
+}
+
+// A API real valida "installmentIds" (o manual escreve "installmentsIds").
+function corpoReneg(p: UmeRenegociacao) {
+  const { installmentsIds, ...resto } = p;
+  return { ...resto, installmentIds: installmentsIds, generatedAt: UME_ASSESSORIA };
 }
