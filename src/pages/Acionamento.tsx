@@ -268,6 +268,8 @@ export default function Acionamento() {
   const [instances, setInstances] = useState<WhatsAppInstanceRow[]>([]);
   const [notificationInstanceIds, setNotificationInstanceIds] = useState<Set<string>>(new Set());
   const [savingNotificationInstanceId, setSavingNotificationInstanceId] = useState<string | null>(null);
+  const [notificacoesPausadas, setNotificacoesPausadas] = useState<boolean>(true);
+  const [savingNotificacoesPausadas, setSavingNotificacoesPausadas] = useState(false);
   const [certificateVerifierIds, setCertificateVerifierIds] = useState<Set<string>>(new Set());
   const [savingCertificateVerifierId, setSavingCertificateVerifierId] = useState<string | null>(null);
   const [filtroInstancia, setFiltroInstancia] = useState('');
@@ -433,6 +435,12 @@ export default function Acionamento() {
         return;
       }
       setNotificationInstanceIds(new Set((data || []).map((row) => row.instancia_id)));
+      const { data: cfg } = await supabase
+        .from('admin_notificacoes_config')
+        .select('notificacoes_pausadas')
+        .eq('id', 1)
+        .maybeSingle();
+      if (cfg) setNotificacoesPausadas(cfg.notificacoes_pausadas !== false);
     };
     loadNotificationInstances();
   }, [user, isOwnerAdmin]);
@@ -1942,6 +1950,22 @@ export default function Acionamento() {
       return next;
     });
     toast.success(ativa ? 'Número definido como responsável pelas notificações pessoais' : 'Número removido das notificações pessoais');
+  };
+
+  const handleToggleNotificacoesPausadas = async (pausadas: boolean) => {
+    if (!isOwnerAdmin) return;
+    setSavingNotificacoesPausadas(true);
+    const { error } = await supabase
+      .from('admin_notificacoes_config')
+      .update({ notificacoes_pausadas: pausadas, updated_at: new Date().toISOString() })
+      .eq('id', 1);
+    setSavingNotificacoesPausadas(false);
+    if (error) {
+      toast.error(`Erro ao alterar pausa das notificações: ${error.message}`);
+      return;
+    }
+    setNotificacoesPausadas(pausadas);
+    toast.success(pausadas ? 'Notificações no seu WhatsApp pausadas' : 'Notificações no seu WhatsApp reativadas');
   };
 
   const handleToggleCertificateVerifier = async (id: string, ativa: boolean) => {
