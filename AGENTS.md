@@ -54,3 +54,4 @@
 - Overdue audits owner-admin cost consent; isolated scheduler credentials start bounded cycles and stop after drain.
 - Inbox phone search uses indexed reverse ranges and bounded invoker RPC; RLS precedes pagination; opening selects the actual box.
 
+- UME official API calls go through _shared/ume-api.ts (cached Keycloak token, global 30 req/min pacing); production stays disabled until UME_PRD_LIBERADO=true after dev homologation.
