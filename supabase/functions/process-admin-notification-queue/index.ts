@@ -96,10 +96,12 @@ Deno.serve(async (req) => {
   // Pausa manual do admin: drena a fila sem enviar nada ao WhatsApp do admin.
   const { data: pauseConfig } = await supabase
     .from("admin_notificacoes_config")
-    .select("notificacoes_pausadas")
+    .select("notificacoes_pausadas, tipos_permitidos, instancia_fixa_id")
     .eq("id", 1)
     .maybeSingle();
-  if (pauseConfig?.notificacoes_pausadas === true) {
+  const permitidos: string[] | null = Array.isArray(pauseConfig?.tipos_permitidos) && pauseConfig.tipos_permitidos.length ? pauseConfig.tipos_permitidos : null;
+  const bloqueadoPorTipo = permitidos !== null && !permitidos.includes(item.tipo);
+  if (pauseConfig?.notificacoes_pausadas === true || bloqueadoPorTipo) {
     const { data: pauseDelay } = await supabase.rpc("finalizar_notificacao_admin", {
       p_id: item.id,
       p_status: "pausado",
@@ -135,6 +137,7 @@ Deno.serve(async (req) => {
     supabase.from("admin_notificacoes_config").select("ultima_instancia_id").eq("id", 1).maybeSingle(),
   ]);
 
+  const fixaId = pauseConfig?.instancia_fixa_id as string | null;
   const selectedIds = new Set((selected || []).map((row: any) => row.instancia_id));
   const preferred = (allActive || []).filter((inst: any) => selectedIds.has(inst.id));
   const fallbackCandidates = (allActive || []).filter((inst: any) => !selectedIds.has(inst.id));
@@ -142,7 +145,11 @@ Deno.serve(async (req) => {
   for (const inst of preferred) if (await connected(inst)) healthyPreferred.push(inst);
   let candidates = healthyPreferred;
   let fallback = false;
-  if (!candidates.length) {
+  if (fixaId) {
+    candidates = [];
+    const fixa = (allActive || []).find((inst: any) => inst.id === fixaId);
+    if (fixa && await connected(fixa)) candidates.push(fixa);
+  } else if (!candidates.length) {
     fallback = true;
     for (const inst of fallbackCandidates) if (await connected(inst)) candidates.push(inst);
   }
