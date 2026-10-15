@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock, Power, PowerOff, Gauge } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock, Power, PowerOff, Gauge, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -424,21 +424,39 @@ export default function EnvioMeta() {
   };
 
   type EscolhaReenvio = "todos" | "ignorar" | "cancelar";
+  type RecenteItem = { telefone: string; ultimoEnvio: string; campanha: string };
   const [reenvioDlg, setReenvioDlg] = useState<{
     open: boolean;
     total: number;
     recentes: number;
     dias: number;
+    recentesLista: RecenteItem[];
     resolver: ((escolha: EscolhaReenvio) => void) | null;
-  }>({ open: false, total: 0, recentes: 0, dias: 1, resolver: null });
+  }>({ open: false, total: 0, recentes: 0, dias: 1, recentesLista: [], resolver: null });
 
   const pedirConfirmacaoReenvio = (
     total: number,
     recentes: number,
     dias: number,
+    recentesLista: RecenteItem[] = [],
   ): Promise<EscolhaReenvio> => new Promise((resolve) => {
-    setReenvioDlg({ open: true, total, recentes, dias, resolver: resolve });
+    setReenvioDlg({ open: true, total, recentes, dias, recentesLista, resolver: resolve });
   });
+
+  const baixarRecentes = async () => {
+    const lista = reenvioDlg.recentesLista;
+    if (!lista.length) return;
+    const { exportarParaExcel } = await import("@/lib/exportExcel");
+    await exportarParaExcel(
+      lista,
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "ultimoEnvio", titulo: "Último envio" },
+        { chave: "campanha", titulo: "Campanha" },
+      ],
+      `contatos-acionados-recentemente-${new Date().toISOString().slice(0, 10)}`,
+    );
+  };
 
 
   const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][]; origem: "excel" | "manual" | "clipboard" }>({ open: false, rows: [], origem: "excel" });
