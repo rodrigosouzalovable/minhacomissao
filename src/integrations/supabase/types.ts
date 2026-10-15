@@ -391,6 +391,7 @@ export type Database = {
           fila_processando_ate: string | null
           fila_processando_id: string | null
           id: number
+          instancia_fixa_id: string | null
           instancia_notificacao_id: string | null
           notificacoes_pausadas: boolean
           notificar_chip_desconectado: boolean
@@ -398,6 +399,7 @@ export type Database = {
           notificar_proxies_faltando: boolean
           notificar_resumo_diario: boolean
           proxima_notificacao_em: string | null
+          tipos_permitidos: string[] | null
           ultima_instancia_id: string | null
           updated_at: string
         }
@@ -407,6 +409,7 @@ export type Database = {
           fila_processando_ate?: string | null
           fila_processando_id?: string | null
           id?: number
+          instancia_fixa_id?: string | null
           instancia_notificacao_id?: string | null
           notificacoes_pausadas?: boolean
           notificar_chip_desconectado?: boolean
@@ -414,6 +417,7 @@ export type Database = {
           notificar_proxies_faltando?: boolean
           notificar_resumo_diario?: boolean
           proxima_notificacao_em?: string | null
+          tipos_permitidos?: string[] | null
           ultima_instancia_id?: string | null
           updated_at?: string
         }
@@ -423,6 +427,7 @@ export type Database = {
           fila_processando_ate?: string | null
           fila_processando_id?: string | null
           id?: number
+          instancia_fixa_id?: string | null
           instancia_notificacao_id?: string | null
           notificacoes_pausadas?: boolean
           notificar_chip_desconectado?: boolean
@@ -430,6 +435,7 @@ export type Database = {
           notificar_proxies_faltando?: boolean
           notificar_resumo_diario?: boolean
           proxima_notificacao_em?: string | null
+          tipos_permitidos?: string[] | null
           ultima_instancia_id?: string | null
           updated_at?: string
         }

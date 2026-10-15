@@ -1254,6 +1254,13 @@
       "when": 1792051958636,
       "tag": "0178_pausar_notificacoes_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 179,
+      "version": "7",
+      "when": 1792052233368,
+      "tag": "0179_migration",
+      "breakpoints": true
     }
   ]
 }
