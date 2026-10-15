@@ -10571,6 +10571,7 @@ export type Database = {
           criado_em: string
           historico_inicial_importado_em: string | null
           ia_responde: boolean
+          iago_desativado: boolean
           id: string
           instance_token: string
           nome: string | null
@@ -10604,6 +10605,7 @@ export type Database = {
           criado_em?: string
           historico_inicial_importado_em?: string | null
           ia_responde?: boolean
+          iago_desativado?: boolean
           id?: string
           instance_token: string
           nome?: string | null
@@ -10637,6 +10639,7 @@ export type Database = {
           criado_em?: string
           historico_inicial_importado_em?: string | null
           ia_responde?: boolean
+          iago_desativado?: boolean
           id?: string
           instance_token?: string
           nome?: string | null
