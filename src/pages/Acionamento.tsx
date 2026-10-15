@@ -268,6 +268,8 @@ export default function Acionamento() {
   const [instances, setInstances] = useState<WhatsAppInstanceRow[]>([]);
   const [notificationInstanceIds, setNotificationInstanceIds] = useState<Set<string>>(new Set());
   const [savingNotificationInstanceId, setSavingNotificationInstanceId] = useState<string | null>(null);
+  const [notificacoesPausadas, setNotificacoesPausadas] = useState<boolean>(true);
+  const [savingNotificacoesPausadas, setSavingNotificacoesPausadas] = useState(false);
   const [certificateVerifierIds, setCertificateVerifierIds] = useState<Set<string>>(new Set());
   const [savingCertificateVerifierId, setSavingCertificateVerifierId] = useState<string | null>(null);
   const [filtroInstancia, setFiltroInstancia] = useState('');
@@ -433,6 +435,12 @@ export default function Acionamento() {
         return;
       }
       setNotificationInstanceIds(new Set((data || []).map((row) => row.instancia_id)));
+      const { data: cfg } = await supabase
+        .from('admin_notificacoes_config')
+        .select('notificacoes_pausadas')
+        .eq('id', 1)
+        .maybeSingle();
+      if (cfg) setNotificacoesPausadas(cfg.notificacoes_pausadas !== false);
     };
     loadNotificationInstances();
   }, [user, isOwnerAdmin]);
@@ -1944,6 +1952,22 @@ export default function Acionamento() {
     toast.success(ativa ? 'Número definido como responsável pelas notificações pessoais' : 'Número removido das notificações pessoais');
   };
 
+  const handleToggleNotificacoesPausadas = async (pausadas: boolean) => {
+    if (!isOwnerAdmin) return;
+    setSavingNotificacoesPausadas(true);
+    const { error } = await supabase
+      .from('admin_notificacoes_config')
+      .update({ notificacoes_pausadas: pausadas, updated_at: new Date().toISOString() })
+      .eq('id', 1);
+    setSavingNotificacoesPausadas(false);
+    if (error) {
+      toast.error(`Erro ao alterar pausa das notificações: ${error.message}`);
+      return;
+    }
+    setNotificacoesPausadas(pausadas);
+    toast.success(pausadas ? 'Notificações no seu WhatsApp pausadas' : 'Notificações no seu WhatsApp reativadas');
+  };
+
   const handleToggleCertificateVerifier = async (id: string, ativa: boolean) => {
     if (!isOwnerAdmin) return;
     setSavingCertificateVerifierId(id);
@@ -2167,6 +2191,23 @@ export default function Acionamento() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">UAZAPI</h1>
           <div className="flex flex-wrap items-center gap-2">
+            {isOwnerAdmin && (
+              <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
+                <Label htmlFor="pausa-notificacoes-admin" className="text-xs cursor-pointer">
+                  Notificações no meu WhatsApp: <span className="font-semibold">{notificacoesPausadas ? 'Pausadas' : 'Ativas'}</span>
+                </Label>
+                {savingNotificacoesPausadas ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                ) : (
+                  <Switch
+                    id="pausa-notificacoes-admin"
+                    checked={!notificacoesPausadas}
+                    onCheckedChange={(checked) => handleToggleNotificacoesPausadas(!checked)}
+                    className="scale-90"
+                  />
+                )}
+              </div>
+            )}
             <Button variant="outline" size="sm" onClick={handleExportarNumeros} disabled={checkingConnections} className="gap-1">
                 <Download className="h-4 w-4" />
                 <span className="text-xs">Exportar números (Excel)</span>
