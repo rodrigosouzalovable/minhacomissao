@@ -1571,11 +1571,20 @@ serve(async (req) => {
           const contatoEspelhoId = espelho.contatoId;
           const entradaId =
             (messageId && String(messageId).trim()) || espelho.mensagemId || `${contatoEspelhoId}-${Date.now()}`;
-          const doIago = await garantirEtiquetaIagoInbox(
-            supabase,
-            contatoEspelhoId,
-            espelho.instancia.user_id,
-          );
+          // Instâncias marcadas com iago_desativado nunca acionam o IAGO.
+          const { data: instIago } = await supabase
+            .from('user_whatsapp_instances')
+            .select('iago_desativado')
+            .eq('id', instanciaId)
+            .maybeSingle();
+          const iagoBloqueado = (instIago as any)?.iago_desativado === true;
+          const doIago = iagoBloqueado
+            ? false
+            : await garantirEtiquetaIagoInbox(
+                supabase,
+                contatoEspelhoId,
+                espelho.instancia.user_id,
+              );
           iagoAssumiu = doIago;
           if (doIago) {
           const iagoTask = (async () => {
