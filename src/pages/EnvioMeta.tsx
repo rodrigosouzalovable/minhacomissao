@@ -508,9 +508,9 @@ export default function EnvioMeta() {
       for (let i = 0; i < jobIds.length; i += 200) {
         const { data: jobs } = await supabase
           .from("envio_meta_job")
-          .select("id,nome")
+          .select("id,nome_campanha")
           .in("id", jobIds.slice(i, i + 200));
-        (jobs || []).forEach((j: any) => nomesJob.set(j.id, j.nome || ""));
+        (jobs || []).forEach((j: any) => nomesJob.set(j.id, j.nome_campanha || ""));
       }
       const lista: RecenteItem[] = Array.from(porSufixo.values()).map((r) => ({
         telefone: r.telefone,
