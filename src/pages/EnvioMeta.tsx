@@ -2818,13 +2818,13 @@ export default function EnvioMeta() {
         <AlertDialogHeader>
           <AlertDialogTitle>Contatos acionados recentemente</AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="space-y-3 pt-2">
+            <div className="w-full min-w-0 space-y-3 pt-2">
               <p>
                 {reenvioDlg.recentes.toLocaleString("pt-BR")} de {reenvioDlg.total.toLocaleString("pt-BR")} contato(s) já receberam mensagem nos últimos {reenvioDlg.dias} dia(s).
               </p>
-              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
-                <div className="flex justify-between gap-3"><span>Enviar para todos</span><strong>{reenvioDlg.total.toLocaleString("pt-BR")}</strong></div>
-                <div className="flex justify-between gap-3"><span>Ignorar os recentes</span><strong>{Math.max(0, reenvioDlg.total - reenvioDlg.recentes).toLocaleString("pt-BR")}</strong></div>
+              <div className="w-full min-w-0 overflow-hidden rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="flex items-center justify-between gap-3"><span className="min-w-0">Enviar para todos</span><strong className="shrink-0">{reenvioDlg.total.toLocaleString("pt-BR")}</strong></div>
+                <div className="flex items-center justify-between gap-3"><span className="min-w-0">Ignorar os recentes</span><strong className="shrink-0">{Math.max(0, reenvioDlg.total - reenvioDlg.recentes).toLocaleString("pt-BR")}</strong></div>
               </div>
               <p className="text-xs text-muted-foreground">Escolha se deseja reenviar também para esses contatos ou manter a proteção contra repetição.</p>
             </div>
