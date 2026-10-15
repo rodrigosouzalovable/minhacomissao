@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock, Power, PowerOff, Gauge } from "lucide-react";
+import { Loader2, Send, RefreshCw, Pencil, Check, X, Pause, Play, StopCircle, HeartPulse, AlertTriangle, Upload, FileSpreadsheet, ShieldCheck, TestTube, CheckCircle2, Building2, Ban, CalendarClock, Power, PowerOff, Gauge, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -424,21 +424,39 @@ export default function EnvioMeta() {
   };
 
   type EscolhaReenvio = "todos" | "ignorar" | "cancelar";
+  type RecenteItem = { telefone: string; ultimoEnvio: string; campanha: string };
   const [reenvioDlg, setReenvioDlg] = useState<{
     open: boolean;
     total: number;
     recentes: number;
     dias: number;
+    recentesLista: RecenteItem[];
     resolver: ((escolha: EscolhaReenvio) => void) | null;
-  }>({ open: false, total: 0, recentes: 0, dias: 1, resolver: null });
+  }>({ open: false, total: 0, recentes: 0, dias: 1, recentesLista: [], resolver: null });
 
   const pedirConfirmacaoReenvio = (
     total: number,
     recentes: number,
     dias: number,
+    recentesLista: RecenteItem[] = [],
   ): Promise<EscolhaReenvio> => new Promise((resolve) => {
-    setReenvioDlg({ open: true, total, recentes, dias, resolver: resolve });
+    setReenvioDlg({ open: true, total, recentes, dias, recentesLista, resolver: resolve });
   });
+
+  const baixarRecentes = async () => {
+    const lista = reenvioDlg.recentesLista;
+    if (!lista.length) return;
+    const { exportarParaExcel } = await import("@/lib/exportExcel");
+    await exportarParaExcel(
+      lista,
+      [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "ultimoEnvio", titulo: "Último envio" },
+        { chave: "campanha", titulo: "Campanha" },
+      ],
+      `contatos-acionados-recentemente-${new Date().toISOString().slice(0, 10)}`,
+    );
+  };
 
 
   const [mapDlg, setMapDlg] = useState<{ open: boolean; rows: any[][]; origem: "excel" | "manual" | "clipboard" }>({ open: false, rows: [], origem: "excel" });
@@ -454,7 +472,7 @@ export default function EnvioMeta() {
   // acontece no servidor ao iniciar a campanha.
   const contarJaEnviadosRecentes = async (
     telefones: string[],
-  ): Promise<{ total: number; dias: number }> => {
+  ): Promise<{ total: number; dias: number; lista: RecenteItem[] }> => {
     const suf = (t: string) => {
       const d = String(t || "").replace(/\D/g, "");
       return d.length >= 8 ? d.slice(-8) : d;
@@ -463,28 +481,45 @@ export default function EnvioMeta() {
       const { data: cfg } = await supabase
         .from("meta_envio_pool_config").select("antirrepeticao_dias").eq("id", 1).maybeSingle();
       const dias = Math.max(0, Math.min(60, Number((cfg as any)?.antirrepeticao_dias ?? 1)));
-      if (dias === 0) return { total: 0, dias: 0 };
+      if (dias === 0) return { total: 0, dias: 0, lista: [] };
       const desde = new Date(Date.now() - dias * 86400000).toISOString();
       const alvo = new Set(telefones.map(suf).filter(Boolean));
-      const recentes = new Set<string>();
+      const porSufixo = new Map<string, { telefone: string; processado_em: string; job_id: string | null }>();
       const PAGE = 1000;
       for (let from = 0; from < 60000; from += PAGE) {
         const { data, error } = await supabase
           .from("envio_meta_job_item")
-          .select("telefone")
+          .select("telefone,processado_em,job_id")
           .eq("status", "enviado")
           .gte("processado_em", desde)
+          .order("processado_em", { ascending: false })
           .range(from, from + PAGE - 1);
         if (error) break;
         (data || []).forEach((r: any) => {
           const s = suf(r.telefone);
-          if (s && alvo.has(s)) recentes.add(s);
+          if (s && alvo.has(s) && !porSufixo.has(s)) {
+            porSufixo.set(s, { telefone: r.telefone, processado_em: r.processado_em, job_id: r.job_id || null });
+          }
         });
         if (!data || data.length < PAGE) break;
       }
-      return { total: recentes.size, dias };
+      const jobIds = Array.from(new Set(Array.from(porSufixo.values()).map((r) => r.job_id).filter(Boolean))) as string[];
+      const nomesJob = new Map<string, string>();
+      for (let i = 0; i < jobIds.length; i += 200) {
+        const { data: jobs } = await supabase
+          .from("envio_meta_job")
+          .select("id,nome_campanha")
+          .in("id", jobIds.slice(i, i + 200));
+        (jobs || []).forEach((j: any) => nomesJob.set(j.id, j.nome_campanha || ""));
+      }
+      const lista: RecenteItem[] = Array.from(porSufixo.values()).map((r) => ({
+        telefone: r.telefone,
+        ultimoEnvio: r.processado_em ? new Date(r.processado_em).toLocaleString("pt-BR") : "",
+        campanha: (r.job_id && nomesJob.get(r.job_id)) || "",
+      }));
+      return { total: porSufixo.size, dias, lista };
     } catch {
-      return { total: 0, dias: 0 };
+      return { total: 0, dias: 0, lista: [] };
     }
   };
 
@@ -1308,6 +1343,7 @@ export default function EnvioMeta() {
         recipientsDedup.length,
         jaRecebidos.total,
         jaRecebidos.dias,
+        jaRecebidos.lista,
       );
       if (escolhaReenvio === "cancelar") return;
       permitirReenvioRecente = escolhaReenvio === "todos";
@@ -2795,14 +2831,26 @@ export default function EnvioMeta() {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="sm:justify-between sm:space-x-2">
-          <AlertDialogCancel
-            onClick={() => {
-              reenvioDlg.resolver?.("cancelar");
-              setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
-            }}
-          >
-            Cancelar
-          </AlertDialogCancel>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={!reenvioDlg.recentesLista.length}
+              onClick={() => void baixarRecentes()}
+              title="Baixar Excel com os números que já receberam mensagem recentemente"
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              Baixar números
+            </Button>
+            <AlertDialogCancel
+              onClick={() => {
+                reenvioDlg.resolver?.("cancelar");
+                setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+              }}
+            >
+              Cancelar
+            </AlertDialogCancel>
+          </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button
               variant="outline"
