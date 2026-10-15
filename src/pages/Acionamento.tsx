@@ -2191,6 +2191,23 @@ export default function Acionamento() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold">UAZAPI</h1>
           <div className="flex flex-wrap items-center gap-2">
+            {isOwnerAdmin && (
+              <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
+                <Label htmlFor="pausa-notificacoes-admin" className="text-xs cursor-pointer">
+                  Notificações no meu WhatsApp: <span className="font-semibold">{notificacoesPausadas ? 'Pausadas' : 'Ativas'}</span>
+                </Label>
+                {savingNotificacoesPausadas ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                ) : (
+                  <Switch
+                    id="pausa-notificacoes-admin"
+                    checked={!notificacoesPausadas}
+                    onCheckedChange={(checked) => handleToggleNotificacoesPausadas(!checked)}
+                    className="scale-90"
+                  />
+                )}
+              </div>
+            )}
             <Button variant="outline" size="sm" onClick={handleExportarNumeros} disabled={checkingConnections} className="gap-1">
                 <Download className="h-4 w-4" />
                 <span className="text-xs">Exportar números (Excel)</span>
