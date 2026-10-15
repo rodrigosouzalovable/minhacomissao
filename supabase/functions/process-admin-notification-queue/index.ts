@@ -93,6 +93,42 @@ Deno.serve(async (req) => {
   const item = Array.isArray(claimed) ? claimed[0] : claimed;
   if (!item) return json({ ok: true, idle: true });
 
+  // Pausa manual do admin: drena a fila sem enviar nada ao WhatsApp do admin.
+  const { data: pauseConfig } = await supabase
+    .from("admin_notificacoes_config")
+    .select("notificacoes_pausadas")
+    .eq("id", 1)
+    .maybeSingle();
+  if (pauseConfig?.notificacoes_pausadas === true) {
+    const { data: pauseDelay } = await supabase.rpc("finalizar_notificacao_admin", {
+      p_id: item.id,
+      p_status: "pausado",
+      p_instancia_id: null,
+      p_fallback: false,
+      p_erro: "Notificações pausadas pelo admin",
+    });
+    await supabase.from("admin_notificacoes_log").insert({
+      tipo: item.tipo,
+      chave_idempotencia: item.chave_idempotencia,
+      mensagem: `[${item.destinatario}] ${item.mensagem}`.slice(0, 4000),
+      status: "pausado",
+      erro_detalhe: "Notificações pausadas pelo admin",
+      enviado_em: new Date().toISOString(),
+    });
+    const pauseDelaySeconds = Number(pauseDelay || 0);
+    if (pauseDelaySeconds > 0) {
+      EdgeRuntime.waitUntil((async () => {
+        await wait((pauseDelaySeconds + 1) * 1000);
+        await fetch(`${url}/functions/v1/process-admin-notification-queue`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+          body: "{}",
+        });
+      })().catch((error) => console.error("[admin-notification-queue] falha ao encadear", error)));
+    }
+    return json({ ok: true, id: item.id, pausado: true, delay_seconds: pauseDelaySeconds });
+  }
+
   const [{ data: selected }, { data: allActive }, { data: config }] = await Promise.all([
     supabase.from("admin_notificacao_instancias").select("instancia_id").eq("ativa", true),
     supabase.from("user_whatsapp_instances").select("id, nome, server_url, instance_token, ativo").eq("ativo", true).not("server_url", "is", null).not("instance_token", "is", null).order("id"),
