@@ -458,7 +458,7 @@ Deno.serve(async (req) => {
       valor_parcela: fmtBRL(valorParcela),
       valor_parcelado: fmtBRL(valorParcelado),
       opcoes_parcelamento: opcoesTexto,
-      telefone_contato: '(62) 98218-3144',
+      telefone_contato: '(62) 98174-6479',
     };
 
     // Se o cliente citou uma quantidade de parcelas ("12x", "em 8 vezes"), respeita a escolha
