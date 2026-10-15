@@ -1343,6 +1343,7 @@ export default function EnvioMeta() {
         recipientsDedup.length,
         jaRecebidos.total,
         jaRecebidos.dias,
+        jaRecebidos.lista,
       );
       if (escolhaReenvio === "cancelar") return;
       permitirReenvioRecente = escolhaReenvio === "todos";
@@ -2830,14 +2831,26 @@ export default function EnvioMeta() {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="sm:justify-between sm:space-x-2">
-          <AlertDialogCancel
-            onClick={() => {
-              reenvioDlg.resolver?.("cancelar");
-              setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
-            }}
-          >
-            Cancelar
-          </AlertDialogCancel>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={!reenvioDlg.recentesLista.length}
+              onClick={() => void baixarRecentes()}
+              title="Baixar Excel com os números que já receberam mensagem recentemente"
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              Baixar números
+            </Button>
+            <AlertDialogCancel
+              onClick={() => {
+                reenvioDlg.resolver?.("cancelar");
+                setReenvioDlg((prev) => ({ ...prev, open: false, resolver: null }));
+              }}
+            >
+              Cancelar
+            </AlertDialogCancel>
+          </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button
               variant="outline"
