@@ -526,6 +526,33 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
     );
     toast.success(`${bloqueadosBlacklist.length} números exportados`);
   };
+  const baixarSemWhatsApp = async () => {
+    try {
+      const rows: Array<{ telefone: string; nome: string; credor: string; erro: string }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from("envio_meta_job_item")
+          .select("telefone, nome, credor, erro")
+          .eq("job_id", job.id)
+          .eq("status", "sem_whatsapp")
+          .order("ordem", { ascending: true })
+          .range(from, from + 999);
+        if (error) throw error;
+        (data || []).forEach((d: any) => rows.push({ telefone: d.telefone || "", nome: d.nome || "", credor: d.credor || "", erro: d.erro || "" }));
+        if (!data || data.length < 1000) break;
+      }
+      if (rows.length === 0) { toast.error("Nada para exportar"); return; }
+      await exportarParaExcel(rows, [
+        { chave: "telefone", titulo: "Telefone" },
+        { chave: "nome", titulo: "Nome" },
+        { chave: "credor", titulo: "Credor" },
+        { chave: "erro", titulo: "Motivo" },
+      ], `sem_whatsapp_${sanitize(nome)}_${stamp()}`);
+      toast.success(`${rows.length} números sem WhatsApp exportados`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao exportar");
+    }
+  };
   const rotuloBaixar = (tipo: string) =>
     exportando === tipo ? `Baixando... ${exportProgresso}` : "Baixar Excel";
 
@@ -582,7 +609,13 @@ export default function CampanhaDetalheDialog({ jobId, open, onOpenChange }: Pro
               </span>
               <span className="text-muted-foreground text-xs">
                 ✅ {job.enviados} • ❌ {job.erros}
-                {semWhatsApp > 0 && <> • 🚫 {semWhatsApp} sem WhatsApp</>}
+                {semWhatsApp > 0 && (
+                  <> • 🚫 {semWhatsApp} sem WhatsApp{" "}
+                    <button type="button" className="underline text-primary" onClick={baixarSemWhatsApp}>
+                      (baixar Excel)
+                    </button>
+                  </>
+                )}
                 {" "}• ⏳ {Math.max(0, job.total - totalProcessado)}
               </span>
             </div>

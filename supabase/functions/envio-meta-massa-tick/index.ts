@@ -1060,13 +1060,21 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
       const dig = String((pend as any).telefone || '').replace(/\D+/g, '');
       const sufixo = dig.length >= 8 ? dig.slice(-8) : dig;
       if (sufixo) {
-        await supabase.from('meta_destinatario_supressao').upsert({
-          telefone_sufixo: sufixo,
-          telefone: dig,
-          motivo: `entrega impossível: ${String(erroMsg || '').slice(0, 160)}`,
-          categoria: 'supressao',
-          criado_em: new Date().toISOString(),
-        }, { onConflict: 'telefone_sufixo' });
+        const semWhats = erroLower.includes('131026') || erroLower.includes('não possui whatsapp') ||
+          erroLower.includes('nao possui whatsapp') || erroLower.includes('message undeliverable');
+        if (semWhats) {
+          // Sem WhatsApp confirmado pela Meta: entra na blacklist permanente (não sobrescreve bloqueios anteriores).
+          const { error: regErr } = await supabase.rpc('registrar_sem_whatsapp_verificados', { _telefones: [dig] });
+          if (regErr) console.error('[tick] falha ao registrar sem WhatsApp:', regErr.message);
+        } else {
+          await supabase.from('meta_destinatario_supressao').upsert({
+            telefone_sufixo: sufixo,
+            telefone: dig,
+            motivo: `entrega impossível: ${String(erroMsg || '').slice(0, 160)}`,
+            categoria: 'supressao',
+            criado_em: new Date().toISOString(),
+          }, { onConflict: 'telefone_sufixo', ignoreDuplicates: true });
+        }
       }
     }
   }
