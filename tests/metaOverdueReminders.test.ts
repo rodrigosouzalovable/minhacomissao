@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { overdueStage, reminderWindow, reminderValues, greenSender } from '../supabase/functions/_shared/meta-atrasados-rules';
-test('D+1 D+3 D+7 and 10 day boundary', () => { for (const [date,stage] of [['2026-10-07',null],['2026-10-06',1],['2026-10-04',3],['2026-09-30',7],['2026-09-27',7],['2026-09-26',null]] as const) expect(overdueStage(date,'2026-10-07')).toBe(stage); });
+test('D0 D+1 D+3 D+7 and 10 day boundary', () => { for (const [date,stage] of [['2026-10-08',null],['2026-10-07',0],['2026-10-06',1],['2026-10-04',3],['2026-09-30',7],['2026-09-27',7],['2026-09-26',null]] as const) expect(overdueStage(date,'2026-10-07')).toBe(stage); });
 test('Sunday blocked and Monday starts at 08 BRT', () => { expect(reminderWindow(new Date('2026-10-11T12:00Z'))).toBe(false); expect(reminderWindow(new Date('2026-10-12T10:59Z'))).toBe(false); expect(reminderWindow(new Date('2026-10-12T11:00Z'))).toBe(true); });
 test('client creditor and due date independent for three creditors', () => { for (const [company,label] of [['ume_novo_mundo','NOVO MUNDO'],['mundo_da_moda','UME'],['odres_cred','ODRES CRED']]) expect(reminderValues('Maria',company,'2026-10-06',{'1':'nome','2':'credor','3':'vencimento'},'{{1}} {{2}} {{3}}')).toEqual({'1':'Maria','2':label,'3':'06/10/2026'}); });
 test('missing mapping or client blocks values', () => { expect(reminderValues('','odres_cred','2026-10-06',{},'{{1}}')).toBeNull(); expect(reminderValues('Maria','odres_cred','2026-10-06',{'1':'nome'},'{{1}} {{2}}')).toBeNull(); });
