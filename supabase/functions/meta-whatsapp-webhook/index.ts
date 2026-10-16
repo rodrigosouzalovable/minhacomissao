@@ -1696,7 +1696,7 @@ serve(async (req) => {
               const MAX_TENTATIVAS_ITEM = 3;
               const { data: item } = await supabase
                 .from('envio_meta_job_item')
-                .select('id, job_id, tentativas, status, instancia_id, vars')
+                .select('id, job_id, tentativas, status, instancia_id, vars, telefone')
                 .eq('wa_message_id', waId)
                 .maybeSingle();
 
