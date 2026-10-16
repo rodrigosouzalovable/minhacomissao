@@ -2,7 +2,7 @@ import { metaMessagingRestriction } from './meta-template-eligibility.ts';
 export function brtDate(now = new Date()): string { return new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(now); }
 export function overdueStage(due: string, today: string): number | null {
   const days = Math.round((Date.parse(today + 'T12:00:00Z') - Date.parse(due + 'T12:00:00Z')) / 86400000);
-  return days >= 1 && days <= 10 ? days >= 7 ? 7 : days >= 3 ? 3 : 1 : null;
+  return days >= 0 && days <= 10 ? days >= 7 ? 7 : days >= 3 ? 3 : days >= 1 ? 1 : 0 : null;
 }
 export function reminderWindow(now = new Date()): boolean {
   const brt = new Date(now.getTime() - 10800000);
