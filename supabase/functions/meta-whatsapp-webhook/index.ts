@@ -1717,6 +1717,10 @@ serve(async (req) => {
                     .eq('id', item.id).eq('status', 'enviado')
                     .select('id').maybeSingle();
                   if (!erroFinalizar && finalizado) {
+                    const { error: regErr } = await supabase.rpc('registrar_sem_whatsapp_verificados', {
+                      _telefones: [String((item as any).telefone || '')],
+                    });
+                    if (regErr) console.error('[webhook] falha ao registrar sem WhatsApp:', regErr.message);
                     const { data: jobDestino } = await supabase.from('envio_meta_job')
                       .select('enviados, sem_whatsapp, falhas_por_instancia_run, instancias_bloqueadas_run, status')
                       .eq('id', item.job_id).maybeSingle();
