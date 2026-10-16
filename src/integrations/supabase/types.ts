@@ -10573,6 +10573,7 @@ export type Database = {
           ia_responde: boolean
           iago_desativado: boolean
           id: string
+          inbox_meta_ativo: boolean
           instance_token: string
           nome: string | null
           ordem: number | null
@@ -10607,6 +10608,7 @@ export type Database = {
           ia_responde?: boolean
           iago_desativado?: boolean
           id?: string
+          inbox_meta_ativo?: boolean
           instance_token: string
           nome?: string | null
           ordem?: number | null
@@ -10641,6 +10643,7 @@ export type Database = {
           ia_responde?: boolean
           iago_desativado?: boolean
           id?: string
+          inbox_meta_ativo?: boolean
           instance_token?: string
           nome?: string | null
           ordem?: number | null
@@ -12773,6 +12776,10 @@ export type Database = {
         Returns: Json
       }
       definir_ponto_exigencia: { Args: { p_ativo: boolean }; Returns: boolean }
+      definir_uazapi_inbox_meta: {
+        Args: { p_ativo: boolean; p_instancia_id: string }
+        Returns: undefined
+      }
       delete_acordo_atomico: {
         Args: { p_acordo_id: string }
         Returns: undefined

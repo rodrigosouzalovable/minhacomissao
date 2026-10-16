@@ -181,6 +181,7 @@ interface WhatsAppInstanceRow {
   apenas_lembretes: boolean;
   robo: boolean;
   ia_responde: boolean;
+  inbox_meta_ativo?: boolean;
   whatsapp_profile_name?: string;
   whatsapp_profile_photo_url?: string;
   whatsapp_profile_description?: string;
@@ -462,7 +463,7 @@ export default function Acionamento() {
       const [uazapiResult, metaResult] = await Promise.all([
         supabase
           .from('user_whatsapp_instances' as any)
-          .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
+          .select('id, user_id, nome, telefone, server_url, instance_token, ativo, apenas_lembretes, robo, ia_responde, inbox_meta_ativo, whatsapp_profile_name, whatsapp_profile_photo_url, whatsapp_profile_description, whatsapp_profile_address, whatsapp_profile_email, proxy_enabled, proxy_host')
           .match(isOwnerAdmin ? {} : { user_id: user.id })
           .order('ordem' as any, { ascending: true })
           .order('criado_em', { ascending: false }),
@@ -2069,6 +2070,14 @@ export default function Acionamento() {
     toast.success(ia_responde ? 'IA habilitada para responder nesta instância' : 'IA desativada nesta instância');
   };
 
+  const handleToggleInboxMeta = async (id: string, ativo: boolean) => {
+    if (!isOwnerAdmin) return;
+    const { error } = await supabase.rpc('definir_uazapi_inbox_meta' as any, { p_instancia_id: id, p_ativo: ativo } as any);
+    if (error) { toast.error(`Erro: ${error.message}`); return; }
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, inbox_meta_ativo: ativo } : i));
+    toast.success(ativo ? 'Número visível no Inbox Meta (caixa PADRÃO). IAGO desativado neste número.' : 'Número removido da caixa PADRÃO do Inbox Meta.');
+  };
+
   const handleTestInstance = async (instance: { id: string; server_url: string; instance_token: string }) => {
     if (!isOwnerAdmin) return;
     setTestingInstanceId(instance.id);
@@ -2798,6 +2807,12 @@ export default function Acionamento() {
                                         className="scale-75"
                                       />
                                     )}
+                                  </div>
+                                )}
+                                {isOwnerAdmin && !isMetaTest && (
+                                  <div className="flex items-center gap-1.5 self-end">
+                                    <Label className="text-[10px] text-muted-foreground cursor-pointer" htmlFor={`inbox-meta-${inst.id}`}>Inbox Meta (PADRÃO)</Label>
+                                    <Switch id={`inbox-meta-${inst.id}`} checked={!!inst.inbox_meta_ativo} onCheckedChange={(checked) => handleToggleInboxMeta(inst.id, checked)} className="scale-75" />
                                   </div>
                                 )}
                                 {isOwnerAdmin && !isMetaTest && (
