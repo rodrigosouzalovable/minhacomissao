@@ -10456,6 +10456,7 @@ export type Database = {
           criado_em: string
           id: string
           inbox_compartilhado: boolean
+          meta_folder_padrao_id: string | null
           meus_sites: boolean
           notificar_acesso_whatsapp: boolean
           parceiro_meta: boolean
@@ -10478,6 +10479,7 @@ export type Database = {
           criado_em?: string
           id?: string
           inbox_compartilhado?: boolean
+          meta_folder_padrao_id?: string | null
           meus_sites?: boolean
           notificar_acesso_whatsapp?: boolean
           parceiro_meta?: boolean
@@ -10500,6 +10502,7 @@ export type Database = {
           criado_em?: string
           id?: string
           inbox_compartilhado?: boolean
+          meta_folder_padrao_id?: string | null
           meus_sites?: boolean
           notificar_acesso_whatsapp?: boolean
           parceiro_meta?: boolean
