@@ -55,3 +55,4 @@
 - Inbox phone search uses indexed reverse ranges and bounded invoker RPC; RLS precedes pagination; opening selects the actual box.
 
 - UME official API calls go through _shared/ume-api.ts (cached Keycloak token, global 30 req/min pacing); production stays disabled until UME_PRD_LIBERADO=true after dev homologation.
+- Partner-owned Meta conversations never stay boxless: a DB trigger moves them to the partner's configured default box, keeping the admin PADRÃO box limited to the admin's numbers.
