@@ -215,6 +215,7 @@ type Ctx = {
   listarInstanciasStatusJob: (jobId: string) => Promise<InstanciaStatusJob[]>;
   revalidarInstanciasJob: (jobId: string) => Promise<RevalidacaoInstanciasJob | null>;
   reativarInstanciaJob: (jobId: string, instanciaId: string) => Promise<boolean>;
+  retirarInstanciaJob: (jobId: string, instanciaId: string) => Promise<boolean>;
   adicionarInstanciasLivres: (jobId: string, ids?: string[]) => Promise<boolean>;
   liberarTetoHoje: (jobId: string, instanciaId?: string, teto?: number) => Promise<boolean>;
   marcarJobAberto: (jobId: string, aberto: boolean) => void;
@@ -419,6 +420,17 @@ export function EnvioMetaSendingProvider({ children }: { children: ReactNode }) 
     }
     toast.success("Instância devolvida para a campanha");
     await carregarJobs();
+    return true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invokeControle]);
+
+  const retirarInstanciaJob = useCallback(async (jobId: string, instanciaId: string): Promise<boolean> => {
+    const { data, error } = await invokeControle(jobId, "retirar_instancia_run", { instancia_id: instanciaId });
+    if (error || !data?.success) {
+      toast.error(data?.error || "Não foi possível retirar a instância agora");
+      return false;
+    }
+    toast.success("Instância retirada da campanha");
     return true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invokeControle]);
