@@ -1424,6 +1424,10 @@ export default function EnvioMeta() {
       return out;
     });
 
+    if (parceiroMeta && folderId === "__default__") {
+      toast.error("Escolha a caixa de mensagens antes de iniciar a campanha.");
+      return;
+    }
     setIniciandoCampanha(true);
     const jobIdCriado = await iniciar({
       template: { id: template.id, nome_template: template.nome_template },
@@ -2713,7 +2717,11 @@ export default function EnvioMeta() {
                 <SelectValue placeholder="Caixa padrão" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__default__">Caixa padrão (visível para a equipe)</SelectItem>
+                {parceiroMeta ? (
+                  <SelectItem value="__default__" disabled>Escolha uma das suas caixas</SelectItem>
+                ) : (
+                  <SelectItem value="__default__">Caixa padrão (visível para a equipe)</SelectItem>
+                )}
                 {foldersDisponiveis.map((f) => (
                   <SelectItem key={f.id} value={f.id}>
                     <span className="inline-flex items-center gap-2">
@@ -2724,6 +2732,9 @@ export default function EnvioMeta() {
                 ))}
               </SelectContent>
             </Select>
+            {parceiroMeta && folderId === "__default__" && (
+              <p className="text-xs text-destructive">Escolha a caixa de mensagens para iniciar a campanha.</p>
+            )}
             <p className="text-xs text-muted-foreground">
               As conversas geradas por esta campanha aparecerão apenas na caixa selecionada do Inbox Meta.
             </p>
@@ -2733,7 +2744,7 @@ export default function EnvioMeta() {
 
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={imageUploading || validando || enviandoTeste || iniciandoCampanha || motivosBloqueio.length > 0} size="lg">
+            <Button onClick={enviar} disabled={imageUploading || validando || enviandoTeste || iniciandoCampanha || motivosBloqueio.length > 0 || (parceiroMeta && folderId === "__default__")} size="lg">
               {validando || iniciandoCampanha
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : agendamento.ativo
