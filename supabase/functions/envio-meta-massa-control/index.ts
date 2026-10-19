@@ -485,6 +485,39 @@ Deno.serve(async (req) => {
         reenfileirados,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
+    } else if (acao === 'retirar_instancia_run') {
+      // Retirada manual pelo dono da campanha (dono já validado acima).
+      const instId: string = body?.instancia_id;
+      const jobInsts: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
+      if (!instId || !jobInsts.includes(instId)) {
+        return new Response(JSON.stringify({ success: false, error: 'instância não pertence a esta campanha' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!['rodando', 'pausado', 'aguardando'].includes(String(job.status))) {
+        return new Response(JSON.stringify({ success: false, error: 'a campanha não está em andamento' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const bloqRunAtual: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
+      const bloqTplAtual: string[] = Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [];
+      const restantes = jobInsts.filter((id) => id !== instId && !bloqRunAtual.includes(id) && !bloqTplAtual.includes(id));
+      if (restantes.length === 0) {
+        return new Response(JSON.stringify({ success: false, error: 'é a última instância ativa — pause a campanha em vez de retirar' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const bloqRun = Array.from(new Set([...bloqRunAtual, instId]));
+      const falhas: Record<string, any> = { ...((job as any).falhas_por_instancia_run || {}) };
+      falhas[`mot:${instId}`] = 'retirada manual';
+      await supabase.from('envio_meta_job').update({
+        instancias_bloqueadas_run: bloqRun,
+        falhas_por_instancia_run: falhas,
+      }).eq('id', jobId);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
     } else if (acao === 'desbloquear_instancia_run') {
       const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
       if (!isAdmin) {
@@ -504,6 +537,7 @@ Deno.serve(async (req) => {
       const bloqTpl: string[] = Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [];
       const falhas: Record<string, number> = { ...((job as any).falhas_por_instancia_run || {}) };
       delete falhas[instId];
+      delete (falhas as any)[`mot:${instId}`];
 
       await supabase.from('envio_meta_job').update({
         instancias_bloqueadas_run: bloqRun,

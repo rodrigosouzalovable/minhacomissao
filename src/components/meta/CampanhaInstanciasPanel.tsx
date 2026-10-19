@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEnvioMetaSending, type InstanciaStatusJob } from "@/contexts/EnvioMetaSendingContext";
 import { toast } from "sonner";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type Props = {
   jobId: string;
@@ -33,13 +35,18 @@ function InstanciaRow({
   isAdmin,
   reativando,
   onReativar,
+  podeRetirar,
+  onRetirar,
 }: {
   instancia: InstanciaStatusJob;
   isAdmin: boolean;
   reativando: boolean;
   onReativar: () => void;
+  podeRetirar: boolean;
+  onRetirar: () => void;
 }) {
-  return (
+  const retiravel = podeRetirar && !instancia.ignorada;
+  const linha = (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b last:border-b-0 px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-2">
         {instancia.ignorada ? (
@@ -67,6 +74,12 @@ function InstanciaRow({
             Saiu por: {instancia.motivo_ignorada}
           </span>
         )}
+        {retiravel && (
+          <Button size="sm" variant="outline" className="text-destructive" onClick={onRetirar}>
+            <CircleOff className="mr-1.5 h-3.5 w-3.5" />
+            Retirar
+          </Button>
+        )}
         {instancia.ignorada && (instancia.reativavel ?? instancia.motivo_ignorada === "falhas consecutivas") && isAdmin && (
           <Button size="sm" variant="outline" disabled={reativando} onClick={onReativar}>
             {reativando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="mr-1.5 h-3.5 w-3.5" />}
@@ -76,10 +89,20 @@ function InstanciaRow({
       </div>
     </div>
   );
+  if (!retiravel) return linha;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{linha}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem className="text-destructive" onSelect={onRetirar}>Retirar da campanha</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
 }
 
 export default function CampanhaInstanciasPanel({ jobId, isAdmin, canResume, initialOpen = false }: Props) {
-  const { listarInstanciasStatusJob, revalidarInstanciasJob, reativarInstanciaJob } = useEnvioMetaSending();
+  const { listarInstanciasStatusJob, revalidarInstanciasJob, reativarInstanciaJob, retirarInstanciaJob } = useEnvioMetaSending();
+  const [retirarAlvo, setRetirarAlvo] = useState<InstanciaStatusJob | null>(null);
   const [instancias, setInstancias] = useState<InstanciaStatusJob[] | null>(null);
   const [open, setOpen] = useState(initialOpen);
   const [carregando, setCarregando] = useState(false);
@@ -135,6 +158,13 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, canResume, ini
     }
   };
 
+  const confirmarRetirada = async () => {
+    const alvo = retirarAlvo;
+    setRetirarAlvo(null);
+    if (!alvo) return;
+    if (await retirarInstanciaJob(jobId, alvo.id)) await carregar();
+  };
+
   const ativas = (instancias || []).filter((i) => !i.ignorada);
   const ignoradas = (instancias || []).filter((i) => i.ignorada);
   const bloqueiosBm = Array.from(
@@ -149,6 +179,20 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, canResume, ini
 
   return (
     <div className="rounded-md border bg-card">
+      <AlertDialog open={!!retirarAlvo} onOpenChange={(v) => { if (!v) setRetirarAlvo(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Retirar da campanha?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {retirarAlvo?.nome} deixa de enviar nesta campanha. Os envios continuam pelas outras instâncias. Você pode devolvê-la depois com "Voltar".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmarRetirada()}>Retirar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
         <Button type="button" variant="ghost" className="h-auto min-w-0 justify-start gap-2 px-0 py-0 text-left text-sm font-medium" onClick={abrir} aria-expanded={open}>
           <Send className="h-4 w-4 text-muted-foreground" />
@@ -178,7 +222,7 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, canResume, ini
               {ativas.length > 0 && (
                 <div>
                   <div className="flex items-center gap-1.5 bg-muted/40 px-3 py-1.5 text-xs font-semibold text-green-700 dark:text-green-300"><CheckCircle2 className="h-3.5 w-3.5" /> Ativas (enviando)</div>
-                  {ativas.map((instancia) => <InstanciaRow key={instancia.id} instancia={instancia} isAdmin={isAdmin} reativando={reativando === instancia.id} onReativar={() => void reativar(instancia.id)} />)}
+                  {ativas.map((instancia) => <InstanciaRow key={instancia.id} instancia={instancia} isAdmin={isAdmin} reativando={reativando === instancia.id} onReativar={() => void reativar(instancia.id)} podeRetirar={canResume} onRetirar={() => setRetirarAlvo(instancia)} />)}
                 </div>
               )}
               {ignoradas.length > 0 && (
@@ -191,7 +235,7 @@ export default function CampanhaInstanciasPanel({ jobId, isAdmin, canResume, ini
                       ))}
                     </div>
                   )}
-                  {ignoradas.map((instancia) => <InstanciaRow key={instancia.id} instancia={instancia} isAdmin={isAdmin} reativando={reativando === instancia.id} onReativar={() => void reativar(instancia.id)} />)}
+                  {ignoradas.map((instancia) => <InstanciaRow key={instancia.id} instancia={instancia} isAdmin={isAdmin} reativando={reativando === instancia.id} onReativar={() => void reativar(instancia.id)} podeRetirar={canResume} onRetirar={() => setRetirarAlvo(instancia)} />)}
                 </div>
               )}
             </ScrollArea>
