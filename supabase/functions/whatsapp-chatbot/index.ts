@@ -1578,6 +1578,36 @@ serve(async (req) => {
             .eq('id', instanciaId)
             .maybeSingle();
           const iagoBloqueado = (instIago as any)?.iago_desativado === true;
+          // Número não oficial sem IAGO: aplica o mesmo rodízio atômico da caixa
+          // dos números oficiais, pulando a vez do IAGO.
+          if (iagoBloqueado) {
+            try {
+              const { data: iagoCfg } = await supabase
+                .from('iago_config').select('user_id').not('user_id', 'is', null).limit(1).maybeSingle();
+              const iagoUid = (iagoCfg as any)?.user_id ?? null;
+              let iagoEtiquetas: string[] = [];
+              if (iagoUid) {
+                const { data: fi } = await supabase
+                  .from('meta_atendimento_fila').select('etiqueta_id').eq('user_id', iagoUid);
+                iagoEtiquetas = (fi ?? []).map((r: any) => r.etiqueta_id);
+              }
+              for (let tentativa = 0; tentativa < 3; tentativa++) {
+                const { data: etq, error: rErr } = await supabase.rpc('atribuir_atendente_conversa', {
+                  p_contato_id: contatoEspelhoId,
+                  p_etiqueta_preferida: null,
+                });
+                if (rErr) { console.error('[ESPELHO-META] rodízio erro:', rErr.message); break; }
+                if (!etq || !iagoEtiquetas.includes(etq as string)) {
+                  console.log('[ESPELHO-META] atendente atribuído', etq);
+                  break;
+                }
+                await supabase.from('meta_whatsapp_contato_etiquetas')
+                  .delete().eq('contato_id', contatoEspelhoId).eq('etiqueta_id', etq as string);
+              }
+            } catch (e: any) {
+              console.error('[ESPELHO-META] rodízio exceção:', e?.message || e);
+            }
+          }
           const doIago = iagoBloqueado
             ? false
             : await garantirEtiquetaIagoInbox(
