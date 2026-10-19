@@ -1282,6 +1282,13 @@
       "when": 1792152803699,
       "tag": "0182_uazapi_inbox_meta_padrao_toggle",
       "breakpoints": true
+    },
+    {
+      "idx": 183,
+      "version": "7",
+      "when": 1792420392510,
+      "tag": "0183_parceiro_caixa_padrao",
+      "breakpoints": true
     }
   ]
 }
