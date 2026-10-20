@@ -87,14 +87,15 @@ export async function chamarUme(
 
 export const umeApi = {
   simularBoletos: (amb: UmeAmbiente, idsOrdem: Array<string | number>, data: string) => {
+    // A API real espera os IDs separados por vírgula em um único parâmetro
+    // "installmentsIds" (o manual cita id_order repetido).
     const qs = new URLSearchParams();
-    // A API real valida "installmentsIds" (o manual cita id_order).
-    idsOrdem.forEach((id) => qs.append('installmentsIds', String(id)));
+    qs.set('installmentsIds', idsOrdem.map(String).join(','));
     qs.set('date', data);
     return chamarUme(amb, 'GET', `/contracts/simulate-multiple-installments?${qs}`);
   },
-  gerarBoletos: (amb: UmeAmbiente, installmentsIds: number[], dueDate: string) =>
-    chamarUme(amb, 'POST', '/invoices/multiple', { installmentsIds, dueDate, generatedAt: UME_ASSESSORIA }),
+  gerarBoletos: (amb: UmeAmbiente, installmentsIds: Array<string | number>, dueDate: string) =>
+    chamarUme(amb, 'POST', '/invoices/multiple', { installmentsIds: installmentsIds.map(String), dueDate, generatedAt: UME_ASSESSORIA }),
   gerarBoletoUnico: (amb: UmeAmbiente, borrowerId: string, dueDate: string) =>
     chamarUme(amb, 'POST', '/invoices/chatbot', { borrowerId, dueDate, generatedAt: UME_ASSESSORIA }),
   simularRenegociacao: (amb: UmeAmbiente, p: UmeRenegociacao) =>
@@ -106,14 +107,15 @@ export const umeApi = {
 export interface UmeRenegociacao {
   monetaryDiscount: number;
   borrowerId: string;
-  installmentsIds: number[];
+  installmentsIds: Array<string | number>;
   firstPaymentDueDate: string;
   numberOfPayments: number;
   interestRate: number;
 }
 
 // A API real valida "installmentIds" (o manual escreve "installmentsIds").
+// IDs sempre como texto: números grandes podem chegar em notação científica.
 function corpoReneg(p: UmeRenegociacao) {
   const { installmentsIds, ...resto } = p;
-  return { ...resto, installmentIds: installmentsIds, generatedAt: UME_ASSESSORIA };
+  return { ...resto, installmentIds: installmentsIds.map(String), generatedAt: UME_ASSESSORIA };
 }
