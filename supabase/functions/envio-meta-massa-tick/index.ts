@@ -1238,6 +1238,12 @@ Deno.serve(async (req) => {
               if (!proximo.advanced) {
                 // Outra faixa pegou o mesmo contato: tenta o seguinte sem gastar o intervalo.
                 if (proximo.conflito) { proximoInicio = Math.min(proximoInicio, Date.now()); continue; }
+                // Espera curta (instância momentaneamente ocupada, rate limit breve):
+                // segura todas as faixas pelo tempo pedido em vez de encerrar a rodada.
+                if (!proximo.stop && !proximo.done && proximo.waitMs && proximo.waitMs <= 15_000) {
+                  proximoInicio = Math.max(proximoInicio, Date.now() + proximo.waitMs);
+                  continue;
+                }
                 parar = true;
                 break;
               }
