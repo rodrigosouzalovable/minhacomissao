@@ -608,45 +608,11 @@ serve(async (req) => {
           // com/sem "9" do celular brasileiro entre envio (5562981079590) e resposta (556281079590)
           const sufixo = phoneSuffix(outroLado);
           if (!soBsuid && sufixo.length === 8) {
-            const { data: contatoCanonico } = await supabase
-              .from('meta_whatsapp_contatos')
-              .select('telefone')
-              .eq('instancia_id', inst.id)
-              .ilike('telefone', `%${sufixo}`)
-              .neq('telefone', outroLado)
-              .order('atualizado_em', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (contatoCanonico?.telefone) {
-              outroLado = contatoCanonico.telefone;
-            } else {
-              const { data: envioCanonico } = await supabase
-                .from('meta_whatsapp_envios_log')
-                .select('telefone')
-                .eq('instancia_id', inst.id)
-                .ilike('telefone', `%${sufixo}`)
-                .neq('telefone', outroLado)
-                .order('enviado_em', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              if (envioCanonico?.telefone) {
-                outroLado = envioCanonico.telefone;
-              } else {
-                // Última defesa: procura em mensagens já gravadas com o mesmo sufixo
-                const { data: msgCanonico } = await supabase
-                  .from('meta_whatsapp_mensagens')
-                  .select('telefone')
-                  .eq('instancia_id', inst.id)
-                  .ilike('telefone', `%${sufixo}`)
-                  .neq('telefone', outroLado)
-                  .order('criado_em', { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                if (msgCanonico?.telefone) {
-                  outroLado = msgCanonico.telefone;
-                }
-              }
-            }
+            // Busca indexada por sufixo (contatos → envios → mensagens) numa única chamada.
+            const { data: canonico } = await supabase.rpc('meta_telefone_canonico', {
+              p_instancia: inst.id, p_telefone: outroLado, p_incluir_historico: true,
+            });
+            if (typeof canonico === 'string' && canonico) outroLado = canonico;
           }
 
           // Se o outro lado também é um número oficial cadastrado no sistema,
