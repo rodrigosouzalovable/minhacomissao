@@ -333,7 +333,7 @@ export default function ConfigurarMeta() {
   });
 
 
-  const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
+  const [duplicado, setDuplicado] = useState<{ id: string; nome: string; excluida?: boolean } | null>(null);
   const [instTemplatesVer, setInstTemplatesVer] = useState<Instancia | null>(null);
 
 
