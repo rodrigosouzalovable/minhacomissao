@@ -12625,6 +12625,10 @@ export type Database = {
         Args: { _uid: string }
         Returns: boolean
       }
+      can_rename_meta_inbox_folder: {
+        Args: { _folder_id: string; _uid: string }
+        Returns: boolean
+      }
       can_send_meta_inbox_message: {
         Args: {
           _allow_new?: boolean
