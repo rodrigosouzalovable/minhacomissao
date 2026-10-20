@@ -39,9 +39,6 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
   const [busy, setBusy] = useState(false);
   const [acessoFolder, setAcessoFolder] = useState<MetaInboxFolder | null>(null);
   const { isAdmin } = useUserRole();
-  const { parceiroMeta } = useUserPermissions();
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editNome, setEditNome] = useState('');
 
   const salvarNome = async (id: string) => {
     const nome = editNome.trim();
@@ -150,25 +147,7 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
               return (
                 <div key={f.id} className="border rounded p-3 space-y-2">
                   <div className="flex items-center gap-2">
-                    {editId === f.id ? (
-                      <>
-                        <Input className="h-8 max-w-[220px]" value={editNome} maxLength={60} autoFocus
-                          onChange={(e) => setEditNome(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') salvarNome(f.id); if (e.key === 'Escape') setEditId(null); }} />
-                        <Button size="sm" variant="ghost" aria-label="Salvar nome" disabled={busy} onClick={() => salvarNome(f.id)}><Check className="h-3.5 w-3.5" /></Button>
-                        <Button size="sm" variant="ghost" aria-label="Cancelar" onClick={() => setEditId(null)}><X className="h-3.5 w-3.5" /></Button>
-                      </>
-                    ) : (
-                      <>
-                        <Badge style={{ backgroundColor: f.cor, color: '#fff' }}>{f.nome}</Badge>
-                        {(owned || (parceiroMeta && adminFolders.has(f.id))) && (
-                          <Button size="sm" variant="ghost" title="Editar nome" aria-label="Editar nome"
-                            onClick={() => { setEditId(f.id); setEditNome(f.nome); }}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </>
-                    )}
+                    <Badge style={{ backgroundColor: f.cor, color: '#fff' }}>{f.nome}</Badge>
                     <span className="text-xs text-muted-foreground flex-1">
                       {owned ? 'Sua caixa' : 'Compartilhada'}
                     </span>
