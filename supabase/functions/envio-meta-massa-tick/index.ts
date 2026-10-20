@@ -62,7 +62,13 @@ async function destravarItensPresos(jobId: string) {
 
 type ItemResult =
   | { advanced: true; delayMs: number }
-  | { advanced: false; waitMs?: number; done?: boolean; stop?: boolean };
+  | { advanced: false; waitMs?: number; done?: boolean; stop?: boolean; conflito?: boolean };
+
+// Envios simultâneos por campanha no modo normal. Cada novo envio só COMEÇA
+// após o intervalo configurado desde o início do anterior; até 3 podem estar
+// aguardando a Meta ao mesmo tempo, então o tempo de confirmação de cada envio
+// deixa de se somar ao intervalo. Mantido baixo para preservar a qualidade.
+const ENVIOS_SIMULTANEOS = 3;
 
 function delayUsuarioMs(job: any): number {
   const lo = Math.max(1, Number(job?.min_seg) || 30);
@@ -805,7 +811,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     .eq('status', 'pendente')
     .select('id')
     .maybeSingle();
-  if (reservErr || !reserved) return { advanced: false, waitMs: 1_000 };
+  if (reservErr || !reserved) return { advanced: false, waitMs: 1_000, conflito: true };
 
   if (!(await jobEstaRodando(job.id))) {
     await supabase.from('envio_meta_job_item')
