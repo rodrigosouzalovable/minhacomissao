@@ -1317,6 +1317,13 @@
       "when": 1792508408157,
       "tag": "0187_envios_log_instancia_telefone",
       "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "7",
+      "when": 1792526020701,
+      "tag": "0188_meta_rotina_diaria_autorizada",
+      "breakpoints": true
     }
   ]
 }

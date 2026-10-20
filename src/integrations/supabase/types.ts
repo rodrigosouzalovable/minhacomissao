@@ -13740,6 +13740,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      meta_rotina_diaria_autorizada: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
       meta_telefone_canonico: {
         Args: {
           p_incluir_historico?: boolean
