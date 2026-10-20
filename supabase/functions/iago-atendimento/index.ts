@@ -11,10 +11,16 @@ import {
   ehPropostaPortal,
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
+import { umeApi } from '../_shared/ume-api.ts';
 import { detectarPropostaPreviaNoHistorico, type PropostaPrevia } from '../_shared/proposta-previa.ts';
 import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-resposta.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
+
+// Pedido explícito de boleto/PIX/segunda via (não confundir com "quero pagar"
+// genérico, que pode estar no meio da negociação de parcelamento).
+const ehPedidoBoleto = (t: string) =>
+  /(boleto|\bpix\b|c[oó]digo de barras|linha digit[aá]vel|segunda via|2ª via)/i.test(t);
 
 const hojeSP = () => agoraSP().toISOString().slice(0, 10);
 
@@ -749,6 +755,56 @@ Deno.serve(async (req) => {
           });
         }
       }
+    }
+
+    // ===== Pedido de boleto/PIX em conversa UME => gera pela API oficial e responde na hora =====
+    if (cpf && !modoAquecimento && /\bUME\b/i.test(credorCaixa) && ehPedidoBoleto(textoAtual)) {
+      try {
+        const consultaBol = await consultarUme(supabase, cpf, { perfil: 'essencial', aguardarCache: false });
+        if (consultaBol.encontrado && consultaBol.borrowerId) {
+          const ambiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
+          const venc = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+          const r = await umeApi.gerarBoletoUnico(ambiente, consultaBol.borrowerId, venc);
+          if (r.ok) {
+            const d = r.data as Record<string, unknown>;
+            const valor = Number(d.invoiceTotalValue ?? 0) || null;
+            const vencIso = String(d.invoiceDueDate ?? venc).slice(0, 10);
+            const textoBoleto = [
+              `Aqui está seu boleto${consultaBol.nome ? `, ${primeiroNome(consultaBol.nome)}` : ''}! 🙏`,
+              '',
+              valor ? `💰 *Valor:* ${fmtBRL(valor)}` : null,
+              `📅 *Vencimento:* ${vencIso.split('-').reverse().join('/')}`,
+              d.pixCode ? `\n🔑 *PIX copia e cola:*\n${d.pixCode}` : null,
+              d.invoiceUrl ? `\n📄 *Boleto (PDF):* ${d.invoiceUrl}` : null,
+            ].filter(Boolean).join('\n');
+            await enviarTexto(supabase, contato, textoBoleto.slice(0, 3500));
+            await supabase.from('ume_boleto_log').insert({
+              user_id: null,
+              cpf,
+              borrower_id: consultaBol.borrowerId,
+              invoice_id: String(d.id ?? '') || null,
+              valor,
+              vencimento: vencIso,
+              invoice_url: String(d.invoiceUrl ?? '') || null,
+              origem: 'iago',
+              ambiente,
+            });
+            const agoraBol = new Date().toISOString();
+            await supabase.from('iago_conversa_estado').update({
+              cpf,
+              ultima_msg_em: agoraBol,
+              ultima_msg_cliente_em: agoraBol,
+            }).eq('id', estado.id);
+            await finalizarEntrada();
+            console.log('[IAGO] boleto UME enviado', { contato_id, cpf, ambiente });
+            return json({ success: true, etapa: 'boleto_enviado' });
+          }
+          console.error('[IAGO] UME recusou boleto', r.status, JSON.stringify(r.data).slice(0, 300));
+        }
+      } catch (e) {
+        console.error('[IAGO] falha ao gerar boleto UME', String((e as Error)?.message || e));
+      }
+      // Falha => segue o fluxo normal (IA responde ou escala para humano)
     }
 
     // ===== Nome do cliente: cadastro > informado/confirmado > enviado por nós > perfil do WhatsApp =====
