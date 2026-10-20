@@ -3034,6 +3034,7 @@ export default function InboxMeta() {
         qualificacaoAtiva={qualifCaixas[configFolder?.id ?? CAIXA_PADRAO_ID] ?? true}
         alertaEsperaAtivo={alertaEsperaCaixas[configFolder?.id ?? CAIXA_PADRAO_ID] ?? true}
         onChanged={fetchQualificacoes}
+        onRenamed={(nome) => { setConfigFolder((c) => (c ? { ...c, nome } : c)); fetchFolders(); }}
       />
       <MetaQualificacaoDialog
         open={qualifDialogOpen}

@@ -25,10 +25,11 @@ interface Props {
   qualificacaoAtiva: boolean;
   alertaEsperaAtivo?: boolean;
   onChanged: () => void;
+  onRenamed?: (nome: string) => void;
 }
 
 export function MetaFolderConfigDialog({
-  open, onOpenChange, folderId, folderNome, qualificacaoAtiva, alertaEsperaAtivo = true, onChanged,
+  open, onOpenChange, folderId, folderNome, qualificacaoAtiva, alertaEsperaAtivo = true, onChanged, onRenamed,
 }: Props) {
   const { toast } = useToast();
   const [ativo, setAtivo] = useState(qualificacaoAtiva);
@@ -39,6 +40,23 @@ export function MetaFolderConfigDialog({
   const [credores, setCredores] = useState<Credor[]>([]);
   const [novoCredor, setNovoCredor] = useState('');
   const [busy, setBusy] = useState(false);
+  const [nomeCaixa, setNomeCaixa] = useState(folderNome);
+  const [salvandoNome, setSalvandoNome] = useState(false);
+  useEffect(() => { if (open) setNomeCaixa(folderNome); }, [open, folderNome]);
+
+  const salvarNomeCaixa = async () => {
+    const nome = nomeCaixa.trim();
+    if (!folderId || !nome) return;
+    setSalvandoNome(true);
+    const { data, error } = await supabase.from('meta_inbox_folders').update({ nome } as any).eq('id', folderId).select('id');
+    setSalvandoNome(false);
+    if (error || !data?.length) {
+      toast({ title: 'Não foi possível renomear', description: error?.message ?? 'Você não é admin desta caixa.', variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Nome da caixa atualizado' });
+    onRenamed?.(nome);
+  };
 
   // Plantão do IAGO
   const [plantaoAtivo, setPlantaoAtivo] = useState(false);
@@ -191,6 +209,18 @@ export function MetaFolderConfigDialog({
           <DialogTitle>Configurar caixa · {folderNome}</DialogTitle>
           <DialogDescription>Ajustes específicos desta caixa de mensagens.</DialogDescription>
         </DialogHeader>
+        {folderId && (
+          <div className="space-y-2 rounded-md border p-3">
+            <Label className="text-sm">Nome da caixa</Label>
+            <div className="flex gap-2">
+              <Input value={nomeCaixa} maxLength={60} onChange={(e) => setNomeCaixa(e.target.value)} />
+              <Button size="sm" onClick={salvarNomeCaixa}
+                disabled={salvandoNome || !nomeCaixa.trim() || nomeCaixa.trim() === folderNome}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-4 rounded-md border p-3">
           <div className="space-y-0.5">
             <Label className="text-sm">Qualificação de conversas</Label>
