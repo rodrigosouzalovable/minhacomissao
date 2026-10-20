@@ -81,7 +81,8 @@ function delayUsuarioMs(job: any): number {
 // pois o arredondamento distorce o ritmo pedido pelo usuário.
 const DELAY_CURTO_MS = 25_000;
 // Orçamento máximo de uma execução em laço (evita função longa demais).
-const ORCAMENTO_MS = 90_000;
+// Rodadas curtas encadeadas: evita estourar o limite de processamento da função.
+const ORCAMENTO_MS = 40_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
