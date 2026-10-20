@@ -56,3 +56,4 @@
 
 - UME official API calls go through _shared/ume-api.ts (cached Keycloak token, global 30 req/min pacing); production stays disabled until UME_PRD_LIBERADO=true after dev homologation.
 - Partner-owned Meta conversations never stay boxless: a DB trigger moves them to the partner's configured default box, keeping the admin PADRÃO box limited to the admin's numbers.
+- UME boleto generation goes through the ume-boleto edge function (attendant dialog) or iago-atendimento (explicit boleto/PIX requests in UME conversations); both reuse _shared/ume-api.ts, log to ume_boleto_log, and installment IDs are always sent as text to avoid scientific-notation corruption.
