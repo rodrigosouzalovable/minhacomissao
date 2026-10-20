@@ -1211,7 +1211,11 @@ export default function ConfigurarMeta() {
 
   const excluir = async (inst: Instancia) => {
     if (!confirm(`Excluir instância "${inst.nome}"?`)) return;
-    await supabase.from("meta_whatsapp_instances").delete().eq("id", inst.id);
+    const { data, error } = await supabase.from("meta_whatsapp_instances").delete().eq("id", inst.id).select("id");
+    if (error || !data?.length) {
+      toast.error(error?.message ? `Não foi possível excluir: ${error.message}` : "Você não tem permissão para excluir esta instância");
+      return;
+    }
     toast.success("Instância excluída");
     carregar();
   };
