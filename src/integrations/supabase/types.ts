@@ -13740,6 +13740,14 @@ export type Database = {
           user_id: string
         }[]
       }
+      meta_telefone_canonico: {
+        Args: {
+          p_incluir_historico?: boolean
+          p_instancia: string
+          p_telefone: string
+        }
+        Returns: string
+      }
       meta_tier_valor: { Args: { t: string }; Returns: number }
       migrar_instancia_meta_para_uazapi_padrao: {
         Args: { _instancia_meta_id: string; _uazapi_instance_id: string }

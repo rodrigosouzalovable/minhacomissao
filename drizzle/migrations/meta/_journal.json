@@ -1303,6 +1303,13 @@
       "when": 1792507147168,
       "tag": "0185_lembretes_incluir_dono",
       "breakpoints": true
+    },
+    {
+      "idx": 186,
+      "version": "7",
+      "when": 1792508343309,
+      "tag": "0186_telefone_canonico_indexado",
+      "breakpoints": true
     }
   ]
 }
