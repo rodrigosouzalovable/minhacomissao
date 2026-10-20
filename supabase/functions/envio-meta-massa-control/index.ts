@@ -324,7 +324,9 @@ Deno.serve(async (req) => {
       const jobInsts: string[] = Array.isArray(job.instancia_ids) ? job.instancia_ids : [];
       const bloqRunAntes: string[] = Array.isArray(job.instancias_bloqueadas_run) ? job.instancias_bloqueadas_run : [];
       const bloqueadasTemplate: string[] = Array.isArray((job as any).instancias_bloqueadas) ? (job as any).instancias_bloqueadas : [];
-      const candidatas = bloqRunAntes.filter((id: string) => jobInsts.includes(id) && !bloqueadasTemplate.includes(id));
+      const falhasRunAntes: Record<string, unknown> = ((job as any).falhas_por_instancia_run && typeof (job as any).falhas_por_instancia_run === 'object') ? (job as any).falhas_por_instancia_run : {};
+      // Retiradas manuais só voltam pelo botão "Voltar" (desbloquear_instancia_run), nunca pelo Atualizar.
+      const candidatas = bloqRunAntes.filter((id: string) => jobInsts.includes(id) && !bloqueadasTemplate.includes(id) && String(falhasRunAntes[`mot:${id}`] || '') !== 'retirada manual');
 
       if (candidatas.length === 0) {
         return new Response(JSON.stringify({
