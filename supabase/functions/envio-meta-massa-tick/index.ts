@@ -1148,6 +1148,7 @@ Deno.serve(async (req) => {
     const jobId: string | undefined = body?.job_id;
     let processadosTotal = 0;
     let claimedTotal = 0;
+    const continuarJobs: string[] = [];
     const maxClaims = jobId ? 1 : 10;
 
     for (let i = 0; i < maxClaims; i++) {
@@ -1227,7 +1228,7 @@ Deno.serve(async (req) => {
           }
           // Orçamento da execução acabou com a campanha ainda andando: encadeia
           // a próxima execução já, em vez de esperar o agendador (~1 min parado).
-          if (esgotouOrcamento) continuarJob = claimed.id;
+          if (esgotouOrcamento) continuarJobs.push(claimed.id);
         }
       } catch (e) {
         console.error('[tick job]', claimed.id, e);
@@ -1242,6 +1243,22 @@ Deno.serve(async (req) => {
       }
 
       if (jobId) break;
+    }
+
+    // Encadeia logo a próxima rodada das campanhas que só pararam por tempo.
+    // A trava já foi liberada acima; a chamada é aguardada só até ser aceita.
+    for (const id of continuarJobs) {
+      try {
+        await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/envio-meta-massa-tick`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ job_id: id }),
+          signal: AbortSignal.timeout(2_000),
+        });
+      } catch { /* timeout esperado: a nova execução segue sozinha */ }
     }
 
     return new Response(JSON.stringify({ success: true, jobs: claimedTotal, processados: processadosTotal }), {
