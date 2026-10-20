@@ -8196,6 +8196,8 @@ export type Database = {
           display_phone: string | null
           enviados_hoje: number
           estado_pool: string | null
+          excluida_em: string | null
+          excluida_por: string | null
           fase_rampup: string | null
           folder_padrao_fixo: boolean
           folder_padrao_id: string | null
@@ -8285,6 +8287,8 @@ export type Database = {
           display_phone?: string | null
           enviados_hoje?: number
           estado_pool?: string | null
+          excluida_em?: string | null
+          excluida_por?: string | null
           fase_rampup?: string | null
           folder_padrao_fixo?: boolean
           folder_padrao_id?: string | null
@@ -8374,6 +8378,8 @@ export type Database = {
           display_phone?: string | null
           enviados_hoje?: number
           estado_pool?: string | null
+          excluida_em?: string | null
+          excluida_por?: string | null
           fase_rampup?: string | null
           folder_padrao_fixo?: boolean
           folder_padrao_id?: string | null
@@ -12441,6 +12447,8 @@ export type Database = {
           display_phone: string | null
           enviados_hoje: number
           estado_pool: string | null
+          excluida_em: string | null
+          excluida_por: string | null
           fase_rampup: string | null
           folder_padrao_fixo: boolean
           folder_padrao_id: string | null
@@ -12982,6 +12990,7 @@ export type Database = {
         }[]
       }
       estrategia_resumo: { Args: never; Returns: Json }
+      excluir_meta_instancia: { Args: { _id: string }; Returns: Json }
       excluir_parcela_pendente: {
         Args: { p_pagamento_id: string }
         Returns: undefined
@@ -14037,6 +14046,8 @@ export type Database = {
           display_phone: string | null
           enviados_hoje: number
           estado_pool: string | null
+          excluida_em: string | null
+          excluida_por: string | null
           fase_rampup: string | null
           folder_padrao_fixo: boolean
           folder_padrao_id: string | null
@@ -14159,6 +14170,8 @@ export type Database = {
           display_phone: string | null
           enviados_hoje: number
           estado_pool: string | null
+          excluida_em: string | null
+          excluida_por: string | null
           fase_rampup: string | null
           folder_padrao_fixo: boolean
           folder_padrao_id: string | null
