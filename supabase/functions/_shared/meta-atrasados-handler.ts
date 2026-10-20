@@ -45,8 +45,7 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
           if(!sender) reason=reason||'Aguardando instância GREEN com template aprovado e caixa/etiqueta compatível com o funcionário';
           const vars=reminderValues(candidate.cliente_nome,candidate.empresa,candidate.data_prevista,cfg.variaveis_map,sender?.body_text||'{{1}} {{2}} {{3}}');
           if(!vars) reason=reason||'Nome, credor, vencimento ou mapeamento de variáveis incompleto';
-          const suppression=must(await db.from('meta_destinatario_supressao').select('telefone_sufixo').eq('telefone_sufixo',tel.slice(-8)).maybeSingle());
-          if(suppression) reason='Telefone bloqueado na blacklist/supressão';
+          // Acordo ativo fechado com este telefone: o lembrete de pagamento ignora a blacklist de campanhas.
           if(sender){
              const inst=must(await db.from('meta_whatsapp_instances').select('id,ativo,provider,saude_status,saude_quality,qualidade_leitura_ok,saude_checked_at,estado_pool,pool_fora_manual,instancia_teste_aquecimento,pausa_automatica_ate,pausa_automatica_motivo,saude_ban_info,quarentena_ate,rate_limit_ate,saude_restricoes').eq('id',sender.id).maybeSingle());
             if(!inst||!greenSender(inst)) reason=reason||'GREEN recente e disponibilidade não confirmados';
