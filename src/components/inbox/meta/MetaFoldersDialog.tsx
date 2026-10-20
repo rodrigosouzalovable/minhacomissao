@@ -7,10 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Trash2, Plus, Users, Pencil, Check, X } from 'lucide-react';
+import { Trash2, Plus, Users } from 'lucide-react';
 import { MetaFolderAcessoDialog } from './MetaFolderAcessoDialog';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useUserPermissions } from '@/hooks/useUserPermissions';
 
 export interface MetaInboxFolder {
   id: string;
@@ -40,21 +39,6 @@ export function MetaFoldersDialog({ open, onOpenChange, currentUserId, onChanged
   const [acessoFolder, setAcessoFolder] = useState<MetaInboxFolder | null>(null);
   const { isAdmin } = useUserRole();
 
-  const salvarNome = async (id: string) => {
-    const nome = editNome.trim();
-    if (!nome) { toast({ title: 'Informe o nome da caixa', variant: 'destructive' }); return; }
-    setBusy(true);
-    const { data, error } = await supabase.from('meta_inbox_folders').update({ nome } as any).eq('id', id).select('id');
-    setBusy(false);
-    if (error || !data?.length) {
-      toast({ title: 'Não foi possível renomear', description: error?.message ?? 'Você não tem permissão para editar esta caixa.', variant: 'destructive' });
-      return;
-    }
-    setEditId(null);
-    await load();
-    onChanged();
-    toast({ title: 'Nome da caixa atualizado' });
-  };
 
   const load = useCallback(async () => {
     const { data: fs } = await supabase.from('meta_inbox_folders')
