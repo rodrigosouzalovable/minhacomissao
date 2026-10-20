@@ -1198,7 +1198,9 @@ Deno.serve(async (req) => {
         if (result.advanced) {
           const inicioLoop = Date.now();
           let delayMs = result.delayMs;
-          while (delayMs > 0 && delayMs <= DELAY_CURTO_MS && Date.now() - inicioLoop + delayMs < ORCAMENTO_MS) {
+          let esgotouOrcamento = false;
+          while (delayMs > 0 && delayMs <= DELAY_CURTO_MS) {
+            if (Date.now() - inicioLoop + delayMs >= ORCAMENTO_MS) { esgotouOrcamento = true; break; }
             const espera = remainingDelay(ultimoInicio, delayMs, Date.now());
             if (espera > 0) await sleep(espera);
 
@@ -1223,6 +1225,9 @@ Deno.serve(async (req) => {
             processadosTotal++;
             delayMs = proximo.delayMs;
           }
+          // Orçamento da execução acabou com a campanha ainda andando: encadeia
+          // a próxima execução já, em vez de esperar o agendador (~1 min parado).
+          if (esgotouOrcamento) continuarJob = claimed.id;
         }
       } catch (e) {
         console.error('[tick job]', claimed.id, e);
