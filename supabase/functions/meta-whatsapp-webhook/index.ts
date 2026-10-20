@@ -163,13 +163,22 @@ function isOfficialInstancePhoneSuffix(sufixo: string, currentInstanceId: string
   return instances.some((i) => i?.id !== currentInstanceId && phoneSuffix(i?.display_phone) === sufixo);
 }
 
+function variantesTelefone(tel: string): string[] {
+  const d = String(tel || '').replace(/\D/g, '');
+  const b = d.startsWith('55') ? d : `55${d}`;
+  const out = new Set<string>([d, b]);
+  if (b.length === 13 && b[4] === '9') out.add(b.slice(0, 4) + b.slice(5));
+  if (b.length === 12) out.add(b.slice(0, 4) + '9' + b.slice(4));
+  return [...out].filter(Boolean);
+}
+
 async function hasOutboundTemplateContext(supabase: any, instanciaId: string, sufixo: string): Promise<boolean> {
   if (!sufixo) return false;
   const { data } = await supabase
     .from('meta_whatsapp_envios_log')
     .select('id')
     .eq('instancia_id', instanciaId)
-    .ilike('telefone', `%${sufixo}`)
+    .in('telefone', variantesTelefone(`55${sufixo}`).concat(variantesTelefone(sufixo)))
     .neq('status', 'failed')
     .order('enviado_em', { ascending: false })
     .limit(1)
@@ -1452,7 +1461,7 @@ serve(async (req) => {
             await supabase.from('meta_whatsapp_envios_log')
               .update({ status: 'replied' })
               .eq('instancia_id', inst.id)
-              .ilike('telefone', `%${sufixo}`)
+              .in('telefone', variantesTelefone(outroLado))
               .neq('status', 'replied');
           }
 

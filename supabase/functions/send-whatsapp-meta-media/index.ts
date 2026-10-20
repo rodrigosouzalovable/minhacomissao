@@ -108,6 +108,15 @@ async function uploadAudioToMeta(inst: any, mediaUrl: string): Promise<{ id?: st
   return { id: upJson?.id };
 }
 
+function variantesTelefone(tel: string): string[] {
+  const d = String(tel || '').replace(/\D/g, '');
+  const b = d.startsWith('55') ? d : `55${d}`;
+  const out = new Set<string>([d, b]);
+  if (b.length === 13 && b[4] === '9') out.add(b.slice(0, 4) + b.slice(5));
+  if (b.length === 12) out.add(b.slice(0, 4) + '9' + b.slice(4));
+  return [...out].filter(Boolean);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
@@ -247,7 +256,7 @@ Deno.serve(async (req) => {
         .from('meta_whatsapp_contatos')
         .select('telefone, wa_jid')
         .eq('instancia_id', instancia_id)
-        .ilike('telefone', `%${sufixo}`)
+        .in('telefone', variantesTelefone(to))
         .order('atualizado_em', { ascending: false })
         .limit(1)
         .maybeSingle();
