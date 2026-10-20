@@ -10,9 +10,10 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const idParcela = z.union([z.string().min(1).max(30), z.number().int()]);
 const reneg = z.object({
   borrowerId: z.string().min(1).max(100),
-  installmentsIds: z.array(z.number().int()).max(200),
+  installmentsIds: z.array(idParcela).max(200),
   monetaryDiscount: z.number().min(0),
   firstPaymentDueDate: data,
   numberOfPayments: z.number().int().min(1).max(60),
@@ -21,7 +22,7 @@ const reneg = z.object({
 const Body = z.discriminatedUnion('acao', [
   z.object({ acao: z.literal('testar_conexao') }),
   z.object({ acao: z.literal('simular_boletos'), idsOrdem: z.array(z.union([z.string(), z.number()])).min(1).max(50), data }),
-  z.object({ acao: z.literal('gerar_boletos'), installmentsIds: z.array(z.number().int()).min(1).max(200), dueDate: data }),
+  z.object({ acao: z.literal('gerar_boletos'), installmentsIds: z.array(idParcela).min(1).max(200), dueDate: data }),
   z.object({ acao: z.literal('gerar_boleto_unico'), borrowerId: z.string().min(1).max(100), dueDate: data }),
   z.object({ acao: z.literal('simular_renegociacao'), ...reneg.shape }),
   z.object({ acao: z.literal('fechar_acordo'), confirmar: z.literal(true), ...reneg.shape }),
