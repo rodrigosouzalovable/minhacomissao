@@ -333,7 +333,7 @@ export default function ConfigurarMeta() {
   });
 
 
-  const [duplicado, setDuplicado] = useState<{ id: string; nome: string } | null>(null);
+  const [duplicado, setDuplicado] = useState<{ id: string; nome: string; excluida?: boolean } | null>(null);
   const [instTemplatesVer, setInstTemplatesVer] = useState<Instancia | null>(null);
 
 
@@ -384,7 +384,7 @@ export default function ConfigurarMeta() {
   const carregar = async () => {
     setLoading(true);
     const [i, t, b, vp] = await Promise.all([
-      supabase.from("meta_whatsapp_instances").select("*").order("criado_em", { ascending: false }),
+      supabase.from("meta_whatsapp_instances").select("*").is("excluida_em", null).order("criado_em", { ascending: false }),
       carregarTodosTemplates(),
       supabase.from("meta_business_managers").select("id,nome,business_id,ativo,padrao,tier_diario,tier_manual,tier_ilimitado").eq("ativo", true).order("padrao", { ascending: false }).order("nome", { ascending: true }),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
@@ -708,6 +708,7 @@ export default function ConfigurarMeta() {
       nome: form.nome.trim(),
       waba_id: form.waba_id.trim(),
       ...camposBmTier(form, formTierTouched),
+      ...(duplicado.excluida ? { excluida_em: null, excluida_por: null, ativo: true } : {}),
     };
     if (form.access_token.trim()) patch.access_token = form.access_token.trim();
     const { error } = await supabase
@@ -734,11 +735,11 @@ export default function ConfigurarMeta() {
     // Já existe uma instância com esse Phone Number ID?
     const { data: existente } = await supabase
       .from("meta_whatsapp_instances")
-      .select("id, nome")
+      .select("id, nome, excluida_em")
       .eq("phone_number_id", form.phone_number_id.trim())
       .maybeSingle();
     if (existente) {
-      setDuplicado({ id: existente.id, nome: existente.nome || "sem nome" });
+      setDuplicado({ id: existente.id, nome: existente.nome || "sem nome", excluida: !!(existente as any).excluida_em });
       return;
     }
 
@@ -1210,10 +1211,10 @@ export default function ConfigurarMeta() {
 
 
   const excluir = async (inst: Instancia) => {
-    if (!confirm(`Excluir instância "${inst.nome}"?`)) return;
-    const { data, error } = await supabase.from("meta_whatsapp_instances").delete().eq("id", inst.id).select("id");
-    if (error || !data?.length) {
-      toast.error(error?.message ? `Não foi possível excluir: ${error.message}` : "Você não tem permissão para excluir esta instância");
+    if (!confirm(`Excluir instância "${inst.nome}"? As conversas e o histórico deste número continuam salvos.`)) return;
+    const { error } = await (supabase as any).rpc("excluir_meta_instancia", { _id: inst.id });
+    if (error) {
+      toast.error(`Não foi possível excluir: ${error.message}`);
       return;
     }
     toast.success("Instância excluída");

@@ -1338,6 +1338,20 @@
       "when": 1792537231668,
       "tag": "0190_instance_delete_grant_folder_rename",
       "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "7",
+      "when": 1792538656799,
+      "tag": "0191_soft_delete_meta_instance",
+      "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1792538683378,
+      "tag": "0192_soft_delete_meta_instance_fix",
+      "breakpoints": true
     }
   ]
 }
