@@ -1324,6 +1324,13 @@
       "when": 1792526020701,
       "tag": "0188_meta_rotina_diaria_autorizada",
       "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "7",
+      "when": 1792536848828,
+      "tag": "0189_folder_rename_by_partner_admin",
+      "breakpoints": true
     }
   ]
 }
