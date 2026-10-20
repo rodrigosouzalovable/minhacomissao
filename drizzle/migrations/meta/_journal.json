@@ -1289,6 +1289,13 @@
       "when": 1792420392510,
       "tag": "0183_parceiro_caixa_padrao",
       "breakpoints": true
+    },
+    {
+      "idx": 184,
+      "version": "7",
+      "when": 1792494289603,
+      "tag": "0184_ume_boleto_log",
+      "breakpoints": true
     }
   ]
 }

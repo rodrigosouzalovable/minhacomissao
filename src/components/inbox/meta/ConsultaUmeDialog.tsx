@@ -4,8 +4,44 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, RefreshCw, Copy, Send } from 'lucide-react';
+import { Loader2, Search, RefreshCw, Copy, Send, Barcode } from 'lucide-react';
 import { toast } from 'sonner';
+
+interface BoletoUme {
+  invoiceId: string;
+  valor: number | null;
+  vencimento: string;
+  pixCode: string;
+  invoiceUrl: string;
+  pixQrCodeUrl: string;
+  ambiente: 'dev' | 'prd';
+}
+
+const dataParaInput = (d: Date) => d.toISOString().slice(0, 10);
+const vencimentoPadrao = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return dataParaInput(d);
+};
+const fmtData = (iso: string) => {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+};
+
+function textoBoleto(b: BoletoUme, nome: string) {
+  const primeiro = (nome || '').split(' ')[0];
+  return [
+    `Olá${primeiro ? `, ${primeiro}` : ''}! Segue seu boleto para pagamento:`,
+    '',
+    `💰 *Valor:* ${fmt(b.valor)}`,
+    `📅 *Vencimento:* ${fmtData(b.vencimento)}`,
+    '',
+    b.pixCode ? `🔑 *PIX copia e cola:*\n${b.pixCode}` : null,
+    b.invoiceUrl ? `\n📄 *Boleto (PDF):* ${b.invoiceUrl}` : null,
+    '',
+    'Qualquer dúvida, estou à disposição!',
+  ].filter((l) => l !== null).join('\n');
+}
 
 interface Parcela { parcelas: number; valorParcela: number }
 interface Tabela { parcelas: Parcela[]; totalAte3x: number | null; total4xMais: number | null }
@@ -104,6 +140,34 @@ export function ConsultaUmeDialog({
   const [tabela, setTabela] = useState<TabelaKey>('padrao');
   const [erro, setErro] = useState('');
   const [loadingTabelas, setLoadingTabelas] = useState(false);
+  const [boleto, setBoleto] = useState<BoletoUme | null>(null);
+  const [boletoLoading, setBoletoLoading] = useState(false);
+  const [vencimentoBoleto, setVencimentoBoleto] = useState(vencimentoPadrao);
+
+  const gerarBoleto = async () => {
+    const digitos = soDigitos(cpf);
+    if (digitos.length !== 11) {
+      toast.error('Informe um CPF com 11 dígitos');
+      return;
+    }
+    setBoletoLoading(true);
+    setBoleto(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('ume-boleto', {
+        body: { acao: 'gerar', cpf: digitos, vencimento: vencimentoBoleto, origem: 'atendente' },
+      });
+      if (error) throw error;
+      if (!(data as any)?.success) {
+        throw new Error((data as any)?.message || (data as any)?.error || 'Falha ao gerar o boleto');
+      }
+      setBoleto((data as any).boleto as BoletoUme);
+      toast.success('Boleto gerado pela API oficial da UME');
+    } catch (e) {
+      toast.error(String((e as Error)?.message || e));
+    } finally {
+      setBoletoLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -302,6 +366,53 @@ export function ConsultaUmeDialog({
                 >
                   <Send className="mr-2 h-4 w-4" /> Enviar na conversa
                 </Button>
+              )}
+            </div>
+            <div className="space-y-3 rounded border p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">Boleto + PIX (API oficial UME)</span>
+                <Input
+                  type="date"
+                  value={vencimentoBoleto}
+                  min={dataParaInput(new Date())}
+                  onChange={(e) => setVencimentoBoleto(e.target.value)}
+                  className="w-[150px]"
+                />
+                <Button size="sm" variant="outline" onClick={() => void gerarBoleto()} disabled={boletoLoading}>
+                  {boletoLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Barcode className="mr-2 h-4 w-4" />}
+                  Gerar boleto + PIX
+                </Button>
+              </div>
+
+              {boleto && (
+                <div className="space-y-2 text-sm">
+                  <div className="flex flex-wrap gap-4">
+                    <div><span className="text-xs text-muted-foreground">Valor</span><div className="font-medium">{fmt(boleto.valor)}</div></div>
+                    <div><span className="text-xs text-muted-foreground">Vencimento</span><div className="font-medium">{fmtData(boleto.vencimento)}</div></div>
+                    {boleto.ambiente === 'dev' && <Badge variant="secondary">ambiente de testes</Badge>}
+                  </div>
+                  {boleto.pixCode && (
+                    <div className="flex items-start gap-2">
+                      <code className="max-h-20 flex-1 overflow-y-auto break-all rounded bg-muted p-2 text-xs">{boleto.pixCode}</code>
+                      <Button size="sm" variant="outline" onClick={() => { void navigator.clipboard.writeText(boleto.pixCode); toast.success('PIX copiado'); }}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  {boleto.invoiceUrl && (
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 truncate rounded bg-muted p-2 text-xs">{boleto.invoiceUrl}</code>
+                      <Button size="sm" variant="outline" onClick={() => { void navigator.clipboard.writeText(boleto.invoiceUrl); toast.success('Link copiado'); }}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  {onEnviar && (
+                    <Button size="sm" onClick={() => { onEnviar(textoBoleto(boleto, consulta?.nome || '')); onOpenChange(false); }}>
+                      <Send className="mr-2 h-4 w-4" /> Enviar boleto na conversa
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
             <p className="text-[11px] text-muted-foreground">

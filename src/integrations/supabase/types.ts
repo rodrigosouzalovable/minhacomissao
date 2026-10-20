@@ -10313,6 +10313,48 @@ export type Database = {
         }
         Relationships: []
       }
+      ume_boleto_log: {
+        Row: {
+          ambiente: string
+          borrower_id: string
+          cpf: string
+          criado_em: string
+          id: string
+          invoice_id: string | null
+          invoice_url: string | null
+          origem: string
+          user_id: string | null
+          valor: number | null
+          vencimento: string
+        }
+        Insert: {
+          ambiente?: string
+          borrower_id: string
+          cpf: string
+          criado_em?: string
+          id?: string
+          invoice_id?: string | null
+          invoice_url?: string | null
+          origem?: string
+          user_id?: string | null
+          valor?: number | null
+          vencimento: string
+        }
+        Update: {
+          ambiente?: string
+          borrower_id?: string
+          cpf?: string
+          criado_em?: string
+          id?: string
+          invoice_id?: string | null
+          invoice_url?: string | null
+          origem?: string
+          user_id?: string | null
+          valor?: number | null
+          vencimento?: string
+        }
+        Relationships: []
+      }
       ume_consultas_cache: {
         Row: {
           atualizado_em: string
