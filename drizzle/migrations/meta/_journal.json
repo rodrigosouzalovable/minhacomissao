@@ -1310,6 +1310,13 @@
       "when": 1792508343309,
       "tag": "0186_telefone_canonico_indexado",
       "breakpoints": true
+    },
+    {
+      "idx": 187,
+      "version": "7",
+      "when": 1792508408157,
+      "tag": "0187_envios_log_instancia_telefone",
+      "breakpoints": true
     }
   ]
 }
