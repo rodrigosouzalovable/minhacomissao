@@ -4,8 +4,44 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, RefreshCw, Copy, Send } from 'lucide-react';
+import { Loader2, Search, RefreshCw, Copy, Send, Barcode } from 'lucide-react';
 import { toast } from 'sonner';
+
+interface BoletoUme {
+  invoiceId: string;
+  valor: number | null;
+  vencimento: string;
+  pixCode: string;
+  invoiceUrl: string;
+  pixQrCodeUrl: string;
+  ambiente: 'dev' | 'prd';
+}
+
+const dataParaInput = (d: Date) => d.toISOString().slice(0, 10);
+const vencimentoPadrao = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return dataParaInput(d);
+};
+const fmtData = (iso: string) => {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+};
+
+function textoBoleto(b: BoletoUme, nome: string) {
+  const primeiro = (nome || '').split(' ')[0];
+  return [
+    `Olá${primeiro ? `, ${primeiro}` : ''}! Segue seu boleto para pagamento:`,
+    '',
+    `💰 *Valor:* ${fmt(b.valor)}`,
+    `📅 *Vencimento:* ${fmtData(b.vencimento)}`,
+    '',
+    b.pixCode ? `🔑 *PIX copia e cola:*\n${b.pixCode}` : null,
+    b.invoiceUrl ? `\n📄 *Boleto (PDF):* ${b.invoiceUrl}` : null,
+    '',
+    'Qualquer dúvida, estou à disposição!',
+  ].filter((l) => l !== null).join('\n');
+}
 
 interface Parcela { parcelas: number; valorParcela: number }
 interface Tabela { parcelas: Parcela[]; totalAte3x: number | null; total4xMais: number | null }
