@@ -72,15 +72,17 @@ export function MetaConversationCost({ contatoId, refreshKey }: { contatoId: str
   return (
     <>
       <Button
-        size="sm"
+        size="icon"
         variant="outline"
-        className="h-7 gap-1.5 px-2 text-xs"
+        className="relative h-7 w-7 p-0"
         onClick={() => setOpen(true)}
-        title="Ver custo desta conversa no mês"
+        title={`Custo no mês: ${dinheiro(resumo.valor_brl)} · ${resumo.confirmado ? 'confirmado' : 'aguardando confirmação'}`}
+        aria-label="Ver custo desta conversa no mês"
       >
         {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}
-        <span>Custo no mês: {dinheiro(resumo.valor_brl)}</span>
-        {resumo.confirmado ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Clock3 className="h-3.5 w-3.5 text-amber-500" />}
+        {!loading && (resumo.confirmado
+          ? <CheckCircle2 className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-background text-emerald-500" />
+          : <Clock3 className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-background text-amber-500" />)}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
