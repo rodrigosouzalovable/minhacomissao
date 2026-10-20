@@ -178,7 +178,7 @@ async function hasOutboundTemplateContext(supabase: any, instanciaId: string, su
     .from('meta_whatsapp_envios_log')
     .select('id')
     .eq('instancia_id', instanciaId)
-    .in('telefone', variantesTelefone(`55${sufixo}`).concat(variantesTelefone(sufixo)))
+    .in('telefone', variantesTelefone(sufixo))
     .neq('status', 'failed')
     .order('enviado_em', { ascending: false })
     .limit(1)
@@ -629,7 +629,7 @@ serve(async (req) => {
           // Mantemos apenas quando a instância atual iniciou o atendimento via template HSM;
           // caso contrário, não cria conversa duplicada no Inbox Meta.
           if (!soBsuid && isOfficialInstancePhoneSuffix(sufixo, inst.id, officialInstances || [])) {
-            const hasTemplateContext = await hasOutboundTemplateContext(supabase, inst.id, sufixo);
+            const hasTemplateContext = await hasOutboundTemplateContext(supabase, inst.id, outroLado || '');
             if (!hasTemplateContext) {
               console.log('[MetaWebhook] ignorando conversa espelho entre instâncias oficiais', {
                 instancia_id: inst.id,
