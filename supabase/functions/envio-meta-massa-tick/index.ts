@@ -62,7 +62,13 @@ async function destravarItensPresos(jobId: string) {
 
 type ItemResult =
   | { advanced: true; delayMs: number }
-  | { advanced: false; waitMs?: number; done?: boolean; stop?: boolean };
+  | { advanced: false; waitMs?: number; done?: boolean; stop?: boolean; conflito?: boolean };
+
+// Envios simultâneos por campanha no modo normal. Cada novo envio só COMEÇA
+// após o intervalo configurado desde o início do anterior; até 3 podem estar
+// aguardando a Meta ao mesmo tempo, então o tempo de confirmação de cada envio
+// deixa de se somar ao intervalo. Mantido baixo para preservar a qualidade.
+const ENVIOS_SIMULTANEOS = 3;
 
 function delayUsuarioMs(job: any): number {
   const lo = Math.max(1, Number(job?.min_seg) || 30);
@@ -75,7 +81,8 @@ function delayUsuarioMs(job: any): number {
 // pois o arredondamento distorce o ritmo pedido pelo usuário.
 const DELAY_CURTO_MS = 25_000;
 // Orçamento máximo de uma execução em laço (evita função longa demais).
-const ORCAMENTO_MS = 90_000;
+// Rodadas curtas encadeadas: evita estourar o limite de processamento da função.
+const ORCAMENTO_MS = 40_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -805,7 +812,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     .eq('status', 'pendente')
     .select('id')
     .maybeSingle();
-  if (reservErr || !reserved) return { advanced: false, waitMs: 1_000 };
+  if (reservErr || !reserved) return { advanced: false, waitMs: 1_000, conflito: true };
 
   if (!(await jobEstaRodando(job.id))) {
     await supabase.from('envio_meta_job_item')
@@ -1200,32 +1207,53 @@ Deno.serve(async (req) => {
           const inicioLoop = Date.now();
           let delayMs = result.delayMs;
           let esgotouOrcamento = false;
-          while (delayMs > 0 && delayMs <= DELAY_CURTO_MS) {
-            if (Date.now() - inicioLoop + delayMs >= ORCAMENTO_MS) { esgotouOrcamento = true; break; }
-            const espera = remainingDelay(ultimoInicio, delayMs, Date.now());
-            if (espera > 0) await sleep(espera);
+          let parar = false;
+          // Horário em que o PRÓXIMO envio pode começar (compartilhado entre as faixas).
+          let proximoInicio = ultimoInicio + delayMs;
 
-            // Renova a trava para que outro tick não roube a campanha no meio do laço.
-            const { data: renovado } = await supabase
-              .from('envio_meta_job')
-              .update({ worker_locked_until: new Date(Date.now() + 45_000).toISOString() })
-              .eq('id', claimed.id)
-              .eq('worker_lock_token', claimed.worker_lock_token)
-              .eq('status', 'rodando')
-              .select('*')
-              .maybeSingle();
-            if (!renovado) break; // pausado, cancelado, concluído ou trava perdida
+          const faixa = async () => {
+            while (!parar) {
+              if (!(delayMs > 0 && delayMs <= DELAY_CURTO_MS)) { parar = true; break; }
+              const espera = proximoInicio - Date.now();
+              if (espera > 0) { await sleep(espera); continue; }
+              if (Date.now() - inicioLoop + delayMs >= ORCAMENTO_MS) { esgotouOrcamento = true; parar = true; break; }
+              // Reserva este horário antes de qualquer espera de rede.
+              const inicioSlot = Date.now();
+              proximoInicio = inicioSlot + delayMs;
 
-            const tItem = Date.now();
-            const proximo = await processarItem(
-              { ...renovado, worker_lock_token: claimed.worker_lock_token },
-              { ignorarProximoEm: true },
-            );
-            ultimoInicio = tItem;
-            if (!proximo.advanced) break;
-            processadosTotal++;
-            delayMs = proximo.delayMs;
-          }
+              // Renova a trava para que outro tick não roube a campanha no meio do laço.
+              const { data: renovado } = await supabase
+                .from('envio_meta_job')
+                .update({ worker_locked_until: new Date(Date.now() + 45_000).toISOString() })
+                .eq('id', claimed.id)
+                .eq('worker_lock_token', claimed.worker_lock_token)
+                .eq('status', 'rodando')
+                .select('*')
+                .maybeSingle();
+              if (!renovado) { parar = true; break; } // pausado, cancelado, concluído ou trava perdida
+
+              const proximo = await processarItem(
+                { ...renovado, worker_lock_token: claimed.worker_lock_token },
+                { ignorarProximoEm: true },
+              );
+              if (!proximo.advanced) {
+                // Outra faixa pegou o mesmo contato: tenta o seguinte sem gastar o intervalo.
+                if (proximo.conflito) { proximoInicio = Math.min(proximoInicio, Date.now()); continue; }
+                // Espera curta (instância momentaneamente ocupada, rate limit breve):
+                // segura todas as faixas pelo tempo pedido em vez de encerrar a rodada.
+                if (!proximo.stop && !proximo.done && proximo.waitMs && proximo.waitMs <= 15_000) {
+                  proximoInicio = Math.max(proximoInicio, Date.now() + proximo.waitMs);
+                  continue;
+                }
+                parar = true;
+                break;
+              }
+              processadosTotal++;
+              delayMs = proximo.delayMs;
+            }
+          };
+
+          await Promise.all(Array.from({ length: ENVIOS_SIMULTANEOS }, () => faixa()));
           // Orçamento da execução acabou com a campanha ainda andando: encadeia
           // a próxima execução já, em vez de esperar o agendador (~1 min parado).
           if (esgotouOrcamento) continuarJobs.push(claimed.id);
