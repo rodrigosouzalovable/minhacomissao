@@ -1206,32 +1206,47 @@ Deno.serve(async (req) => {
           const inicioLoop = Date.now();
           let delayMs = result.delayMs;
           let esgotouOrcamento = false;
-          while (delayMs > 0 && delayMs <= DELAY_CURTO_MS) {
-            if (Date.now() - inicioLoop + delayMs >= ORCAMENTO_MS) { esgotouOrcamento = true; break; }
-            const espera = remainingDelay(ultimoInicio, delayMs, Date.now());
-            if (espera > 0) await sleep(espera);
+          let parar = false;
+          // Horário em que o PRÓXIMO envio pode começar (compartilhado entre as faixas).
+          let proximoInicio = ultimoInicio + delayMs;
 
-            // Renova a trava para que outro tick não roube a campanha no meio do laço.
-            const { data: renovado } = await supabase
-              .from('envio_meta_job')
-              .update({ worker_locked_until: new Date(Date.now() + 45_000).toISOString() })
-              .eq('id', claimed.id)
-              .eq('worker_lock_token', claimed.worker_lock_token)
-              .eq('status', 'rodando')
-              .select('*')
-              .maybeSingle();
-            if (!renovado) break; // pausado, cancelado, concluído ou trava perdida
+          const faixa = async () => {
+            while (!parar) {
+              if (!(delayMs > 0 && delayMs <= DELAY_CURTO_MS)) { parar = true; break; }
+              const espera = proximoInicio - Date.now();
+              if (espera > 0) { await sleep(espera); continue; }
+              if (Date.now() - inicioLoop + delayMs >= ORCAMENTO_MS) { esgotouOrcamento = true; parar = true; break; }
+              // Reserva este horário antes de qualquer espera de rede.
+              const inicioSlot = Date.now();
+              proximoInicio = inicioSlot + delayMs;
 
-            const tItem = Date.now();
-            const proximo = await processarItem(
-              { ...renovado, worker_lock_token: claimed.worker_lock_token },
-              { ignorarProximoEm: true },
-            );
-            ultimoInicio = tItem;
-            if (!proximo.advanced) break;
-            processadosTotal++;
-            delayMs = proximo.delayMs;
-          }
+              // Renova a trava para que outro tick não roube a campanha no meio do laço.
+              const { data: renovado } = await supabase
+                .from('envio_meta_job')
+                .update({ worker_locked_until: new Date(Date.now() + 45_000).toISOString() })
+                .eq('id', claimed.id)
+                .eq('worker_lock_token', claimed.worker_lock_token)
+                .eq('status', 'rodando')
+                .select('*')
+                .maybeSingle();
+              if (!renovado) { parar = true; break; } // pausado, cancelado, concluído ou trava perdida
+
+              const proximo = await processarItem(
+                { ...renovado, worker_lock_token: claimed.worker_lock_token },
+                { ignorarProximoEm: true },
+              );
+              if (!proximo.advanced) {
+                // Outra faixa pegou o mesmo contato: tenta o seguinte sem gastar o intervalo.
+                if (proximo.conflito) { proximoInicio = Math.min(proximoInicio, Date.now()); continue; }
+                parar = true;
+                break;
+              }
+              processadosTotal++;
+              delayMs = proximo.delayMs;
+            }
+          };
+
+          await Promise.all(Array.from({ length: ENVIOS_SIMULTANEOS }, () => faixa()));
           // Orçamento da execução acabou com a campanha ainda andando: encadeia
           // a próxima execução já, em vez de esperar o agendador (~1 min parado).
           if (esgotouOrcamento) continuarJobs.push(claimed.id);
