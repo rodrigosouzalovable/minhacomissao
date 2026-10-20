@@ -163,13 +163,22 @@ function isOfficialInstancePhoneSuffix(sufixo: string, currentInstanceId: string
   return instances.some((i) => i?.id !== currentInstanceId && phoneSuffix(i?.display_phone) === sufixo);
 }
 
+function variantesTelefone(tel: string): string[] {
+  const d = String(tel || '').replace(/\D/g, '');
+  const b = d.startsWith('55') ? d : `55${d}`;
+  const out = new Set<string>([d, b]);
+  if (b.length === 13 && b[4] === '9') out.add(b.slice(0, 4) + b.slice(5));
+  if (b.length === 12) out.add(b.slice(0, 4) + '9' + b.slice(4));
+  return [...out].filter(Boolean);
+}
+
 async function hasOutboundTemplateContext(supabase: any, instanciaId: string, sufixo: string): Promise<boolean> {
   if (!sufixo) return false;
   const { data } = await supabase
     .from('meta_whatsapp_envios_log')
     .select('id')
     .eq('instancia_id', instanciaId)
-    .ilike('telefone', `%${sufixo}`)
+    .in('telefone', variantesTelefone(sufixo))
     .neq('status', 'failed')
     .order('enviado_em', { ascending: false })
     .limit(1)
@@ -608,45 +617,11 @@ serve(async (req) => {
           // com/sem "9" do celular brasileiro entre envio (5562981079590) e resposta (556281079590)
           const sufixo = phoneSuffix(outroLado);
           if (!soBsuid && sufixo.length === 8) {
-            const { data: contatoCanonico } = await supabase
-              .from('meta_whatsapp_contatos')
-              .select('telefone')
-              .eq('instancia_id', inst.id)
-              .ilike('telefone', `%${sufixo}`)
-              .neq('telefone', outroLado)
-              .order('atualizado_em', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (contatoCanonico?.telefone) {
-              outroLado = contatoCanonico.telefone;
-            } else {
-              const { data: envioCanonico } = await supabase
-                .from('meta_whatsapp_envios_log')
-                .select('telefone')
-                .eq('instancia_id', inst.id)
-                .ilike('telefone', `%${sufixo}`)
-                .neq('telefone', outroLado)
-                .order('enviado_em', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              if (envioCanonico?.telefone) {
-                outroLado = envioCanonico.telefone;
-              } else {
-                // Última defesa: procura em mensagens já gravadas com o mesmo sufixo
-                const { data: msgCanonico } = await supabase
-                  .from('meta_whatsapp_mensagens')
-                  .select('telefone')
-                  .eq('instancia_id', inst.id)
-                  .ilike('telefone', `%${sufixo}`)
-                  .neq('telefone', outroLado)
-                  .order('criado_em', { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                if (msgCanonico?.telefone) {
-                  outroLado = msgCanonico.telefone;
-                }
-              }
-            }
+            // Busca indexada por sufixo (contatos → envios → mensagens) numa única chamada.
+            const { data: canonico } = await supabase.rpc('meta_telefone_canonico', {
+              p_instancia: inst.id, p_telefone: outroLado, p_incluir_historico: true,
+            });
+            if (typeof canonico === 'string' && canonico) outroLado = canonico;
           }
 
           // Se o outro lado também é um número oficial cadastrado no sistema,
@@ -654,7 +629,7 @@ serve(async (req) => {
           // Mantemos apenas quando a instância atual iniciou o atendimento via template HSM;
           // caso contrário, não cria conversa duplicada no Inbox Meta.
           if (!soBsuid && isOfficialInstancePhoneSuffix(sufixo, inst.id, officialInstances || [])) {
-            const hasTemplateContext = await hasOutboundTemplateContext(supabase, inst.id, sufixo);
+            const hasTemplateContext = await hasOutboundTemplateContext(supabase, inst.id, outroLado || '');
             if (!hasTemplateContext) {
               console.log('[MetaWebhook] ignorando conversa espelho entre instâncias oficiais', {
                 instancia_id: inst.id,
@@ -1486,7 +1461,7 @@ serve(async (req) => {
             await supabase.from('meta_whatsapp_envios_log')
               .update({ status: 'replied' })
               .eq('instancia_id', inst.id)
-              .ilike('telefone', `%${sufixo}`)
+              .in('telefone', variantesTelefone(outroLado))
               .neq('status', 'replied');
           }
 

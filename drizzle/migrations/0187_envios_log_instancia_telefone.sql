@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_meta_envios_log_inst_tel ON public.meta_whatsapp_envios_log (instancia_id, telefone, enviado_em DESC);
