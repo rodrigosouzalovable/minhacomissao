@@ -1359,6 +1359,13 @@
       "when": 1792600078808,
       "tag": "0193_lembretes_disparo_anna_flavia",
       "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1792612513867,
+      "tag": "0194_sftp_ume_baixas",
+      "breakpoints": true
     }
   ]
 }
