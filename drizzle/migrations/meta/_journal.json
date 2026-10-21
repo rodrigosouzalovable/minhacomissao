@@ -1366,6 +1366,13 @@
       "when": 1792612513867,
       "tag": "0194_sftp_ume_baixas",
       "breakpoints": true
+    },
+    {
+      "idx": 195,
+      "version": "7",
+      "when": 1792613307306,
+      "tag": "0195_sftp_ume_config",
+      "breakpoints": true
     }
   ]
 }

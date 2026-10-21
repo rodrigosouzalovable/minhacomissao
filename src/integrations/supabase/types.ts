@@ -9962,6 +9962,27 @@ export type Database = {
           },
         ]
       }
+      sftp_ume_config: {
+        Row: {
+          atualizado_em: string
+          atualizado_por: string | null
+          id: boolean
+          private_key: string
+        }
+        Insert: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          id?: boolean
+          private_key: string
+        }
+        Update: {
+          atualizado_em?: string
+          atualizado_por?: string | null
+          id?: boolean
+          private_key?: string
+        }
+        Relationships: []
+      }
       sites_gerados: {
         Row: {
           abertura: string | null
@@ -14243,6 +14264,7 @@ export type Database = {
         }[]
       }
       sftp_ume_aplicar: { Args: { p_arquivo: string }; Returns: number }
+      sftp_ume_chave_status: { Args: never; Returns: string }
       sftp_ume_registrar: {
         Args: {
           p_assinatura: string
@@ -14254,6 +14276,7 @@ export type Database = {
         }
         Returns: string
       }
+      sftp_ume_salvar_chave: { Args: { p_chave: string }; Returns: undefined }
       transferir_iago_para_humano_rodizio: {
         Args: { p_contato_id: string }
         Returns: string
