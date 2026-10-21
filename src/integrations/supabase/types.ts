@@ -10489,6 +10489,66 @@ export type Database = {
         }
         Relationships: []
       }
+      ume_carteira_clientes: {
+        Row: {
+          atualizado_em: string
+          borrower_id: string
+          carteira: string
+          cpf: string
+          data_lote: string
+          nome: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          borrower_id: string
+          carteira: string
+          cpf: string
+          data_lote: string
+          nome?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          borrower_id?: string
+          carteira?: string
+          cpf?: string
+          data_lote?: string
+          nome?: string | null
+        }
+        Relationships: []
+      }
+      ume_carteira_parcelas: {
+        Row: {
+          borrower_id: string
+          carteira: string
+          contrato: string | null
+          cpf: string
+          data_lote: string
+          installment_id: string
+          valor: number | null
+          vencimento: string | null
+        }
+        Insert: {
+          borrower_id: string
+          carteira: string
+          contrato?: string | null
+          cpf: string
+          data_lote: string
+          installment_id: string
+          valor?: number | null
+          vencimento?: string | null
+        }
+        Update: {
+          borrower_id?: string
+          carteira?: string
+          contrato?: string | null
+          cpf?: string
+          data_lote?: string
+          installment_id?: string
+          valor?: number | null
+          vencimento?: string | null
+        }
+        Relationships: []
+      }
       ume_consultas_cache: {
         Row: {
           atualizado_em: string
@@ -14282,6 +14342,19 @@ export type Database = {
         Returns: string
       }
       tresc_limpar_cache_antigo: { Args: never; Returns: number }
+      ume_carteira_finalizar: {
+        Args: { p_carteira: string; p_lote: string }
+        Returns: number
+      }
+      ume_carteira_gravar: {
+        Args: {
+          p_carteira: string
+          p_clientes: Json
+          p_lote: string
+          p_parcelas: Json
+        }
+        Returns: number
+      }
       user_can_access_tenant: {
         Args: { _tenant: string; _uid: string }
         Returns: boolean

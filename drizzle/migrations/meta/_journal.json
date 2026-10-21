@@ -1373,6 +1373,13 @@
       "when": 1792613307306,
       "tag": "0195_sftp_ume_config",
       "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "7",
+      "when": 1792617106003,
+      "tag": "0196_ume_carteira_sftp",
+      "breakpoints": true
     }
   ]
 }
