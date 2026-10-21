@@ -62,8 +62,17 @@ Deno.serve(async (req) => {
         return json({ ok: true, pastas });
       }
       if (acao === 'baixar') {
-        const buf = await sftp.get(caminho) as Uint8Array;
-        return new Response(buf, { headers: { ...corsHeaders, 'Content-Type': 'text/csv; charset=latin1' } });
+        // Envia em fluxo contínuo para não estourar o tempo ocioso em arquivos grandes.
+        const leitor = sftp.createReadStream(caminho, { highWaterMark: 256 * 1024 });
+        const fluxo = new ReadableStream({
+          start(ctrl) {
+            leitor.on('data', (c: Uint8Array) => ctrl.enqueue(new Uint8Array(c)));
+            leitor.on('end', () => { ctrl.close(); sftp.end().catch(() => {}); });
+            leitor.on('error', (e: Error) => { ctrl.error(e); sftp.end().catch(() => {}); });
+          },
+        });
+        manterAberto = true;
+        return new Response(fluxo, { headers: { ...corsHeaders, 'Content-Type': 'text/csv; charset=latin1' } });
       }
       return json({ error: 'Ação inválida' }, 400);
     } finally {
