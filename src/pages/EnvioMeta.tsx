@@ -2825,24 +2825,24 @@ export default function EnvioMeta() {
         }
       }}
     >
-      <AlertDialogContent className="max-w-lg">
-        <AlertDialogHeader>
+      <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-2xl overflow-hidden">
+        <AlertDialogHeader className="min-w-0">
           <AlertDialogTitle>Contatos acionados recentemente</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="w-full min-w-0 space-y-3 pt-2">
               <p>
                 {reenvioDlg.recentes.toLocaleString("pt-BR")} de {reenvioDlg.total.toLocaleString("pt-BR")} contato(s) já receberam mensagem nos últimos {reenvioDlg.dias} dia(s).
               </p>
-              <div className="w-full min-w-0 overflow-hidden rounded-md border bg-muted/30 p-3 text-sm space-y-1">
-                <div className="flex items-center justify-between gap-3"><span className="min-w-0">Enviar para todos</span><strong className="shrink-0">{reenvioDlg.total.toLocaleString("pt-BR")}</strong></div>
-                <div className="flex items-center justify-between gap-3"><span className="min-w-0">Ignorar os recentes</span><strong className="shrink-0">{Math.max(0, reenvioDlg.total - reenvioDlg.recentes).toLocaleString("pt-BR")}</strong></div>
+              <div className="box-border w-full min-w-0 rounded-md border bg-muted/30 p-3 text-sm grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
+                <span className="min-w-0">Enviar para todos</span><strong className="text-right text-foreground">{reenvioDlg.total.toLocaleString("pt-BR")}</strong>
+                <span className="min-w-0">Ignorar os recentes</span><strong className="text-right text-foreground">{Math.max(0, reenvioDlg.total - reenvioDlg.recentes).toLocaleString("pt-BR")}</strong>
               </div>
               <p className="text-xs text-muted-foreground">Escolha se deseja reenviar também para esses contatos ou manter a proteção contra repetição.</p>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="sm:justify-between sm:space-x-2">
-          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+        <AlertDialogFooter className="flex-wrap gap-2 sm:justify-between sm:space-x-0">
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="ghost"
@@ -2862,7 +2862,7 @@ export default function EnvioMeta() {
               Cancelar
             </AlertDialogCancel>
           </div>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => {
