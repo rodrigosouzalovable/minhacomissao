@@ -67,7 +67,7 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
     setJuros('0');
     if (c.length === 11) void carregar(c);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, cpfInicial, proposta]);
+  }, [open, cpfInicial, JSON.stringify(proposta ?? null)]);
 
   const chamar = async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke('ume-acordo-api', { body });
