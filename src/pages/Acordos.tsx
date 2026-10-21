@@ -1,3 +1,4 @@
+import { vencimentoNoIntervalo } from "@/lib/filtroVencimento";
 import { useEffect, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -575,7 +576,11 @@ export default function Acordos() {
   const [credorFilter, setCredorFilter] = useState<string>(initial.credorFilter ?? 'todos');
 
   const [rankingAberto, setRankingAberto] = useState(false);
-  const [filtroDataVencimento, setFiltroDataVencimento] = useState<Date | undefined>(parseDate(initial.filtroDataVencimento));
+  const [filtroDataVencimento, setFiltroDataVencimento] = useState<{ from?: Date; to?: Date } | undefined>(() => {
+    const from = parseDate(initial.filtroDataVencimento);
+    const to = parseDate((initial as any).filtroDataVencimentoTo);
+    return from || to ? { from, to } : undefined;
+  });
   const [filtroDataCriacao, setFiltroDataCriacao] = useState<{ from?: Date; to?: Date } | undefined>(() => {
     const from = parseDate(initial.filtroDataCriacaoFrom ?? initial.filtroDataCriacao);
     const to = parseDate(initial.filtroDataCriacaoTo);
@@ -594,7 +599,8 @@ export default function Acordos() {
         statusFilter,
         abaAtiva,
         selectedUserId,
-        filtroDataVencimento: filtroDataVencimento ? filtroDataVencimento.toISOString() : null,
+        filtroDataVencimento: filtroDataVencimento?.from ? filtroDataVencimento.from.toISOString() : null,
+        filtroDataVencimentoTo: filtroDataVencimento?.to ? filtroDataVencimento.to.toISOString() : null,
         filtroDataCriacaoFrom: filtroDataCriacao?.from ? filtroDataCriacao.from.toISOString() : null,
         filtroDataCriacaoTo: filtroDataCriacao?.to ? filtroDataCriacao.to.toISOString() : null,
         credorFilter,
@@ -944,10 +950,13 @@ export default function Acordos() {
   };
   // Helper: check if an acordo has a parcela matching the selected date
   const matchesDateFilter = (acordoId: string) => {
-    if (!filtroDataVencimento) return true;
-    const datas = todasDatasPorAcordo.get(acordoId) || [];
-    const selectedStr = format(filtroDataVencimento, 'yyyy-MM-dd');
-    return datas.some(d => d === selectedStr);
+    if (!filtroDataVencimento || (!filtroDataVencimento.from && !filtroDataVencimento.to)) return true;
+    const datas = (todasDatasPorAcordo.get(acordoId) || []).map(d => d.slice(0, 10));
+    return vencimentoNoIntervalo(
+      datas,
+      filtroDataVencimento.from ? format(filtroDataVencimento.from, 'yyyy-MM-dd') : undefined,
+      filtroDataVencimento.to ? format(filtroDataVencimento.to, 'yyyy-MM-dd') : undefined,
+    );
   };
 
   // Helper: check if an acordo was created within the selected date range
@@ -1219,14 +1228,17 @@ export default function Acordos() {
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filtroDataVencimento ? `Vencimento: ${format(filtroDataVencimento, "dd/MM/yyyy")}` : "Filtrar por vencimento"}
+                    {filtroDataVencimento?.from
+                      ? `Vencimento: ${format(filtroDataVencimento.from, "dd/MM/yyyy")}${filtroDataVencimento.to ? ` – ${format(filtroDataVencimento.to, "dd/MM/yyyy")}` : ''}`
+                      : "Filtrar por vencimento"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
-                    mode="single"
-                    selected={filtroDataVencimento}
-                    onSelect={setFiltroDataVencimento}
+                    mode="range"
+                    selected={filtroDataVencimento as any}
+                    onSelect={(r: any) => setFiltroDataVencimento(r?.from || r?.to ? r : undefined)}
+                    numberOfMonths={2}
                     locale={ptBR}
                     initialFocus
                     className="p-3 pointer-events-auto"
