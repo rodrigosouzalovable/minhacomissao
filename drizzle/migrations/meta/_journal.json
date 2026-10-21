@@ -1380,6 +1380,13 @@
       "when": 1792617106003,
       "tag": "0196_ume_carteira_sftp",
       "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "7",
+      "when": 1792617966350,
+      "tag": "0197_ume_acordo_api_log",
+      "breakpoints": true
     }
   ]
 }
