@@ -1401,6 +1401,13 @@
       "when": 1792619581347,
       "tag": "0199_sftp_ume_auto_progresso",
       "breakpoints": true
+    },
+    {
+      "idx": 200,
+      "version": "7",
+      "when": 1792624641271,
+      "tag": "0200_sftp_ume_aplicar_auto",
+      "breakpoints": true
     }
   ]
 }
