@@ -9855,6 +9855,113 @@ export type Database = {
           },
         ]
       }
+      sftp_ume_arquivos: {
+        Row: {
+          aplicadas: number
+          assinatura: string
+          casadas: number
+          criado_em: string
+          criado_por: string | null
+          data_lote: string | null
+          id: string
+          nome_arquivo: string
+          origem: string
+          status: string
+          total_baixas: number
+          total_linhas: number
+        }
+        Insert: {
+          aplicadas?: number
+          assinatura: string
+          casadas?: number
+          criado_em?: string
+          criado_por?: string | null
+          data_lote?: string | null
+          id?: string
+          nome_arquivo: string
+          origem?: string
+          status?: string
+          total_baixas?: number
+          total_linhas?: number
+        }
+        Update: {
+          aplicadas?: number
+          assinatura?: string
+          casadas?: number
+          criado_em?: string
+          criado_por?: string | null
+          data_lote?: string | null
+          id?: string
+          nome_arquivo?: string
+          origem?: string
+          status?: string
+          total_baixas?: number
+          total_linhas?: number
+        }
+        Relationships: []
+      }
+      sftp_ume_baixas: {
+        Row: {
+          acordo_id: string | null
+          aplicado_em: string | null
+          arquivo_id: string
+          contrato: string | null
+          cpf: string
+          criado_em: string
+          data_pagamento: string | null
+          id: string
+          pagamento_id: string | null
+          parcela_ref: string | null
+          status: string
+          tipo: string
+          valor: number | null
+          valor_pago: number | null
+          vencimento: string | null
+        }
+        Insert: {
+          acordo_id?: string | null
+          aplicado_em?: string | null
+          arquivo_id: string
+          contrato?: string | null
+          cpf: string
+          criado_em?: string
+          data_pagamento?: string | null
+          id?: string
+          pagamento_id?: string | null
+          parcela_ref?: string | null
+          status?: string
+          tipo: string
+          valor?: number | null
+          valor_pago?: number | null
+          vencimento?: string | null
+        }
+        Update: {
+          acordo_id?: string | null
+          aplicado_em?: string | null
+          arquivo_id?: string
+          contrato?: string | null
+          cpf?: string
+          criado_em?: string
+          data_pagamento?: string | null
+          id?: string
+          pagamento_id?: string | null
+          parcela_ref?: string | null
+          status?: string
+          tipo?: string
+          valor?: number | null
+          valor_pago?: number | null
+          vencimento?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sftp_ume_baixas_arquivo_id_fkey"
+            columns: ["arquivo_id"]
+            isOneToOne: false
+            referencedRelation: "sftp_ume_arquivos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sites_gerados: {
         Row: {
           abertura: string | null
@@ -14134,6 +14241,18 @@ export type Database = {
         Returns: {
           template_id: string
         }[]
+      }
+      sftp_ume_aplicar: { Args: { p_arquivo: string }; Returns: number }
+      sftp_ume_registrar: {
+        Args: {
+          p_assinatura: string
+          p_baixas: Json
+          p_data_lote: string
+          p_nome: string
+          p_origem: string
+          p_total_linhas: number
+        }
+        Returns: string
       }
       transferir_iago_para_humano_rodizio: {
         Args: { p_contato_id: string }

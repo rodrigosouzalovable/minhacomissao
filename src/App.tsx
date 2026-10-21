@@ -57,6 +57,7 @@ const RedirectBoleto = lazy(() => retryImport(() => import("./pages/RedirectBole
 const RedirectVerificarProposta = lazy(() => retryImport(() => import("./pages/RedirectVerificarProposta")));
 
 const Relatorios = lazy(() => retryImport(() => import("./pages/Relatorios")));
+const SftpUme = lazy(() => retryImport(() => import("./pages/SftpUme")));
 const ComiteNovoMundo = lazy(() => retryImport(() => import("./pages/ComiteNovoMundo")));
 const ValidarEmails = lazy(() => retryImport(() => import("./pages/ValidarEmails")));
 const Notificacoes = lazy(() => retryImport(() => import("./pages/Notificacoes")));
@@ -289,6 +290,7 @@ const App = () => (
             <Route path="/monitor-envios" element={<PermissionRoute><MonitorEnvios /></PermissionRoute>} />
             <Route path="/admin/exportar-dados" element={<PermissionRoute><ExportarDados /></PermissionRoute>} />
             <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
+            <Route path="/admin/sftp-ume" element={<AdminRoute><SftpUme /></AdminRoute>} />
             <Route path="/admin/comite-novomundo" element={<AdminRoute><ComiteNovoMundo /></AdminRoute>} />
             <Route path="/admin/validar-emails" element={<AdminRoute><ValidarEmails /></AdminRoute>} />
             <Route path="/admin/notificacoes" element={<PermissionRoute><Notificacoes /></PermissionRoute>} />
