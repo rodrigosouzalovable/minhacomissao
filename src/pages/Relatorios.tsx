@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
-import { Plus, RotateCcw, Download, CalendarIcon, Trophy, Pencil, RefreshCw } from 'lucide-react';
+import { Plus, RotateCcw, Download, CalendarIcon, Trophy, Pencil, RefreshCw, Send } from 'lucide-react';
 import { FunilAcionamentosCard } from '@/components/relatorios/FunilAcionamentosCard';
 import { ArquivoDiarioUmeCard } from '@/components/relatorios/ArquivoDiarioUmeCard';
 import {
