@@ -28,7 +28,9 @@ Deno.serve(async (req) => {
     const { data: admin } = await sb.rpc('has_role', { _user_id: u.user.id, _role: 'admin' });
     if (!admin) return json({ error: 'Apenas administradores' }, 403);
 
-    const chave = Deno.env.get('SFTP_UME_PRIVATE_KEY');
+    const svc = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const { data: cfg } = await svc.from('sftp_ume_config').select('private_key').maybeSingle();
+    const chave = cfg?.private_key || Deno.env.get('SFTP_UME_PRIVATE_KEY');
     if (!chave) return json({ error: 'Chave de acesso ao SFTP ainda não cadastrada' }, 400);
 
     const body = await req.json().catch(() => ({}));
