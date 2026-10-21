@@ -1,0 +1,1 @@
+SELECT public.meta_atrasados_continuacao(true);
