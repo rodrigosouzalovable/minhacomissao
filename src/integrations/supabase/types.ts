@@ -9900,6 +9900,57 @@ export type Database = {
         }
         Relationships: []
       }
+      sftp_ume_auto_progresso: {
+        Row: {
+          arquivo: string
+          atualizado_em: string
+          baixas: Json
+          carteira: string | null
+          clientes: number
+          data_lote: string | null
+          erro: string | null
+          modificado: number
+          parcelas: number
+          pasta: string
+          posicao: number
+          status: string
+          tamanho: number
+          total_linhas: number
+        }
+        Insert: {
+          arquivo: string
+          atualizado_em?: string
+          baixas?: Json
+          carteira?: string | null
+          clientes?: number
+          data_lote?: string | null
+          erro?: string | null
+          modificado: number
+          parcelas?: number
+          pasta: string
+          posicao?: number
+          status?: string
+          tamanho: number
+          total_linhas?: number
+        }
+        Update: {
+          arquivo?: string
+          atualizado_em?: string
+          baixas?: Json
+          carteira?: string | null
+          clientes?: number
+          data_lote?: string | null
+          erro?: string | null
+          modificado?: number
+          parcelas?: number
+          pasta?: string
+          posicao?: number
+          status?: string
+          tamanho?: number
+          total_linhas?: number
+        }
+        Relationships: []
+      }
       sftp_ume_baixas: {
         Row: {
           acordo_id: string | null
@@ -14378,7 +14429,9 @@ export type Database = {
         }[]
       }
       sftp_ume_aplicar: { Args: { p_arquivo: string }; Returns: number }
+      sftp_ume_auto_autorizada: { Args: { p_token: string }; Returns: boolean }
       sftp_ume_chave_status: { Args: never; Returns: string }
+      sftp_ume_pode: { Args: never; Returns: boolean }
       sftp_ume_registrar: {
         Args: {
           p_assinatura: string
