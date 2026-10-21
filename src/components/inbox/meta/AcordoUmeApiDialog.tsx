@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, Play, CheckCircle2, Barcode, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import type { PropostaPortal } from '@/lib/umePropostaPortal';
 
 const soDigitos = (v: string) => (v || '').replace(/\D/g, '');
 const formatCpf = (d: string) => d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
@@ -39,8 +40,9 @@ function resumoResultado(r: any): string {
   return linhas.join('\n');
 }
 
-export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId, onEnviar }: {
+export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId, onEnviar, proposta }: {
   open: boolean; onOpenChange: (v: boolean) => void; cpfInicial?: string | null; conversaId?: string | null; onEnviar?: (texto: string) => void;
+  proposta?: PropostaPortal | null;
 }) {
   const [cpf, setCpf] = useState('');
   const [dados, setDados] = useState<Carregado | null>(null);
@@ -57,11 +59,15 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
 
   useEffect(() => {
     if (!open) return;
-    const c = soDigitos(cpfInicial || '');
+    const c = soDigitos(proposta?.cpf || cpfInicial || '');
     setCpf(c); setDados(null); setSimulacao(null); setEfetivado(null); setBoleto(null); setErro('');
+    setNParcelas(proposta?.parcelas ? String(proposta.parcelas) : '18');
+    setTotalAcordo(proposta?.total ? proposta.total.toFixed(2).replace('.', ',') : '');
+    setPrimeiroVenc(proposta?.primeiroVencimento ?? '');
+    setJuros('0');
     if (c.length === 11) void carregar(c);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, cpfInicial]);
+  }, [open, cpfInicial, JSON.stringify(proposta ?? null)]);
 
   const chamar = async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke('ume-acordo-api', { body });
