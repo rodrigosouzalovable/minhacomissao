@@ -7,6 +7,15 @@ const json = (body: unknown, status = 200) =>
 
 const PASTAS = ['/baixas_pagamento', '/carga', '/odres', '/Acompanhamento_Recuperacao', '/carga/processados'];
 
+// Chaves coladas em formulário costumam perder as quebras de linha; remonta o PEM.
+function normalizarPem(bruta: string): string {
+  const t = bruta.replace(/\\n/g, '\n').trim();
+  const m = /-----BEGIN ([A-Z ]+)-----([\s\S]*?)-----END \1-----/.exec(t);
+  if (!m) return t;
+  const corpo = m[2].replace(/\s+/g, '');
+  return `-----BEGIN ${m[1]}-----\n${corpo.match(/.{1,64}/g)!.join('\n')}\n-----END ${m[1]}-----\n`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
@@ -34,7 +43,7 @@ Deno.serve(async (req) => {
       host: Deno.env.get('SFTP_UME_HOST') ?? '35.227.83.18',
       port: 22,
       username: Deno.env.get('SFTP_UME_USER') ?? 'ribeiro_usr',
-      privateKey: chave.replace(/\\n/g, '\n'),
+      privateKey: normalizarPem(chave),
       readyTimeout: 20000,
     });
     try {
