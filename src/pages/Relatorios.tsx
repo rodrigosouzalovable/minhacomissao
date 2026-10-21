@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
-import { Plus, RotateCcw, Download, CalendarIcon, Trophy, Pencil, RefreshCw } from 'lucide-react';
+import { Plus, RotateCcw, Download, CalendarIcon, Trophy, Pencil, RefreshCw, Send } from 'lucide-react';
 import { FunilAcionamentosCard } from '@/components/relatorios/FunilAcionamentosCard';
 import { ArquivoDiarioUmeCard } from '@/components/relatorios/ArquivoDiarioUmeCard';
 import {
@@ -135,6 +135,20 @@ export default function Relatorios() {
     setSincronizando(false);
     if (error) { toast.error('Falha ao atualizar: ' + error.message); return; }
     toast.success('Relatório atualizado com os dados do Inbox Meta');
+    load();
+  };
+
+  const [reenviando, setReenviando] = useState(false);
+  const reenviarWhatsApp = async () => {
+    setReenviando(true);
+    const { data: r, error } = await supabase.functions.invoke('relatorio-acionamentos-sync', {
+      body: { dia: dataStr, reenviar: true },
+    });
+    setReenviando(false);
+    if (error) { toast.error('Falha ao reenviar: ' + error.message); return; }
+    const n = (r as any)?.notificacao?.enviados ?? 0;
+    if (n > 0) toast.success(`Relatório reenviado para ${n} destino(s)`);
+    else toast.error('Relatório não foi entregue: ' + (((r as any)?.notificacao?.erros || [])[0] || 'verifique as instâncias'));
     load();
   };
 
@@ -340,6 +354,27 @@ export default function Relatorios() {
             {isAdmin && <ImportarLigacoesDialog onDone={load} />}
             {isAdmin && <Config3CPlusDialog onDone={load} />}
             {isAdmin && <DestinosRelatorioDialog />}
+            {isAdmin && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={reenviando}>
+                    <Send className={cn('h-4 w-4 mr-2', reenviando && 'animate-pulse')} /> Reenviar no WhatsApp
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reenviar o relatório de {format(data, 'dd/MM/yyyy')}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Os números serão recalculados e o relatório consolidado atualizado será enviado ao seu WhatsApp e aos grupos configurados.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={reenviarWhatsApp}>Reenviar</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
 
 
             {isAdmin && (

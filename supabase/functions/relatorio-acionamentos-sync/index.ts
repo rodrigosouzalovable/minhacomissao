@@ -88,8 +88,26 @@ Deno.serve(async (req) => {
     }
 
     const dia: string = body.dia || agora.dia;
-    const notificar: boolean = body.notificar !== false;
-    const consolidado: boolean = body.consolidado === true;
+    let notificar: boolean = body.notificar !== false;
+    let consolidado: boolean = body.consolidado === true;
+
+    // Reenvio manual (somente admin): força consolidado e ignora a trava diária
+    const reenviar: boolean = body.reenviar === true;
+    if (reenviar) {
+      const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      const { data: u } = await supabase.auth.getUser(token);
+      const uid = u?.user?.id;
+      const { data: ehAdmin } = uid
+        ? await supabase.rpc("has_role", { _user_id: uid, _role: "admin" })
+        : { data: false };
+      if (!ehAdmin) {
+        return new Response(JSON.stringify({ error: "Apenas administradores podem reenviar o relatório" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      notificar = true;
+      consolidado = true;
+    }
 
 
     // Janela do dia em BRT
@@ -425,9 +443,10 @@ Deno.serve(async (req) => {
               .map((r: any) => `• ${r.hora}: ${r.tentativas || 0} / ${r.cpc || 0} / ${r.cpca || 0}`),
           ];
 
-      const chave = consolidado
+      const chaveBase = consolidado
         ? `relat-acion-consol-${dia}`
         : `relat-acion-${dia}-${String(agora.hora).padStart(2, "0")}h`;
+      const chave = reenviar ? `${chaveBase}:reenvio-${Date.now()}` : chaveBase;
 
       // Destinos extras configurados (grupos de WhatsApp)
       const { data: destinos } = await supabase
