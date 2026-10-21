@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
     }
 
     const sftp = new SftpClient();
+    let manterAberto = false;
     await sftp.connect({
       host: Deno.env.get('SFTP_UME_HOST') ?? '35.227.83.18',
       port: 22,
@@ -76,7 +77,7 @@ Deno.serve(async (req) => {
       }
       return json({ error: 'Ação inválida' }, 400);
     } finally {
-      await sftp.end().catch(() => {});
+      if (!manterAberto) await sftp.end().catch(() => {});
     }
   } catch (e) {
     console.error('sftp-ume', e);
