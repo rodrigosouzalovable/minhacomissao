@@ -108,7 +108,7 @@ export default function SftpUme() {
   const exportar = async (h: Importado) => {
     const { data } = await supabase.from('sftp_ume_baixas').select('*').eq('arquivo_id', h.id).limit(10000);
     const rot: Record<string, string> = { casado: 'Pronta para baixa', aplicado: 'Baixada', ja_pago: 'Já estava paga', sem_acordo: 'Sem acordo no sistema' };
-    const linhas = (data ?? []).map((b: any) => ({
+    const linhas: Record<string, unknown>[] = (data ?? []).map((b: any) => ({
       Tipo: b.tipo === '08' ? 'Pagamento' : 'Baixa de acordo', CPF: b.cpf, Contrato: b.contrato, Parcela: b.parcela_ref,
       Vencimento: fmtData(b.vencimento), Valor: b.valor, 'Data pagamento': fmtData(b.data_pagamento),
       'Valor pago': b.valor_pago, Situação: rot[b.status] ?? b.status,
