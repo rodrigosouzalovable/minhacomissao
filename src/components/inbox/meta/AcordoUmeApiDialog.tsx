@@ -89,16 +89,23 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
 
   const n = Math.round(numeroBR(nParcelas));
   const vTotal = numeroBR(totalAcordo);
-  const desconto = dados ? round2(dados.totalAberto - vTotal) : 0;
-  const parcela = n > 0 ? round2(vTotal / n) : 0;
-  const pode = !!dados && n >= 1 && n <= 24 && vTotal > 0 && desconto >= 0
+  const diferenca = dados ? round2(dados.totalAberto - vTotal) : 0;
+  const desconto = Math.max(0, diferenca);
+  // Total acima do aberto = acréscimo do parcelamento (ex.: +10% do portal), enviado como juros.
+  const acrescimo = Math.max(0, -diferenca);
+  const jurosEnvio = dados && acrescimo > 0 ? round2((acrescimo / dados.totalAberto) * 100) : numeroBR(juros);
+  const centavos = Math.round(vTotal * 100);
+  const parcelaBase = n > 0 ? Math.floor(centavos / n) / 100 : 0;
+  const ultimaParcela = n > 0 ? round2((centavos - Math.floor(centavos / n) * (n - 1)) / 100) : 0;
+  const parcela = parcelaBase;
+  const pode = !!dados && n >= 1 && n <= 24 && vTotal > 0
     && /^\d{4}-\d{2}-\d{2}$/.test(primeiroVenc) && (n === 1 || parcela >= 100);
 
   const executar = async (acao: 'simular' | 'efetivar') => {
     if (acao === 'efetivar' && !window.confirm(`Efetivar acordo REAL na UME: ${n}x de ${fmt(parcela)} (total ${fmt(vTotal)}), 1º vencimento ${fmtData(primeiroVenc)}?`)) return;
     setOcupado(acao); setErro('');
     try {
-      const r = await chamar({ acao, cpf: soDigitos(cpf), numeroParcelas: n, primeiroVencimento: primeiroVenc, desconto, juros: numeroBR(juros), confirmar: acao === 'efetivar', conversaId: conversaId || null });
+      const r = await chamar({ acao, cpf: soDigitos(cpf), numeroParcelas: n, primeiroVencimento: primeiroVenc, desconto, juros: jurosEnvio, confirmar: acao === 'efetivar', conversaId: conversaId || null });
       if (acao === 'simular') { setSimulacao(r.resultado ?? {}); toast.success('Simulação da UME recebida — confira antes de efetivar'); }
       else { setEfetivado(r.resultado ?? {}); toast.success('Acordo efetivado na UME'); }
     } catch (e) { setErro(String((e as Error)?.message || e)); }
@@ -156,13 +163,13 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
               <div className="space-y-1"><Label className="text-xs">Total do acordo</Label><Input value={totalAcordo} onChange={(e) => setTotalAcordo(e.target.value)} /></div>
               <div className="space-y-1"><Label className="text-xs">Nº de parcelas</Label><Input value={nParcelas} onChange={(e) => setNParcelas(e.target.value.replace(/\D/g, '').slice(0, 2))} /></div>
               <div className="space-y-1"><Label className="text-xs">1º vencimento</Label><Input type="date" value={primeiroVenc} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setPrimeiroVenc(e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-xs">Juros (% a.m.)</Label><Input value={juros} onChange={(e) => setJuros(e.target.value)} /></div>
+              <div className="space-y-1"><Label className="text-xs">Juros (%)</Label><Input value={acrescimo > 0 ? String(jurosEnvio).replace('.', ',') : juros} disabled={acrescimo > 0} onChange={(e) => setJuros(e.target.value)} /></div>
             </div>
             <div className="flex flex-wrap gap-2 text-sm">
-              <Badge variant="secondary">Parcela: {fmt(parcela)}</Badge>
-              <Badge variant="secondary">Desconto: {fmt(desconto)}</Badge>
+              <Badge variant="secondary">{n > 1 && ultimaParcela !== parcela ? `${n - 1}x de ${fmt(parcela)} + última de ${fmt(ultimaParcela)}` : `Parcela: ${fmt(parcela)}`}</Badge>
+              {acrescimo > 0 ? <Badge variant="secondary">Acréscimo: {fmt(acrescimo)}</Badge> : <Badge variant="secondary">Desconto: {fmt(desconto)}</Badge>}
             </div>
-            {desconto < 0 && <p className="text-xs text-destructive">O total do acordo está acima do total em aberto. Para cobrar acréscimo, use o campo de juros e confira na simulação.</p>}
+            {acrescimo > 0 && <p className="text-xs text-muted-foreground">Acréscimo do parcelamento calculado sozinho e enviado como juros. Confira o valor das parcelas na simulação da UME antes de efetivar.</p>}
             {n > 1 && parcela > 0 && parcela < 100 && <p className="text-xs text-destructive">Parcela mínima é R$ 100.</p>}
 
             {simulacao && (
