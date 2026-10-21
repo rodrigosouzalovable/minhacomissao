@@ -1,5 +1,6 @@
 // IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
 // Na PADRÃO pode escalar; na AQUECIMENTO responde curto, sem humano e sem follow-up.
+import { borrowerIdSftp } from '../_shared/ume-carteira.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.88.0';
 import {
   corsHeaders, json, fmtBRL, soDigitos, primeiroNome, cpfFormatado, agoraSP, sleep,
@@ -760,7 +761,8 @@ Deno.serve(async (req) => {
     // ===== Pedido de boleto/PIX em conversa UME => gera pela API oficial e responde na hora =====
     if (cpf && !modoAquecimento && /\bUME\b/i.test(credorCaixa) && ehPedidoBoleto(textoAtual)) {
       try {
-        const consultaBol = await consultarUme(supabase, cpf, { perfil: 'essencial', aguardarCache: false });
+        const idSftpBol = await borrowerIdSftp(supabase, cpf);
+        const consultaBol = idSftpBol ?? await consultarUme(supabase, cpf, { perfil: 'essencial', aguardarCache: false });
         if (consultaBol.encontrado && consultaBol.borrowerId) {
           const ambiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
           const venc = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);

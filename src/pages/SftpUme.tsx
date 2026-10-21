@@ -67,7 +67,20 @@ export default function SftpUme() {
       p_total_linhas: lido.totalLinhas, p_baixas: lido.baixas as never,
     });
     if (error) throw new Error(error.message);
-    toast.success(`${nome}: ${lido.baixas.length} baixas lidas de ${lido.totalLinhas.toLocaleString('pt-BR')} linhas.`);
+    if (lido.carteira && (lido.clientes.length || lido.parcelas.length)) {
+      const BLOCO = 4000;
+      const total = Math.max(lido.clientes.length, lido.parcelas.length);
+      for (let i = 0; i < total; i += BLOCO) {
+        const { error: e } = await supabase.rpc('ume_carteira_gravar', {
+          p_carteira: lido.carteira, p_lote: lido.dataLote,
+          p_clientes: lido.clientes.slice(i, i + BLOCO) as never, p_parcelas: lido.parcelas.slice(i, i + BLOCO) as never,
+        });
+        if (e) throw new Error(`Clientes/parcelas: ${e.message}`);
+      }
+      const { error: ef } = await supabase.rpc('ume_carteira_finalizar', { p_carteira: lido.carteira, p_lote: lido.dataLote });
+      if (ef) throw new Error(ef.message);
+    }
+    toast.success(`${nome}: ${lido.clientes.length.toLocaleString('pt-BR')} clientes, ${lido.parcelas.length.toLocaleString('pt-BR')} parcelas em aberto e ${lido.baixas.length} baixas lidas.`);
     await carregarHistorico();
   };
 
