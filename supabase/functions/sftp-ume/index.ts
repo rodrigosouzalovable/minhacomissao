@@ -5,7 +5,10 @@ import SftpClient from 'npm:ssh2-sftp-client@10';
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-const PASTAS = ['/baixas_pagamento', '/carga', '/odres', '/Acompanhamento_Recuperacao', '/carga/processados'];
+const PASTAS = [
+  '/baixas_pagamento/ume', '/baixas_pagamento/odres', '/baixas_pagamento',
+  '/carga', '/odres/carga', '/carga/processados', '/odres/carga/processados', '/Acompanhamento_Recuperacao',
+];
 
 // Chaves coladas em formulário costumam perder as quebras de linha; remonta o PEM.
 function normalizarPem(bruta: string): string {
