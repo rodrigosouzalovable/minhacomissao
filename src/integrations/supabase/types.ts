@@ -10366,6 +10366,60 @@ export type Database = {
         }
         Relationships: []
       }
+      ume_acordo_api_log: {
+        Row: {
+          acao: string
+          ambiente: string
+          borrower_id: string
+          conversa_id: string | null
+          cpf: string
+          criado_em: string
+          desconto: number
+          id: string
+          installment_ids: string[]
+          juros: number
+          parcelas: number
+          primeiro_vencimento: string
+          resposta: Json | null
+          sucesso: boolean
+          user_id: string
+        }
+        Insert: {
+          acao: string
+          ambiente: string
+          borrower_id: string
+          conversa_id?: string | null
+          cpf: string
+          criado_em?: string
+          desconto: number
+          id?: string
+          installment_ids: string[]
+          juros?: number
+          parcelas: number
+          primeiro_vencimento: string
+          resposta?: Json | null
+          sucesso: boolean
+          user_id: string
+        }
+        Update: {
+          acao?: string
+          ambiente?: string
+          borrower_id?: string
+          conversa_id?: string | null
+          cpf?: string
+          criado_em?: string
+          desconto?: number
+          id?: string
+          installment_ids?: string[]
+          juros?: number
+          parcelas?: number
+          primeiro_vencimento?: string
+          resposta?: Json | null
+          sucesso?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       ume_acordo_jobs: {
         Row: {
           conversa_id: string | null
