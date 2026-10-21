@@ -40,7 +40,8 @@ Deno.serve(async (req) => {
     // borrowerId vem da consulta da calculadora (cache de 12h; consulta se não houver)
     // Prioriza o ID oficial vindo do SFTP; sem ele, usa a consulta da calculadora
     const idSftp = await borrowerIdSftp(service, cpf);
-    const consulta = idSftp ? { encontrado: true, borrowerId: idSftp }
+    const consulta = idSftp
+         
       : await consultarUme(service, cpf, { perfil: 'essencial', aguardarCache: false });
     if (!consulta.encontrado || !consulta.borrowerId) {
       return json({ success: false, error: 'cpf_nao_encontrado', message: 'CPF não localizado na base da UME.' });
