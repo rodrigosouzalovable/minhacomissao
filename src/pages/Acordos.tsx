@@ -1,3 +1,4 @@
+import { vencimentoNoIntervalo } from "@/lib/filtroVencimento";
 import { useEffect, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
