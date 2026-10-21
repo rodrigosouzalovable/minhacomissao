@@ -85,7 +85,8 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
   const vTotal = numeroBR(totalAcordo);
   const desconto = dados ? round2(dados.totalAberto - vTotal) : 0;
   const parcela = n > 0 ? round2(vTotal / n) : 0;
-  const pode = !!dados && n >= 1 && n <= 24 && vTotal > 0 && desconto >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(primeiroVenc) && parcela >= 100 || (!!dados && n === 1 && vTotal > 0 && desconto >= 0 && !!primeiroVenc);
+  const pode = !!dados && n >= 1 && n <= 24 && vTotal > 0 && desconto >= 0
+    && /^\d{4}-\d{2}-\d{2}$/.test(primeiroVenc) && (n === 1 || parcela >= 100);
 
   const executar = async (acao: 'simular' | 'efetivar') => {
     if (acao === 'efetivar' && !window.confirm(`Efetivar acordo REAL na UME: ${n}x de ${fmt(parcela)} (total ${fmt(vTotal)}), 1º vencimento ${fmtData(primeiroVenc)}?`)) return;

@@ -43,7 +43,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { CREDOR_MARCAS_LISTA, getCredorMarca } from "@/lib/credorMarcas";
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
 import { ConsultaUmeDialog } from '@/components/inbox/meta/ConsultaUmeDialog';
-import { GerarAcordoUmeDialog } from '@/components/inbox/meta/GerarAcordoUmeDialog';
+import { AcordoUmeApiDialog } from '@/components/inbox/meta/AcordoUmeApiDialog';
 import { SugestoesObjecaoPanel, detectarObjecaoLocal } from '@/components/inbox/meta/SugestoesObjecaoPanel';
 import { AgendarRetornoDialog } from '@/components/inbox/meta/AgendarRetornoDialog';
 import { useMetaCall } from '@/contexts/MetaCallContext';
@@ -2993,12 +2993,12 @@ export default function InboxMeta() {
         folderNome={acessoFolder?.nome ?? 'Padrão'}
         onChanged={fetchFolders}
       />
-      <GerarAcordoUmeDialog
+      <AcordoUmeApiDialog
         open={gerarAcordoUmeOpen}
         onOpenChange={setGerarAcordoUmeOpen}
         cpfInicial={cpfDoContato ?? null}
-        telefone={contatoAtivo?.telefone ?? null}
         conversaId={contatoAtivo?.id ?? null}
+        onEnviar={(texto) => { void enviar(texto); }}
       />
 
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
