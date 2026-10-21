@@ -148,16 +148,23 @@ async function fatia(db: any, pasta: string, continuar: boolean): Promise<Record
       await db.from('sftp_ume_auto_progresso').update(novo).eq('pasta', pasta);
       return { pasta, posicao: novo.posicao, tamanho: st.tamanho, proxima: true };
     }
-    const { count: jaReg } = await db.from('sftp_ume_arquivos').select('id', { count: 'exact', head: true }).eq('nome_arquivo', st.arquivo);
-    const { error: er } = (jaReg ?? 0) > 0 ? { error: null } : await db.rpc('sftp_ume_registrar', {
-      p_nome: st.arquivo, p_origem: 'auto', p_data_lote: dataLote,
-      p_assinatura: `auto:${caminho}:${st.tamanho}:${st.modificado}`, p_total_linhas: novo.total_linhas, p_baixas: baixas,
-    });
-    if (er) throw new Error(`registrar: ${er.message}`);
+    const { data: reg } = await db.from('sftp_ume_arquivos').select('id').eq('nome_arquivo', st.arquivo).maybeSingle();
+    let arquivoId: string | null = reg?.id ?? null;
+    if (!arquivoId) {
+      const { data: novoId, error: er } = await db.rpc('sftp_ume_registrar', {
+        p_nome: st.arquivo, p_origem: 'auto', p_data_lote: dataLote,
+        p_assinatura: `auto:${caminho}:${st.tamanho}:${st.modificado}`, p_total_linhas: novo.total_linhas, p_baixas: baixas,
+      });
+      if (er) throw new Error(`registrar: ${er.message}`);
+      arquivoId = novoId as string;
+    }
+    // Baixa automática: parcelas de acordos ativos casadas por CPF, valor e vencimento viram pagas.
+    const { data: baixadas, error: ea } = await db.rpc('sftp_ume_aplicar', { p_arquivo: arquivoId });
+    if (ea) console.error('sftp-ume-auto aplicar', pasta, ea.message);
     const { data: removidas } = await db.rpc('ume_carteira_finalizar', { p_carteira: carteira, p_lote: dataLote });
     await db.from('sftp_ume_auto_progresso').update({ ...novo, baixas: [], status: 'concluido' }).eq('pasta', pasta);
     await db.storage.from(BUCKET).remove([tmp(pasta)]);
-    return { pasta, arquivo: st.arquivo, clientes: novo.clientes, parcelas: novo.parcelas, baixas: baixas.length, removidas };
+    return { pasta, arquivo: st.arquivo, clientes: novo.clientes, parcelas: novo.parcelas, baixas: baixas.length, baixadas, removidas };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('sftp-ume-auto', pasta, msg);
