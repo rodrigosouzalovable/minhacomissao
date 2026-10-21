@@ -44,6 +44,7 @@ import { CREDOR_MARCAS_LISTA, getCredorMarca } from "@/lib/credorMarcas";
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
 import { ConsultaUmeDialog } from '@/components/inbox/meta/ConsultaUmeDialog';
 import { AcordoUmeApiDialog } from '@/components/inbox/meta/AcordoUmeApiDialog';
+import { ultimaPropostaPortal } from '@/lib/umePropostaPortal';
 import { SugestoesObjecaoPanel, detectarObjecaoLocal } from '@/components/inbox/meta/SugestoesObjecaoPanel';
 import { AgendarRetornoDialog } from '@/components/inbox/meta/AgendarRetornoDialog';
 import { useMetaCall } from '@/contexts/MetaCallContext';
@@ -2997,6 +2998,7 @@ export default function InboxMeta() {
         open={gerarAcordoUmeOpen}
         onOpenChange={setGerarAcordoUmeOpen}
         cpfInicial={cpfDoContato ?? null}
+        proposta={gerarAcordoUmeOpen ? ultimaPropostaPortal(mensagens) : null}
         conversaId={contatoAtivo?.id ?? null}
         onEnviar={(texto) => { void enviar(texto); }}
       />
