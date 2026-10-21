@@ -28,7 +28,9 @@ Deno.serve(async (req) => {
     const { data: admin } = await sb.rpc('has_role', { _user_id: u.user.id, _role: 'admin' });
     if (!admin) return json({ error: 'Apenas administradores' }, 403);
 
-    const chave = Deno.env.get('SFTP_UME_PRIVATE_KEY');
+    const svc = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const { data: cfg } = await svc.from('sftp_ume_config').select('private_key').maybeSingle();
+    const chave = cfg?.private_key || Deno.env.get('SFTP_UME_PRIVATE_KEY');
     if (!chave) return json({ error: 'Chave de acesso ao SFTP ainda não cadastrada' }, 400);
 
     const body = await req.json().catch(() => ({}));
@@ -39,6 +41,7 @@ Deno.serve(async (req) => {
     }
 
     const sftp = new SftpClient();
+    let manterAberto = false;
     await sftp.connect({
       host: Deno.env.get('SFTP_UME_HOST') ?? '35.227.83.18',
       port: 22,
@@ -60,12 +63,21 @@ Deno.serve(async (req) => {
         return json({ ok: true, pastas });
       }
       if (acao === 'baixar') {
-        const buf = await sftp.get(caminho) as Uint8Array;
-        return new Response(buf, { headers: { ...corsHeaders, 'Content-Type': 'text/csv; charset=latin1' } });
+        // Envia em fluxo contínuo para não estourar o tempo ocioso em arquivos grandes.
+        const leitor = sftp.createReadStream(caminho, { highWaterMark: 256 * 1024 });
+        const fluxo = new ReadableStream({
+          start(ctrl) {
+            leitor.on('data', (c: Uint8Array) => ctrl.enqueue(new Uint8Array(c)));
+            leitor.on('end', () => { ctrl.close(); sftp.end().catch(() => {}); });
+            leitor.on('error', (e: Error) => { ctrl.error(e); sftp.end().catch(() => {}); });
+          },
+        });
+        manterAberto = true;
+        return new Response(fluxo, { headers: { ...corsHeaders, 'Content-Type': 'text/csv; charset=latin1' } });
       }
       return json({ error: 'Ação inválida' }, 400);
     } finally {
-      await sftp.end().catch(() => {});
+      if (!manterAberto) await sftp.end().catch(() => {});
     }
   } catch (e) {
     console.error('sftp-ume', e);
