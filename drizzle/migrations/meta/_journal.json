@@ -1387,6 +1387,20 @@
       "when": 1792617966350,
       "tag": "0197_ume_acordo_api_log",
       "breakpoints": true
+    },
+    {
+      "idx": 198,
+      "version": "7",
+      "when": 1792618931018,
+      "tag": "0198_sftp_ume_auto",
+      "breakpoints": true
+    },
+    {
+      "idx": 199,
+      "version": "7",
+      "when": 1792619581347,
+      "tag": "0199_sftp_ume_auto_progresso",
+      "breakpoints": true
     }
   ]
 }
