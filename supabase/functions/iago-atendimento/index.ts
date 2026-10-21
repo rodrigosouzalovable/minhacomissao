@@ -762,9 +762,7 @@ Deno.serve(async (req) => {
     if (cpf && !modoAquecimento && /\bUME\b/i.test(credorCaixa) && ehPedidoBoleto(textoAtual)) {
       try {
         const idSftpBol = await borrowerIdSftp(supabase, cpf);
-        const consultaBol = idSftpBol
-         
-          : await consultarUme(supabase, cpf, { perfil: 'essencial', aguardarCache: false });
+        const consultaBol = idSftpBol ?? await consultarUme(supabase, cpf, { perfil: 'essencial', aguardarCache: false });
         if (consultaBol.encontrado && consultaBol.borrowerId) {
           const ambiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
           const venc = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
