@@ -44,7 +44,20 @@ export default function SftpUme() {
     setPastas(data.pastas);
   }, []);
 
-  useEffect(() => { carregarHistorico(); }, [carregarHistorico]);
+  const [chaveEm, setChaveEm] = useState<string | null>(null);
+  const carregarChave = useCallback(async () => {
+    const { data } = await supabase.rpc('sftp_ume_chave_status');
+    setChaveEm((data as string | null) ?? null);
+  }, []);
+  useEffect(() => { carregarHistorico(); carregarChave(); }, [carregarHistorico, carregarChave]);
+
+  const enviarChave = async (f: File | undefined) => {
+    if (!f) return;
+    const { error } = await supabase.rpc('sftp_ume_salvar_chave', { p_chave: await f.text() });
+    if (error) { toast.error(error.message); return; }
+    toast.success('Chave de acesso salva.');
+    carregarChave();
+  };
 
   const processar = async (nome: string, texto: string, origem: string) => {
     const lido = lerArquivoSftp(texto);
@@ -124,6 +137,11 @@ export default function SftpUme() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
+              <span className="font-medium">Arquivo de chave (.pem):</span>
+              <span className="text-muted-foreground">{chaveEm ? `cadastrada em ${new Date(chaveEm).toLocaleString('pt-BR')}` : 'não cadastrada'}</span>
+              <Input className="max-w-xs" type="file" accept=".pem,.key,.txt" onChange={(e) => { enviarChave(e.target.files?.[0]); e.target.value = ''; }} />
+            </div>
             {erroConexao && <p className="text-sm text-destructive">{erroConexao}</p>}
             {!pastas && !erroConexao && <p className="text-sm text-muted-foreground">Clique em conectar para ver os arquivos do servidor.</p>}
             {pastas && Object.entries(pastas).map(([pasta, itens]) => (

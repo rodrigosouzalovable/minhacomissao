@@ -114,4 +114,4 @@
 - [x] Recuperar importações Cobmais travadas em 5%, processar planilhas grandes em lotes e publicar automaticamente após validação integral.
 
 - [x] Revalidar pagamento antes dos avisos Meta, separar resultados inconclusivos e validar/publicar sem envios reais; 19 testes passaram.
-- [ ] SFTP UME: campo para enviar o arquivo da chave na aba
+- [x] SFTP UME: campo para enviar o arquivo da chave na aba
