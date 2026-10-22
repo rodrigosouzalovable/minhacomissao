@@ -10,7 +10,7 @@ describe('distribuição igual na campanha', () => {
   });
   it('YELLOW/RED acima de 30% da média GREEN fica de fora', () => {
     const uso = new Map([['g1', 100], ['g2', 100], ['y', 30], ['r', 400]]);
-    expect(escolherPorMenorUso([c('g1', 'GREEN'), c('g2', 'GREEN'), c('y', 'YELLOW'), c('r', 'RED')], uso)?.id).toBe('g1');
+    expect(escolherPorMenorUso([c('g1', 'GREEN'), c('g2', 'GREEN'), c('y', 'YELLOW'), c('r', 'RED')], uso, null, () => 0)?.id).toBe('g1');
   });
   it('YELLOW abaixo de 30% da média pode receber', () => {
     const uso = new Map([['g1', 100], ['y', 5]]);
