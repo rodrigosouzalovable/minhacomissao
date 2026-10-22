@@ -14469,6 +14469,7 @@ export type Database = {
         }
         Returns: number
       }
+      ume_vencimento_mais_antigo: { Args: { p_cpf: string }; Returns: string }
       user_can_access_tenant: {
         Args: { _tenant: string; _uid: string }
         Returns: boolean
