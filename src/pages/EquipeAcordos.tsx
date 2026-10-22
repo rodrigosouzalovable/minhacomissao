@@ -459,67 +459,54 @@ export default function EquipeAcordos() {
           return;
         }
 
-        // Buscar acordos de todos os funcionários (paginado para evitar limite de 1000)
-        let allAcordos: any[] = [];
+        // Carrega páginas em paralelo e apenas as colunas usadas pela tela
         const PAGE_SIZE = 1000;
-        let from = 0;
-        let hasMore = true;
-        
-        while (hasMore) {
-          const { data: batch, error: batchError } = await supabase
-            .from('acordos')
-            .select('*')
-            .in('user_id', funcionarioIds)
-            .order('criado_em', { ascending: false })
-            .range(from, from + PAGE_SIZE - 1);
-
-          if (batchError) throw batchError;
-          
-          if (batch && batch.length > 0) {
-            allAcordos = [...allAcordos, ...batch];
-            from += PAGE_SIZE;
-            hasMore = batch.length === PAGE_SIZE;
-          } else {
-            hasMore = false;
+        const COLS = 'id, cliente_nome, cliente_cpf, cliente_telefone, valor_total, valor_parcela, parcelas, dias_atraso, comissao_total, status, criado_em, user_id, empresa';
+        const acordosQuery = () => {
+          const q = supabase.from('acordos').select(COLS);
+          return verComoAdmin ? q : q.in('user_id', funcionarioIds);
+        };
+        const pagQuery = () => {
+          const q = supabase.from('pagamentos')
+            .select('comissao_parcela, valor_parcela, acordo_id, data_paga, data_prevista, numero_parcela, acordos!inner(user_id)')
+            .eq('status', 'pago');
+          return verComoAdmin ? q : q.in('acordos.user_id', funcionarioIds);
+        };
+        const carregarTudo = async (build: () => any, countQuery: () => any, order: (q: any) => any) => {
+          const first = await order(build()).range(0, PAGE_SIZE - 1);
+          if (first.error) throw first.error;
+          let rows: any[] = first.data || [];
+          if (rows.length === PAGE_SIZE) {
+            const { count, error } = await countQuery();
+            if (error) throw error;
+            const total = count ?? rows.length;
+            const extras = await Promise.all(
+              Array.from({ length: Math.ceil(total / PAGE_SIZE) - 1 }, (_, i) =>
+                order(build()).range((i + 1) * PAGE_SIZE, (i + 2) * PAGE_SIZE - 1))
+            );
+            for (const r of extras) { if (r.error) throw r.error; rows = rows.concat(r.data || []); }
           }
-        }
+          return rows;
+        };
 
-        const acordosData = allAcordos;
+        const [acordosData, pagResult] = await Promise.all([
+          carregarTudo(acordosQuery, () => { const q = supabase.from('acordos').select('id', { count: 'exact', head: true }); return verComoAdmin ? q : q.in('user_id', funcionarioIds); }, (q) => q.order('criado_em', { ascending: false }).order('id')),
+          carregarTudo(pagQuery, () => { const q = supabase.from('pagamentos').select('id, acordos!inner(user_id)', { count: 'exact', head: true }).eq('status', 'pago'); return verComoAdmin ? q : q.in('acordos.user_id', funcionarioIds); }, (q) => q.order('data_paga', { ascending: false, nullsFirst: false }).order('id'))
+            .then((d) => ({ data: d, error: null as any }), (error) => ({ data: [] as any[], error })),
+        ]);
 
-        // Mapear acordos com nomes dos funcionários
-        const acordosComNome = (acordosData || []).map(acordo => {
-          const member = validMembers.find(m => m.funcionario_id === acordo.user_id);
-          return {
-            ...acordo,
-            funcionario_nome: member?.nome || 'Desconhecido'
-          };
-        });
+        const nomes = new Map(validMembers.map(m => [m.funcionario_id, m.nome]));
+        const acordosComNome = acordosData.map((acordo: any) => ({
+          ...acordo,
+          funcionario_nome: nomes.get(acordo.user_id) || 'Desconhecido'
+        }));
 
         setAcordos(acordosComNome);
+        setLoading(false);
 
-        // Buscar pagamentos pagos via join com acordos (evita URL longa com muitos IDs)
-        if (funcionarioIds.length > 0) {
-          // Buscar TODOS os pagamentos pagos paginando para evitar limite silencioso
-          let pagamentosPagos: any[] = [];
-          let pagamentosError: any = null;
-          {
-            const PAGE = 1000;
-            let offset = 0;
-            while (true) {
-              const { data, error } = await supabase
-                .from('pagamentos')
-                .select('comissao_parcela, valor_parcela, acordo_id, data_paga, data_prevista, numero_parcela, acordos!inner(user_id)')
-                .in('acordos.user_id', funcionarioIds)
-                .eq('status', 'pago')
-                .order('data_paga', { ascending: false, nullsFirst: false })
-                .range(offset, offset + PAGE - 1);
-              if (error) { pagamentosError = error; break; }
-              if (!data || data.length === 0) break;
-              pagamentosPagos = pagamentosPagos.concat(data);
-              if (data.length < PAGE) break;
-              offset += PAGE;
-            }
-          }
+        {
+          const pagamentosPagos = pagResult.data;
+          const pagamentosError = pagResult.error;
 
           if (pagamentosError) {
             console.error('Erro ao buscar pagamentos pagos:', pagamentosError);
@@ -529,8 +516,7 @@ export default function EquipeAcordos() {
               description: 'Não foi possível carregar os pagamentos pagos. Tente novamente.',
             });
           } else if (pagamentosPagos) {
-            // Normalizar dados removendo o objeto acordos aninhado
-            const pagamentosNormalizados = pagamentosPagos.map(p => ({
+            const pagamentosNormalizados = pagamentosPagos.map((p: any) => ({
               comissao_parcela: p.comissao_parcela,
               valor_parcela: p.valor_parcela,
               acordo_id: p.acordo_id,
@@ -541,20 +527,19 @@ export default function EquipeAcordos() {
             setPagamentosEquipe(pagamentosNormalizados);
           }
 
-          // Resumo de parcelas agregado no banco, restrito aos acordos da tela
-          const acordoIdsCarregados = (acordosData || []).map((a: any) => a.id);
+          // Resumo de parcelas em blocos paralelos
+          const acordoIdsCarregados = acordosData.map((a: any) => a.id);
           let resumo: any[] = [];
           let quebraError: any = null;
-          if (acordoIdsCarregados.length > 0) {
-            const CHUNK = 500;
-            for (let i = 0; i < acordoIdsCarregados.length; i += CHUNK) {
-              const { data: parte, error: parteError } = await supabase.rpc(
-                'acordos_parcelas_resumo' as any,
-                { p_acordo_ids: acordoIdsCarregados.slice(i, i + CHUNK) } as any
-              );
-              if (parteError) { quebraError = parteError; break; }
-              if (parte) resumo = resumo.concat(parte as any[]);
-            }
+          const CHUNK = 500;
+          const partes = await Promise.all(
+            Array.from({ length: Math.ceil(acordoIdsCarregados.length / CHUNK) }, (_, i) =>
+              supabase.rpc('acordos_parcelas_resumo' as any,
+                { p_acordo_ids: acordoIdsCarregados.slice(i * CHUNK, (i + 1) * CHUNK) } as any))
+          );
+          for (const p of partes) {
+            if (p.error) { quebraError = p.error; break; }
+            if (p.data) resumo = resumo.concat(p.data as any[]);
           }
 
           if (quebraError) {
