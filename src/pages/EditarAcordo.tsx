@@ -128,6 +128,8 @@ export default function EditarAcordo() {
         setHasParcelasPagas(temPagas);
         setParcelasOriginais(pagamentos || []);
         setParcelasEditadas({});
+        setQuantidade((pagamentos || []).length || acordo.parcelas);
+        setNovas([]);
 
         const empresaCarregada = (acordo.empresa as 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred') || 'ume_novo_mundo';
         setEmpresa(empresaCarregada);
@@ -185,23 +187,22 @@ export default function EditarAcordo() {
       if (!isAdmin) {
         const alteradas = parcelasOriginais.filter((p) => {
           const draft = parcelasEditadas[p.id];
-          return draft && (Number(draft.valor.replace(',', '.')) !== Number(p.valor_parcela) || draft.data !== p.data_prevista);
+          return p.status === 'pendente' && !removidas.includes(p.numero_parcela) && draft && (Number(draft.valor.replace(',', '.')) !== Number(p.valor_parcela) || draft.data !== p.data_prevista);
         }).map((p) => ({ id: p.id, valor: Number(parcelasEditadas[p.id].valor.replace(',', '.')), data: parcelasEditadas[p.id].data }));
-        if (alteradas.some((p) => !Number.isFinite(p.valor) || p.valor <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(p.data))) {
+        const novasEnvio = novas.map((n) => ({ valor: Number(n.valor.replace(',', '.')), data: n.data }));
+        if ([...alteradas, ...novasEnvio].some((p) => !Number.isFinite(p.valor) || p.valor <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(p.data))) {
           throw new Error('Confira o valor e a data das parcelas.');
         }
+        if (quantidade < quantidadeMinima(parcelasOriginais)) throw new Error('A quantidade não pode ser menor que as parcelas já pagas.');
+        if (form.clienteNome.trim().length < 3) throw new Error('Informe o nome do cliente.');
+        if (!isCpfCompleto(form.clienteCpf)) throw new Error('CPF deve ter 11 dígitos.');
         const telefone = form.clienteTelefone.trim();
         if (telefone.length > 15) throw new Error('Telefone inválido.');
-        if (empresa === empresaOriginal && alteradas.length === 0 && telefone === telefoneOriginal) {
-          navigate(`/acordos/${id}`);
-          return;
-        }
-        if (alteradas.length || telefone !== telefoneOriginal) {
-          const { error } = await supabase.rpc('editar_acordo_proprio', {
-            p_acordo_id: id, p_telefone: telefone || null, p_parcelas: alteradas,
-          });
-          if (error) throw error;
-        }
+        const { error } = await supabase.rpc('editar_acordo_proprio_completo' as any, {
+          p_acordo_id: id, p_nome: form.clienteNome.trim(), p_cpf: form.clienteCpf, p_telefone: telefone || null,
+          p_quantidade: quantidade, p_parcelas: alteradas, p_novas: novasEnvio,
+        });
+        if (error) throw error;
         if (empresa !== empresaOriginal) {
           const { error } = await supabase.rpc('alterar_credor_acordo', { p_acordo_id: id, p_novo_credor: empresa });
           if (error) throw error;
@@ -383,7 +384,7 @@ export default function EditarAcordo() {
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Você pode alterar credor, telefone, valor e vencimento das parcelas pendentes deste acordo.
+              Você pode alterar nome, CPF, telefone, credor, quantidade de parcelas e valor/vencimento das parcelas pendentes deste acordo.
             </AlertDescription>
           </Alert>
         )}
@@ -402,7 +403,6 @@ export default function EditarAcordo() {
                   placeholder="Nome completo do cliente"
                   value={form.clienteNome}
                   onChange={(e) => setForm({ ...form, clienteNome: e.target.value })}
-                  disabled={!isAdmin}
                   required
                 />
               </div>
@@ -425,7 +425,6 @@ export default function EditarAcordo() {
                       }
                     }}
                     maxLength={14}
-                    disabled={!isAdmin}
                     required
                     className={cpfError ? 'border-destructive' : ''}
                   />
@@ -503,13 +502,30 @@ export default function EditarAcordo() {
           </Card>
 
           {!isAdmin && <Card>
-            <CardHeader><CardTitle>Parcelas</CardTitle><CardDescription>Altere aqui as parcelas pendentes. Valores de parcelas pagas e datas de pagamento podem ser corrigidos nos detalhes do acordo.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Parcelas</CardTitle><CardDescription>Altere a quantidade, o valor e o vencimento das parcelas pendentes. Valores de parcelas pagas e datas de pagamento podem ser corrigidos nos detalhes do acordo.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
-              {parcelasOriginais.map((parcela) => (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1"><Label htmlFor="quantidade">Quantidade de parcelas</Label>
+                  <Input id="quantidade" type="number" min={quantidadeMinima(parcelasOriginais)} max={120} value={quantidade}
+                    onChange={(e) => setQuantidade(Math.min(120, Math.max(0, parseInt(e.target.value, 10) || 0)))} />
+                  {quantidade < quantidadeMinima(parcelasOriginais) && <p className="text-xs text-destructive">Mínimo de {quantidadeMinima(parcelasOriginais)} (parcelas já pagas).</p>}
+                </div>
+                <div className="space-y-1"><Label>Total do acordo</Label>
+                  <p className="pt-2 text-sm font-semibold">{totalOwner.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                </div>
+              </div>
+              {parcelasOriginais.filter((p) => !removidas.includes(p.numero_parcela)).map((parcela) => (
                 <div key={parcela.id} className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr] items-end border-b pb-3 last:border-0">
                   <div className="text-sm font-medium">Parcela {parcela.numero_parcela}{parcela.status === 'pago' ? ' · Paga' : ''}</div>
                   <div className="space-y-1"><Label htmlFor={`valor-${parcela.id}`}>Valor (R$)</Label><Input id={`valor-${parcela.id}`} inputMode="decimal" type="number" step="0.01" min="0.01" disabled={parcela.status !== 'pendente'} value={parcelasEditadas[parcela.id]?.valor ?? String(parcela.valor_parcela)} onChange={(e) => setParcelasEditadas((prev) => ({ ...prev, [parcela.id]: { valor: e.target.value, data: prev[parcela.id]?.data ?? parcela.data_prevista } }))} /></div>
                   <div className="space-y-1"><Label htmlFor={`data-${parcela.id}`}>Vencimento</Label><Input id={`data-${parcela.id}`} type="date" disabled={parcela.status !== 'pendente'} value={parcelasEditadas[parcela.id]?.data ?? parcela.data_prevista} onChange={(e) => setParcelasEditadas((prev) => ({ ...prev, [parcela.id]: { valor: prev[parcela.id]?.valor ?? String(parcela.valor_parcela), data: e.target.value } }))} /></div>
+                </div>
+              ))}
+              {novas.map((n, i) => (
+                <div key={`nova-${i}`} className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr] items-end border-b pb-3 last:border-0">
+                  <div className="text-sm font-medium">Parcela {parcelasOriginais.length + i + 1} · Nova</div>
+                  <div className="space-y-1"><Label htmlFor={`nova-valor-${i}`}>Valor (R$)</Label><Input id={`nova-valor-${i}`} type="number" step="0.01" min="0.01" value={n.valor} onChange={(e) => setNovas((prev) => prev.map((x, j) => j === i ? { ...x, valor: e.target.value } : x))} /></div>
+                  <div className="space-y-1"><Label htmlFor={`nova-data-${i}`}>Vencimento</Label><Input id={`nova-data-${i}`} type="date" value={n.data} onChange={(e) => setNovas((prev) => prev.map((x, j) => j === i ? { ...x, data: e.target.value } : x))} /></div>
                 </div>
               ))}
             </CardContent>
