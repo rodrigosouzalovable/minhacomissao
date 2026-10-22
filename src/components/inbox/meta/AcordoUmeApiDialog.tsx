@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, Play, CheckCircle2, Barcode, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PropostaPortal } from '@/lib/umePropostaPortal';
-import { LancarAcordoConversa } from './LancarAcordoConversa';
 
 const soDigitos = (v: string) => (v || '').replace(/\D/g, '');
 const formatCpf = (d: string) => d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
@@ -61,7 +60,7 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
   useEffect(() => {
     if (!open) return;
     const c = soDigitos(proposta?.cpf || cpfInicial || '');
-    setCpf(c); setDados(null); setSimulacao(null); setEfetivado(null); setBoleto(null); setErro('');
+    setCpf(c); setDados(null); setSimulacao(null); setEfetivado(null); setErro('');
     setNParcelas(proposta?.parcelas ? String(proposta.parcelas) : '18');
     setTotalAcordo(proposta?.total ? proposta.total.toFixed(2).replace('.', ',') : '');
     setPrimeiroVenc(proposta?.primeiroVencimento ?? '');
