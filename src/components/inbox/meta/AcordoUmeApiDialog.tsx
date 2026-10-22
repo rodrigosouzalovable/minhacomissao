@@ -5,10 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, Play, CheckCircle2, Barcode, Send } from 'lucide-react';
+import { Loader2, Search, Play, CheckCircle2, Barcode } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PropostaPortal } from '@/lib/umePropostaPortal';
-import { LancarAcordoConversa } from './LancarAcordoConversa';
 
 const soDigitos = (v: string) => (v || '').replace(/\D/g, '');
 const formatCpf = (d: string) => d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
@@ -41,9 +40,11 @@ function resumoResultado(r: any): string {
   return linhas.join('\n');
 }
 
-export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId, onEnviar, proposta, nomeContato, telefoneContato }: {
+export type AcordoEfetivado = { cpf: string; nome: string; total: number; parcelas: number; primeiroVencimento: string; observacao: string };
+
+export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId, onEnviar, proposta, nomeContato, onEfetivado }: {
   open: boolean; onOpenChange: (v: boolean) => void; cpfInicial?: string | null; conversaId?: string | null; onEnviar?: (texto: string) => void;
-  proposta?: PropostaPortal | null; nomeContato?: string | null; telefoneContato?: string | null;
+  proposta?: PropostaPortal | null; nomeContato?: string | null; telefoneContato?: string | null; onEfetivado?: (a: AcordoEfetivado) => void;
 }) {
   const [cpf, setCpf] = useState('');
   const [dados, setDados] = useState<Carregado | null>(null);
@@ -55,12 +56,11 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
   const [efetivado, setEfetivado] = useState<any>(null);
   const [ocupado, setOcupado] = useState<'' | 'simular' | 'efetivar' | 'boleto'>('');
   const [erro, setErro] = useState('');
-  const [boleto, setBoleto] = useState<Boleto | null>(null);
 
   useEffect(() => {
     if (!open) return;
     const c = soDigitos(proposta?.cpf || cpfInicial || '');
-    setCpf(c); setDados(null); setSimulacao(null); setEfetivado(null); setBoleto(null); setErro('');
+    setCpf(c); setDados(null); setSimulacao(null); setEfetivado(null); setErro('');
     setNParcelas(proposta?.parcelas ? String(proposta.parcelas) : '18');
     setTotalAcordo(proposta?.total ? proposta.total.toFixed(2).replace('.', ',') : '');
     setPrimeiroVenc(proposta?.primeiroVencimento ?? '');
@@ -105,23 +105,29 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
     try {
       const r = await chamar({ acao, cpf: soDigitos(cpf), numeroParcelas: n, primeiroVencimento: primeiroVenc, desconto: 0, juros: 0, totalAlvo: round2(vTotal), confirmar: acao === 'efetivar', conversaId: conversaId || null });
       if (acao === 'simular') { setSimulacao(r.resultado ?? {}); toast.success('Simulação da UME recebida — confira antes de efetivar'); }
-      else { setEfetivado(r.resultado ?? {}); toast.success('Acordo efetivado na UME'); }
+      else {
+        setEfetivado(r.resultado ?? {}); toast.success('Acordo efetivado na UME');
+        onEfetivado?.({ cpf: soDigitos(cpf), nome: dados?.cliente.nome || nomeContato || '', total: round2(vTotal), parcelas: n, primeiroVencimento: primeiroVenc, observacao: `acordo UME efetivado, ID UME ${dados?.cliente.borrowerId ?? ''}` });
+      }
     } catch (e) { setErro(String((e as Error)?.message || e)); }
     finally { setOcupado(''); }
   };
 
   const gerarBoleto = async () => {
+    if (!onEnviar) return;
     setOcupado('boleto'); setErro('');
     try {
       const { data, error } = await supabase.functions.invoke('ume-boleto', { body: { acao: 'gerar', cpf: soDigitos(cpf), vencimento: primeiroVenc, origem: 'atendente' } });
       if (error) throw error;
       if (!(data as any)?.success) throw new Error((data as any)?.message || (data as any)?.error || 'Falha ao gerar boleto');
-      setBoleto((data as any).boleto);
+      onEnviar(textoEnvio((data as any).boleto as Boleto));
+      toast.success('Boleto e PIX enviados na conversa');
+      onOpenChange(false);
     } catch (e) { setErro(String((e as Error)?.message || e)); }
     finally { setOcupado(''); }
   };
 
-  const textoEnvio = () => {
+  const textoEnvio = (boleto: Boleto | null) => {
     const nome = (dados?.cliente.nome || '').split(' ')[0];
     return [
       `Olá${nome ? `, ${nome}` : ''}! Seu acordo foi formalizado: *${n}x de ${fmt(parcela)}* (total ${fmt(vTotal)}).`,
@@ -189,24 +195,11 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
               <div className="space-y-2 rounded border p-3 text-sm">
                 <div className="font-medium">Acordo registrado na UME</div>
                 <pre className="whitespace-pre-wrap text-xs text-muted-foreground">{resumoResultado(efetivado) || JSON.stringify(efetivado, null, 2).slice(0, 1500)}</pre>
-                <Button size="sm" variant="outline" onClick={() => void gerarBoleto()} disabled={!!ocupado}>
-                  {ocupado === 'boleto' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Barcode className="mr-2 h-4 w-4" />} Gerar boleto + PIX da 1ª parcela
+                <Button size="sm" onClick={() => void gerarBoleto()} disabled={!!ocupado || !onEnviar}>
+                  {ocupado === 'boleto' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Barcode className="mr-2 h-4 w-4" />} Gerar boleto e PIX da primeira parcela e enviar na conversa
                 </Button>
-                {boleto && <div className="text-xs">Boleto: {fmt(boleto.valor)} — venc. {fmtData(boleto.vencimento)}{boleto.ambiente === 'dev' ? ' (ambiente de testes)' : ''}</div>}
-                {onEnviar && (
-                  <Button size="sm" onClick={() => { onEnviar(textoEnvio()); onOpenChange(false); }}>
-                    <Send className="mr-2 h-4 w-4" /> Enviar na conversa
-                  </Button>
-                )}
+                <p className="text-xs text-muted-foreground">Para lançar em Meus Acordos, use o botão "+" no topo da conversa.</p>
               </div>
-            )}
-
-            {efetivado && (
-              <LancarAcordoConversa
-                cpf={soDigitos(cpf)} nomeInicial={dados.cliente.nome || nomeContato || ''} telefoneInicial={telefoneContato || ''}
-                total={round2(vTotal)} parcelas={n} primeiroVencimento={primeiroVenc} conversaId={conversaId}
-                observacaoExtra={`acordo UME efetivado, ID UME ${dados.cliente.borrowerId}`}
-              />
             )}
           </div>
         )}

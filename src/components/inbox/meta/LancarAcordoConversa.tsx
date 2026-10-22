@@ -82,7 +82,7 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
 
   return (
     <div className="space-y-3 rounded border p-3 text-sm">
-      <div className="font-medium">Lançar acordo no sistema (Meus Acordos)</div>
+      <div className="font-medium">Dados do acordo (Meus Acordos)</div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1 sm:col-span-2"><Label className="text-xs">Nome do cliente</Label><Input value={nome} onChange={(e) => setNome(e.target.value)} /></div>
         <div className="space-y-1"><Label className="text-xs">Telefone</Label><Input value={telefone} onChange={(e) => setTelefone(e.target.value)} /></div>
@@ -102,7 +102,7 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
       </label>
       <Button size="sm" onClick={() => void lancar()} disabled={!pode || salvando}>
         {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />}
-        {lancadoId ? 'Acordo lançado' : 'Lançar acordo'}
+        {lancadoId ? 'Acordo salvo' : 'Salvar acordo'}
       </Button>
       {lancadoId && <p className="text-xs text-muted-foreground">Envie o termo de formalização pela tela do acordo para concluir.</p>}
     </div>
