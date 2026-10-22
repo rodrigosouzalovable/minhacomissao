@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, Play, CheckCircle2, Barcode, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PropostaPortal } from '@/lib/umePropostaPortal';
+import { LancarAcordoConversa } from './LancarAcordoConversa';
 
 const soDigitos = (v: string) => (v || '').replace(/\D/g, '');
 const formatCpf = (d: string) => d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
@@ -40,9 +41,9 @@ function resumoResultado(r: any): string {
   return linhas.join('\n');
 }
 
-export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId, onEnviar, proposta }: {
+export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId, onEnviar, proposta, nomeContato, telefoneContato }: {
   open: boolean; onOpenChange: (v: boolean) => void; cpfInicial?: string | null; conversaId?: string | null; onEnviar?: (texto: string) => void;
-  proposta?: PropostaPortal | null;
+  proposta?: PropostaPortal | null; nomeContato?: string | null; telefoneContato?: string | null;
 }) {
   const [cpf, setCpf] = useState('');
   const [dados, setDados] = useState<Carregado | null>(null);
@@ -198,6 +199,14 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
                   </Button>
                 )}
               </div>
+            )}
+
+            {efetivado && (
+              <LancarAcordoConversa
+                cpf={soDigitos(cpf)} nomeInicial={dados.cliente.nome || nomeContato || ''} telefoneInicial={telefoneContato || ''}
+                total={round2(vTotal)} parcelas={n} primeiroVencimento={primeiroVenc} conversaId={conversaId}
+                observacaoExtra={`acordo UME efetivado, ID UME ${dados.cliente.borrowerId}`}
+              />
             )}
           </div>
         )}

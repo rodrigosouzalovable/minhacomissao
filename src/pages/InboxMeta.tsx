@@ -2999,6 +2999,8 @@ export default function InboxMeta() {
         onOpenChange={setGerarAcordoUmeOpen}
         cpfInicial={cpfDoContato ?? null}
         proposta={gerarAcordoUmeOpen ? ultimaPropostaPortal(mensagens) : null}
+        nomeContato={(contatoAtivo as any)?.nome ?? null}
+        telefoneContato={contatoAtivo?.telefone ?? null}
         conversaId={contatoAtivo?.id ?? null}
         onEnviar={(texto) => { void enviar(texto); }}
       />
