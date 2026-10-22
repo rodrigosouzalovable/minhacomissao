@@ -745,6 +745,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
     },
     body: JSON.stringify({
       instancia_ids: instanciaIdsDisponiveis,
+      job_id: job.id,
       user_id: job.user_id,
       excluir_id: job.ultima_instancia_id || null,
       excluir_ids: exclItem,
