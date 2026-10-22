@@ -209,6 +209,12 @@ export default function EditarAcordo() {
           p_quantidade: quantidade, p_parcelas: alteradas, p_novas: novasEnvio,
         });
         if (error) throw error;
+        const diasNovo = parseInt(form.diasAtraso, 10);
+        if (!Number.isFinite(diasNovo) || diasNovo < 0 || diasNovo > 9999) throw new Error('Informe os dias de atraso.');
+        {
+          const { error } = await supabase.rpc('editar_dias_atraso_acordo_proprio' as any, { p_acordo_id: id, p_dias_atraso: diasNovo });
+          if (error) throw error;
+        }
         if (empresa !== empresaOriginal) {
           const { error } = await supabase.rpc('alterar_credor_acordo', { p_acordo_id: id, p_novo_credor: empresa });
           if (error) throw error;
@@ -601,7 +607,6 @@ export default function EditarAcordo() {
                     placeholder="0"
                     value={form.diasAtraso}
                     onChange={(e) => setForm({ ...form, diasAtraso: e.target.value })}
-                    disabled={hasParcelasPagas && !isAdmin}
                     required
                   />
                 </div>
