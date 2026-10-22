@@ -103,6 +103,7 @@ export default function BusinessManagersManager() {
     const { data, error } = await supabase
       .from("meta_business_managers")
       .select("*")
+      .is("arquivada_em", null)
       .order("padrao", { ascending: false })
       .order("criado_em", { ascending: true });
     setLoading(false);
@@ -165,13 +166,25 @@ export default function BusinessManagersManager() {
   }
 
   async function excluir(bm: BM) {
-    if (!confirm(`Excluir BM "${bm.nome}"?`)) return;
+    if (!confirm(`Excluir BM "${bm.nome}"?\n\nSe ela tiver histórico de envios, será arquivada e não aparecerá mais no sistema (o histórico é preservado).`)) return;
     const { error } = await supabase
       .from("meta_business_managers")
       .delete()
       .eq("id", bm.id);
-    if (error) return toast.error(error.message);
-    toast.success("BM excluída");
+    if (!error) {
+      toast.success("BM excluída");
+      return load();
+    }
+    if ((error as any).code !== "23503") return toast.error(error.message);
+    // Possui histórico vinculado: arquiva em vez de apagar.
+    const { error: e1 } = await supabase
+      .from("meta_business_managers")
+      .update({ ativo: false, padrao: false, arquivada_em: new Date().toISOString() } as any)
+      .eq("id", bm.id);
+    if (e1) return toast.error(e1.message);
+    await (supabase as any).from("meta_whatsapp_instances").update({ meta_bm_id: null }).eq("meta_bm_id", bm.id);
+    await (supabase as any).from("certificado_config").update({ meta_bm_id: null }).eq("meta_bm_id", bm.id);
+    toast.success("BM arquivada (histórico preservado)");
     load();
   }
 
