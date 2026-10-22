@@ -1450,6 +1450,13 @@
       "when": 1792691550583,
       "tag": "0206_sftp_vincular_exige_data_pagamento",
       "breakpoints": true
+    },
+    {
+      "idx": 207,
+      "version": "7",
+      "when": 1792693015560,
+      "tag": "0207_envio_meta_job_uso_instancias",
+      "breakpoints": true
     }
   ]
 }

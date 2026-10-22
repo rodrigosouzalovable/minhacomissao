@@ -13300,6 +13300,13 @@ export type Database = {
         }
       }
       envio_meta_job_resumo: { Args: { _job_id: string }; Returns: Json }
+      envio_meta_job_uso_instancias: {
+        Args: { p_job_id: string }
+        Returns: {
+          enviados: number
+          instancia_id: string
+        }[]
+      }
       envio_meta_jobs_delivery_resumo: {
         Args: { _job_ids: string[] }
         Returns: {
