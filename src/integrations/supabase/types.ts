@@ -5513,6 +5513,7 @@ export type Database = {
       meta_business_managers: {
         Row: {
           app_id: string
+          arquivada_em: string | null
           ativo: boolean
           atualizado_em: string
           business_id: string | null
@@ -5530,6 +5531,7 @@ export type Database = {
         }
         Insert: {
           app_id: string
+          arquivada_em?: string | null
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null
@@ -5547,6 +5549,7 @@ export type Database = {
         }
         Update: {
           app_id?: string
+          arquivada_em?: string | null
           ativo?: boolean
           atualizado_em?: string
           business_id?: string | null

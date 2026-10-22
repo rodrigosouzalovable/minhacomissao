@@ -1415,6 +1415,13 @@
       "when": 1792628825484,
       "tag": "0201_sftp_ume_vincular_acordos_existentes",
       "breakpoints": true
+    },
+    {
+      "idx": 202,
+      "version": "7",
+      "when": 1792665488733,
+      "tag": "0202_bm_arquivada",
+      "breakpoints": true
     }
   ]
 }

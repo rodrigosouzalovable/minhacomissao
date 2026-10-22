@@ -1,0 +1,2 @@
+ALTER TABLE public.meta_business_managers ADD COLUMN IF NOT EXISTS arquivada_em timestamptz NULL;
+CREATE INDEX IF NOT EXISTS idx_meta_bm_nao_arquivadas ON public.meta_business_managers (id) WHERE arquivada_em IS NULL;
