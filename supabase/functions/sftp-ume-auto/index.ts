@@ -136,10 +136,19 @@ async function fatia(db: any, pasta: string, continuar: boolean): Promise<Record
       }
     }
     if (!dataLote || !carteira) throw new Error('Arquivo sem cabeçalho 00');
+    // Grava em lotes; em tempo limite, repete o mesmo trecho em pedaços menores (UPSERT é idempotente).
+    const gravar = async (cl: unknown[], pa: unknown[], tentativa = 0): Promise<void> => {
+      const { error } = await db.rpc('ume_carteira_gravar', { p_carteira: carteira, p_lote: dataLote, p_clientes: cl, p_parcelas: pa });
+      if (!error) return;
+      if (!/timeout/i.test(error.message) || tentativa >= 4) throw new Error(`gravar: ${error.message}`);
+      await new Promise((r) => setTimeout(r, 1500 * (tentativa + 1)));
+      if (cl.length + pa.length <= 50) return gravar(cl, pa, tentativa + 1);
+      const mc = Math.ceil(cl.length / 2), mp = Math.ceil(pa.length / 2);
+      await gravar(cl.slice(0, mc), pa.slice(0, mp), tentativa + 1);
+      await gravar(cl.slice(mc), pa.slice(mp), tentativa + 1);
+    };
     for (let i = 0; i < Math.max(clientes.length, parcelas.length); i += BLOCO) {
-      const { error } = await db.rpc('ume_carteira_gravar', { p_carteira: carteira, p_lote: dataLote,
-        p_clientes: clientes.slice(i, i + BLOCO), p_parcelas: parcelas.slice(i, i + BLOCO) });
-      if (error) throw new Error(`gravar: ${error.message}`);
+      await gravar(clientes.slice(i, i + BLOCO), parcelas.slice(i, i + BLOCO));
     }
     const novo = { posicao: inicio + usar, data_lote: dataLote, carteira, total_linhas: st.total_linhas + linhas,
       clientes: st.clientes + clientes.length, parcelas: st.parcelas + parcelas.length, baixas, atualizado_em: new Date().toISOString() };
