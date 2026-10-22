@@ -20,7 +20,8 @@ const Body = z.discriminatedUnion('acao', [
     numeroParcelas: z.number().int().min(1).max(24),
     primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     desconto: z.number().min(0),
-    juros: z.number().min(0).max(20).default(0),
+    juros: z.number().min(0).max(8).default(0),
+    totalAlvo: z.number().positive().optional(),
     confirmar: z.boolean().optional(),
     conversaId: z.string().uuid().nullish(),
   }),
@@ -56,7 +57,7 @@ Deno.serve(async (req) => {
     }
 
     if (!parcelas.length) return json({ success: false, error: 'sem_parcelas', message: 'Nenhuma parcela em aberto deste CPF no último arquivo.' });
-    if (b.desconto > totalAberto) return json({ success: false, error: 'desconto_maior_que_divida', message: 'O desconto é maior que o total em aberto.' });
+    if (!b.totalAlvo && b.desconto > totalAberto) return json({ success: false, error: 'desconto_maior_que_divida', message: 'O desconto é maior que o total em aberto.' });
     const hoje = new Date().toISOString().slice(0, 10);
     if (b.primeiroVencimento < hoje) return json({ success: false, error: 'vencimento_passado', message: 'O 1º vencimento não pode ser no passado.' });
     if (b.acao === 'efetivar' && b.confirmar !== true) return json({ error: 'confirmação obrigatória' }, 400);
@@ -71,6 +72,21 @@ Deno.serve(async (req) => {
       numberOfPayments: b.numeroParcelas,
       interestRate: b.juros,
     };
+    // Total combinado com o cliente: a UME atualiza a dívida com encargos de atraso,
+    // então lemos o totalDebt atualizado e enviamos a diferença como desconto, sem juros.
+    if (b.totalAlvo && b.totalAlvo > 0) {
+      const base = await umeApi.simularRenegociacao(ambiente, { ...corpo, monetaryDiscount: 0, interestRate: 0 });
+      const totalDebt = Number((base.data as Record<string, unknown> | null)?.totalDebt);
+      if (!base.ok || !Number.isFinite(totalDebt)) {
+        const d = base.data as Record<string, unknown> | null;
+        return json({ success: false, error: 'ume_base', message: 'A UME recusou: ' + String(d?.message || d?.error || `erro ${base.status}`), detalhe: base.data });
+      }
+      if (b.totalAlvo > totalDebt) {
+        return json({ success: false, error: 'total_acima_divida', message: `O total combinado é maior que a dívida atualizada na UME (${totalDebt.toFixed(2)}).` });
+      }
+      corpo.monetaryDiscount = round2(totalDebt - b.totalAlvo);
+      corpo.interestRate = 0;
+    }
     const r = b.acao === 'simular' ? await umeApi.simularRenegociacao(ambiente, corpo) : await umeApi.fecharAcordo(ambiente, corpo);
     console.log('[ume-acordo-api]', { acao: b.acao, ambiente, status: r.status, parcelas: ids.length });
 
