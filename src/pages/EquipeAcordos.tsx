@@ -472,12 +472,12 @@ export default function EquipeAcordos() {
             .eq('status', 'pago');
           return verComoAdmin ? q : q.in('acordos.user_id', funcionarioIds);
         };
-        const carregarTudo = async (build: () => any, order: (q: any) => any) => {
+        const carregarTudo = async (build: () => any, countQuery: () => any, order: (q: any) => any) => {
           const first = await order(build()).range(0, PAGE_SIZE - 1);
           if (first.error) throw first.error;
           let rows: any[] = first.data || [];
           if (rows.length === PAGE_SIZE) {
-            const { count, error } = await build().select('id', { count: 'exact', head: true });
+            const { count, error } = await countQuery();
             if (error) throw error;
             const total = count ?? rows.length;
             const extras = await Promise.all(
@@ -490,8 +490,8 @@ export default function EquipeAcordos() {
         };
 
         const [acordosData, pagResult] = await Promise.all([
-          carregarTudo(acordosQuery, (q) => q.order('criado_em', { ascending: false }).order('id')),
-          carregarTudo(pagQuery, (q) => q.order('data_paga', { ascending: false, nullsFirst: false }).order('id'))
+          carregarTudo(acordosQuery, () => { const q = supabase.from('acordos').select('id', { count: 'exact', head: true }); return verComoAdmin ? q : q.in('user_id', funcionarioIds); }, (q) => q.order('criado_em', { ascending: false }).order('id')),
+          carregarTudo(pagQuery, () => { const q = supabase.from('pagamentos').select('id, acordos!inner(user_id)', { count: 'exact', head: true }).eq('status', 'pago'); return verComoAdmin ? q : q.in('acordos.user_id', funcionarioIds); }, (q) => q.order('data_paga', { ascending: false, nullsFirst: false }).order('id'))
             .then((d) => ({ data: d, error: null as any }), (error) => ({ data: [] as any[], error })),
         ]);
 
