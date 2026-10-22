@@ -50,7 +50,6 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
   const [nParcelas, setNParcelas] = useState('18');
   const [totalAcordo, setTotalAcordo] = useState('');
   const [primeiroVenc, setPrimeiroVenc] = useState('');
-  const [juros, setJuros] = useState('0');
   const [simulacao, setSimulacao] = useState<any>(null);
   const [efetivado, setEfetivado] = useState<any>(null);
   const [ocupado, setOcupado] = useState<'' | 'simular' | 'efetivar' | 'boleto'>('');
@@ -64,7 +63,6 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
     setNParcelas(proposta?.parcelas ? String(proposta.parcelas) : '18');
     setTotalAcordo(proposta?.total ? proposta.total.toFixed(2).replace('.', ',') : '');
     setPrimeiroVenc(proposta?.primeiroVencimento ?? '');
-    setJuros('0');
     if (c.length === 11) void carregar(c);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cpfInicial, JSON.stringify(proposta ?? null)]);
@@ -93,7 +91,6 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
   const desconto = Math.max(0, diferenca);
   // Total acima do aberto = acréscimo do parcelamento (ex.: +10% do portal), enviado como juros.
   const acrescimo = Math.max(0, -diferenca);
-  const jurosEnvio = dados && acrescimo > 0 ? round2((acrescimo / dados.totalAberto) * 100) : numeroBR(juros);
   const centavos = Math.round(vTotal * 100);
   const parcelaBase = n > 0 ? Math.floor(centavos / n) / 100 : 0;
   const ultimaParcela = n > 0 ? round2((centavos - Math.floor(centavos / n) * (n - 1)) / 100) : 0;
