@@ -10,7 +10,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 const PASTAS_AUTO = ['/carga', '/odres/carga'];
-const FATIA = 1_200_000; // bytes por execução
+const FATIA = 800_000; // bytes por execução
 const BLOCO = 800; // lotes pequenos evitam o tempo limite do banco ao gravar parcelas
 const BUCKET = 'sftp-ume-tmp';
 const tmp = (pasta: string) => `${pasta.replace(/\//g, '_').replace(/^_/, '')}.csv`;
