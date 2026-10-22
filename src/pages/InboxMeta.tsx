@@ -43,7 +43,8 @@ import { CopyButton } from '@/components/CopyButton';
 import { CREDOR_MARCAS_LISTA, getCredorMarca } from "@/lib/credorMarcas";
 import { ModeloMensagemDialog } from '@/components/modelo-mensagem/ModeloMensagemDialog';
 import { ConsultaUmeDialog } from '@/components/inbox/meta/ConsultaUmeDialog';
-import { AcordoUmeApiDialog } from '@/components/inbox/meta/AcordoUmeApiDialog';
+import { AcordoUmeApiDialog, type AcordoEfetivado } from '@/components/inbox/meta/AcordoUmeApiDialog';
+import { LancarAcordoDialog } from '@/components/inbox/meta/LancarAcordoDialog';
 import { ultimaPropostaPortal } from '@/lib/umePropostaPortal';
 import { SugestoesObjecaoPanel, detectarObjecaoLocal } from '@/components/inbox/meta/SugestoesObjecaoPanel';
 import { AgendarRetornoDialog } from '@/components/inbox/meta/AgendarRetornoDialog';
@@ -241,6 +242,8 @@ export default function InboxMeta() {
   const [modeloMsgOpen, setModeloMsgOpen] = useState(false);
   const [consultaUmeOpen, setConsultaUmeOpen] = useState(false);
   const [gerarAcordoUmeOpen, setGerarAcordoUmeOpen] = useState(false);
+  const [lancarAcordoOpen, setLancarAcordoOpen] = useState(false);
+  const [efetivadosPorConversa, setEfetivadosPorConversa] = useState<Record<string, AcordoEfetivado>>({});
   const [agendarRetornoOpen, setAgendarRetornoOpen] = useState(false);
   const { ligarOuPedirPermissao, permissaoDe, estado: estadoChamada, chamadasHabilitadas } = useMetaCall();
 
@@ -2576,13 +2579,7 @@ export default function InboxMeta() {
                      size="sm"
                      variant="outline"
                      className="h-7 w-7 p-0"
-                     onClick={() => navigate('/acordos/novo', { state: { metaOrigem: {
-                       contatoId: contatoAtivo.id,
-                       instanciaId: contatoAtivo.instancia_id,
-                       telefone: contatoAtivo.telefone,
-                       bsuid: contatoAtivo.bsuid,
-                       clienteNome: nomeExibido(contatoAtivo),
-                     } } })}
+                     onClick={() => setLancarAcordoOpen(true)}
                      title="Lançar acordo desta negociação"
                      aria-label="Lançar acordo desta negociação"
                    >
@@ -3003,7 +3000,32 @@ export default function InboxMeta() {
         telefoneContato={contatoAtivo?.telefone ?? null}
         conversaId={contatoAtivo?.id ?? null}
         onEnviar={(texto) => { void enviar(texto); }}
+        onEfetivado={(a) => { const id = contatoAtivo?.id; if (id) setEfetivadosPorConversa((m) => ({ ...m, [id]: a })); }}
       />
+      {contatoAtivo && lancarAcordoOpen && (() => {
+        const ef = efetivadosPorConversa[contatoAtivo.id];
+        const prop = ef ? null : ultimaPropostaPortal(mensagens);
+        return (
+          <LancarAcordoDialog
+            open={lancarAcordoOpen}
+            onOpenChange={setLancarAcordoOpen}
+            conversaId={contatoAtivo.id}
+            dados={{
+              cpf: ef?.cpf ?? prop?.cpf ?? cpfDoContato ?? '',
+              nome: ef?.nome || nomeExibido(contatoAtivo) || '',
+              telefone: contatoAtivo.telefone ?? '',
+              total: ef?.total ?? prop?.total ?? null,
+              parcelas: ef?.parcelas ?? prop?.parcelas ?? null,
+              primeiroVencimento: ef?.primeiroVencimento ?? prop?.primeiroVencimento ?? null,
+              observacao: ef?.observacao,
+            }}
+            onTelaCompleta={() => { setLancarAcordoOpen(false); navigate('/acordos/novo', { state: { metaOrigem: {
+              contatoId: contatoAtivo.id, instanciaId: contatoAtivo.instancia_id, telefone: contatoAtivo.telefone,
+              bsuid: contatoAtivo.bsuid, clienteNome: nomeExibido(contatoAtivo),
+            } } }); }}
+          />
+        );
+      })()}
 
       <MetaIAConfigDialog open={iaConfigOpen} onOpenChange={setIaConfigOpen} />
       <ModeloMensagemDialog open={modeloMsgOpen} onOpenChange={setModeloMsgOpen} credor={contatoAtivo?.credor ?? null} />
