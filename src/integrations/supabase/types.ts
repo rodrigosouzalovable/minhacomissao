@@ -14444,6 +14444,10 @@ export type Database = {
         Returns: string
       }
       sftp_ume_salvar_chave: { Args: { p_chave: string }; Returns: undefined }
+      sftp_ume_vincular_existentes: {
+        Args: { p_arquivo: string }
+        Returns: number
+      }
       transferir_iago_para_humano_rodizio: {
         Args: { p_contato_id: string }
         Returns: string
