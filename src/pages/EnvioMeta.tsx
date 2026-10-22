@@ -841,6 +841,7 @@ export default function EnvioMeta() {
         .order("nome"),
       (supabase as any).from("meta_business_managers")
         .select("id, nome, business_id")
+        .is("arquivada_em", null)
         .order("nome"),
       (supabase as any).from("meta_instance_parceiros").select("instancia_id, user_id"),
       carregarUtilityMestres(user.id),
