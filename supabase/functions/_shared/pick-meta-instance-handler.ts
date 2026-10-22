@@ -7,6 +7,7 @@ import { enviadosHojeBrtLote, tetoBase } from './meta-freio.ts';
 import { THIAGO_NOGUEIRA_USER_ID, instanciasLiberadasThiago } from './thiago-meta-override.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144Connected } from './novo-mundo-3144.ts';
 import { classifyMessagingHealth, hasBan, isQualityOnlyHold } from './meta-messaging-health.ts';
+import { escolherPorMenorUso } from './meta-distribuicao-campanha.ts';
 
 
 const corsHeaders = {
@@ -400,6 +401,23 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
     let winner = candidates[0];
     if (excluir_id && candidates.length > 1 && winner.inst.id === excluir_id) {
       winner = candidates[1];
+    }
+    // Campanha: distribuição igual por número (menor uso na campanha);
+    // YELLOW/RED limitados a 30% da média dos saudáveis.
+    if (reqBody?.job_id && !usouFallbackGuardrail) {
+      const { data: usoRows, error: usoErr } = await supabase.rpc('envio_meta_job_uso_instancias', { p_job_id: reqBody.job_id });
+      if (!usoErr) {
+        const usoJob = new Map<string, number>((usoRows || []).map((r: any) => [r.instancia_id, Number(r.enviados) || 0]));
+        const escolhido = escolherPorMenorUso(
+          candidates.map((c) => ({ id: c.inst.id, quality: c.inst.saude_quality, c })), usoJob, excluir_id,
+        );
+        if (!escolhido) {
+          return new Response(JSON.stringify({ success: false, blocked: 'sem_disponivel', error: 'Números com qualidade baixa já atingiram o teto de 30% da média', motivos: descartados }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        winner = escolhido.c;
+      }
     }
 
     // Cacheia score
