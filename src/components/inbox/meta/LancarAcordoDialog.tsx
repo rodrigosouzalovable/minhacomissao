@@ -7,7 +7,7 @@ import { LancarAcordoConversa } from './LancarAcordoConversa';
 
 const numeroBR = (s: string) => { const n = Number(s.replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 
-export interface DadosLancamento { cpf: string; nome: string; telefone: string; total: number | null; parcelas: number | null; primeiroVencimento: string | null; observacao?: string }
+export interface DadosLancamento { cpf: string; nome: string; telefone: string; total: number | null; parcelas: number | null; primeiroVencimento: string | null; observacao?: string; credor?: 'ume_novo_mundo' | 'odres_cred' | 'mundo_da_moda' | null }
 
 export function LancarAcordoDialog({ open, onOpenChange, dados, conversaId, onTelaCompleta }: {
   open: boolean; onOpenChange: (v: boolean) => void; dados: DadosLancamento; conversaId?: string | null; onTelaCompleta: () => void;
@@ -40,7 +40,7 @@ export function LancarAcordoDialog({ open, onOpenChange, dados, conversaId, onTe
         <LancarAcordoConversa
           cpf={cpf} nomeInicial={dados.nome} telefoneInicial={dados.telefone}
           total={Math.round(numeroBR(total) * 100) / 100} parcelas={parseInt(parcelas, 10) || 0} primeiroVencimento={venc}
-          conversaId={conversaId} observacaoExtra={dados.observacao}
+          conversaId={conversaId} observacaoExtra={dados.observacao} credorInicial={dados.credor ?? null}
         />
         <Button variant="link" size="sm" className="self-start px-0" onClick={onTelaCompleta}>Abrir tela completa de novo acordo</Button>
       </DialogContent>

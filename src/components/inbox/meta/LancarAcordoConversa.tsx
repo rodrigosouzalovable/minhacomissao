@@ -35,8 +35,30 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
   const [salvando, setSalvando] = useState(false);
   const [lancadoId, setLancadoId] = useState<string | null>(null);
 
+  const [vencBase, setVencBase] = useState<string | null>(null);
+
   useEffect(() => { setNome(nomeInicial); }, [nomeInicial]);
   useEffect(() => { setTelefone(telefoneInicial); }, [telefoneInicial]);
+  useEffect(() => { if (credorInicial) setEmpresa((e) => e ?? credorInicial); }, [credorInicial]);
+  // Dias de atraso: parcela em aberto mais antiga da carteira UME/Odres (SFTP).
+  useEffect(() => {
+    const c = cpf.replace(/\D/g, '');
+    setVencBase(null);
+    if (c.length !== 11) return;
+    let ativo = true;
+    const fmtCpf = `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6, 9)}-${c.slice(9)}`;
+    void (async () => {
+      const { data } = await supabase.from('ume_carteira_parcelas' as any).select('vencimento')
+        .in('cpf', [c, fmtCpf]).order('vencimento', { ascending: true }).limit(1);
+      const v = (data as any)?.[0]?.vencimento as string | undefined;
+      if (!ativo || !v) return;
+      const [y, m, d] = v.slice(0, 10).split('-').map(Number);
+      const hoje = new Date(); const diasCalc = Math.floor((Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) - Date.UTC(y, m - 1, d)) / 86400000);
+      if (diasCalc > 0) { setVencBase(v.slice(0, 10)); setDias((atual) => atual || String(diasCalc)); }
+    })();
+    return () => { ativo = false; };
+  }, [cpf]);
+
 
   const diasN = parseInt(dias, 10);
   const centavos = Math.round(total * 100);
