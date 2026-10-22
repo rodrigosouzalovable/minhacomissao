@@ -11,7 +11,7 @@ const json = (body: unknown, status = 200) =>
 
 const PASTAS_AUTO = ['/carga', '/odres/carga'];
 const FATIA = 1_200_000; // bytes por execução
-const BLOCO = 4000;
+const BLOCO = 800; // lotes pequenos evitam o tempo limite do banco ao gravar parcelas
 const BUCKET = 'sftp-ume-tmp';
 const tmp = (pasta: string) => `${pasta.replace(/\//g, '_').replace(/^_/, '')}.csv`;
 
