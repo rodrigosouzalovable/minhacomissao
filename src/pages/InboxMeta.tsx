@@ -3018,6 +3018,7 @@ export default function InboxMeta() {
               parcelas: ef?.parcelas ?? prop?.parcelas ?? null,
               primeiroVencimento: ef?.primeiroVencimento ?? prop?.primeiroVencimento ?? null,
               observacao: ef?.observacao,
+              credor: prop?.credor ?? null,
             }}
             onTelaCompleta={() => { setLancarAcordoOpen(false); navigate('/acordos/novo', { state: { metaOrigem: {
               contatoId: contatoAtivo.id, instanciaId: contatoAtivo.instancia_id, telefone: contatoAtivo.telefone,

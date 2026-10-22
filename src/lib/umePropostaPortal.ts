@@ -1,10 +1,12 @@
 // Lê a mensagem de proposta enviada pelo portal ("Quero negociar meu débito...")
 // para pré-preencher o acordo UME/Odres. Nunca adivinha: campo ausente fica null.
+export type CredorProposta = 'ume_novo_mundo' | 'odres_cred' | 'mundo_da_moda';
 export interface PropostaPortal {
   cpf: string | null;
   total: number | null;
   parcelas: number | null;
   primeiroVencimento: string | null; // YYYY-MM-DD
+  credor: CredorProposta | null;
 }
 
 const valor = (s?: string) => {
@@ -12,6 +14,15 @@ const valor = (s?: string) => {
   const n = Number(s.replace(/\./g, '').replace(',', '.'));
   return Number.isFinite(n) ? n : null;
 };
+
+/** Credor citado na mensagem ("débito com UME"); ausente = null. */
+export function lerCredorProposta(texto: string): CredorProposta | null {
+  const t = String(texto || '');
+  if (/\bodres\b/i.test(t)) return 'odres_cred';
+  if (/\bume\b/i.test(t)) return 'ume_novo_mundo';
+  if (/novo\s+mundo/i.test(t)) return 'mundo_da_moda';
+  return null;
+}
 
 export function lerPropostaPortal(texto: string): PropostaPortal | null {
   const t = String(texto || '');
@@ -26,6 +37,7 @@ export function lerPropostaPortal(texto: string): PropostaPortal | null {
     total,
     parcelas: nParc ? Number(nParc) : aVista ? 1 : null,
     primeiroVencimento: d ? `${d[3]}-${d[2]}-${d[1]}` : null,
+    credor: lerCredorProposta(t),
   };
 }
 
