@@ -161,6 +161,10 @@ async function fatia(db: any, pasta: string, continuar: boolean): Promise<Record
     // Baixa automática: parcelas de acordos ativos casadas por CPF, valor e vencimento viram pagas.
     const { data: baixadas, error: ea } = await db.rpc('sftp_ume_aplicar', { p_arquivo: arquivoId });
     if (ea) console.error('sftp-ume-auto aplicar', pasta, ea.message);
+    // CPFs com acordo ativo cujo pagamento não casou: baixa a parcela aberta mais próxima ou lança uma nova parcela paga.
+    const { data: vinculadas, error: ev } = await db.rpc('sftp_ume_vincular_existentes', { p_arquivo: arquivoId });
+    if (ev) console.error('sftp-ume-auto vincular', pasta, ev.message);
+    else console.log('sftp-ume-auto vinculadas', pasta, vinculadas);
     const { data: removidas } = await db.rpc('ume_carteira_finalizar', { p_carteira: carteira, p_lote: dataLote });
     await db.from('sftp_ume_auto_progresso').update({ ...novo, baixas: [], status: 'concluido' }).eq('pasta', pasta);
     await db.storage.from(BUCKET).remove([tmp(pasta)]);
