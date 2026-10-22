@@ -3020,7 +3020,7 @@ export default function InboxMeta() {
               observacao: ef?.observacao,
               credor: prop?.credor ?? null,
             }}
-            onTelaCompleta={() => { setLancarAcordoOpen(false); navigate('/acordos/novo', { state: { metaOrigem: {
+            onTelaCompleta={(prefill) => { setLancarAcordoOpen(false); navigate('/acordos/novo', { state: { prefill, metaOrigem: {
               contatoId: contatoAtivo.id, instanciaId: contatoAtivo.instancia_id, telefone: contatoAtivo.telefone,
               bsuid: contatoAtivo.bsuid, clienteNome: nomeExibido(contatoAtivo),
             } } }); }}
