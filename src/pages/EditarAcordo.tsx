@@ -1,4 +1,5 @@
 import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
+import { ajustarNovas, parcelasRemovidas, quantidadeMinima, totalEditado, type NovaParcela } from '@/lib/edicaoAcordo';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -73,6 +74,11 @@ export default function EditarAcordo() {
   const [operadores, setOperadores] = useState<Array<{ user_id: string; nome: string | null }>>([]);
   const [parcelasOriginais, setParcelasOriginais] = useState<Array<{ id: string; numero_parcela: number; status: string; valor_parcela: number; data_prevista: string }>>([]);
   const [parcelasEditadas, setParcelasEditadas] = useState<Record<string, { valor: string; data: string }>>({});
+  const [quantidade, setQuantidade] = useState(0);
+  const [novas, setNovas] = useState<NovaParcela[]>([]);
+  useEffect(() => { setNovas((atuais) => ajustarNovas(parcelasOriginais, quantidade, atuais)); }, [quantidade, parcelasOriginais]);
+  const removidas = useMemo(() => parcelasRemovidas(parcelasOriginais, quantidade), [parcelasOriginais, quantidade]);
+  const totalOwner = useMemo(() => totalEditado(parcelasOriginais.map((p) => ({ ...p, valorEditado: parcelasEditadas[p.id] ? Number(parcelasEditadas[p.id].valor) || 0 : undefined })), quantidade, novas), [parcelasOriginais, parcelasEditadas, quantidade, novas]);
 
   useEffect(() => {
     if (!isAdmin) return;
