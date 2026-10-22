@@ -177,6 +177,38 @@ export default function NovoAcordo() {
     }));
   }, [metaOrigem]);
 
+  // Prefill vindo do diálogo "+" do Inbox Meta
+  const prefill = (location.state as { prefill?: {
+    nome?: string; cpf?: string; telefone?: string; total?: number; parcelas?: number; primeiroVencimento?: string;
+    dias?: string; empresa?: 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred' | null; operadorId?: string | null; observacao?: string;
+  } } | null)?.prefill ?? null;
+  const prefillAplicado = useRef(false);
+  useEffect(() => {
+    if (!prefill || prefillAplicado.current) return;
+    prefillAplicado.current = true;
+    const n = prefill.parcelas || 0;
+    const tot = prefill.total || 0;
+    const cent = Math.round(tot * 100);
+    const base = n > 0 ? Math.floor(cent / n) / 100 : 0;
+    setActiveTab('manual');
+    setForm((c) => ({
+      ...c,
+      clienteNome: prefill.nome ? formatNome(prefill.nome) : c.clienteNome,
+      clienteCpf: prefill.cpf ? formatCpf(prefill.cpf) : c.clienteCpf,
+      clienteTelefone: prefill.telefone ? formatPhone(prefill.telefone.replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '')) : c.clienteTelefone,
+      valorTotal: tot > 0 ? formatCurrencyDisplay(tot) : c.valorTotal,
+      parcelas: n > 0 ? String(n) : c.parcelas,
+      valorPrimeiraParcela: base > 0 ? formatCurrencyDisplay(base) : c.valorPrimeiraParcela,
+      valorDemaisParcelas: base > 0 ? formatCurrencyDisplay(base) : c.valorDemaisParcelas,
+      dataPrimeiroPagamento: prefill.primeiroVencimento || c.dataPrimeiroPagamento,
+      diasAtraso: prefill.dias || c.diasAtraso,
+      observacoes: prefill.observacao || c.observacoes,
+    }));
+    if (prefill.empresa) setEmpresa(prefill.empresa);
+    if (prefill.operadorId) setSelectedUserId(prefill.operadorId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Handler para dados extraídos pela IA
   const handleDataExtracted = (data: ExtractedData) => {
     const documento = normalizarDocumentoAcordo(data);
