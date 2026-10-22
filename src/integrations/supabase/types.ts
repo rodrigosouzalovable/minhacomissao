@@ -13187,6 +13187,56 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      editar_acordo_proprio_completo: {
+        Args: {
+          p_acordo_id: string
+          p_cpf: string
+          p_nome: string
+          p_novas?: Json
+          p_parcelas?: Json
+          p_quantidade: number
+          p_telefone: string
+        }
+        Returns: {
+          atualizado_em: string
+          boleto_enviado: boolean
+          cliente_cpf: string | null
+          cliente_nome: string
+          cliente_telefone: string | null
+          comissao_total: number
+          criado_em: string
+          data_primeiro_pagamento: string
+          dias_atraso: number
+          duplicado_verificado: boolean
+          empresa: string
+          id: string
+          instancia_negociacao_id: string | null
+          observacoes: string | null
+          parcelas: number
+          percentual_comissao: number
+          status: string
+          telefone_confirmado_em: string | null
+          telefone_confirmado_por: string | null
+          termo_formalizacao_metodo: string | null
+          termo_formalizacao_status: string
+          termo_formalizado_em: string | null
+          termo_formalizado_por: string | null
+          termo_meta_contato_id: string | null
+          termo_meta_instancia_id: string | null
+          user_id: string
+          valor_parcela: number
+          valor_total: number
+          whatsapp_opt_in: boolean
+          whatsapp_opt_in_em: string | null
+          whatsapp_opt_in_origem: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "acordos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       editar_parcela_acordo_proprio: {
         Args: {
           p_nova_data_paga?: string
