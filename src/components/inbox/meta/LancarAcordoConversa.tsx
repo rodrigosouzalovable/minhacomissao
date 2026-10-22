@@ -8,6 +8,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, FilePlus2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { calcularPercentualComissaoMundoDaModa } from '@/lib/comissao';
+import { useUserRole } from '@/hooks/useUserRole';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+export interface EstadoLancamento { nome: string; telefone: string; dias: string; empresa: Empresa | null; operadorId: string | null }
 
 type Empresa = 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred';
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -22,10 +26,18 @@ export function somarMeses(iso: string, meses: number): string {
   return alvo.toISOString().slice(0, 10);
 }
 
-export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total, parcelas, primeiroVencimento, conversaId, credorInicial, observacaoExtra }: {
+export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total, parcelas, primeiroVencimento, conversaId, credorInicial, observacaoExtra, onEstado }: {
   cpf: string; nomeInicial: string; telefoneInicial: string; total: number; parcelas: number; primeiroVencimento: string;
-  conversaId?: string | null; credorInicial?: Empresa | null; observacaoExtra?: string;
+  conversaId?: string | null; credorInicial?: Empresa | null; observacaoExtra?: string; onEstado?: (e: EstadoLancamento) => void;
 }) {
+  const { isAdmin } = useUserRole();
+  const [operadorId, setOperadorId] = useState<string | null>(null);
+  const [operadores, setOperadores] = useState<Array<{ id: string; nome: string | null; email: string | null }>>([]);
+  useEffect(() => { void supabase.auth.getUser().then(({ data }) => setOperadorId((o) => o ?? data.user?.id ?? null)); }, []);
+  useEffect(() => {
+    if (!isAdmin) return;
+    void supabase.from('profiles').select('id, nome, email').eq('ativo', true).order('nome').then(({ data }) => setOperadores((data as any) || []));
+  }, [isAdmin]);
   const qc = useQueryClient();
   const [nome, setNome] = useState(nomeInicial);
   const [telefone, setTelefone] = useState(telefoneInicial);
@@ -58,6 +70,8 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
   }, [cpf]);
 
 
+  useEffect(() => { onEstado?.({ nome, telefone, dias, empresa, operadorId }); }, [nome, telefone, dias, empresa, operadorId, onEstado]);
+
   const diasN = parseInt(dias, 10);
   const centavos = Math.round(total * 100);
   const base = parcelas > 0 ? Math.floor(centavos / parcelas) : 0;
@@ -79,7 +93,7 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
         comissao_parcela: round2(v * percentual / 100), status: 'pendente' as const,
       }));
       const { data: acordo, error } = await supabase.from('acordos').insert({
-        user_id: user.id, cliente_nome: nome.trim().toUpperCase(), cliente_cpf: cpf, cliente_telefone: telDig,
+        user_id: isAdmin && operadorId ? operadorId : user.id, cliente_nome: nome.trim().toUpperCase(), cliente_cpf: cpf, cliente_telefone: telDig,
         valor_total: round2(total), parcelas, valor_parcela: valores[0], data_primeiro_pagamento: primeiroVencimento,
         dias_atraso: diasN, percentual_comissao: percentual,
         comissao_total: round2(pags.reduce((s, p) => s + p.comissao_parcela, 0)),
@@ -112,6 +126,14 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
             <Button key={k} type="button" size="sm" variant={empresa === k ? 'default' : 'outline'} onClick={() => setEmpresa(k)}>{l}</Button>
           ))}</div>
         </div>
+        {isAdmin && (
+          <div className="space-y-1 sm:col-span-3"><Label className="text-xs">Operador vinculado</Label>
+            <Select value={operadorId ?? ''} onValueChange={setOperadorId}>
+              <SelectTrigger><SelectValue placeholder="Selecione o operador" /></SelectTrigger>
+              <SelectContent>{operadores.map((o) => <SelectItem key={o.id} value={o.id}>{o.nome || o.email}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
       <div className="text-xs text-muted-foreground">
         {parcelas}x — {parcelas > 1 && valores[parcelas - 1] !== valores[0] ? `${parcelas - 1}x de ${fmt(valores[0])} + última de ${fmt(valores[parcelas - 1])}` : fmt(valores[0] ?? 0)} · total {fmt(total)}
