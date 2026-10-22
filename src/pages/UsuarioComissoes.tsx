@@ -110,33 +110,48 @@ export default function UsuarioComissoes() {
   const { data: acordos } = useQuery({
     queryKey: ['user-acordos', userId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('acordos')
-        .select('*')
-        .eq('user_id', userId)
-        .order('criado_em', { ascending: false });
-
-      if (error) throw error;
-      return data as Acordo[];
+      const todos: Acordo[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from('acordos')
+          .select('*')
+          .eq('user_id', userId)
+          .order('criado_em', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, from + 999);
+        if (error) throw error;
+        todos.push(...((data || []) as Acordo[]));
+        if (!data || data.length < 1000) break;
+      }
+      return todos;
     },
     enabled: !!userId,
   });
 
-  // Buscar pagamentos de todos os acordos
+  // Buscar pagamentos de todos os acordos (em blocos para evitar consultas grandes demais)
   const { data: pagamentos } = useQuery({
-    queryKey: ['user-pagamentos', acordos?.map(a => a.id)],
+    queryKey: ['user-pagamentos', userId, acordos?.length, acordos?.[0]?.id],
     queryFn: async () => {
       if (!acordos || acordos.length === 0) return [];
-      
       const acordoIds = acordos.map(a => a.id);
-      const { data, error } = await supabase
-        .from('pagamentos')
-        .select('*')
-        .in('acordo_id', acordoIds)
-        .order('numero_parcela', { ascending: true });
-
-      if (error) throw error;
-      return data as Pagamento[];
+      const blocos: string[][] = [];
+      for (let i = 0; i < acordoIds.length; i += 150) blocos.push(acordoIds.slice(i, i + 150));
+      const resultados = await Promise.all(blocos.map(async (ids) => {
+        const itens: Pagamento[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase
+            .from('pagamentos')
+            .select('*')
+            .in('acordo_id', ids)
+            .order('id', { ascending: true })
+            .range(from, from + 999);
+          if (error) throw error;
+          itens.push(...((data || []) as Pagamento[]));
+          if (!data || data.length < 1000) break;
+        }
+        return itens;
+      }));
+      return resultados.flat().sort((a, b) => a.numero_parcela - b.numero_parcela);
     },
     enabled: !!acordos && acordos.length > 0,
   });
