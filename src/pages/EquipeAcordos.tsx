@@ -477,8 +477,7 @@ export default function EquipeAcordos() {
           if (first.error) throw first.error;
           let rows: any[] = first.data || [];
           if (rows.length === PAGE_SIZE) {
-            const { count, error } = await (verComoAdmin || build === acordosQuery
-              ? build().select('id', { count: 'exact', head: true }) : build().select('id', { count: 'exact', head: true }));
+            const { count, error } = await build().select('id', { count: 'exact', head: true });
             if (error) throw error;
             const total = count ?? rows.length;
             const extras = await Promise.all(
