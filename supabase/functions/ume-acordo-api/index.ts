@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     await db.from('ume_acordo_api_log').insert({
       user_id: u.user.id, cpf: b.cpf, borrower_id: corpo.borrowerId, conversa_id: b.conversaId ?? null,
       ambiente, acao: b.acao, parcelas: b.numeroParcelas, primeiro_vencimento: b.primeiroVencimento,
-      desconto: corpo.monetaryDiscount, juros: b.juros, installment_ids: ids, sucesso: r.ok, resposta: r.data as never,
+      desconto: corpo.monetaryDiscount, juros: corpo.interestRate, installment_ids: ids, sucesso: r.ok, resposta: r.data as never,
     });
 
     if (!r.ok) {
