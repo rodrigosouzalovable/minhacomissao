@@ -81,7 +81,7 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
     try {
       const r = await chamar({ acao: 'carregar', cpf: soDigitos(c) });
       setDados(r);
-      if (!totalAcordo) setTotalAcordo(String(r.totalAberto).replace('.', ','));
+      if (!proposta?.total) setTotalAcordo((atual) => atual || String(r.totalAberto).replace('.', ','));
     } catch (e) { setDados(null); setErro(String((e as Error)?.message || e)); }
     finally { setCarregando(false); }
   };
