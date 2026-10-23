@@ -1,3 +1,4 @@
+import { retryImport } from "@/lib/lazyWithRetry";
 import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -335,7 +336,7 @@ export default function PontoAdmin() {
     );
 
   const exportarPdf = async () => {
-    const { default: jsPDF } = await import('jspdf');
+    const { default: jsPDF } = await retryImport(() => import('jspdf'));
     const doc = new jsPDF({ orientation: 'landscape' });
     doc.setFontSize(14);
     doc.text('Espelho de Ponto', 14, 14);
