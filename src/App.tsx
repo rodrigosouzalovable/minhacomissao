@@ -54,6 +54,7 @@ const MonitorEnvios = lazy(() => retryImport(() => import("./pages/MonitorEnvios
 const ExportarDados = lazy(() => retryImport(() => import("./pages/ExportarDados")));
 const CertificadoDigital = lazy(() => retryImport(() => import("./pages/CertificadoDigital")));
 const RedirectBoleto = lazy(() => retryImport(() => import("./pages/RedirectBoleto")));
+const RedirectAppUme = lazy(() => retryImport(() => import("./pages/RedirectAppUme")));
 const RedirectVerificarProposta = lazy(() => retryImport(() => import("./pages/RedirectVerificarProposta")));
 
 const Relatorios = lazy(() => retryImport(() => import("./pages/Relatorios")));
@@ -246,6 +247,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/novomundo" replace />} />
             <Route path="/ir/boleto" element={<RedirectBoleto />} />
+            <Route path="/app-ume" element={<RedirectAppUme />} />
             <Route path="/ir/verificar-proposta-odres" element={<RedirectVerificarProposta />} />
             <Route path="/pix/:id" element={<PixPublico />} />
             {/* Tenant routes (multi-tenant) — MUST come before /:creditor to avoid clash */}
