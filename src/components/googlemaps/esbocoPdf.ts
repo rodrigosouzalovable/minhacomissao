@@ -1,9 +1,10 @@
+import { retryImport } from "@/lib/lazyWithRetry";
 /** Captura o mockup renderizado e gera um PDF A4 multipágina. Tudo no navegador. */
 
 export async function gerarPdfEsboco(el: HTMLElement, nomeEmpresa: string): Promise<void> {
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-    import("html2canvas"),
-    import("jspdf"),
+    retryImport(() => import("html2canvas")),
+    retryImport(() => import("jspdf")),
   ]);
 
   const canvas = await html2canvas(el, {

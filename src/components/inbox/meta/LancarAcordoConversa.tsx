@@ -163,16 +163,18 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
       <label className="flex items-center gap-2 text-xs">
         <Checkbox checked={telOk} onCheckedChange={(v) => setTelOk(!!v)} /> Confirmei que este telefone é do cliente
       </label>
-      <Button size="sm" onClick={() => void lancar()} disabled={!pode || salvando}>
-        {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />}
-        {lancadoId ? 'Acordo salvo' : 'Salvar acordo'}
-      </Button>
-      {lancadoId && (termoOk
-        ? <p className="text-xs text-muted-foreground">Termo de acordo formalizado.</p>
-        : <Button size="sm" variant="secondary" onClick={() => void abrirTermo()} disabled={carregandoTermo}>
-            {carregandoTermo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-            Enviar termo de acordo na conversa
-          </Button>)}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" onClick={() => void lancar()} disabled={!pode || salvando}>
+          {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />}
+          {lancadoId ? 'Acordo salvo' : 'Salvar acordo'}
+        </Button>
+        {lancadoId && (termoOk
+          ? <p className="text-xs text-muted-foreground">Termo de acordo formalizado.</p>
+          : <Button size="sm" variant="secondary" onClick={() => void abrirTermo()} disabled={carregandoTermo}>
+              {carregandoTermo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+              Enviar termo de acordo na conversa
+            </Button>)}
+      </div>
       {termo && <FormalizarTermoDialog key={termoKey} open={termoOpen} acordo={termo.acordo} pagamentos={termo.pagamentos}
         metaOrigem={metaOrigem ? { ...metaOrigem, instanciaNome: 'WhatsApp Oficial' } : null}
         onComplete={() => { setTermoOpen(false); setTermoOk(true); }} />}

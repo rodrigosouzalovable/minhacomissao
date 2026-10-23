@@ -1,3 +1,4 @@
+import { retryImport } from "@/lib/lazyWithRetry";
 import type { Tables } from '@/integrations/supabase/types';
 import souzaRibeiroAsset from '@/assets/souza-e-ribeiro-oficial.png.asset.json';
 import umeAsset from '@/assets/ume-oficial.png.asset.json';
@@ -112,7 +113,7 @@ export async function gerarTermoAcordoPdf({ acordo, pagamentos, salvar = true }:
   }
 
   const [{ default: jsPDF }, logoSouza, logoCredor] = await Promise.all([
-    import('jspdf'),
+    retryImport(() => import('jspdf')),
     carregarImagem(souzaRibeiroAsset.url),
     carregarImagem(
       acordo.empresa === 'mundo_da_moda'
