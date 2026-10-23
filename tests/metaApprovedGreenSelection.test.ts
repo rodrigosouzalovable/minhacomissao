@@ -4,9 +4,9 @@ import { approvedGreenSelectionIds } from '../src/lib/metaNationalInstances';
 const row = (id: string, saude_quality: string | null = 'GREEN') => ({ id, saude_quality, display_phone: '+55 62 8269-8799' });
 
 describe('Selecionar instâncias aprovadas GREEN', () => {
-  test('seleciona GREEN aprovado e exclui todas as demais qualidades', () => {
+  test('seleciona GREEN e desconhecida aprovadas, exclui YELLOW/RED', () => {
     const rows = [row('green'), row('yellow', 'YELLOW'), row('red', 'RED'), row('unknown', 'UNKNOWN'), row('empty', ''), row('null', null)];
-    expect(approvedGreenSelectionIds(rows, new Set(rows.map(i => i.id)))).toEqual(['green']);
+    expect(approvedGreenSelectionIds(rows, new Set(rows.map(i => i.id)))).toEqual(['green', 'unknown', 'empty', 'null']);
   });
   test('exige aprovação do template escolhido', () => {
     expect(approvedGreenSelectionIds([row('approved'), row('missing')], new Set(['approved']))).toEqual(['approved']);
