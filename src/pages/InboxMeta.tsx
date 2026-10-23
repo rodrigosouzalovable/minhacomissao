@@ -892,6 +892,11 @@ export default function InboxMeta() {
 
     if (filtroInstancia !== 'todas') q = q.eq('instancia_id', filtroInstancia);
     if (filtroLeitura === 'nao_lidas') q = q.gt('nao_lido', 0);
+    // PADRÃO do admin: envios de campanha sem resposta ficam em aba própria.
+    if (separarCampanhas) {
+      if (filtroLeitura === 'campanha') q = q.is('ultima_msg_entrada_em', null).eq('fixado', false);
+      else q = q.or('ultima_msg_entrada_em.not.is.null,fixado.eq.true');
+    }
     if (currentFolderId === null) q = q.is('folder_id', null);
     else q = q.eq('folder_id', currentFolderId);
     const { data: base } = await q;
@@ -1263,6 +1268,10 @@ export default function InboxMeta() {
         }
         if (buscaTelefoneGlobal) return true;
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
+        if (separarCampanhas && !b) {
+          const respondeu = !!c.ultima_msg_entrada_em || !!c.fixado;
+          if (filtroLeitura === 'campanha' ? respondeu : !respondeu) return false;
+        }
         if (filtroJanela24h) {
           if (!c.ultima_msg_entrada_em) return false;
           const fim = new Date(c.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
@@ -2042,6 +2051,13 @@ export default function InboxMeta() {
                 className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'nao_lidas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
                 Não lidas
               </button>
+              {separarCampanhas && (
+                <button onClick={() => setFiltroLeitura('campanha')}
+                  title="Clientes que receberam campanha e ainda não responderam"
+                  className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'campanha' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
+                  Envios de campanha
+                </button>
+              )}
             </div>
             {/* Meus Clientes */}
             <div className="space-y-1.5">
