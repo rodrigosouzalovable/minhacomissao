@@ -523,6 +523,31 @@ serve(async (req) => {
               }
 
               const sufixo = String(tel || '').replace(/\D/g, '').slice(-8);
+
+              // Cliente com chamadas bloqueadas: recusa na hora, sem tocar para ninguém.
+              if (entrada && sufixo && (evento === 'connect' || evento === 'ringing')
+                && existente?.status !== 'bloqueada') {
+                const { data: bloq } = await supabase.from('meta_chamadas_bloqueadas')
+                  .select('id').eq('sufixo', sufixo).maybeSingle();
+                if (bloq) {
+                  try {
+                    const r = await fetch(`https://graph.facebook.com/v23.0/${inst.phone_number_id}/calls`, {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ messaging_product: 'whatsapp', call_id: callId, action: 'reject' }),
+                    });
+                    console.log('[MetaWebhook] chamada bloqueada recusada', callId, r.status);
+                  } catch (e) { console.error('[MetaWebhook] falha ao recusar chamada bloqueada', e); }
+                  const bloqPatch = { status: 'bloqueada', data_fim: agora, atualizado_em: agora, funcionario_id: null };
+                  if (existente?.id) await supabase.from('whatsapp_chamadas').update(bloqPatch).eq('id', existente.id);
+                  else await supabase.from('whatsapp_chamadas').insert({
+                    call_id: callId, contato_id: (await supabase.from('meta_whatsapp_contatos').select('id').eq('instancia_id', inst.id).like('telefone', `%${sufixo}`).limit(1).maybeSingle()).data?.id ?? null, instancia_id: inst.id, waba_id: wabaIdEntry,
+                    phone_number_id: inst.phone_number_id, telefone: tel || '', tipo_chamada: 'entrada', ...bloqPatch,
+                  });
+                  continue;
+                }
+              }
+              if (existente?.status === 'bloqueada') continue;
               const buscarContato = async () => {
                 if (!sufixo) return null;
                 const { data } = await supabase.from('meta_whatsapp_contatos')

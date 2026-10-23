@@ -1471,6 +1471,13 @@
       "when": 1792765964101,
       "tag": "0209_notificacoes_admin_descartar_atrasadas",
       "breakpoints": true
+    },
+    {
+      "idx": 210,
+      "version": "7",
+      "when": 1792774445421,
+      "tag": "0210_meta_chamadas_bloqueadas",
+      "breakpoints": true
     }
   ]
 }
