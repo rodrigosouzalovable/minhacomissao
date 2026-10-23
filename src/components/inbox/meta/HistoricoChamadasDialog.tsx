@@ -23,7 +23,7 @@ type Row = {
 
 const rotuloStatus: Record<string, string> = {
   iniciada: 'Iniciada', ringing: 'Chamando', em_andamento: 'Em andamento',
-  concluida: 'Concluída', perdida: 'Não atendida', rejeitada: 'Recusada', erro: 'Erro',
+  concluida: 'Concluída', perdida: 'Não atendida', rejeitada: 'Recusada', bloqueada: 'Bloqueada', erro: 'Erro',
 };
 
 const corStatus: Record<string, string> = {
