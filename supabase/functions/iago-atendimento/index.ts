@@ -8,7 +8,7 @@ import {
   avisarEmergencia as avisarEmergenciaBase, etiquetarAguardandoHumano as etiquetarAguardandoHumanoBase, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
-  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa, garantirApresentacaoVirtual, FOLDER_AQUECIMENTO_INBOX,
+  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa, credorDasMensagensEnviadas, garantirApresentacaoVirtual, FOLDER_AQUECIMENTO_INBOX,
   ehPropostaPortal,
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
@@ -1409,13 +1409,13 @@ async function gerarResposta(args: {
 
     credorFinal
       ? [
-          `CREDOR DESTA NEGOCIAÇÃO: esta conversa está vinculada a "${credorFinal}". Quando o cliente perguntar especificamente a qual credor pertence ESTE débito, informe exatamente "${credorFinal}".`,
-          'ABRANGÊNCIA DA EMPRESA: nossa equipe trabalha com débitos da UME e da Novo Mundo. Se o cliente perguntar se também atendemos, trabalhamos ou representamos uma dessas empresas, confirme que trabalhamos com AS DUAS: UME e Novo Mundo.',
-          'Nunca diga que atendemos exclusivamente, somente ou apenas um desses dois credores. Não confunda a abrangência da empresa com o credor específico do débito consultado pelo CPF.',
+          `CREDOR DESTA NEGOCIAÇÃO: esta conversa está vinculada a "${credorFinal}". Quando o cliente perguntar especificamente a qual credor pertence ESTE débito, informe exatamente "${credorFinal}". É PROIBIDO citar outro credor (por exemplo UME) como dono deste débito; se a mensagem enviada ao cliente cita "${credorFinal}", mantenha sempre "${credorFinal}".`,
+          'ABRANGÊNCIA DA EMPRESA: nossa equipe trabalha com débitos da UME, da Novo Mundo e da Odres Cred. Se o cliente perguntar se também atendemos, trabalhamos ou representamos uma dessas empresas, confirme que trabalhamos com UME, Novo Mundo e Odres Cred.',
+          'Nunca diga que atendemos exclusivamente, somente ou apenas um desses credores. Não confunda a abrangência da empresa com o credor específico do débito consultado pelo CPF.',
         ].join('\n')
       : credorAmbiguo
-        ? 'CREDOR DESTA NEGOCIAÇÃO: o credor deste débito ainda não está definido. Informe que nossa equipe trabalha com débitos da UME e da Novo Mundo, mas peça o CPF para confirmar a qual deles o débito do cliente pertence (e, se ainda não der para confirmar, escale para um humano).'
-        : 'ABRANGÊNCIA DA EMPRESA: nossa equipe trabalha com débitos da UME e da Novo Mundo. Nunca diga que atendemos exclusivamente, somente ou apenas um desses dois credores. Para confirmar o credor de um débito específico, consulte o CPF.',
+        ? 'CREDOR DESTA NEGOCIAÇÃO: o credor deste débito ainda não está definido. Informe que nossa equipe trabalha com débitos da UME, da Novo Mundo e da Odres Cred, mas peça o CPF para confirmar a qual deles o débito do cliente pertence (e, se ainda não der para confirmar, escale para um humano).'
+        : 'ABRANGÊNCIA DA EMPRESA: nossa equipe trabalha com débitos da UME, da Novo Mundo e da Odres Cred. Nunca diga que atendemos exclusivamente, somente ou apenas um desses credores. Para confirmar o credor de um débito específico, consulte o CPF.',
 
 
     'Você NUNCA fecha ou registra acordo.',
