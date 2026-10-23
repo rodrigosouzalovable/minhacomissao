@@ -53,6 +53,7 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
 
   const [termo, setTermo] = useState<{ acordo: Tables<'acordos'>; pagamentos: Tables<'pagamentos'>[] } | null>(null);
   const [termoOpen, setTermoOpen] = useState(false);
+  const [termoKey, setTermoKey] = useState(0);
   const [termoOk, setTermoOk] = useState(false);
   const [carregandoTermo, setCarregandoTermo] = useState(false);
   const abrirTermo = async () => {
@@ -64,7 +65,7 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
         supabase.from('pagamentos').select('*').eq('acordo_id', lancadoId).order('numero_parcela'),
       ]);
       if (e1 || e2 || !a) throw e1 || e2 || new Error('Acordo não encontrado');
-      setTermo({ acordo: a, pagamentos: p || [] }); setTermoOpen(true);
+      setTermo({ acordo: a, pagamentos: p || [] }); setTermoKey((k) => k + 1); setTermoOpen(true);
     } catch (e) { toast.error(String((e as Error)?.message || e)); } finally { setCarregandoTermo(false); }
   };
   const [vencBase, setVencBase] = useState<string | null>(null);
@@ -172,7 +173,7 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
             {carregandoTermo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             Enviar termo de acordo na conversa
           </Button>)}
-      {termo && <FormalizarTermoDialog open={termoOpen} acordo={termo.acordo} pagamentos={termo.pagamentos}
+      {termo && <FormalizarTermoDialog key={termoKey} open={termoOpen} acordo={termo.acordo} pagamentos={termo.pagamentos}
         metaOrigem={metaOrigem ? { ...metaOrigem, instanciaNome: 'WhatsApp Oficial' } : null}
         onComplete={() => { setTermoOpen(false); setTermoOk(true); }} />}
     </div>
