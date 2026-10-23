@@ -604,8 +604,21 @@ export default function InboxMeta() {
   const qualificacaoAtivaNaCaixa = qualifCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
   const alertaEsperaAtivoNaCaixa = alertaEsperaCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
 
+  // Caixas ocultas: preferência visual e pessoal (localStorage por usuário).
+  const ocultasKey = `inbox-meta-caixas-ocultas:${user?.id ?? 'anon'}`;
+  const [caixasOcultas, setCaixasOcultas] = useState<string[]>([]);
+  useEffect(() => {
+    try { const v = JSON.parse(localStorage.getItem(ocultasKey) || '[]'); setCaixasOcultas(Array.isArray(v) ? v : []); } catch { setCaixasOcultas([]); }
+  }, [ocultasKey]);
+  const salvarOcultas = (ids: string[]) => { setCaixasOcultas(ids); localStorage.setItem(ocultasKey, JSON.stringify(ids)); };
+  const ocultarCaixa = (id: string) => {
+    salvarOcultas(Array.from(new Set([...caixasOcultas, id])));
+    if (currentFolderId === id) { escolhaManualFolderRef.current = true; setCurrentFolderId(null); }
+  };
+  const desocultarCaixa = (id: string) => salvarOcultas(caixasOcultas.filter((x) => x !== id));
   // Somente caixas permitidas (RLS já filtra a lista de folders)
-  const foldersVisiveis = folders;
+  const foldersOcultos = folders.filter((f) => caixasOcultas.includes(f.id));
+  const foldersVisiveis = folders.filter((f) => !caixasOcultas.includes(f.id) || f.id === currentFolderId);
 
   // Se a caixa ativa não é permitida, cai na primeira permitida.
   // Só age depois de confirmar a permissão da caixa Padrão (evita trocar de caixa durante o carregamento).
