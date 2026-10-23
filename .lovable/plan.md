@@ -7,8 +7,8 @@
 
 ## O que será feito
 1. Corrigir o descarte para que avisos pausados nunca mais fiquem travados.
-2. Limpar o acúmulo: avisos com mais de 2 horas de atraso são descartados (ficam no histórico como "expirado") em vez de chegarem velhos ao seu WhatsApp.
-3. Daqui em diante, qualquer aviso que ficar mais de 2 horas na fila é descartado automaticamente, para você nunca mais receber ponto ou alerta de outro dia.
+2. Descartar todo o acúmulo atual (cerca de 1.500 avisos atrasados): nenhum deles será enviado. Ficam só no histórico como "expirado".
+3. Daqui em diante, só avisos novos são enviados, um por vez, com 30–60 segundos sorteados entre cada um. Se um aviso ficar mais de 2 horas na fila, ele é descartado para você nunca receber ponto ou alerta de outro dia.
 4. Reativar todos os tipos de aviso que você tinha desligado (saúde das instâncias, campanhas, IAGO, cobrança Meta, templates, relatórios, ponto etc.). A instância Âncora 9590 continua no rodízio.
 
 ## Atenção ao volume
