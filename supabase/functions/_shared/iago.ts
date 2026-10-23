@@ -1143,11 +1143,32 @@ export async function resolverCredorConversa(
     const achado = ativos.find((n) => normCredor(n) === slug);
     if (achado) return { nome: achado, ambiguo: false };
     // credor do cabeçalho não está entre os ativos: o cabeçalho prevalece
-    const rotulo = slug === 'novo mundo' ? 'Novo Mundo' : slug === 'ume' ? 'UME' : String(contatoCredorSlug || '').trim();
+    const rotulo = slug === 'novo mundo' ? 'Novo Mundo' : slug === 'ume' ? 'UME' : slug === 'odres cred' ? 'Odres Cred' : String(contatoCredorSlug || '').trim();
     return { nome: rotulo, ambiguo: false };
   }
 
   if (ativos.length === 1) return { nome: ativos[0], ambiguo: false };
   if (ativos.length > 1) return { nome: '', ambiguo: true };
   return { nome: '', ambiguo: false };
+}
+
+/**
+ * Detecta o credor citado na mensagem mais recente enviada por nós (template de campanha,
+ * proposta etc.). Retorna '' quando nenhuma ou mais de uma marca aparece na mesma mensagem.
+ */
+export function credorDasMensagensEnviadas(historico: Array<{ direcao?: string; conteudo?: string; template_nome?: string | null }>): string {
+  const marcas: Array<[string, RegExp]> = [
+    ['Odres Cred', /\bodres?\s*cred\b|\bodres\b/],
+    ['Novo Mundo', /\bnovo\s*mundo\b/],
+    ['UME', /\bume\b/],
+  ];
+  for (let i = historico.length - 1; i >= 0; i--) {
+    const m = historico[i];
+    // Só mensagens de campanha (template): respostas livres do IAGO podem estar erradas.
+    if (m?.direcao !== 'saida' || !m?.template_nome) continue;
+    const t = normCredor(String(m.conteudo || ''));
+    const achados = marcas.filter(([, re]) => re.test(t)).map(([n]) => n);
+    if (achados.length === 1) return achados[0];
+  }
+  return '';
 }
