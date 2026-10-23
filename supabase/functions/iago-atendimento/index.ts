@@ -764,6 +764,138 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ===== Repescagem: template "acordo formalizado mas a parcela venceu" =====
+    // SIM => boleto/PIX para hoje. ALTERAR DATA => pergunta a data (máx. 7 dias) e emite.
+    if (cpf && !modoAquecimento) {
+      const ctxRep = (estado.contexto || {}) as any;
+      const ultimaSaida = [...historico].reverse().find((m: any) => m.direcao === 'saida');
+      const veioDoTemplate = /acordo foi formalizado mas identificamos que a parcela venceu/i
+        .test(String(ultimaSaida?.conteudo || ''));
+      const aguardandoData = !!ctxRep.repescagem_aguardando_data;
+      if (veioDoTemplate || aguardandoData) {
+        const t = String(textoAtual || '').trim();
+        const hoje = hojeSP();
+        const addDias = (iso: string, n: number) => {
+          const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10);
+        };
+        const limite = addDias(hoje, 7);
+        const br = (iso: string) => iso.split('-').reverse().join('/');
+        const salvarCtx = (extra: Record<string, unknown>) => supabase.from('iago_conversa_estado').update({
+          cpf, contexto: { ...ctxRep, ...extra }, ultima_msg_em: new Date().toISOString(),
+          ultima_msg_cliente_em: new Date().toISOString(),
+        }).eq('id', estado.id);
+
+        const extrairData = (s: string): string | null => {
+          const n = s.toLowerCase();
+          if (/\bhoje\b/.test(n)) return hoje;
+          if (/depois de amanh/.test(n)) return addDias(hoje, 2);
+          if (/\bamanh/.test(n)) return addDias(hoje, 1);
+          const dias = ['domingo', 'segunda', 'ter', 'quarta', 'quinta', 'sexta', 's[aá]bado'];
+          for (let i = 0; i < dias.length; i++) {
+            if (new RegExp(`\\b${dias[i]}`).test(n)) {
+              const dow = new Date(`${hoje}T12:00:00Z`).getUTCDay();
+              return addDias(hoje, ((i - dow + 7) % 7) || 7);
+            }
+          }
+          const m1 = n.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
+          const m2 = !m1 ? n.match(/\bdia\s+(\d{1,2})\b/) : null;
+          const [ano, mes] = hoje.split('-').map(Number);
+          let d: number, mm: number, aa: number;
+          if (m1) { d = +m1[1]; mm = +m1[2]; aa = m1[3] ? (+m1[3] < 100 ? 2000 + +m1[3] : +m1[3]) : ano; }
+          else if (m2) { d = +m2[1]; mm = mes; aa = ano; }
+          else return null;
+          let iso = `${aa}-${String(mm).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          if (!m1 && iso < hoje) { // "dia 2" já passou => próximo mês
+            const nx = new Date(Date.UTC(aa, mm, d, 12)); iso = nx.toISOString().slice(0, 10);
+          }
+          return isNaN(new Date(`${iso}T12:00:00Z`).getTime()) ? null : iso;
+        };
+
+        const emitir = async (venc: string) => {
+          const idSftp = await borrowerIdSftp(supabase, cpf);
+          const consulta = idSftp ?? await consultarUme(supabase, cpf, { perfil: 'essencial', aguardarCache: false });
+          if (!consulta.encontrado || !consulta.borrowerId) return false;
+          const ambiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
+          const r = await umeApi.gerarBoletoUnico(ambiente, consulta.borrowerId, venc);
+          if (!r.ok) { console.error('[IAGO] repescagem: UME recusou', r.status); return false; }
+          const d = r.data as Record<string, unknown>;
+          const valor = Number(d.invoiceTotalValue ?? 0) || null;
+          const vencIso = String(d.invoiceDueDate ?? venc).slice(0, 10);
+          const txt = [
+            `Prontinho${nomeCliente0 ? `, ${primeiroNome(nomeCliente0)}` : ''}! Segue sua parcela atualizada 🙏`,
+            '',
+            valor ? `💰 *Valor:* ${fmtBRL(valor)}` : null,
+            `📅 *Vencimento:* ${br(vencIso)}`,
+            d.pixCode ? `\n🔑 *PIX copia e cola:*\n${d.pixCode}` : null,
+            d.invoiceUrl ? `\n📄 *Boleto (PDF):* ${d.invoiceUrl}` : null,
+          ].filter(Boolean).join('\n');
+          await enviarTexto(supabase, contato, txt.slice(0, 3500));
+          await supabase.from('ume_boleto_log').insert({
+            user_id: null, cpf, borrower_id: consulta.borrowerId, invoice_id: String(d.id ?? '') || null,
+            valor, vencimento: vencIso, invoice_url: String(d.invoiceUrl ?? '') || null, origem: 'iago_repescagem', ambiente,
+          });
+          // Atualiza o vencimento da parcela pendente mais antiga do acordo ativo
+          try {
+            const { data: ac } = await supabase.from('acordos').select('id')
+              .eq('cliente_cpf', cpf).order('criado_em', { ascending: false }).limit(1).maybeSingle();
+            if (ac?.id) {
+              const { data: p } = await supabase.from('pagamentos').select('id')
+                .eq('acordo_id', ac.id).eq('status', 'pendente')
+                .order('numero_parcela', { ascending: true }).limit(1).maybeSingle();
+              if (p?.id) await supabase.from('pagamentos').update({ data_prevista: vencIso }).eq('id', p.id);
+            }
+          } catch (e) { console.error('[IAGO] repescagem: falha ao atualizar vencimento', String(e)); }
+          return true;
+        };
+        const nomeCliente0 = String((estado as any).contexto?.nome_informado || '').trim();
+
+        const ehNao = /n[aã]o,?\s*obrigad/i.test(t);
+        const ehAlterar = /alterar|mudar|trocar|outra data|outro dia|data/i.test(t) && !extrairData(t);
+        const ehSim = /^(sim|s|pode|pode enviar|manda|quero|ok|claro|envia)\b/i.test(t);
+
+        if (ehNao) {
+          await enviarTexto(supabase, contato, 'Tudo bem! Se mudar de ideia, é só me chamar aqui que envio a parcela atualizada. 🙏');
+          await salvarCtx({ repescagem_aguardando_data: false });
+          await finalizarEntrada();
+          return json({ success: true, etapa: 'repescagem_recusou' });
+        }
+        if (veioDoTemplate && ehSim && !aguardandoData) {
+          if (await emitir(hoje)) {
+            await salvarCtx({ repescagem_aguardando_data: false });
+            await finalizarEntrada();
+            return json({ success: true, etapa: 'repescagem_boleto_hoje' });
+          }
+        } else if (ehAlterar && !aguardandoData) {
+          await enviarTexto(supabase, contato,
+            `Claro! Qual a melhor data para o pagamento? Consigo prorrogar até *${br(limite)}* (no máximo 7 dias).`);
+          await salvarCtx({ repescagem_aguardando_data: true });
+          await finalizarEntrada();
+          return json({ success: true, etapa: 'repescagem_pediu_data' });
+        } else if (aguardandoData || veioDoTemplate) {
+          const dt = extrairData(t);
+          if (dt && dt >= hoje && dt <= limite) {
+            if (await emitir(dt)) {
+              await salvarCtx({ repescagem_aguardando_data: false });
+              await finalizarEntrada();
+              return json({ success: true, etapa: 'repescagem_boleto_nova_data' });
+            }
+          } else if (dt) {
+            await enviarTexto(supabase, contato,
+              `Para manter as condições do seu acordo, consigo prorrogar no máximo até *${br(limite)}*. Pode ser alguma data até lá?`);
+            await salvarCtx({ repescagem_aguardando_data: true });
+            await finalizarEntrada();
+            return json({ success: true, etapa: 'repescagem_data_fora_limite' });
+          } else if (aguardandoData) {
+            await enviarTexto(supabase, contato,
+              `Me informe a data, por favor (ex.: ${br(addDias(hoje, 2))}). O limite é *${br(limite)}*.`);
+            await finalizarEntrada();
+            return json({ success: true, etapa: 'repescagem_data_invalida' });
+          }
+        }
+        // Falha na emissão ou mensagem fora do fluxo => segue o fluxo normal
+      }
+    }
+
     // ===== Pedido de boleto/PIX em conversa UME => gera pela API oficial e responde na hora =====
     if (cpf && !modoAquecimento && /\bUME\b/i.test(credorCaixa) && ehPedidoBoleto(textoAtual)) {
       try {
