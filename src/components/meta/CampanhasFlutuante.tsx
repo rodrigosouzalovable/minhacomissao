@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,45 @@ export default function CampanhasFlutuante() {
   const [open, setOpen] = useState(false);
   const [dialogJobId, setDialogJobId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const POS_KEY = "campanhas-flutuante-pos";
+  const boxRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number; id: number } | null>(null);
+  const arrastouRef = useRef(false);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(() => {
+    try { const v = JSON.parse(localStorage.getItem(POS_KEY) || "null"); return v && Number.isFinite(v.x) && Number.isFinite(v.y) ? v : null; } catch { return null; }
+  });
+  const limitar = (x: number, y: number) => {
+    const el = boxRef.current;
+    const w = el?.offsetWidth ?? 160, h = el?.offsetHeight ?? 56;
+    return { x: Math.min(Math.max(4, x), window.innerWidth - w - 4), y: Math.min(Math.max(4, y), window.innerHeight - h - 4) };
+  };
+  useEffect(() => {
+    const onResize = () => setPos((p) => (p ? limitar(p.x, p.y) : p));
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const r = boxRef.current?.getBoundingClientRect();
+    if (!r) return;
+    dragRef.current = { sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top, id: e.pointerId };
+    arrastouRef.current = false;
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (!arrastouRef.current && Math.hypot(dx, dy) < 5) return;
+    if (!arrastouRef.current) { arrastouRef.current = true; boxRef.current?.setPointerCapture(d.id); setOpen(false); }
+    setPos(limitar(d.ox + dx, d.oy + dy));
+  };
+  const onPointerUp = () => {
+    if (arrastouRef.current && pos) localStorage.setItem(POS_KEY, JSON.stringify(pos));
+    dragRef.current = null;
+    // arrastouRef é limpo no clique seguinte (onClickCapture) para não abrir o painel
+    setTimeout(() => { arrastouRef.current = false; }, 0);
+  };
 
   useEffect(() => {
     const refresh = () => { if (document.visibilityState === "visible") void refreshStatus(); };
@@ -71,8 +110,16 @@ export default function CampanhasFlutuante() {
 
   return (
     <>
-      <div className="fixed bottom-4 right-4 z-40">
-          <Popover open={open} onOpenChange={(next) => { setOpen(next); if (next) void refreshStatus(); }}>
+      <div
+        ref={boxRef}
+        className={cn("fixed z-40 touch-none", !pos && "bottom-4 right-4")}
+        style={pos ? { left: pos.x, top: pos.y } : undefined}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onClickCapture={(e) => { if (arrastouRef.current) { e.preventDefault(); e.stopPropagation(); arrastouRef.current = false; } }}
+      >
+          <Popover open={open} onOpenChange={(next) => { if (next && arrastouRef.current) return; setOpen(next); if (next) void refreshStatus(); }}>
           <PopoverTrigger asChild>
             <Button
               size="lg"

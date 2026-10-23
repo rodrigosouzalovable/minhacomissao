@@ -15,7 +15,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, Bookmark, Calculator, Lightbulb, Handshake,
+  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, Bookmark, Calculator, Lightbulb, Handshake, Eye, EyeOff,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -604,8 +604,21 @@ export default function InboxMeta() {
   const qualificacaoAtivaNaCaixa = qualifCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
   const alertaEsperaAtivoNaCaixa = alertaEsperaCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
 
+  // Caixas ocultas: preferência visual e pessoal (localStorage por usuário).
+  const ocultasKey = `inbox-meta-caixas-ocultas:${user?.id ?? 'anon'}`;
+  const [caixasOcultas, setCaixasOcultas] = useState<string[]>([]);
+  useEffect(() => {
+    try { const v = JSON.parse(localStorage.getItem(ocultasKey) || '[]'); setCaixasOcultas(Array.isArray(v) ? v : []); } catch { setCaixasOcultas([]); }
+  }, [ocultasKey]);
+  const salvarOcultas = (ids: string[]) => { setCaixasOcultas(ids); localStorage.setItem(ocultasKey, JSON.stringify(ids)); };
+  const ocultarCaixa = (id: string) => {
+    salvarOcultas(Array.from(new Set([...caixasOcultas, id])));
+    if (currentFolderId === id) { escolhaManualFolderRef.current = true; setCurrentFolderId(null); }
+  };
+  const desocultarCaixa = (id: string) => salvarOcultas(caixasOcultas.filter((x) => x !== id));
   // Somente caixas permitidas (RLS já filtra a lista de folders)
-  const foldersVisiveis = folders;
+  const foldersOcultos = folders.filter((f) => caixasOcultas.includes(f.id));
+  const foldersVisiveis = folders.filter((f) => !caixasOcultas.includes(f.id) || f.id === currentFolderId);
 
   // Se a caixa ativa não é permitida, cai na primeira permitida.
   // Só age depois de confirmar a permissão da caixa Padrão (evita trocar de caixa durante o carregamento).
@@ -2164,8 +2177,13 @@ export default function InboxMeta() {
                         {f.nome}
                       </button>
                     </ContextMenuTrigger>
-                    {podeGerenciar && (
-                      <ContextMenuContent>
+                    <ContextMenuContent>
+                      <ContextMenuItem onClick={() => ocultarCaixa(f.id)}>
+                        <EyeOff className="h-4 w-4 mr-2" /> Ocultar caixa
+                      </ContextMenuItem>
+                      {podeGerenciar && (
+                        <>
+                        <ContextMenuSeparator />
                         <ContextMenuItem onClick={() => setAcessoFolder({ id: f.id, nome: f.nome })}>
                           <Users className="h-4 w-4 mr-2" /> Atendentes desta caixa
                         </ContextMenuItem>
@@ -2185,8 +2203,9 @@ export default function InboxMeta() {
                         <ContextMenuItem onClick={() => handleApagarCaixa(f)} className="text-destructive focus:text-destructive">
                           <Trash2 className="h-4 w-4 mr-2" /> Apagar caixa
                         </ContextMenuItem>
-                      </ContextMenuContent>
-                    )}
+                        </>
+                      )}
+                    </ContextMenuContent>
                   </ContextMenu>
                 );
               })}
@@ -2204,6 +2223,49 @@ export default function InboxMeta() {
                 <span className="text-[11px] text-muted-foreground">
                   Sem caixa de mensagens atribuída — fale com o administrador.
                 </span>
+              )}
+
+              {foldersOcultos.length > 0 && (
+                <ContextMenu>
+                  <Popover>
+                    <ContextMenuTrigger asChild>
+                      <PopoverTrigger asChild>
+                        <button
+                          className="text-[11px] px-2 py-1 rounded border border-dashed border-border hover:bg-accent text-muted-foreground flex items-center gap-1"
+                          title="Caixas ocultas"
+                        >
+                          <EyeOff className="h-3 w-3" /> Caixas Ocultas ({foldersOcultos.length})
+                        </button>
+                      </PopoverTrigger>
+                    </ContextMenuTrigger>
+                    <PopoverContent align="start" className="w-56 p-1">
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground">Clique para abrir · botão direito para desocultar</div>
+                      {foldersOcultos.map((f) => (
+                        <ContextMenu key={f.id}>
+                          <ContextMenuTrigger asChild>
+                            <button
+                              onClick={() => { escolhaManualFolderRef.current = true; setCurrentFolderId(f.id); }}
+                              className={cn('w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent flex items-center gap-2', currentFolderId === f.id && 'bg-accent')}
+                            >
+                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: f.cor }} />
+                              <span className="truncate">{f.nome}</span>
+                            </button>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuItem onClick={() => desocultarCaixa(f.id)}>
+                              <Eye className="h-4 w-4 mr-2" /> Desocultar
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                  <ContextMenuContent>
+                    <ContextMenuItem onClick={() => salvarOcultas([])}>
+                      <Eye className="h-4 w-4 mr-2" /> Desocultar todas
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               )}
 
               <button
