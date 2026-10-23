@@ -5,12 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, FilePlus2 } from 'lucide-react';
+import { Loader2, FilePlus2, Send } from 'lucide-react';
+import { FormalizarTermoDialog } from '@/components/acordos/FormalizarTermoDialog';
+import type { Tables } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { calcularPercentualComissaoMundoDaModa } from '@/lib/comissao';
 import { useUserRole } from '@/hooks/useUserRole';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+export interface MetaOrigemLanc { contatoId: string; instanciaId: string; telefone?: string | null; bsuid?: string | null; contatoNome?: string | null }
 export interface EstadoLancamento { nome: string; telefone: string; dias: string; empresa: Empresa | null; operadorId: string | null }
 
 type Empresa = 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred';
@@ -26,7 +29,8 @@ export function somarMeses(iso: string, meses: number): string {
   return alvo.toISOString().slice(0, 10);
 }
 
-export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total, parcelas, primeiroVencimento, conversaId, credorInicial, observacaoExtra, onEstado }: {
+export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total, parcelas, primeiroVencimento, conversaId, credorInicial, observacaoExtra, onEstado, metaOrigem }: {
+  metaOrigem?: MetaOrigemLanc | null;
   cpf: string; nomeInicial: string; telefoneInicial: string; total: number; parcelas: number; primeiroVencimento: string;
   conversaId?: string | null; credorInicial?: Empresa | null; observacaoExtra?: string; onEstado?: (e: EstadoLancamento) => void;
 }) {
@@ -47,6 +51,22 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
   const [salvando, setSalvando] = useState(false);
   const [lancadoId, setLancadoId] = useState<string | null>(null);
 
+  const [termo, setTermo] = useState<{ acordo: Tables<'acordos'>; pagamentos: Tables<'pagamentos'>[] } | null>(null);
+  const [termoOpen, setTermoOpen] = useState(false);
+  const [termoOk, setTermoOk] = useState(false);
+  const [carregandoTermo, setCarregandoTermo] = useState(false);
+  const abrirTermo = async () => {
+    if (!lancadoId) return;
+    setCarregandoTermo(true);
+    try {
+      const [{ data: a, error: e1 }, { data: p, error: e2 }] = await Promise.all([
+        supabase.from('acordos').select('*').eq('id', lancadoId).single(),
+        supabase.from('pagamentos').select('*').eq('acordo_id', lancadoId).order('numero_parcela'),
+      ]);
+      if (e1 || e2 || !a) throw e1 || e2 || new Error('Acordo não encontrado');
+      setTermo({ acordo: a, pagamentos: p || [] }); setTermoOpen(true);
+    } catch (e) { toast.error(String((e as Error)?.message || e)); } finally { setCarregandoTermo(false); }
+  };
   const [vencBase, setVencBase] = useState<string | null>(null);
 
   useEffect(() => { setNome(nomeInicial); }, [nomeInicial]);
@@ -146,7 +166,15 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
         {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />}
         {lancadoId ? 'Acordo salvo' : 'Salvar acordo'}
       </Button>
-      {lancadoId && <p className="text-xs text-muted-foreground">Envie o termo de formalização pela tela do acordo para concluir.</p>}
+      {lancadoId && (termoOk
+        ? <p className="text-xs text-muted-foreground">Termo de acordo formalizado.</p>
+        : <Button size="sm" variant="secondary" onClick={() => void abrirTermo()} disabled={carregandoTermo}>
+            {carregandoTermo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+            Enviar termo de acordo na conversa
+          </Button>)}
+      {termo && <FormalizarTermoDialog open={termoOpen} acordo={termo.acordo} pagamentos={termo.pagamentos}
+        metaOrigem={metaOrigem ? { ...metaOrigem, instanciaNome: 'WhatsApp Oficial' } : null}
+        onComplete={() => { setTermoOpen(false); setTermoOk(true); }} />}
     </div>
   );
 }

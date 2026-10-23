@@ -3010,6 +3010,7 @@ export default function InboxMeta() {
             open={lancarAcordoOpen}
             onOpenChange={setLancarAcordoOpen}
             conversaId={contatoAtivo.id}
+            metaOrigem={{ contatoId: contatoAtivo.id, instanciaId: contatoAtivo.instancia_id, telefone: contatoAtivo.telefone, bsuid: contatoAtivo.bsuid ?? null, contatoNome: contatoAtivo.nome ?? null }}
             dados={{
               cpf: ef?.cpf ?? prop?.cpf ?? cpfDoContato ?? '',
               nome: ef?.nome || nomeExibido(contatoAtivo) || '',
