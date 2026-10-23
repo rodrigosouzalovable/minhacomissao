@@ -10,6 +10,7 @@ import { queueRecoveryDecision } from "../_shared/meta-template-queue-recovery.t
 import { modelosParaCopiar } from "../_shared/meta-template-copy-candidates.ts";
 import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
 import { motivoBloqueioTemplate } from "../_shared/meta-template-eligibility.ts";
+import { liberarPausaReprovacoes } from "../_shared/meta-template-rejection-release.ts";
 
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -127,6 +128,13 @@ Deno.serve(async (req) => {
       if (mestresEspecificos && idsMestreDoProprietario?.length === 0) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: "template_mestre_de_outro_proprietario" });
         continue;
+      }
+      if (inst.templates_auto_status === "PAUSADO_REJEICOES" || (inst.templates_auto_pausado_ate && new Date(inst.templates_auto_pausado_ate) > new Date())) {
+        const pausa = await liberarPausaReprovacoes(supabase, inst);
+        if (pausa) {
+          resultados.push({ instancia_id: instanciaId, ok: false, erro: pausa });
+          continue;
+        }
       }
       const bloqueio = motivoBloqueioTemplate(inst);
       if (bloqueio || inst.instancia_teste_aquecimento || (!manualDefer && inst.templates_auto_copiar !== true)) {
