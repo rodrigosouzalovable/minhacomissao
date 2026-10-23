@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useCallback, useRef } from 'react';
-import { LancarAcordoConversa, type EstadoLancamento } from './LancarAcordoConversa';
+import { LancarAcordoConversa, type EstadoLancamento, type MetaOrigemLanc } from './LancarAcordoConversa';
 
 export interface PrefillTelaCompleta extends Partial<EstadoLancamento> { cpf: string; total: number; parcelas: number; primeiroVencimento: string; observacao?: string }
 
@@ -12,8 +12,8 @@ const numeroBR = (s: string) => { const n = Number(s.replace(/\./g, '').replace(
 
 export interface DadosLancamento { cpf: string; nome: string; telefone: string; total: number | null; parcelas: number | null; primeiroVencimento: string | null; observacao?: string; credor?: 'ume_novo_mundo' | 'odres_cred' | 'mundo_da_moda' | null }
 
-export function LancarAcordoDialog({ open, onOpenChange, dados, conversaId, onTelaCompleta }: {
-  open: boolean; onOpenChange: (v: boolean) => void; dados: DadosLancamento; conversaId?: string | null; onTelaCompleta: (prefill: PrefillTelaCompleta) => void;
+export function LancarAcordoDialog({ open, onOpenChange, dados, conversaId, metaOrigem, onTelaCompleta }: {
+  metaOrigem?: MetaOrigemLanc | null; open: boolean; onOpenChange: (v: boolean) => void; dados: DadosLancamento; conversaId?: string | null; onTelaCompleta: (prefill: PrefillTelaCompleta) => void;
 }) {
   const [cpf, setCpf] = useState('');
   const [total, setTotal] = useState('');
@@ -45,7 +45,7 @@ export function LancarAcordoDialog({ open, onOpenChange, dados, conversaId, onTe
         <LancarAcordoConversa
           cpf={cpf} nomeInicial={dados.nome} telefoneInicial={dados.telefone}
           total={Math.round(numeroBR(total) * 100) / 100} parcelas={parseInt(parcelas, 10) || 0} primeiroVencimento={venc}
-          conversaId={conversaId} observacaoExtra={dados.observacao} credorInicial={dados.credor ?? null} onEstado={onEstado}
+          conversaId={conversaId} metaOrigem={metaOrigem} observacaoExtra={dados.observacao} credorInicial={dados.credor ?? null} onEstado={onEstado}
         />
         <Button variant="link" size="sm" className="self-start px-0" onClick={() => onTelaCompleta({ ...(estado.current ?? {}), cpf, total: Math.round(numeroBR(total) * 100) / 100, parcelas: parseInt(parcelas, 10) || 0, primeiroVencimento: venc, observacao: dados.observacao })}>Abrir tela completa de novo acordo</Button>
       </DialogContent>
