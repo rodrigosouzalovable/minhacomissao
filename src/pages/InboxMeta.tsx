@@ -244,7 +244,7 @@ export default function InboxMeta() {
   const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'conversas' | 'arquivados'>('conversas');
-  const [filtroLeitura, setFiltroLeitura] = useState<'todas' | 'nao_lidas'>('todas');
+  const [filtroLeitura, setFiltroLeitura] = useState<'todas' | 'nao_lidas' | 'campanha'>('todas');
 
   const [etiquetas, setEtiquetas] = useState<MetaEtiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
@@ -280,6 +280,9 @@ export default function InboxMeta() {
 
   // Meus Clientes (conversas com a etiqueta do próprio usuário)
   const [modoMeusClientes, setModoMeusClientes] = useState(false);
+  // Separação de envios de campanha: somente admin, somente caixa PADRÃO.
+  const separarCampanhas = isAdmin && currentFolderId === null && !modoMeusClientes;
+  useEffect(() => { if (!separarCampanhas && filtroLeitura === 'campanha') setFiltroLeitura('todas'); }, [separarCampanhas, filtroLeitura]);
   const [mcDataIni, setMcDataIni] = useState<Date | undefined>(undefined);
   const [mcDataFim, setMcDataFim] = useState<Date | undefined>(undefined);
   const [mcMarcadores, setMcMarcadores] = useState<Set<string>>(new Set());
@@ -951,7 +954,7 @@ export default function InboxMeta() {
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
     void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current), fetchContatosNaoCliente(contatoIdsRef.current)]);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, fetchContatosNaoCliente, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, filtroLeitura, instancias, toast]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, fetchContatosNaoCliente, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, filtroLeitura, instancias, toast, separarCampanhas]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -1321,7 +1324,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, buscaTelefoneGlobal, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, filtroQualifs, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento]);
+  }, [contatos, busca, buscaTelefoneGlobal, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, filtroQualifs, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento, separarCampanhas]);
 
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
