@@ -769,8 +769,11 @@ Deno.serve(async (req) => {
     if (cpf && !modoAquecimento) {
       const ctxRep = (estado.contexto || {}) as any;
       const ultimaSaida = [...historico].reverse().find((m: any) => m.direcao === 'saida');
-      const veioDoTemplate = /acordo foi formalizado mas identificamos que a parcela venceu/i
-        .test(String(ultimaSaida?.conteudo || ''));
+      // Templates aceitos: nova_parcela_vencida_2 (botões "SIM, ENVIAR PIX AGORA" / "ALTERAR DATA")
+      // e o modelo anterior (botão "QUERO ALTERAR A DATTA"), reconhecidos pelo nome ou pelo texto.
+      const veioDoTemplate = /parcela_vencida/i.test(String(ultimaSaida?.template_nome || '')) ||
+        /acordo foi formalizado mas identificamos que a parcela venceu/i
+          .test(String(ultimaSaida?.conteudo || ''));
       const aguardandoData = !!ctxRep.repescagem_aguardando_data;
       if (veioDoTemplate || aguardandoData) {
         const t = String(textoAtual || '').trim();
