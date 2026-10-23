@@ -129,8 +129,8 @@ Deno.serve(async (req) => {
       (contato as any).folder_id ?? null,
       (contato as any).credor ?? null,
     );
-    const credorCaixa = credorResolvido.nome;
-    const credorAmbiguo = credorResolvido.ambiguo;
+    let credorCaixa = credorResolvido.nome;
+    let credorAmbiguo = credorResolvido.ambiguo;
 
 
     // ===== A conversa é do IAGO? (etiqueta de atendente) =====
@@ -263,6 +263,12 @@ Deno.serve(async (req) => {
     let historico = ((msgs || []) as any[]).slice().reverse()
       .map((m) => ({ ...m, conteudo: conteudoLegivel(m) }));
     let ultimaEntrada = [...historico].reverse().find((m) => m.direcao === 'entrada');
+    // Sem credor no cabeçalho: o credor citado na nossa última mensagem enviada
+    // prevalece sobre o credor padrão da caixa (evita dizer UME para cliente Odres).
+    if (!(contato as any).credor) {
+      const credorMsg = credorDasMensagensEnviadas(historico);
+      if (credorMsg) { credorCaixa = credorMsg; credorAmbiguo = false; }
+    }
     // Imagem: o webhook já mandou a leitura feita pela IA (descrição + classificação).
     const imagemCtx = (body?.imagem_contexto && String(body.imagem_contexto.descricao || '').trim())
       ? {
