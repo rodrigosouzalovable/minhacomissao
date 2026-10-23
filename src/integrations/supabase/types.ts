@@ -5739,6 +5739,30 @@ export type Database = {
           },
         ]
       }
+      meta_chamadas_bloqueadas: {
+        Row: {
+          bloqueado_por: string | null
+          criado_em: string
+          id: string
+          sufixo: string
+          telefone: string | null
+        }
+        Insert: {
+          bloqueado_por?: string | null
+          criado_em?: string
+          id?: string
+          sufixo: string
+          telefone?: string | null
+        }
+        Update: {
+          bloqueado_por?: string | null
+          criado_em?: string
+          id?: string
+          sufixo?: string
+          telefone?: string | null
+        }
+        Relationships: []
+      }
       meta_contato_qualificacao: {
         Row: {
           contato_id: string
