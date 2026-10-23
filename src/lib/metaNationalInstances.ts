@@ -69,7 +69,7 @@ export function approvedGreenSelectionIds<T extends MetaPhoneInstance & { saude_
 ): string[] {
   return [...new Set(instances.filter((instance) =>
     approvedIds.has(instance.id) &&
-    String(instance.saude_quality ?? '').trim().toUpperCase() === 'GREEN' &&
+    ['GREEN', 'UNKNOWN', ''].includes(String(instance.saude_quality ?? '').trim().toUpperCase()) &&
     isBrazilianInstance(instance) && !isBannedInstance(instance)
   ).map((instance) => instance.id))];
 }
