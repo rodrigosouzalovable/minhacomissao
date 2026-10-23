@@ -101,13 +101,16 @@ Deno.serve(async (req) => {
     .maybeSingle();
   const permitidos: string[] | null = Array.isArray(pauseConfig?.tipos_permitidos) && pauseConfig.tipos_permitidos.length ? pauseConfig.tipos_permitidos : null;
   const bloqueadoPorTipo = permitidos !== null && !permitidos.includes(item.tipo);
-  if (pauseConfig?.notificacoes_pausadas === true || bloqueadoPorTipo) {
+  // Avisos com mais de 2h na fila são descartados: nunca chegar ponto/alerta de outro dia.
+  const criadaMs = item.criada_em ? new Date(item.criada_em).getTime() : Date.now();
+  const expirado = Date.now() - criadaMs > 2 * 60 * 60 * 1000;
+  if (pauseConfig?.notificacoes_pausadas === true || bloqueadoPorTipo || expirado) {
     const { data: pauseDelay } = await supabase.rpc("finalizar_notificacao_admin", {
       p_id: item.id,
-      p_status: "pausado",
+      p_status: expirado ? "expirado" : "pausado",
       p_instancia_id: null,
       p_fallback: false,
-      p_erro: "Notificações pausadas pelo admin",
+      p_erro: expirado ? "Descartado: aviso atrasado" : "Notificações pausadas pelo admin",
     });
     await supabase.from("admin_notificacoes_log").insert({
       tipo: item.tipo,
