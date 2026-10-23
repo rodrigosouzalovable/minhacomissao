@@ -3,6 +3,7 @@ export function humanizarErroTemplate(erroBruto?: string | null): string {
   const raw = (erroBruto || "").toString().trim();
   if (!raw) return "Erro desconhecido ao criar o template.";
   const s = raw.toLowerCase();
+  if (s === "none") return "A Meta recusou um modelo anterior sem informar o motivo. Exclua o modelo recusado na BM e tente aplicar novamente.";
 
   if (s.includes("141006") || s.includes("payment method") || s.includes("método de pagamento")) {
     return "A Meta informou problema no método de pagamento desta conta WhatsApp (código 141006). Abra Faturamento no card, confira o cartão e eventuais pendências da conta WhatsApp vinculada — não apenas da BM. Depois clique em Verificar pagamento e tente aplicar novamente após a Meta confirmar a liberação.";

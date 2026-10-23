@@ -194,12 +194,23 @@ Deno.serve(async (req) => {
         .map((r) => r.template_mestre_id));
 
       const terminalRows = new Map<string, any>((filaAtual || []).map(r => [r.template_mestre_id, r]));
+      // Modelos que já existem no número (ex.: aplicados direto na BM) encerram falhas/pendências antigas.
+      const jaExistentes = mestresPermitidos.filter((m) => chavesReais.has(`${m.nome}|${m.idioma || "pt_BR"}`));
+      const filaObsoleta = jaExistentes.map((m) => terminalRows.get(m.id))
+        .filter((r) => r && String(r.status || "").toUpperCase() !== "APPROVED");
+      if (filaObsoleta.length) {
+        await supabase.from("meta_templates_onboarding_fila").update({
+          status: "APPROVED", motivo: "já existente no número", finalizado_em: new Date().toISOString(),
+        }).in("id", filaObsoleta.map((r) => r.id));
+        for (const r of filaObsoleta) terminalRows.delete(r.template_mestre_id);
+      }
       const aplicaveis = modelosParaCopiar(mestresPermitidos, jaNoNumero, chavesReais, emProcessamento)
         .filter(m => queueRecoveryDecision(terminalRows.get(m.id)) !== "terminal");
       const candidatos: [string, number][] = aplicaveis.map((m, idx) => [m.id, aplicaveis.length - idx]);
 
       if (candidatos.length === 0) {
-        const terminal = mestresPermitidos.map(m => terminalRows.get(m.id)).find(r => queueRecoveryDecision(r) === "terminal");
+        const existentes = new Set(jaExistentes.map((m) => m.id));
+        const terminal = mestresPermitidos.filter((m) => !existentes.has(m.id)).map(m => terminalRows.get(m.id)).find(r => queueRecoveryDecision(r) === "terminal");
         resultados.push({
           instancia_id: instanciaId,
           ok: !terminal,
