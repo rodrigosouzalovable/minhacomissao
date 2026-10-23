@@ -15,7 +15,7 @@ import {
   Search, Send, Loader2, ShieldCheck, AlertCircle, Clock, Tag, X, Pin,
   Archive, Trash2, Paperclip, Reply, CheckSquare, Square, ChevronDown,
   Mic, AudioLines, FileText, Zap, Sun, Moon, Plus, Pencil, Users, Settings2,
-  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, Bookmark, Calculator, Lightbulb, Handshake, Eye, EyeOff,
+  Bot, Download, ChevronUp, ArrowLeft, Smartphone, Phone, PhoneOff, Bookmark, Calculator, Lightbulb, Handshake, Eye, EyeOff,
 } from 'lucide-react';
 
 const CORES_ETIQUETA = ['#25D366', '#FF6B6B', '#4ECDC4', '#FFD93D', '#6C5CE7', '#FF8A5C', '#EA4C89', '#00B4D8'];
@@ -159,6 +159,36 @@ export default function InboxMeta() {
   const [filtroInstancia, setFiltroInstancia] = useState<string>('todas');
   const [contatos, setContatos] = useState<MetaContato[]>([]);
   const [contatoAtivo, setContatoAtivo] = useState<MetaContato | null>(null);
+  // Bloqueio de chamadas por sufixo (8 dígitos): lido uma vez ao abrir a conversa.
+  const [chamadasBloqueadas, setChamadasBloqueadas] = useState(false);
+  const sufixoChamada = String(contatoAtivo?.telefone ?? '').replace(/\D/g, '').slice(-8);
+  useEffect(() => {
+    setChamadasBloqueadas(false);
+    if (sufixoChamada.length !== 8) return;
+    let cancelado = false;
+    supabase.from('meta_chamadas_bloqueadas').select('id').eq('sufixo', sufixoChamada).maybeSingle()
+      .then(({ data }) => { if (!cancelado) setChamadasBloqueadas(!!data); });
+    return () => { cancelado = true; };
+  }, [sufixoChamada]);
+  const alternarBloqueioChamadas = async () => {
+    if (sufixoChamada.length !== 8) return;
+    const bloquear = !chamadasBloqueadas;
+    if (!window.confirm(bloquear
+      ? 'Bloquear chamadas deste cliente? As ligações dele serão recusadas automaticamente.'
+      : 'Desbloquear chamadas deste cliente?')) return;
+    const { data: auth } = await supabase.auth.getUser();
+    const { error } = bloquear
+      ? await supabase.from('meta_chamadas_bloqueadas').insert({
+        sufixo: sufixoChamada, telefone: contatoAtivo?.telefone ?? null, bloqueado_por: auth.user?.id,
+      })
+      : await supabase.from('meta_chamadas_bloqueadas').delete().eq('sufixo', sufixoChamada);
+    if (error && !/duplicate/i.test(error.message)) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      return;
+    }
+    setChamadasBloqueadas(bloquear);
+    toast({ title: bloquear ? 'Chamadas bloqueadas' : 'Chamadas desbloqueadas' });
+  };
   // CPF do contato: prioriza o gravado na conversa (planilha do Envio Meta);
   // se não houver, tenta resolver pelo telefone (últimos 8 dígitos).
   const [cpfPorTelefone, setCpfPorTelefone] = useState<string | null>(null);
@@ -2715,6 +2745,19 @@ export default function InboxMeta() {
                       </>
                     );
                   })()}
+
+                  {contatoAtivo?.telefone && (
+                    <Button
+                      size="sm"
+                      variant={chamadasBloqueadas ? 'destructive' : 'outline'}
+                      className="h-7 w-7 p-0"
+                      onClick={() => void alternarBloqueioChamadas()}
+                      title={chamadasBloqueadas ? 'Desbloquear chamadas deste cliente' : 'Bloquear chamadas deste cliente'}
+                      aria-label={chamadasBloqueadas ? 'Desbloquear chamadas' : 'Bloquear chamadas'}
+                    >
+                      <PhoneOff className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
 
                   <Button
                     size="sm"
