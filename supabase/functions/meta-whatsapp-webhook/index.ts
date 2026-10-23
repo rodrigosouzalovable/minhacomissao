@@ -541,7 +541,7 @@ serve(async (req) => {
                   const bloqPatch = { status: 'bloqueada', data_fim: agora, atualizado_em: agora, funcionario_id: null };
                   if (existente?.id) await supabase.from('whatsapp_chamadas').update(bloqPatch).eq('id', existente.id);
                   else await supabase.from('whatsapp_chamadas').insert({
-                    call_id: callId, contato_id: await buscarContatoBloq(), instancia_id: inst.id, waba_id: wabaIdEntry,
+                    call_id: callId, contato_id: (await supabase.from('meta_whatsapp_contatos').select('id').eq('instancia_id', inst.id).like('telefone', `%${sufixo}`).limit(1).maybeSingle()).data?.id ?? null, instancia_id: inst.id, waba_id: wabaIdEntry,
                     phone_number_id: inst.phone_number_id, telefone: tel || '', tipo_chamada: 'entrada', ...bloqPatch,
                   });
                   continue;
