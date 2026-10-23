@@ -253,7 +253,7 @@ Deno.serve(async (req) => {
     // ===== Histórico da conversa =====
     const { data: msgs } = await supabase
       .from('meta_whatsapp_mensagens')
-      .select('id, wa_message_id, direcao, conteudo, criado_em, tipo_conteudo, transcricao')
+      .select('id, wa_message_id, direcao, conteudo, criado_em, tipo_conteudo, transcricao, template_nome')
       .eq('instancia_id', (contato as any).instancia_id)
       .eq('telefone', (contato as any).telefone || '')
       .order('criado_em', { ascending: false })
@@ -658,7 +658,7 @@ Deno.serve(async (req) => {
     {
       const { data: msgsAtualizadas } = await supabase
         .from('meta_whatsapp_mensagens')
-        .select('id, wa_message_id, direcao, conteudo, criado_em, tipo_conteudo, transcricao')
+        .select('id, wa_message_id, direcao, conteudo, criado_em, tipo_conteudo, transcricao, template_nome')
         .eq('instancia_id', (contato as any).instancia_id)
         .eq('telefone', (contato as any).telefone || '')
         .order('criado_em', { ascending: false })

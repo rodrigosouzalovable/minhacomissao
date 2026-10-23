@@ -1156,7 +1156,7 @@ export async function resolverCredorConversa(
  * Detecta o credor citado na mensagem mais recente enviada por nós (template de campanha,
  * proposta etc.). Retorna '' quando nenhuma ou mais de uma marca aparece na mesma mensagem.
  */
-export function credorDasMensagensEnviadas(historico: Array<{ direcao?: string; conteudo?: string }>): string {
+export function credorDasMensagensEnviadas(historico: Array<{ direcao?: string; conteudo?: string; template_nome?: string | null }>): string {
   const marcas: Array<[string, RegExp]> = [
     ['Odres Cred', /\bodres?\s*cred\b|\bodres\b/],
     ['Novo Mundo', /\bnovo\s*mundo\b/],
@@ -1164,7 +1164,8 @@ export function credorDasMensagensEnviadas(historico: Array<{ direcao?: string; 
   ];
   for (let i = historico.length - 1; i >= 0; i--) {
     const m = historico[i];
-    if (m?.direcao !== 'saida') continue;
+    // Só mensagens de campanha (template): respostas livres do IAGO podem estar erradas.
+    if (m?.direcao !== 'saida' || !m?.template_nome) continue;
     const t = normCredor(String(m.conteudo || ''));
     const achados = marcas.filter(([, re]) => re.test(t)).map(([n]) => n);
     if (achados.length === 1) return achados[0];
