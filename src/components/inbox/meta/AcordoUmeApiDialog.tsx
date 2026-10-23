@@ -135,6 +135,9 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
       boleto?.valor ? `💰 *Valor deste boleto:* ${fmt(boleto.valor)}` : null,
       boleto?.pixCode ? `\n🔑 *PIX copia e cola:*\n${boleto.pixCode}` : null,
       boleto?.invoiceUrl ? `\n📄 *Boleto (PDF):* ${boleto.invoiceUrl}` : null,
+      (dados?.cliente.carteira === '217490215' || /odres/i.test(dados?.cliente.carteira || ''))
+        ? '\nVocê também pode acompanhar seu acordo pelo site:\n🌐 https://clientes.odrescred.com.br/'
+        : '\nVocê também pode acompanhar seu acordo pelo *App UME:*\n📲 Baixe o app: https://meusacordos.com.br/app-ume',
       '', 'Qualquer dúvida, estou à disposição!',
     ].filter((l) => l !== null).join('\n');
   };
