@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS idx_meta_contatos_padrao_entrada ON public.meta_whatsapp_contatos (arquivado, ultima_mensagem_em DESC) WHERE folder_id IS NULL AND ultima_msg_entrada_em IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_meta_contatos_padrao_sem_entrada ON public.meta_whatsapp_contatos (arquivado, ultima_mensagem_em DESC) WHERE folder_id IS NULL AND ultima_msg_entrada_em IS NULL;

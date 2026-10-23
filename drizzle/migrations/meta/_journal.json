@@ -1478,6 +1478,13 @@
       "when": 1792774445421,
       "tag": "0210_meta_chamadas_bloqueadas",
       "breakpoints": true
+    },
+    {
+      "idx": 211,
+      "version": "7",
+      "when": 1792777930356,
+      "tag": "0211_idx_meta_contatos_padrao_respondidos",
+      "breakpoints": true
     }
   ]
 }

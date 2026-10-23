@@ -244,7 +244,7 @@ export default function InboxMeta() {
   const [temMaisAnteriores, setTemMaisAnteriores] = useState(true);
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<'conversas' | 'arquivados'>('conversas');
-  const [filtroLeitura, setFiltroLeitura] = useState<'todas' | 'nao_lidas'>('todas');
+  const [filtroLeitura, setFiltroLeitura] = useState<'todas' | 'nao_lidas' | 'campanha'>('todas');
 
   const [etiquetas, setEtiquetas] = useState<MetaEtiqueta[]>([]);
   const [contatoEtiquetas, setContatoEtiquetas] = useState<Record<string, string[]>>({});
@@ -280,6 +280,9 @@ export default function InboxMeta() {
 
   // Meus Clientes (conversas com a etiqueta do próprio usuário)
   const [modoMeusClientes, setModoMeusClientes] = useState(false);
+  // Separação de envios de campanha: somente admin, somente caixa PADRÃO.
+  const separarCampanhas = isAdmin && currentFolderId === null && !modoMeusClientes;
+  useEffect(() => { if (!separarCampanhas && filtroLeitura === 'campanha') setFiltroLeitura('todas'); }, [separarCampanhas, filtroLeitura]);
   const [mcDataIni, setMcDataIni] = useState<Date | undefined>(undefined);
   const [mcDataFim, setMcDataFim] = useState<Date | undefined>(undefined);
   const [mcMarcadores, setMcMarcadores] = useState<Set<string>>(new Set());
@@ -892,6 +895,11 @@ export default function InboxMeta() {
 
     if (filtroInstancia !== 'todas') q = q.eq('instancia_id', filtroInstancia);
     if (filtroLeitura === 'nao_lidas') q = q.gt('nao_lido', 0);
+    // PADRÃO do admin: envios de campanha sem resposta ficam em aba própria.
+    if (separarCampanhas) {
+      if (filtroLeitura === 'campanha') q = q.is('ultima_msg_entrada_em', null).eq('fixado', false);
+      else q = q.or('ultima_msg_entrada_em.not.is.null,fixado.eq.true');
+    }
     if (currentFolderId === null) q = q.is('folder_id', null);
     else q = q.eq('folder_id', currentFolderId);
     const { data: base } = await q;
@@ -946,7 +954,7 @@ export default function InboxMeta() {
     contatoIdsRef.current = combinados.map(c => c.id);
     // Etiquetas apenas dos contatos que entraram na lista
     void Promise.all([fetchContatoEtiquetas(contatoIdsRef.current), fetchQualifContatos(contatoIdsRef.current), fetchContatosNaoCliente(contatoIdsRef.current)]);
-  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, fetchContatosNaoCliente, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, filtroLeitura, instancias, toast]);
+  }, [user, filtroInstancia, abaAtiva, buscaDebounced, currentFolderId, limiteContatos, fetchContatoEtiquetas, fetchQualifContatos, fetchContatosNaoCliente, modoMeusClientes, minhaEtiquetaId, mcDataIni, mcDataFim, mcMarcadores, filtroEtiqueta, filtroLeitura, instancias, toast, separarCampanhas]);
 
   // Debounce da busca — evita bater no banco a cada tecla
   useEffect(() => {
@@ -1263,6 +1271,10 @@ export default function InboxMeta() {
         }
         if (buscaTelefoneGlobal) return true;
         if (filtroLeitura === 'nao_lidas' && !(c.nao_lido > 0)) return false;
+        if (separarCampanhas && !b) {
+          const respondeu = !!c.ultima_msg_entrada_em || !!c.fixado;
+          if (filtroLeitura === 'campanha' ? respondeu : !respondeu) return false;
+        }
         if (filtroJanela24h) {
           if (!c.ultima_msg_entrada_em) return false;
           const fim = new Date(c.ultima_msg_entrada_em).getTime() + JANELA_24H_MS;
@@ -1312,7 +1324,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, buscaTelefoneGlobal, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, filtroQualifs, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento]);
+  }, [contatos, busca, buscaTelefoneGlobal, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, filtroQualifs, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento, separarCampanhas]);
 
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
@@ -2042,6 +2054,13 @@ export default function InboxMeta() {
                 className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'nao_lidas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
                 Não lidas
               </button>
+              {separarCampanhas && (
+                <button onClick={() => setFiltroLeitura('campanha')}
+                  title="Clientes que receberam campanha e ainda não responderam"
+                  className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'campanha' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
+                  Envios de campanha
+                </button>
+              )}
             </div>
             {/* Meus Clientes */}
             <div className="space-y-1.5">
