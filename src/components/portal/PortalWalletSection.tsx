@@ -82,7 +82,7 @@ export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: Po
           </div>}
         </div>}
       </>}
-      {(hasAgreement || !terms) && <Button asChild className="mt-6 w-full h-auto min-h-12 whitespace-normal font-semibold"><a href={whatsapp} target="_blank" rel="noopener noreferrer">Falar sobre {marca.nome}<ArrowUpRight className="w-4 h-4 ml-2" /></a></Button>}
+      {(hasAgreement || !terms) && wallet.estado !== 'error' && <Button asChild className="mt-6 w-full h-auto min-h-12 whitespace-normal font-semibold"><a href={whatsapp} target="_blank" rel="noopener noreferrer">Falar sobre {marca.nome}<ArrowUpRight className="w-4 h-4 ml-2" /></a></Button>}
       {terms && !autoatendimento && <p className="text-xs text-muted-foreground mt-5">Simulação sujeita à confirmação da equipe. O pedido não gera acordo nem boleto automaticamente.</p>}
       {terms && autoatendimento && <p className="text-xs text-muted-foreground mt-5">Ao confirmar, seu acordo é formalizado e o PIX da primeira parcela aparece nesta tela.</p>}
     </>}
