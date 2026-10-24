@@ -9,6 +9,8 @@ import { getDiasAtraso } from '@/lib/descontoPortal';
 import { portalBrtToday, portalInstallments, portalPaymentDateValid, portalProposalText, portalTerms, type PortalWallet } from '@/lib/portalNegotiation';
 import { useContatoPortal } from '@/hooks/useContatoPortal';
 import { portalDarkLogos } from './PortalShell';
+import { supabase } from '@/integrations/supabase/client';
+import PortalAcordoConcluido, { type PortalEfetivacao } from './PortalAcordoConcluido';
 
 const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dateLabel = (date: string) => date.split('-').reverse().join('/');
@@ -34,6 +36,23 @@ export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: Po
   const maxDate = new Date(Date.parse(`${today}T00:00:00Z`) + 10 * 86400000).toISOString().slice(0,10);
   const valid = !!terms && !hasAgreement && !!mode && total > 0 && portalPaymentDateValid(date, today) && (mode === 'avista' ? wallet.credor !== 'novo_mundo' || total >= 100 : validEntry && installments.length >= 2);
   const whatsapp = `https://wa.me/${contato.phone}?text=${encodeURIComponent(valid && terms ? portalProposalText({credor:wallet.credor,nome:wallet.nome || 'Cliente',cpf,principal:terms.principal,total,installments,date,entrada:entry,contratos:[...new Set(wallet.debitos.map(d=>d.contrato).filter((c):c is string=>!!c))]}) : `Olá! Meu CPF é ${cpf}. Gostaria de consultar meu débito com ${marca.nome}.`)}`;
+  const autoatendimento = wallet.credor !== 'novo_mundo';
+  const [telefone, setTelefone] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [resultado, setResultado] = useState<PortalEfetivacao | null>(null);
+  const confirmar = async () => {
+    if (!valid || enviando) return;
+    setEnviando(true); setResultado(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('portal-efetivar-acordo', { body: { cpf, credor: wallet.credor, modo: mode, parcelas: mode === 'avista' ? 1 : quantity, primeiroVencimento: date, telefone } });
+      if (error) throw error;
+      setResultado(data as PortalEfetivacao);
+    } catch {
+      setResultado({ success: false, fallback: true, message: 'Não conseguimos concluir seu acordo automaticamente. Fale com nossa equipe no WhatsApp para formalizar esta proposta.' });
+    } finally { setEnviando(false); }
+  };
+
+  if (resultado?.success) return <section className="portal-result-wallet py-9 border-b" aria-labelledby={`wallet-${wallet.credor}`}><PortalAcordoConcluido r={resultado} /></section>;
 
   return <section className="portal-result-wallet py-9 border-b" aria-labelledby={`wallet-${wallet.credor}`}>
     <div className="flex items-center justify-between gap-5 flex-wrap"><div className="flex items-center gap-4"><img src={portalDarkLogos[wallet.credor]} alt="" className={`portal-result-creditor portal-result-creditor-${wallet.credor}`} /><div><h2 id={`wallet-${wallet.credor}`} className="font-semibold text-xl">{marca.nome}</h2><p className="text-xs text-muted-foreground mt-1">{wallet.estado === 'loading' ? 'Consultando carteira' : hasAgreement ? 'Acordo disponível' : wallet.estado === 'empty' ? 'Nenhum débito localizado' : wallet.estado === 'error' ? 'Consulta temporariamente indisponível' : wallet.estado === 'pending' ? 'Consulte com nossa equipe' : 'Débito localizado'}</p></div></div>{wallet.estado === 'loading' && <Loader2 className="w-5 h-5 animate-spin text-primary" />}</div>
@@ -48,13 +67,17 @@ export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: Po
           {mode && <div className="mt-6 space-y-5 border-t pt-6"><dl className="space-y-2 text-sm"><div className="flex justify-between gap-4"><dt className="text-muted-foreground">Principal</dt><dd>{money(terms.principal)}</dd></div>{mode==='parcelado' && wallet.credor!=='novo_mundo' && <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Acréscimo de 10%</dt><dd>{money(terms.acrescimo)}</dd></div>}<div className="flex justify-between gap-4 font-semibold"><dt>{mode==='avista'?'Total à vista':'Total parcelado'}</dt><dd>{money(total)}</dd></div></dl>
             {mode==='parcelado' && <>{wallet.credor==='novo_mundo' && <div><Label htmlFor={`entrada-${wallet.credor}`}>Entrada opcional (mínimo R$ 100)</Label><Input id={`entrada-${wallet.credor}`} type="number" min="0" step="0.01" value={entrada} onChange={e=>setEntrada(e.target.value)} className="mt-2 max-w-xs" placeholder="0,00" />{!validEntry && <p className="text-xs text-destructive mt-2">Informe zero ou entrada de pelo menos R$ 100, inferior ao total.</p>}</div>}<div><Label htmlFor={`parcelas-${wallet.credor}`}>Quantidade de parcelas</Label><Select value={String(quantity)} onValueChange={v=>setQuantity(Number(v))}><SelectTrigger id={`parcelas-${wallet.credor}`} className="mt-2 max-w-sm"><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent>{Array.from({length:Math.max(0,max-1)},(_,i)=>i+2).map(n=>{const values=portalInstallments(total-entry,n,cap);return <SelectItem key={n} value={String(n)}>{n}x de {money(values[0] ?? 0)}</SelectItem>;})}</SelectContent></Select>{installments.length>0 && <p className="text-xs text-muted-foreground mt-2">{installments.length} parcelas de {money(installments[0])}{lastInstallment!==installments[0]?`; última parcela de ${money(lastInstallment ?? 0)}`:'.'}</p>}{installments.length===0 && <p className="text-xs text-destructive mt-2">Escolha uma quantidade válida, com todas as parcelas a partir de R$ 100.</p>}</div></>}
             <div><Label htmlFor={`data-${wallet.credor}`}>{mode==='avista'?'Data do pagamento à vista':'Data do primeiro pagamento'}</Label><Input id={`data-${wallet.credor}`} type="date" min={today} max={maxDate} value={date} onChange={e=>setDate(e.target.value)} className="mt-2 max-w-xs" /><p className="text-xs text-muted-foreground mt-2">Escolha entre {dateLabel(today)} e {dateLabel(maxDate)}.</p>{date && !portalPaymentDateValid(date,today) && <p className="text-xs text-destructive mt-2">A data deve estar dentro do prazo de 10 dias.</p>}</div>
-            {valid && <p className="flex items-center gap-2 text-sm text-primary"><Check className="w-4 h-4" />Proposta pronta para confirmar com a equipe.</p>}
-            <Button asChild={valid} disabled={!valid} className="h-auto min-h-12 whitespace-normal">{valid ? <a href={whatsapp} target="_blank" rel="noopener noreferrer">Solicitar esta condição no WhatsApp<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></a> : <span>Escolha a condição e a data de pagamento</span>}</Button>
+            {autoatendimento && valid && <div><Label htmlFor={`tel-${wallet.credor}`}>Seu WhatsApp com DDD</Label><Input id={`tel-${wallet.credor}`} inputMode="tel" value={telefone} onChange={e=>setTelefone(e.target.value)} className="mt-2 max-w-xs" placeholder="(62) 99999-9999" /></div>}
+            {resultado?.fallback ? <div className="space-y-3"><div className="flex items-start gap-3 bg-muted rounded-lg p-4"><AlertCircle className="w-5 h-5 shrink-0 text-muted-foreground" /><p className="text-sm leading-relaxed">{resultado.message}</p></div><Button asChild className="h-auto min-h-12 whitespace-normal"><a href={whatsapp} target="_blank" rel="noopener noreferrer">Falar no WhatsApp para formalizar<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></a></Button></div>
+            : autoatendimento ? <>{resultado?.message && <p className="text-sm text-destructive">{resultado.message}</p>}<Button disabled={!valid || telefone.replace(/\D/g,'').length < 10 || enviando} onClick={()=>void confirmar()} className="h-auto min-h-12 whitespace-normal">{enviando ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Formalizando seu acordo...</> : valid ? 'Confirmar acordo e gerar PIX' : 'Escolha a condição e a data de pagamento'}</Button></>
+            : <>{valid && <p className="flex items-center gap-2 text-sm text-primary"><Check className="w-4 h-4" />Proposta pronta para confirmar com a equipe.</p>}
+            <Button asChild={valid} disabled={!valid} className="h-auto min-h-12 whitespace-normal">{valid ? <a href={whatsapp} target="_blank" rel="noopener noreferrer">Solicitar esta condição no WhatsApp<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></a> : <span>Escolha a condição e a data de pagamento</span>}</Button></>}
           </div>}
         </div>}
       </>}
       {(hasAgreement || !terms) && <Button asChild className="mt-6 w-full h-auto min-h-12 whitespace-normal font-semibold"><a href={whatsapp} target="_blank" rel="noopener noreferrer">Falar sobre {marca.nome}<ArrowUpRight className="w-4 h-4 ml-2" /></a></Button>}
-      {terms && <p className="text-xs text-muted-foreground mt-5">Simulação sujeita à confirmação da equipe. O pedido não gera acordo nem boleto automaticamente.</p>}
+      {terms && !autoatendimento && <p className="text-xs text-muted-foreground mt-5">Simulação sujeita à confirmação da equipe. O pedido não gera acordo nem boleto automaticamente.</p>}
+      {terms && autoatendimento && <p className="text-xs text-muted-foreground mt-5">Ao confirmar, seu acordo é formalizado e o PIX da primeira parcela aparece nesta tela.</p>}
     </>}
   </section>;
 }
