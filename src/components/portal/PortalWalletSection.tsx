@@ -14,6 +14,13 @@ import PortalAcordoConcluido, { type PortalEfetivacao } from './PortalAcordoConc
 
 const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dateLabel = (date: string) => date.split('-').reverse().join('/');
+const maskTelefone = (v: string) => {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : '';
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+};
+const telefoneOk = (v: string) => /^\(\d{2}\) 9\d{4}-\d{4}$/.test(v);
 
 export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: PortalWallet; cpf: string; retry: () => void }) {
   const [details, setDetails] = useState(false);
