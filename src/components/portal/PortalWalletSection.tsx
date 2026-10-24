@@ -14,6 +14,13 @@ import PortalAcordoConcluido, { type PortalEfetivacao } from './PortalAcordoConc
 
 const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dateLabel = (date: string) => date.split('-').reverse().join('/');
+const maskTelefone = (v: string) => {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : '';
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+};
+const telefoneOk = (v: string) => /^\(\d{2}\) 9\d{4}-\d{4}$/.test(v);
 
 export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: PortalWallet; cpf: string; retry: () => void }) {
   const [details, setDetails] = useState(false);
@@ -69,7 +76,7 @@ export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: Po
             <div><Label htmlFor={`data-${wallet.credor}`}>{mode==='avista'?'Data do pagamento à vista':'Data do primeiro pagamento'}</Label><Input id={`data-${wallet.credor}`} type="date" min={today} max={maxDate} value={date} onChange={e=>setDate(e.target.value)} className="mt-2 max-w-xs" /><p className="text-xs text-muted-foreground mt-2">Escolha entre {dateLabel(today)} e {dateLabel(maxDate)}.</p>{date && !portalPaymentDateValid(date,today) && <p className="text-xs text-destructive mt-2">A data deve estar dentro do prazo de 10 dias.</p>}</div>
             {autoatendimento && valid && <div><Label htmlFor={`tel-${wallet.credor}`}>Seu WhatsApp com DDD</Label><Input id={`tel-${wallet.credor}`} inputMode="tel" value={telefone} onChange={e=>setTelefone(e.target.value)} className="mt-2 max-w-xs" placeholder="(62) 99999-9999" /></div>}
             {resultado?.fallback ? <div className="space-y-3"><div className="flex items-start gap-3 bg-muted rounded-lg p-4"><AlertCircle className="w-5 h-5 shrink-0 text-muted-foreground" /><p className="text-sm leading-relaxed">{resultado.message}</p></div><Button asChild className="h-auto min-h-12 whitespace-normal"><a href={whatsapp} target="_blank" rel="noopener noreferrer">Falar no WhatsApp para formalizar<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></a></Button></div>
-            : autoatendimento ? <>{resultado?.message && <p className="text-sm text-destructive">{resultado.message}</p>}<Button disabled={!valid || telefone.replace(/\D/g,'').length < 10 || enviando} onClick={()=>void confirmar()} className="h-auto min-h-12 whitespace-normal">{enviando ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Formalizando seu acordo...</> : valid ? 'Confirmar acordo e gerar PIX' : 'Escolha a condição e a data de pagamento'}</Button></>
+            : autoatendimento ? <>{resultado?.message && <p className="text-sm text-destructive">{resultado.message}</p>}<Button disabled={!valid || !telefoneOk(telefone) || enviando} onClick={()=>void confirmar()} className="h-auto min-h-12 whitespace-normal">{enviando ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Formalizando seu acordo...</> : valid ? 'Confirmar acordo e gerar PIX' : 'Escolha a condição e a data de pagamento'}</Button></>
             : <>{valid && <p className="flex items-center gap-2 text-sm text-primary"><Check className="w-4 h-4" />Proposta pronta para confirmar com a equipe.</p>}
             <Button asChild={valid} disabled={!valid} className="h-auto min-h-12 whitespace-normal">{valid ? <a href={whatsapp} target="_blank" rel="noopener noreferrer">Solicitar esta condição no WhatsApp<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></a> : <span>Escolha a condição e a data de pagamento</span>}</Button></>}
           </div>}
