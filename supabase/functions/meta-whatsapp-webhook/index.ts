@@ -691,6 +691,25 @@ serve(async (req) => {
             wa_message_id: m.id,
           } as any);
 
+          // Mensagem do portal com CPF: preenche o credor real do contato (só se vazio).
+          const cpfPortal = !isEcho && !msgError ? String(texto || '').match(/Meu CPF é (\d{11})/i)?.[1] : null;
+          if (cpfPortal && outroLado) {
+            (async () => {
+              const sufixo = outroLado.replace(/\D/g, '').slice(-8);
+              const { data: ct } = await supabase.from('meta_whatsapp_contatos').select('id, credor').eq('instancia_id', inst.id).like('telefone', `%${sufixo}`).limit(1).maybeSingle();
+              if (!ct || (ct as any).credor) return;
+              const tem = (w: any) => !!w && ((w.debitos?.length ?? 0) > 0 || (w.acordos?.length ?? 0) > 0 || Number(w.principal) > 0);
+              const { data: nm } = await supabase.rpc('portal_consultar_carteira', { p_cpf: cpfPortal, p_credor: 'novo_mundo' });
+              let credor: string | null = tem(nm) ? 'novo_mundo' : null;
+              if (!credor) {
+                const { data: odres } = await supabase.rpc('portal_odres_identificado', { p_cpf: cpfPortal });
+                if (odres === true) credor = 'odres_cred';
+                else { const { data: ume } = await supabase.rpc('portal_consultar_carteira', { p_cpf: cpfPortal, p_credor: 'ume' }); if (tem(ume)) credor = 'ume'; }
+              }
+              if (credor) await supabase.from('meta_whatsapp_contatos').update({ credor }).eq('id', (ct as any).id).is('credor', null);
+            })().catch(() => {});
+          }
+
           // Métrica diária (inbound orgânico melhora ratio anti-ban)
           if (!isEcho && !msgError) {
             supabase.rpc('meta_metric_bump', { _instancia_id: inst.id, _campo: 'inbound', _inc: 1 }).then(() => {}, () => {});
