@@ -12,7 +12,8 @@ import { notificarAdmin } from '../_shared/notificar-admin.ts';
 const ADMIN_USER_ID = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
 const CARTEIRA: Record<'ume' | 'odres_cred', string> = { ume: '201845262', odres_cred: '217490215' };
 const json = (b: unknown) => new Response(JSON.stringify(b), { headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
-const fallback = (message: string, motivo: string) => json({ success: false, fallback: true, motivo, message });
+const fallback = (message: string, motivo: string) => { console.log('[portal-efetivar] recusa', motivo); return json({ success: false, fallback: true, motivo, message }); };
+const recusa = (message: string, motivo: string) => { console.log('[portal-efetivar] recusa', motivo); return json({ success: false, motivo, message }); };
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const br = (d: string) => d.split('-').reverse().join('/');
@@ -33,7 +34,7 @@ Deno.serve(async (req) => {
   const NAO = 'Não conseguimos concluir seu acordo automaticamente. Fale com nossa equipe no WhatsApp para formalizar esta proposta.';
   try {
     const parsed = Body.safeParse(await req.json().catch(() => ({})));
-    if (!parsed.success) return json({ success: false, message: 'Confira os dados informados.' });
+    if (!parsed.success) { console.log('[portal-efetivar] recusa dados_invalidos', JSON.stringify(parsed.error.flatten().fieldErrors)); return json({ success: false, motivo: 'dados_invalidos', message: 'Confira os dados informados (telefone com DDD e data).' }); }
     const b = parsed.data;
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const db = createClient(Deno.env.get('SUPABASE_URL')!, key, { auth: { persistSession: false } });
@@ -42,19 +43,19 @@ Deno.serve(async (req) => {
     const dig = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${key}:portal-efetivar:${ip}:${b.cpf}`));
     const chave = Array.from(new Uint8Array(dig), (v) => v.toString(16).padStart(2, '0')).join('');
     const { data: ok } = await db.rpc('portal_reservar_consulta', { p_chave: chave });
-    if (ok !== true) return json({ success: false, message: 'Muitas tentativas em pouco tempo. Aguarde alguns minutos.' });
+    if (ok !== true) return recusa('Muitas tentativas em pouco tempo. Aguarde alguns minutos.', 'limite_tentativas');
 
     // Data: hoje até +10 dias (BRT)
     const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
     const max = new Date(Date.parse(`${hoje}T00:00:00Z`) + 10 * 86400000).toISOString().slice(0, 10);
-    if (b.primeiroVencimento < hoje || b.primeiroVencimento > max) return json({ success: false, message: 'Escolha uma data entre hoje e os próximos 10 dias.' });
+    if (b.primeiroVencimento < hoje || b.primeiroVencimento > max) return recusa('Escolha uma data entre hoje e os próximos 10 dias.', 'data_fora_prazo');
 
     // Já existe acordo ativo na nossa base → atendimento humano
     const { data: ativos } = await db.from('acordos').select('id').eq('cliente_cpf', b.cpf).eq('status', 'ativo').limit(1);
     if (ativos?.length) return fallback('Já existe uma negociação em andamento para o seu CPF. Fale com nossa equipe para formalizar a nova proposta.', 'acordo_existente');
 
     const { data: cli } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira').eq('cpf', b.cpf).maybeSingle();
-    if (!cli?.borrower_id || cli.carteira !== CARTEIRA[b.credor]) return fallback(NAO, 'fora_carteira');
+    if (!cli?.borrower_id || cli.carteira !== CARTEIRA[b.credor]) { console.log('[portal-efetivar] carteira', b.credor, cli?.carteira ?? 'nenhuma'); return fallback(NAO, 'fora_carteira'); }
     const { data: parc } = await db.from('ume_carteira_parcelas').select('installment_id, vencimento').eq('cpf', b.cpf).eq('carteira', cli.carteira).order('vencimento').limit(500);
     if (!parc?.length) return fallback(NAO, 'sem_parcelas');
 
@@ -64,14 +65,14 @@ Deno.serve(async (req) => {
     if (!Number.isFinite(principal) || principal <= 0) return fallback(NAO, 'sem_principal');
     const total = b.modo === 'avista' ? r2(principal) : r2(principal * 1.1);
     const n = b.modo === 'avista' ? 1 : b.parcelas;
-    if (b.modo === 'parcelado' && (n < 2 || Math.floor(Math.round(total * 100) / n) < 10000)) return json({ success: false, message: 'Cada parcela precisa ser de pelo menos R$ 100.' });
+    if (b.modo === 'parcelado' && (n < 2 || Math.floor(Math.round(total * 100) / n) < 10000)) return recusa('Cada parcela precisa ser de pelo menos R$ 100.', 'parcela_minima');
 
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
     const corpo = { borrowerId: String(cli.borrower_id), installmentsIds: parc.map((p) => String(p.installment_id)), monetaryDiscount: 0, firstPaymentDueDate: b.primeiroVencimento, numberOfPayments: n, interestRate: 0 };
     const base = await umeApi.simularRenegociacao(ambiente, corpo);
     const totalDebt = Number((base.data as Record<string, unknown> | null)?.totalDebt);
     if (!base.ok || !Number.isFinite(totalDebt) || total > totalDebt) {
-      console.log('[portal-efetivar] simulação recusada', base.status);
+      console.log('[portal-efetivar] simulação recusada', base.status, totalDebt, total, JSON.stringify(base.data).slice(0, 300));
       return fallback(NAO, 'ume_simulacao');
     }
     corpo.monetaryDiscount = r2(totalDebt - total);
