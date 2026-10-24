@@ -133,7 +133,7 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
     } finally { setSalvando(false); }
   };
 
-  const credores: [Empresa, string][] = [['ume_novo_mundo', 'UME'], ['odres_cred', 'Odres Cred'], ['mundo_da_moda', 'Novo Mundo']];
+  const credores: [Empresa, string][] = [['mundo_da_moda', 'UME'], ['odres_cred', 'Odres Cred'], ['ume_novo_mundo', 'Novo Mundo']];
 
   return (
     <div className="space-y-3 rounded border p-3 text-sm">

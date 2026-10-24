@@ -19,8 +19,8 @@ const valor = (s?: string) => {
 export function lerCredorProposta(texto: string): CredorProposta | null {
   const t = String(texto || '');
   if (/\bodres\b/i.test(t)) return 'odres_cred';
-  if (/\bume\b/i.test(t)) return 'ume_novo_mundo';
-  if (/novo\s+mundo/i.test(t)) return 'mundo_da_moda';
+  if (/\bume\b/i.test(t)) return 'mundo_da_moda';
+  if (/novo\s+mundo/i.test(t)) return 'ume_novo_mundo';
   return null;
 }
 
