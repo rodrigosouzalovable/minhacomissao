@@ -9,6 +9,8 @@ import { getDiasAtraso } from '@/lib/descontoPortal';
 import { portalBrtToday, portalInstallments, portalPaymentDateValid, portalProposalText, portalTerms, type PortalWallet } from '@/lib/portalNegotiation';
 import { useContatoPortal } from '@/hooks/useContatoPortal';
 import { portalDarkLogos } from './PortalShell';
+import { supabase } from '@/integrations/supabase/client';
+import PortalAcordoConcluido, { type PortalEfetivacao } from './PortalAcordoConcluido';
 
 const money = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dateLabel = (date: string) => date.split('-').reverse().join('/');
