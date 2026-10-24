@@ -55,7 +55,10 @@ Deno.serve(async (req) => {
     if (ativos?.length) return fallback('Já existe uma negociação em andamento para o seu CPF. Fale com nossa equipe para formalizar a nova proposta.', 'acordo_existente');
 
     const { data: cli } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira').eq('cpf', b.cpf).maybeSingle();
-    if (!cli?.borrower_id || cli.carteira !== CARTEIRA[b.credor]) { console.log('[portal-efetivar] carteira', b.credor, cli?.carteira ?? 'nenhuma'); return fallback(NAO, 'fora_carteira'); }
+    // Usa a carteira real do SFTP (UME e Odres usam a mesma API UME e o mesmo borrowerId)
+    const credorReal = (Object.keys(CARTEIRA) as Array<'ume' | 'odres_cred'>).find((k) => CARTEIRA[k] === cli?.carteira);
+    if (!cli?.borrower_id || !credorReal) { console.log('[portal-efetivar] carteira', b.credor, cli?.carteira ?? 'nenhuma'); return fallback(NAO, 'fora_carteira'); }
+    if (credorReal !== b.credor) console.log('[portal-efetivar] credor ajustado pela carteira', b.credor, '->', credorReal);
     const { data: parc } = await db.from('ume_carteira_parcelas').select('installment_id, vencimento').eq('cpf', b.cpf).eq('carteira', cli.carteira).order('vencimento').limit(500);
     if (!parc?.length) return fallback(NAO, 'sem_parcelas');
 
@@ -95,14 +98,14 @@ Deno.serve(async (req) => {
     const cents = Math.round(total * 100), each = Math.floor(cents / n);
     const valores = Array.from({ length: n }, (_, i) => (i === n - 1 ? cents - each * (n - 1) : each) / 100);
     const nome = String(cli.nome || consulta?.nome || 'CLIENTE').toUpperCase();
-    const label = b.credor === 'ume' ? 'UME' : 'Odres Cred';
+    const label = credorReal === 'ume' ? 'UME' : 'Odres Cred';
     let acordoId: string | null = null;
     const { data: acordo, error } = await db.from('acordos').insert({
       user_id: ADMIN_USER_ID, cliente_nome: nome, cliente_cpf: b.cpf, cliente_telefone: b.telefone,
       valor_total: total, parcelas: n, valor_parcela: valores[0], data_primeiro_pagamento: b.primeiroVencimento,
       dias_atraso: dias, percentual_comissao: pct, comissao_total: r2(valores.reduce((s, v) => s + v * pct / 100, 0)),
       observacoes: `Acordo fechado pelo cliente no portal (${label}) — ${ambiente.toUpperCase()}${boleto ? ' — PIX/boleto emitido' : ' — boleto pendente'}`,
-      empresa: b.credor === 'ume' ? 'ume_novo_mundo' : 'odres_cred', boleto_enviado: !!boleto, termo_formalizacao_status: 'pendente',
+      empresa: credorReal === 'ume' ? 'ume_novo_mundo' : 'odres_cred', boleto_enviado: !!boleto, termo_formalizacao_status: 'pendente',
     }).select('id').single();
     if (error) console.error('[portal-efetivar] lançamento', error.message);
     else {
