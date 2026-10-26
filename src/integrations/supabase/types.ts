@@ -399,6 +399,7 @@ export type Database = {
           notificar_proxies_faltando: boolean
           notificar_resumo_diario: boolean
           proxima_notificacao_em: string | null
+          tipos_bloqueados: string[] | null
           tipos_permitidos: string[] | null
           ultima_instancia_id: string | null
           updated_at: string
@@ -417,6 +418,7 @@ export type Database = {
           notificar_proxies_faltando?: boolean
           notificar_resumo_diario?: boolean
           proxima_notificacao_em?: string | null
+          tipos_bloqueados?: string[] | null
           tipos_permitidos?: string[] | null
           ultima_instancia_id?: string | null
           updated_at?: string
@@ -435,6 +437,7 @@ export type Database = {
           notificar_proxies_faltando?: boolean
           notificar_resumo_diario?: boolean
           proxima_notificacao_em?: string | null
+          tipos_bloqueados?: string[] | null
           tipos_permitidos?: string[] | null
           ultima_instancia_id?: string | null
           updated_at?: string
