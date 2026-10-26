@@ -1,0 +1,1 @@
+ALTER TABLE public.admin_notificacoes_config ADD COLUMN IF NOT EXISTS tipos_bloqueados text[];

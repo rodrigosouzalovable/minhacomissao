@@ -1485,6 +1485,13 @@
       "when": 1792777930356,
       "tag": "0211_idx_meta_contatos_padrao_respondidos",
       "breakpoints": true
+    },
+    {
+      "idx": 212,
+      "version": "7",
+      "when": 1793018085260,
+      "tag": "0212_notificacoes_admin_tipos_bloqueados",
+      "breakpoints": true
     }
   ]
 }
