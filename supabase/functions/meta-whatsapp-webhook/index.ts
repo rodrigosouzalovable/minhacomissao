@@ -66,7 +66,7 @@ function extractContatosCompartilhados(m: any): { nome: string; telefones: { num
   });
 }
 
-const META_UNAVAILABLE_MESSAGE = 'Mensagem não disponibilizada pela Meta. Consulte o WhatsApp do número.';
+const META_UNAVAILABLE_MESSAGE = 'Conteúdo não enviado pela Meta (ex.: enquete, visualização única ou mensagem editada). Veja no celular do número.';
 
 function safeMessageDiagnostic(m: any): Record<string, unknown> | null {
   if (!m || typeof m !== 'object') return null;
@@ -86,6 +86,12 @@ function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_u
   if (m.button?.text || m.button?.payload) return { texto: m.button.text || m.button.payload, tipo: 'texto', media_url: null };
   if (m.interactive?.button_reply?.title) return { texto: m.interactive.button_reply.title, tipo: 'texto', media_url: null };
   if (m.interactive?.list_reply?.title) return { texto: m.interactive.list_reply.title, tipo: 'texto', media_url: null };
+  if (m.interactive?.call_permission_reply) {
+    const r = m.interactive.call_permission_reply;
+    const aceitou = String(r.response || '').toLowerCase() === 'accept';
+    return { texto: aceitou ? `📞 Cliente permitiu ligações${r.is_permanent ? ' (permanente)' : ''}` : '📞 Cliente recusou ligações', tipo: 'texto', media_url: null };
+  }
+  if (tipo === 'revoke') return { texto: '🚫 O cliente apagou esta mensagem', tipo: 'texto', media_url: null };
   if (m.interactive?.nfm_reply?.response_json) {
     const resposta = m.interactive.nfm_reply.body || m.interactive.nfm_reply.name || 'Resposta de formulário recebida';
     return { texto: resposta, tipo: 'texto', media_url: null };
