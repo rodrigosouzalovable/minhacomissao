@@ -37,7 +37,7 @@ const VARIAVEIS = [
   { key: '{valor_parcelado}', desc: 'Valor total parcelado (70%)' },
   { key: '{max_parcelas}', desc: 'Quantidade máxima de parcelas' },
   { key: '{credor}', desc: 'Nome do credor' },
-  { key: '{telefone_contato}', desc: '(62) 98174-6479' },
+  { key: '{telefone_contato}', desc: '(62) 98218-3144' },
 ];
 
 const ETAPA_LABELS: Record<string, string> = {

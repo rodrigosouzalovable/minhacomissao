@@ -22,8 +22,8 @@ export const DOMINIO_BASE = 'meusacordos.com.br';
 export const DNS_A_VALUE = '185.158.133.1';
 
 const CONTATO_PADRAO: ContatoPortal = {
-  phone: '5562981746479',
-  phoneDisplay: '(62) 98174-6479',
+  phone: '5562982183144',
+  phoneDisplay: '(62) 98218-3144',
   email: 'meusacordos@souzaeribeiro.com.br',
   noindex: false,
 };

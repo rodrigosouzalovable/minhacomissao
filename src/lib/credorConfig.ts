@@ -25,8 +25,8 @@ export const CREDORES: Record<string, CredorConfig> = {
   grupoaltum: {
     slug: 'grupoaltum',
     nome: 'Grupo Altum',
-    phone: '5562981746479',
-    phoneDisplay: '(62) 98174-6479',
+    phone: '5562982183144',
+    phoneDisplay: '(62) 98218-3144',
     logos: {
       principal: logoGrupoAltum,
       negociacao: logoGrupoAltumNegociacao,
@@ -41,8 +41,8 @@ export const CREDORES: Record<string, CredorConfig> = {
   novomundo: {
     slug: 'novomundo',
     nome: 'Novo Mundo',
-    phone: '5562981746479',
-    phoneDisplay: '(62) 98174-6479',
+    phone: '5562982183144',
+    phoneDisplay: '(62) 98218-3144',
     logos: {
       principal: logoNovoMundoPortal.url,
       negociacao: logoNovoMundoPortal.url,
