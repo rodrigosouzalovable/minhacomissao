@@ -2497,7 +2497,7 @@ serve(async (req) => {
         .replace(/\{valor_parcelado\}/g, dadosCtx.valor_parcelado ? formatCurrency(Number(dadosCtx.valor_parcelado)) : '')
         .replace(/\{max_parcelas\}/g, String(dadosCtx.max_parcelas || ''))
         .replace(/\{credor\}/g, dadosCtx.credor || '')
-        .replace(/\{telefone_contato\}/g, '(62) 98174-6479');
+        .replace(/\{telefone_contato\}/g, '(62) 98218-3144');
     }
 
     const serverUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
@@ -2800,8 +2800,8 @@ serve(async (req) => {
 
         if (debitosError || !debitos || debitos.length === 0) {
           resposta = debitos?.length === 0
-            ? `Não encontramos pendências para o CPF ${formatCpf(cpf)}. Se acredita que há algum erro, entre em contato: (62) 98174-6479.`
-            : `Desculpe, tive um problema ao consultar seus dados. Tente novamente mais tarde ou ligue para (62) 98174-6479.`;
+            ? `Não encontramos pendências para o CPF ${formatCpf(cpf)}. Se acredita que há algum erro, entre em contato: (62) 98218-3144.`
+            : `Desculpe, tive um problema ao consultar seus dados. Tente novamente mais tarde ou ligue para (62) 98218-3144.`;
           await salvarEResponder('sem_debitos', { cpf });
           break;
         }
@@ -2851,8 +2851,8 @@ serve(async (req) => {
 
           if (debitosError || !debitos || debitos.length === 0) {
             resposta = debitos?.length === 0
-              ? `Não encontramos pendências no seu CPF. Se acredita que há algum erro, ligue para (62) 98174-6479.`
-              : `Desculpe, tive um problema ao consultar. Tente novamente ou ligue para (62) 98174-6479.`;
+              ? `Não encontramos pendências no seu CPF. Se acredita que há algum erro, ligue para (62) 98218-3144.`
+              : `Desculpe, tive um problema ao consultar. Tente novamente ou ligue para (62) 98218-3144.`;
             await salvarEResponder('sem_debitos', { cpf });
             break;
           }
@@ -3356,7 +3356,7 @@ serve(async (req) => {
           break;
         }
 
-        resposta = `Para uma nova consulta, digite "menu". Para falar com um negociador: (62) 98174-6479.`;
+        resposta = `Para uma nova consulta, digite "menu". Para falar com um negociador: (62) 98218-3144.`;
         await salvarEResponder(etapaAtual);
         break;
       }

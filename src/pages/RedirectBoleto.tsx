@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 const WHATSAPP_URL =
-  "https://wa.me/5562981746479?text=" +
+  "https://wa.me/5562982183144?text=" +
   encodeURIComponent("Olá! Recebi uma mensagem e quero solicitar meu boleto para pagamento.");
 
 export default function RedirectBoleto() {
