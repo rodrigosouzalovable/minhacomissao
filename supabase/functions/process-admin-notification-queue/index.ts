@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
+import { notificacaoBloqueada } from "../_shared/admin-notificacao-filtro.ts";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -96,11 +97,10 @@ Deno.serve(async (req) => {
   // Pausa manual do admin: drena a fila sem enviar nada ao WhatsApp do admin.
   const { data: pauseConfig } = await supabase
     .from("admin_notificacoes_config")
-    .select("notificacoes_pausadas, tipos_permitidos, instancia_fixa_id")
+    .select("notificacoes_pausadas, tipos_permitidos, tipos_bloqueados, instancia_fixa_id")
     .eq("id", 1)
     .maybeSingle();
-  const permitidos: string[] | null = Array.isArray(pauseConfig?.tipos_permitidos) && pauseConfig.tipos_permitidos.length ? pauseConfig.tipos_permitidos : null;
-  const bloqueadoPorTipo = permitidos !== null && !permitidos.includes(item.tipo);
+  const bloqueadoPorTipo = notificacaoBloqueada(pauseConfig, item.tipo);
   // Avisos com mais de 2h na fila são descartados: nunca chegar ponto/alerta de outro dia.
   const criadaMs = item.criada_em ? new Date(item.criada_em).getTime() : Date.now();
   const expirado = Date.now() - criadaMs > 2 * 60 * 60 * 1000;
