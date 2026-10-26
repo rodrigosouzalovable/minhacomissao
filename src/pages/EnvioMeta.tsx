@@ -552,7 +552,7 @@ export default function EnvioMeta() {
   const importarExcel = async (file: File) => {
     try {
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
+      const wb = XLSX.read(buf, { type: "array", cellNF: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
       if (!ws) throw new Error("Planilha vazia");
       normalizarDatasPlanilha(ws);
