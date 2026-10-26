@@ -488,6 +488,17 @@ export default function AcordoDetalhe() {
     }
   };
 
+  const handleMarcarQuebrado = async () => {
+    if (!acordo) return;
+    const { data: s } = await supabase.auth.getUser();
+    const nota = `[${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}] Marcado como quebrado no credor por ${s.user?.email ?? 'admin'}.`;
+    const { error } = await supabase.from('acordos').update({ status: 'quebrado', observacoes: [acordo.observacoes, nota].filter(Boolean).join('\n') } as never).eq('id', acordo.id);
+    if (error) { toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível marcar o acordo como quebrado.' }); return; }
+    void invalidarRecebimentos(queryClient);
+    toast({ title: 'Acordo marcado como quebrado' });
+    window.location.reload();
+  };
+
   const handleExcluirAcordo = async () => {
     if (!acordo) return;
 
@@ -773,6 +784,25 @@ export default function AcordoDetalhe() {
                 <Pencil className="h-4 w-4 mr-1" />
                 Editar (Admin)
               </Button>
+            )}
+            {isAdmin && acordo.status === 'ativo' && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm">Quebrado na UME</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Marcar acordo como quebrado?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Use quando o acordo já foi quebrado ou cancelado no backoffice do credor. O histórico é preservado e o portal volta a mostrar a dívida em aberto.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleMarcarQuebrado}>Marcar como quebrado</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
             {/* Botão de excluir acordo: admin sempre; dono apenas se NÃO houver parcelas pagas */}
             {(isAdmin || (isOwner && parcelasPagas === 0)) && (
