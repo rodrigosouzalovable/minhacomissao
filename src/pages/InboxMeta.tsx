@@ -1774,6 +1774,25 @@ export default function InboxMeta() {
     await supabase.from('meta_whatsapp_contatos').update({ arquivado: abaAtiva !== 'arquivados' }).in('id', Array.from(selecionados));
     sairMultipla();
   };
+  const dispensarSelecionados = async () => {
+    if (selecionados.size === 0) return;
+    const ids = Array.from(selecionados);
+    const idSet = new Set(ids);
+    const valor = new Date().toISOString();
+    const anteriores = new Map(contatos.filter(c => idSet.has(c.id)).map(c => [c.id, { sla_dispensado_em: c.sla_dispensado_em ?? null, nao_lido: c.nao_lido }]));
+    setContatos(prev => prev.map(c => idSet.has(c.id) ? { ...c, sla_dispensado_em: valor, nao_lido: 0 } : c));
+    setContatoAtivo(prev => prev && idSet.has(prev.id) ? { ...prev, sla_dispensado_em: valor, nao_lido: 0 } : prev);
+    const { error } = await (supabase as any).from('meta_whatsapp_contatos')
+      .update({ sla_dispensado_em: valor, nao_lido: 0 }).in('id', ids);
+    if (error) {
+      setContatos(prev => prev.map(c => anteriores.has(c.id) ? { ...c, ...anteriores.get(c.id)! } : c));
+      setContatoAtivo(prev => prev && anteriores.has(prev.id) ? { ...prev, ...anteriores.get(prev.id)! } : prev);
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: `${ids.length} conversa(s) marcada(s) como "não precisa de resposta"` });
+    sairMultipla();
+  };
   const excluirSelecionados = async () => {
     if (selecionados.size === 0) return;
     const ids = Array.from(selecionados);
@@ -2333,6 +2352,9 @@ export default function InboxMeta() {
                 <span className="text-xs flex-1">{selecionados.size} selecionada(s)</span>
                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={arquivarSelecionados} title={abaAtiva === 'arquivados' ? 'Desarquivar' : 'Arquivar'}>
                   <Archive className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={dispensarSelecionados} title="Não precisa de resposta">
+                  <CheckSquare className="h-3.5 w-3.5" />
                 </Button>
                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={excluirSelecionados} title="Excluir">
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
