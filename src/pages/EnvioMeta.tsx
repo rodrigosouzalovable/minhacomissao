@@ -555,6 +555,7 @@ export default function EnvioMeta() {
       const wb = XLSX.read(buf, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       if (!ws) throw new Error("Planilha vazia");
+      normalizarDatasPlanilha(ws);
       const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: "" });
       if (!rows || rows.length === 0) { toast.error("Planilha vazia"); return; }
       setMapDlg({ open: true, rows, origem: "excel" });
