@@ -26,6 +26,7 @@ const Body = z.discriminatedUnion('acao', [
   z.object({ acao: z.literal('gerar_boleto_unico'), borrowerId: z.string().min(1).max(100), dueDate: data }),
   z.object({ acao: z.literal('simular_renegociacao'), ...reneg.shape }),
   z.object({ acao: z.literal('fechar_acordo'), confirmar: z.literal(true), ...reneg.shape }),
+  z.object({ acao: z.literal('consultar_acordo'), acordoId: z.string().regex(/^\d{1,12}$/) }),
 ]);
 
 Deno.serve(async (req) => {
@@ -55,6 +56,7 @@ Deno.serve(async (req) => {
       case 'gerar_boleto_unico': r = await umeApi.gerarBoletoUnico(ambiente, b.borrowerId, b.dueDate); break;
       case 'simular_renegociacao': { const { acao: _a, ...p } = b; r = await umeApi.simularRenegociacao(ambiente, p); break; }
       case 'fechar_acordo': { const { acao: _a, confirmar: _c, ...p } = b; r = await umeApi.fecharAcordo(ambiente, p); break; }
+      case 'consultar_acordo': r = await chamarUme(ambiente, 'GET', `/renegotiations/${b.acordoId}`); break;
     }
     console.log('[ume-api-action]', { acao: b.acao, ambiente, ms: Date.now() - t0, status: (r as any)?.status });
     return json({ success: (r as any)?.ok === true, ambiente, ...(r as object) });
