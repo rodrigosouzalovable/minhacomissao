@@ -20,6 +20,17 @@ type Empresa = 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred';
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+/** (00) 00000-0000, sem o 55 do país. */
+export function formatarTelefoneBr(valor: string | null | undefined): string {
+  let d = String(valor ?? '').replace(/\D/g, '');
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2);
+  d = d.slice(0, 11);
+  if (d.length <= 2) return d ? `(${d}` : '';
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
 /** Soma meses mantendo o dia (limitado ao fim do mês), sem fuso horário. */
 export function somarMeses(iso: string, meses: number): string {
   const [y, m, d] = iso.split('-').map(Number);
@@ -70,8 +81,19 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
   };
   const [vencBase, setVencBase] = useState<string | null>(null);
 
-  useEffect(() => { setNome(nomeInicial); }, [nomeInicial]);
-  useEffect(() => { setTelefone(telefoneInicial); }, [telefoneInicial]);
+  useEffect(() => { setNome((nomeInicial || '').toUpperCase()); }, [nomeInicial]);
+  useEffect(() => { setTelefone(formatarTelefoneBr(telefoneInicial)); }, [telefoneInicial]);
+  // Nome real cadastrado para o CPF (carteira/devedores) substitui o nome do perfil do WhatsApp.
+  useEffect(() => {
+    const c = cpf.replace(/\D/g, '');
+    if (c.length !== 11) return;
+    let ativo = true;
+    void (async () => {
+      const { data } = await (supabase.rpc as any)('nome_cliente_por_cpf', { p_cpf: c });
+      if (ativo && typeof data === 'string' && data.trim()) setNome(data.trim().toUpperCase());
+    })();
+    return () => { ativo = false; };
+  }, [cpf]);
   useEffect(() => { if (credorInicial) setEmpresa((e) => e ?? credorInicial); }, [credorInicial]);
   // Dias de atraso: parcela em aberto mais antiga da carteira UME/Odres (SFTP).
   useEffect(() => {
@@ -139,8 +161,8 @@ export function LancarAcordoConversa({ cpf, nomeInicial, telefoneInicial, total,
     <div className="space-y-3 rounded border p-3 text-sm">
       <div className="font-medium">Dados do acordo (Meus Acordos)</div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="space-y-1 sm:col-span-2"><Label className="text-xs">Nome do cliente</Label><Input value={nome} onChange={(e) => setNome(e.target.value)} /></div>
-        <div className="space-y-1"><Label className="text-xs">Telefone</Label><Input value={telefone} onChange={(e) => setTelefone(e.target.value)} /></div>
+        <div className="space-y-1 sm:col-span-2"><Label className="text-xs">Nome do cliente</Label><Input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} /></div>
+        <div className="space-y-1"><Label className="text-xs">Telefone</Label><Input value={telefone} placeholder="(00) 00000-0000" maxLength={15} onChange={(e) => setTelefone(formatarTelefoneBr(e.target.value))} /></div>
         <div className="space-y-1"><Label className="text-xs">Dias de atraso</Label><Input value={dias} inputMode="numeric" onChange={(e) => setDias(e.target.value.replace(/\D/g, '').slice(0, 5))} /></div>
         <div className="space-y-1 sm:col-span-2"><Label className="text-xs">Credor</Label>
           <div className="flex gap-2">{credores.map(([k, l]) => (
