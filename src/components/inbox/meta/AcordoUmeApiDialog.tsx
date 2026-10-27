@@ -8,6 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, Play, CheckCircle2, Barcode } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PropostaPortal } from '@/lib/umePropostaPortal';
+import { useQueryClient } from '@tanstack/react-query';
+import { useUserRole } from '@/hooks/useUserRole';
+import { calcularPercentualComissaoMundoDaModa } from '@/lib/comissao';
+import { somarMeses } from '@/components/inbox/meta/LancarAcordoConversa';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const soDigitos = (v: string) => (v || '').replace(/\D/g, '');
 const formatCpf = (d: string) => d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
@@ -42,10 +47,27 @@ function resumoResultado(r: any): string {
 
 export type AcordoEfetivado = { cpf: string; nome: string; total: number; parcelas: number; primeiroVencimento: string; observacao: string };
 
-export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId, onEnviar, proposta, nomeContato, onEfetivado }: {
+export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId, onEnviar, proposta, nomeContato, telefoneContato, onEfetivado }: {
   open: boolean; onOpenChange: (v: boolean) => void; cpfInicial?: string | null; conversaId?: string | null; onEnviar?: (texto: string) => void;
   proposta?: PropostaPortal | null; nomeContato?: string | null; telefoneContato?: string | null; onEfetivado?: (a: AcordoEfetivado) => void;
 }) {
+  const qc = useQueryClient();
+  const { isAdmin } = useUserRole();
+  const [operadorId, setOperadorId] = useState<string | null>(null);
+  const [meuNome, setMeuNome] = useState('');
+  const [operadores, setOperadores] = useState<Array<{ id: string; nome: string | null; email: string | null }>>([]);
+  useEffect(() => {
+    if (!open) return;
+    void supabase.auth.getUser().then(async ({ data }) => {
+      const id = data.user?.id ?? null;
+      setOperadorId((o) => o ?? id);
+      if (id) { const { data: p } = await supabase.from('profiles').select('nome, email').eq('id', id).maybeSingle(); setMeuNome((p as any)?.nome || (p as any)?.email || 'Você'); }
+    });
+  }, [open]);
+  useEffect(() => {
+    if (!open || !isAdmin) return;
+    void supabase.from('profiles').select('id, nome, email').eq('ativo', true).order('nome').then(({ data }) => setOperadores((data as any) || []));
+  }, [open, isAdmin]);
   const [cpf, setCpf] = useState('');
   const [dados, setDados] = useState<Carregado | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -113,8 +135,43 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
     finally { setOcupado(''); }
   };
 
+  const lancarAcordo = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Sessão expirada');
+    const c = soDigitos(cpf);
+    const odres = dados?.cliente.carteira === '217490215' || /odres/i.test(dados?.cliente.carteira || '');
+    let dias = 0;
+    const { data: venc } = await (supabase.rpc as any)('ume_vencimento_mais_antigo', { p_cpf: c });
+    if (venc) {
+      const [y, m, d] = String(venc).slice(0, 10).split('-').map(Number);
+      const h = new Date();
+      dias = Math.max(0, Math.floor((Date.UTC(h.getFullYear(), h.getMonth(), h.getDate()) - Date.UTC(y, m - 1, d)) / 86400000));
+    }
+    const pct = dias > 0 ? calcularPercentualComissaoMundoDaModa(dias) : 0;
+    const base = Math.floor(centavos / n);
+    const valores = Array.from({ length: n }, (_, i) => (i === n - 1 ? centavos - base * (n - 1) : base) / 100);
+    const pags = valores.map((v, i) => ({ numero_parcela: i + 1, data_prevista: somarMeses(primeiroVenc, i), valor_parcela: v, comissao_parcela: round2(v * pct / 100), status: 'pendente' as const }));
+    const tel = soDigitos(telefoneContato || '');
+    const { data: acordo, error } = await supabase.from('acordos').insert({
+      user_id: isAdmin && operadorId ? operadorId : user.id,
+      cliente_nome: (dados?.cliente.nome || nomeContato || 'CLIENTE').trim().toUpperCase(), cliente_cpf: formatCpf(c), cliente_telefone: tel,
+      valor_total: round2(vTotal), parcelas: n, valor_parcela: valores[0], data_primeiro_pagamento: primeiroVenc,
+      dias_atraso: dias, percentual_comissao: pct, comissao_total: round2(pags.reduce((s, p) => s + p.comissao_parcela, 0)),
+      observacoes: `Acordo lançado pela conversa (Inbox) ao gerar boleto/PIX — acordo UME efetivado, ID UME ${dados?.cliente.borrowerId ?? ''}`,
+      empresa: odres ? 'odres_cred' : 'mundo_da_moda',
+      telefone_confirmado_em: tel ? new Date().toISOString() : null, telefone_confirmado_por: tel ? user.id : null,
+      termo_formalizacao_status: 'pendente', termo_meta_contato_id: conversaId ?? null,
+    } as any).select('id').single();
+    if (error) throw error;
+    const { error: e2 } = await supabase.from('pagamentos').insert(pags.map((p) => ({ ...p, acordo_id: acordo.id })));
+    if (e2) throw e2;
+    void qc.invalidateQueries();
+    return dias;
+  };
+
   const gerarBoleto = async () => {
     if (!onEnviar) return;
+    if (isAdmin && !operadorId) { toast.error('Escolha para quem o acordo será lançado'); return; }
     setOcupado('boleto'); setErro('');
     try {
       const { data, error } = await supabase.functions.invoke('ume-boleto', { body: { acao: 'gerar', cpf: soDigitos(cpf), vencimento: primeiroVenc, origem: 'atendente' } });
@@ -122,6 +179,13 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
       if (!(data as any)?.success) throw new Error((data as any)?.message || (data as any)?.error || 'Falha ao gerar boleto');
       onEnviar(textoEnvio((data as any).boleto as Boleto));
       toast.success('Boleto e PIX enviados na conversa');
+      try {
+        const dias = await lancarAcordo();
+        toast.success(dias > 0 ? 'Acordo lançado em Meus Acordos' : 'Acordo lançado — confira os dias de atraso em Meus Acordos');
+      } catch (e) {
+        setErro(`Boleto enviado, mas o acordo não foi lançado: ${String((e as Error)?.message || e)}. Use o botão "+" da conversa.`);
+        return;
+      }
       onOpenChange(false);
     } catch (e) { setErro(String((e as Error)?.message || e)); }
     finally { setOcupado(''); }
