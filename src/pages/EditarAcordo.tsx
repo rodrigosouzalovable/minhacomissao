@@ -28,7 +28,7 @@ const acordoSchema = z.object({
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
   dataPrimeiroPagamento: z.string().min(1, 'Data é obrigatória'),
   diasAtraso: z.number().int().min(0, 'Dias em atraso não pode ser negativo').max(9999),
-  observacoes: z.string().trim().min(3, 'Informe o número que falou com o cliente').max(50, 'Máximo 50 caracteres'),
+  observacoes: z.string().trim().min(3, 'Informe o número que falou com o cliente').max(500, 'Máximo 500 caracteres'),
 });
 
 const formatCpf = (value: string) => {
@@ -619,7 +619,7 @@ export default function EditarAcordo() {
                   placeholder="Ex: (62) 99999-9999 ou ramal 1234"
                   value={form.observacoes}
                   onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
-                  maxLength={50}
+                  maxLength={500}
                   required
                 />
               </div>
