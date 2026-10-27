@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { traduzirErroUme } from './ume-erros.ts';
+import { traduzirErroUme } from '../../supabase/functions/_shared/ume-erros.ts';
 
 describe('traduzirErroUme', () => {
   it('parcela paga em renegociação anterior', () => {
