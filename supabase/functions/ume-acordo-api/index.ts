@@ -44,7 +44,13 @@ Deno.serve(async (req) => {
 
     const { data: cli } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira, data_lote').eq('cpf', b.cpf).maybeSingle();
     if (!cli?.borrower_id) {
-      return json({ success: false, error: 'cpf_fora_da_carteira', message: 'CPF não está nos arquivos UME/Odres importados pelo SFTP. Importe o arquivo de carga mais recente da carteira do cliente.' });
+      const hojeLog = new Date().toISOString().slice(0, 10);
+      await db.from('ume_acordo_api_log').insert({
+        user_id: u.user.id, cpf: b.cpf, borrower_id: '', ambiente: 'prd', acao: b.acao, parcelas: 0,
+        primeiro_vencimento: hojeLog, desconto: 0, juros: 0, installment_ids: [], sucesso: false,
+        resposta: { motivo: 'fora_da_carteira' } as never,
+      }).then(() => {}, () => {});
+      return json({ success: false, error: 'cpf_fora_da_carteira', message: 'Este CPF não veio no arquivo UME/Odres de hoje. Normalmente isso acontece quando a UME ainda considera aberta uma renegociação antiga (mesmo quebrada). Peça à UME para encerrá-la ou lance o acordo pelo + da conversa.' });
     }
     const { data: parc } = await db.from('ume_carteira_parcelas')
       .select('installment_id, contrato, vencimento, valor')
