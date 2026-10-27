@@ -45,10 +45,12 @@ Deno.serve(async (req) => {
     const { data: ok } = await db.rpc('portal_reservar_consulta', { p_chave: chave });
     if (ok !== true) return recusa('Muitas tentativas em pouco tempo. Aguarde alguns minutos.', 'limite_tentativas');
 
-    // Data: hoje até +10 dias (BRT)
+    // Data: hoje ou próximo dia (domingo pula para segunda) — BRT
     const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
-    const max = new Date(Date.parse(`${hoje}T00:00:00Z`) + 10 * 86400000).toISOString().slice(0, 10);
-    if (b.primeiroVencimento < hoje || b.primeiroVencimento > max) return recusa('Escolha uma data entre hoje e os próximos 10 dias.', 'data_fora_prazo');
+    const mx = new Date(Date.parse(`${hoje}T00:00:00Z`) + 86400000);
+    if (mx.getUTCDay() === 0) mx.setUTCDate(mx.getUTCDate() + 1);
+    const max = mx.toISOString().slice(0, 10);
+    if (b.primeiroVencimento < hoje || b.primeiroVencimento > max) return recusa('Escolha pagar hoje ou no próximo dia.', 'data_fora_prazo');
 
     // Já existe acordo ativo na nossa base → atendimento humano
     const { data: ativos } = await db.from('acordos').select('id').eq('cliente_cpf', b.cpf).eq('status', 'ativo').limit(1);

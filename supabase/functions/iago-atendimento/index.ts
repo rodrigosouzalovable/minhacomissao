@@ -1451,7 +1451,7 @@ async function gerarResposta(args: {
         proposta.opcoes.length
           ? `Parcelado com ${proposta.descParceladoPct}% de desconto (total ${fmtBRL(proposta.totalParcelado)}):\n${opcoesTxt}`
           : 'NÃO existe opção parcelada válida (toda parcela ficaria abaixo de R$ 100). Ofereça SOMENTE o valor à vista e não cite parcelamento.',
-        'Parcela mínima permitida: R$ 100,00. Primeira parcela/entrada em até 10 dias.',
+        'Parcela mínima permitida: R$ 100,00. Primeira parcela/entrada para hoje ou no máximo amanhã (se amanhã for domingo, segunda). Para Odres Cred, informe que o desbloqueio do telefone é liberado em até 2 horas após o pagamento via PIX.',
         '',
         'FORMATO OBRIGATÓRIO da proposta (envie exatamente nesta estrutura, preenchendo com os valores acima):',
         'Identificamos algumas parcelas em atraso que totalizam *R$ <total>*.',
