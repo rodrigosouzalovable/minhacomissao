@@ -24,10 +24,17 @@ export function validPortalCpf(value: string): boolean {
   return true;
 }
 
+/** Entrada em D+0 ou D+1; se amanhã for domingo, vale até segunda. */
+export function portalMaxPaymentDate(today: string): string {
+  const t = new Date(Date.parse(`${today}T00:00:00Z`) + 86400000);
+  if (t.getUTCDay() === 0) t.setUTCDate(t.getUTCDate() + 1);
+  return t.toISOString().slice(0, 10);
+}
+
 export function portalPaymentDateValid(date: string, today: string): boolean {
   const start = Date.parse(`${today}T00:00:00Z`);
   const chosen = Date.parse(`${date}T00:00:00Z`);
-  return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(chosen) && new Date(chosen).toISOString().slice(0, 10) === date && chosen >= start && chosen <= start + 10 * 86400000;
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(chosen) && new Date(chosen).toISOString().slice(0, 10) === date && chosen >= start && date <= portalMaxPaymentDate(today);
 }
 
 export function portalBrtToday(): string {
