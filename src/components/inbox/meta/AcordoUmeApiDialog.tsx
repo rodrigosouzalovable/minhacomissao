@@ -265,7 +265,16 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
                 <Button size="sm" onClick={() => void gerarBoleto()} disabled={!!ocupado || !onEnviar}>
                   {ocupado === 'boleto' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Barcode className="mr-2 h-4 w-4" />} Gerar boleto e PIX da primeira parcela e enviar na conversa
                 </Button>
-                <p className="text-xs text-muted-foreground">Para lançar em Meus Acordos, use o botão "+" no topo da conversa.</p>
+                <div className="space-y-1 max-w-sm">
+                  <Label className="text-xs">Lançar acordo para</Label>
+                  {isAdmin ? (
+                    <Select value={operadorId ?? ''} onValueChange={setOperadorId}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o operador" /></SelectTrigger>
+                      <SelectContent>{operadores.map((o) => <SelectItem key={o.id} value={o.id}>{o.nome || o.email}</SelectItem>)}</SelectContent>
+                    </Select>
+                  ) : <Input value={meuNome} disabled />}
+                </div>
+                <p className="text-xs text-muted-foreground">Ao gerar o boleto, o acordo é lançado automaticamente em Meus Acordos para o operador escolhido.</p>
               </div>
             )}
           </div>
