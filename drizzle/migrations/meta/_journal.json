@@ -1492,6 +1492,13 @@
       "when": 1793018085260,
       "tag": "0212_notificacoes_admin_tipos_bloqueados",
       "breakpoints": true
+    },
+    {
+      "idx": 213,
+      "version": "7",
+      "when": 1793098826577,
+      "tag": "0213_relatorio_quebras_diario",
+      "breakpoints": true
     }
   ]
 }
