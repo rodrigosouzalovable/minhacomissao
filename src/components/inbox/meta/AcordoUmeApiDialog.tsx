@@ -22,7 +22,8 @@ const numeroBR = (v: string) => { const n = Number((v || '').replace(/\./g, '').
 const fmtData = (iso: string) => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; };
 
 interface Carregado {
-  cliente: { borrowerId: string; nome: string | null; carteira: string; dataLote: string };
+  cliente: { borrowerId: string; nome: string | null; carteira: string; dataLote: string; diasAtraso?: number | null };
+  online?: boolean;
   parcelas: { installment_id: string; contrato: string | null; vencimento: string | null; valor: number | null }[];
   totalAberto: number;
 }
@@ -140,8 +141,8 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
     if (!user) throw new Error('Sessão expirada');
     const c = soDigitos(cpf);
     const odres = dados?.cliente.carteira === '217490215' || /odres/i.test(dados?.cliente.carteira || '');
-    let dias = 0;
-    const { data: venc } = await (supabase.rpc as any)('ume_vencimento_mais_antigo', { p_cpf: c });
+    let dias = dados?.online && dados.cliente.diasAtraso ? Math.max(0, Math.round(dados.cliente.diasAtraso)) : 0;
+    const { data: venc } = dias ? { data: null } : await (supabase.rpc as any)('ume_vencimento_mais_antigo', { p_cpf: c });
     if (venc) {
       const [y, m, d] = String(venc).slice(0, 10).split('-').map(Number);
       const h = new Date();
@@ -249,19 +250,28 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2">
+            {dados.online && !efetivado && (
+              <div className="space-y-2 rounded border p-3 text-sm">
+                <p>Este CPF não veio no arquivo de parcelas de hoje (comum quando há acordos antigos quebrados). Dados obtidos na consulta online da UME{dados.cliente.diasAtraso ? ` · ${dados.cliente.diasAtraso} dias de atraso` : ''}.</p>
+                <p className="text-xs text-muted-foreground">A simulação pela API precisa das parcelas do arquivo. Efetive o acordo no backoffice UME e clique abaixo para gerar o boleto/PIX e lançar em Meus Acordos.</p>
+                <Button size="sm" variant="outline" disabled={!pode || !!ocupado} onClick={() => { if (window.confirm(`Confirma que o acordo ${n}x (total ${fmt(vTotal)}) já foi efetivado no backoffice UME?`)) { setEfetivado({ origem: 'backoffice' }); onEfetivado?.({ cpf: soDigitos(cpf), nome: dados.cliente.nome || nomeContato || '', total: round2(vTotal), parcelas: n, primeiroVencimento: primeiroVenc, observacao: `acordo efetivado no backoffice UME, ID UME ${dados.cliente.borrowerId}` }); } }}>
+                  <CheckCircle2 className="mr-2 h-4 w-4" /> Acordo já efetivado no backoffice
+                </Button>
+              </div>
+            )}
+            {!dados.online && <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => void executar('simular')} disabled={!pode || !!ocupado || !!efetivado}>
                 {ocupado === 'simular' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />} Simular na UME
               </Button>
               <Button onClick={() => void executar('efetivar')} disabled={!simulacao || !!ocupado || !!efetivado}>
                 {ocupado === 'efetivar' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} {efetivado ? 'Acordo efetivado' : 'Efetivar acordo'}
               </Button>
-            </div>
+            </div>}
 
             {efetivado && (
               <div className="space-y-2 rounded border p-3 text-sm">
                 <div className="font-medium">Acordo registrado na UME</div>
-                <pre className="whitespace-pre-wrap text-xs text-muted-foreground">{resumoResultado(efetivado) || JSON.stringify(efetivado, null, 2).slice(0, 1500)}</pre>
+                {efetivado.origem !== 'backoffice' && <pre className="whitespace-pre-wrap text-xs text-muted-foreground">{resumoResultado(efetivado) || JSON.stringify(efetivado, null, 2).slice(0, 1500)}</pre>}
                 <Button size="sm" onClick={() => void gerarBoleto()} disabled={!!ocupado || !onEnviar}>
                   {ocupado === 'boleto' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Barcode className="mr-2 h-4 w-4" />} Gerar boleto e PIX da primeira parcela e enviar na conversa
                 </Button>
