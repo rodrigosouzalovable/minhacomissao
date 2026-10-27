@@ -3,6 +3,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
+import { consultarUme } from '../_shared/ume-desconto.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,13 +45,22 @@ Deno.serve(async (req) => {
 
     const { data: cli } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira, data_lote').eq('cpf', b.cpf).maybeSingle();
     if (!cli?.borrower_id) {
+      // Fora do arquivo do dia: busca o cadastro online da UME (cache 12h) para permitir boleto e lançamento.
+      if (b.acao === 'carregar') {
+        const c = await consultarUme(db, b.cpf, { perfil: 'essencial', horasCache: 12 }).catch(() => null);
+        if (c?.encontrado && c.borrowerId) {
+          return json({ success: true, online: true, cliente: { borrowerId: c.borrowerId, nome: c.nome || null, carteira: 'online', dataLote: c.consultadoEm.slice(0, 10), diasAtraso: c.diasAtraso }, parcelas: [], totalAberto: Number(c.valorSemJuros ?? 0) });
+        }
+      }
       const hojeLog = new Date().toISOString().slice(0, 10);
       await db.from('ume_acordo_api_log').insert({
         user_id: u.user.id, cpf: b.cpf, borrower_id: '', ambiente: 'prd', acao: b.acao, parcelas: 0,
         primeiro_vencimento: hojeLog, desconto: 0, juros: 0, installment_ids: [], sucesso: false,
         resposta: { motivo: 'fora_da_carteira' } as never,
       }).then(() => {}, () => {});
-      return json({ success: false, error: 'cpf_fora_da_carteira', message: 'Este CPF não veio no arquivo UME/Odres de hoje. Normalmente isso acontece quando a UME ainda considera aberta uma renegociação antiga (mesmo quebrada). Peça à UME para encerrá-la ou lance o acordo pelo + da conversa.' });
+      return json({ success: false, error: 'cpf_fora_da_carteira', message: b.acao === 'carregar'
+        ? 'CPF não localizado na UME (nem no arquivo do dia nem na consulta online).'
+        : 'Este CPF não veio no arquivo de parcelas de hoje, então a simulação pela API não é possível. Efetive no backoffice UME e use "Acordo já efetivado no backoffice" para gerar o boleto e lançar.' });
     }
     const { data: parc } = await db.from('ume_carteira_parcelas')
       .select('installment_id, contrato, vencimento, valor')
