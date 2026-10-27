@@ -14391,6 +14391,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      relatorio_quebras_diario: { Args: { p_dia: string }; Returns: Json }
       relatorio_ume_acionamentos: {
         Args: { _data: string }
         Returns: {
