@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CREDOR_MARCAS } from '@/lib/credorMarcas';
 import { getDiasAtraso } from '@/lib/descontoPortal';
-import { portalBrtToday, portalInstallments, portalMaxPaymentDate, portalPaymentDateValid, portalProposalText, portalTerms, type PortalWallet } from '@/lib/portalNegotiation';
+import { portalBrtToday, portalFifthBusinessDay, portalInstallments, portalMaxPaymentDate, portalNextPaymentDate, portalPaymentDateValid, portalProposalText, portalTerms, type PortalWallet } from '@/lib/portalNegotiation';
 import { useContatoPortal } from '@/hooks/useContatoPortal';
 import { portalDarkLogos } from './PortalShell';
 import { supabase } from '@/integrations/supabase/client';
@@ -43,6 +43,8 @@ export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: Po
   const lastInstallment = installments[installments.length - 1];
   const today = portalBrtToday();
   const maxDate = portalMaxPaymentDate(today);
+  const quinto = portalFifthBusinessDay(today);
+  const atalhos: [string, string][] = [[today, 'Hoje'], [portalNextPaymentDate(today), 'Amanhã'], ...(quinto ? [[quinto, '5º dia útil'] as [string, string]] : [])];
   useEffect(() => { setDate((d) => d || today); }, [today]);
   const valid = !!terms && !hasAgreement && !!mode && total > 0 && portalPaymentDateValid(date, today) && (mode === 'avista' ? wallet.credor !== 'novo_mundo' || total >= 100 : validEntry && installments.length >= 2);
   const whatsapp = `https://wa.me/${contato.phone}?text=${encodeURIComponent(valid && terms ? portalProposalText({credor:wallet.credor,nome:wallet.nome || 'Cliente',cpf,principal:terms.principal,total,installments,date,entrada:entry,contratos:[...new Set(wallet.debitos.map(d=>d.contrato).filter((c):c is string=>!!c))]}) : `Olá! Meu CPF é ${cpf}. Gostaria de consultar meu débito com ${marca.nome}.`)}`;
