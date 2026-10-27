@@ -20,6 +20,17 @@ type Empresa = 'ume_novo_mundo' | 'mundo_da_moda' | 'odres_cred';
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+/** (00) 00000-0000, sem o 55 do país. */
+export function formatarTelefoneBr(valor: string | null | undefined): string {
+  let d = String(valor ?? '').replace(/\D/g, '');
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2);
+  d = d.slice(0, 11);
+  if (d.length <= 2) return d ? `(${d}` : '';
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
 /** Soma meses mantendo o dia (limitado ao fim do mês), sem fuso horário. */
 export function somarMeses(iso: string, meses: number): string {
   const [y, m, d] = iso.split('-').map(Number);
