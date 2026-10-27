@@ -619,7 +619,7 @@ export default function EditarAcordo() {
                   placeholder="Ex: (62) 99999-9999 ou ramal 1234"
                   value={form.observacoes}
                   onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
-                  maxLength={50}
+                  maxLength={500}
                   required
                 />
               </div>
