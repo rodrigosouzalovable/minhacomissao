@@ -25,10 +25,31 @@ export function validPortalCpf(value: string): boolean {
 }
 
 /** Entrada em D+0 ou D+1; se amanhã for domingo, vale até segunda. */
+const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+/** Último dia permitido: 10 dias corridos após hoje. */
 export function portalMaxPaymentDate(today: string): string {
-  const t = new Date(Date.parse(`${today}T00:00:00Z`) + 86400000);
-  if (t.getUTCDay() === 0) t.setUTCDate(t.getUTCDate() + 1);
-  return t.toISOString().slice(0, 10);
+  return addDays(today, 10);
+}
+
+/** Próximo dia (domingo pula para segunda). */
+export function portalNextPaymentDate(today: string): string {
+  const t = addDays(today, 1);
+  return new Date(`${t}T00:00:00Z`).getUTCDay() === 0 ? addDays(t, 1) : t;
+}
+
+/** 5º dia útil (seg–sex) do mês seguinte; null se passar do limite de 10 dias. */
+export function portalFifthBusinessDay(today: string): string | null {
+  const [y, m] = today.split('-').map(Number);
+  const d = new Date(Date.UTC(m === 12 ? y + 1 : y, m % 12, 1));
+  let count = 0;
+  for (;;) {
+    const w = d.getUTCDay();
+    if (w !== 0 && w !== 6 && ++count === 5) break;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  const iso = d.toISOString().slice(0, 10);
+  return iso <= portalMaxPaymentDate(today) ? iso : null;
 }
 
 export function portalPaymentDateValid(date: string, today: string): boolean {
