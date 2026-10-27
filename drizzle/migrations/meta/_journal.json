@@ -1513,6 +1513,13 @@
       "when": 1793130859773,
       "tag": "0215_duplicate_cpf_skip_same_cpf",
       "breakpoints": true
+    },
+    {
+      "idx": 216,
+      "version": "7",
+      "when": 1793131495638,
+      "tag": "0216_nome_cliente_por_cpf",
+      "breakpoints": true
     }
   ]
 }

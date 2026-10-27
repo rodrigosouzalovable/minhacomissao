@@ -14192,6 +14192,7 @@ export type Database = {
         Args: { _instancia_meta_id: string; _uazapi_instance_id: string }
         Returns: Json
       }
+      nome_cliente_por_cpf: { Args: { p_cpf: string }; Returns: string }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       parceiro_tem_instancia: {
         Args: { _instancia: string; _uid: string }
