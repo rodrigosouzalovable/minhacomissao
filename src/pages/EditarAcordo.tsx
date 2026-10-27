@@ -22,7 +22,7 @@ import { ArrowLeft, Calculator, AlertTriangle } from 'lucide-react';
 
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
-  clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine((val) => val.replace(/\D/g, '').length === 11, { message: 'CPF deve ter 11 dígitos' }),
+  clienteCpf: z.string().refine((val) => val.replace(/\D/g, '').length === 11, { message: 'CPF deve ter 11 dígitos' }),
   clienteTelefone: z.string().max(15, 'Telefone inválido').optional(),
   valorTotal: z.number().positive('Valor deve ser maior que zero'),
   parcelas: z.number().int().positive().min(1, 'Mínimo 1 parcela').max(120, 'Máximo 120 parcelas'),
@@ -146,9 +146,9 @@ export default function EditarAcordo() {
 
         
         setForm({
-          clienteNome: acordo.cliente_nome,
-          clienteCpf: acordo.cliente_cpf || '',
-          clienteTelefone: acordo.cliente_telefone || '',
+          clienteNome: (acordo.cliente_nome || '').toUpperCase(),
+          clienteCpf: formatCpf(acordo.cliente_cpf || ''),
+          clienteTelefone: formatPhone((acordo.cliente_telefone || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '')),
           valorTotal: String(acordo.valor_total),
           parcelas: String(acordo.parcelas),
           dataPrimeiroPagamento: acordo.data_primeiro_pagamento,
@@ -414,7 +414,7 @@ export default function EditarAcordo() {
                   id="clienteNome"
                   placeholder="Nome completo do cliente"
                   value={form.clienteNome}
-                  onChange={(e) => setForm({ ...form, clienteNome: e.target.value })}
+                  onChange={(e) => setForm({ ...form, clienteNome: e.target.value.toUpperCase() })}
                   required
                 />
               </div>

@@ -1499,6 +1499,20 @@
       "when": 1793098826577,
       "tag": "0213_relatorio_quebras_diario",
       "breakpoints": true
+    },
+    {
+      "idx": 214,
+      "version": "7",
+      "when": 1793130829021,
+      "tag": "0214_acordos_normalizar_cliente",
+      "breakpoints": true
+    },
+    {
+      "idx": 215,
+      "version": "7",
+      "when": 1793130859773,
+      "tag": "0215_duplicate_cpf_skip_same_cpf",
+      "breakpoints": true
     }
   ]
 }
