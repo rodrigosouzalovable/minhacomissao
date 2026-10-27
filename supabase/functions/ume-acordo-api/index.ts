@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
 import { consultarUme } from '../_shared/ume-desconto.ts';
+import { traduzirErroUme } from '../_shared/ume-erros.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -95,7 +96,7 @@ Deno.serve(async (req) => {
       const totalDebt = Number((base.data as Record<string, unknown> | null)?.totalDebt);
       if (!base.ok || !Number.isFinite(totalDebt)) {
         const d = base.data as Record<string, unknown> | null;
-        return json({ success: false, error: 'ume_base', message: 'A UME recusou: ' + String(d?.message || d?.error || `erro ${base.status}`), detalhe: base.data });
+        return json({ success: false, error: 'ume_base', message: traduzirErroUme(d?.message || d?.error || `erro ${base.status}`), detalhe: base.data });
       }
       if (b.totalAlvo > totalDebt) {
         return json({ success: false, error: 'total_acima_divida', message: `O total combinado é maior que a dívida atualizada na UME (${totalDebt.toFixed(2)}).` });
@@ -114,7 +115,7 @@ Deno.serve(async (req) => {
 
     if (!r.ok) {
       const d = r.data as Record<string, unknown> | null;
-      return json({ success: false, error: String(d?.message || d?.error || `ume_http_${r.status}`), message: 'A UME recusou: ' + String(d?.message || d?.error || `erro ${r.status}`), detalhe: r.data });
+      return json({ success: false, error: String(d?.message || d?.error || `ume_http_${r.status}`), message: traduzirErroUme(d?.message || d?.error || `erro ${r.status}`), detalhe: r.data });
     }
     return json({ success: true, ambiente, totalAberto, resultado: r.data });
   } catch (e) {

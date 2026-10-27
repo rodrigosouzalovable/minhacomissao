@@ -3,6 +3,7 @@ import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
 import { consultarUme, soDigitos } from '../_shared/ume-desconto.ts';
 import { borrowerIdSftp } from '../_shared/ume-carteira.ts';
+import { traduzirErroUme } from '../_shared/ume-erros.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,7 +55,7 @@ Deno.serve(async (req) => {
 
     if (!r.ok) {
       const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
-      return json({ success: false, error: msg, message: 'A UME recusou a geração do boleto. Tente novamente ou confira o cadastro.' });
+      return json({ success: false, error: msg, message: traduzirErroUme(msg, 'a geração do boleto') });
     }
 
     const d = r.data as Record<string, unknown>;
