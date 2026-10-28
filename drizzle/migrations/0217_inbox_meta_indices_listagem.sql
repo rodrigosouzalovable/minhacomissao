@@ -1,0 +1,3 @@
+CREATE INDEX IF NOT EXISTS idx_meta_wa_contatos_inst_arq_folder_ult ON public.meta_whatsapp_contatos (instancia_id, arquivado, folder_id, ultima_mensagem_em DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_meta_wa_contatos_folder_arq_ult ON public.meta_whatsapp_contatos (folder_id, arquivado, ultima_mensagem_em DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_meta_wa_contatos_nao_lidas ON public.meta_whatsapp_contatos (arquivado, ultima_mensagem_em DESC NULLS LAST) WHERE nao_lido > 0;
