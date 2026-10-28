@@ -2379,36 +2379,6 @@ export default function ConfigurarMeta() {
             {isAdmin && (
               <div className="flex items-start justify-between gap-3 rounded-md border p-3">
                 <div>
-                  <Label>Instância de teste da Meta — usar como destino do aquecimento</Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Recebe mensagens na caixa AQUECIMENTO e responde pelo IAGO. Nunca participa de campanhas, cobrança ou evolução de tier.
-                  </p>
-                </div>
-                <Switch
-                  checked={form.instancia_teste_aquecimento}
-                  onCheckedChange={(v) => setForm({ ...form, instancia_teste_aquecimento: v, aquecimento_meta_ativo: v ? false : form.aquecimento_meta_ativo })}
-                />
-              </div>
-            )}
-
-            {isAdmin && !form.instancia_teste_aquecimento && (
-              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
-                <div>
-                  <Label>Número de nova BM — entrar no aquecimento de tier</Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Quando ligado, este número entra no motor de aquecimento (UAZAPI + leads) para subir de 2k → 10k → 100k. Desligado, o motor ignora o número.
-                  </p>
-                </div>
-                <Switch
-                  checked={form.aquecimento_meta_ativo}
-                  onCheckedChange={(v) => setForm({ ...form, aquecimento_meta_ativo: v })}
-                />
-              </div>
-            )}
-
-            {isAdmin && !form.instancia_teste_aquecimento && (
-              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
-                <div>
                   <Label>Copiar templates aprovados automaticamente</Label>
                   <p className="text-xs text-muted-foreground mt-1">
                      Copia os modelos Utility selecionados para novos números, 24h por dia, inclusive domingos, com intervalo de 2–5 minutos por número em todos os tiers. Tier 250: até 2 por número/dia.
