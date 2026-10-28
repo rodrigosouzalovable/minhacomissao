@@ -3,6 +3,8 @@ import { AlertCircle, ArrowUpRight, Check, ChevronDown, Loader2, Zap } from 'luc
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CREDOR_MARCAS } from '@/lib/credorMarcas';
 import { getDiasAtraso } from '@/lib/descontoPortal';
@@ -22,6 +24,7 @@ const maskTelefone = (v: string) => {
   if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 };
+const addMonths = (iso: string, n: number) => { const [y,m,d]=iso.split('-').map(Number); const last=new Date(Date.UTC(y,m-1+n+1,0)).getUTCDate(); const dt=new Date(Date.UTC(y,m-1+n,Math.min(d,last))); return dt.toISOString().slice(0,10); };
 const telefoneOk = (v: string) => /^\(\d{2}\) 9\d{4}-\d{4}$/.test(v);
 
 export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: PortalWallet; cpf: string; retry: () => void }) {
@@ -52,6 +55,9 @@ export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: Po
   const [telefone, setTelefone] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<PortalEfetivacao | null>(null);
+  const [revisando, setRevisando] = useState<'efetivar' | 'whatsapp' | null>(null);
+  const [aceite, setAceite] = useState(false);
+  const abrirRevisao = (t: 'efetivar' | 'whatsapp') => { setAceite(false); setRevisando(t); };
   const confirmar = async () => {
     if (!valid || enviando) return;
     setEnviando(true); setResultado(null);
@@ -82,9 +88,9 @@ export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: Po
             <div><Label>{mode==='avista'?'Data do pagamento à vista':'Data do primeiro pagamento'}</Label><div className="flex gap-2 mt-2 flex-wrap">{atalhos.map(([d,rot])=><Button key={d} type="button" variant={date===d?'default':'outline'} onClick={()=>setDate(d)}>{rot} · {dateLabel(d)}</Button>)}</div><div className="mt-2 max-w-[220px]"><Label className="text-xs">Ou escolha outra data</Label><Input type="date" min={today} max={maxDate} value={date} onChange={e=>setDate(e.target.value)} /></div><p className="text-xs text-muted-foreground mt-2">Pagamento em até 10 dias, até {dateLabel(maxDate)}.</p>{wallet.credor === 'odres_cred' && <div className="flex items-start gap-3 bg-primary/10 border border-primary/30 rounded-lg p-3 mt-3"><Zap className="w-5 h-5 shrink-0 text-primary" /><p className="text-sm leading-relaxed"><strong>Liberação rápida:</strong> pagando via PIX, o desbloqueio do seu telefone é liberado em até 2 horas após o pagamento.</p></div>}</div>
             {autoatendimento && valid && <div><Label htmlFor={`tel-${wallet.credor}`}>Seu WhatsApp com DDD</Label><Input id={`tel-${wallet.credor}`} inputMode="tel" value={telefone} onChange={e=>setTelefone(maskTelefone(e.target.value))} className="mt-2 max-w-xs" placeholder="(62) 99999-9999" /></div>}
             {resultado?.fallback ? <div className="space-y-3"><div className="flex items-start gap-3 bg-muted rounded-lg p-4"><AlertCircle className="w-5 h-5 shrink-0 text-muted-foreground" /><p className="text-sm leading-relaxed">{resultado.message}</p></div><Button asChild className="h-auto min-h-12 whitespace-normal"><a href={whatsapp} target="_blank" rel="noopener noreferrer">Falar no WhatsApp para formalizar<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></a></Button></div>
-            : autoatendimento ? <>{resultado?.message && <p className="text-sm text-destructive">{resultado.message}</p>}<div className="flex flex-col sm:flex-row gap-3"><Button disabled={!valid || !telefoneOk(telefone) || enviando} onClick={()=>void confirmar()} className="h-auto min-h-12 whitespace-normal">{enviando ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Formalizando seu acordo...</> : valid ? 'Confirmar acordo e gerar PIX' : 'Escolha a condição e a data de pagamento'}</Button>{valid && <Button asChild variant="outline" className="h-auto min-h-12 whitespace-normal"><a href={whatsapp} target="_blank" rel="noopener noreferrer">Formalizar acordo no WhatsApp<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></a></Button>}</div></>
+            : autoatendimento ? <>{resultado?.message && <p className="text-sm text-destructive">{resultado.message}</p>}<div className="flex flex-col sm:flex-row gap-3"><Button disabled={!valid || !telefoneOk(telefone) || enviando} onClick={()=>abrirRevisao('efetivar')} className="h-auto min-h-12 whitespace-normal">{enviando ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Formalizando seu acordo...</> : valid ? 'Confirmar acordo e gerar PIX' : 'Escolha a condição e a data de pagamento'}</Button>{valid && <Button variant="outline" className="h-auto min-h-12 whitespace-normal" onClick={()=>abrirRevisao('whatsapp')}>Formalizar acordo no WhatsApp<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></Button>}</div></>
             : <>{valid && <p className="flex items-center gap-2 text-sm text-primary"><Check className="w-4 h-4" />Proposta pronta para confirmar com a equipe.</p>}
-            <Button asChild={valid} disabled={!valid} className="h-auto min-h-12 whitespace-normal">{valid ? <a href={whatsapp} target="_blank" rel="noopener noreferrer">Solicitar esta condição no WhatsApp<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></a> : <span>Escolha a condição e a data de pagamento</span>}</Button></>}
+            <Button disabled={!valid} onClick={()=>abrirRevisao('whatsapp')} className="h-auto min-h-12 whitespace-normal">{valid ? <>Solicitar esta condição no WhatsApp<ArrowUpRight className="w-4 h-4 ml-2 shrink-0" /></> : <span>Escolha a condição e a data de pagamento</span>}</Button></>}
           </div>}
         </div>}
       </>}
@@ -92,5 +98,11 @@ export default function PortalWalletSection({ wallet, cpf, retry }: { wallet: Po
       {terms && !autoatendimento && <p className="text-xs text-muted-foreground mt-5">Simulação sujeita à confirmação da equipe. O pedido não gera acordo nem boleto automaticamente.</p>}
       {terms && autoatendimento && <p className="text-xs text-muted-foreground mt-5">Ao confirmar, seu acordo é formalizado e o PIX da primeira parcela aparece nesta tela.</p>}
     </>}
+      {revisando && mode && <Dialog open onOpenChange={(o)=>{ if(!o) setRevisando(null); }}><DialogContent className="max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Confira seu acordo</DialogTitle><DialogDescription>Leia com atenção antes de confirmar. {marca.nome}</DialogDescription></DialogHeader>
+      <div className="space-y-4 text-sm"><div className="rounded-lg border border-primary/40 bg-primary/10 p-4 text-center"><p className="text-xs font-semibold text-muted-foreground">VOCÊ ESTÁ FECHANDO</p><p className="text-2xl font-bold mt-1">{mode==='avista' ? `À vista: ${money(total)}` : `${installments.length}x de ${money(installments[0] ?? 0)}`}</p>{mode==='parcelado' && lastInstallment!==installments[0] && <p className="text-xs mt-1">Última parcela de {money(lastInstallment ?? 0)}</p>}</div>
+        <dl className="space-y-2">{entry>0 && <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Entrada</dt><dd>{money(entry)}</dd></div>}<div className="flex justify-between gap-4 font-semibold"><dt>Total do acordo</dt><dd>{money(total)}</dd></div><div className="flex justify-between gap-4"><dt className="text-muted-foreground">{mode==='avista'?'Data do pagamento':'1º pagamento'}</dt><dd className="font-semibold">{dateLabel(date)}</dd></div>{telefone && <div className="flex justify-between gap-4"><dt className="text-muted-foreground">WhatsApp</dt><dd>{telefone}</dd></div>}</dl>
+        {mode==='parcelado' && installments.length>0 && <div><p className="text-xs font-semibold text-muted-foreground mb-2">VENCIMENTOS</p><div className="divide-y rounded-md border">{installments.map((v,i)=><div key={i} className="flex justify-between px-3 py-1.5"><span>Parcela {i+1} · {dateLabel(addMonths(date,i))}</span><span className="font-medium">{money(v)}</span></div>)}</div></div>}
+        <label className="flex items-start gap-3 rounded-md bg-muted p-3 cursor-pointer"><Checkbox checked={aceite} onCheckedChange={(v)=>setAceite(v===true)} className="mt-0.5" /><span>Li e confirmo que estou fechando um acordo {mode==='avista' ? `à vista de ${money(total)}` : `de ${installments.length}x de ${money(installments[0] ?? 0)}`}, com {mode==='avista'?'pagamento':'1º pagamento'} em {dateLabel(date)}.</span></label></div>
+      <DialogFooter className="gap-2"><Button variant="outline" onClick={()=>setRevisando(null)}>Voltar e alterar</Button><Button disabled={!aceite} onClick={()=>{ const t=revisando; setRevisando(null); if(t==='efetivar') void confirmar(); else window.open(whatsapp,'_blank','noopener,noreferrer'); }}>Confirmar acordo</Button></DialogFooter></DialogContent></Dialog>}
   </section>;
 }
