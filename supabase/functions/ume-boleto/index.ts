@@ -35,8 +35,11 @@ Deno.serve(async (req) => {
     if (cpf.length !== 11) return json({ error: 'CPF inválido' }, 400);
 
     // Vencimento não pode ser no passado
-    const hoje = new Date().toISOString().slice(0, 10);
-    if (vencimento < hoje) return json({ error: 'vencimento não pode ser no passado' }, 400);
+    const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); // data em Brasília
+    if (vencimento < hoje) {
+      const [a, m, d] = vencimento.split('-');
+      return json({ success: false, error: 'vencimento_passado', message: `O 1º vencimento (${d}/${m}/${a}) já passou. Escolha hoje ou uma data futura e tente de novo.` }, 200);
+    }
 
     // borrowerId vem da consulta da calculadora (cache de 12h; consulta se não houver)
     // Prioriza o ID oficial vindo do SFTP; sem ele, usa a consulta da calculadora
