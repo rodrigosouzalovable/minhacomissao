@@ -42,7 +42,11 @@ Deno.serve(async (req) => {
       const userId = userData?.user?.id;
       if (!userId) return json({ success: false, error: "nao_autenticado" }, 401);
       const { data: admin } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
-      if (admin !== true) return json({ success: false, error: "somente_admin" }, 403);
+      if (admin !== true) {
+        // Leitura de status por não-admin: resposta neutra, sem erro (evita tela branca)
+        if (body?.status_only === true) return json({ success: true, state: null });
+        return json({ success: false, error: "somente_admin" }, 403);
+      }
     }
 
     if (body?.status_only === true) {
