@@ -15,9 +15,10 @@ export function PropostaSftpTab() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [processando, setProcessando] = useState(false);
   const [res, setRes] = useState<Resultado | null>(null);
+  const [pronto, setPronto] = useState<{ wb: any; nome: string; XLSX: any } | null>(null);
 
   async function processar(file: File) {
-    setProcessando(true); setRes(null);
+    setProcessando(true); setRes(null); setPronto(null);
     try {
       const XLSX = await import('xlsx');
       const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
@@ -66,7 +67,7 @@ export function PropostaSftpTab() {
       const out = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(okRows), 'Pronto para envio');
       if (semRows.length > 1) XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(semRows), 'Sem dívida no SFTP');
-      XLSX.writeFile(out, file.name.replace(/\.xlsx?$/i, '') + '_PRONTO.xlsx');
+      setPronto({ wb: out, nome: file.name.replace(/\.xlsx?$/i, '') + '_PRONTO.xlsx', XLSX });
       setRes({ total: rows.length - 1, preenchidos, semDivida, amostra });
       toast.success(`${preenchidos} propostas preenchidas`);
     } catch (e: any) {
@@ -95,8 +96,13 @@ export function PropostaSftpTab() {
         </Button>
         {res && (
           <div className="space-y-2 rounded-md border p-3 text-sm">
-            <p><Download className="mr-1 inline h-4 w-4" /> Planilha baixada: <b>{res.preenchidos}</b> de {res.total} clientes com proposta.
+            <p>Planilha pronta: <b>{res.preenchidos}</b> de {res.total} clientes com proposta.
               {res.semDivida > 0 && <> {res.semDivida} sem dívida no SFTP ficaram numa aba separada e não devem ser enviados.</>}</p>
+            {pronto && (
+              <Button variant="secondary" onClick={() => pronto.XLSX.writeFile(pronto.wb, pronto.nome)}>
+                <Download className="mr-2 h-4 w-4" /> Baixar planilha pronta
+              </Button>
+            )}
             {res.amostra && <p className="text-muted-foreground">Exemplo: {res.amostra}</p>}
           </div>
         )}
