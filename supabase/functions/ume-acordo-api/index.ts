@@ -51,7 +51,16 @@ Deno.serve(async (req) => {
       if (b.acao === 'carregar') {
         const c = await consultarUme(db, b.cpf, { perfil: 'essencial', horasCache: b.forcar === true ? 0 : 12 }).catch(() => null);
         if (c?.encontrado && c.borrowerId) {
-          return json({ success: true, online: true, cliente: { borrowerId: c.borrowerId, nome: c.nome || null, carteira: 'online', dataLote: c.consultadoEm.slice(0, 10), diasAtraso: c.diasAtraso }, parcelas: [], totalAberto: Number(c.valorSemJuros ?? 0) });
+          // Carteira real: último arquivo SFTP em que o CPF apareceu; senão, último acordo lançado.
+          let carteira = 'online';
+          const { data: hist } = await db.from('ume_carteira_parcelas').select('carteira').eq('cpf', b.cpf).order('data_lote', { ascending: false }).limit(1).maybeSingle();
+          if (hist?.carteira) carteira = hist.carteira;
+          else {
+            const { data: ac } = await db.from('acordos').select('empresa').eq('cpf', b.cpf).in('empresa', ['odres_cred', 'mundo_da_moda', 'ume_novo_mundo']).order('created_at', { ascending: false }).limit(1).maybeSingle();
+            if (ac?.empresa === 'odres_cred') carteira = 'odres';
+            else if (ac?.empresa) carteira = 'ume';
+          }
+          return json({ success: true, online: true, cliente: { borrowerId: c.borrowerId, nome: c.nome || null, carteira, dataLote: c.consultadoEm.slice(0, 10), diasAtraso: c.diasAtraso }, parcelas: [], totalAberto: Number(c.valorSemJuros ?? 0) });
         }
       }
       const hojeLog = new Date().toISOString().slice(0, 10);
