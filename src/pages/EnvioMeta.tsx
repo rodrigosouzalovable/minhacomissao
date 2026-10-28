@@ -287,7 +287,7 @@ export default function EnvioMeta() {
   const [importedTemplateKey, setImportedTemplateKey] = useState("");
   const [editAsText, setEditAsText] = useState<boolean>(false);
   // CPF obrigatório na importação — sempre começa ligado.
-  const [cpfObrigatorio, setCpfObrigatorio] = useState<boolean>(true);
+  const [cpfObrigatorio, setCpfObrigatorio] = useState<boolean>(false);
   // Credor obrigatório na importação — sempre começa ligado.
   const [credorObrigatorio, setCredorObrigatorio] = useState<boolean>(true);
   
@@ -322,7 +322,7 @@ export default function EnvioMeta() {
   const [uazConectadasIds, setUazConectadasIds] = useState<string[] | null>(null);
   const [checandoUazConexao, setChecandoUazConexao] = useState<boolean>(false);
   // Validação de WhatsApp durante o disparo, usando todas as UAZAPI conectadas.
-  const [validarNoEnvio, setValidarNoEnvio] = useState<boolean>(true);
+  const [validarNoEnvio] = useState<boolean>(false);
 
   // Checa conexão real das instâncias UAZAPI (cache de 5 min), em lotes de 5.
   const checarConexoesUaz = async (force = false) => {
@@ -1181,7 +1181,19 @@ export default function EnvioMeta() {
   };
 
 
+  const [preparandoDisparo, setPreparandoDisparo] = useState(false);
   const enviar = async () => {
+    if (preparandoDisparo || iniciandoCampanha) return;
+    setPreparandoDisparo(true);
+    // Deixa o botão mostrar "Carregando..." antes de qualquer verificação/confirmação.
+    await new Promise((r) => setTimeout(r, 50));
+    try {
+      await enviarInterno();
+    } finally {
+      setPreparandoDisparo(false);
+    }
+  };
+  const enviarInterno = async () => {
     if (imageUploading) return toast.info('Aguarde o carregamento da imagem.');
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
     if (instanciaIds.length === 0) return toast.error("Selecione ao menos uma instância");
@@ -2590,114 +2602,6 @@ export default function EnvioMeta() {
             </div>
           </div>
 
-          <div className="max-w-md space-y-1.5">
-            <div className="flex items-center justify-between gap-3 rounded-md border p-3">
-              <div className="space-y-0.5">
-                <Label>Validar WhatsApp durante o disparo</Label>
-                <p className="text-xs text-muted-foreground">
-                  O sistema checa cada contato com todos os números UAZAPI conectados enquanto envia. Quem não tem
-                  WhatsApp não recebe e fica marcado na campanha. Se a UAZAPI estiver fora, o envio continua normalmente.
-                </p>
-              </div>
-              <Switch checked={validarNoEnvio} onCheckedChange={setValidarNoEnvio} />
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>
-                {uazConectadasIds === null
-                  ? "Números UAZAPI para validação: verificar"
-                  : `${uazDisponiveis.length} número(s) UAZAPI conectado(s) para validar`}
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-6 px-2"
-                onClick={() => checarConexoesUaz(true)}
-                disabled={checandoUazConexao}
-              >
-                {checandoUazConexao ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              </Button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={validarAgora}
-                disabled={validando || recipients.length === 0}
-              >
-                {validando ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />}
-                Validar agora (opcional)
-              </Button>
-
-              {validacaoPreview && validacaoPreview.valid.length > 0 && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    const validSet = new Set(validacaoPreview.valid.map((t) => normalizeTelKey(t)));
-                    const dedup = dedupRecipientsRaw(recipientsRaw, isentosDedup);
-                    const linhas = recipientRecordLines(dedup.texto);
-                    const usarHeaders = recipientsHeaders.length > 0;
-                    const colHeaders = usarHeaders ? recipientsHeaders : ["Telefone", "Nome", "CPF/CNPJ", "Atraso", "Saldo"];
-                    const dados: Record<string, any>[] = [];
-                    for (const linha of linhas) {
-                      const parts = splitLinhaEnvio(linha);
-                      const tel = parts[0] || "";
-                      if (!validSet.has(normalizeTelKey(tel))) continue;
-                      const row: Record<string, any> = {};
-                      colHeaders.forEach((h, i) => { row[h] = parts[i] ?? ""; });
-                      dados.push(row);
-                    }
-                    if (dados.length === 0) { toast.error("Nada para exportar"); return; }
-                    const { exportarParaExcel } = await import("@/lib/exportExcel");
-                    const hoje = new Date().toISOString().slice(0, 10);
-                    await exportarParaExcel(
-                      dados,
-                      colHeaders.map((h) => ({ chave: h, titulo: h })),
-                      `contatos-com-whatsapp-${hoje}`
-                    );
-                    toast.success(`${dados.length} contatos exportados`);
-                  }}
-                >
-                  <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
-                  Baixar Excel ({validacaoPreview.valid.length} com WhatsApp)
-                </Button>
-              )}
-            </div>
-            {validacaoPreview && (
-              <div className="mt-2 rounded-md border bg-muted/30 p-2 space-y-1.5">
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <Badge className="bg-green-600 text-white">✅ {validacaoPreview.valid.length} com WhatsApp</Badge>
-                  <Badge variant="destructive">🚫 {validacaoPreview.bloqueados ?? validacaoPreview.invalid.length} sem WhatsApp bloqueado(s)</Badge>
-                  {validacaoPreview.errors.length > 0 && (
-                    <Badge className="bg-amber-500 text-white">⚠️ {validacaoPreview.errors.length} erro(s)</Badge>
-                  )}
-                  {validacaoPreview.duplicados && validacaoPreview.duplicados > 0 ? (
-                    <Badge variant="secondary">🔁 {validacaoPreview.duplicados} duplicado(s) removido(s)</Badge>
-                  ) : null}
-                </div>
-                {validacaoPreview.invalid.length > 0 && (
-                  <details className="text-xs">
-                    <summary className="cursor-pointer text-red-600">Ver sem WhatsApp</summary>
-                    <div className="max-h-32 overflow-auto font-mono mt-1 space-y-0.5">
-                      {validacaoPreview.invalid.map((t, i) => <div key={i}>{t}</div>)}
-                    </div>
-                  </details>
-                )}
-                {validacaoPreview.errors.length > 0 && (
-                  <details className="text-xs">
-                    <summary className="cursor-pointer text-amber-600">Ver erros de validação</summary>
-                    <div className="max-h-32 overflow-auto font-mono mt-1 space-y-0.5">
-                      {validacaoPreview.errors.map((t, i) => <div key={i}>{t}</div>)}
-                    </div>
-                  </details>
-                )}
-              </div>
-            )}
-          </div>
 
 
           <div className="max-w-md space-y-1.5">
@@ -2747,14 +2651,16 @@ export default function EnvioMeta() {
 
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enviar} disabled={imageUploading || validando || enviandoTeste || iniciandoCampanha || motivosBloqueio.length > 0 || (parceiroMeta && folderId === "__default__")} size="lg">
-              {validando || iniciandoCampanha
+            <Button onClick={enviar} disabled={preparandoDisparo || imageUploading || validando || enviandoTeste || iniciandoCampanha || motivosBloqueio.length > 0 || (parceiroMeta && folderId === "__default__")} size="lg">
+              {preparandoDisparo || validando || iniciandoCampanha
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : agendamento.ativo
                   ? <CalendarClock className="h-4 w-4 mr-2" />
                   : <Send className="h-4 w-4 mr-2" />}
               {iniciandoCampanha
                 ? "Revalidando instâncias na Meta..."
+                : preparandoDisparo
+                  ? "Carregando..."
                 : validando
                   ? "Validando WhatsApp..."
                 : `${agendamento.ativo ? "Agendar" : "Disparar"} ${recipients.length > 0 ? `(${recipients.length})` : ""}`}
