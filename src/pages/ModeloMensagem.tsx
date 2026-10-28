@@ -5,6 +5,7 @@ import { LayoutUmeTab } from '@/components/modelo-mensagem/LayoutUmeTab';
 
 import { LayoutUazapiTab } from '@/components/modelo-mensagem/LayoutUazapiTab';
 import { LayoutVistaParcelamentoTab } from '@/components/modelo-mensagem/LayoutVistaParcelamentoTab';
+import { PropostaSftpTab } from '@/components/modelo-mensagem/PropostaSftpTab';
 import { ModeloUmeTab } from '@/components/modelo-mensagem/ModeloUmeTab';
 import { EditarTemplateMensagemDialog } from '@/components/EditarTemplateMensagemDialog';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ export default function ModeloMensagem() {
               <TabsTrigger value="vista-parcelamento">Layout à vista + parcelamento</TabsTrigger>
               <TabsTrigger value="uazapi">Layout Uazapi</TabsTrigger>
               <TabsTrigger value="ume">Modelo UME</TabsTrigger>
+              <TabsTrigger value="proposta-sftp">Proposta {"{{2}}"} SFTP</TabsTrigger>
             </TabsList>
             <TabsContent value="imagem" className="mt-4">
               <ColarImagemTab key={reloadKey} />
@@ -64,6 +66,9 @@ export default function ModeloMensagem() {
             </TabsContent>
             <TabsContent value="ume" className="mt-4">
               <ModeloUmeTab />
+            </TabsContent>
+            <TabsContent value="proposta-sftp" className="mt-4">
+              <PropostaSftpTab />
             </TabsContent>
           </Tabs>
         ) : (
