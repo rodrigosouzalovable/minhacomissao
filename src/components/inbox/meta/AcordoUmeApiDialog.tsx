@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, Play, CheckCircle2, Barcode } from 'lucide-react';
+import { Loader2, Search, Play, CheckCircle2, Barcode, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PropostaPortal } from '@/lib/umePropostaPortal';
 import { useQueryClient } from '@tanstack/react-query';
@@ -98,11 +98,11 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
     return data as any;
   };
 
-  const carregar = async (c = cpf) => {
+  const carregar = async (c = cpf, forcar = false) => {
     if (soDigitos(c).length !== 11) { toast.error('Informe um CPF com 11 dígitos'); return; }
-    setCarregando(true); setErro(''); setSimulacao(null);
+    setCarregando(true); setErro(''); setSimulacao(null); if (forcar) setEfetivado(null);
     try {
-      const r = await chamar({ acao: 'carregar', cpf: soDigitos(c) });
+      const r = await chamar({ acao: 'carregar', cpf: soDigitos(c), forcar });
       setDados(r);
       if (!proposta?.total) setTotalAcordo((atual) => atual || String(r.totalAberto).replace('.', ','));
     } catch (e) { setDados(null); setErro(String((e as Error)?.message || e)); }
@@ -216,6 +216,9 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
           <Input value={formatCpf(soDigitos(cpf))} onChange={(e) => setCpf(soDigitos(e.target.value).slice(0, 11))} className="max-w-[190px]" placeholder="000.000.000-00" />
           <Button variant="outline" onClick={() => void carregar()} disabled={carregando}>
             {carregando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}<span className="ml-2">Buscar parcelas</span>
+          </Button>
+          <Button variant="outline" onClick={() => void carregar(cpf, true)} disabled={carregando} title="Consultar a UME novamente agora, sem usar dados salvos">
+            <RefreshCw className={`h-4 w-4 ${carregando ? 'animate-spin' : ''}`} /><span className="ml-2">Atualizar</span>
           </Button>
         </div>
 
