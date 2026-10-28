@@ -698,15 +698,21 @@ export default function InboxMeta() {
   const etiquetasAtivas = useMemo(() => etiquetas.filter(e => e.ativa !== false), [etiquetas]);
 
   // Etiquetas oferecidas no menu de contexto: atendentes só da caixa ativa
+  // A etiqueta do próprio usuário sempre aparece, mesmo sem escala na caixa.
   const etiquetasMenu = useMemo(() => {
-    if (!nomesAtendenteCaixa) return etiquetasAtivas;
-    return etiquetasAtivas.filter((e) => {
+    const base = !nomesAtendenteCaixa ? etiquetasAtivas : etiquetasAtivas.filter((e) => {
       const nome = String(e.nome || '').trim();
       if (!/^atendente:/i.test(nome)) return true;
+      if (e.id === minhaEtiquetaId) return true;
       const puro = nome.replace(/^atendente:\s*/i, '').trim().toLowerCase();
       return nomesAtendenteCaixa.has(puro);
     });
-  }, [etiquetasAtivas, nomesAtendenteCaixa]);
+    if (minhaEtiquetaId && !base.some((e) => e.id === minhaEtiquetaId)) {
+      const minha = etiquetas.find((e) => e.id === minhaEtiquetaId);
+      if (minha) return [...base, minha].sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+    }
+    return base;
+  }, [etiquetasAtivas, nomesAtendenteCaixa, minhaEtiquetaId, etiquetas]);
 
   const podeAdministrarCaixaAtual = useMemo(() => {
     if (currentFolderId === null) return isAdmin || adminPadrao;
