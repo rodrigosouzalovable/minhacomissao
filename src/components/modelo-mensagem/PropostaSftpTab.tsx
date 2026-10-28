@@ -15,9 +15,10 @@ export function PropostaSftpTab() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [processando, setProcessando] = useState(false);
   const [res, setRes] = useState<Resultado | null>(null);
+  const [pronto, setPronto] = useState<{ wb: any; nome: string; XLSX: any } | null>(null);
 
   async function processar(file: File) {
-    setProcessando(true); setRes(null);
+    setProcessando(true); setRes(null); setPronto(null);
     try {
       const XLSX = await import('xlsx');
       const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
@@ -36,10 +37,17 @@ export function PropostaSftpTab() {
       // Soma o principal em aberto do último lote do SFTP por CPF (lotes pequenos para não estourar a URL).
       const porCpf = new Map<string, { lote: string; soma: number }>();
       for (let i = 0; i < cpfs.length; i += LOTE) {
-        const { data, error } = await db.from('ume_carteira_parcelas')
-          .select('cpf, valor, data_lote').in('cpf', cpfs.slice(i, i + LOTE)).limit(10000);
-        if (error) throw error;
-        for (const p of data ?? []) {
+        // O servidor devolve no máximo 1.000 linhas por consulta: paginar até acabar.
+        const data: any[] = [];
+        for (let de = 0; ; de += 1000) {
+          const { data: pg, error } = await db.from('ume_carteira_parcelas')
+            .select('cpf, valor, data_lote, installment_id').in('cpf', cpfs.slice(i, i + LOTE))
+            .order('installment_id').range(de, de + 999);
+          if (error) throw error;
+          data.push(...(pg ?? []));
+          if (!pg || pg.length < 1000) break;
+        }
+        for (const p of data) {
           const at = porCpf.get(p.cpf);
           const v = Number(p.valor) || 0;
           if (!at || p.data_lote > at.lote) porCpf.set(p.cpf, { lote: p.data_lote, soma: v });
@@ -66,7 +74,7 @@ export function PropostaSftpTab() {
       const out = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(okRows), 'Pronto para envio');
       if (semRows.length > 1) XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(semRows), 'Sem dívida no SFTP');
-      XLSX.writeFile(out, file.name.replace(/\.xlsx?$/i, '') + '_PRONTO.xlsx');
+      setPronto({ wb: out, nome: file.name.replace(/\.xlsx?$/i, '') + '_PRONTO.xlsx', XLSX });
       setRes({ total: rows.length - 1, preenchidos, semDivida, amostra });
       toast.success(`${preenchidos} propostas preenchidas`);
     } catch (e: any) {
@@ -95,8 +103,13 @@ export function PropostaSftpTab() {
         </Button>
         {res && (
           <div className="space-y-2 rounded-md border p-3 text-sm">
-            <p><Download className="mr-1 inline h-4 w-4" /> Planilha baixada: <b>{res.preenchidos}</b> de {res.total} clientes com proposta.
+            <p>Planilha pronta: <b>{res.preenchidos}</b> de {res.total} clientes com proposta.
               {res.semDivida > 0 && <> {res.semDivida} sem dívida no SFTP ficaram numa aba separada e não devem ser enviados.</>}</p>
+            {pronto && (
+              <Button variant="secondary" onClick={() => pronto.XLSX.writeFile(pronto.wb, pronto.nome)}>
+                <Download className="mr-2 h-4 w-4" /> Baixar planilha pronta
+              </Button>
+            )}
             {res.amostra && <p className="text-muted-foreground">Exemplo: {res.amostra}</p>}
           </div>
         )}
