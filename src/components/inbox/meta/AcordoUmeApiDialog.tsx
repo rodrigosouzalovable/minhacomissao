@@ -141,7 +141,9 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Sessão expirada');
     const c = soDigitos(cpf);
-    const odres = dados?.cliente.carteira === '217490215' || /odres/i.test(dados?.cliente.carteira || '');
+    const odres = dados?.cliente.carteira === 'online'
+      ? window.confirm('Não encontramos a carteira deste cliente. Ele é da ODRES CRED?\n\nOK = Odres Cred  •  Cancelar = UME')
+      : dados?.cliente.carteira === '217490215' || /odres/i.test(dados?.cliente.carteira || '');
     let dias = dados?.online && dados.cliente.diasAtraso ? Math.max(0, Math.round(dados.cliente.diasAtraso)) : 0;
     const { data: venc } = dias ? { data: null } : await (supabase.rpc as any)('ume_vencimento_mais_antigo', { p_cpf: c });
     if (venc) {
