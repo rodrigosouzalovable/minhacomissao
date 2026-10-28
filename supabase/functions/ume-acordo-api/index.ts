@@ -25,6 +25,7 @@ const Body = z.discriminatedUnion('acao', [
     juros: z.number().min(0).max(8).default(0),
     totalAlvo: z.number().positive().optional(),
     confirmar: z.boolean().optional(),
+    forcar: z.boolean().optional(),
     conversaId: z.string().uuid().nullish(),
   }),
 ]);
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
     if (!cli?.borrower_id) {
       // Fora do arquivo do dia: busca o cadastro online da UME (cache 12h) para permitir boleto e lançamento.
       if (b.acao === 'carregar') {
-        const c = await consultarUme(db, b.cpf, { perfil: 'essencial', horasCache: 12 }).catch(() => null);
+        const c = await consultarUme(db, b.cpf, { perfil: 'essencial', horasCache: b.forcar === true ? 0 : 12 }).catch(() => null);
         if (c?.encontrado && c.borrowerId) {
           return json({ success: true, online: true, cliente: { borrowerId: c.borrowerId, nome: c.nome || null, carteira: 'online', dataLote: c.consultadoEm.slice(0, 10), diasAtraso: c.diasAtraso }, parcelas: [], totalAberto: Number(c.valorSemJuros ?? 0) });
         }
