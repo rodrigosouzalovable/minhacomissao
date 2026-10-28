@@ -8,6 +8,7 @@ import { z } from 'npm:zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
 import { consultarUme } from '../_shared/ume-desconto.ts';
 import { notificarAdmin } from '../_shared/notificar-admin.ts';
+import { enviarConfirmacaoPortal } from '../_shared/portal-confirmacao-cliente.ts';
 
 const ADMIN_USER_ID = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
 const CARTEIRA: Record<'ume' | 'odres_cred', string> = { ume: '201845262', odres_cred: '217490215' };
@@ -114,6 +115,17 @@ Deno.serve(async (req) => {
       if (e2) console.error('[portal-efetivar] parcelas', e2.message);
     }
 
+    const negoc = n === 1 ? `à vista ${money(total)}` : `${n}x de ${money(valores[0])} (total ${money(total)})`;
+    const textoCliente = [
+      `Olá, ${nome.split(' ')[0]}! Seu acordo com a ${label} foi registrado com sucesso pelo portal.`, '',
+      `💰 Negociação: ${negoc}`, `📅 1º vencimento: ${br(b.primeiroVencimento)}`,
+      ...(boleto?.pixCode ? ['', '*PIX copia e cola da 1ª parcela:*', boleto.pixCode] : []),
+      ...(boleto?.invoiceUrl ? ['', `📄 Boleto: ${boleto.invoiceUrl}`] : []),
+      ...(credorReal !== 'ume' ? ['', 'Pagando via PIX, o desbloqueio do telefone ocorre em até 2 horas.'] : []),
+      '', 'Qualquer dúvida, é só responder esta mensagem.',
+    ].join('\n');
+    const conf = await enviarConfirmacaoPortal(db, b.telefone, textoCliente).catch((e) => ({ ok: false, motivo: String(e) }));
+    console.log('[portal-efetivar] confirmação cliente', conf);
     const cpfFmt = b.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
     await notificarAdmin(db, {
       tipo: 'portal_acordo_emitido',
@@ -125,6 +137,7 @@ Deno.serve(async (req) => {
         `💰 Negociação: ${n === 1 ? `À vista ${money(total)}` : `${n}x de ${money(valores[0])}${valores[n - 1] !== valores[0] ? ` (última ${money(valores[n - 1])})` : ''} — total ${money(total)}`}`,
         `📌 Principal: ${money(r2(principal))}`, `📅 1º vencimento: ${br(b.primeiroVencimento)}`, `⏱️ Atraso: ${dias} dias (comissão ${pct}%)`,
         `⚡ ${boleto ? 'PIX/boleto da 1ª parcela emitido e exibido ao cliente.' : '⚠️ Acordo fechado, mas o boleto NÃO foi emitido — gerar manualmente.'}`,
+        conf.ok ? '📲 Confirmação com PIX enviada ao cliente no WhatsApp.' : `⚠️ Confirmação NÃO enviada ao cliente (${conf.motivo}) — enviar manualmente.`,
         acordoId ? '✅ Lançado no seu login em Meus Acordos.' : '⚠️ Falha ao lançar em Meus Acordos — lançar manualmente.',
       ].join('\n'),
     }).catch((e) => console.error('[portal-efetivar] aviso', String(e)));
