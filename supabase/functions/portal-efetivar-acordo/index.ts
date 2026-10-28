@@ -124,7 +124,8 @@ Deno.serve(async (req) => {
       ...(credorReal !== 'ume' ? ['', 'Pagando via PIX, o desbloqueio do telefone ocorre em até 2 horas.'] : []),
       '', 'Qualquer dúvida, é só responder esta mensagem.',
     ].join('\n');
-    const conf = await enviarConfirmacaoPortal(db, b.telefone, textoCliente).catch((e) => ({ ok: false, motivo: String(e) }));
+    void textoCliente;
+    const conf = await enviarConfirmacaoPortal(db, b.telefone, { nome, parcelas: n, valorParcela: valores[0], vencimento: b.primeiroVencimento }).catch((e) => ({ ok: false, motivo: String(e) }));
     console.log('[portal-efetivar] confirmação cliente', conf);
     const cpfFmt = b.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
     await notificarAdmin(db, {
