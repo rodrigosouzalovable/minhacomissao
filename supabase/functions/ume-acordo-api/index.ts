@@ -25,6 +25,7 @@ const Body = z.discriminatedUnion('acao', [
     juros: z.number().min(0).max(8).default(0),
     totalAlvo: z.number().positive().optional(),
     confirmar: z.boolean().optional(),
+    forcar: z.boolean().optional(),
     conversaId: z.string().uuid().nullish(),
   }),
 ]);
