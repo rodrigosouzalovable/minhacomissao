@@ -37,10 +37,17 @@ export function PropostaSftpTab() {
       // Soma o principal em aberto do último lote do SFTP por CPF (lotes pequenos para não estourar a URL).
       const porCpf = new Map<string, { lote: string; soma: number }>();
       for (let i = 0; i < cpfs.length; i += LOTE) {
-        const { data, error } = await db.from('ume_carteira_parcelas')
-          .select('cpf, valor, data_lote').in('cpf', cpfs.slice(i, i + LOTE)).limit(10000);
-        if (error) throw error;
-        for (const p of data ?? []) {
+        // O servidor devolve no máximo 1.000 linhas por consulta: paginar até acabar.
+        const data: any[] = [];
+        for (let de = 0; ; de += 1000) {
+          const { data: pg, error } = await db.from('ume_carteira_parcelas')
+            .select('cpf, valor, data_lote, installment_id').in('cpf', cpfs.slice(i, i + LOTE))
+            .order('installment_id').range(de, de + 999);
+          if (error) throw error;
+          data.push(...(pg ?? []));
+          if (!pg || pg.length < 1000) break;
+        }
+        for (const p of data) {
           const at = porCpf.get(p.cpf);
           const v = Number(p.valor) || 0;
           if (!at || p.data_lote > at.lote) porCpf.set(p.cpf, { lote: p.data_lote, soma: v });
