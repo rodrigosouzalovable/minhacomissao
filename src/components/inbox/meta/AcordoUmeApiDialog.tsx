@@ -1,3 +1,4 @@
+import { conferirBoletoUme } from "@/lib/umeBoletoConferencia";
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -178,7 +179,10 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
       const { data, error } = await supabase.functions.invoke('ume-boleto', { body: { acao: 'gerar', cpf: soDigitos(cpf), vencimento: primeiroVenc, origem: 'atendente' } });
       if (error) throw error;
       if (!(data as any)?.success) throw new Error((data as any)?.message || (data as any)?.error || 'Falha ao gerar boleto');
-      onEnviar(textoEnvio((data as any).boleto as Boleto));
+      const bol = (data as any).boleto as Boleto;
+      const divergencia = conferirBoletoUme({ valor: bol?.valor ?? null, vencimento: bol?.vencimento ?? null }, { valorParcela: parcela, vencimento: primeiroVenc });
+      if (divergencia) { setErro(divergencia); toast.error('Boleto divergente — não enviado'); return; }
+      onEnviar(textoEnvio(bol));
       toast.success('Boleto e PIX enviados na conversa');
       try {
         const dias = await lancarAcordo();
@@ -257,7 +261,7 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
               <div className="space-y-2 rounded border p-3 text-sm">
                 <p>Este CPF não veio no arquivo de parcelas de hoje (comum quando há acordos antigos quebrados). Dados obtidos na consulta online da UME{dados.cliente.diasAtraso ? ` · ${dados.cliente.diasAtraso} dias de atraso` : ''}.</p>
                 <p className="text-xs text-muted-foreground">A simulação pela API precisa das parcelas do arquivo. Efetive o acordo no backoffice UME e clique abaixo para gerar o boleto/PIX e lançar em Meus Acordos.</p>
-                <Button size="sm" variant="outline" disabled={!pode || !!ocupado} onClick={() => { if (window.confirm(`Confirma que o acordo ${n}x (total ${fmt(vTotal)}) já foi efetivado no backoffice UME?`)) { setEfetivado({ origem: 'backoffice' }); onEfetivado?.({ cpf: soDigitos(cpf), nome: dados.cliente.nome || nomeContato || '', total: round2(vTotal), parcelas: n, primeiroVencimento: primeiroVenc, observacao: `acordo efetivado no backoffice UME, ID UME ${dados.cliente.borrowerId}` }); } }}>
+                <Button size="sm" variant="outline" disabled={!pode || !!ocupado} onClick={() => { if (window.confirm(`Confirma que o acordo ${n}x (total ${fmt(vTotal)}) já foi efetivado no backoffice UME, com 1º vencimento ${fmtData(primeiroVenc)}?\n\nO boleto só sai certo se o acordo já existir na UME com o mesmo valor e data. Se não bater, o sistema não envia nada ao cliente.`)) { setEfetivado({ origem: 'backoffice' }); onEfetivado?.({ cpf: soDigitos(cpf), nome: dados.cliente.nome || nomeContato || '', total: round2(vTotal), parcelas: n, primeiroVencimento: primeiroVenc, observacao: `acordo efetivado no backoffice UME, ID UME ${dados.cliente.borrowerId}` }); } }}>
                   <CheckCircle2 className="mr-2 h-4 w-4" /> Acordo já efetivado no backoffice
                 </Button>
               </div>
