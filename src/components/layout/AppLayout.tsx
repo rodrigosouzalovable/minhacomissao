@@ -339,7 +339,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Filter nav items based on role
   const filteredNavItems = navItems.filter((item) => {
     // Administradores globais mantêm acesso completo.
-    if (isAdmin) return true;
+    // Admin com lista de abas salva vê só as marcadas (Usuários sempre visível).
+    if (isAdmin) {
+      if (item.href === '/admin/usuarios') return true;
+      if (abasPermitidas) {
+        if (item.href === '/admin/campanhas-meta') return veCampanhas || abasPermitidas.includes(item.href);
+        return abasPermitidas.includes(item.href);
+      }
+      return true;
+    }
     // Campanhas possui uma permissão explícita separada no editor.
     if (item.href === '/admin/campanhas-meta') return veCampanhas;
     if (abasPermitidas) {
