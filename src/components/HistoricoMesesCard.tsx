@@ -46,7 +46,16 @@ export function HistoricoMesesCard() {
       if (!user) throw new Error('Faça login para consultar recebimentos.');
 
       // Meu resultado
-      const { data: acordos } = await supabase.from('acordos').select('id, empresa').eq('user_id', user.id);
+      // Paginado: o banco devolve no máximo 1.000 linhas por consulta.
+      const acordos: { id: string; empresa: string | null }[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: lote, error } = await supabase
+          .from('acordos').select('id, empresa').eq('user_id', user.id)
+          .order('id').range(from, from + 999);
+        if (error) throw error;
+        acordos.push(...((lote || []) as { id: string; empresa: string | null }[]));
+        if (!lote || lote.length < 1000) break;
+      }
       let meuTotal = 0;
       let meuNovoMundo = 0;
       let meuUme = 0;
@@ -56,13 +65,14 @@ export function HistoricoMesesCard() {
       const empresaPorAcordo = new Map((acordos || []).map((a) => [a.id, a.empresa]));
       if (ids.length) {
         for (let i = 0; i < ids.length; i += 200) {
-          const { data: pg } = await supabase
+          const { data: pg, error: pgErr } = await supabase
             .from('pagamentos')
             .select('acordo_id, valor_parcela')
             .in('acordo_id', ids.slice(i, i + 200))
             .eq('status', 'pago')
             .gte('data_paga', ini)
             .lte('data_paga', fim);
+          if (pgErr) throw pgErr;
           (pg || []).forEach((p) => {
             meuTotal += Number(p.valor_parcela || 0);
             meuQtd += 1;

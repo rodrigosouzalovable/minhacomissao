@@ -1,45 +1,54 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
 
+// Cache em memória: evita que uma falha momentânea rebaixe um admin para funcionário.
+const roleCache = new Map<string, AppRole>();
+
+async function buscarRole(userId: string): Promise<{ role: AppRole | null; ok: boolean }> {
+  const { data, error } = await Promise.race([
+    supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
+    new Promise<{ data: null; error: Error }>((resolve) =>
+      setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 10000)),
+  ]) as { data: { role: AppRole } | null; error: unknown };
+  if (error) return { role: null, ok: false };
+  return { role: data?.role ?? 'funcionario', ok: true };
+}
+
 export function useUserRole() {
   const { user } = useAuth();
-  const [role, setRole] = useState<AppRole | null>(null);
+  const [role, setRole] = useState<AppRole | null>(user ? roleCache.get(user.id) ?? null : null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchRole() {
-      if (!user) {
-        setRole(null);
+  const fetchRole = useCallback(async () => {
+    if (!user) { setRole(null); setLoading(false); return; }
+    const cached = roleCache.get(user.id);
+    if (cached) { setRole(cached); setLoading(false); }
+    // Até 3 tentativas com espera crescente antes de assumir funcionário.
+    for (let t = 0; t < 3; t++) {
+      const r = await buscarRole(user.id);
+      if (r.ok && r.role) {
+        roleCache.set(user.id, r.role);
+        setRole(r.role);
         setLoading(false);
         return;
       }
-
-      // Limite de 10s para a tela nunca ficar presa em "Carregando..."
-      const { data, error } = await Promise.race([
-        supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle(),
-        new Promise<{ data: null; error: Error }>((resolve) =>
-          setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 10000)),
-      ]) as { data: { role: AppRole } | null; error: unknown };
-
-      if (error) {
-        console.error('Error fetching user role:', error);
-        setRole('funcionario');
-      } else {
-        setRole(data?.role ?? 'funcionario');
-      }
-      setLoading(false);
+      if (t < 2) await new Promise((res) => setTimeout(res, 1500 * (t + 1)));
     }
-
-    fetchRole();
+    console.error('Error fetching user role: falhou após 3 tentativas');
+    if (!cached) setRole('funcionario');
+    setLoading(false);
   }, [user]);
+
+  useEffect(() => { void fetchRole(); }, [fetchRole]);
 
   return {
     role,
     loading,
+    refetch: fetchRole,
     isAdmin: role === 'admin',
     isGestor: role === 'gestor',
     isFuncionario: role === 'funcionario',
