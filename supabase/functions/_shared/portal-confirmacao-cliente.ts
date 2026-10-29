@@ -1,5 +1,6 @@
 // Confirmação ao cliente no WhatsApp após acordo fechado pelo portal.
 // Sempre pelo template aprovado `confirmacao_acordo_portal`, somente na instância Novo Mundo 3144.
+import { aplicarEtiquetaRodrigo } from './etiqueta-portal-avista.ts';
 
 export const PORTAL_CONFIRMACAO_INSTANCIA_ID = 'b103ac3e-5781-47c4-8e11-24a323f5f0ee';
 export const PORTAL_CONFIRMACAO_TEMPLATE = 'confirmacao_acordo_portal';
@@ -33,7 +34,16 @@ export async function enviarConfirmacaoPortal(db: any, telefone: string, dados: 
       }),
     });
     const j = await r.json().catch(() => ({}));
-    if (r.ok && j?.success !== false) return { ok: true, motivo: 'enviado' };
+    if (r.ok && j?.success !== false) {
+      if (Number(dados.parcelas) === 1) {
+        try {
+          const { data: ct } = await db.from('meta_whatsapp_contatos').select('id')
+            .eq('instancia_id', PORTAL_CONFIRMACAO_INSTANCIA_ID).like('telefone', `%${digits.slice(-8)}`).limit(1).maybeSingle();
+          if (ct?.id) await aplicarEtiquetaRodrigo(db, ct.id);
+        } catch (e) { console.log('[portal-confirmacao] etiqueta', String(e)); }
+      }
+      return { ok: true, motivo: 'enviado' };
+    }
     return { ok: false, motivo: String(j?.error || `HTTP ${r.status}`).slice(0, 160) };
   } catch (e) { return { ok: false, motivo: String(e).slice(0, 160) }; }
 }

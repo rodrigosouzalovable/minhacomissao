@@ -8,6 +8,7 @@ import { registrarAutoRespostaSeConfirmada } from '../_shared/registrar-auto-res
 import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-resposta.ts';
 import { ORIGEM_CADASTRAL } from '../_shared/recuperacao-cadastral-rules.ts';
 import { NOVO_MUNDO_ORIGEM } from '../_shared/novo-mundo-contatos-rules.ts';
+import { etiquetarSeAcordoPortalAVista } from '../_shared/etiqueta-portal-avista.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -955,6 +956,11 @@ serve(async (req) => {
                 console.log('[MetaWebhook] conversa movida da caixa IA para Padrão', { contatoIdFinal });
               }
             }
+          }
+
+          if (!isEcho && contatoIdFinal) {
+            try { await etiquetarSeAcordoPortalAVista(supabase, contatoIdFinal, String(from || '')); }
+            catch (e) { console.log('[MetaWebhook] etiqueta portal à vista', String(e)); }
           }
 
           if (!isEcho && contatoIdFinal && !_leadAquecimento) {
