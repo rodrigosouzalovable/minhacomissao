@@ -329,3 +329,6 @@ All colors MUST be HSL.
   }
 }
 
+/* Logos centralizadas na home (qualquer quantidade de credores). */
+.portal-home .portal-brands { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; }
+.portal-home .portal-brand { flex: 0 1 210px; }
