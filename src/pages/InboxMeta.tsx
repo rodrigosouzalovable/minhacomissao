@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -2209,6 +2210,16 @@ export default function InboxMeta() {
             </div>
             {/* Caixas de mensagens */}
             <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => { void atualizarCaixas(); }}
+                disabled={caixasCarregando}
+                className="text-[11px] px-1.5 py-1 rounded border border-transparent bg-muted/40 text-muted-foreground hover:bg-accent disabled:opacity-60"
+                title="Atualizar caixas de mensagens"
+                aria-label="Atualizar caixas de mensagens"
+              >
+                <RefreshCw className={cn('h-3 w-3', caixasCarregando && 'animate-spin')} />
+              </button>
               {podeVerPadrao && (
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
@@ -3137,7 +3148,7 @@ export default function InboxMeta() {
           open={foldersDialogOpen}
           onOpenChange={setFoldersDialogOpen}
           currentUserId={user.id}
-          onChanged={fetchFolders}
+          onChanged={() => { void fetchFolders(); }}
         />
       )}
       <MetaFolderAcessoDialog
@@ -3145,7 +3156,7 @@ export default function InboxMeta() {
         onOpenChange={(v) => { if (!v) setAcessoFolder(null); }}
         folderId={acessoFolder?.id ?? null}
         folderNome={acessoFolder?.nome ?? 'Padrão'}
-        onChanged={fetchFolders}
+        onChanged={() => { void fetchFolders(); }}
       />
       <AcordoUmeApiDialog
         open={gerarAcordoUmeOpen}
