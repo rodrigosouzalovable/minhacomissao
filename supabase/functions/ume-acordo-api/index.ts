@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
           const { data: hist } = await db.from('ume_carteira_parcelas').select('carteira').eq('cpf', b.cpf).order('data_lote', { ascending: false }).limit(1).maybeSingle();
           if (hist?.carteira) carteira = hist.carteira;
           else {
-            const { data: ac } = await db.from('acordos').select('empresa').eq('cpf', b.cpf).in('empresa', ['odres_cred', 'mundo_da_moda', 'ume_novo_mundo']).order('created_at', { ascending: false }).limit(1).maybeSingle();
+            const { data: ac } = await db.from('acordos').select('empresa').eq('cpf', b.cpf).in('empresa', ['odres_cred', 'mundo_da_moda', 'ume_novo_mundo']).order('criado_em', { ascending: false }).limit(1).maybeSingle();
             if (ac?.empresa === 'odres_cred') carteira = 'odres';
             else if (ac?.empresa) carteira = 'ume';
           }
