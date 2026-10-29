@@ -1534,6 +1534,13 @@
       "when": 1793278059458,
       "tag": "0218_lock_rodrigo_atendente_label",
       "breakpoints": true
+    },
+    {
+      "idx": 219,
+      "version": "7",
+      "when": 1793292745534,
+      "tag": "0219_contatos_telefone_trgm",
+      "breakpoints": true
     }
   ]
 }

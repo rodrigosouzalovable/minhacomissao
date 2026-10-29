@@ -18,11 +18,12 @@ export function useUserRole() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // Limite de 10s para a tela nunca ficar presa em "Carregando..."
+      const { data, error } = await Promise.race([
+        supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle(),
+        new Promise<{ data: null; error: Error }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 10000)),
+      ]) as { data: { role: AppRole } | null; error: unknown };
 
       if (error) {
         console.error('Error fetching user role:', error);

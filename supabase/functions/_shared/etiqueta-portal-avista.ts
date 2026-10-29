@@ -33,7 +33,7 @@ export async function etiquetarSeAcordoPortalAVista(db: any, contatoId: string, 
   const { data } = await db.from('acordos').select('parcelas, observacoes, status')
     .eq('user_id', PORTAL_ADMIN_USER_ID).eq('parcelas', 1)
     .like('observacoes', `${PORTAL_OBS_PREFIXO}%`).like('cliente_telefone', `%${suf}`)
-    .order('created_at', { ascending: false }).limit(1);
+    .order('criado_em', { ascending: false }).limit(1);
   const a = (data ?? [])[0];
   if (!a || !ehAcordoPortalAVista(a)) return false;
   return aplicarEtiquetaRodrigo(db, contatoId);
