@@ -363,7 +363,18 @@ Deno.serve(async (req) => {
       .eq('instancia_id', instancia_id);
     if (useBsuid) contatoQuery = contatoQuery.eq('bsuid', bsuid);
     else contatoQuery = contatoQuery.eq('telefone', to);
-    const { data: contato } = await contatoQuery.maybeSingle();
+    let { data: contato } = await contatoQuery.maybeSingle();
+    if (!contato && !useBsuid && to && to.length >= 8) {
+      const { data: porSufixo } = await supabase
+        .from('meta_whatsapp_contatos')
+        .select('id, ultima_msg_entrada_em, telefone, bsuid')
+        .eq('instancia_id', instancia_id)
+        .like('telefone', `%${to.slice(-8)}`)
+        .order('ultima_msg_entrada_em', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+      if (porSufixo) contato = porSufixo as any;
+    }
     const ultimaEntrada = contato?.ultima_msg_entrada_em ? new Date(contato.ultima_msg_entrada_em).getTime() : 0;
     if (!ultimaEntrada || (Date.now() - ultimaEntrada) >= 24 * 60 * 60 * 1000) {
       try {
