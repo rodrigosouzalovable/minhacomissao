@@ -14297,6 +14297,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      recuperacao_quebrados_autorizada: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
       registrar_auto_resposta_geral: {
         Args: {
           _cidade?: string
