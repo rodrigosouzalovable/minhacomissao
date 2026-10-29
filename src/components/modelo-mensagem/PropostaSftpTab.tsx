@@ -70,9 +70,10 @@ export function PropostaSftpTab() {
         const linha = [...r];
         const info = porCpf.get(cpfDe(r[iCpf]));
         if (!info || info.soma <= 0) { semDivida++; linha[iVar] = ''; return linha; }
-        const cred = String(iCred >= 0 ? r[iCred] : '').toUpperCase().includes('UME') ? 'ume' : 'odres';
+        const celCred = String(iCred >= 0 ? r[iCred] : '').toUpperCase();
+        const cred: CredorProposta = celCred.includes('UME') ? 'ume' : celCred.includes('ODRES') ? 'odres' : credor;
         linha[iCpf] = cpfDe(r[iCpf]);
-        linha[iVar] = textoProposta(info.soma, cred);
+        linha[iVar] = textoProposta(info.soma, cred, modelos[cred]);
         if (!amostra) amostra = linha[iVar];
         preenchidos++;
         return linha;
@@ -103,6 +104,22 @@ export function PropostaSftpTab() {
             Envie a planilha com as colunas CPF, {'{{1}}'}, TELEFONE, {'{{2}}'} (em branco) e CREDOR. O sistema busca o principal em aberto
             de cada CPF, calcula à vista pelo principal e parcelado com +10% em até 18x (parcela mínima R$ 100) e baixa a planilha pronta para o Envio Meta.
           </p>
+        </div>
+        <div className="space-y-2 rounded-md border p-3">
+          <div className="flex gap-2">
+            <Button size="sm" variant={credor === 'odres' ? 'default' : 'outline'} onClick={() => setCredor('odres')}>ODRES CRED</Button>
+            <Button size="sm" variant={credor === 'ume' ? 'default' : 'outline'} onClick={() => setCredor('ume')}>UME</Button>
+          </div>
+          <Textarea rows={4} value={modelos[credor]}
+            onChange={(e) => setModelos((m) => ({ ...m, [credor]: e.target.value }))} />
+          <p className="text-xs text-muted-foreground">
+            Variáveis: {'{avista}'}, {'{parcelas}'}, {'{valor_parcela}'}. O trecho entre [ ] some quando a dívida não permite parcelar.
+            Linhas com CREDOR na planilha usam o texto do credor delas; sem CREDOR, usam o credor selecionado.
+          </p>
+          <p className="text-sm"><b>Prévia:</b> {textoProposta(2101.8, credor, modelos[credor])}</p>
+          <Button size="sm" variant="ghost" onClick={() => setModelos((m) => ({ ...m, [credor]: MODELOS_PADRAO[credor] }))}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Restaurar texto padrão
+          </Button>
         </div>
         <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void processar(f); }} />
