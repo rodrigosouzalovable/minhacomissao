@@ -26,19 +26,37 @@ export function PropostaSftpTab() {
   useEffect(() => { localStorage.setItem(CHAVE_MODELOS, JSON.stringify(modelos)); }, [modelos]);
 
 
-  async function processar(file: File) {
-    setProcessando(true); setRes(null); setPronto(null);
+  async function lerArquivo(f: File) {
+    setRes(null); setPronto(null);
     try {
       const XLSX = await import('xlsx');
-      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: '' });
       if (rows.length < 2) throw new Error('Planilha vazia');
       const head = rows[0].map((h: any) => String(h).trim().toUpperCase());
-      const iCpf = head.findIndex((h: string) => h.includes('CPF'));
-      const iVar = head.findIndex((h: string) => h.replace(/\s/g, '') === '{{2}}');
-      const iCred = head.findIndex((h: string) => h.includes('CREDOR'));
-      if (iCpf < 0 || iVar < 0) throw new Error('A planilha precisa das colunas CPF e {{2}}');
+      setArq({ rows, nome: f.name, XLSX });
+      setMapa({
+        cpf: head.findIndex((h: string) => h.includes('CPF')),
+        v2: head.findIndex((h: string) => h.replace(/\s/g, '') === '{{2}}'),
+        cred: head.findIndex((h: string) => h.includes('CREDOR')),
+      });
+    } catch (e: any) {
+      toast.error('Erro: ' + (e?.message || e));
+    } finally {
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  async function processar() {
+    if (!arq) return;
+    const { rows, XLSX } = arq;
+    const file = { name: arq.nome };
+    const iCpf = mapa.cpf, iVar = mapa.v2, iCred = mapa.cred;
+    setArq(null);
+    setProcessando(true); setRes(null); setPronto(null);
+    try {
+      if (iCpf < 0 || iVar < 0) throw new Error('Escolha as colunas CPF e {{2}}');
 
       const cpfDe = (v: any) => String(v ?? '').replace(/\D/g, '').padStart(11, '0');
       const cpfs = [...new Set(rows.slice(1).map((r) => cpfDe(r[iCpf])).filter((c) => c !== '00000000000'))];
