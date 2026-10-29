@@ -36,12 +36,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-    );
-    const { data: userData } = await supabase.auth.getUser(jwt);
-    const user = userData?.user;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabase = createClient(Deno.env.get('SUPABASE_URL') || '', serviceKey);
+    const body = await req.json();
+    // Chamada interna (rotinas do servidor) pode disparar em nome do dono informado.
+    let user: { id: string } | null = null;
+    if (jwt === serviceKey && typeof body?.asUserId === 'string') {
+      user = { id: body.asUserId };
+    } else {
+      const { data: userData } = await supabase.auth.getUser(jwt);
+      user = userData?.user ?? null;
+    }
     if (!user) {
       console.error('[iniciar] recusado 401: token inválido/expirado (auth.getUser falhou)');
       return new Response(JSON.stringify({ success: false, error: 'Sessão expirada ou inválida. Saia e entre novamente para disparar.' }), {
@@ -49,7 +54,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
     const template = body?.template as { id: string; nome_template: string } | undefined;
     const instanciaIds: string[] = Array.isArray(body?.instanciaIds) ? body.instanciaIds : [];
     const clientes: Cliente[] = Array.isArray(body?.clientes) ? body.clientes : [];
