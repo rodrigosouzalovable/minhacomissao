@@ -959,7 +959,7 @@ serve(async (req) => {
           }
 
           if (!isEcho && contatoIdFinal) {
-            try { await etiquetarSeAcordoPortalAVista(supabase, contatoIdFinal, String(from || '')); }
+            try { await etiquetarSeAcordoPortalAVista(supabase, contatoIdFinal, String(outroLado || '')); }
             catch (e) { console.log('[MetaWebhook] etiqueta portal à vista', String(e)); }
           }
 
