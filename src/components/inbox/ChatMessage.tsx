@@ -4,6 +4,7 @@ import { FileText, Image as ImageIcon, Loader2, X, Trash2, Ban, Pencil, Reply, C
 import { toast } from '@/hooks/use-toast';
 import { createPortal } from 'react-dom';
 import { WhatsAppAudioPlayer } from './WhatsAppAudioPlayer';
+import { ImageLightbox } from './ImageLightbox';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -721,27 +722,8 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
         </AlertDialogContent>
       </AlertDialog>
 
-      {showLightbox && lightboxImageSrc && createPortal(
-        <div
-          className="fixed inset-0 z-[100] bg-black/90 animate-in fade-in-0 duration-200"
-          onClick={closeLightbox}
-        >
-          <button
-            onClick={closeLightbox}
-            className="absolute top-4 right-4 z-10 text-white/80 hover:text-white transition p-2 rounded-full bg-white/10 hover:bg-white/20"
-          >
-            <X className="h-6 w-6" />
-          </button>
-          <div className="flex h-full w-full items-center justify-center p-4 sm:p-6 md:p-10">
-            <img
-              src={lightboxImageSrc}
-              alt="Imagem ampliada"
-              className="h-full w-full object-contain"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>,
-        document.body
+      {showLightbox && lightboxImageSrc && (
+        <ImageLightbox src={lightboxImageSrc} onClose={closeLightbox} />
       )}
     </>
   );
