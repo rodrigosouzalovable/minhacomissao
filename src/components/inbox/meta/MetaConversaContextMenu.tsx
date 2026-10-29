@@ -50,7 +50,7 @@ export function MetaConversaContextMenu({
 
   const handleMarcarNaoLida = async () => {
     const { error } = await supabase.from('meta_whatsapp_contatos').update({ nao_lido: 1 }).eq('id', contatoId);
-    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    if (error) toast({ title: error.message.includes('ETIQUETA_RODRIGO_TRAVADA') ? 'Etiqueta bloqueada' : 'Erro', description: error.message.replace(/^.*ETIQUETA_RODRIGO_TRAVADA:\s*/, ''), variant: 'destructive' });
     else onMarcarNaoLida();
   };
 
@@ -71,7 +71,7 @@ export function MetaConversaContextMenu({
       const { error } = await supabase.from('meta_whatsapp_contato_etiquetas').delete()
         .eq('contato_id', contatoId).eq('etiqueta_id', etiquetaId);
       if (error) {
-        toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+        toast({ title: error.message.includes('ETIQUETA_RODRIGO_TRAVADA') ? 'Etiqueta bloqueada' : 'Erro', description: error.message.replace(/^.*ETIQUETA_RODRIGO_TRAVADA:\s*/, ''), variant: 'destructive' });
         return;
       }
       onEtiquetaToggle(contatoId, etiquetaId, false);
@@ -97,7 +97,7 @@ export function MetaConversaContextMenu({
       const { error: delErr } = await supabase.from('meta_whatsapp_contato_etiquetas').delete()
         .eq('contato_id', contatoId).in('etiqueta_id', antigos.map(e => e.id));
       if (delErr) {
-        toast({ title: 'Erro', description: delErr.message, variant: 'destructive' });
+        toast({ title: delErr.message.includes('ETIQUETA_RODRIGO_TRAVADA') ? 'Etiqueta bloqueada' : 'Erro', description: delErr.message.replace(/^.*ETIQUETA_RODRIGO_TRAVADA:\s*/, ''), variant: 'destructive' });
         return;
       }
       antigos.forEach(e => onEtiquetaToggle(contatoId, e.id, false));
@@ -106,7 +106,7 @@ export function MetaConversaContextMenu({
     const { error } = await supabase.from('meta_whatsapp_contato_etiquetas')
       .insert({ contato_id: contatoId, etiqueta_id: etiquetaId });
     if (error) {
-      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+      toast({ title: error.message.includes('ETIQUETA_RODRIGO_TRAVADA') ? 'Etiqueta bloqueada' : 'Erro', description: error.message.replace(/^.*ETIQUETA_RODRIGO_TRAVADA:\s*/, ''), variant: 'destructive' });
       return;
     }
     onEtiquetaToggle(contatoId, etiquetaId, true);
