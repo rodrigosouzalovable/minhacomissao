@@ -74,7 +74,7 @@ function formatCpfFull(cpf: string) {
 
 export default function ConsultaResultado() {
   const { cpf, creditor } = useParams<{ cpf: string; creditor: string }>();
-  if (cpf && creditor && ['novomundo', 'ume', 'odrescred', 'odres_cred'].includes(creditor)) return <PublicPortalResults cpf={cpf} />;
+  if (cpf && creditor && ['novomundo', 'ume', 'odrescred', 'odres_cred'].includes(creditor)) return <PublicPortalResults cpf={cpf} slug={creditor} />;
   return <LegacyConsultaResultado />;
 }
 
