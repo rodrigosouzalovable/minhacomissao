@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Upload, Download, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +21,8 @@ export function PropostaSftpTab() {
   const [res, setRes] = useState<Resultado | null>(null);
   const [pronto, setPronto] = useState<{ wb: any; nome: string; XLSX: any } | null>(null);
   const [credor, setCredor] = useState<CredorProposta>('odres');
+  const [arq, setArq] = useState<{ rows: any[][]; nome: string; XLSX: any } | null>(null);
+  const [mapa, setMapa] = useState({ cpf: -1, v2: -1, cred: -1 });
   const [modelos, setModelos] = useState<Record<CredorProposta, string>>(() => {
     try { return { ...MODELOS_PADRAO, ...JSON.parse(localStorage.getItem(CHAVE_MODELOS) || '{}') }; }
     catch { return MODELOS_PADRAO; }
@@ -26,19 +30,37 @@ export function PropostaSftpTab() {
   useEffect(() => { localStorage.setItem(CHAVE_MODELOS, JSON.stringify(modelos)); }, [modelos]);
 
 
-  async function processar(file: File) {
-    setProcessando(true); setRes(null); setPronto(null);
+  async function lerArquivo(f: File) {
+    setRes(null); setPronto(null);
     try {
       const XLSX = await import('xlsx');
-      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false, defval: '' });
       if (rows.length < 2) throw new Error('Planilha vazia');
       const head = rows[0].map((h: any) => String(h).trim().toUpperCase());
-      const iCpf = head.findIndex((h: string) => h.includes('CPF'));
-      const iVar = head.findIndex((h: string) => h.replace(/\s/g, '') === '{{2}}');
-      const iCred = head.findIndex((h: string) => h.includes('CREDOR'));
-      if (iCpf < 0 || iVar < 0) throw new Error('A planilha precisa das colunas CPF e {{2}}');
+      setArq({ rows, nome: f.name, XLSX });
+      setMapa({
+        cpf: head.findIndex((h: string) => h.includes('CPF')),
+        v2: head.findIndex((h: string) => h.replace(/\s/g, '') === '{{2}}'),
+        cred: head.findIndex((h: string) => h.includes('CREDOR')),
+      });
+    } catch (e: any) {
+      toast.error('Erro: ' + (e?.message || e));
+    } finally {
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  async function processar() {
+    if (!arq) return;
+    const { rows, XLSX } = arq;
+    const file = { name: arq.nome };
+    const iCpf = mapa.cpf, iVar = mapa.v2, iCred = mapa.cred;
+    setArq(null);
+    setProcessando(true); setRes(null); setPronto(null);
+    try {
+      if (iCpf < 0 || iVar < 0) throw new Error('Escolha as colunas CPF e {{2}}');
 
       const cpfDe = (v: any) => String(v ?? '').replace(/\D/g, '').padStart(11, '0');
       const cpfs = [...new Set(rows.slice(1).map((r) => cpfDe(r[iCpf])).filter((c) => c !== '00000000000'))];
@@ -122,7 +144,47 @@ export function PropostaSftpTab() {
           </Button>
         </div>
         <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) void processar(f); }} />
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) void lerArquivo(f); }} />
+        <Dialog open={!!arq} onOpenChange={(o) => { if (!o) setArq(null); }}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader><DialogTitle>Selecione as colunas da planilha</DialogTitle></DialogHeader>
+            {arq && (() => {
+              const cab = arq.rows[0].map((h: any, i: number) => String(h).trim() || `Coluna ${i + 1}`);
+              const campo = (rotulo: string, chave: 'cpf' | 'v2' | 'cred', opcional = false) => (
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">{rotulo}</p>
+                  <Select value={String(mapa[chave])} onValueChange={(v) => setMapa((m) => ({ ...m, [chave]: Number(v) }))}>
+                    <SelectTrigger><SelectValue placeholder="Escolha a coluna" /></SelectTrigger>
+                    <SelectContent>
+                      {opcional && <SelectItem value="-1">Nenhuma — usar credor selecionado</SelectItem>}
+                      {cab.map((h: string, i: number) => <SelectItem key={i} value={String(i)}>{h}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+              return (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {campo('CPF *', 'cpf')}{campo('Coluna da {{2}} *', 'v2')}{campo('CREDOR', 'cred', true)}
+                  </div>
+                  <div className="max-h-56 overflow-auto rounded-md border text-xs">
+                    <table className="w-full">
+                      <thead><tr>{cab.map((h: string, i: number) => <th key={i} className="border-b p-2 text-left">{h}</th>)}</tr></thead>
+                      <tbody>{arq.rows.slice(1, 6).map((r: any[], j: number) => (
+                        <tr key={j}>{cab.map((_: string, i: number) => <td key={i} className="border-b p-2">{String(r[i] ?? '')}</td>)}</tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{arq.rows.length - 1} linhas no arquivo {arq.nome}</p>
+                </div>
+              );
+            })()}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setArq(null)}>Cancelar</Button>
+              <Button disabled={mapa.cpf < 0 || mapa.v2 < 0} onClick={() => void processar()}>Calcular</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <Button onClick={() => inputRef.current?.click()} disabled={processando}>
           {processando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
           {processando ? 'Calculando...' : 'Enviar planilha'}
