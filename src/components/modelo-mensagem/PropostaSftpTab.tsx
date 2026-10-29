@@ -91,21 +91,18 @@ export function PropostaSftpTab() {
         if (idx === 0) return r;
         const linha = [...r];
         const info = porCpf.get(cpfDe(r[iCpf]));
-        if (!info || info.soma <= 0) { semDivida++; linha[iVar] = ''; return linha; }
         const celCred = String(iCred >= 0 ? r[iCred] : '').toUpperCase();
         const cred: CredorProposta = celCred.includes('UME') ? 'ume' : celCred.includes('ODRES') ? 'odres' : credor;
         linha[iCpf] = cpfDe(r[iCpf]);
+        if (!info || info.soma <= 0) { semDivida++; linha[iVar] = textoSemDivida(cred); return linha; }
         linha[iVar] = textoProposta(info.soma, cred, modelos[cred]);
         if (!amostra) amostra = linha[iVar];
         preenchidos++;
         return linha;
       });
 
-      const okRows = [saida[0], ...saida.slice(1).filter((l) => l[iVar])];
-      const semRows = [saida[0], ...saida.slice(1).filter((l) => !l[iVar])];
       const out = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(okRows), 'Pronto para envio');
-      if (semRows.length > 1) XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(semRows), 'Sem dívida no SFTP');
+      XLSX.utils.book_append_sheet(out, XLSX.utils.aoa_to_sheet(saida), 'Pronto para envio');
       setPronto({ wb: out, nome: file.name.replace(/\.xlsx?$/i, '') + '_PRONTO.xlsx', XLSX });
       setRes({ total: rows.length - 1, preenchidos, semDivida, amostra });
       toast.success(`${preenchidos} propostas preenchidas`);
