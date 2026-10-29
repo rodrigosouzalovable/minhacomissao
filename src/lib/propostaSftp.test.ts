@@ -20,3 +20,14 @@ describe('proposta SFTP', () => {
     );
   });
 });
+
+describe('proposta UME', () => {
+  test('texto UME no formato da Opção 3 (final de ano)', () => {
+    expect(textoProposta(2101.8, 'ume')).toBe(
+      'UME com condições especiais de final de ano. Quite à vista por R$ 2.101,80 ou parcele em até 18x de R$ 128,44. Pague a 1ª no PIX e volte a comprar a prazo!',
+    );
+  });
+  test('UME sem parcelamento quando não cabe 2x de R$ 100', () => {
+    expect(textoProposta(150, 'ume')).toBe('UME com condições especiais de final de ano. Quite à vista por R$ 150,00. Pague a 1ª no PIX e volte a comprar a prazo!');
+  });
+});
