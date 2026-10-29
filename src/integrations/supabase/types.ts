@@ -12657,6 +12657,21 @@ export type Database = {
         Args: { _pares: Json }
         Returns: number
       }
+      acordos_ativos_por_destinatarios: {
+        Args: { _cpfs: string[]; _sufixos: string[] }
+        Returns: {
+          acordo_id: string
+          cliente_nome: string
+          cpf: string
+          cpf_norm: string
+          criado_em: string
+          empresa: string
+          responsavel: string
+          status: string
+          sufixo: string
+          telefone: string
+        }[]
+      }
       acordos_parcelas_resumo: {
         Args: { p_acordo_ids: string[] }
         Returns: {
