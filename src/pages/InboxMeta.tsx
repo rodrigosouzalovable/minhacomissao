@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -149,7 +150,8 @@ function formatContatoTime(ts: string | null) {
 
 export default function InboxMeta() {
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
+  const [caixasCarregando, setCaixasCarregando] = useState(false);
   const { parceiroMeta } = useUserPermissions();
   const { toast } = useToast();
   const location = useLocation();
@@ -540,34 +542,37 @@ export default function InboxMeta() {
 
   useEffect(() => { fetchEtiquetas(); fetchMsgRapidas(); }, [fetchEtiquetas, fetchMsgRapidas]);
 
-  const fetchFolders = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase.from('meta_inbox_folders')
-      .select('id, nome, cor, owner_id')
-      .order('nome');
-    setFolders(((data as any) ?? []) as MetaInboxFolder[]);
-    // Caixa Padrão: visível só para admin ou usuários atribuídos a ela.
-    if (isAdmin) {
-      setPodeVerPadrao(true);
+  const fetchFolders = useCallback(async (tentativa = 0): Promise<void> => {
+    if (!user || roleLoading) return;
+    setCaixasCarregando(true);
+    try {
+      // Permissão da PADRÃO e lista de caixas ao mesmo tempo; PADRÃO decidida primeiro.
+      const [foldersRes, dmRes, admRes] = await Promise.all([
+        supabase.from('meta_inbox_folders').select('id, nome, cor, owner_id').order('nome'),
+        isAdmin
+          ? Promise.resolve({ data: null, error: null })
+          : (supabase as any).from('meta_inbox_default_members').select('user_id, admin').eq('user_id', user.id).maybeSingle(),
+        (supabase as any).from('meta_inbox_folder_members').select('folder_id').eq('user_id', user.id).eq('admin', true),
+      ]);
+      if (dmRes.error || foldersRes.error) {
+        // Falha temporária: não concluir "sem acesso"; tenta mais uma vez.
+        if (tentativa < 1) { setTimeout(() => { void fetchFolders(tentativa + 1); }, 2000); }
+        return;
+      }
+      if (isAdmin) { setPodeVerPadrao(true); setAdminPadrao(false); }
+      else { setPodeVerPadrao(!!dmRes.data); setAdminPadrao(!!(dmRes.data as any)?.admin); }
+      setFolders(((foldersRes.data as any) ?? []) as MetaInboxFolder[]);
+      if (!admRes.error) setAdminCaixas(new Set(((admRes.data as any[]) ?? []).map((r) => r.folder_id as string)));
       setPadraoVerificado(true);
-    } else {
-      const { data: dm } = await (supabase as any)
-        .from('meta_inbox_default_members')
-        .select('user_id, admin')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      setPodeVerPadrao(!!dm);
-      setAdminPadrao(!!(dm as any)?.admin);
-      setPadraoVerificado(true);
+    } finally {
+      setCaixasCarregando(false);
     }
-    // Caixas onde o usuário é admin da própria caixa
-    const { data: adm } = await (supabase as any)
-      .from('meta_inbox_folder_members')
-      .select('folder_id')
-      .eq('user_id', user.id)
-      .eq('admin', true);
-    setAdminCaixas(new Set(((adm as any[]) ?? []).map((r) => r.folder_id as string)));
-  }, [user, isAdmin]);
+  }, [user, isAdmin, roleLoading]);
+
+  const atualizarCaixas = useCallback(async () => {
+    escolhaManualFolderRef.current = false;
+    await fetchFolders();
+  }, [fetchFolders]);
 
   const handleApagarCaixa = useCallback(async (folder: MetaInboxFolder) => {
     if (!window.confirm(`Tem certeza que deseja apagar a caixa "${folder.nome}"?\n\nAs conversas não serão excluídas, apenas voltarão para a caixa padrão.`)) return;
@@ -2205,6 +2210,16 @@ export default function InboxMeta() {
             </div>
             {/* Caixas de mensagens */}
             <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => { void atualizarCaixas(); }}
+                disabled={caixasCarregando}
+                className="text-[11px] px-1.5 py-1 rounded border border-transparent bg-muted/40 text-muted-foreground hover:bg-accent disabled:opacity-60"
+                title="Atualizar caixas de mensagens"
+                aria-label="Atualizar caixas de mensagens"
+              >
+                <RefreshCw className={cn('h-3 w-3', caixasCarregando && 'animate-spin')} />
+              </button>
               {podeVerPadrao && (
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
@@ -3133,7 +3148,7 @@ export default function InboxMeta() {
           open={foldersDialogOpen}
           onOpenChange={setFoldersDialogOpen}
           currentUserId={user.id}
-          onChanged={fetchFolders}
+          onChanged={() => { void fetchFolders(); }}
         />
       )}
       <MetaFolderAcessoDialog
@@ -3141,7 +3156,7 @@ export default function InboxMeta() {
         onOpenChange={(v) => { if (!v) setAcessoFolder(null); }}
         folderId={acessoFolder?.id ?? null}
         folderNome={acessoFolder?.nome ?? 'Padrão'}
-        onChanged={fetchFolders}
+        onChanged={() => { void fetchFolders(); }}
       />
       <AcordoUmeApiDialog
         open={gerarAcordoUmeOpen}
