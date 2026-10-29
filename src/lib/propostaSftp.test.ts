@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { calcularProposta, textoProposta } from './propostaSftp';
+import { calcularProposta, textoProposta, textoSemDivida } from './propostaSftp';
 
 describe('proposta SFTP', () => {
   test('David: à vista pelo principal e 18x com +10%', () => {
@@ -36,7 +36,6 @@ test('negrito não duplica asteriscos já digitados', () => {
   expect(textoProposta(150, 'ume', '*Quite por R$ {avista}*')).toBe('*Quite por R$ 150,00*');
 });
 
-import { textoSemDivida } from './propostaSftp';
 test('texto sem dívida por credor', () => {
   expect(textoSemDivida('odres')).toBe('*Odres Cred referente ao seu telefone. Pagando a 1ª no PIX seu aparelho desbloqueia na hora!*');
   expect(textoSemDivida('ume')).toBe('*UME com condições especiais de final de ano. Pague a 1ª no PIX e volte a comprar a prazo!*');
