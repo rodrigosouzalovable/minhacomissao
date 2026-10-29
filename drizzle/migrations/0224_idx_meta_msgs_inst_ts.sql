@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_meta_msgs_inst_ts ON public.meta_whatsapp_mensagens (instancia_id, timestamp_msg DESC);
