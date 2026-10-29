@@ -52,15 +52,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const registerAccess = async () => {
       for (let attempt = 1; attempt <= 3 && !cancelled; attempt += 1) {
-        const { data, error } = await supabase.functions.invoke('notificar-acesso-usuario', {
-          body: { accessId },
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (!error && (data?.ok || data?.skipped)) return;
-        console.error(`Falha ao registrar acesso do usuário (tentativa ${attempt}):`, error?.message || data?.error);
+        try {
+          // Usa sempre a sessão atual (renovada) em vez de um token possivelmente expirado.
+          const { data: cur } = await supabase.auth.getSession();
+          if (!cur.session) return;
+          const { data, error } = await supabase.functions.invoke('notificar-acesso-usuario', {
+            body: { accessId },
+          });
+          if (!error && (data?.ok || data?.skipped)) return;
+          const status = (error as any)?.context?.status;
+          // Sessão inválida/expirada: registro de acesso é opcional, não insiste nem quebra a tela.
+          if (status === 401 || status === 403) return;
+          console.warn(`Falha ao registrar acesso do usuário (tentativa ${attempt}):`, error?.message || data?.error);
+        } catch (e) {
+          console.warn('Falha ao registrar acesso do usuário:', e);
+        }
         if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
       }
-      if (!cancelled) accessNotificationUserRef.current = null;
     };
     void registerAccess();
     return () => { cancelled = true; };
