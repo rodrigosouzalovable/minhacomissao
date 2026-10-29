@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { montarClientesRecuperacao } from './recuperacaoQuebrados';
 
 const base = { acordo_id: 'a', valor_parcela: 100, cliente_cpf: '1', empresa: 'odres_cred' };
