@@ -1,13 +1,15 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Upload, Download } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2, Upload, Download, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { textoProposta } from '@/lib/propostaSftp';
+import { textoProposta, MODELOS_PADRAO, type CredorProposta } from '@/lib/propostaSftp';
 
 const db = supabase as any;
 const LOTE = 150;
+const CHAVE_MODELOS = 'proposta-sftp-modelos-v1';
 
 interface Resultado { total: number; preenchidos: number; semDivida: number; amostra: string }
 
@@ -16,6 +18,13 @@ export function PropostaSftpTab() {
   const [processando, setProcessando] = useState(false);
   const [res, setRes] = useState<Resultado | null>(null);
   const [pronto, setPronto] = useState<{ wb: any; nome: string; XLSX: any } | null>(null);
+  const [credor, setCredor] = useState<CredorProposta>('odres');
+  const [modelos, setModelos] = useState<Record<CredorProposta, string>>(() => {
+    try { return { ...MODELOS_PADRAO, ...JSON.parse(localStorage.getItem(CHAVE_MODELOS) || '{}') }; }
+    catch { return MODELOS_PADRAO; }
+  });
+  useEffect(() => { localStorage.setItem(CHAVE_MODELOS, JSON.stringify(modelos)); }, [modelos]);
+
 
   async function processar(file: File) {
     setProcessando(true); setRes(null); setPronto(null);
