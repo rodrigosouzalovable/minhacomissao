@@ -453,13 +453,17 @@ export default function InboxMeta() {
   const JANELA_RECONSULTA = 30_000;
   // Busca vínculos de etiqueta SOMENTE dos contatos exibidos na tela.
   // Antes fazia varredura completa da tabela em cada carregamento/foco.
+  const etiqVistosRef = useRef<Map<string, number>>(new Map());
   const fetchContatoEtiquetas = useCallback(async (contatoIds?: string[], forcar = false) => {
-    const ids = (contatoIds ?? []).filter(Boolean);
-    if (ids.length === 0) return;
-    const key = ids.join(',');
+    const todos = (contatoIds ?? []).filter(Boolean);
+    if (todos.length === 0) return;
     const agora = Date.now();
-    if (!forcar && etiqCacheRef.current.key === key && agora - etiqCacheRef.current.ts < JANELA_RECONSULTA) return;
-    etiqCacheRef.current = { key, ts: agora };
+    // Só busca contatos ainda não consultados dentro da janela (evita refazer a lista inteira).
+    const vistos = etiqVistosRef.current;
+    const ids = forcar ? todos : todos.filter((id) => agora - (vistos.get(id) ?? 0) >= JANELA_RECONSULTA);
+    if (ids.length === 0) return;
+    ids.forEach((id) => vistos.set(id, agora));
+    etiqCacheRef.current = { key: ids.join(','), ts: agora };
 
     const CHUNK = 200;
     const all: Array<{ contato_id: string; etiqueta_id: string; origem: string | null }> = [];
@@ -469,10 +473,11 @@ export default function InboxMeta() {
         .from('meta_whatsapp_contato_etiquetas')
         .select('contato_id, etiqueta_id, origem')
         .in('contato_id', slice);
-      if (error) { etiqCacheRef.current = { key: '', ts: 0 }; return; } // preserva state anterior em caso de erro
+      if (error) { etiqCacheRef.current = { key: '', ts: 0 }; ids.forEach((id) => vistos.delete(id)); return; } // preserva state anterior em caso de erro
       all.push(...((data as any[]) ?? []));
     }
     const map: Record<string, string[]> = {};
+    for (const id of ids) map[id] = [];
     const bloq: Record<string, Set<string>> = {};
     all.forEach((r) => {
       if (!map[r.contato_id]) map[r.contato_id] = [];
