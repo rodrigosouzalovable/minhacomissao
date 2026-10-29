@@ -151,7 +151,7 @@ function formatContatoTime(ts: string | null) {
 
 export default function InboxMeta() {
   const { user } = useAuth();
-  const { isAdmin, loading: roleLoading } = useUserRole();
+  const { isAdmin, loading: roleLoading, refetch: refetchRole } = useUserRole();
   const [caixasCarregando, setCaixasCarregando] = useState(false);
   const { parceiroMeta } = useUserPermissions();
   const { toast } = useToast();
@@ -577,8 +577,10 @@ export default function InboxMeta() {
 
   const atualizarCaixas = useCallback(async () => {
     escolhaManualFolderRef.current = false;
+    setCurrentFolderId(null);
+    await refetchRole();
     await fetchFolders();
-  }, [fetchFolders]);
+  }, [fetchFolders, refetchRole]);
 
   const handleApagarCaixa = useCallback(async (folder: MetaInboxFolder) => {
     if (!window.confirm(`Tem certeza que deseja apagar a caixa "${folder.nome}"?\n\nAs conversas não serão excluídas, apenas voltarão para a caixa padrão.`)) return;
