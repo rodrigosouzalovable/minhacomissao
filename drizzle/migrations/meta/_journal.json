@@ -1527,6 +1527,13 @@
       "when": 1793194808741,
       "tag": "0217_inbox_meta_indices_listagem",
       "breakpoints": true
+    },
+    {
+      "idx": 218,
+      "version": "7",
+      "when": 1793278059458,
+      "tag": "0218_lock_rodrigo_atendente_label",
+      "breakpoints": true
     }
   ]
 }

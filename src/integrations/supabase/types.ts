@@ -13941,6 +13941,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      meta_etiqueta_rodrigo_travada: {
+        Args: { _contato: string }
+        Returns: boolean
+      }
       meta_etiquetas_da_caixa: {
         Args: { _folder: string }
         Returns: {
