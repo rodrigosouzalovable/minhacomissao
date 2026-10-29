@@ -35,6 +35,8 @@ export function aplicarModelo(principal: number, modelo: string): string {
     .trim();
 }
 
+// O texto inteiro sai entre asteriscos para ficar em negrito no WhatsApp.
 export function textoProposta(principal: number, credor: CredorProposta, modelo?: string): string {
-  return aplicarModelo(principal, modelo ?? MODELOS_PADRAO[credor]);
+  const t = aplicarModelo(principal, modelo ?? MODELOS_PADRAO[credor]).replace(/^\*+|\*+$/g, '').trim();
+  return `*${t}*`;
 }
