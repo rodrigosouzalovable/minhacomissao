@@ -1541,6 +1541,13 @@
       "when": 1793292745534,
       "tag": "0219_contatos_telefone_trgm",
       "breakpoints": true
+    },
+    {
+      "idx": 220,
+      "version": "7",
+      "when": 1793294737178,
+      "tag": "0220_acordos_ativos_por_destinatarios",
+      "breakpoints": true
     }
   ]
 }
