@@ -473,19 +473,26 @@ export default function EquipeAcordos() {
             .eq('status', 'pago');
           return verComoAdmin ? q : q.in('acordos.user_id', funcionarioIds);
         };
-        const carregarTudo = async (build: () => any, countQuery: () => any, order: (q: any) => any) => {
+        // Sem contagem exata (era a consulta mais cara, com junção de acordos):
+        // busca blocos de 4 páginas em paralelo até vir uma página incompleta.
+        const carregarTudo = async (build: () => any, _countQuery: () => any, order: (q: any) => any) => {
           const first = await order(build()).range(0, PAGE_SIZE - 1);
           if (first.error) throw first.error;
           let rows: any[] = first.data || [];
-          if (rows.length === PAGE_SIZE) {
-            const { count, error } = await countQuery();
-            if (error) throw error;
-            const total = count ?? rows.length;
-            const extras = await Promise.all(
-              Array.from({ length: Math.ceil(total / PAGE_SIZE) - 1 }, (_, i) =>
-                order(build()).range((i + 1) * PAGE_SIZE, (i + 2) * PAGE_SIZE - 1))
+          let pagina = 1;
+          let completo = rows.length < PAGE_SIZE;
+          while (!completo) {
+            const lote = await Promise.all(
+              Array.from({ length: 4 }, (_, i) =>
+                order(build()).range((pagina + i) * PAGE_SIZE, (pagina + i + 1) * PAGE_SIZE - 1))
             );
-            for (const r of extras) { if (r.error) throw r.error; rows = rows.concat(r.data || []); }
+            for (const r of lote) {
+              if (r.error) throw r.error;
+              const d = r.data || [];
+              rows = rows.concat(d);
+              if (d.length < PAGE_SIZE) { completo = true; break; }
+            }
+            pagina += 4;
           }
           return rows;
         };
