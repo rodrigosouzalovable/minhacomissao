@@ -17,7 +17,7 @@ const corsHeaders = {
 function formatTel(tel: string): string {
   const d = (tel || '').replace(/\D/g, '');
   if (!d) return '';
-  return d.startsWith('55') ? d : `55${d}`;
+  return d.startsWith('55') || d.length > 11 ? d : `55${d}`;
 }
 
 const MSG_DESTINATARIO_SEM_WHATSAPP =
@@ -389,7 +389,18 @@ Deno.serve(async (req) => {
       .eq('instancia_id', instancia_id);
     if (useBsuid) contatoQuery = contatoQuery.eq('bsuid', bsuid);
     else contatoQuery = contatoQuery.eq('telefone', to);
-    const { data: contato } = await contatoQuery.maybeSingle();
+    let { data: contato } = await contatoQuery.maybeSingle();
+    if (!contato && !useBsuid && to && to.length >= 8) {
+      const { data: porSufixo } = await supabase
+        .from('meta_whatsapp_contatos')
+        .select('id, ultima_msg_entrada_em, telefone, bsuid')
+        .eq('instancia_id', instancia_id)
+        .like('telefone', `%${to.slice(-8)}`)
+        .order('ultima_msg_entrada_em', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+      if (porSufixo) contato = porSufixo as any;
+    }
 
     const ultimaEntrada = contato?.ultima_msg_entrada_em ? new Date(contato.ultima_msg_entrada_em).getTime() : 0;
     const agora = Date.now();
