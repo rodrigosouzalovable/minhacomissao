@@ -11,6 +11,13 @@ export const MODELOS_PADRAO: Record<CredorProposta, string> = {
   ume: 'UME com condições especiais de final de ano. Quite à vista por R$ {avista}[ ou parcele em até {parcelas}x de R$ {valor_parcela}]. Pague a 1ª no PIX e volte a comprar a prazo!',
 };
 
+export const TEXTOS_SEM_DIVIDA: Record<CredorProposta, string> = {
+  odres: '*Odres Cred referente ao seu telefone. Pagando a 1ª no PIX seu aparelho desbloqueia na hora!*',
+  ume: '*UME com condições especiais de final de ano. Pague a 1ª no PIX e volte a comprar a prazo!*',
+};
+
+export const textoSemDivida = (credor: CredorProposta) => TEXTOS_SEM_DIVIDA[credor];
+
 const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const arred = (n: number) => Math.round(n * 100) / 100;
 
