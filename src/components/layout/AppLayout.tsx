@@ -1,3 +1,4 @@
+import { cachedFetch } from "@/lib/rpcCache";
 import { ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -301,7 +302,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       const id = setTimeout(() => {
         if (document.visibilityState !== 'visible') return;
         fn();
-      }, 15000);
+      }, 30000);
       if (ref === 'inbox') tInbox = id; else tMeta = id;
     };
 
