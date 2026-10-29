@@ -40,7 +40,7 @@ export default function PortalConsulta() {
   const navigate = useNavigate();
 
   if (creditor && ['novomundo', 'ume', 'odrescred', 'odres_cred'].includes(creditor)) {
-    return <PublicPortalHome />;
+    return <PublicPortalHome slug={creditor} />;
   }
 
   if (!creditor || !isValidCredorSlug(creditor)) {
