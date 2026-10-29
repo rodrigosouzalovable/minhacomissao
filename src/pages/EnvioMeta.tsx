@@ -1182,6 +1182,7 @@ export default function EnvioMeta() {
 
 
   const [preparandoDisparo, setPreparandoDisparo] = useState(false);
+  const [filtroAcordo, setFiltroAcordo] = useState<null | { excluidos: number; restantes: number; wb: XLSX.WorkBook; textoOriginal: string; novoTexto: string }>(null);
   const enviar = async () => {
     if (preparandoDisparo || iniciandoCampanha) return;
     setPreparandoDisparo(true);
@@ -1319,6 +1320,48 @@ export default function EnvioMeta() {
     }
     const recipientsDedup = parseRecipients(dedup.texto, isentosDedup, recipientRoles);
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
+
+    // Varredura: retira quem já tem acordo em andamento (CPF ou telefone).
+    {
+      const linhas = recipientRecordLines(dedup.texto);
+      const itens = linhas.map((linha) => ({ linha, r: parseRecipients(linha, isentosDedup, recipientRoles)[0] }));
+      const cpfs = Array.from(new Set(itens.map((i) => cpfNorm(i.r?.cpf)).filter((c) => c.length >= 11)));
+      const sufs = Array.from(new Set(itens.map((i) => sufixo8(i.r?.telefone)).filter((s) => s.length === 8)));
+      const matches: AcordoAtivoMatch[] = [];
+      try {
+        const n = Math.max(Math.ceil(cpfs.length / 500), Math.ceil(sufs.length / 500));
+        for (let k = 0; k < n; k++) {
+          const { data, error } = await supabase.rpc("acordos_ativos_por_destinatarios" as any, {
+            _cpfs: cpfs.slice(k * 500, k * 500 + 500),
+            _sufixos: sufs.slice(k * 500, k * 500 + 500),
+          });
+          if (error) throw error;
+          matches.push(...((data as AcordoAtivoMatch[]) || []));
+        }
+      } catch {
+        return toast.error("Não foi possível verificar os acordos em andamento. Nada foi enviado; tente novamente.");
+      }
+      const comR = itens.filter((i) => i.r).map((i) => ({ ...i.r!, __linha: i.linha }));
+      const { liberados, excluidos } = separarPorAcordoAtivo(comR, matches);
+      if (excluidos.length > 0) {
+        const semR = itens.filter((i) => !i.r).map((i) => i.linha);
+        const novoTexto = [...liberados.map((l) => l.__linha), ...semR].join("\n");
+        const ws = XLSX.utils.json_to_sheet(excluidos.map((e) => ({
+          Nome: e.destinatario.nome || e.acordo.cliente_nome || "",
+          CPF: e.destinatario.cpf || e.acordo.cpf || "",
+          Telefone: e.destinatario.telefone,
+          Credor: e.acordo.empresa || "",
+          "Encontrado por": e.encontradoPor,
+          "Responsável pelo acordo": e.acordo.responsavel || "",
+          "Data do acordo": e.acordo.criado_em ? new Date(e.acordo.criado_em).toLocaleDateString("pt-BR") : "",
+          "Situação": "Em andamento",
+        })));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Com acordo");
+        setFiltroAcordo({ excluidos: excluidos.length, restantes: liberados.length, wb, textoOriginal: recipientsRaw, novoTexto });
+        return;
+      }
+    }
 
     const lo = Math.max(1, Number(minSec) || 1);
     const hi = Math.max(lo, Number(maxSec) || lo);
