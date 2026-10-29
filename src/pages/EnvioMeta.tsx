@@ -3060,6 +3060,32 @@ export default function EnvioMeta() {
       />
 
 
+      <Dialog open={!!filtroAcordo} onOpenChange={(o) => { if (!o) setFiltroAcordo(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clientes com acordo em andamento</DialogTitle>
+            <DialogDescription>
+              {filtroAcordo?.excluidos} cliente(s) retirado(s) porque já têm acordo em andamento (por CPF ou telefone).
+              {" "}{filtroAcordo?.restantes} cliente(s) continuam na campanha.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <Button variant="outline" onClick={() => filtroAcordo && XLSX.writeFile(filtroAcordo.wb, `clientes-com-acordo-${new Date().toISOString().slice(0, 10)}.xlsx`)}>
+              <Download className="h-4 w-4 mr-2" />Baixar planilha dos retirados
+            </Button>
+            <Button variant="ghost" onClick={() => setFiltroAcordo(null)}>Cancelar</Button>
+            <Button
+              disabled={!filtroAcordo || filtroAcordo.restantes === 0}
+              onClick={() => {
+                if (!filtroAcordo) return;
+                setRecipientsRaw(filtroAcordo.novoTexto);
+                setFiltroAcordo(null);
+                toast.success("Clientes com acordo retirados da lista. Clique em Disparar para iniciar.");
+              }}
+            >Continuar sem eles</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
