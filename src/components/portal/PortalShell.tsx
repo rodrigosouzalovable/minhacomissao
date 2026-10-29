@@ -6,7 +6,7 @@ import { useContatoPortal } from '@/hooks/useContatoPortal';
 import logoSouza from '@/assets/logo-souza-ribeiro.png';
 import { CREDOR_MARCAS_LISTA } from '@/lib/credorMarcas';
 import novoHome from '@/assets/logo-novo-mundo-portal.png.asset.json';
-import umeHome from '@/assets/ume-portal-transparent.png';
+import umeHome from '@/assets/ume-portal-white.png';
 import { type PortalEscopo, ESCOPO_PRINCIPAL } from '@/lib/portalEscopo';
 import odresHome from '@/assets/odres-home-white.png.asset.json';
 
