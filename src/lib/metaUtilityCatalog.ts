@@ -28,7 +28,10 @@ export function catalogoUtility(copies: TemplateCopy[], masters: UtilityMaster[]
     if (t.status.toLowerCase() === 'approved') {
       g.todasInstanciasAprovadasIds.add(t.instancia_id);
       if (selectedIds.includes(t.instancia_id)) g.instanciasAprovadasIds.add(t.instancia_id);
-      if (g.sample.status.toLowerCase() !== 'approved') { g.sample = t; g.varsCount = countVars(t); }
+      const sampleOk = g.sample.status.toLowerCase() === 'approved';
+      const sampleHasText = !!g.sample.body_text?.trim();
+      const hasText = !!t.body_text?.trim();
+      if (!sampleOk || (!sampleHasText && hasText)) { g.sample = t; g.varsCount = countVars(t); }
     }
   }
   const marketing = new Map<string, Set<string>>();
