@@ -13994,6 +13994,10 @@ export type Database = {
           contato_id: string
         }[]
       }
+      meta_inbox_nao_lidas_count: {
+        Args: { _instancia_ids: string[] }
+        Returns: number
+      }
       meta_inbox_phone_search: {
         Args: { p_limit?: number; p_suffix: string }
         Returns: {
