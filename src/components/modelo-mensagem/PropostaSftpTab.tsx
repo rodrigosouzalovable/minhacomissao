@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, Upload, Download, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { textoProposta, MODELOS_PADRAO, type CredorProposta } from '@/lib/propostaSftp';
+import { textoProposta, textoSemDivida, MODELOS_PADRAO, type CredorProposta } from '@/lib/propostaSftp';
 
 const db = supabase as any;
 const LOTE = 150;
