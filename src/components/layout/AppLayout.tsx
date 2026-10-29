@@ -265,25 +265,22 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Fetch Meta Inbox unread count
   const fetchMetaUnreadCount = useCallback(async () => {
     if (!user) return;
-    const { data: activeInstances } = await supabase
-      .from('meta_whatsapp_instances')
-      .select('id')
-      .eq('ativo', true);
-
-    const instanceIds = (activeInstances ?? []).map((i) => i.id);
+    // Lista de instâncias visíveis muda pouco: reaproveita por 5 min.
+    const instanceIds = await cachedFetch<string[]>(`meta-ativas-ids:${user.id}`, 300_000, async () => {
+      const { data, error } = await supabase
+        .from('meta_whatsapp_instances')
+        .select('id')
+        .eq('ativo', true);
+      if (error) throw error;
+      return (data ?? []).map((i) => i.id);
+    }).catch(() => [] as string[]);
     if (instanceIds.length === 0) {
       setMetaInboxUnreadCount(0);
       return;
     }
-
-    const { count } = await supabase
-      .from('meta_whatsapp_contatos')
-      .select('id', { count: 'exact', head: true })
-      .in('instancia_id', instanceIds)
-      .eq('arquivado', false)
-      .is('folder_id', null)
-      .gt('nao_lido', 0);
-    setMetaInboxUnreadCount(count ?? 0);
+    // Contagem em uma única chamada no banco (permissão avaliada uma vez).
+    const { data, error } = await (supabase as any).rpc('meta_inbox_nao_lidas_count', { _instancia_ids: instanceIds });
+    if (!error) setMetaInboxUnreadCount(Number(data ?? 0));
   }, [user]);
 
   // Canal Realtime único para os dois badges, com debounce e guarda de aba visível.
