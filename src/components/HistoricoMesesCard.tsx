@@ -65,13 +65,14 @@ export function HistoricoMesesCard() {
       const empresaPorAcordo = new Map((acordos || []).map((a) => [a.id, a.empresa]));
       if (ids.length) {
         for (let i = 0; i < ids.length; i += 200) {
-          const { data: pg } = await supabase
+          const { data: pg, error: pgErr } = await supabase
             .from('pagamentos')
             .select('acordo_id, valor_parcela')
             .in('acordo_id', ids.slice(i, i + 200))
             .eq('status', 'pago')
             .gte('data_paga', ini)
             .lte('data_paga', fim);
+          if (pgErr) throw pgErr;
           (pg || []).forEach((p) => {
             meuTotal += Number(p.valor_parcela || 0);
             meuQtd += 1;
