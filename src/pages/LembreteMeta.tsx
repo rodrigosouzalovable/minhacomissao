@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { Bell, Save, Send, Loader2, PlayCircle, CheckCircle2, XCircle, AlertCircle, TestTube } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { OverdueMetaSettings } from '@/components/meta/OverdueMetaSettings';
+import { RecuperacaoQuebradosCard } from '@/components/meta/RecuperacaoQuebradosCard';
 
 const TEMPLATE_NOME = 'lembrete_envio_boleto';
 
@@ -248,6 +249,7 @@ export default function LembreteMeta() {
   return (
     <AppLayout>
       <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
+        <RecuperacaoQuebradosCard />
         <OverdueMetaSettings />
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
