@@ -38,6 +38,7 @@ import EditarVariaveisTemplateDialog from "@/components/meta/EditarVariaveisTemp
 import { SaudeBadgeStatus, SaudeBadgeQuality } from "@/components/meta/SaudeBadges";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useBmCotas } from "@/hooks/useBmCotas";
+import { separarPorAcordoAtivo, cpfNorm, sufixo8, type AcordoAtivoMatch } from "@/lib/filtroAcordoAtivo";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { TemplateFavoriteSelect } from "@/components/meta/TemplateFavoriteSelect";
