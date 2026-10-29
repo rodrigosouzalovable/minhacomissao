@@ -626,23 +626,30 @@ export default function InboxMeta() {
 
   useEffect(() => { fetchQualificacoes(); }, [fetchQualificacoes]);
 
-  const fetchQualifContatos = useCallback(async (ids: string[], forcar = false) => {
-    if (!ids.length) { setQualifPorContato({}); qualifCacheRef.current = { key: '', ts: 0 }; return; }
-    const key = ids.join(',');
+  const qualifVistosRef = useRef<Map<string, number>>(new Map());
+  const fetchQualifContatos = useCallback(async (todos: string[], forcar = false) => {
+    if (!todos.length) { setQualifPorContato({}); qualifCacheRef.current = { key: '', ts: 0 }; qualifVistosRef.current.clear(); return; }
     const agora = Date.now();
-    if (!forcar && qualifCacheRef.current.key === key && agora - qualifCacheRef.current.ts < JANELA_RECONSULTA) return;
-    qualifCacheRef.current = { key, ts: agora };
+    // Só consulta contatos ainda não carregados dentro da janela.
+    const vistos = qualifVistosRef.current;
+    const ids = forcar ? todos : todos.filter((id) => agora - (vistos.get(id) ?? 0) >= JANELA_RECONSULTA);
+    if (!ids.length) return;
+    ids.forEach((id) => vistos.set(id, agora));
+    qualifCacheRef.current = { key: ids.join(','), ts: agora };
     const map: Record<string, string[]> = {};
+    for (const id of ids) map[id] = [];
 
     for (let i = 0; i < ids.length; i += 300) {
-      const { data } = await (supabase as any).from('meta_contato_qualificacao')
-        .select('contato_id, qualificacao_id').in('contato_id', ids.slice(i, i + 300));
+      const slice = ids.slice(i, i + 300);
+      const { data, error } = await (supabase as any).from('meta_contato_qualificacao')
+        .select('contato_id, qualificacao_id').in('contato_id', slice);
+      if (error) { slice.forEach((id) => { vistos.delete(id); delete map[id]; }); continue; }
       ((data as any[]) ?? []).forEach(r => {
         if (!map[r.contato_id]) map[r.contato_id] = [];
         if (r.qualificacao_id) map[r.contato_id].push(r.qualificacao_id);
       });
     }
-    setQualifPorContato(map);
+    setQualifPorContato(prev => ({ ...prev, ...map }));
   }, []);
 
   const qualificacaoAtivaNaCaixa = qualifCaixas[currentFolderId ?? CAIXA_PADRAO_ID] ?? true;
