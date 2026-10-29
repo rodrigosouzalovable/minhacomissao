@@ -1548,6 +1548,27 @@
       "when": 1793294737178,
       "tag": "0220_acordos_ativos_por_destinatarios",
       "breakpoints": true
+    },
+    {
+      "idx": 221,
+      "version": "7",
+      "when": 1793295385619,
+      "tag": "0221_meta_inbox_nao_lidas_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 222,
+      "version": "7",
+      "when": 1793295471942,
+      "tag": "0222_meta_inbox_nao_lidas_count_ids",
+      "breakpoints": true
+    },
+    {
+      "idx": 223,
+      "version": "7",
+      "when": 1793295662383,
+      "tag": "0223_idx_meta_contatos_nao_lidos_padrao",
+      "breakpoints": true
     }
   ]
 }

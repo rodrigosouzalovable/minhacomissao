@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_meta_contatos_nao_lidos_padrao ON public.meta_whatsapp_contatos (instancia_id) WHERE arquivado = false AND folder_id IS NULL AND nao_lido > 0;
