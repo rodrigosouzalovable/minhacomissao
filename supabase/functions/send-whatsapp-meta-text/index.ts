@@ -17,7 +17,7 @@ const corsHeaders = {
 function formatTel(tel: string): string {
   const d = (tel || '').replace(/\D/g, '');
   if (!d) return '';
-  return d.startsWith('55') ? d : `55${d}`;
+  return d.startsWith('55') || d.length > 11 ? d : `55${d}`;
 }
 
 const MSG_DESTINATARIO_SEM_WHATSAPP =
