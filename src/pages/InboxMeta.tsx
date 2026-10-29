@@ -1,3 +1,4 @@
+import { cachedFetch } from "@/lib/rpcCache";
 import { RefreshCw } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -421,7 +422,7 @@ export default function InboxMeta() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await (supabase as any).rpc('get_meta_whatsapp_active_instances_for_sending');
+      const { data } = await cachedFetch(`meta-envio-instancias:${user?.id}`, 120_000, async () => { const r = await (supabase as any).rpc('get_meta_whatsapp_active_instances_for_sending'); if (r.error) throw r.error; return r; }).catch((e: any) => ({ data: null, error: e }));
       setInstancias((data as MetaInstance[]) ?? []);
     })();
   }, [user]);

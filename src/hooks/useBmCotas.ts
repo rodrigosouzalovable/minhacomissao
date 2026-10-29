@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { cachedFetch, invalidateCache } from "@/lib/rpcCache";
 
 export interface CotaBm {
   bm_id: string;
@@ -19,8 +20,14 @@ export function useBmCotas() {
   const [cotas, setCotas] = useState<Record<string, CotaBm>>({});
   const [loading, setLoading] = useState(true);
 
-  const carregar = useCallback(async () => {
-    const { data, error } = await (supabase as any).rpc("meta_bm_uso_24h");
+  const carregar = useCallback(async (forcar = false) => {
+    if (forcar) invalidateCache("meta_bm_uso_24h");
+    // Telas compartilham o resultado por 2 min; o disparo revalida a cota no servidor.
+    const { data, error } = await cachedFetch("meta_bm_uso_24h", 120_000, async () => {
+      const r = await (supabase as any).rpc("meta_bm_uso_24h");
+      if (r.error) throw r.error;
+      return r;
+    }).catch((e: any) => ({ data: null, error: e }));
     if (!error && data) {
       const map: Record<string, CotaBm> = {};
       for (const r of data as any[]) {
@@ -62,5 +69,7 @@ export function useBmCotas() {
     [cotaDaBm],
   );
 
-  return { cotas, loading, recarregar: carregar, cotaDaBm, semSaldo };
+  const recarregar = useCallback(() => carregar(true), [carregar]);
+
+  return { cotas, loading, recarregar, cotaDaBm, semSaldo };
 }

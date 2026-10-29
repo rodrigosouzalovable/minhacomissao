@@ -1,3 +1,4 @@
+import { cachedFetch } from "@/lib/rpcCache";
 import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -121,7 +122,7 @@ export default function EquipeAcordos() {
   const { data: metaInstances } = useQuery({
     queryKey: ['meta-instances-for-agreements', user?.id],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc('get_meta_whatsapp_active_instances_for_sending');
+      const { data, error } = await cachedFetch(`meta-envio-instancias:${user?.id}`, 120_000, async () => { const r = await (supabase as any).rpc('get_meta_whatsapp_active_instances_for_sending'); if (r.error) throw r.error; return r; }).catch((e: any) => ({ data: null, error: e }));
       if (error) throw error;
       return ((data || []) as MetaInstance[]).filter(instance => (instance.provider ?? 'meta') === 'meta');
     },
