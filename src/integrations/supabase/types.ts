@@ -13691,6 +13691,7 @@ export type Database = {
         Args: { p_contato_id: string; p_entrada_id: string }
         Returns: undefined
       }
+      identificar_credor_por_cpf: { Args: { p_cpf: string }; Returns: string[] }
       importar_contatos_novo_mundo: {
         Args: {
           p_arquivo: string

@@ -1,3 +1,4 @@
+import { useCredorPorCpf } from '@/lib/credorPorCpf';
 import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -463,6 +464,7 @@ export default function NovoAcordoAdmin() {
     );
   }
 
+  const avisoCredorCpf = useCredorPorCpf(form.clienteCpf, empresa, setEmpresa);
   return (
     <AppLayout>
       <div className="max-w-2xl mx-auto space-y-6">
@@ -556,6 +558,11 @@ export default function NovoAcordoAdmin() {
                     ODRES CRED
                   </Button>
                 </div>
+                {avisoCredorCpf && (
+                  <p className={`text-sm font-medium ${avisoCredorCpf.tom === 'ok' ? 'text-green-600' : avisoCredorCpf.tom === 'alerta' ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'}`}>
+                    {avisoCredorCpf.texto}
+                  </p>
+                )}
                 {!empresa && (
                   <p className="text-sm text-muted-foreground">
                     Selecione a empresa/credor do contrato para calcular a comissão.
