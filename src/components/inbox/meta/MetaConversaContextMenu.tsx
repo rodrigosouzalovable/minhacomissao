@@ -49,7 +49,7 @@ export function MetaConversaContextMenu({
   const [gerenciarOpen, setGerenciarOpen] = useState(false);
 
   const handleMarcarNaoLida = async () => {
-    const { error } = await supabase.from('meta_whatsapp_contatos').update({ nao_lido: 1 }).eq('id', contatoId);
+    const { error } = await supabase.from('meta_whatsapp_contatos').update({ nao_lido: 1, sla_dispensado_em: null } as any).eq('id', contatoId);
     if (error) toast({ title: error.message.includes('ETIQUETA_RODRIGO_TRAVADA') ? 'Etiqueta bloqueada' : 'Erro', description: error.message.replace(/^.*ETIQUETA_RODRIGO_TRAVADA:\s*/, ''), variant: 'destructive' });
     else onMarcarNaoLida();
   };

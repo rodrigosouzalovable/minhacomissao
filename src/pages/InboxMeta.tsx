@@ -1722,8 +1722,8 @@ export default function InboxMeta() {
     if (contatoAtivo?.id === id) setContatoAtivo(null);
   };
   const handleMarcarNaoLida = (id: string) => {
-    setContatos(prev => prev.map(c => c.id === id ? { ...c, nao_lido: Math.max(c.nao_lido || 0, 1) } : c));
-    setContatoAtivo(prev => prev?.id === id ? { ...prev, nao_lido: Math.max(prev.nao_lido || 0, 1) } : prev);
+    setContatos(prev => prev.map(c => c.id === id ? { ...c, nao_lido: Math.max(c.nao_lido || 0, 1), sla_dispensado_em: null } : c));
+    setContatoAtivo(prev => prev?.id === id ? { ...prev, nao_lido: Math.max(prev.nao_lido || 0, 1), sla_dispensado_em: null } : prev);
   };
   const handleMarcarNaoCliente = async (contato: MetaContato) => {
     if (!window.confirm(`Marcar ou desfazer ${formatTelefone(contato.telefone)} como “Não é o cliente”?`)) return;
