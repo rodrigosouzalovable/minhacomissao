@@ -301,8 +301,34 @@ export default function NovoAcordo() {
   };
 
   // Handler para número de parcelas com cálculo automático
+  const descartarParcelasDocumento = () => {
+    const rows = parcelasDocumento;
+    setParcelasDocumento([]);
+    setForm(prev => ({ ...prev,
+      valorPrimeiraParcela: rows[0] ? formatCurrencyDisplay(rows[0].valor) : prev.valorPrimeiraParcela,
+      valorDemaisParcelas: rows[1] ? formatCurrencyDisplay(rows[1].valor) : (rows[0] ? formatCurrencyDisplay(rows[0].valor) : prev.valorDemaisParcelas),
+    }));
+  };
+
   const handleParcelasChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 3);
+    if (parcelasDocumento.length) {
+      const n = Math.min(parseInt(value) || 0, 120);
+      setForm(prev => ({ ...prev, parcelas: value }));
+      if (n < 1) return;
+      const rows = parcelasDocumento.slice(0, n);
+      while (rows.length < n) {
+        const last = rows[rows.length - 1];
+        const d = new Date(`${last.data_vencimento}T12:00:00`);
+        const dia = d.getDate();
+        d.setDate(1); d.setMonth(d.getMonth() + 1);
+        d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+        rows.push({ ...last, data_vencimento: d.toISOString().slice(0, 10) });
+      }
+      setParcelasDocumento(rows);
+      setForm(prev => ({ ...prev, parcelas: value, valorTotal: formatCurrencyDisplay(totalParcelasDocumento(rows)) }));
+      return;
+    }
     setForm(prev => ({
       ...prev,
       parcelas: value
@@ -872,12 +898,12 @@ export default function NovoAcordo() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="valorTotal">Valor Total do Acordo (R$) *</Label>
-                <Input id="valorTotal" placeholder="Digite o valor (ex: 2094,96)" value={form.valorTotal} readOnly={parcelasDocumento.length > 0} onChange={e => handleCurrencyRealtime(e.target.value, 'valorTotal')} required />
+                <Input id="valorTotal" placeholder="Digite o valor (ex: 2094,96)" value={form.valorTotal} onChange={e => { if (parcelasDocumento.length) descartarParcelasDocumento(); handleCurrencyRealtime(e.target.value, 'valorTotal'); }} required />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="parcelas">Número de Parcelas *</Label>
-                <Input id="parcelas" type="text" inputMode="numeric" min="1" max="120" placeholder="1" value={form.parcelas} readOnly={parcelasDocumento.length > 0} onChange={handleParcelasChange} required />
+                <Input id="parcelas" type="text" inputMode="numeric" min="1" max="120" placeholder="1" value={form.parcelas} onChange={handleParcelasChange} required />
               </div>
 
               {!parcelasDocumento.length && <div className="grid gap-4 sm:grid-cols-2">
@@ -896,6 +922,7 @@ export default function NovoAcordo() {
                 </div>
               </div>}
 
+              {parcelasDocumento.length > 0 && <Button type="button" variant="outline" size="sm" onClick={descartarParcelasDocumento}>Descartar parcelas importadas</Button>}
               {parcelasDocumento.length > 0 && <ParcelasDocumentoEditor rows={parcelasDocumento} onChange={rows => {
                 setParcelasDocumento(rows);
                 setForm(current => ({ ...current,
@@ -918,10 +945,11 @@ export default function NovoAcordo() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="dataPrimeiroPagamento">Data do 1º Pagamento *</Label>
-                  <Input id="dataPrimeiroPagamento" type="date" readOnly={parcelasDocumento.length > 0} value={form.dataPrimeiroPagamento} onChange={e => setForm({
-                  ...form,
-                  dataPrimeiroPagamento: e.target.value
-                })} required />
+                  <Input id="dataPrimeiroPagamento" type="date" value={form.dataPrimeiroPagamento} onChange={e => {
+                  const v = e.target.value;
+                  setForm({ ...form, dataPrimeiroPagamento: v });
+                  if (parcelasDocumento.length) setParcelasDocumento(rows => rows.map((r, i) => i === 0 ? { ...r, data_vencimento: v } : r));
+                }} required />
                 </div>
 
                 <div className="space-y-2">
