@@ -1184,6 +1184,7 @@ export default function EnvioMeta() {
 
   const [preparandoDisparo, setPreparandoDisparo] = useState(false);
   const [filtroAcordo, setFiltroAcordo] = useState<null | { excluidos: number; restantes: number; wb: XLSX.WorkBook; textoOriginal: string; novoTexto: string }>(null);
+  const retomarDisparoRef = useRef(false);
   const enviar = async () => {
     if (preparandoDisparo || iniciandoCampanha) return;
     setPreparandoDisparo(true);
@@ -1195,6 +1196,13 @@ export default function EnvioMeta() {
       setPreparandoDisparo(false);
     }
   };
+  // "Continuar sem eles": segue o disparo com a lista já filtrada.
+  useEffect(() => {
+    if (!retomarDisparoRef.current) return;
+    retomarDisparoRef.current = false;
+    void enviar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipientsRaw]);
   const enviarInterno = async () => {
     if (imageUploading) return toast.info('Aguarde o carregamento da imagem.');
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
@@ -3061,28 +3069,29 @@ export default function EnvioMeta() {
 
 
       <Dialog open={!!filtroAcordo} onOpenChange={(o) => { if (!o) setFiltroAcordo(null); }}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="text-center sm:text-center">
             <DialogTitle>Clientes com acordo em andamento</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-center">
               {filtroAcordo?.excluidos} cliente(s) retirado(s) porque já têm acordo em andamento (por CPF ou telefone).
               {" "}{filtroAcordo?.restantes} cliente(s) continuam na campanha.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-wrap gap-2 justify-end">
-            <Button variant="outline" onClick={() => filtroAcordo && XLSX.writeFile(filtroAcordo.wb, `clientes-com-acordo-${new Date().toISOString().slice(0, 10)}.xlsx`)}>
-              <Download className="h-4 w-4 mr-2" />Baixar planilha dos retirados
-            </Button>
-            <Button variant="ghost" onClick={() => setFiltroAcordo(null)}>Cancelar</Button>
+          <div className="flex flex-col items-center gap-2 pt-2">
             <Button
+              className="w-full sm:w-72"
               disabled={!filtroAcordo || filtroAcordo.restantes === 0}
               onClick={() => {
                 if (!filtroAcordo) return;
+                retomarDisparoRef.current = true;
                 setRecipientsRaw(filtroAcordo.novoTexto);
                 setFiltroAcordo(null);
-                toast.success("Clientes com acordo retirados da lista. Clique em Disparar para iniciar.");
               }}
             >Continuar sem eles</Button>
+            <Button className="w-full sm:w-72" variant="outline" onClick={() => filtroAcordo && XLSX.writeFile(filtroAcordo.wb, `clientes-com-acordo-${new Date().toISOString().slice(0, 10)}.xlsx`)}>
+              <Download className="h-4 w-4 mr-2" />Baixar planilha dos retirados
+            </Button>
+            <Button className="w-full sm:w-72" variant="ghost" onClick={() => setFiltroAcordo(null)}>Cancelar</Button>
           </div>
         </DialogContent>
       </Dialog>
