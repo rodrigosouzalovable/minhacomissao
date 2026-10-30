@@ -1196,6 +1196,13 @@ export default function EnvioMeta() {
       setPreparandoDisparo(false);
     }
   };
+  // "Continuar sem eles": segue o disparo com a lista já filtrada.
+  useEffect(() => {
+    if (!retomarDisparoRef.current) return;
+    retomarDisparoRef.current = false;
+    void enviar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipientsRaw]);
   const enviarInterno = async () => {
     if (imageUploading) return toast.info('Aguarde o carregamento da imagem.');
     if (!template || !templateGroup) return toast.error("Selecione um template aprovado");
