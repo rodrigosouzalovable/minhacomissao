@@ -1583,6 +1583,13 @@
       "when": 1793310276386,
       "tag": "0225_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 226,
+      "version": "7",
+      "when": 1793359223386,
+      "tag": "0226_meta_contato_dispensa_zera_nao_lido",
+      "breakpoints": true
     }
   ]
 }
