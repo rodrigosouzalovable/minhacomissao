@@ -1,3 +1,4 @@
+import { useCredorPorCpf } from '@/lib/credorPorCpf';
 import { dataDocumentoISO, normalizarDocumentoAcordo, pagamentosDocumento, totalParcelasDocumento, validarParcelasDocumento, type ParcelaDocumento } from '@/lib/acordoDocumento';
 import { ParcelasDocumentoEditor } from '@/components/acordos/ParcelasDocumentoEditor';
 import { invalidarRecebimentos } from '@/lib/recebimentosPorCredor';
@@ -632,6 +633,7 @@ export default function NovoAcordo() {
       setIsLoading(false);
     }
   };
+  const avisoCredorCpf = useCredorPorCpf(form.clienteCpf, empresa, setEmpresa);
   return <AppLayout>
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
@@ -803,6 +805,11 @@ export default function NovoAcordo() {
                 {!empresa && empresaSugerida && (
                   <p className="text-sm font-medium text-amber-600 dark:text-amber-500">
                     A IA sugeriu: {empresaSugerida}. Confira e selecione o credor manualmente.
+                  </p>
+                )}
+                {avisoCredorCpf && (
+                  <p className={`text-sm font-medium ${avisoCredorCpf.tom === 'ok' ? 'text-green-600' : avisoCredorCpf.tom === 'alerta' ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'}`}>
+                    {avisoCredorCpf.texto}
                   </p>
                 )}
                 {!empresa && (
