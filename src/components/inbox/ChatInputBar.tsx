@@ -97,7 +97,6 @@ export function ChatInputBar({
       if (texto) {
         // Preenche o campo de digitação para o usuário revisar/editar antes de enviar
         setTextoMensagem(prev => (prev ? `${prev} ${texto}` : texto));
-        toast({ title: 'Áudio transcrito', description: 'Revise o texto e clique em enviar.' });
       }
     } else {
       await enviarGravacao();
