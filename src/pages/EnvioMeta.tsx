@@ -28,7 +28,7 @@ import { useMetaEnviosTotais } from "@/hooks/useMetaEnviosTotais";
 import { useAuth } from "@/hooks/useAuth";
 import { AgendarCampanhaBox, agendamentoParaISO, type AgendamentoState } from "@/components/meta/CampanhaAgendadaSection";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
-import { Trash2 } from "lucide-react";
+import { Trash2, Star, Camera } from "lucide-react";
 import * as XLSX from "xlsx";
 import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
 import { CREDOR_MARCAS_LISTA, type CredorSlug } from "@/lib/credorMarcas";

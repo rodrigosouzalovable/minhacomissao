@@ -67,6 +67,35 @@ Deno.serve(async (req) => {
         perfil_atualizado: false,
       };
       try {
+        // 0) Troca de foto (upload do sistema -> Meta), somente para uma instância
+        if (instanciaId && typeof body?.nova_foto_base64 === 'string') {
+          try {
+            const bin = Uint8Array.from(atob(body.nova_foto_base64), (c) => c.charCodeAt(0));
+            const tipo = body?.nova_foto_tipo === 'image/png' ? 'image/png' : 'image/jpeg';
+            const appId = Deno.env.get('META_APP_ID') || '1081283281394312';
+            const sess = await fetch(`${GRAPH}/${appId}/uploads?file_length=${bin.length}&file_type=${encodeURIComponent(tipo)}`, {
+              method: 'POST', headers: { Authorization: `Bearer ${inst.access_token}` },
+            }).then((x) => x.json());
+            if (!sess?.id) throw new Error(sess?.error?.message || 'falha ao abrir upload na Meta');
+            const up = await fetch(`${GRAPH}/${sess.id}`, {
+              method: 'POST',
+              headers: { Authorization: `OAuth ${inst.access_token}`, file_offset: '0' },
+              body: bin,
+            }).then((x) => x.json());
+            if (!up?.h) throw new Error(up?.error?.message || 'falha ao enviar imagem para a Meta');
+            const setResp = await fetch(`${GRAPH}/${inst.phone_number_id}/whatsapp_business_profile`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${inst.access_token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messaging_product: 'whatsapp', profile_picture_handle: up.h }),
+            }).then((x) => x.json());
+            if (!setResp?.success) throw new Error(setResp?.error?.message || 'a Meta recusou a nova foto');
+            r.upload_ok = true;
+          } catch (e) {
+            r.upload_error = e instanceof Error ? e.message : 'erro ao trocar foto';
+            results.push(r);
+            continue;
+          }
+        }
         const patch: any = { meta_perfil_sync_em: new Date().toISOString() };
 
         // 1) Nome oficial / status do nome
