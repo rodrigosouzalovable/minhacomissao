@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       '', 'Qualquer dúvida, é só responder esta mensagem.',
     ].join('\n');
     void textoCliente;
-    const conf = await enviarConfirmacaoPortal(db, b.telefone, { nome, parcelas: n, valorParcela: valores[0], vencimento: b.primeiroVencimento }).catch((e) => ({ ok: false, motivo: String(e) }));
+    const conf = await enviarConfirmacaoPortal(db, b.telefone, { nome, parcelas: n, valorParcela: valores[0], vencimento: b.primeiroVencimento, credor: String(credorReal || label) }).catch((e) => ({ ok: false, motivo: String(e) }));
     console.log('[portal-efetivar] confirmação cliente', conf);
     const cpfFmt = b.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
     await notificarAdmin(db, {
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
         `💰 Negociação: ${n === 1 ? `À vista ${money(total)}` : `${n}x de ${money(valores[0])}${valores[n - 1] !== valores[0] ? ` (última ${money(valores[n - 1])})` : ''} — total ${money(total)}`}`,
         `📌 Principal: ${money(r2(principal))}`, `📅 1º vencimento: ${br(b.primeiroVencimento)}`, `⏱️ Atraso: ${dias} dias (comissão ${pct}%)`,
         `⚡ ${boleto ? 'PIX/boleto da 1ª parcela emitido e exibido ao cliente.' : '⚠️ Acordo fechado, mas o boleto NÃO foi emitido — gerar manualmente.'}`,
-        conf.ok ? '📲 Confirmação com PIX enviada ao cliente no WhatsApp.' : `⚠️ Confirmação NÃO enviada ao cliente (${conf.motivo}) — enviar manualmente.`,
+        conf.ok ? '📲 Confirmação enviada à Meta (se não for entregue, o sistema tenta outro número e avisa).' : `⚠️ Confirmação NÃO enviada ao cliente (${conf.motivo}) — enviar manualmente.`,
         acordoId ? '✅ Lançado no seu login em Meus Acordos.' : '⚠️ Falha ao lançar em Meus Acordos — lançar manualmente.',
       ].join('\n'),
     }).catch((e) => console.error('[portal-efetivar] aviso', String(e)));
