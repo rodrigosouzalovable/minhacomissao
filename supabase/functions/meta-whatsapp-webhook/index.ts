@@ -9,6 +9,7 @@ import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-respo
 import { ORIGEM_CADASTRAL } from '../_shared/recuperacao-cadastral-rules.ts';
 import { NOVO_MUNDO_ORIGEM } from '../_shared/novo-mundo-contatos-rules.ts';
 import { etiquetarSeAcordoPortalAVista } from '../_shared/etiqueta-portal-avista.ts';
+import { reenviarConfirmacaoAposFalha } from '../_shared/portal-confirmacao-cliente.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1592,6 +1593,11 @@ serve(async (req) => {
               foi_gratis: foiGratis,
             })
             .eq('wa_message_id', waId);
+
+          if (status === 'failed') {
+            await reenviarConfirmacaoAposFalha(supabase, waId, String(updateLog.erro || 'falha'))
+              .catch((e) => console.error('[webhook] reenvio confirmação portal', String(e)));
+          }
 
           const { error: custoErr } = await supabase.rpc('registrar_custo_mensagem_meta', {
             p_wa_message_id: waId,
