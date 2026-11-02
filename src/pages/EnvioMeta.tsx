@@ -28,7 +28,7 @@ import { useMetaEnviosTotais } from "@/hooks/useMetaEnviosTotais";
 import { useAuth } from "@/hooks/useAuth";
 import { AgendarCampanhaBox, agendamentoParaISO, type AgendamentoState } from "@/components/meta/CampanhaAgendadaSection";
 import { useEnvioMetaSending } from "@/contexts/EnvioMetaSendingContext";
-import { Trash2 } from "lucide-react";
+import { Trash2, Star, Camera } from "lucide-react";
 import * as XLSX from "xlsx";
 import MapearColunasImportDialog from "@/components/meta/MapearColunasImportDialog";
 import { CREDOR_MARCAS_LISTA, type CredorSlug } from "@/lib/credorMarcas";
@@ -1154,6 +1154,54 @@ export default function EnvioMeta() {
     return ["GREEN", "YELLOW", "RED"].includes(q) ? q : "SEM_QUALIDADE";
   };
 
+  const favKey = `envio-meta-favoritas:${user?.id || "anon"}`;
+  const [favoritas, setFavoritas] = useState<string[]>([]);
+  useEffect(() => {
+    try { setFavoritas(JSON.parse(localStorage.getItem(favKey) || "[]")); } catch { setFavoritas([]); }
+  }, [favKey]);
+  const toggleFavorita = (id: string) => {
+    setFavoritas((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      localStorage.setItem(favKey, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const [fotoAcaoId, setFotoAcaoId] = useState<string | null>(null);
+  const sincronizarFotoInstancia = async (id: string) => {
+    setFotoAcaoId(id);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-sync-perfil-instancias", { body: { instancia_id: id } });
+      if (error) throw error;
+      const r = data?.results?.[0];
+      if (r?.foto) toast.success("Foto atualizada a partir da Meta");
+      else toast.warning(r?.perfil_orientacao || r?.foto_error || r?.perfil_error || "A Meta não retornou foto para este número");
+      await carregar();
+    } catch (e: any) {
+      toast.error("Erro ao sincronizar foto: " + (e?.message || e));
+    } finally { setFotoAcaoId(null); }
+  };
+  const trocarFotoInstancia = async (id: string, file: File) => {
+    if (!/^image\/(jpeg|png)$/.test(file.type)) { toast.error("Use uma imagem JPG ou PNG"); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Imagem maior que 5 MB"); return; }
+    setFotoAcaoId(id);
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let bin = "";
+      for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode(...buf.subarray(k, k + 0x8000));
+      const { data, error } = await supabase.functions.invoke("meta-sync-perfil-instancias", {
+        body: { instancia_id: id, nova_foto_base64: btoa(bin), nova_foto_tipo: file.type },
+      });
+      if (error) throw error;
+      const r = data?.results?.[0];
+      if (r?.upload_error) throw new Error(r.upload_error);
+      toast.success("Foto de perfil trocada na Meta");
+      await carregar();
+    } catch (e: any) {
+      toast.error("Erro ao trocar foto: " + (e?.message || e));
+    } finally { setFotoAcaoId(null); }
+  };
+
   const instanciasVisiveis = useMemo(() => {
     let lista = instancias;
     if (bmFiltro.length > 0) {
@@ -1162,8 +1210,12 @@ export default function EnvioMeta() {
     if (qualidadeFiltro.length > 0) {
       lista = lista.filter((i) => qualidadeFiltro.includes(qualidadeDaInstancia(i)));
     }
+    if (favoritas.length > 0) {
+      const fav = new Set(favoritas);
+      lista = [...lista].sort((a, b) => Number(fav.has(b.id)) - Number(fav.has(a.id)));
+    }
     return lista;
-  }, [instancias, bmFiltro, qualidadeFiltro]);
+  }, [instancias, bmFiltro, qualidadeFiltro, favoritas]);
 
   const qualidadesDisponiveis = useMemo(() => {
     const contagem: Record<string, number> = { GREEN: 0, YELLOW: 0, RED: 0, SEM_QUALIDADE: 0 };
@@ -2107,12 +2159,36 @@ export default function EnvioMeta() {
                   onCheckedChange={() => toggleInstancia(i)}
                 />
 
-                <Avatar className="h-9 w-9 flex-shrink-0">
-                  <AvatarImage src={i.meta_profile_pic_url || undefined} alt={`Foto de perfil de ${i.meta_verified_name || i.nome}`} />
-                  <AvatarFallback className="text-[11px]">
-                    {(i.meta_verified_name || i.nome || "?").slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                <div className="flex flex-col items-center gap-0.5 flex-shrink-0" onClick={(e) => e.preventDefault()}>
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage src={i.meta_profile_pic_url || undefined} alt={`Foto de perfil de ${i.meta_verified_name || i.nome}`} />
+                    <AvatarFallback className="text-[11px]">
+                      {(i.meta_verified_name || i.nome || "?").slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex items-center gap-0.5">
+                    <button type="button" title={favoritas.includes(i.id) ? "Remover dos favoritos" : "Favoritar (mostrar no topo)"}
+                      aria-label="Favoritar instância"
+                      className="p-0.5 rounded hover:bg-muted"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorita(i.id); }}>
+                      <Star className={`h-3.5 w-3.5 ${favoritas.includes(i.id) ? "fill-warning text-warning" : "text-muted-foreground"}`} />
+                    </button>
+                    <button type="button" title="Buscar foto da Meta" aria-label="Buscar foto da Meta"
+                      disabled={fotoAcaoId === i.id}
+                      className="p-0.5 rounded hover:bg-muted disabled:opacity-50"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); sincronizarFotoInstancia(i.id); }}>
+                      {fotoAcaoId === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />}
+                    </button>
+                    <label title="Trocar foto de perfil" aria-label="Trocar foto de perfil"
+                      className="p-0.5 rounded hover:bg-muted cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}>
+                      <Camera className="h-3.5 w-3.5 text-muted-foreground" />
+                      <input type="file" accept="image/jpeg,image/png" className="hidden"
+                        disabled={fotoAcaoId === i.id}
+                        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) trocarFotoInstancia(i.id, f); }} />
+                    </label>
+                  </div>
+                </div>
 
                 <div className="flex-1 min-w-0">
                   {!nacional && <Badge variant="secondary">{instanceDisplayPhone(i) ? "Fora da seleção nacional" : "Telefone não identificado"}</Badge>}
