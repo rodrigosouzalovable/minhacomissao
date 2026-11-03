@@ -218,7 +218,7 @@ export default function NovoAcordo() {
     const documento = normalizarDocumentoAcordo(data);
     const rows = documento.parcelas_detalhadas || [];
     setParcelasDocumento(rows);
-    setTotalDocumentoDivergente(documento.divergencia_valor_documento ? documento.valor_total_documento ?? null : null);
+    parcelasOriginaisRef.current = rows;
     setEmpresa(null);
     setEmpresaSugerida('');
     setTelefoneConfirmado('');
