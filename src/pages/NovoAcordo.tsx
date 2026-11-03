@@ -27,6 +27,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ConfirmarTelefoneDialog } from '@/components/acordos/ConfirmarTelefoneDialog';
 import { FormalizarTermoDialog } from '@/components/acordos/FormalizarTermoDialog';
 import type { Tables } from '@/integrations/supabase/types';
+// Comissão do funcionário fica visível apenas para admin.
+const MOSTRAR_COMISSAO_FUNCIONARIO: boolean = false;
 const acordoSchema = z.object({
   clienteNome: z.string().min(2, 'Nome do cliente é obrigatório').max(200, 'Nome muito longo'),
   clienteCpf: z.string().min(14, 'CPF incompleto').max(14, 'CPF inválido').refine(val => val.replace(/\D/g, '').length === 11, {
