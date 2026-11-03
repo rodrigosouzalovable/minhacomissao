@@ -142,8 +142,11 @@ function extractTextoFromMessage(m: any): { texto: string; tipo: string; media_u
     }
     return { texto: '👤 Contato compartilhado', tipo: 'contato', media_url: null, contatos: [] };
   }
+  const erro131060 = Array.isArray(m?.errors) && m.errors.some((e: any) => Number(e?.code) === 131060);
   return {
-    texto: META_UNAVAILABLE_MESSAGE,
+    texto: erro131060
+      ? 'A Meta reteve o texto desta mensagem (erro 131060: enviada por WhatsApp Windows/relógio ou primeiro contato). Leia no celular do número ou peça ao cliente para reenviar.'
+      : META_UNAVAILABLE_MESSAGE,
     tipo: 'texto',
     media_url: null,
     diagnostico: safeMessageDiagnostic(m),
