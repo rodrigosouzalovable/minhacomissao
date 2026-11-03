@@ -1597,6 +1597,13 @@
       "when": 1793370951132,
       "tag": "0227_identificar_credor_por_cpf",
       "breakpoints": true
+    },
+    {
+      "idx": 228,
+      "version": "7",
+      "when": 1793747891177,
+      "tag": "0228_proteger_etiqueta_rodrigo",
+      "breakpoints": true
     }
   ]
 }
