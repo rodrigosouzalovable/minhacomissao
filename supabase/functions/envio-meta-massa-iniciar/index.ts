@@ -238,24 +238,25 @@ Deno.serve(async (req) => {
       });
       if (arriscadas.length > 0) {
         if (body?.riscoQualidadeConfirmado !== true) {
-          const rotulos = arriscadas
-            .map((r: any) => `${r.nome || r.display_phone || r.id} (${String(r.saude_quality || 'sem leitura').toUpperCase()})`)
-            .join(', ');
-          console.error('[iniciar] recusado 400: risco de qualidade não confirmado', rotulos);
-          return new Response(JSON.stringify({
-            success: false,
-            error: `Confirmação de risco necessária: ${arriscadas.length} número(s) com qualidade baixa selecionados — ${rotulos}.`,
-            risco_qualidade: arriscadas.map((r: any) => ({
-              id: r.id,
-              nome: r.nome || r.display_phone || r.id,
-              qualidade: String(r.saude_quality || '').toUpperCase() || null,
-            })),
-          }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          // Sem confirmação: retira os números de qualidade baixa e segue com os demais.
+          const idsRisco = new Set(arriscadas.map((r: any) => r.id));
+          for (const r of arriscadas as any[]) {
+            motivos.push(`${r.nome || r.display_phone || r.id}: qualidade ${String(r.saude_quality || '').toUpperCase()} — retirado da campanha`);
+          }
+          instanciaIdsFiltradas = instanciaIdsFiltradas.filter((id) => !idsRisco.has(id));
+          if (instanciaIdsFiltradas.length === 0) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: `Todos os números selecionados estão com qualidade baixa — ${motivos.join(' | ')}`,
+              motivos,
+            }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+        } else {
+          instanciasRiscoAceito = Array.from(new Set([
+            ...instanciasRiscoAceito,
+            ...arriscadas.map((r: any) => r.id),
+          ]));
         }
-        instanciasRiscoAceito = Array.from(new Set([
-          ...instanciasRiscoAceito,
-          ...arriscadas.map((r: any) => r.id),
-        ]));
       }
     } catch (_) { /* não bloqueia início */ }
     const permitirQualidadeBaixa = instanciasRiscoAceito.length > 0;
