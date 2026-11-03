@@ -1237,6 +1237,7 @@ export default function EnvioMeta() {
   const [preparandoDisparo, setPreparandoDisparo] = useState(false);
   const [filtroAcordo, setFiltroAcordo] = useState<null | { excluidos: number; restantes: number; wb: XLSX.WorkBook; textoOriginal: string; novoTexto: string }>(null);
   const retomarDisparoRef = useRef(false);
+  const pularFiltroAcordoRef = useRef(false);
   const enviar = async () => {
     if (preparandoDisparo || iniciandoCampanha) return;
     setPreparandoDisparo(true);
@@ -1383,7 +1384,9 @@ export default function EnvioMeta() {
     if (recipientsDedup.length === 0) return toast.error("Cole ao menos um destinatário");
 
     // Varredura: retira quem já tem acordo em andamento (CPF ou telefone).
-    {
+    const pularFiltroAcordo = pularFiltroAcordoRef.current;
+    pularFiltroAcordoRef.current = false;
+    if (!pularFiltroAcordo) {
       const linhas = recipientRecordLines(dedup.texto);
       const itens = linhas.map((linha) => ({ linha, r: parseRecipients(linha, isentosDedup, recipientRoles)[0] }));
       const cpfs = Array.from(new Set(itens.map((i) => cpfNorm(i.r?.cpf)).filter((c) => c.length >= 11)));
@@ -3164,6 +3167,15 @@ export default function EnvioMeta() {
                 setFiltroAcordo(null);
               }}
             >Continuar sem eles</Button>
+            <Button
+              className="w-full sm:w-72"
+              variant="secondary"
+              onClick={() => {
+                pularFiltroAcordoRef.current = true;
+                setFiltroAcordo(null);
+                void enviar();
+              }}
+            >Continuar com eles</Button>
             <Button className="w-full sm:w-72" variant="outline" onClick={() => filtroAcordo && XLSX.writeFile(filtroAcordo.wb, `clientes-com-acordo-${new Date().toISOString().slice(0, 10)}.xlsx`)}>
               <Download className="h-4 w-4 mr-2" />Baixar planilha dos retirados
             </Button>
