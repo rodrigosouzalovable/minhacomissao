@@ -939,6 +939,7 @@ export default function NovoAcordo() {
               {parcelasDocumento.length > 0 && <Button type="button" variant="outline" size="sm" onClick={descartarParcelasDocumento}>Descartar parcelas importadas</Button>}
               {parcelasDocumento.length > 0 && <ParcelasDocumentoEditor rows={parcelasDocumento} onChange={rows => {
                 setParcelasDocumento(rows);
+                parcelasOriginaisRef.current = rows;
                 setForm(current => ({ ...current,
                   valorTotal: formatCurrencyDisplay(totalParcelasDocumento(rows)),
                   parcelas: String(rows.length),
