@@ -65,14 +65,15 @@ Deno.serve(async (req) => {
         const bloco = candidatos.slice(i, i + 200).filter((c: any) => !bloqueados.has(c.id) && c.telefone);
         if (bloco.length === 0) continue;
         const sufixos = bloco.map((c: any) => String(c.telefone).replace(/\D/g, "").slice(-8));
-        const { data: entradas } = await supabase
-          .from("meta_whatsapp_mensagens")
-          .select("instancia_id, telefone")
-          .eq("direcao", "entrada")
-          .in("instancia_id", Array.from(new Set(bloco.map((c: any) => c.instancia_id))))
-          .or(sufixos.map((s: string) => `telefone.ilike.%${s}`).join(","));
+        // Busca indexada por sufixo (substitui 200 ILIKE que varriam a tabela inteira).
+        const { data: entradas, error: errEnt } = await supabase.rpc("meta_entradas_por_sufixos", {
+          p_instancias: Array.from(new Set(bloco.map((c: any) => c.instancia_id))),
+          p_sufixos: Array.from(new Set(sufixos)),
+        });
+        // Leitura falhou: protege o bloco inteiro (nunca arquiva na dúvida).
+        if (errEnt) { for (const c of bloco) bloqueados.add(c.id); continue; }
         const chaves = new Set(
-          (entradas || []).map((m: any) => `${m.instancia_id}|${String(m.telefone || "").replace(/\D/g, "").slice(-8)}`),
+          (entradas || []).map((m: any) => `${m.instancia_id}|${m.sufixo}`),
         );
         for (const c of bloco) {
           const k = `${c.instancia_id}|${String(c.telefone).replace(/\D/g, "").slice(-8)}`;
