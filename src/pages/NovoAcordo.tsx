@@ -321,7 +321,10 @@ export default function NovoAcordo() {
       const n = Math.min(parseInt(value) || 0, 120);
       setForm(prev => ({ ...prev, parcelas: value }));
       if (n < 1) return;
-      const rows = parcelasDocumento.slice(0, n);
+      // Sempre deriva das parcelas importadas originais (ref), nunca da lista
+      // já encurtada por um dígito intermediário (ex.: 12 → 1 → 10).
+      const fonte = parcelasOriginaisRef.current.length ? parcelasOriginaisRef.current : parcelasDocumento;
+      const rows = fonte.slice(0, n);
       while (rows.length < n) {
         const last = rows[rows.length - 1];
         const d = new Date(`${last.data_vencimento}T12:00:00`);
