@@ -307,6 +307,7 @@ export default function NovoAcordo() {
   // Handler para número de parcelas com cálculo automático
   const descartarParcelasDocumento = () => {
     const rows = parcelasDocumento;
+    parcelasOriginaisRef.current = [];
     setParcelasDocumento([]);
     setForm(prev => ({ ...prev,
       valorPrimeiraParcela: rows[0] ? formatCurrencyDisplay(rows[0].valor) : prev.valorPrimeiraParcela,
