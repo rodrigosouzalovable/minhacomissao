@@ -155,6 +155,9 @@ export default function NovoAcordo() {
       .then(({ data }) => setInstancias((data as any) || []));
   }, [user, isAdmin, selectedUserId]);
   const [parcelasDocumento, setParcelasDocumento] = useState<ParcelaDocumento[]>([]);
+  // Guarda as parcelas importadas originais: mudar o número de parcelas tecla a tecla
+  // nunca deve encurtar/perder os valores importados.
+  const parcelasOriginaisRef = useRef<ParcelaDocumento[]>([]);
   const [totalDocumentoDivergente, setTotalDocumentoDivergente] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('ai');
   const [form, setForm] = useState({
@@ -215,7 +218,7 @@ export default function NovoAcordo() {
     const documento = normalizarDocumentoAcordo(data);
     const rows = documento.parcelas_detalhadas || [];
     setParcelasDocumento(rows);
-    setTotalDocumentoDivergente(documento.divergencia_valor_documento ? documento.valor_total_documento ?? null : null);
+    parcelasOriginaisRef.current = rows;
     setEmpresa(null);
     setEmpresaSugerida('');
     setTelefoneConfirmado('');
@@ -304,6 +307,7 @@ export default function NovoAcordo() {
   // Handler para número de parcelas com cálculo automático
   const descartarParcelasDocumento = () => {
     const rows = parcelasDocumento;
+    parcelasOriginaisRef.current = [];
     setParcelasDocumento([]);
     setForm(prev => ({ ...prev,
       valorPrimeiraParcela: rows[0] ? formatCurrencyDisplay(rows[0].valor) : prev.valorPrimeiraParcela,
@@ -317,7 +321,10 @@ export default function NovoAcordo() {
       const n = Math.min(parseInt(value) || 0, 120);
       setForm(prev => ({ ...prev, parcelas: value }));
       if (n < 1) return;
-      const rows = parcelasDocumento.slice(0, n);
+      // Sempre deriva das parcelas importadas originais (ref), nunca da lista
+      // já encurtada por um dígito intermediário (ex.: 12 → 1 → 10).
+      const fonte = parcelasOriginaisRef.current.length ? parcelasOriginaisRef.current : parcelasDocumento;
+      const rows = fonte.slice(0, n);
       while (rows.length < n) {
         const last = rows[rows.length - 1];
         const d = new Date(`${last.data_vencimento}T12:00:00`);
@@ -932,6 +939,7 @@ export default function NovoAcordo() {
               {parcelasDocumento.length > 0 && <Button type="button" variant="outline" size="sm" onClick={descartarParcelasDocumento}>Descartar parcelas importadas</Button>}
               {parcelasDocumento.length > 0 && <ParcelasDocumentoEditor rows={parcelasDocumento} onChange={rows => {
                 setParcelasDocumento(rows);
+                parcelasOriginaisRef.current = rows;
                 setForm(current => ({ ...current,
                   valorTotal: formatCurrencyDisplay(totalParcelasDocumento(rows)),
                   parcelas: String(rows.length),
@@ -955,7 +963,10 @@ export default function NovoAcordo() {
                   <Input id="dataPrimeiroPagamento" type="date" value={form.dataPrimeiroPagamento} onChange={e => {
                   const v = e.target.value;
                   setForm({ ...form, dataPrimeiroPagamento: v });
-                  if (parcelasDocumento.length) setParcelasDocumento(rows => rows.map((r, i) => i === 0 ? { ...r, data_vencimento: v } : r));
+                  if (parcelasDocumento.length) {
+                    setParcelasDocumento(rows => rows.map((r, i) => i === 0 ? { ...r, data_vencimento: v } : r));
+                    parcelasOriginaisRef.current = parcelasOriginaisRef.current.map((r, i) => i === 0 ? { ...r, data_vencimento: v } : r);
+                  }
                 }} required />
                 </div>
 
