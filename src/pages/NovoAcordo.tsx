@@ -155,6 +155,9 @@ export default function NovoAcordo() {
       .then(({ data }) => setInstancias((data as any) || []));
   }, [user, isAdmin, selectedUserId]);
   const [parcelasDocumento, setParcelasDocumento] = useState<ParcelaDocumento[]>([]);
+  // Guarda as parcelas importadas originais: mudar o número de parcelas tecla a tecla
+  // nunca deve encurtar/perder os valores importados.
+  const parcelasOriginaisRef = useRef<ParcelaDocumento[]>([]);
   const [totalDocumentoDivergente, setTotalDocumentoDivergente] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('ai');
   const [form, setForm] = useState({
