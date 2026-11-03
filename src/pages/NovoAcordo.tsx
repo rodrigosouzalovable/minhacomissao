@@ -963,7 +963,10 @@ export default function NovoAcordo() {
                   <Input id="dataPrimeiroPagamento" type="date" value={form.dataPrimeiroPagamento} onChange={e => {
                   const v = e.target.value;
                   setForm({ ...form, dataPrimeiroPagamento: v });
-                  if (parcelasDocumento.length) setParcelasDocumento(rows => rows.map((r, i) => i === 0 ? { ...r, data_vencimento: v } : r));
+                  if (parcelasDocumento.length) {
+                    setParcelasDocumento(rows => rows.map((r, i) => i === 0 ? { ...r, data_vencimento: v } : r));
+                    parcelasOriginaisRef.current = parcelasOriginaisRef.current.map((r, i) => i === 0 ? { ...r, data_vencimento: v } : r);
+                  }
                 }} required />
                 </div>
 
