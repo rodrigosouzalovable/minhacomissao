@@ -30,6 +30,15 @@ export async function aplicarEtiquetaAtendente(
       .maybeSingle();
     const folderId = (cRow as any)?.folder_id ?? null;
 
+    // Etiqueta do Rodrigo (admin) é definitiva: nunca trocar por outro atendente.
+    const { data: protegida } = await supabase
+      .from('meta_whatsapp_contato_etiquetas')
+      .select('etiqueta_id')
+      .eq('contato_id', opts.contatoId)
+      .eq('etiqueta_id', '03a9298c-f201-4b4a-ab05-f6e6cafa4116')
+      .maybeSingle();
+    if (protegida) return { ok: false, motivo: 'protegida_rodrigo' };
+
     if (opts.somenteSeSemEtiqueta) {
       const { data: jaTem } = await supabase
         .from('meta_whatsapp_contato_etiquetas')
