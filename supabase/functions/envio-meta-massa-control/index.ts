@@ -123,12 +123,7 @@ Deno.serve(async (req) => {
       }).eq('id', jobId);
       await devolverProcessandoParaFila();
     } else if (acao === 'reativar') {
-      if (job.status === 'cancelado') {
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'Campanhas canceladas não podem ser reativadas. Crie uma nova campanha.',
-        }), { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
+      // Campanhas canceladas podem ser reativadas: só os itens ainda pendentes são enviados.
       // Reconcilia o cabeçalho com os itens reais antes de decidir se existe algo
       // para retomar. Isso evita botões falsos quando itens sem WhatsApp encerram a fila.
       const contarStatus = async (status: string) => {
