@@ -13935,6 +13935,13 @@ export type Database = {
           valor_brl: number
         }[]
       }
+      meta_entradas_por_sufixos: {
+        Args: { p_instancias: string[]; p_sufixos: string[] }
+        Returns: {
+          instancia_id: string
+          sufixo: string
+        }[]
+      }
       meta_envios_resumo: {
         Args: { _ate?: string; _uid?: string }
         Returns: Json
