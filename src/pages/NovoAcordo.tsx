@@ -1093,6 +1093,7 @@ export default function NovoAcordo() {
 
 
 
+                  {isAdmin && (
                   <div className="rounded-md border overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
@@ -1115,6 +1116,7 @@ export default function NovoAcordo() {
                       </tbody>
                     </table>
                   </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     Valor estimado considerando o pagamento de todas as parcelas. A comissão é creditada conforme o cliente paga cada parcela.
                   </p>

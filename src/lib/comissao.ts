@@ -12,7 +12,7 @@ export const tabelaComissoesFuncionarioHistorica = [
   { min: 721, max: 999999, percentual: 10 },
 ];
 
-export const tabelaComissoesFuncionario = [
+export const tabelaComissoesFuncionarioOut2026 = [
   { min: 1,   max: 60,     percentual: 2 },
   { min: 61,  max: 90,     percentual: 3 },
   { min: 91,  max: 180,    percentual: 4 },
@@ -21,7 +21,15 @@ export const tabelaComissoesFuncionario = [
   { min: 721, max: 999999, percentual: 9 },
 ];
 
+// Vigente para pagamentos a partir de 01/11/2026
+export const tabelaComissoesFuncionario = [
+  { min: 1,   max: 90,     percentual: 2 },
+  { min: 91,  max: 360,    percentual: 4 },
+  { min: 361, max: 999999, percentual: 7 },
+];
+
 export const DATA_INICIO_NOVA_COMISSAO_FUNCIONARIO = '2026-10-01';
+export const DATA_INICIO_COMISSAO_FUNCIONARIO_NOV2026 = '2026-11-01';
 
 export function calcularPercentualComissaoFuncionario(
   diasAtraso: number,
@@ -30,7 +38,9 @@ export function calcularPercentualComissaoFuncionario(
   const data = dataPagamento?.slice(0, 10);
   const tabela = data && data < DATA_INICIO_NOVA_COMISSAO_FUNCIONARIO
     ? tabelaComissoesFuncionarioHistorica
-    : tabelaComissoesFuncionario;
+    : data && data < DATA_INICIO_COMISSAO_FUNCIONARIO_NOV2026
+      ? tabelaComissoesFuncionarioOut2026
+      : tabelaComissoesFuncionario;
   for (const faixa of tabela) {
     if (diasAtraso >= faixa.min && diasAtraso <= faixa.max) {
       return faixa.percentual;
