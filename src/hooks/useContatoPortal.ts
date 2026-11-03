@@ -41,7 +41,7 @@ export function useContatoPortal(): ContatoPortal {
   const base = data ? contatoDeRegistro(data) : fallback;
   // Portal exclusivo da Odres Cred usa canal próprio (exigência da UME).
   const odres = typeof window !== 'undefined' && /^\/(odrescred|odres_cred)(\/|$)|^\/consulta\/(odrescred|odres_cred)(\/|$)/i.test(window.location.pathname);
-  const contato: ContatoPortal = odres ? { ...base, phone: '5562982756510', phoneDisplay: '(62) 98275-6510' } : base;
+  const contato: ContatoPortal = odres ? { ...base, phone: '5562981810202', phoneDisplay: '(62) 98181-0202' } : base;
 
   useEffect(() => {
     if (!contato.noindex) return;

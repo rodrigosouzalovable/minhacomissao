@@ -8,7 +8,7 @@ import { notificarAdmin } from './notificar-admin.ts';
 export const PORTAL_CONFIRMACAO_INSTANCIA_ID = 'b103ac3e-5781-47c4-8e11-24a323f5f0ee';
 export const PORTAL_CONFIRMACAO_TEMPLATE = 'confirmacao_acordo_portal';
 const ADMIN_USER_ID = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
-const ODRES_EXCLUSIVO_SUFIXO = '82756510';
+const ODRES_EXCLUSIVO_SUFIXO = '81810202';
 
 export interface DadosConfirmacao { nome: string; parcelas: number; valorParcela: number; vencimento: string /* YYYY-MM-DD */; credor?: string }
 interface Estado { tentativa: number; excluidas: string[]; dados: DadosConfirmacao; telefone: string }
