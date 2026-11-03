@@ -1032,8 +1032,8 @@ export default function NovoAcordo() {
               </CardContent>
             </Card>}
 
-          {/* Preview da comissão do FUNCIONÁRIO */}
-          {calculo && !isAdmin && (() => {
+          {/* Preview da comissão do FUNCIONÁRIO — oculto: comissão visível apenas para admin */}
+          {false && calculo && !isAdmin && (() => {
             const diasAtraso = parseInt(form.diasAtraso) || 0;
             const percFunc = calcularPercentualComissaoFuncionario(diasAtraso);
             const parcelasNum = parseInt(form.parcelas) || 0;
