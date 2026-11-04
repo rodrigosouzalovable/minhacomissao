@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
+import { invokeErrorMessage } from '@/lib/invokeErrorMessage';
 
 interface UseMetaAudioRecorderProps {
   instanciaId: string;
@@ -144,23 +145,6 @@ async function ensureMetaAudio(
   try { await ffmpeg.deleteFile(inName); await ffmpeg.deleteFile(outName); } catch { /* noop */ }
   return { blob: out, ext: 'ogg', contentType: 'audio/ogg' };
 }
-
-async function invokeErrorMessage(error: unknown): Promise<string> {
-  const fallback = error instanceof Error ? error.message : 'Falha ao chamar o serviço de envio';
-  const context = (error as { context?: unknown } | null)?.context;
-  if (!(context instanceof Response)) return fallback;
-  try {
-    const payload = await context.clone().json() as { error?: string; message?: string };
-    return payload.error || payload.message || fallback;
-  } catch {
-    try {
-      return (await context.clone().text()) || fallback;
-    } catch {
-      return fallback;
-    }
-  }
-}
-
 
 export function useMetaAudioRecorder({
   instanciaId, telefone, bsuid, userId, replyToWaId, conteudoCitado, onSent,
