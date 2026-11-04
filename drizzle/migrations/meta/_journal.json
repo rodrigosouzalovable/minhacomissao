@@ -1611,6 +1611,13 @@
       "when": 1793796301402,
       "tag": "0229_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 230,
+      "version": "7",
+      "when": 1793797216702,
+      "tag": "0230_iago_rodizio_caixas_personalizadas",
+      "breakpoints": true
     }
   ]
 }
