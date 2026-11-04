@@ -110,17 +110,12 @@ Deno.serve(async (req) => {
 
     const folderId = (contato as any).folder_id ?? null;
     modoAquecimento = folderId === FOLDER_AQUECIMENTO_INBOX;
-    modoCaixaPadrao = folderId === null;
-    // Exceção controlada: fora da PADRÃO, somente a AQUECIMENTO pode usar o IAGO.
-    if (!modoCaixaPadrao && !modoAquecimento) {
-      return json({ success: false, skipped: 'IAGO restrito às caixas PADRÃO e AQUECIMENTO' });
-    }
-
-    // Na PADRÃO, o IAGO participa somente quando estiver cadastrado no rodízio.
-    // Na AQUECIMENTO, toda entrada UAZAPI espelhada é responsabilidade dele.
-    if (modoCaixaPadrao) {
-      const atende = await iagoAtendeCaixa(supabase, iago.id, null);
+    // PADRÃO e caixas personalizadas onde o IAGO foi marcado como atendente
+    // funcionam igual: rodízio, respostas e transferência para humanos da mesma caixa.
+    if (!modoAquecimento) {
+      const atende = await iagoAtendeCaixa(supabase, iago.id, folderId);
       if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
+      modoCaixaPadrao = true;
     }
 
     // ===== Credor da conversa: cabeçalho da conversa > credor único ativo da caixa =====
