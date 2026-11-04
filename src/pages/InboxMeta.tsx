@@ -73,6 +73,7 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
 import { humanizarErroEnvio } from '@/lib/humanizarErroEnvio';
+import { invokeErrorMessage } from '@/lib/invokeErrorMessage';
 import { uploadInboxMedia } from '@/lib/inboxMediaUrl';
 import { inboxPhoneSearch, inboxPhoneSearchArgs } from '@/lib/metaInboxPhoneSearch';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
@@ -1564,7 +1565,7 @@ export default function InboxMeta() {
             },
 
           });
-          if (error) throw new Error(error.message);
+          if (error) throw new Error(await invokeErrorMessage(error));
           if (!data?.success && (data as any)?.destinatario_invalido) {
             setMensagens(prev => prev.filter(m => m.id !== tempId));
             toast({
@@ -1666,7 +1667,7 @@ export default function InboxMeta() {
           conteudo_citado: respondendo?.conteudo,
         },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await invokeErrorMessage(error));
       if (!data?.success) throw new Error(data?.error || 'Falha');
       setRespondendo(null);
       setArquivoParaConfirmar(null);

@@ -58,3 +58,4 @@
 - Partner-owned Meta conversations never stay boxless: a DB trigger moves them to the partner's configured default box, keeping the admin PADRÃO box limited to the admin's numbers.
 - SFTP UME/Odres payments for CPFs with an active agreement that did not match exactly settle the nearest open installment (±35 days) or append a new paid one, deduplicated across daily snapshots, so recurring files never double-count.
 - Shared read-only lookups (sending instances, BM quotas, unread counts) use short in-memory caches/RPCs; sends still revalidate server-side, so caches never bypass limits.
+- Inbox send errors share response-body extraction so text, attachments and audio preserve server refusals without automatic retries or reactivation.

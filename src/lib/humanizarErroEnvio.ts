@@ -7,6 +7,16 @@ export function humanizarErroEnvio(erroBruto?: string | null, contexto: 'mensage
 
   const s = raw.toLowerCase();
 
+  if (s.includes('instância meta não encontrada/ativa')) {
+    return 'O número desta conversa está desativado ou não está mais disponível no sistema. Confira o cadastro em API Oficial Meta antes de responder. O envio não foi realizado.';
+  }
+
+  if (s.includes('sessão inválida ou expirada') || s.includes('sessão necessária')) {
+    return 'Sua sessão expirou. Entre novamente no sistema para responder; o envio não foi realizado.';
+  }
+
+  if (s.includes('você não faz parte da caixa desta conversa')) return raw;
+
   if (s.includes('não foi possível liberar o acesso ao arquivo anexado') || s.includes('não foi possível salvar o arquivo anexado')) {
     return raw;
   }

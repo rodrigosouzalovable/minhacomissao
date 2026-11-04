@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [ ] Corrigir o erro genérico do envio na conversa com número desativado e validar sem reativar ou enviar mensagens reais.
 - [x] Corrigir rolagem da importação Meta, preservar registros multilinha e preencher prévia principal; 23 testes passaram e arquivo real confirmou 99 clientes/cinco colunas/Edson na prévia, sem disparos.
 - [x] Payment-reminder finding is stale: active cron has no caller for check-payment-reminders or job 8; preserved authentication and schedules.
 - [x] Isolated template admission errors per number, preserved terminal rows and peer reservations; 18 tests passed and meta-criar-template-lote deployed without real submissions.
