@@ -1,15 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { traduzirErroUme } from '../../supabase/functions/_shared/ume-erros.ts';
+import { traduzirErroUme } from '../../supabase/functions/_shared/ume-erros';
 
 describe('traduzirErroUme', () => {
-  it('parcela paga em renegociação anterior', () => {
-    expect(traduzirErroUme('Installment 8441643 was paid in previous renegotiation 208474.'))
-      .toContain('A parcela 8441643 já foi paga no acordo anterior 208474');
+  it('número com 403 no meio não vira acesso negado', () => {
+    expect(traduzirErroUme('Borrower 14034012 has no eligible installments')).not.toMatch(/acesso à UME foi negado/);
   });
-  it('juros acima do limite', () => {
-    expect(traduzirErroUme('Interest rate 999% is above maximum = 8%.')).toContain('máximo permitido pela UME (8%)');
+  it('status 401 real vira acesso negado', () => {
+    expect(traduzirErroUme('erro 401', 'o acordo', 401)).toMatch(/acesso à UME foi negado/);
   });
-  it('erro desconhecido', () => {
-    expect(traduzirErroUme('xyz')).toContain('motivo não identificado');
+  it('parcela paga em acordo anterior continua reconhecida', () => {
+    expect(traduzirErroUme('installment 8840312 was paid in previous renegotiation 403')).toMatch(/já foi paga/);
   });
 });

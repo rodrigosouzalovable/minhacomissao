@@ -18,17 +18,24 @@ const REGRAS: Regra[] = [
     msg: () => 'O valor da parcela ficou abaixo do mínimo aceito pela UME. Diminua o número de parcelas.' },
   { re: /discount.*(above|exceed|greater|maximum)/i,
     msg: () => 'O desconto passou do limite permitido pela UME. Aumente o total do acordo.' },
-  { re: /unauthorized|forbidden|\bTEP\b|invalid[_ ]token|401|403/i,
-    msg: () => 'O acesso à UME foi negado (problema de login com a UME, não do cliente). Tente de novo em alguns minutos; se continuar, avise o administrador.' },
-  { re: /timeout|timed out|unavailable|bad gateway|5\d\d|internal server error/i,
-    msg: () => 'O sistema da UME está fora do ar ou demorou para responder. Tente de novo em alguns minutos.' },
+  { re: /unauthorized|forbidden|\bTEP\b|invalid[_ ]token|\bume_auth_\d+|^erro (401|403)$/i,
+    msg: () => MSG_AUTH },
+  { re: /timeout|timed out|unavailable|bad gateway|internal server error|^erro 5\d\d$/i,
+    msg: () => MSG_FORA },
 ];
 
-export function traduzirErroUme(original: unknown, contexto = 'o acordo'): string {
+const MSG_AUTH = 'O acesso à UME foi negado (problema de login com a UME, não do cliente). Tente de novo em alguns minutos; se continuar, avise o administrador.';
+const MSG_FORA = 'O sistema da UME está fora do ar ou demorou para responder. Tente de novo em alguns minutos.';
+
+// Números soltos (IDs, valores) nunca definem o tipo do erro; o status HTTP real sim.
+export function traduzirErroUme(original: unknown, contexto = 'o acordo', status?: number): string {
   const txt = String(original ?? '').trim();
   for (const r of REGRAS) {
     const m = txt.match(r.re);
     if (m) return r.msg(m);
   }
-  return `A UME recusou ${contexto} por um motivo não identificado. Confira os dados do cliente no backoffice ou tente de novo.`;
+  if (status === 401 || status === 403) return MSG_AUTH;
+  if (status && status >= 500) return MSG_FORA;
+  const trecho = txt && !/^erro \d+$/i.test(txt) ? ` Motivo da UME: "${txt.slice(0, 160)}".` : '';
+  return `A UME recusou ${contexto} por um motivo não identificado.${trecho} Confira os dados do cliente no backoffice ou tente de novo.`;
 }
