@@ -106,7 +106,14 @@ Deno.serve(async (req) => {
       const totalDebt = Number((base.data as Record<string, unknown> | null)?.totalDebt);
       if (!base.ok || !Number.isFinite(totalDebt)) {
         const d = base.data as Record<string, unknown> | null;
-        return json({ success: false, error: 'ume_base', message: traduzirErroUme(d?.message || d?.error || `erro ${base.status}`), detalhe: base.data });
+        console.error('[ume-acordo-api] base falhou', { status: base.status, cpf_fim: b.cpf.slice(-4) });
+        await db.from('ume_acordo_api_log').insert({
+          user_id: u.user.id, cpf: b.cpf, borrower_id: corpo.borrowerId, conversa_id: b.conversaId ?? null,
+          ambiente, acao: b.acao, parcelas: b.numeroParcelas, primeiro_vencimento: b.primeiroVencimento,
+          desconto: 0, juros: 0, installment_ids: ids, sucesso: false,
+          resposta: { etapa: 'divida_atualizada', status: base.status, data: base.data } as never,
+        }).then(() => {}, () => {});
+        return json({ success: false, error: 'ume_base', message: traduzirErroUme(d?.message || d?.error || `erro ${base.status}`, 'o acordo', base.status), detalhe: base.data });
       }
       if (b.totalAlvo > totalDebt) {
         return json({ success: false, error: 'total_acima_divida', message: `O total combinado é maior que a dívida atualizada na UME (${totalDebt.toFixed(2)}).` });
@@ -125,7 +132,7 @@ Deno.serve(async (req) => {
 
     if (!r.ok) {
       const d = r.data as Record<string, unknown> | null;
-      return json({ success: false, error: String(d?.message || d?.error || `ume_http_${r.status}`), message: traduzirErroUme(d?.message || d?.error || `erro ${r.status}`), detalhe: r.data });
+      return json({ success: false, error: String(d?.message || d?.error || `ume_http_${r.status}`), message: traduzirErroUme(d?.message || d?.error || `erro ${r.status}`, 'o acordo', r.status), detalhe: r.data });
     }
     return json({ success: true, ambiente, totalAberto, resultado: r.data });
   } catch (e) {
