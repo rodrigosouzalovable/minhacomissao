@@ -1604,6 +1604,13 @@
       "when": 1793747891177,
       "tag": "0228_proteger_etiqueta_rodrigo",
       "breakpoints": true
+    },
+    {
+      "idx": 229,
+      "version": "7",
+      "when": 1793796301402,
+      "tag": "0229_migration",
+      "breakpoints": true
     }
   ]
 }
