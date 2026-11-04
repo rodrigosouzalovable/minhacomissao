@@ -1240,7 +1240,15 @@ serve(async (req) => {
                 supabase.from('meta_inbox_folder_credores')
                   .select('folder_id').eq('folder_id', folderKey).maybeSingle(),
               ]);
-              const pastaComIago = _folderIdContato === null || !!(janelaIago as any)?.ativo || !!(credorPasta as any)?.folder_id;
+              let pastaComIago = _folderIdContato === null || !!(janelaIago as any)?.ativo || !!(credorPasta as any)?.folder_id;
+              if (!pastaComIago && _folderIdContato) {
+                const { data: _iagoCfg } = await supabase.from('iago_config').select('user_id').order('created_at').limit(1).maybeSingle();
+                if ((_iagoCfg as any)?.user_id) {
+                  const { data: _mem } = await supabase.from('meta_inbox_folder_members').select('user_id')
+                    .eq('folder_id', _folderIdContato).eq('user_id', (_iagoCfg as any).user_id).maybeSingle();
+                  pastaComIago = !!_mem;
+                }
+              }
 
               if (pastaComIago) {
                 const { data: msgSalva } = await supabase
@@ -1329,7 +1337,15 @@ serve(async (req) => {
                 supabase.from('meta_inbox_folder_credores')
                   .select('folder_id').eq('folder_id', folderKey).maybeSingle(),
               ]);
-              const pastaComIagoImg = _folderIdContato === null || !!(janelaIagoImg as any)?.ativo || !!(credorPastaImg as any)?.folder_id;
+              let pastaComIagoImg = _folderIdContato === null || !!(janelaIagoImg as any)?.ativo || !!(credorPastaImg as any)?.folder_id;
+              if (!pastaComIagoImg && _folderIdContato) {
+                const { data: _iagoCfg } = await supabase.from('iago_config').select('user_id').order('created_at').limit(1).maybeSingle();
+                if ((_iagoCfg as any)?.user_id) {
+                  const { data: _mem } = await supabase.from('meta_inbox_folder_members').select('user_id')
+                    .eq('folder_id', _folderIdContato).eq('user_id', (_iagoCfg as any).user_id).maybeSingle();
+                  pastaComIagoImg = !!_mem;
+                }
+              }
 
               if (pastaComIagoImg) {
                 const { data: msgSalvaImg } = await supabase

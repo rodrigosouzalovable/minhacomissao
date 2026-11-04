@@ -20,7 +20,7 @@
 - Meta webhook alerts need failed recovery and confirmed subscription errors, not timeouts.
 - Installment values/payment dates use atomic recalculation RPCs; due dates and payments use dedicated authenticated RPCs.
 
-- Inbox assignments/sends are atomic and authorized; IAGO rotates in PADRÃO only. Unread filtering precedes pagination; opening does not clear unread.
+- Inbox assignments/sends are atomic and authorized; IAGO rotates in PADRÃO and in custom boxes where it is a member, handing off only to that box's humans. Unread filtering precedes pagination; opening does not clear unread.
 - Unknown Meta messages keep restricted diagnostics and show a clear content-unavailable notice.
 - Inbox pool returns reuse authorized RPCs after individual Meta health confirmation; never bypass real blocks.
 - Inbox media uses conversation-level authorization, never broad folder access, to isolate attachments.
