@@ -1,5 +1,6 @@
 // Rotina de recuperação de acordos com parcela vencida (UME + Odres Cred).
 // Seg–sáb 09:30 BRT. Autorizada só pelo token do agendamento 'recuperacao-quebrados-0930'.
+// Também resgata acordos QUEBRADOS (1ª parcela vencida há 11–60 dias), 1 envio a cada 15 dias por número.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -147,5 +148,5 @@ Deno.serve(async (req) => {
     }),
   });
   const out = await resp.json().catch(() => ({}));
-  return json({ success: resp.ok, clientes: clientes.length, numeros: instIds.length, resultado: out }, resp.ok ? 200 : 500);
+  return json({ success: resp.ok, clientes: clientes.length, quebrados: qtdQuebrados, numeros: instIds.length, resultado: out }, resp.ok ? 200 : 500);
 });
