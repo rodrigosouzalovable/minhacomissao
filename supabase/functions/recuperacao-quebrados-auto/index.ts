@@ -104,9 +104,22 @@ Deno.serve(async (req) => {
       .in("cliente_cpf", cpfsQ.slice(i, i + 200));
     for (const a of data || []) cpfsAtivos.add(String(a.cliente_cpf || "").replace(/\D/g, ""));
   }
+  // Acordos ainda "ativos" com parcela pendente vencida há 11–60 dias (na prática, quebrados).
+  const ativosAtrasados: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("pagamentos")
+      .select("data_prevista,valor_parcela,acordos!inner(cliente_nome,cliente_telefone,cliente_cpf,empresa,status)")
+      .eq("status", "pendente").gte("data_prevista", isoBRT(-60)).lte("data_prevista", isoBRT(-11))
+      .eq("acordos.status", "ativo").in("acordos.empresa", ["ume_novo_mundo", "odres_cred"])
+      .order("data_prevista", { ascending: true }).range(from, from + 999);
+    if (error) break;
+    for (const r of data || []) ativosAtrasados.push({ ...r.acordos, data_primeiro_pagamento: r.data_prevista,
+      valor_parcela: r.valor_parcela, _ativo: true });
+    if (!data || data.length < 1000) break;
+  }
   let qtdQuebrados = 0;
-  for (const a of quebrados) {
-    if (cpfsAtivos.has(String(a.cliente_cpf || "").replace(/\D/g, ""))) continue;
+  for (const a of [...ativosAtrasados, ...quebrados]) {
+    if (!a._ativo && cpfsAtivos.has(String(a.cliente_cpf || "").replace(/\D/g, ""))) continue;
     let tel = String(a.cliente_telefone || "").replace(/\D/g, "");
     if (tel.length < 10 || tel.length > 13) continue;
     if (!tel.startsWith("55")) tel = `55${tel}`;
