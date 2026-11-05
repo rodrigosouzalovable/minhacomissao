@@ -71,8 +71,9 @@ type ItemResult =
 const ENVIOS_SIMULTANEOS = 3;
 
 function delayUsuarioMs(job: any): number {
-  const lo = Math.max(1, Number(job?.min_seg) || 30);
-  const hi = Math.max(lo, Number(job?.max_seg) || 90);
+  // Intervalo mínimo de segurança (5–10s) para evitar rajadas que a Meta trata como spam.
+  const lo = Math.max(5, Number(job?.min_seg) || 30);
+  const hi = Math.max(lo, 10, Number(job?.max_seg) || 90);
   const sec = Math.floor(Math.random() * (hi - lo + 1)) + lo;
   return sec * 1000;
 }

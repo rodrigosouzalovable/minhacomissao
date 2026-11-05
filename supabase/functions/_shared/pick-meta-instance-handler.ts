@@ -55,6 +55,9 @@ function faseFromDias(d: number): string {
   return 'livre';
 }
 
+// Máximo de envios por número/dia em campanhas, para proteger a qualidade.
+const TETO_PROTECAO_CAMPANHA_DIA = 300;
+
 export async function handlePickMetaInstance(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   try {
@@ -300,6 +303,17 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
             descartados.push(`${rotulo}: cota da Meta atingida (${enviadosDia}/${cotaMeta})`);
             continue;
           }
+        }
+      }
+
+      // ===== Teto de proteção por número em campanhas =====
+      // Espalha o volume entre mais números para reduzir denúncias e quedas
+      // de qualidade; vale mesmo no modo "sem teto".
+      if (modoCampanha && !liberacaoTotalThiago && !liberar3144Conectada) {
+        const enviadosDiaCap = usoDia(inst.id);
+        if (enviadosDiaCap >= TETO_PROTECAO_CAMPANHA_DIA) {
+          descartados.push(`${rotulo}: teto de proteção diário atingido (${enviadosDiaCap}/${TETO_PROTECAO_CAMPANHA_DIA})`);
+          continue;
         }
       }
 
