@@ -309,7 +309,7 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
       // ===== Teto de proteção por número em campanhas =====
       // Espalha o volume entre mais números para reduzir denúncias e quedas
       // de qualidade; vale mesmo no modo "sem teto".
-      if (modoCampanha && !liberacaoTotalThiago && !liberar3144Conectada) {
+      if (String(reqBody?.contexto || '') === 'campanha' && !liberacaoTotalThiago && !liberar3144Conectada) {
         const enviadosDiaCap = usoDia(inst.id);
         if (enviadosDiaCap >= TETO_PROTECAO_CAMPANHA_DIA) {
           descartados.push(`${rotulo}: teto de proteção diário atingido (${enviadosDiaCap}/${TETO_PROTECAO_CAMPANHA_DIA})`);
