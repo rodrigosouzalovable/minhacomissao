@@ -74,6 +74,37 @@ export default function Relatorios() {
   const [alerta3c, setAlerta3c] = useState<string | null>(null);
 
   const dataStr = toDateStr(data);
+  const [valorReal, setValorReal] = useState<number | null>(null);
+  const [valorRealEm, setValorRealEm] = useState<string | null>(null);
+  const [atualizandoValor, setAtualizandoValor] = useState(false);
+
+  // Mesma conta do relatório do WhatsApp: soma dos acordos criados no dia (BRT)
+  const atualizarValorAcordos = useCallback(async () => {
+    setAtualizandoValor(true);
+    try {
+      let total = 0;
+      for (let from = 0; ; from += 1000) {
+        const { data: rows, error } = await supabase
+          .from('acordos')
+          .select('id, valor_total')
+          .gte('criado_em', `${dataStr}T00:00:00-03:00`)
+          .lte('criado_em', `${dataStr}T23:59:59-03:00`)
+          .order('id')
+          .range(from, from + 999);
+        if (error) throw error;
+        (rows || []).forEach((r: any) => { total += Number(r.valor_total || 0); });
+        if (!rows || rows.length < 1000) break;
+      }
+      setValorReal(total);
+      setValorRealEm(new Date().toISOString());
+    } catch (e: any) {
+      toast.error('Não foi possível atualizar o valor em acordos');
+    } finally {
+      setAtualizandoValor(false);
+    }
+  }, [dataStr]);
+
+  useEffect(() => { setValorReal(null); atualizarValorAcordos(); }, [atualizarValorAcordos]);
 
   const load = useCallback(async () => {
     const [rRes, mRes] = await Promise.all([
@@ -345,7 +376,7 @@ export default function Relatorios() {
                 />
               </PopoverContent>
             </Popover>
-            <Button variant="outline" size="sm" onClick={sincronizarAgora} disabled={sincronizando}>
+            <Button variant="outline" size="sm" onClick={() => { sincronizarAgora(); atualizarValorAcordos(); }} disabled={sincronizando}>
               <RefreshCw className={cn('h-4 w-4 mr-2', sincronizando && 'animate-spin')} /> Atualizar agora
             </Button>
             <Button variant="outline" size="sm" onClick={exportCSV}>
@@ -416,7 +447,10 @@ export default function Relatorios() {
           whatsapp={totais.whatsapp}
           cpc={totais.cpc}
           cpca={totais.cpca}
-          valor={totais.valor}
+          valor={valorReal ?? totais.valor}
+          valorEm={valorRealEm}
+          onAtualizarValor={atualizarValorAcordos}
+          atualizandoValor={atualizandoValor}
         />
 
         {isAdmin && <ArquivoDiarioUmeCard />}
