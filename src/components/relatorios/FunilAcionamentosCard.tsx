@@ -1,7 +1,9 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Megaphone, MessageSquare, UserCheck, Handshake, Wallet, Clock } from 'lucide-react';
+import { Megaphone, MessageSquare, UserCheck, Handshake, Wallet, Clock, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 type Props = {
   dataFmt: string;
@@ -12,6 +14,9 @@ type Props = {
   cpc: number;
   cpca: number;
   valor: number;
+  valorEm?: string | null;
+  onAtualizarValor?: () => void;
+  atualizandoValor?: boolean;
 };
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -20,7 +25,7 @@ const pctTxt = (num: number, den: number) =>
   den > 0 ? `${((num / den) * 100).toFixed(1).replace('.', ',')}%` : '0%';
 
 export function FunilAcionamentosCard({
-  dataFmt, parcial, syncEm, tentativas, whatsapp, cpc, cpca, valor,
+  dataFmt, parcial, syncEm, tentativas, whatsapp, cpc, cpca, valor, valorEm, onAtualizarValor, atualizandoValor,
 }: Props) {
   const etapas = [
     { label: 'Acionamentos', valor: tentativas, base: tentativas, icon: Megaphone, tone: 'bg-primary' },
@@ -49,7 +54,18 @@ export function FunilAcionamentosCard({
             <div>
               <p className="text-xs text-muted-foreground">Valor em acordos</p>
               <p className="text-xl font-bold">{brl(valor)}</p>
+              {valorEm && (
+                <p className="text-[10px] text-muted-foreground">
+                  às {new Date(valorEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </p>
+              )}
             </div>
+            {onAtualizarValor && (
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={onAtualizarValor}
+                disabled={atualizandoValor} aria-label="Atualizar valor em acordos" title="Atualizar valor em acordos">
+                <RefreshCw className={cn('h-4 w-4', atualizandoValor && 'animate-spin')} />
+              </Button>
+            )}
           </div>
         </div>
 
