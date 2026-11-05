@@ -1,5 +1,6 @@
 // Rotina de recuperação de acordos com parcela vencida (UME + Odres Cred).
 // Seg–sáb 09:30 BRT. Autorizada só pelo token do agendamento 'recuperacao-quebrados-0930'.
+// Também resgata acordos QUEBRADOS (1ª parcela vencida há 11–60 dias), 1 envio a cada 15 dias por número.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -70,6 +71,58 @@ Deno.serve(async (req) => {
     porSuf.set(suf, { telefone: tel, nome, cpf: a.cliente_cpf || undefined, saldo: Number(r.valor_parcela || 0),
       vars: { name: nome, nome, "1": nome, "2": credor, "3": `${d}/${m}/${y}` } });
   }
+  // ===== Acordos já QUEBRADOS (1ª parcela vencida entre 11 e 60 dias) =====
+  // Cadência: no máximo 1 mensagem a cada 15 dias por número; pula quem já tem acordo ativo.
+  const { data: jobs15 } = await db.from("envio_meta_job").select("id")
+    .eq("user_id", DONO).ilike("nome_campanha", "Recuperação quebrados%")
+    .gte("created_at", new Date(Date.now() - 15 * 86400_000).toISOString());
+  const recentes15 = new Set<string>(recentes);
+  const ids15 = (jobs15 || []).map((j: any) => j.id).filter((id: string) => !jobIds.includes(id));
+  for (let i = 0; i < ids15.length; i += 50) {
+    for (let from = 0; ; from += 1000) {
+      const { data } = await db.from("envio_meta_job_item").select("telefone")
+        .in("job_id", ids15.slice(i, i + 50)).range(from, from + 999);
+      for (const it of data || []) recentes15.add(String(it.telefone || "").replace(/\D/g, "").slice(-8));
+      if (!data || data.length < 1000) break;
+    }
+  }
+  const quebrados: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("acordos")
+      .select("cliente_nome,cliente_telefone,cliente_cpf,empresa,data_primeiro_pagamento,valor_parcela")
+      .eq("status", "quebrado").in("empresa", ["ume_novo_mundo", "odres_cred"])
+      .gte("data_primeiro_pagamento", isoBRT(-60)).lte("data_primeiro_pagamento", isoBRT(-11))
+      .range(from, from + 999);
+    if (error) break;
+    quebrados.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  const cpfsQ = [...new Set(quebrados.map((q) => String(q.cliente_cpf || "").replace(/\D/g, "")).filter(Boolean))];
+  const cpfsAtivos = new Set<string>();
+  for (let i = 0; i < cpfsQ.length; i += 200) {
+    const { data } = await db.from("acordos").select("cliente_cpf").eq("status", "ativo")
+      .in("cliente_cpf", cpfsQ.slice(i, i + 200));
+    for (const a of data || []) cpfsAtivos.add(String(a.cliente_cpf || "").replace(/\D/g, ""));
+  }
+  let qtdQuebrados = 0;
+  for (const a of quebrados) {
+    if (cpfsAtivos.has(String(a.cliente_cpf || "").replace(/\D/g, ""))) continue;
+    let tel = String(a.cliente_telefone || "").replace(/\D/g, "");
+    if (tel.length < 10 || tel.length > 13) continue;
+    if (!tel.startsWith("55")) tel = `55${tel}`;
+    if (tel.length < 12) continue;
+    const suf = tel.slice(-8);
+    if (recentes15.has(suf) || porSuf.has(suf)) continue;
+    const p = String(a.cliente_nome || "cliente").trim().split(/\s+/)[0] || "cliente";
+    const nome = p[0].toUpperCase() + p.slice(1).toLowerCase();
+    const [y, m, d] = String(a.data_primeiro_pagamento).slice(0, 10).split("-");
+    const credor = CREDOR[a.empresa] || a.empresa;
+    porSuf.set(suf, { telefone: tel, nome, cpf: a.cliente_cpf || undefined, saldo: Number(a.valor_parcela || 0),
+      vars: { name: nome, nome, "1": nome, "2": credor, "3": `${d}/${m}/${y}` } });
+    qtdQuebrados++;
+  }
+  console.log(`[recuperacao-quebrados] vencidos=${porSuf.size - qtdQuebrados} quebrados=${qtdQuebrados}`);
+
   const clientes = [...porSuf.values()];
   if (!clientes.length) return json({ success: true, clientes: 0 });
 
@@ -95,5 +148,5 @@ Deno.serve(async (req) => {
     }),
   });
   const out = await resp.json().catch(() => ({}));
-  return json({ success: resp.ok, clientes: clientes.length, numeros: instIds.length, resultado: out }, resp.ok ? 200 : 500);
+  return json({ success: resp.ok, clientes: clientes.length, quebrados: qtdQuebrados, numeros: instIds.length, resultado: out }, resp.ok ? 200 : 500);
 });
