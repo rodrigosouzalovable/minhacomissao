@@ -74,8 +74,8 @@ export function detectarCamposLocal(texto: string, d: DadosProposta): string {
   const pares: [string, string][] = [
     [v.maior_parcelamento, 'maior_parcelamento'],
     [v.total_com_juros, 'total_com_juros'],
-    [v.total_sem_juros, 'total_sem_juros'],
     [v.avista, 'avista'],
+    [v.total_sem_juros, 'total_sem_juros'],
     [v.total_proposta, 'total_proposta'],
     [v.cpf, 'cpf'],
     [v.nome, 'nome'],
