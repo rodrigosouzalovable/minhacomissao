@@ -3,6 +3,8 @@ export function humanizarErroTemplate(erroBruto?: string | null): string {
   const raw = (erroBruto || "").toString().trim();
   if (!raw) return "Erro desconhecido ao criar o template.";
   const s = raw.toLowerCase();
+  if (s === "copia_automatica_desativada") return "A cópia automática de templates está desligada neste número. Use o botão Templates do card para aplicar manualmente.";
+  if (s === "instancia_de_teste") return "Este número é de teste do aquecimento e não recebe templates.";
   if (s === "none") return "A Meta recusou um modelo anterior sem informar o motivo. Exclua o modelo recusado na BM e tente aplicar novamente.";
 
   if (s.includes("141006") || s.includes("payment method") || s.includes("método de pagamento")) {
