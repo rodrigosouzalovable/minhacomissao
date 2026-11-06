@@ -29,7 +29,7 @@ Mantenha o resto do texto, emojis, quebras de linha e formatação *negrito* exa
     const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "google/gemini-2.5-flash-lite", messages: [{ role: "system", content: system }, { role: "user", content: texto }] }),
+      body: JSON.stringify({ model: "google/gemini-3.1-flash-lite", messages: [{ role: "system", content: system }, { role: "user", content: texto }] }),
     });
     if (r.status === 429) return json({ error: "Muitas solicitações, tente em instantes" }, 429);
     if (r.status === 402) return json({ error: "Créditos de IA esgotados" }, 402);
