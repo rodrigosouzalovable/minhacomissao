@@ -34,6 +34,7 @@
 - Campaign results use indexed suffix/CPF and time windows, without polling.
 - “Não é o cliente” alterna a blacklist por sufixo sem sobrescrever bloqueios anteriores, fica visível no card; todos desfazem pelo card, somente admins listam/exportam.
 - Navigation uses explicitly granted tabs; `parceiro_meta` scopes instances, never grants extra screens.
+- Route role checks wait for the current session's user to be resolved before redirecting; stale roles never authorize another user.
 - National leads have separate locks/scheduling and daily/monthly Google-account limits; no message sends or dollar caps.
 - Destinatários confirmados sem WhatsApp usam categoria própria de supressão obrigatória por sufixo; falhas inconclusivas nunca são persistidas.
 - Bell/Retornos share pending payments of active agreements; scheduled-return alerts avoid overdue queries, preventing popups and redundant fetching.
