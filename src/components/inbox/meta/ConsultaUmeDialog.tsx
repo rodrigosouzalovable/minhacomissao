@@ -4,8 +4,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, RefreshCw, Copy, Send, Barcode } from 'lucide-react';
+import { Loader2, Search, RefreshCw, Copy, Send, Barcode, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { preencherModelo, type DadosProposta } from '@/lib/umePropostaModelo';
+import { ConfigurarModeloUmeDialog } from './ConfigurarModeloUmeDialog';
+
+const NOME_TABELA = { padrao: 'Tabela Padrão', especial: 'Desconto Especial', sem_juros_10: 'Sem Juros + 10%' } as const;
+
+function dadosProposta(c: Consulta, tabela: 'padrao' | 'especial' | 'sem_juros_10'): DadosProposta | null {
+  const t = tabelaDe(c, tabela);
+  if (!t) return null;
+  return {
+    nome: c.nome, cpf: formatCpf(soDigitos(c.cpf)), diasAtraso: c.diasAtraso, fase: c.fase,
+    totalSemJuros: c.valorSemJuros, totalComJuros: c.valorComJuros,
+    totalProposta: tabela === 'sem_juros_10' ? c.valorSemJuros : (c.valorComJuros ?? c.valorSemJuros ?? null),
+    avista: t.parcelas.find((p) => p.parcelas === 1)?.valorParcela ?? null,
+    parcelas: t.parcelas, tabela: NOME_TABELA[tabela],
+  };
+}
 
 interface BoletoUme {
   invoiceId: string;
@@ -143,6 +159,25 @@ export function ConsultaUmeDialog({
   const [boleto, setBoleto] = useState<BoletoUme | null>(null);
   const [boletoLoading, setBoletoLoading] = useState(false);
   const [vencimentoBoleto, setVencimentoBoleto] = useState(vencimentoPadrao);
+  const [modelo, setModelo] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let ativo = true;
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+      const { data } = await supabase.from('ume_proposta_modelos').select('texto').eq('user_id', u.user.id).maybeSingle();
+      if (ativo) setModelo(data?.texto || null);
+    })();
+    return () => { ativo = false; };
+  }, [open]);
+
+  const textoFinal = (c: Consulta) => {
+    const d = modelo ? dadosProposta(c, tabela) : null;
+    return d && modelo ? preencherModelo(modelo, d) : textoProposta(c, tabela);
+  };
 
   const gerarBoleto = async () => {
     const digitos = soDigitos(cpf);
@@ -351,7 +386,7 @@ export function ConsultaUmeDialog({
               <Button
                 variant="outline"
                 onClick={() => {
-                  void navigator.clipboard.writeText(textoProposta(consulta, tabela));
+                  void navigator.clipboard.writeText(textoFinal(consulta));
                   toast.success('Proposta copiada');
                 }}
               >
@@ -360,13 +395,24 @@ export function ConsultaUmeDialog({
               {onEnviar && (
                 <Button
                   onClick={() => {
-                    onEnviar(textoProposta(consulta, tabela));
+                    onEnviar(textoFinal(consulta));
                     onOpenChange(false);
                   }}
                 >
                   <Send className="mr-2 h-4 w-4" /> Enviar na conversa
                 </Button>
               )}
+              <Button variant="outline" size="icon" title="Configurar mensagem" aria-label="Configurar mensagem" onClick={() => setConfigOpen(true)}>
+                <Settings2 className="h-4 w-4" />
+              </Button>
+              <ConfigurarModeloUmeDialog
+                open={configOpen}
+                onOpenChange={setConfigOpen}
+                dados={dadosProposta(consulta, tabela)}
+                modeloAtual={modelo}
+                textoPadrao={textoProposta(consulta, tabela)}
+                onSalvo={setModelo}
+              />
             </div>
             <div className="space-y-3 rounded border p-3">
               <div className="flex flex-wrap items-center gap-2">

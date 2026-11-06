@@ -10815,6 +10815,24 @@ export type Database = {
         }
         Relationships: []
       }
+      ume_proposta_modelos: {
+        Row: {
+          atualizado_em: string
+          texto: string
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          texto: string
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          texto?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_permissions: {
         Row: {
           abas_permitidas: string[]

@@ -1625,6 +1625,13 @@
       "when": 1793968890143,
       "tag": "0231_portal_odres_identificado_sftp",
       "breakpoints": true
+    },
+    {
+      "idx": 232,
+      "version": "7",
+      "when": 1793994552467,
+      "tag": "0232_ume_proposta_modelos",
+      "breakpoints": true
     }
   ]
 }
