@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 import { preencherModelo, detectarCamposLocal, type DadosProposta } from './umePropostaModelo';
 
 const d: DadosProposta = {
