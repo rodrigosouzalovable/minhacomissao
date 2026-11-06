@@ -61,3 +61,4 @@
 - Shared read-only lookups (sending instances, BM quotas, unread counts) use short in-memory caches/RPCs; sends still revalidate server-side, so caches never bypass limits.
 - Inbox send errors share response-body extraction so text, attachments and audio preserve server refusals without automatic retries or reactivation.
 - Campaign picks cap each sender at a fixed daily protection limit and the mass tick enforces a 5–10s minimum interval, spreading volume to protect Meta quality.
+- Template onboarding queues the owner's main campaign templates (Odres portal, UME portal, Novo Mundo debt) with top priority so new numbers get them approved first.
