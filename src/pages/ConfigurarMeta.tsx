@@ -1076,7 +1076,7 @@ export default function ConfigurarMeta() {
       if (syncData?.success === false) throw new Error(syncData?.error || "Não foi possível sincronizar os templates atuais");
 
       const { data: filaData, error: filaError } = await supabase.functions.invoke("meta-templates-onboarding-enfileirar", {
-        body: { instancia_id: inst.id },
+        body: { instancia_id: inst.id, aplicacao_manual: true },
       });
       if (filaError) throw filaError;
       if (filaData?.success === false) throw new Error(filaData?.error || "Não foi possível iniciar a aplicação");
