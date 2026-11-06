@@ -208,7 +208,12 @@ Deno.serve(async (req) => {
       }
       const aplicaveis = modelosParaCopiar(mestresPermitidos, jaNoNumero, chavesReais, emProcessamento)
         .filter(m => queueRecoveryDecision(terminalRows.get(m.id)) !== "terminal");
-      const candidatos: [string, number][] = aplicaveis.map((m, idx) => [m.id, aplicaveis.length - idx]);
+      // Templates mais usados nas campanhas entram na frente de qualquer outro.
+      const PRIORITARIOS = ["odres_portal_de_negociacao", "acesse_o_portal_de_negociacao", "informacoes_sobre_seu_debito"];
+      const candidatos: [string, number][] = aplicaveis.map((m: any, idx) => {
+        const p = PRIORITARIOS.indexOf(String(m.nome || ""));
+        return [m.id, p >= 0 ? 1000 - p : aplicaveis.length - idx];
+      });
 
       if (candidatos.length === 0) {
         const existentes = new Set(jaExistentes.map((m) => m.id));
