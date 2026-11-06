@@ -134,6 +134,17 @@ Deno.serve(async (req) => {
       "criado_em",
     );
 
+    // === Acumulado do mês (dia 1 até o fim do dia do relatório) ===
+    const acordosMes = await fetchAll(
+      () => supabase
+        .from("acordos")
+        .select("valor_total, criado_em")
+        .gte("criado_em", `${dia.slice(0, 7)}-01T00:00:00-03:00`)
+        .lte("criado_em", fimDia),
+      "criado_em",
+    );
+    const valorAcumuladoMes = (acordosMes || []).reduce((s: number, a: any) => s + Number(a.valor_total || 0), 0);
+
     const acordoSufixos = new Set(
       (acordos || []).map((a: any) => suf8(a.cliente_telefone)).filter((s: string) => s.length === 8),
     );
@@ -411,6 +422,7 @@ Deno.serve(async (req) => {
             "",
             `📄 Acordos lançados: *${totalAcordos}*`,
             `💵 Valor em acordos: *${brl(valorAcordos || tot.valor)}*`,
+            `📆 Acumulado do mês: *${brl(valorAcumuladoMes)}*`,
             ...linhasQualif,
             ...(alerta3c ? ["", alerta3c] : []),
             "",
@@ -432,6 +444,7 @@ Deno.serve(async (req) => {
             `🤝 CPC-A: *${tot.cpca}*  (${pct(tot.cpca, tot.cpc)})`,
             `📄 Acordos lançados: *${totalAcordos}*`,
             `💵 Valor em acordos: *${brl(valorAcordos || tot.valor)}*`,
+            `📆 Acumulado do mês: *${brl(valorAcumuladoMes)}*`,
             ...linhasQualif,
             ...(alerta3c ? ["", alerta3c] : []),
             "",
