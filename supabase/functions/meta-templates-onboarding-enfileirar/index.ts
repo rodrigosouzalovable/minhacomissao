@@ -58,6 +58,8 @@ Deno.serve(async (req) => {
     const templateNome = String(body?.template_nome || "").trim();
     const templateIdioma = String(body?.idioma || "").trim();
     const manualDefer = body?.manual_defer === true && !interno;
+    // Clique explícito do admin dono no botão "Templates": não depende da cópia automática.
+    const aplicacaoManual = body?.aplicacao_manual === true && !interno;
     const mestreId = typeof body?.mestre_id === "string" ? body.mestre_id : "";
     if (manualDefer && (!templateNome || !/^[0-9a-f-]{36}$/i.test(mestreId) || listaInstancias.length > 5)) return json({ success: false, error: "Dados de aplicação manual inválidos" }, 400);
     type MestreEspecifico = {
@@ -137,7 +139,7 @@ Deno.serve(async (req) => {
         }
       }
       const bloqueio = motivoBloqueioTemplate(inst);
-      if (bloqueio || inst.instancia_teste_aquecimento || (!manualDefer && inst.templates_auto_copiar !== true)) {
+      if (bloqueio || inst.instancia_teste_aquecimento || (!manualDefer && !aplicacaoManual && inst.templates_auto_copiar !== true)) {
         resultados.push({ instancia_id: instanciaId, ok: false, erro: bloqueio || (inst.instancia_teste_aquecimento ? "instancia_de_teste" : "copia_automatica_desativada") });
         continue;
       }
