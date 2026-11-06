@@ -117,6 +117,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/sftp-ume', label: 'SFTP UME / Odres', icon: Download, adminOnly: true },
   { href: '/admin/exportar-dados', label: 'Exportar Dados', icon: Download, adminOnly: true },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },
+  { href: '/admin/mentoria', label: 'Mentoria WhatsApp', icon: Target, adminOnly: true },
   { href: '/admin/comite-novomundo', label: 'Comitê Novo Mundo', icon: BarChart3, adminOnly: true },
   { href: '/admin/validar-emails', label: 'Validar E-mails', icon: AtSign, adminOnly: true },
   { href: '/admin/notificacoes', label: 'Notificações', icon: Bell, adminOnly: true },

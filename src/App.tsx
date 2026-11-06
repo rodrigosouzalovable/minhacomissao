@@ -59,6 +59,7 @@ const RedirectVerificarProposta = lazy(() => retryImport(() => import("./pages/R
 
 const Relatorios = lazy(() => retryImport(() => import("./pages/Relatorios")));
 const SftpUme = lazy(() => retryImport(() => import("./pages/SftpUme")));
+const MentoriaWhatsApp = lazy(() => retryImport(() => import("./pages/MentoriaWhatsApp")));
 const ComiteNovoMundo = lazy(() => retryImport(() => import("./pages/ComiteNovoMundo")));
 const ValidarEmails = lazy(() => retryImport(() => import("./pages/ValidarEmails")));
 const Notificacoes = lazy(() => retryImport(() => import("./pages/Notificacoes")));
@@ -293,6 +294,7 @@ const App = () => (
             <Route path="/admin/exportar-dados" element={<PermissionRoute><ExportarDados /></PermissionRoute>} />
             <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
             <Route path="/admin/sftp-ume" element={<AdminRoute><SftpUme /></AdminRoute>} />
+            <Route path="/admin/mentoria" element={<AdminRoute><MentoriaWhatsApp /></AdminRoute>} />
             <Route path="/admin/comite-novomundo" element={<AdminRoute><ComiteNovoMundo /></AdminRoute>} />
             <Route path="/admin/validar-emails" element={<AdminRoute><ValidarEmails /></AdminRoute>} />
             <Route path="/admin/notificacoes" element={<PermissionRoute><Notificacoes /></PermissionRoute>} />
