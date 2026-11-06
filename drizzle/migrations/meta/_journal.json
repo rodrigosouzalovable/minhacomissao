@@ -1618,6 +1618,13 @@
       "when": 1793797216702,
       "tag": "0230_iago_rodizio_caixas_personalizadas",
       "breakpoints": true
+    },
+    {
+      "idx": 231,
+      "version": "7",
+      "when": 1793968890143,
+      "tag": "0231_portal_odres_identificado_sftp",
+      "breakpoints": true
     }
   ]
 }
