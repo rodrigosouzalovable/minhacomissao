@@ -25,7 +25,7 @@ export const fmtTel = (s: string) => {
   return s || "-";
 };
 // Helvetica do jsPDF não tem setas e alguns símbolos: troca por equivalentes seguros.
-const limpa = (t: string) => t.replace(/→/g, ">").replace(/[^\x00-\xFF—–•…“”‘’]/g, "");
+const limpa = (t: string) => t.replace(/\s*→\s*/g, " / ").replace(/[^\x00-\xFF—–•…“”‘’]/g, "");
 
 export interface PropostaDados {
   empresa: string; responsavel: string; cnpj: string; telefone: string;
@@ -67,8 +67,8 @@ export async function gerarPropostaMentoriaPdf(p: PropostaDados, logo?: string |
     y = 24;
   };
   const garantir = (h: number) => { if (y + h > H - 20) { doc.addPage(); cabecalhoInterno(); } };
-  const secao = (n: string, t: string) => {
-    garantir(18); y += 3;
+  const secao = (n: string, t: string, min = 18) => {
+    garantir(min); y += 3;
     doc.setFillColor(...AZUL); doc.roundedRect(M, y - 4.5, 9, 6.5, 1.2, 1.2, "F");
     fonte(9, true); doc.setTextColor(255, 255, 255); txt(n, M + 4.5, y, { align: "center" });
     fonte(13, true); cor(NAVY); txt(t, M + 12, y);
@@ -135,7 +135,7 @@ export async function gerarPropostaMentoriaPdf(p: PropostaDados, logo?: string |
   });
 
   // ================= 2. CRONOGRAMA =================
-  secao("02", "Cronograma de implantação — 4 semanas");
+  secao("02", "Cronograma de implantação — 4 semanas", 70);
   const cw4 = (CW - 9) / 4;
   garantir(52);
   doc.setDrawColor(...AZUL); doc.setLineWidth(0.6); doc.line(M + cw4 / 2, y + 5, W - M - cw4 / 2, y + 5);
@@ -154,7 +154,7 @@ export async function gerarPropostaMentoriaPdf(p: PropostaDados, logo?: string |
 
   // ================= 3. ENTREGÁVEIS =================
   const itens = [...p.checklist, "30 dias de suporte após a entrega"];
-  secao("03", "Entregáveis");
+  secao("03", "Entregáveis", 50);
   const rows = Math.ceil(itens.length / 2);
   garantir(rows * 7 + 6);
   doc.setFillColor(...FUNDO); doc.setDrawColor(...BORDA); doc.roundedRect(M, y - 2, CW, rows * 7 + 4, 2, 2, "FD");
@@ -167,8 +167,7 @@ export async function gerarPropostaMentoriaPdf(p: PropostaDados, logo?: string |
   y += rows * 7 + 8;
 
   // ================= 4. ROI =================
-  doc.addPage(); cabecalhoInterno();
-  secao("04", "Retorno sobre o investimento");
+  secao("04", "Retorno sobre o investimento", 90);
   const kpis: [string, string, RGB][] = [
     ["GASTO MENSAL ATUAL", brl(p.mensalAtual), CINZA],
     ["ECONOMIA EM 12 MESES", brl(p.e12), VERDE],
@@ -202,7 +201,7 @@ export async function gerarPropostaMentoriaPdf(p: PropostaDados, logo?: string |
   y += 50;
 
   // ================= 5. INVESTIMENTO =================
-  secao("05", "Investimento");
+  secao("05", "Investimento", 70);
   garantir(50);
   const vista = Number(p.valorVista) || 0, parc = Number(p.valorParcelado) || 0, n = Number(p.parcelas) || 1;
   const iw = (CW - 6) / 2;
@@ -239,12 +238,12 @@ export async function gerarPropostaMentoriaPdf(p: PropostaDados, logo?: string |
     "Acompanhamento de 4 semanas + 30 dias de suporte. Suporte adicional mediante novo contrato.",
     `Esta proposta é válida até ${validoAte}.`,
   ].forEach((c) => {
-    const ls = linhas(c, CW - 8); garantir(ls.length * 4.4 + 2);
+    fonte(8.8); const ls = linhas(c, CW - 8); garantir(ls.length * 4.4 + 2);
     doc.setFillColor(...AZUL); doc.circle(M + 1.5, y - 1.2, 0.9, "F");
     fonte(8.8); cor(TEXTO); txt(ls.join("\n"), M + 5, y); y += ls.length * 4.4 + 2;
   });
   if (p.obs) {
-    y += 2; const ls = linhas(p.obs, CW - 12); garantir(ls.length * 4.4 + 14);
+    y += 2; fonte(8.8); const ls = linhas(p.obs, CW - 12); garantir(ls.length * 4.4 + 14);
     doc.setFillColor(255, 251, 235); doc.setDrawColor(...DOURADO);
     doc.roundedRect(M, y, CW, ls.length * 4.4 + 10, 2, 2, "FD");
     fonte(7.5, true); cor(DOURADO); txt("OBSERVAÇÕES", M + 6, y + 6);
