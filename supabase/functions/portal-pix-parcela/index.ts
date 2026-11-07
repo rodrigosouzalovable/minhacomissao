@@ -32,13 +32,14 @@ Deno.serve(async (req) => {
     const { data: ok } = await db.rpc('portal_reservar_consulta', { p_chave: chave });
     if (ok !== true) return json({ success: false, message: 'Muitas tentativas em pouco tempo. Aguarde alguns minutos.' });
 
-    const { data: acordo } = await db.from('acordos').select('id').eq('id', b.acordoId).eq('cliente_cpf', b.cpf).eq('status', 'ativo').maybeSingle();
-    if (!acordo) return json({ success: false, message: NAO });
+    const fmt = `${b.cpf.slice(0, 3)}.${b.cpf.slice(3, 6)}.${b.cpf.slice(6, 9)}-${b.cpf.slice(9)}`;
+    const { data: acordo } = await db.from('acordos').select('id').eq('id', b.acordoId).in('cliente_cpf', [b.cpf, fmt]).eq('status', 'ativo').maybeSingle();
+    if (!acordo) { console.log('[portal-pix] acordo não encontrado'); return json({ success: false, message: NAO }); }
     const { data: parcela } = await db.from('pagamentos').select('valor_parcela, data_prevista, status').eq('acordo_id', acordo.id).eq('numero_parcela', b.numeroParcela).maybeSingle();
     if (!parcela || parcela.status === 'pago') return json({ success: false, message: 'Esta parcela já consta como paga.' });
 
     const { data: cli } = await db.from('ume_carteira_clientes').select('borrower_id').eq('cpf', b.cpf).maybeSingle();
-    if (!cli?.borrower_id) return json({ success: false, message: NAO });
+    if (!cli?.borrower_id) { console.log('[portal-pix] cadastro UME ausente'); } if (!cli?.borrower_id) return json({ success: false, message: NAO });
 
     const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
     const venc = String(parcela.data_prevista) < hoje ? hoje : String(parcela.data_prevista);
