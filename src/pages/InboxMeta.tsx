@@ -1622,7 +1622,6 @@ export default function InboxMeta() {
         } else {
           setPendingTranscricao(texto);
         }
-        toast({ title: 'Áudio transcrito', description: 'Revise o texto e clique em enviar.' });
       }
     } else {
       await audioRec.enviarGravacao();
