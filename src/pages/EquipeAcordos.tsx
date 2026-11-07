@@ -60,6 +60,9 @@ interface MetaInstance {
   provider?: string | null;
 }
 
+// Cache em memória entre navegações: reabrir a aba é instantâneo e atualiza em segundo plano.
+const equipeCache = new Map<string, any>();
+
 export default function EquipeAcordos() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -400,6 +403,17 @@ export default function EquipeAcordos() {
   useEffect(() => {
     async function loadTeamData() {
       if (!user || roleLoading || permLoading) return;
+      const cacheKey = `${user.id}:${verComoAdmin ? 'a' : 'g'}`;
+      const c = equipeCache.get(cacheKey) || {};
+      const salvar = (k: string, v: any) => { c[k] = v; equipeCache.set(cacheKey, c); };
+      if (c.acordos) {
+        setTeamMembers(c.members || []);
+        setAcordos(c.acordos);
+        if (c.pagamentos) setPagamentosEquipe(c.pagamentos);
+        if (c.datas) setTodasDatasPorAcordo(c.datas);
+        if (c.quebra) setAcordosComQuebraAcordo(c.quebra);
+        setLoading(false);
+      }
 
       try {
         let funcionarioIds: string[] = [];
@@ -453,6 +467,7 @@ export default function EquipeAcordos() {
         }
 
         setTeamMembers(validMembers);
+        salvar('members', validMembers);
 
         if (funcionarioIds.length === 0) {
           setAcordos([]);
@@ -510,6 +525,7 @@ export default function EquipeAcordos() {
         }));
 
         setAcordos(acordosComNome);
+        salvar('acordos', acordosComNome);
         setLoading(false);
 
         {
@@ -533,6 +549,7 @@ export default function EquipeAcordos() {
               numero_parcela: p.numero_parcela,
             }));
             setPagamentosEquipe(pagamentosNormalizados);
+            salvar('pagamentos', pagamentosNormalizados);
           }
 
           // Resumo de parcelas em blocos paralelos
@@ -575,6 +592,7 @@ export default function EquipeAcordos() {
             });
             setTodasDatasPorAcordo(allDatesMap);
             setAcordosComQuebraAcordo(idsComQuebra);
+            salvar('datas', allDatesMap); salvar('quebra', idsComQuebra);
           }
         }
       } catch (error) {
