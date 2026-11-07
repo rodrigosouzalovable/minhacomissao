@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { validPortalCpf, type PortalCredor, type PortalWallet } from '@/lib/portalNegotiation';
-import { portalEscopo } from '@/lib/portalEscopo';
+import { portalEscopo, CREDORES_CONSULTA } from '@/lib/portalEscopo';
 import { PortalShell } from './PortalShell';
 import PortalWalletSection from './PortalWalletSection';
 import { portalVisibleWallet } from '@/lib/portalWalletVisibility';
@@ -16,7 +16,7 @@ const initialWallet = (credor: PortalCredor): PortalWallet => ({credor,estado:'l
 
 export default function PublicPortalResults({ cpf, slug }: { cpf: string; slug?: string }) {
   const escopo = portalEscopo(slug);
-  const credores = escopo.credores;
+  const credores = CREDORES_CONSULTA;
   const valid = validPortalCpf(cpf);
   const contato = useContatoPortal();
   const [wallets,setWallets] = useState<PortalWallet[]>(()=>credores.map(initialWallet));
