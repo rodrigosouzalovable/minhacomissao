@@ -70,7 +70,15 @@ export default function MentoriaWhatsApp() {
     };
   }, [mensalAtual, investimento]);
 
-  const gerarPdf = () => {
+  const gerarPdf = async () => {
+    const doc = await gerarPropostaMentoriaPdf({
+      ...p, mensalAtual, e12: roi.e12, e24: roi.e24, payback: roi.payback,
+      dores: DORES, semanas: SEMANAS, checklist: CHECKLIST,
+    });
+    doc.save(`Proposta_Mentoria_${(p.empresa || "cliente").replace(/\s+/g, "_")}.pdf`);
+  };
+
+  const gerarPdfAntigo = () => {
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const W = 210, M = 18;
     let y = 0;
