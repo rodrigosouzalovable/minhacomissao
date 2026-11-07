@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, ArrowUpRight, Check, ChevronDown, Loader2, Zap } from 'lucide-react';
+import { AlertCircle, CalendarDays, ArrowUpRight, Check, ChevronDown, Loader2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
