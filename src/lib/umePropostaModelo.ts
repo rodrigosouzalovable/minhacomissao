@@ -29,6 +29,20 @@ export const VARIAVEIS_PROPOSTA: { chave: string; descricao: string }[] = [
 ];
 
 export const PARCELA_MINIMA = 100;
+export const MAX_PARCELAS_UME = 18;
+
+/** Completa a tabela UME até 18x usando o "Total - 4x ou mais" (valor arredondado como na UME). */
+export function estenderParcelasUme(
+  parcelas: { parcelas: number; valorParcela: number }[],
+  total4xMais: number | null,
+): { parcelas: number; valorParcela: number }[] {
+  if (!total4xMais || total4xMais <= 0) return parcelas;
+  const out = [...parcelas];
+  for (let n = 4; n <= MAX_PARCELAS_UME; n++) {
+    if (!out.some((p) => p.parcelas === n)) out.push({ parcelas: n, valorParcela: Math.round(total4xMais / n) });
+  }
+  return out.sort((a, b) => a.parcelas - b.parcelas);
+}
 
 const fmt = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });

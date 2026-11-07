@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, RefreshCw, Copy, Send, Barcode, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { preencherModelo, type DadosProposta } from '@/lib/umePropostaModelo';
+import { preencherModelo, estenderParcelasUme, type DadosProposta } from '@/lib/umePropostaModelo';
 import { ConfigurarModeloUmeDialog } from './ConfigurarModeloUmeDialog';
 
 const NOME_TABELA = { padrao: 'Tabela Padrão', especial: 'Desconto Especial', sem_juros_10: 'Sem Juros + 10%' } as const;
@@ -108,9 +108,10 @@ function tabelaSemJuros10(c: Consulta): Tabela | null {
 }
 
 function tabelaDe(c: Consulta, tabela: TabelaKey): Tabela | null {
-  if (tabela === 'especial') return c.especial;
   if (tabela === 'sem_juros_10') return tabelaSemJuros10(c);
-  return c.padrao;
+  const t = tabela === 'especial' ? c.especial : c.padrao;
+  if (!t || t.parcelas.length === 0) return t;
+  return { ...t, parcelas: estenderParcelasUme(t.parcelas, t.total4xMais) };
 }
 
 /** Tabela só é utilizável quando tem ao menos uma parcela com valor. */

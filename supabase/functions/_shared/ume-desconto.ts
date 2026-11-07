@@ -71,6 +71,13 @@ function montarTabela(valores: Array<Array<string | number>> | undefined, ate3x:
     const v = num(col?.[0]);
     if (v != null && v > 0) parcelas.push({ parcelas: idx + 1, valorParcela: v });
   });
+  // A UME mostra só até 11x; completa até 18x pelo "Total - 4x ou mais".
+  if (parcelas.length > 0 && quatroMais != null && quatroMais > 0) {
+    for (let n = 4; n <= 18; n++) {
+      if (!parcelas.some((p) => p.parcelas === n)) parcelas.push({ parcelas: n, valorParcela: Math.round(quatroMais / n) });
+    }
+    parcelas.sort((a, b) => a.parcelas - b.parcelas);
+  }
   return { parcelas, totalAte3x: ate3x, total4xMais: quatroMais };
 }
 
