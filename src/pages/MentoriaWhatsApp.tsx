@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import jsPDF from "jspdf";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -135,6 +136,7 @@ export default function MentoriaWhatsApp() {
   };
 
   return (
+    <AppLayout>
     <div className="space-y-6 p-4 md:p-6">
       <div className="flex items-center gap-3">
         <GraduationCap className="h-7 w-7 text-primary" />
@@ -204,5 +206,6 @@ export default function MentoriaWhatsApp() {
         </TabsContent>
       </Tabs>
     </div>
+    </AppLayout>
   );
 }
