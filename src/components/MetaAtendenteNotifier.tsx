@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { somConversasAtivo } from '@/components/SomConversasToggle';
 import successSound from '@/assets/success-sound.mp3';
 
 /**
@@ -49,6 +50,7 @@ export function MetaAtendenteNotifier() {
     if (!user) return;
     const TEST_KEY = 'meta-atendente-som-teste-v1';
     const unlock = async () => {
+      if (!somConversasAtivo(user.id)) return;
       try {
         const a = new Audio(successSound);
         const jaTestou = !!localStorage.getItem(TEST_KEY);
@@ -106,6 +108,7 @@ export function MetaAtendenteNotifier() {
           if (!rel) return;
 
           lastPlayRef.current[contatoId] = now;
+          if (!somConversasAtivo(user.id)) return;
           try {
             const audio = new Audio(successSound);
             audio.volume = 0.35;

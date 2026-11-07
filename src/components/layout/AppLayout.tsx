@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PaymentReminders } from '@/components/PaymentReminders';
+import { SomConversasToggle } from '@/components/SomConversasToggle';
 import { RetornoAlertChecker } from '@/components/RetornoAlertChecker';
 import { PontoGate } from '@/components/ponto/PontoGate';
 import { InatividadeFlutuante } from '@/components/ponto/InatividadeFlutuante';
@@ -398,6 +399,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="flex items-center gap-2">
           <div className="text-primary-foreground">
             <PaymentReminders />
+            <SomConversasToggle />
           </div>
           <Button
             variant="ghost"
@@ -432,6 +434,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <h1 className="text-xl font-bold">MEUS ACORDOS</h1>
               </div>
               <PaymentReminders />
+              <SomConversasToggle />
             </div>
             <p className="text-sm opacity-80 mt-2 ml-10">{user?.email}</p>
           </div>
@@ -514,6 +517,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Tooltip>
           </TooltipProvider>
           {sidebarCollapsed && <PaymentReminders />}
+          <SomConversasToggle />
         </div>
         <div className="p-6">
           <PontoGate>{children}</PontoGate>
