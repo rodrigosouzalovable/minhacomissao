@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { portalEscopo } from './portalEscopo';
+import { portalEscopo, CREDORES_CONSULTA } from './portalEscopo';
+
+describe('consulta de CPF', () => {
+  it('consulta as três carteiras em qualquer portal', () => {
+    expect(CREDORES_CONSULTA).toEqual(['novo_mundo', 'ume', 'odres_cred']);
+  });
+});
 
 describe('portalEscopo', () => {
   it('odrescred mostra somente Odres Cred', () => {
