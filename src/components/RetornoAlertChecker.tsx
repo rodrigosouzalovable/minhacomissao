@@ -15,6 +15,7 @@ import {
 import { Bell, User, Phone, FileText, CalendarClock, MessageSquare } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import successSound from '@/assets/success-sound.mp3';
+import { somConversasAtivo } from '@/components/SomConversasToggle';
 
 interface RetornoAlerta {
   id: string;
@@ -63,7 +64,8 @@ export function RetornoAlertChecker() {
     novos.forEach((r) => notifiedIds.current.add(r.id));
     setFila((prev) => [...prev, ...novos]);
 
-    // Play sound
+    // Play sound (respeita o botão de som do sino)
+    if (!somConversasAtivo(user?.id)) return;
     try {
       const audio = new Audio(successSound);
       await audio.play();
