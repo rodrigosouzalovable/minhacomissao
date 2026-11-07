@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import jsPDF from "jspdf";
+import { gerarPropostaMentoriaPdf } from "@/lib/propostaMentoriaPdf";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -75,71 +75,6 @@ export default function MentoriaWhatsApp() {
       ...p, mensalAtual, e12: roi.e12, e24: roi.e24, payback: roi.payback,
       dores: DORES, semanas: SEMANAS, checklist: CHECKLIST,
     });
-    doc.save(`Proposta_Mentoria_${(p.empresa || "cliente").replace(/\s+/g, "_")}.pdf`);
-  };
-
-  const gerarPdfAntigo = () => {
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
-    const W = 210, M = 18;
-    let y = 0;
-    const azul: [number, number, number] = [15, 76, 129];
-    const novaPagina = () => { doc.addPage(); y = 20; };
-    const garantir = (h: number) => { if (y + h > 280) novaPagina(); };
-    const titulo = (t: string) => {
-      garantir(14); y += 4;
-      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(...azul);
-      doc.text(t, M, y); y += 2; doc.setDrawColor(...azul); doc.line(M, y, W - M, y); y += 6;
-      doc.setTextColor(40); doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-    };
-    const par = (t: string, bold = false) => {
-      doc.setFont("helvetica", bold ? "bold" : "normal");
-      const linhas = doc.splitTextToSize(t, W - 2 * M);
-      garantir(linhas.length * 5); doc.text(linhas, M, y); y += linhas.length * 5 + 1;
-    };
-
-    doc.setFillColor(...azul); doc.rect(0, 0, W, 42, "F");
-    doc.setTextColor(255); doc.setFont("helvetica", "bold"); doc.setFontSize(20);
-    doc.text("Proposta Comercial", M, 20);
-    doc.setFontSize(12); doc.setFont("helvetica", "normal");
-    doc.text("Mentoria API Oficial do WhatsApp + Sistema Próprio de Disparos", M, 30);
-    doc.setFontSize(9); doc.text(`Emitida em ${new Date().toLocaleDateString("pt-BR")} • Válida por ${p.validade} dias`, M, 37);
-    y = 54; doc.setTextColor(40);
-
-    titulo("Cliente");
-    par(`Empresa: ${p.empresa || "-"}`); par(`Responsável: ${p.responsavel || "-"}`);
-    par(`CNPJ: ${p.cnpj || "-"}    Telefone: ${p.telefone || "-"}`);
-
-    titulo("O que você recebe");
-    par("Liberdade operacional: sua equipe passa a operar a API Oficial da Meta e você recebe um sistema próprio de disparos, sem pagar mensalidade para agências ou plataformas intermediárias.");
-    DORES.forEach(([d, s]) => par(`• ${d}: ${s}`));
-
-    titulo("Cronograma de 4 semanas");
-    SEMANAS.forEach(([t, d]) => { par(t, true); par(d); });
-
-    titulo("Entregáveis");
-    CHECKLIST.forEach(c => par(`• ${c}`));
-    par("• 30 dias de suporte após a entrega.");
-
-    titulo("Economia estimada");
-    par(`Gasto mensal atual informado: ${brl(mensalAtual)}`);
-    par(`Economia líquida em 12 meses: ${brl(roi.e12)}    Em 24 meses: ${brl(roi.e24)}`);
-    par(`Retorno do investimento em aproximadamente ${roi.payback.toFixed(1)} meses.`);
-
-    titulo("Investimento");
-    par(`À vista: ${brl(Number(p.valorVista) || 0)}`, true);
-    par(`Parcelado: ${brl(Number(p.valorParcelado) || 0)} em até ${p.parcelas}x de ${brl((Number(p.valorParcelado) || 0) / (Number(p.parcelas) || 1))}`, true);
-    if (p.pix) par(`Chave PIX para fechamento: ${p.pix}`);
-
-    titulo("Condições");
-    par("• O custo por mensagem é cobrado diretamente pela Meta no cartão da Business Manager do cliente.");
-    par("• O sistema é implantado na infraestrutura em nuvem do próprio cliente; custos de servidor são do cliente.");
-    par("• Acompanhamento de 4 semanas + 30 dias de suporte. Suporte adicional mediante novo contrato.");
-    if (p.obs) { titulo("Observações"); par(p.obs); }
-
-    garantir(30); y += 16;
-    doc.line(M, y, M + 70, y); doc.line(W - M - 70, y, W - M, y); y += 5;
-    doc.setFontSize(9); doc.text("Contratante", M, y); doc.text("Contratada", W - M - 70, y);
-
     doc.save(`Proposta_Mentoria_${(p.empresa || "cliente").replace(/\s+/g, "_")}.pdf`);
   };
 
