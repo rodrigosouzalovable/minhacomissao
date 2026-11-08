@@ -15,3 +15,24 @@ Deno.test('após falha: número da campanha, depois exclusivo Odres, nunca RED n
 });
 
 Deno.test('limite de 4 tentativas', () => assertEquals(MAX_TENTATIVAS_CONFIRMACAO, 4));
+
+import { preferirTemplateNovo, condicaoAcordo, credorComArtigo, cpfFormatado } from './portal-confirmacao-rules.ts';
+
+Deno.test('prefere o template novo na mesma instância e mantém o antigo onde o novo não existe', () => {
+  const r = preferirTemplateNovo([
+    { instancia: 'a', nome: 'confirmacao_acordo_portal' }, { instancia: 'a', nome: 'confirmacao_formalizacao_acordo' },
+    { instancia: 'b', nome: 'confirmacao_acordo_portal' },
+  ]);
+  assertEquals(r.find((x) => x.instancia === 'a')!.nome, 'confirmacao_formalizacao_acordo');
+  assertEquals(r.find((x) => x.instancia === 'b')!.nome, 'confirmacao_acordo_portal');
+});
+
+Deno.test('condição 1x e parcelada', () => {
+  assertEquals(condicaoAcordo(1, 2414, '2026-11-07'), '1 parcela no valor de R$ 2.414,00, com vencimento em 07/11/2026');
+  assertEquals(condicaoAcordo(6, 157.06, '2026-11-07'), '6 parcelas mensais de R$ 157,06, com primeiro vencimento em 07/11/2026');
+});
+
+Deno.test('credor e CPF', () => {
+  assertEquals(credorComArtigo('ODRES CRED'), 'a Odres Cred');
+  assertEquals(cpfFormatado('07612097273'), '076.120.972-73');
+});

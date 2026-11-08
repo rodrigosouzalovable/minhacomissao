@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       '', 'Qualquer dúvida, é só responder esta mensagem.',
     ].join('\n');
     void textoCliente;
-    const conf = await enviarConfirmacaoPortal(db, b.telefone, { nome, parcelas: n, valorParcela: valores[0], vencimento: b.primeiroVencimento, credor: String(credorReal || label) }).catch((e) => ({ ok: false, motivo: String(e) }));
+    const conf = await enviarConfirmacaoPortal(db, b.telefone, { nome, parcelas: n, valorParcela: valores[0], vencimento: b.primeiroVencimento, credor: String(credorReal || label), cpf: b.cpf }).catch((e) => ({ ok: false, motivo: String(e) }));
     console.log('[portal-efetivar] confirmação cliente', conf);
     const cpfFmt = b.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
     await notificarAdmin(db, {
