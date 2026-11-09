@@ -44,7 +44,7 @@ describe('opções habilitadas na proposta', () => {
 });
 
 import { preencherModelo as pm2 } from './umePropostaModelo';
-test('maior_parcelamento lista exatamente 12x e 15x marcadas', () => {
+it('maior_parcelamento lista exatamente 12x e 15x marcadas', () => {
   const d: any = { nome: 'Ana', cpf: '', diasAtraso: 1, fase: '', totalSemJuros: 3000, totalComJuros: 3000, totalProposta: 3000, avista: 1000, tabela: 'T',
     parcelas: [12, 15, 17].map((n) => ({ parcelas: n, valorParcela: 200 })) };
   const out = pm2('{maior_parcelamento}', d, { avista: false, parcelas: [12, 15] });
