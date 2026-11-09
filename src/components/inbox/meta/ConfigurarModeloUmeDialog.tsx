@@ -7,12 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
-import { VARIAVEIS_PROPOSTA, TODAS_PARCELAS, detectarCamposLocal, preencherModelo, filtrarTextoPadrao, salvarOpcoes, valoresProposta, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
+import { VARIAVEIS_PROPOSTA, TODAS_PARCELAS, detectarCamposLocal, preencherModelo, filtrarTextoPadrao, salvarOpcoes, valoresProposta, CREDORES_PROPOSTA, type CredorProposta, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
 
-export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtual, textoPadrao, onSalvo, opcoesAtuais, onOpcoesSalvas }: {
+export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtual, textoPadrao, onSalvo, opcoesAtuais, onOpcoesSalvas, credor, onCredorChange }: {
   open: boolean; onOpenChange: (v: boolean) => void; dados: DadosProposta | null;
   modeloAtual: string | null; textoPadrao: string; onSalvo: (texto: string | null) => void;
   opcoesAtuais: OpcoesProposta; onOpcoesSalvas: (o: OpcoesProposta) => void;
+  credor: CredorProposta; onCredorChange: (c: CredorProposta) => void;
 }) {
   const [opcoes, setOpcoes] = useState<OpcoesProposta>(opcoesAtuais);
   useEffect(() => { if (open) setOpcoes(opcoesAtuais); }, [open, opcoesAtuais]);
@@ -20,8 +21,8 @@ export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtu
   const salvarSoOpcoes = async () => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    salvarOpcoes(u.user.id, opcoes); onOpcoesSalvas(opcoes);
-    await supabase.from('ume_proposta_modelos').upsert({ user_id: u.user.id, texto: modeloAtual || '', opcoes: opcoes as any, atualizado_em: new Date().toISOString() });
+    if (credor === 'ume') salvarOpcoes(u.user.id, opcoes); onOpcoesSalvas(opcoes);
+    await supabase.from('ume_proposta_modelos').upsert({ user_id: u.user.id, texto: modeloAtual || '', credor, opcoes: opcoes as any, atualizado_em: new Date().toISOString() }, { onConflict: 'user_id,credor' });
   };
   const [texto, setTexto] = useState('');
   const [sugerindo, setSugerindo] = useState(false);
@@ -56,9 +57,9 @@ export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtu
   const salvar = async (valor: string | null) => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    salvarOpcoes(u.user.id, opcoes); onOpcoesSalvas(opcoes);
+    if (credor === 'ume') salvarOpcoes(u.user.id, opcoes); onOpcoesSalvas(opcoes);
     setSalvando(true);
-    const r = await supabase.from('ume_proposta_modelos').upsert({ user_id: u.user.id, texto: valor || '', opcoes: opcoes as any, atualizado_em: new Date().toISOString() });
+    const r = await supabase.from('ume_proposta_modelos').upsert({ user_id: u.user.id, texto: valor || '', credor, opcoes: opcoes as any, atualizado_em: new Date().toISOString() }, { onConflict: 'user_id,credor' });
     setSalvando(false);
     if (r.error) return toast.error('Não foi possível salvar: ' + r.error.message);
     onSalvo(valor); toast.success(valor ? 'Modelo salvo' : 'Modelo padrão restaurado'); onOpenChange(false);
@@ -72,6 +73,12 @@ export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtu
           <DialogDescription>Cole o texto que você usa. O sistema troca nome e valores por campos preenchidos automaticamente.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">Credor:</span>
+            {CREDORES_PROPOSTA.map((c) => (
+              <Button key={c.valor} size="sm" className="h-7" variant={credor === c.valor ? 'default' : 'outline'} aria-pressed={credor === c.valor} onClick={() => onCredorChange(c.valor)}>{c.nome}</Button>
+            ))}
+          </div>
           <Textarea ref={ref} rows={9} value={texto} onChange={(e) => setTexto(e.target.value)}
             placeholder={'Ex.: Oi Larissa! Seu débito de R$ 10.461,00 sai à vista por R$ 4.713,00...'} />
           <div className="flex flex-wrap gap-2">

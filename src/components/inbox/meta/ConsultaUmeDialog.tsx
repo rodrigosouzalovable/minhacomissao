@@ -7,8 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, RefreshCw, Copy, Send, Barcode, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
-import { preencherModelo, estenderParcelasUme, carregarOpcoes, opcoesDeJson, filtrarTextoPadrao, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
+import { preencherModelo, estenderParcelasUme, carregarOpcoes, opcoesDeJson, filtrarTextoPadrao, modeloDoCredor, CREDORES_PROPOSTA, type CredorProposta, type ModeloCredor, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
 import { ConfigurarModeloUmeDialog } from './ConfigurarModeloUmeDialog';
+import { identificarCredorPorCpf } from '@/lib/credorPorCpf';
 
 const NOME_TABELA = { padrao: 'Tabela Padrão', especial: 'Desconto Especial', sem_juros_10: 'Sem Juros + 10%' } as const;
 
@@ -161,9 +162,12 @@ export function ConsultaUmeDialog({
   const [boleto, setBoleto] = useState<BoletoUme | null>(null);
   const [boletoLoading, setBoletoLoading] = useState(false);
   const [vencimentoBoleto, setVencimentoBoleto] = useState(vencimentoPadrao);
-  const [modelo, setModelo] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
-  const [opcoes, setOpcoes] = useState<OpcoesProposta>(() => carregarOpcoes(null));
+  const [credor, setCredor] = useState<CredorProposta>('ume');
+  const [modelos, setModelos] = useState<Partial<Record<CredorProposta, ModeloCredor>>>({});
+  const { texto: modelo, opcoes } = modeloDoCredor(modelos, credor);
+  const setModelo = (t: string | null) => setModelos((m) => ({ ...m, [credor]: { ...modeloDoCredor(m, credor), texto: t } }));
+  const setOpcoes = (o: OpcoesProposta) => setModelos((m) => ({ ...m, [credor]: { ...modeloDoCredor(m, credor), opcoes: o } }));
 
   useEffect(() => {
     if (!open) return;
@@ -171,12 +175,14 @@ export function ConsultaUmeDialog({
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
-      if (ativo) setOpcoes(carregarOpcoes(u.user.id));
-      const { data } = await supabase.from('ume_proposta_modelos').select('texto, opcoes').eq('user_id', u.user.id).maybeSingle();
+      const local = carregarOpcoes(u.user.id);
+      const { data } = await supabase.from('ume_proposta_modelos').select('texto, opcoes, credor').eq('user_id', u.user.id);
       if (!ativo) return;
-      setModelo(data?.texto || null);
-      const o = opcoesDeJson((data as any)?.opcoes);
-      if (o) setOpcoes(o);
+      const mapa: Partial<Record<CredorProposta, ModeloCredor>> = { ume: { texto: null, opcoes: local } };
+      for (const r of (data || []) as any[]) {
+        mapa[r.credor as CredorProposta] = { texto: r.texto || null, opcoes: opcoesDeJson(r.opcoes) ?? (r.credor === 'ume' ? local : carregarOpcoes(null)) };
+      }
+      setModelos(mapa);
     })();
     return () => { ativo = false; };
   }, [open]);
@@ -190,7 +196,7 @@ export function ConsultaUmeDialog({
   useEffect(() => {
     if (consulta) setPrevia(textoFinal(consulta));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consulta, tabela, modelo, opcoes]);
+  }, [consulta, tabela, modelos, credor]);
 
   const gerarBoleto = async () => {
     const digitos = soDigitos(cpf);
@@ -223,7 +229,11 @@ export function ConsultaUmeDialog({
     setCpf(inicial);
     setConsulta(null);
     setErro('');
-    if (inicial.length === 11) void consultar(inicial, false);
+    setCredor('ume');
+    if (inicial.length === 11) {
+      void consultar(inicial, false);
+      void identificarCredorPorCpf(inicial).then((r) => { if (r?.tipo === 'unico' && r.empresa === 'odres_cred') setCredor('odres_cred'); });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cpfInicial]);
 
@@ -396,6 +406,12 @@ export function ConsultaUmeDialog({
             </div>
 
             <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">Credor da proposta:</span>
+                {CREDORES_PROPOSTA.map((c) => (
+                  <Button key={c.valor} size="sm" className="h-7" variant={credor === c.valor ? 'default' : 'outline'} aria-pressed={credor === c.valor} onClick={() => setCredor(c.valor)}>{c.nome}</Button>
+                ))}
+              </div>
               <p className="text-sm font-medium">Prévia da mensagem</p>
               <Textarea rows={8} value={previa} onChange={(e) => setPrevia(e.target.value)} aria-label="Prévia da mensagem" />
               <p className="text-xs text-muted-foreground">É exatamente isso que será enviado. Você pode ajustar antes de enviar.</p>
@@ -433,6 +449,8 @@ export function ConsultaUmeDialog({
                 onSalvo={setModelo}
                 opcoesAtuais={opcoes}
                 onOpcoesSalvas={setOpcoes}
+                credor={credor}
+                onCredorChange={setCredor}
               />
             </div>
             <div className="space-y-3 rounded border p-3">
