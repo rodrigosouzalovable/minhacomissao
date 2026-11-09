@@ -1750,8 +1750,58 @@ export default function EnvioMeta() {
             <Button size="sm" variant="outline" disabled={loading} onClick={carregar}>
               <RefreshCw className="h-3 w-3 mr-1" /> Atualizar disponibilidade
             </Button>
-            {/* Variação de templates — só templates com a MESMA quantidade de variáveis */}
             {templateGroup && (
+              <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium">Campanha com vários credores</p>
+                    <p className="text-xs text-muted-foreground">
+                      Uma única lista com Novo Mundo, UME e Odres Cred. Cada contato recebe só o template do seu credor, e os números não disparam duas campanhas ao mesmo tempo.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={multiCredor}
+                    onCheckedChange={(v) => {
+                      setMultiCredor(v);
+                      if (v) setCredorObrigatorio(true);
+                    }}
+                    aria-label="Campanha com vários credores"
+                  />
+                </div>
+                {multiCredor && (
+                  <div className="space-y-2">
+                    {CREDOR_MARCAS_LISTA.map((cm) => {
+                      const qtd = recipients.filter((c) => credorByTel[telSuffix8(c.telefone)] === cm.slug).length;
+                      const opcoes = [templateGroup, ...variantesCompativeis];
+                      return (
+                        <div key={cm.slug} className="flex items-center gap-2">
+                          <span className="text-sm w-28 shrink-0">{cm.nome}</span>
+                          <Select
+                            value={tplPorCredor[cm.slug] || "__none__"}
+                            onValueChange={(v) => setTplPorCredor((p) => ({ ...p, [cm.slug]: v === "__none__" ? undefined : v }))}
+                          >
+                            <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Não enviar para este credor</SelectItem>
+                              {opcoes.map((g) => (
+                                <SelectItem key={g.key} value={g.key}>{g.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{qtd} contato(s)</Badge>
+                        </div>
+                      );
+                    })}
+                    <p className="text-[11px] text-muted-foreground">
+                      Só aparecem templates com {templateGroup.varsCount} variável{templateGroup.varsCount === 1 ? "" : "is"}, igual ao template principal, para os dados da planilha servirem a todos. Importe a planilha com a coluna Credor.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Variação de templates — só templates com a MESMA quantidade de variáveis */}
+            {templateGroup && !multiCredor && (
               <div className="rounded-md border p-3 space-y-2 bg-muted/30">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="text-sm font-medium">Variação de templates (opcional)</p>
