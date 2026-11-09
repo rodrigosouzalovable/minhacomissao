@@ -21,6 +21,7 @@ export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtu
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
     salvarOpcoes(u.user.id, opcoes); onOpcoesSalvas(opcoes);
+    await supabase.from('ume_proposta_modelos').upsert({ user_id: u.user.id, texto: modeloAtual || '', opcoes: opcoes as any, atualizado_em: new Date().toISOString() });
   };
   const [texto, setTexto] = useState('');
   const [sugerindo, setSugerindo] = useState(false);
@@ -57,9 +58,7 @@ export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtu
     if (!u.user) return;
     salvarOpcoes(u.user.id, opcoes); onOpcoesSalvas(opcoes);
     setSalvando(true);
-    const r = valor
-      ? await supabase.from('ume_proposta_modelos').upsert({ user_id: u.user.id, texto: valor, atualizado_em: new Date().toISOString() })
-      : await supabase.from('ume_proposta_modelos').delete().eq('user_id', u.user.id);
+    const r = await supabase.from('ume_proposta_modelos').upsert({ user_id: u.user.id, texto: valor || '', opcoes: opcoes as any, atualizado_em: new Date().toISOString() });
     setSalvando(false);
     if (r.error) return toast.error('Não foi possível salvar: ' + r.error.message);
     onSalvo(valor); toast.success(valor ? 'Modelo salvo' : 'Modelo padrão restaurado'); onOpenChange(false);
@@ -107,6 +106,9 @@ export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtu
               ))}
             </div>
             <p className="text-xs text-muted-foreground">Parcelas abaixo de R$ 100 continuam fora mesmo marcadas.</p>
+            {texto.includes('{maior_parcelamento}') && (
+              <p className="text-xs text-muted-foreground">O campo {'{maior_parcelamento}'} mostra todas as parcelas marcadas, uma por linha.</p>
+            )}
           </div>
           {dados && (
             <div className="rounded border bg-muted/40 p-3">
