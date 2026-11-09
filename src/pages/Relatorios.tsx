@@ -76,6 +76,7 @@ export default function Relatorios() {
   const dataStr = toDateStr(data);
   const [valorReal, setValorReal] = useState<number | null>(null);
   const [valorRealEm, setValorRealEm] = useState<string | null>(null);
+  const [valorMes, setValorMes] = useState<number | null>(null);
   const [atualizandoValor, setAtualizandoValor] = useState(false);
 
   // Mesma conta do relatório do WhatsApp: soma dos acordos criados no dia (BRT)
@@ -83,19 +84,27 @@ export default function Relatorios() {
     setAtualizandoValor(true);
     try {
       let total = 0;
+      let totalMes = 0;
+      const inicioMes = `${dataStr.slice(0, 7)}-01T00:00:00-03:00`;
+      const inicioDia = new Date(`${dataStr}T00:00:00-03:00`).getTime();
       for (let from = 0; ; from += 1000) {
         const { data: rows, error } = await supabase
           .from('acordos')
-          .select('id, valor_total')
-          .gte('criado_em', `${dataStr}T00:00:00-03:00`)
+          .select('id, valor_total, criado_em')
+          .gte('criado_em', inicioMes)
           .lte('criado_em', `${dataStr}T23:59:59-03:00`)
           .order('id')
           .range(from, from + 999);
         if (error) throw error;
-        (rows || []).forEach((r: any) => { total += Number(r.valor_total || 0); });
+        (rows || []).forEach((r: any) => {
+          const v = Number(r.valor_total || 0);
+          totalMes += v;
+          if (new Date(r.criado_em).getTime() >= inicioDia) total += v;
+        });
         if (!rows || rows.length < 1000) break;
       }
       setValorReal(total);
+      setValorMes(totalMes);
       setValorRealEm(new Date().toISOString());
     } catch (e: any) {
       toast.error('Não foi possível atualizar o valor em acordos');
@@ -104,7 +113,7 @@ export default function Relatorios() {
     }
   }, [dataStr]);
 
-  useEffect(() => { setValorReal(null); atualizarValorAcordos(); }, [atualizarValorAcordos]);
+  useEffect(() => { setValorReal(null); setValorMes(null); atualizarValorAcordos(); }, [atualizarValorAcordos]);
 
   const load = useCallback(async () => {
     const [rRes, mRes] = await Promise.all([
@@ -449,6 +458,8 @@ export default function Relatorios() {
           cpca={totais.cpca}
           valor={valorReal ?? totais.valor}
           valorEm={valorRealEm}
+          valorMes={valorMes}
+          mesFmt={format(data, 'MMMM', { locale: ptBR })}
           onAtualizarValor={atualizarValorAcordos}
           atualizandoValor={atualizandoValor}
         />
