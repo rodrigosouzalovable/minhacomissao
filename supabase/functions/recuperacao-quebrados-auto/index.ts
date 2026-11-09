@@ -3,10 +3,13 @@
 // Também resgata acordos QUEBRADOS (1ª parcela vencida há 11–60 dias), 1 envio a cada 15 dias por número.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { CREDOR_PREVENTIVO, datasAlvoPreventivo, montarClientesPreventivo } from "../_shared/lembrete-preventivo.ts";
 
 const DONO = "ee649720-b8ce-47a2-859e-100a3a9ae6bb";
 const TEMPLATE = "abertura_para_reagendamento_de_pagamento";
 const CREDOR: Record<string, string> = { ume_novo_mundo: "UME", odres_cred: "Odres Cred" };
+const PREV_TEMPLATE = "novo_lembrete_envio_boleto_variavel";
+const PREV_NOME = "Lembrete preventivo auto";
 
 const json = (p: unknown, status = 200) =>
   new Response(JSON.stringify(p), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -136,8 +139,14 @@ Deno.serve(async (req) => {
   }
   console.log(`[recuperacao-quebrados] vencidos=${porSuf.size - qtdQuebrados} quebrados=${qtdQuebrados}`);
 
+  // ===== Lembrete preventivo D-1 (mesmo agendamento, campanha separada) =====
+  let preventivo: unknown = null;
+  try { preventivo = await lancarPreventivo(db, url, key, hoje, new Set(porSuf.keys())); }
+  catch (e) { preventivo = { success: false, error: e instanceof Error ? e.message : String(e) }; }
+  console.log("[lembrete-preventivo]", JSON.stringify(preventivo));
+
   const clientes = [...porSuf.values()];
-  if (!clientes.length) return json({ success: true, clientes: 0 });
+  if (!clientes.length) return json({ success: true, clientes: 0, preventivo });
 
   const { data: inst } = await db.from("meta_whatsapp_instances").select("id")
     .eq("user_id", DONO).eq("ativo", true).eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN")
@@ -161,5 +170,60 @@ Deno.serve(async (req) => {
     }),
   });
   const out = await resp.json().catch(() => ({}));
-  return json({ success: resp.ok, clientes: clientes.length, quebrados: qtdQuebrados, numeros: instIds.length, resultado: out }, resp.ok ? 200 : 500);
+  return json({ success: resp.ok, clientes: clientes.length, quebrados: qtdQuebrados, numeros: instIds.length, resultado: out, preventivo }, resp.ok ? 200 : 500);
 });
+
+// Parcelas pendentes de acordos ativos que vencem amanhã (sábado: domingo e segunda).
+async function lancarPreventivo(db: any, url: string, key: string, hoje: string, jaAcionados: Set<string>) {
+  const datas = datasAlvoPreventivo(hoje);
+  if (!datas.length) return { success: true, clientes: 0 };
+  const rows: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("pagamentos")
+      .select("data_prevista,valor_parcela,acordos!inner(cliente_nome,cliente_telefone,cliente_cpf,empresa,status)")
+      .eq("status", "pendente").in("data_prevista", datas)
+      .eq("acordos.status", "ativo").in("acordos.empresa", Object.keys(CREDOR_PREVENTIVO))
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    for (const r of data || []) rows.push({ ...r.acordos, data_prevista: r.data_prevista, valor_parcela: r.valor_parcela });
+    if (!data || data.length < 1000) break;
+  }
+  // Evita repetir no mesmo dia caso a rotina seja chamada de novo.
+  const excluir = new Set(jaAcionados);
+  const { data: jobsHoje } = await db.from("envio_meta_job").select("id")
+    .eq("user_id", DONO).ilike("nome_campanha", `${PREV_NOME}%`)
+    .gte("created_at", new Date(Date.now() - 20 * 3600_000).toISOString());
+  for (const j of jobsHoje || []) {
+    for (let from = 0; ; from += 1000) {
+      const { data } = await db.from("envio_meta_job_item").select("telefone").eq("job_id", j.id).range(from, from + 999);
+      for (const it of data || []) excluir.add(String(it.telefone || "").replace(/\D/g, "").slice(-8));
+      if (!data || data.length < 1000) break;
+    }
+  }
+  const clientes = montarClientesPreventivo(rows, hoje, excluir);
+  if (!clientes.length) return { success: true, clientes: 0 };
+
+  const { data: inst } = await db.from("meta_whatsapp_instances").select("id")
+    .eq("user_id", DONO).eq("ativo", true).eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN")
+    .eq("estado_pool", "ativo").eq("instancia_teste_aquecimento", false);
+  const ids = (inst || []).map((i: any) => i.id);
+  const { data: tpls } = await db.from("meta_whatsapp_templates").select("id,instancia_id")
+    .in("instancia_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
+    .eq("nome_template", PREV_TEMPLATE).eq("status", "approved").ilike("categoria", "utility");
+  const byInst: Record<string, string> = {};
+  for (const t of tpls || []) byInst[t.instancia_id] = t.id;
+  const instIds = Object.keys(byInst);
+  if (!instIds.length) return { success: false, clientes: clientes.length, error: "nenhum número GREEN com o modelo Utility" };
+
+  const resp = await fetch(`${url}/functions/v1/envio-meta-massa-iniciar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      asUserId: DONO, template: { id: byInst[instIds[0]], nome_template: PREV_TEMPLATE },
+      instanciaIds: instIds, templateIdByInstance: byInst, clientes, minSec: 5, maxSec: 10,
+      nomeCampanha: `${PREV_NOME} ${hoje}`, validarNoEnvio: false,
+    }),
+  });
+  const out = await resp.json().catch(() => ({}));
+  return { success: resp.ok, clientes: clientes.length, numeros: instIds.length, resultado: out };
+}
