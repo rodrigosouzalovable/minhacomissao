@@ -622,6 +622,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
           const sv: any = (s as any).variaveis || {};
           if (!hasImage && typeof sv._header_image_url === 'string' && sv._header_image_url.trim()) {
             vars._header_image_url = sv._header_image_url;
+            if (sv._header_image_auto === true) vars._header_image_auto = true;
           }
           if (!hasComponents && Array.isArray(sv._components) && sv._components.length > 0) {
             vars._components = sv._components;
