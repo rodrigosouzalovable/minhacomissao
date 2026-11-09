@@ -36,7 +36,11 @@ Deno.serve(async (req) => {
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
   const { data: ok } = await db.rpc('sftp_ume_auto_autorizada', { p_token: token });
   let admin = false;
-  if (!ok) {
+  // Ponte externa (GitHub Actions) que baixa arquivos grandes sem o limite de tempo da função.
+  const ponte = Deno.env.get('SFTP_PONTE_TOKEN') ?? '';
+  const viaPonte = !ok && ponte.length >= 24 && token === ponte;
+  if (viaPonte) admin = true;
+  if (!ok && !viaPonte) {
     const { data: u } = await db.auth.getUser(token);
     if (u?.user) { const { data: r } = await db.rpc('has_role', { _user_id: u.user.id, _role: 'admin' }); admin = !!r; }
     if (!admin) return json({ error: 'Não autorizado' }, 401);
@@ -49,6 +53,13 @@ Deno.serve(async (req) => {
     const p = url.searchParams.get('pasta') ?? '';
     const arquivo = url.searchParams.get('arquivo') ?? '';
     if (!PASTAS_AUTO.includes(p) || !/^[\w.-]+\.(csv|txt)$/i.test(arquivo)) return json({ error: 'Parâmetros inválidos' }, 400);
+    const { data: atual } = await db.from('sftp_ume_auto_progresso').select('arquivo, status').eq('pasta', p).maybeSingle();
+    if (url.searchParams.get('verificar') === '1') {
+      return json({ ok: true, ja_processado: atual?.arquivo === arquivo && atual?.status === 'concluido' });
+    }
+    if (atual?.arquivo === arquivo && ['concluido', 'processando'].includes(atual?.status)) {
+      return json({ ok: true, msg: 'Arquivo já importado ou em andamento' });
+    }
     const dados = new Uint8Array(await req.arrayBuffer());
     if (!dados.length) return json({ error: 'Arquivo vazio' }, 400);
     const { error: eu } = await db.storage.from(BUCKET).upload(tmp(p), new Blob([dados], { type: 'text/csv' }), { upsert: true });
