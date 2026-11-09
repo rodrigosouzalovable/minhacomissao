@@ -1,0 +1,1 @@
+ALTER TABLE public.ume_proposta_modelos ADD COLUMN IF NOT EXISTS opcoes jsonb;

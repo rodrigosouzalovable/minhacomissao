@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, RefreshCw, Copy, Send, Barcode, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { preencherModelo, estenderParcelasUme, carregarOpcoes, filtrarTextoPadrao, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
+import { Textarea } from '@/components/ui/textarea';
+import { preencherModelo, estenderParcelasUme, carregarOpcoes, opcoesDeJson, filtrarTextoPadrao, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
 import { ConfigurarModeloUmeDialog } from './ConfigurarModeloUmeDialog';
 
 const NOME_TABELA = { padrao: 'Tabela Padrão', especial: 'Desconto Especial', sem_juros_10: 'Sem Juros + 10%' } as const;
@@ -171,8 +172,11 @@ export function ConsultaUmeDialog({
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
       if (ativo) setOpcoes(carregarOpcoes(u.user.id));
-      const { data } = await supabase.from('ume_proposta_modelos').select('texto').eq('user_id', u.user.id).maybeSingle();
-      if (ativo) setModelo(data?.texto || null);
+      const { data } = await supabase.from('ume_proposta_modelos').select('texto, opcoes').eq('user_id', u.user.id).maybeSingle();
+      if (!ativo) return;
+      setModelo(data?.texto || null);
+      const o = opcoesDeJson((data as any)?.opcoes);
+      if (o) setOpcoes(o);
     })();
     return () => { ativo = false; };
   }, [open]);
@@ -181,6 +185,12 @@ export function ConsultaUmeDialog({
     const d = modelo ? dadosProposta(c, tabela) : null;
     return d && modelo ? preencherModelo(modelo, d, opcoes) : filtrarTextoPadrao(textoProposta(c, tabela), opcoes);
   };
+
+  const [previa, setPrevia] = useState('');
+  useEffect(() => {
+    if (consulta) setPrevia(textoFinal(consulta));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consulta, tabela, modelo, opcoes]);
 
   const gerarBoleto = async () => {
     const digitos = soDigitos(cpf);
@@ -385,11 +395,16 @@ export function ConsultaUmeDialog({
               </div>
             </div>
 
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Prévia da mensagem</p>
+              <Textarea rows={8} value={previa} onChange={(e) => setPrevia(e.target.value)} aria-label="Prévia da mensagem" />
+              <p className="text-xs text-muted-foreground">É exatamente isso que será enviado. Você pode ajustar antes de enviar.</p>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
-                  void navigator.clipboard.writeText(textoFinal(consulta));
+                  void navigator.clipboard.writeText(previa);
                   toast.success('Proposta copiada');
                 }}
               >
@@ -398,7 +413,8 @@ export function ConsultaUmeDialog({
               {onEnviar && (
                 <Button
                   onClick={() => {
-                    onEnviar(textoFinal(consulta));
+                    if (!previa.trim()) { toast.error('A mensagem está vazia'); return; }
+                    onEnviar(previa);
                     onOpenChange(false);
                   }}
                 >

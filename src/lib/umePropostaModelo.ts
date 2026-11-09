@@ -61,6 +61,10 @@ export function carregarOpcoes(uid?: string | null): OpcoesProposta {
   } catch { /* padrão */ }
   return OPCOES_PADRAO;
 }
+export function opcoesDeJson(o: any): OpcoesProposta | null {
+  return o && typeof o.avista === 'boolean' && Array.isArray(o.parcelas)
+    ? { avista: o.avista, parcelas: o.parcelas.filter((n: unknown) => typeof n === 'number') } : null;
+}
 export function salvarOpcoes(uid: string, o: OpcoesProposta) {
   localStorage.setItem(chaveOpcoes(uid), JSON.stringify(o));
 }
@@ -94,7 +98,10 @@ export function valoresProposta(d: DadosProposta, o: OpcoesProposta = OPCOES_PAD
     total_proposta: fmt(d.totalProposta),
     avista: fmt(d.avista),
     parcelas_lista: opcoes.map((p) => `• ${p.parcelas}x de ${fmt(p.valorParcela)}`).join('\n'),
-    maior_parcelamento: maior ? `${maior.parcelas}x de ${fmt(maior.valorParcela)}` : '',
+    // Com seleção parcial de várias parcelas, lista exatamente as marcadas.
+    maior_parcelamento: o.parcelas.length < TODAS_PARCELAS.length && opcoes.length > 1
+      ? opcoes.map((p) => `${p.parcelas}x de ${fmt(p.valorParcela)}`).join('\n')
+      : maior ? `${maior.parcelas}x de ${fmt(maior.valorParcela)}` : '',
     menor_parcela: maior ? fmt(maior.valorParcela) : '',
     tabela: d.tabela,
   };
