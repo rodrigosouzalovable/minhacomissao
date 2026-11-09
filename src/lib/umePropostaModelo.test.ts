@@ -24,3 +24,21 @@ describe('modelo de proposta UME', () => {
     expect(detectarCamposLocal(colado, d)).toBe('Oi {primeiro_nome}, à vista {avista}');
   });
 });
+
+import { preencherModelo as pm2, filtrarTextoPadrao as ftp } from './umePropostaModelo';
+describe('opções habilitadas na proposta', () => {
+  const d: any = { nome: 'Ana Souza', cpf: '1', diasAtraso: 1, fase: '', totalSemJuros: 1, totalComJuros: 1, totalProposta: 1, avista: 900, tabela: 't',
+    parcelas: [2,3,6,12,18].map((n) => ({ parcelas: n, valorParcela: n === 18 ? 50 : 1800 / n })) };
+  it('à vista desligado remove a linha', () => {
+    expect(pm2('Oi\nÀ vista {avista}\nfim', d, { avista: false, parcelas: [3] })).toBe('Oi\nfim');
+  });
+  it('só 3, 6 e 12 marcados', () => {
+    expect(pm2('{parcelas_lista}', d, { avista: true, parcelas: [3, 6, 12] }).split('\n').map((l) => l.match(/(\d+)x/)![1])).toEqual(['3', '6', '12']);
+  });
+  it('parcela marcada abaixo de R$100 continua fora', () => {
+    expect(pm2('{parcelas_lista}', d, { avista: true, parcelas: [18] })).toBe('');
+  });
+  it('texto padrão filtra linhas', () => {
+    expect(ftp('À vista: R$ 900\n• 2x de R$ 900\n• 3x de R$ 600', { avista: false, parcelas: [3] })).toBe('• 3x de R$ 600');
+  });
+});
