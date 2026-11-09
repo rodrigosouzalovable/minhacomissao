@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import CampaignImagePicker, { type CampaignImage } from "@/components/meta/CampaignImagePicker";
-import TemplateWhatsAppPreview from "@/components/TemplateWhatsAppPreview";
+import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
 
 type Props = {
   userId: string;
