@@ -1,0 +1,55 @@
+name: Ponte SFTP Odres
+
+# Baixa diariamente o arquivo grande da Odres (lento demais para o limite da função na nuvem)
+# e entrega ao sistema, que processa e dá as baixas automaticamente.
+on:
+  schedule:
+    - cron: '35 15 * * *' # 12:35 BRT, depois da rotina automática
+  workflow_dispatch: {}
+
+jobs:
+  ponte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install paramiko requests
+      - name: Baixar e enviar
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
+          PONTE_TOKEN: ${{ secrets.SFTP_PONTE_TOKEN }}
+          FUNCAO_URL: https://cymdrkeukockakfzjeen.supabase.co/functions/v1/sftp-ume-auto
+        shell: python
+        run: |
+          import io, os, sys, paramiko, requests
+          pasta = '/odres/carga'
+          chave = os.environ['SFTP_PRIVATE_KEY'].replace('\\n', '\n')
+          pkey = None
+          for cls in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey):
+              try:
+                  pkey = cls.from_private_key(io.StringIO(chave)); break
+              except Exception:
+                  pass
+          if not pkey: sys.exit('Chave SFTP inválida')
+          t = paramiko.Transport((os.environ.get('SFTP_HOST') or '35.227.83.18', 22))
+          t.connect(username=os.environ.get('SFTP_USER') or 'ribeiro_usr', pkey=pkey)
+          s = paramiko.SFTPClient.from_transport(t)
+          itens = [i for i in s.listdir_attr(pasta) if i.filename.lower().endswith(('.csv', '.txt'))]
+          arq = max(itens, key=lambda i: i.st_mtime)
+          h = {'Authorization': 'Bearer ' + os.environ['PONTE_TOKEN']}
+          q = {'acao': 'enviar_arquivo', 'pasta': pasta, 'arquivo': arq.filename, 'modificado': str(arq.st_mtime * 1000)}
+          v = requests.post(os.environ['FUNCAO_URL'], params={**q, 'verificar': '1'}, headers=h, timeout=60)
+          v.raise_for_status()
+          if v.json().get('ja_processado'):
+              print('Já processado:', arq.filename); sys.exit(0)
+          print('Baixando', arq.filename, arq.st_size)
+          buf = io.BytesIO()
+          s.getfo(f'{pasta}/{arq.filename}', buf)
+          s.close(); t.close()
+          r = requests.post(os.environ['FUNCAO_URL'], params=q, headers={**h, 'Content-Type': 'text/csv'}, data=buf.getvalue(), timeout=600)
+          print(r.status_code, r.text[:300])
+          r.raise_for_status()
