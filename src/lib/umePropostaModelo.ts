@@ -47,13 +47,41 @@ export function estenderParcelasUme(
 const fmt = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
 
-/** Parcelas oferecidas: 2x ou mais e nunca abaixo de R$ 100. */
-export function parcelasOferecidas(d: DadosProposta) {
-  return d.parcelas.filter((p) => p.parcelas >= 2 && p.valorParcela >= PARCELA_MINIMA);
+/** Opções que o atendente quer exibir na mensagem (padrão: todas). */
+export interface OpcoesProposta { avista: boolean; parcelas: number[] }
+export const TODAS_PARCELAS = Array.from({ length: MAX_PARCELAS_UME - 1 }, (_, i) => i + 2);
+export const OPCOES_PADRAO: OpcoesProposta = { avista: true, parcelas: TODAS_PARCELAS };
+
+const chaveOpcoes = (uid: string) => `ume-opcoes-proposta:${uid}`;
+export function carregarOpcoes(uid?: string | null): OpcoesProposta {
+  if (!uid) return OPCOES_PADRAO;
+  try {
+    const o = JSON.parse(localStorage.getItem(chaveOpcoes(uid)) || 'null');
+    if (o && typeof o.avista === 'boolean' && Array.isArray(o.parcelas)) return { avista: o.avista, parcelas: o.parcelas.filter((n: unknown) => typeof n === 'number') };
+  } catch { /* padrão */ }
+  return OPCOES_PADRAO;
+}
+export function salvarOpcoes(uid: string, o: OpcoesProposta) {
+  localStorage.setItem(chaveOpcoes(uid), JSON.stringify(o));
 }
 
-export function valoresProposta(d: DadosProposta): Record<string, string> {
-  const opcoes = parcelasOferecidas(d);
+/** Parcelas oferecidas: 2x ou mais, nunca abaixo de R$ 100 e só as habilitadas. */
+export function parcelasOferecidas(d: DadosProposta, o: OpcoesProposta = OPCOES_PADRAO) {
+  return d.parcelas.filter((p) => p.parcelas >= 2 && p.valorParcela >= PARCELA_MINIMA && o.parcelas.includes(p.parcelas));
+}
+
+/** Remove do texto padrão as linhas de opções desabilitadas. */
+export function filtrarTextoPadrao(texto: string, o: OpcoesProposta = OPCOES_PADRAO): string {
+  return texto.split('\n').filter((l) => {
+    if (!o.avista && /vista/i.test(l) && /R\$/.test(l)) return false;
+    const m = l.match(/(\d{1,2})\s*x\s*de\s*R\$/i);
+    if (m && !o.parcelas.includes(Number(m[1]))) return false;
+    return true;
+  }).join('\n');
+}
+
+export function valoresProposta(d: DadosProposta, o: OpcoesProposta = OPCOES_PADRAO): Record<string, string> {
+  const opcoes = parcelasOferecidas(d, o);
   const maior = opcoes.reduce<typeof opcoes[number] | null>((m, p) => (!m || p.parcelas > m.parcelas ? p : m), null);
   return {
     primeiro_nome: (d.nome || '').trim().split(/\s+/)[0] || '',
@@ -72,8 +100,9 @@ export function valoresProposta(d: DadosProposta): Record<string, string> {
   };
 }
 
-export function preencherModelo(texto: string, d: DadosProposta): string {
-  const v = valoresProposta(d);
+export function preencherModelo(texto: string, d: DadosProposta, o: OpcoesProposta = OPCOES_PADRAO): string {
+  const v = valoresProposta(d, o);
+  if (!o.avista) texto = texto.split('\n').filter((l) => !/\{\s*avista\s*\}/.test(l)).join('\n');
   return texto.replace(/\{\s*([a-z_]+)\s*\}/g, (m, k) => (k in v ? v[k] : m));
 }
 

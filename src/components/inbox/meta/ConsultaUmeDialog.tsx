@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, RefreshCw, Copy, Send, Barcode, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { preencherModelo, estenderParcelasUme, type DadosProposta } from '@/lib/umePropostaModelo';
+import { preencherModelo, estenderParcelasUme, carregarOpcoes, filtrarTextoPadrao, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
 import { ConfigurarModeloUmeDialog } from './ConfigurarModeloUmeDialog';
 
 const NOME_TABELA = { padrao: 'Tabela Padrão', especial: 'Desconto Especial', sem_juros_10: 'Sem Juros + 10%' } as const;
@@ -162,6 +162,7 @@ export function ConsultaUmeDialog({
   const [vencimentoBoleto, setVencimentoBoleto] = useState(vencimentoPadrao);
   const [modelo, setModelo] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  const [opcoes, setOpcoes] = useState<OpcoesProposta>(() => carregarOpcoes(null));
 
   useEffect(() => {
     if (!open) return;
@@ -169,6 +170,7 @@ export function ConsultaUmeDialog({
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
+      if (ativo) setOpcoes(carregarOpcoes(u.user.id));
       const { data } = await supabase.from('ume_proposta_modelos').select('texto').eq('user_id', u.user.id).maybeSingle();
       if (ativo) setModelo(data?.texto || null);
     })();
@@ -177,7 +179,7 @@ export function ConsultaUmeDialog({
 
   const textoFinal = (c: Consulta) => {
     const d = modelo ? dadosProposta(c, tabela) : null;
-    return d && modelo ? preencherModelo(modelo, d) : textoProposta(c, tabela);
+    return d && modelo ? preencherModelo(modelo, d, opcoes) : filtrarTextoPadrao(textoProposta(c, tabela), opcoes);
   };
 
   const gerarBoleto = async () => {
@@ -413,6 +415,8 @@ export function ConsultaUmeDialog({
                 modeloAtual={modelo}
                 textoPadrao={textoProposta(consulta, tabela)}
                 onSalvo={setModelo}
+                opcoesAtuais={opcoes}
+                onOpcoesSalvas={setOpcoes}
               />
             </div>
             <div className="space-y-3 rounded border p-3">

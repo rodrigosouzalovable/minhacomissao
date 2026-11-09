@@ -6,12 +6,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { VARIAVEIS_PROPOSTA, detectarCamposLocal, preencherModelo, valoresProposta, type DadosProposta } from '@/lib/umePropostaModelo';
+import { Switch } from '@/components/ui/switch';
+import { VARIAVEIS_PROPOSTA, TODAS_PARCELAS, detectarCamposLocal, preencherModelo, filtrarTextoPadrao, salvarOpcoes, valoresProposta, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
 
-export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtual, textoPadrao, onSalvo }: {
+export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtual, textoPadrao, onSalvo, opcoesAtuais, onOpcoesSalvas }: {
   open: boolean; onOpenChange: (v: boolean) => void; dados: DadosProposta | null;
   modeloAtual: string | null; textoPadrao: string; onSalvo: (texto: string | null) => void;
+  opcoesAtuais: OpcoesProposta; onOpcoesSalvas: (o: OpcoesProposta) => void;
 }) {
+  const [opcoes, setOpcoes] = useState<OpcoesProposta>(opcoesAtuais);
+  useEffect(() => { if (open) setOpcoes(opcoesAtuais); }, [open, opcoesAtuais]);
+  const alternar = (n: number) => setOpcoes((o) => ({ ...o, parcelas: o.parcelas.includes(n) ? o.parcelas.filter((x) => x !== n) : [...o.parcelas, n].sort((a, b) => a - b) }));
+  const salvarSoOpcoes = async () => {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return;
+    salvarOpcoes(u.user.id, opcoes); onOpcoesSalvas(opcoes);
+  };
   const [texto, setTexto] = useState('');
   const [sugerindo, setSugerindo] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -45,6 +55,7 @@ export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtu
   const salvar = async (valor: string | null) => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
+    salvarOpcoes(u.user.id, opcoes); onOpcoesSalvas(opcoes);
     setSalvando(true);
     const r = valor
       ? await supabase.from('ume_proposta_modelos').upsert({ user_id: u.user.id, texto: valor, atualizado_em: new Date().toISOString() })
@@ -79,14 +90,33 @@ export function ConfigurarModeloUmeDialog({ open, onOpenChange, dados, modeloAtu
               ))}
             </div>
           </div>
-          {dados && texto.trim() && (
+          <div className="space-y-2 rounded border p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Opções que vão na mensagem</p>
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" onClick={() => setOpcoes({ avista: true, parcelas: TODAS_PARCELAS })}>Marcar todas</Button>
+                <Button size="sm" variant="ghost" onClick={() => setOpcoes({ avista: false, parcelas: [] })}>Desmarcar todas</Button>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={opcoes.avista} onCheckedChange={(v) => setOpcoes((o) => ({ ...o, avista: v }))} /> À vista
+            </label>
+            <div className="flex flex-wrap gap-1">
+              {TODAS_PARCELAS.map((n) => (
+                <Button key={n} size="sm" className="h-7 w-11 px-0" variant={opcoes.parcelas.includes(n) ? 'default' : 'outline'} aria-pressed={opcoes.parcelas.includes(n)} onClick={() => alternar(n)}>{n}x</Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Parcelas abaixo de R$ 100 continuam fora mesmo marcadas.</p>
+          </div>
+          {dados && (
             <div className="rounded border bg-muted/40 p-3">
               <p className="mb-1 text-xs font-medium text-muted-foreground">Como o cliente vai receber:</p>
-              <pre className="whitespace-pre-wrap font-sans text-sm">{preencherModelo(texto, dados)}</pre>
+              <pre className="whitespace-pre-wrap font-sans text-sm">{texto.trim() ? preencherModelo(texto, dados, opcoes) : filtrarTextoPadrao(textoPadrao, opcoes)}</pre>
             </div>
           )}
           <div className="flex flex-wrap justify-between gap-2 pt-2">
             <Button variant="outline" disabled={salvando || !modeloAtual} onClick={() => salvar(null)}>Restaurar modelo padrão</Button>
+            <Button variant="secondary" disabled={salvando} onClick={async () => { await salvarSoOpcoes(); toast.success('Opções salvas'); onOpenChange(false); }}>Salvar só as opções</Button>
             <Button disabled={salvando || !texto.trim()} onClick={() => salvar(texto)}>
               {salvando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar modelo
             </Button>
