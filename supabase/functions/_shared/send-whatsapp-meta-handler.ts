@@ -649,10 +649,6 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
           if (signed?.signedUrl) {
             vars._header_image_url = signed.signedUrl;
             (template as any).variaveis = vars;
-            // Persiste para os próximos envios desta e das demais instâncias.
-            await supabase.from('meta_whatsapp_templates')
-              .update({ variaveis: { ...(registeredTemplate?.variaveis || {}), _header_image_url: signed.signedUrl } })
-              .eq('nome_template', template.nome_template).eq('idioma', template.idioma).eq('id', template.id);
           }
         }
       }
