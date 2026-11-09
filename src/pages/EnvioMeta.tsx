@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AppLayout } from "@/components/layout/AppLayout";
 import TemplateWhatsAppPreview from "@/components/meta/TemplateWhatsAppPreview";
+import CredorTemplatePreview from "@/components/meta/CredorTemplatePreview";
 import CustoEstimadoEnvio, { LIMITE_CUSTO_BRL_DEFAULT } from "@/components/meta/CustoEstimadoEnvio";
 import { calcularCustoEstimado } from "@/hooks/useCustoEstimadoEnvio";
 import { checkUazapiConnection, isResultConnected } from "@/lib/uazapiConnectionCache";
@@ -269,6 +270,7 @@ export default function EnvioMeta() {
   const [templateId, setTemplateId] = useState<string>("");
   const [campaignImage, setCampaignImage] = useState<CampaignImage | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
+  const [imagemPorCredor, setImagemPorCredor] = useState<Partial<Record<CredorSlug, CampaignImage>>>({});
   useEffect(() => { setCampaignImage(null); setImageUploading(false); }, [templateId]);
   // Variação de templates: chaves adicionais (além do principal) que entram no round-robin
   const [variantesExtraKeys, setVariantesExtraKeys] = useState<string[]>([]);
@@ -1566,7 +1568,15 @@ export default function EnvioMeta() {
       const out: ClienteRow = { ...c };
       if (v) out.vars = v;
       if (templateTemBotaoUrlDinamico) out.vars = snapshotMetaButtonVars(out.vars, buttonUrl.trim());
-      if (campaignImage?.templateKey === templateId) out.vars = {
+      if (multiCredor) {
+        const img = credLinha ? imagemPorCredor[credLinha as CredorSlug] : undefined;
+        const gk = credLinha ? tplPorCredor[credLinha as CredorSlug] : undefined;
+        const g = gk ? templateGroups.find((x) => x.key === gk) : undefined;
+        if (img && g && img.templateKey === g.key) out.vars = {
+          ...(out.vars || {}), _campaign_image_path: img.path,
+          _campaign_image_template: `${g.nome}|${g.idioma}`,
+        };
+      } else if (campaignImage?.templateKey === templateId) out.vars = {
         ...(out.vars || {}), _campaign_image_path: campaignImage.path,
         _campaign_image_template: `${templateGroup.nome}|${templateGroup.idioma}`,
       };
@@ -1773,8 +1783,10 @@ export default function EnvioMeta() {
                     {CREDOR_MARCAS_LISTA.map((cm) => {
                       const qtd = recipients.filter((c) => credorByTel[telSuffix8(c.telefone)] === cm.slug).length;
                       const opcoes = [templateGroup, ...variantesCompativeis];
+                      const gSel = tplPorCredor[cm.slug] ? opcoes.find((g) => g?.key === tplPorCredor[cm.slug]) : undefined;
                       return (
-                        <div key={cm.slug} className="flex items-center gap-2">
+                        <div key={cm.slug}>
+                          <div className="flex items-center gap-2">
                           <span className="text-sm w-28 shrink-0">{cm.nome}</span>
                           <Select
                             value={tplPorCredor[cm.slug] || "__none__"}
@@ -1789,6 +1801,24 @@ export default function EnvioMeta() {
                             </SelectContent>
                           </Select>
                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{qtd} contato(s)</Badge>
+                          </div>
+                          {gSel && (
+                            <CredorTemplatePreview
+                              userId={user?.id || ''}
+                              templateKey={gSel.key}
+                              template={gSel.sample}
+                              hasImage={templateHasImage(gSel.sample)}
+                              instanceImageUrl={templates
+                                .filter((t: any) => t.nome_template === gSel.nome && t.idioma === gSel.idioma)
+                                .map((t: any) => t?.variaveis?._header_image_url)
+                                .find((u: any) => typeof u === 'string' && u.trim().length > 0)}
+                              masterMediaPath={mestres.find((m) => m.id === gSel.mestreId)?.cabecalho_media_url}
+                              sampleVariables={recipients.find((c) => credorByTel[telSuffix8(c.telefone)] === cm.slug)?.vars}
+                              value={imagemPorCredor[cm.slug] || null}
+                              onChange={(v) => setImagemPorCredor((p) => ({ ...p, [cm.slug]: v || undefined }))}
+                              onBusyChange={setImageUploading}
+                            />
+                          )}
                         </div>
                       );
                     })}
@@ -1992,7 +2022,7 @@ export default function EnvioMeta() {
               </div>
             )}
 
-            {template && (
+            {template && !multiCredor && (
               <div className="mt-2">
                 {templateHasImage(template) && <CampaignImagePicker key={templateId} userId={user?.id || ''} templateKey={templateId} value={campaignImage} onChange={setCampaignImage} onBusyChange={setImageUploading} />}
                 <TemplateWhatsAppPreview
