@@ -51,3 +51,15 @@ it('maior_parcelamento lista exatamente 12x e 15x marcadas', () => {
   expect(out).toContain('15x');
   expect(out).not.toContain('17x');
 });
+
+import { modeloDoCredor } from './umePropostaModelo';
+describe('modelo por credor', () => {
+  it('usa o modelo do credor escolhido', () => {
+    const mapa = { ume: { texto: 'A', opcoes: { avista: true, parcelas: [12] } }, odres_cred: { texto: 'B', opcoes: { avista: false, parcelas: [3] } } };
+    expect(modeloDoCredor(mapa, 'odres_cred').texto).toBe('B');
+    expect(modeloDoCredor(mapa, 'odres_cred').opcoes.avista).toBe(false);
+  });
+  it('credor sem modelo usa o padrão', () => {
+    expect(modeloDoCredor({}, 'novo_mundo').texto).toBeNull();
+  });
+});

@@ -1639,6 +1639,13 @@
       "when": 1794222576657,
       "tag": "0233_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 234,
+      "version": "7",
+      "when": 1794236713111,
+      "tag": "0234_ume_proposta_modelos_por_credor",
+      "breakpoints": true
     }
   ]
 }

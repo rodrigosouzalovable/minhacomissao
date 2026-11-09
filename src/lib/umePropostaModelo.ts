@@ -141,3 +141,15 @@ export function detectarCamposLocal(texto: string, d: DadosProposta): string {
   if (v.primeiro_nome) out = out.replace(new RegExp(`\\b${escapar(v.primeiro_nome)}\\b`, 'gi'), '{primeiro_nome}');
   return out;
 }
+
+export type CredorProposta = 'ume' | 'odres_cred' | 'novo_mundo';
+export const CREDORES_PROPOSTA: { valor: CredorProposta; nome: string }[] = [
+  { valor: 'ume', nome: 'UME' },
+  { valor: 'odres_cred', nome: 'Odres Cred' },
+  { valor: 'novo_mundo', nome: 'Novo Mundo' },
+];
+export type ModeloCredor = { texto: string | null; opcoes: OpcoesProposta };
+/** Modelo do credor escolhido; credor sem modelo salvo usa o texto padrão com todas as opções. */
+export function modeloDoCredor(mapa: Partial<Record<CredorProposta, ModeloCredor>>, credor: CredorProposta): ModeloCredor {
+  return mapa[credor] ?? { texto: null, opcoes: OPCOES_PADRAO };
+}
