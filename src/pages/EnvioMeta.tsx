@@ -272,6 +272,9 @@ export default function EnvioMeta() {
   useEffect(() => { setCampaignImage(null); setImageUploading(false); }, [templateId]);
   // Variação de templates: chaves adicionais (além do principal) que entram no round-robin
   const [variantesExtraKeys, setVariantesExtraKeys] = useState<string[]>([]);
+  // Campanha multi-credor: uma lista com todos os credores e um template por credor.
+  const [multiCredor, setMultiCredor] = useState(false);
+  const [tplPorCredor, setTplPorCredor] = useState<Partial<Record<CredorSlug, string>>>({});
 
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
   // Also removes stale selections when a phone is edited or instances reload.
@@ -1050,20 +1053,25 @@ export default function EnvioMeta() {
   // Grupos que entram no round-robin de templates (principal + extras)
   const variantesGroups = useMemo<TemplateGroup[]>(() => {
     if (!templateGroup) return [];
+    if (multiCredor) {
+      const keys = Array.from(new Set([templateGroup.key, ...Object.values(tplPorCredor).filter(Boolean) as string[]]));
+      return keys.map((k) => templateGroups.find((g) => g.key === k)).filter(Boolean) as TemplateGroup[];
+    }
     const extras = variantesExtraKeys
       .map((k) => templateGroups.find((g) => g.key === k))
       .filter(Boolean) as TemplateGroup[];
     return [templateGroup, ...extras];
-  }, [templateGroup, variantesExtraKeys, templateGroups]);
+  }, [templateGroup, variantesExtraKeys, templateGroups, multiCredor, tplPorCredor]);
 
   // Quando os dois templates de acordo estão selecionados, a coluna Credor
   // roteia cada cliente para o template correto em vez de alternar por sorteio.
   const templatePorCredor = useMemo(() => {
+    if (multiCredor) return true;
     const nomes = new Set(variantesGroups.map((g) => g.nome));
     const temUme = nomes.has("autorizado_a_vista_ou_parcelado_ume");
     const temNovoMundo = nomes.has("autorizado_a_vista_ou_parcelado");
     return temUme && temNovoMundo;
-  }, [variantesGroups]);
+  }, [variantesGroups, multiCredor]);
 
   const credorDoTemplate = (nome: string): CredorSlug | null => {
     if (nome === "autorizado_a_vista_ou_parcelado_ume") return "ume";
