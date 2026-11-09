@@ -1763,7 +1763,7 @@ export default function EnvioMeta() {
             <Button size="sm" variant="outline" disabled={loading} onClick={carregar}>
               <RefreshCw className="h-3 w-3 mr-1" /> Atualizar disponibilidade
             </Button>
-            {templateGroup && (
+            {templateGroups.length > 0 && (
               <div className="rounded-md border p-3 space-y-2 bg-muted/30">
                 <div className="flex items-center justify-between gap-2">
                   <div>
@@ -1785,24 +1785,38 @@ export default function EnvioMeta() {
                   <div className="space-y-2">
                     {CREDOR_MARCAS_LISTA.map((cm) => {
                       const qtd = recipients.filter((c) => credorByTel[telSuffix8(c.telefone)] === cm.slug).length;
-                      const opcoes = [templateGroup, ...variantesCompativeis];
+                      const opcoes = templateGroup ? [templateGroup, ...variantesCompativeis] : templateGroups;
                       const gSel = tplPorCredor[cm.slug] ? opcoes.find((g) => g?.key === tplPorCredor[cm.slug]) : undefined;
                       return (
                         <div key={cm.slug}>
                           <div className="flex items-center gap-2">
                           <span className="text-sm w-28 shrink-0">{cm.nome}</span>
-                          <Select
-                            value={tplPorCredor[cm.slug] || "__none__"}
-                            onValueChange={(v) => setTplPorCredor((p) => ({ ...p, [cm.slug]: v === "__none__" ? undefined : v }))}
-                          >
-                            <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">Não enviar para este credor</SelectItem>
-                              {opcoes.map((g) => (
-                                <SelectItem key={g.key} value={g.key}>{g.nome}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex-1 min-w-0">
+                            <TemplateFavoriteSelect
+                              tipo="meta"
+                              searchContent
+                              className="min-h-8 h-8 text-xs"
+                              placeholder="Não enviar para este credor"
+                              searchPlaceholder="Pesquisar template pelo nome"
+                              value={tplPorCredor[cm.slug] || ""}
+                              onValueChange={(v) => {
+                                setTplPorCredor((p) => ({ ...p, [cm.slug]: v || undefined }));
+                                if (v && !templateId) setTemplateId(v);
+                              }}
+                              options={opcoes.map((g) => ({
+                                value: g.key,
+                                nome: g.nome,
+                                idioma: g.idioma,
+                                descricao: g.sample.body_text?.trim() || null,
+                              }))}
+                            />
+                          </div>
+                          {tplPorCredor[cm.slug] && (
+                            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" title="Não enviar para este credor"
+                              onClick={() => setTplPorCredor((p) => ({ ...p, [cm.slug]: undefined }))}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{qtd} contato(s)</Badge>
                           </div>
                           {gSel && (
@@ -1826,7 +1840,7 @@ export default function EnvioMeta() {
                       );
                     })}
                     <p className="text-[11px] text-muted-foreground">
-                      Só aparecem templates com {templateGroup.varsCount} variável{templateGroup.varsCount === 1 ? "" : "is"}, igual ao template principal, para os dados da planilha servirem a todos. Importe a planilha com a coluna Credor.
+                      {templateGroup ? <>Só aparecem templates com {templateGroup.varsCount} variável{templateGroup.varsCount === 1 ? "" : "is"}</> : <>Depois do primeiro template escolhido, só aparecem templates com a mesma quantidade de variáveis</>}, igual ao template principal, para os dados da planilha servirem a todos. Importe a planilha com a coluna Credor.
                     </p>
                   </div>
                 )}
