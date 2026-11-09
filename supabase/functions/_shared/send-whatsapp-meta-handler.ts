@@ -639,7 +639,8 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
       // Último recurso para header IMAGE sem URL cadastrada: usa a imagem do
       // template mestre (a mesma aprovada pela Meta), via link assinado.
       if (getHeaderFormat(template) === 'IMAGE' &&
-          !(typeof vars._header_image_url === 'string' && vars._header_image_url.trim())) {
+          (vars._header_image_auto === true ||
+            !(typeof vars._header_image_url === 'string' && vars._header_image_url.trim()))) {
         const { data: mestre } = await supabase.from('meta_templates_mestre')
           .select('cabecalho_media_url').eq('nome', template.nome_template)
           .eq('idioma', template.idioma).not('cabecalho_media_url', 'is', null).limit(1).maybeSingle();
@@ -648,6 +649,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
             .createSignedUrl(String(mestre.cabecalho_media_url), 7 * 24 * 3600);
           if (signed?.signedUrl) {
             vars._header_image_url = signed.signedUrl;
+            vars._header_image_auto = true; // link temporário: renovado a cada envio
             (template as any).variaveis = vars;
           }
         }
