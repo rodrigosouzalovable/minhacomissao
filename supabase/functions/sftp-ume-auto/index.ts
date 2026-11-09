@@ -67,20 +67,26 @@ Deno.serve(async (req) => {
   if (!pasta) return json({ error: 'Pasta inválida' }, 400);
   const continuar = body?.continuar === true;
 
-  const tarefa = fatia(db, pasta, continuar)
-    .then(async (r) => {
-      console.log('sftp-ume-auto', JSON.stringify(r));
-      if (r.proxima) {
-        await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/sftp-ume-auto`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ pasta, continuar: true }),
-        }).then((x) => x.body?.cancel()).catch((e) => console.error('encadear', e));
-      }
-    });
+  if (admin && !continuar) return json({ error: 'Admins só podem enviar arquivo ou continuar' }, 400);
+  const tarefa = fatia(db, pasta, continuar).then((r) => proxima(r, pasta, token));
   // deno-lint-ignore no-explicit-any
   (globalThis as any).EdgeRuntime?.waitUntil(tarefa);
   return json({ ok: true, iniciado: pasta }, 202);
 });
+
+async function proxima(r: Record<string, unknown>, pasta: string, token: string) {
+  console.log('sftp-ume-auto', JSON.stringify(r));
+  if (!r.proxima) return;
+  await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/sftp-ume-auto`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ pasta, continuar: true }),
+  }).then((x) => x.body?.cancel()).catch((e) => console.error('encadear', e));
+}
+
+// deno-lint-ignore no-explicit-any
+async function encadear(db: any, pasta: string, token: string) {
+  return proxima({ proxima: true, pasta }, pasta, token);
+}
 
 // deno-lint-ignore no-explicit-any
 async function fatia(db: any, pasta: string, continuar: boolean): Promise<Record<string, unknown>> {
