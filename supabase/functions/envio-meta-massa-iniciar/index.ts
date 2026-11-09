@@ -567,9 +567,24 @@ Deno.serve(async (req) => {
 
     // Insere itens em lotes de 500 para não estourar payload.
     // Em modo rajada: pré-atribui instância em round-robin para permitir workers paralelos.
+    // Credor do acordo ativo (por CPF) prevalece sobre o credor da planilha.
+    const empresaPorCpf = new Map<string, string>();
+    {
+      const cpfs = [...new Set(clientesEnvio.map((c: any) => soDigitos(c.cpf)).filter((d) => d.length === 11))];
+      const fmt = (d: string) => `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+      for (let k = 0; k < cpfs.length; k += 300) {
+        const lote = cpfs.slice(k, k + 300);
+        const { data: acs, error: acErr } = await supabase.from('acordos')
+          .select('cliente_cpf, empresa').eq('status', 'ativo')
+          .in('cliente_cpf', [...lote, ...lote.map(fmt)]);
+        if (acErr) { console.error('[iniciar] credor por acordo falhou', acErr); break; }
+        for (const a of acs || []) if (a.empresa) empresaPorCpf.set(soDigitos(a.cliente_cpf), a.empresa);
+      }
+    }
     const CHUNK = 500;
     for (let i = 0; i < clientesEnvio.length; i += CHUNK) {
-      const slice = clientesEnvio.slice(i, i + CHUNK).map((c, idx) => {
+      const slice = clientesEnvio.slice(i, i + CHUNK).map((c0, idx) => {
+        const c = aplicarCredorDoAcordo(c0 as any, empresaPorCpf.get(soDigitos((c0 as any).cpf))) as typeof c0;
         const globalIdx = i + idx;
         const instId = modoRajada
           ? instanciaIdsFiltradas[globalIdx % instanciaIdsFiltradas.length]
