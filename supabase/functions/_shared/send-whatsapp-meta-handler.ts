@@ -636,6 +636,27 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
         (template as any).variaveis = vars;
       }
 
+      // Último recurso para header IMAGE sem URL cadastrada: usa a imagem do
+      // template mestre (a mesma aprovada pela Meta), via link assinado.
+      if (getHeaderFormat(template) === 'IMAGE' &&
+          !(typeof vars._header_image_url === 'string' && vars._header_image_url.trim())) {
+        const { data: mestre } = await supabase.from('meta_templates_mestre')
+          .select('cabecalho_media_url').eq('nome', template.nome_template)
+          .eq('idioma', template.idioma).not('cabecalho_media_url', 'is', null).limit(1).maybeSingle();
+        if (mestre?.cabecalho_media_url) {
+          const { data: signed } = await supabase.storage.from('meta-template-media')
+            .createSignedUrl(String(mestre.cabecalho_media_url), 7 * 24 * 3600);
+          if (signed?.signedUrl) {
+            vars._header_image_url = signed.signedUrl;
+            (template as any).variaveis = vars;
+            // Persiste para os próximos envios desta e das demais instâncias.
+            await supabase.from('meta_whatsapp_templates')
+              .update({ variaveis: { ...(registeredTemplate?.variaveis || {}), _header_image_url: signed.signedUrl } })
+              .eq('nome_template', template.nome_template).eq('idioma', template.idioma).eq('id', template.id);
+          }
+        }
+      }
+
     } catch (e) {
       console.log('[send-whatsapp-meta] fallback header/components falhou:', String(e).slice(0, 200));
     }
