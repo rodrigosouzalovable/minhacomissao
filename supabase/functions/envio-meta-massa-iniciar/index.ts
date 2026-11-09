@@ -5,6 +5,7 @@ import { calcularJanelaEnvio } from '../_shared/metaJanelaEnvio.ts';
 import { instanciasLiberadasThiago } from '../_shared/thiago-meta-override.ts';
 import { isDisplayNameOrQualityRestriction, isNovoMundo3144 } from '../_shared/novo-mundo-3144.ts';
 import { telefoneMeta } from '../_shared/meta-destinatario.ts';
+import { aplicarCredorDoAcordo, soDigitos } from '../_shared/credor-acordo.ts';
 import { classifyMessagingHealth, hasBan, isQualityOnlyHold } from '../_shared/meta-messaging-health.ts';
 import { CAMPAIGN_IMAGE_BUCKET, campaignImagePathAllowed, templateHasImage, validateCampaignImageFile } from '../_shared/meta-campaign-image.ts';
 
