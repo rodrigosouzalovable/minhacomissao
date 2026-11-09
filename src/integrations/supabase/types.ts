@@ -10818,18 +10818,21 @@ export type Database = {
       ume_proposta_modelos: {
         Row: {
           atualizado_em: string
+          credor: string
           opcoes: Json | null
           texto: string
           user_id: string
         }
         Insert: {
           atualizado_em?: string
+          credor?: string
           opcoes?: Json | null
           texto: string
           user_id: string
         }
         Update: {
           atualizado_em?: string
+          credor?: string
           opcoes?: Json | null
           texto?: string
           user_id?: string
