@@ -622,6 +622,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
           const sv: any = (s as any).variaveis || {};
           if (!hasImage && typeof sv._header_image_url === 'string' && sv._header_image_url.trim()) {
             vars._header_image_url = sv._header_image_url;
+            if (sv._header_image_auto === true) vars._header_image_auto = true;
           }
           if (!hasComponents && Array.isArray(sv._components) && sv._components.length > 0) {
             vars._components = sv._components;
@@ -634,6 +635,25 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
           if (doneImage && doneComps) break;
         }
         (template as any).variaveis = vars;
+      }
+
+      // Último recurso para header IMAGE sem URL cadastrada: usa a imagem do
+      // template mestre (a mesma aprovada pela Meta), via link assinado.
+      if (getHeaderFormat(template) === 'IMAGE' &&
+          (vars._header_image_auto === true ||
+            !(typeof vars._header_image_url === 'string' && vars._header_image_url.trim()))) {
+        const { data: mestre } = await supabase.from('meta_templates_mestre')
+          .select('cabecalho_media_url').eq('nome', template.nome_template)
+          .eq('idioma', template.idioma).not('cabecalho_media_url', 'is', null).limit(1).maybeSingle();
+        if (mestre?.cabecalho_media_url) {
+          const { data: signed } = await supabase.storage.from('meta-template-media')
+            .createSignedUrl(String(mestre.cabecalho_media_url), 7 * 24 * 3600);
+          if (signed?.signedUrl) {
+            vars._header_image_url = signed.signedUrl;
+            vars._header_image_auto = true; // link temporário: renovado a cada envio
+            (template as any).variaveis = vars;
+          }
+        }
       }
 
     } catch (e) {
