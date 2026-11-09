@@ -35,7 +35,32 @@ Deno.serve(async (req) => {
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
   const { data: ok } = await db.rpc('sftp_ume_auto_autorizada', { p_token: token });
-  if (!ok) return json({ error: 'Não autorizado' }, 401);
+  let admin = false;
+  if (!ok) {
+    const { data: u } = await db.auth.getUser(token);
+    if (u?.user) { const { data: r } = await db.rpc('has_role', { _user_id: u.user.id, _role: 'admin' }); admin = !!r; }
+    if (!admin) return json({ error: 'Não autorizado' }, 401);
+  }
+
+  // Arquivos grandes demais para o download dentro do tempo limite: um admin envia o CSV já baixado
+  // do SFTP, que segue exatamente o mesmo processamento em fatias da rotina automática.
+  const url = new URL(req.url);
+  if (url.searchParams.get('acao') === 'enviar_arquivo') {
+    const p = url.searchParams.get('pasta') ?? '';
+    const arquivo = url.searchParams.get('arquivo') ?? '';
+    if (!PASTAS_AUTO.includes(p) || !/^[\w.-]+\.(csv|txt)$/i.test(arquivo)) return json({ error: 'Parâmetros inválidos' }, 400);
+    const dados = new Uint8Array(await req.arrayBuffer());
+    if (!dados.length) return json({ error: 'Arquivo vazio' }, 400);
+    const { error: eu } = await db.storage.from(BUCKET).upload(tmp(p), new Blob([dados], { type: 'text/csv' }), { upsert: true });
+    if (eu) return json({ error: `temporário: ${eu.message}` }, 500);
+    await db.from('sftp_ume_auto_progresso').upsert({ pasta: p, arquivo, tamanho: dados.length,
+      modificado: Number(url.searchParams.get('modificado') ?? Date.now()), posicao: 0, data_lote: null, carteira: null,
+      total_linhas: 0, clientes: 0, parcelas: 0, baixas: [], status: 'processando', erro: null, atualizado_em: new Date().toISOString() });
+    const tarefa = encadear(db, p, token);
+    // deno-lint-ignore no-explicit-any
+    (globalThis as any).EdgeRuntime?.waitUntil(tarefa);
+    return json({ ok: true, recebido: dados.length }, 202);
+  }
 
   const body = await req.json().catch(() => ({}));
   const pasta = PASTAS_AUTO.includes(body?.pasta) ? body.pasta as string : null;
