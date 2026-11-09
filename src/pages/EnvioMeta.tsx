@@ -1111,7 +1111,22 @@ export default function EnvioMeta() {
     if (!templateGroup) m.push("Selecione um template aprovado.");
     if (instanciaIds.length === 0) m.push("Selecione ao menos uma instância.");
     if (recipientsRaw.trim().length === 0) m.push("Importe a planilha com os destinatários.");
-    if (templatePorCredor && recipients.length > 0) {
+    if (multiCredor) {
+      const escolhidos = Object.values(tplPorCredor).filter(Boolean);
+      if (escolhidos.length === 0) m.push("Escolha o template de pelo menos um credor.");
+      const semTpl = new Map<string, number>();
+      let semCredorMulti = 0;
+      for (const c of recipients) {
+        const cr = credorByTel[telSuffix8(c.telefone)];
+        if (!cr) { semCredorMulti++; continue; }
+        if (!tplPorCredor[cr]) semTpl.set(cr, (semTpl.get(cr) || 0) + 1);
+      }
+      if (semCredorMulti > 0) m.push(`${semCredorMulti} contato(s) sem credor reconhecido — marque a coluna Credor na importação.`);
+      for (const [cr, n] of semTpl) {
+        const nome = CREDOR_MARCAS_LISTA.find((x) => x.slug === cr)?.nome || cr;
+        m.push(`${n} contato(s) da ${nome} sem template escolhido.`);
+      }
+    } else if (templatePorCredor && recipients.length > 0) {
       const semCredor = recipients.filter((c) => !credorByTel[telSuffix8(c.telefone)]).length;
       if (semCredor > 0) m.push(`Mapeie a coluna Credor para ${semCredor} linha(s) — UME usa o template com sufixo _ume e Novo Mundo usa o template padrão.`);
     }
@@ -1121,7 +1136,7 @@ export default function EnvioMeta() {
       );
     }
     return m;
-  }, [templateGroup, instanciaIds, recipientsRaw, recipients, credorByTel, templatePorCredor, instanciasIncompatíveis]);
+  }, [templateGroup, instanciaIds, recipientsRaw, recipients, credorByTel, templatePorCredor, instanciasIncompatíveis, multiCredor, tplPorCredor]);
 
   const templateIdByInstance = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -1497,20 +1512,25 @@ export default function EnvioMeta() {
     }
 
     // Variação de templates: cada variante leva seu próprio mapa instância -> template_id
-    const templateVariantes = variantesGroups.map((g) => {
+    const varianteDe = (g: TemplateGroup, credorV: CredorSlug | null) => {
       const byInst: Record<string, string> = {};
       for (const r of g.rows) {
         if (r.status === "approved" && instanciasComCota.includes(r.instancia_id)) {
           byInst[r.instancia_id] = r.id;
         }
       }
-      return {
-        template_id: g.sample.id,
-        nome_template: g.nome,
-        template_id_by_instance: byInst,
-        credor: templatePorCredor ? credorDoTemplate(g.nome) : null,
-      };
-    });
+      return { template_id: g.sample.id, nome_template: g.nome, template_id_by_instance: byInst, credor: credorV };
+    };
+    // Multi-credor: uma variante por credor; cada contato recebe só o template do seu credor.
+    const templateVariantes = multiCredor
+      ? (Object.entries(tplPorCredor) as Array<[CredorSlug, string | undefined]>)
+          .filter(([, k]) => !!k)
+          .map(([cr, k]) => {
+            const g = templateGroups.find((x) => x.key === k);
+            return g ? varianteDe(g, cr) : null;
+          })
+          .filter(Boolean) as ReturnType<typeof varianteDe>[]
+      : variantesGroups.map((g) => varianteDe(g, templatePorCredor ? credorDoTemplate(g.nome) : null));
 
     // ⚠️ Confirmação de risco — números com qualidade baixa marcados à mão
     const arriscadas = instanciasComCota
@@ -1569,7 +1589,7 @@ export default function EnvioMeta() {
       semWhatsapp: semWa,
       erroValidacao: erroVal,
       templateIdByInstance,
-      templateVariantes: templateVariantes.length > 1 ? templateVariantes : undefined,
+      templateVariantes: templateVariantes.length > 1 || (multiCredor && templateVariantes.length > 0) ? templateVariantes : undefined,
 
       nomeCampanha: nomeCampanha.trim() || undefined,
       folderId: folderId === "__default__" ? null : folderId,
