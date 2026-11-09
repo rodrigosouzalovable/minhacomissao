@@ -15,6 +15,8 @@ type Props = {
   cpca: number;
   valor: number;
   valorEm?: string | null;
+  valorMes?: number | null;
+  mesFmt?: string;
   onAtualizarValor?: () => void;
   atualizandoValor?: boolean;
 };
@@ -25,7 +27,7 @@ const pctTxt = (num: number, den: number) =>
   den > 0 ? `${((num / den) * 100).toFixed(1).replace('.', ',')}%` : '0%';
 
 export function FunilAcionamentosCard({
-  dataFmt, parcial, syncEm, tentativas, whatsapp, cpc, cpca, valor, valorEm, onAtualizarValor, atualizandoValor,
+  dataFmt, parcial, syncEm, tentativas, whatsapp, cpc, cpca, valor, valorEm, valorMes, mesFmt, onAtualizarValor, atualizandoValor,
 }: Props) {
   const etapas = [
     { label: 'Acionamentos', valor: tentativas, base: tentativas, icon: Megaphone, tone: 'bg-primary' },
@@ -58,6 +60,14 @@ export function FunilAcionamentosCard({
                 <p className="text-[10px] text-muted-foreground">
                   às {new Date(valorEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </p>
+              )}
+              {valorMes != null && (
+                <div className="mt-1 border-t pt-1">
+                  <p className="text-[11px] text-muted-foreground">
+                    Acumulado do mês{mesFmt ? ` (${mesFmt})` : ''}
+                  </p>
+                  <p className="text-sm font-semibold">{brl(valorMes)}</p>
+                </div>
               )}
             </div>
             {onAtualizarValor && (
