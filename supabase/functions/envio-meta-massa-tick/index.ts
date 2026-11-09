@@ -93,7 +93,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // (isso fazia cliente UME receber o layout Novo Mundo).
 function resolverTemplateId(job: any, instId: string, varianteIdx: number, credor?: string | null): string | null {
   const variantes = Array.isArray(job?.template_variantes) ? job.template_variantes : [];
-  const cred = credor === 'ume' || credor === 'novo_mundo' ? credor : null;
+  const cred = credor === 'ume' || credor === 'novo_mundo' || credor === 'odres_cred' ? credor : null;
   if (cred) {
     const porCredor = variantes.find((v: any) => v?.credor === cred);
     if (porCredor) {
