@@ -69,12 +69,12 @@ Deno.serve(async (req) => {
     // Variação de templates: round-robin ou roteamento determinístico por credor.
     const templateVariantes = (Array.isArray(body?.templateVariantes) ? body.templateVariantes : []) as Array<{
       template_id: string; nome_template?: string; template_id_by_instance?: Record<string, string>;
-      credor?: 'novo_mundo' | 'ume' | null;
+      credor?: 'novo_mundo' | 'ume' | 'odres_cred' | null;
     }>;
 
     const nomeCampanha = typeof body?.nomeCampanha === 'string' ? body.nomeCampanha.trim().slice(0, 120) : null;
     const folderId: string | null = typeof body?.folderId === 'string' && body.folderId ? body.folderId : null;
-    const credorCampanha: string | null = body?.credor === 'novo_mundo' || body?.credor === 'ume' ? body.credor : null;
+    const credorCampanha: string | null = body?.credor === 'novo_mundo' || body?.credor === 'ume' || body?.credor === 'odres_cred' ? body.credor : null;
     const custo = body?.custoEstimativa && typeof body.custoEstimativa === 'object' ? body.custoEstimativa : null;
     // Agendamento: ISO UTC no futuro. Job criado como 'rodando', mas só começa em proximo_em.
     let agendarParaMs: number | null = null;
@@ -574,10 +574,10 @@ Deno.serve(async (req) => {
         const instId = modoRajada
           ? instanciaIdsFiltradas[globalIdx % instanciaIdsFiltradas.length]
           : null;
-        const credorItem = (c.credor === 'novo_mundo' || c.credor === 'ume') ? c.credor : credorCampanha;
+        const credorItem = (c.credor === 'novo_mundo' || c.credor === 'ume' || c.credor === 'odres_cred') ? c.credor : credorCampanha;
         // Pré-resolve o template do credor da linha (quando a instância já é conhecida).
         let tplResolvido: string | null = null;
-        if (instId && (credorItem === 'ume' || credorItem === 'novo_mundo')) {
+        if (instId && (credorItem === 'ume' || credorItem === 'novo_mundo' || credorItem === 'odres_cred')) {
           const v = templateVariantes.find((x) => x?.credor === credorItem);
           if (v) tplResolvido = v.template_id_by_instance?.[instId] || v.template_id || null;
         }

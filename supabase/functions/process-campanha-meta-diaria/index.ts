@@ -32,7 +32,7 @@ async function sleep(ms: number) {
 // estiver configurado; caso contrário mantém a alternância existente.
 function resolverTemplateId(campanha: any, instId: string, varianteIdx: number, credor?: string | null): string {
   const variantes = Array.isArray(campanha?.template_variantes) ? campanha.template_variantes : [];
-  const credorRoteavel = credor === 'ume' || credor === 'novo_mundo' ? credor : null;
+  const credorRoteavel = credor === 'ume' || credor === 'novo_mundo' || credor === 'odres_cred' ? credor : null;
   const porCredor = credorRoteavel
     ? variantes.find((v: any) => v?.credor === credorRoteavel)
     : null;

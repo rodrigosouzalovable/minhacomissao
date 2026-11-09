@@ -272,6 +272,9 @@ export default function EnvioMeta() {
   useEffect(() => { setCampaignImage(null); setImageUploading(false); }, [templateId]);
   // Variação de templates: chaves adicionais (além do principal) que entram no round-robin
   const [variantesExtraKeys, setVariantesExtraKeys] = useState<string[]>([]);
+  // Campanha multi-credor: uma lista com todos os credores e um template por credor.
+  const [multiCredor, setMultiCredor] = useState(false);
+  const [tplPorCredor, setTplPorCredor] = useState<Partial<Record<CredorSlug, string>>>({});
 
   const [instanciaIds, setInstanciaIds] = useState<string[]>([]);
   // Also removes stale selections when a phone is edited or instances reload.
@@ -1050,20 +1053,25 @@ export default function EnvioMeta() {
   // Grupos que entram no round-robin de templates (principal + extras)
   const variantesGroups = useMemo<TemplateGroup[]>(() => {
     if (!templateGroup) return [];
+    if (multiCredor) {
+      const keys = Array.from(new Set([templateGroup.key, ...Object.values(tplPorCredor).filter(Boolean) as string[]]));
+      return keys.map((k) => templateGroups.find((g) => g.key === k)).filter(Boolean) as TemplateGroup[];
+    }
     const extras = variantesExtraKeys
       .map((k) => templateGroups.find((g) => g.key === k))
       .filter(Boolean) as TemplateGroup[];
     return [templateGroup, ...extras];
-  }, [templateGroup, variantesExtraKeys, templateGroups]);
+  }, [templateGroup, variantesExtraKeys, templateGroups, multiCredor, tplPorCredor]);
 
   // Quando os dois templates de acordo estão selecionados, a coluna Credor
   // roteia cada cliente para o template correto em vez de alternar por sorteio.
   const templatePorCredor = useMemo(() => {
+    if (multiCredor) return true;
     const nomes = new Set(variantesGroups.map((g) => g.nome));
     const temUme = nomes.has("autorizado_a_vista_ou_parcelado_ume");
     const temNovoMundo = nomes.has("autorizado_a_vista_ou_parcelado");
     return temUme && temNovoMundo;
-  }, [variantesGroups]);
+  }, [variantesGroups, multiCredor]);
 
   const credorDoTemplate = (nome: string): CredorSlug | null => {
     if (nome === "autorizado_a_vista_ou_parcelado_ume") return "ume";
@@ -1103,7 +1111,22 @@ export default function EnvioMeta() {
     if (!templateGroup) m.push("Selecione um template aprovado.");
     if (instanciaIds.length === 0) m.push("Selecione ao menos uma instância.");
     if (recipientsRaw.trim().length === 0) m.push("Importe a planilha com os destinatários.");
-    if (templatePorCredor && recipients.length > 0) {
+    if (multiCredor) {
+      const escolhidos = Object.values(tplPorCredor).filter(Boolean);
+      if (escolhidos.length === 0) m.push("Escolha o template de pelo menos um credor.");
+      const semTpl = new Map<string, number>();
+      let semCredorMulti = 0;
+      for (const c of recipients) {
+        const cr = credorByTel[telSuffix8(c.telefone)];
+        if (!cr) { semCredorMulti++; continue; }
+        if (!tplPorCredor[cr]) semTpl.set(cr, (semTpl.get(cr) || 0) + 1);
+      }
+      if (semCredorMulti > 0) m.push(`${semCredorMulti} contato(s) sem credor reconhecido — marque a coluna Credor na importação.`);
+      for (const [cr, n] of semTpl) {
+        const nome = CREDOR_MARCAS_LISTA.find((x) => x.slug === cr)?.nome || cr;
+        m.push(`${n} contato(s) da ${nome} sem template escolhido.`);
+      }
+    } else if (templatePorCredor && recipients.length > 0) {
       const semCredor = recipients.filter((c) => !credorByTel[telSuffix8(c.telefone)]).length;
       if (semCredor > 0) m.push(`Mapeie a coluna Credor para ${semCredor} linha(s) — UME usa o template com sufixo _ume e Novo Mundo usa o template padrão.`);
     }
@@ -1113,7 +1136,7 @@ export default function EnvioMeta() {
       );
     }
     return m;
-  }, [templateGroup, instanciaIds, recipientsRaw, recipients, credorByTel, templatePorCredor, instanciasIncompatíveis]);
+  }, [templateGroup, instanciaIds, recipientsRaw, recipients, credorByTel, templatePorCredor, instanciasIncompatíveis, multiCredor, tplPorCredor]);
 
   const templateIdByInstance = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -1489,20 +1512,25 @@ export default function EnvioMeta() {
     }
 
     // Variação de templates: cada variante leva seu próprio mapa instância -> template_id
-    const templateVariantes = variantesGroups.map((g) => {
+    const varianteDe = (g: TemplateGroup, credorV: CredorSlug | null) => {
       const byInst: Record<string, string> = {};
       for (const r of g.rows) {
         if (r.status === "approved" && instanciasComCota.includes(r.instancia_id)) {
           byInst[r.instancia_id] = r.id;
         }
       }
-      return {
-        template_id: g.sample.id,
-        nome_template: g.nome,
-        template_id_by_instance: byInst,
-        credor: templatePorCredor ? credorDoTemplate(g.nome) : null,
-      };
-    });
+      return { template_id: g.sample.id, nome_template: g.nome, template_id_by_instance: byInst, credor: credorV };
+    };
+    // Multi-credor: uma variante por credor; cada contato recebe só o template do seu credor.
+    const templateVariantes = multiCredor
+      ? (Object.entries(tplPorCredor) as Array<[CredorSlug, string | undefined]>)
+          .filter(([, k]) => !!k)
+          .map(([cr, k]) => {
+            const g = templateGroups.find((x) => x.key === k);
+            return g ? varianteDe(g, cr) : null;
+          })
+          .filter(Boolean) as ReturnType<typeof varianteDe>[]
+      : variantesGroups.map((g) => varianteDe(g, templatePorCredor ? credorDoTemplate(g.nome) : null));
 
     // ⚠️ Confirmação de risco — números com qualidade baixa marcados à mão
     const arriscadas = instanciasComCota
@@ -1561,7 +1589,7 @@ export default function EnvioMeta() {
       semWhatsapp: semWa,
       erroValidacao: erroVal,
       templateIdByInstance,
-      templateVariantes: templateVariantes.length > 1 ? templateVariantes : undefined,
+      templateVariantes: templateVariantes.length > 1 || (multiCredor && templateVariantes.length > 0) ? templateVariantes : undefined,
 
       nomeCampanha: nomeCampanha.trim() || undefined,
       folderId: folderId === "__default__" ? null : folderId,
@@ -1722,8 +1750,58 @@ export default function EnvioMeta() {
             <Button size="sm" variant="outline" disabled={loading} onClick={carregar}>
               <RefreshCw className="h-3 w-3 mr-1" /> Atualizar disponibilidade
             </Button>
-            {/* Variação de templates — só templates com a MESMA quantidade de variáveis */}
             {templateGroup && (
+              <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium">Campanha com vários credores</p>
+                    <p className="text-xs text-muted-foreground">
+                      Uma única lista com Novo Mundo, UME e Odres Cred. Cada contato recebe só o template do seu credor, e os números não disparam duas campanhas ao mesmo tempo.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={multiCredor}
+                    onCheckedChange={(v) => {
+                      setMultiCredor(v);
+                      if (v) setCredorObrigatorio(true);
+                    }}
+                    aria-label="Campanha com vários credores"
+                  />
+                </div>
+                {multiCredor && (
+                  <div className="space-y-2">
+                    {CREDOR_MARCAS_LISTA.map((cm) => {
+                      const qtd = recipients.filter((c) => credorByTel[telSuffix8(c.telefone)] === cm.slug).length;
+                      const opcoes = [templateGroup, ...variantesCompativeis];
+                      return (
+                        <div key={cm.slug} className="flex items-center gap-2">
+                          <span className="text-sm w-28 shrink-0">{cm.nome}</span>
+                          <Select
+                            value={tplPorCredor[cm.slug] || "__none__"}
+                            onValueChange={(v) => setTplPorCredor((p) => ({ ...p, [cm.slug]: v === "__none__" ? undefined : v }))}
+                          >
+                            <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Não enviar para este credor</SelectItem>
+                              {opcoes.map((g) => (
+                                <SelectItem key={g.key} value={g.key}>{g.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{qtd} contato(s)</Badge>
+                        </div>
+                      );
+                    })}
+                    <p className="text-[11px] text-muted-foreground">
+                      Só aparecem templates com {templateGroup.varsCount} variável{templateGroup.varsCount === 1 ? "" : "is"}, igual ao template principal, para os dados da planilha servirem a todos. Importe a planilha com a coluna Credor.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Variação de templates — só templates com a MESMA quantidade de variáveis */}
+            {templateGroup && !multiCredor && (
               <div className="rounded-md border p-3 space-y-2 bg-muted/30">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="text-sm font-medium">Variação de templates (opcional)</p>
