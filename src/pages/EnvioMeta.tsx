@@ -1340,14 +1340,17 @@ export default function EnvioMeta() {
         .map((id) => instancias.find((x) => x.id === id)?.nome || id)
         .slice(0, 5)
         .join(", ");
-      return toast.error(
-        `Ative o pool antes de iniciar a campanha. ${foraDoPool.length} instância(s) selecionada(s) estão fora do pool: ${nomes}. A seleção foi mantida.`,
+      if (foraDoPool.length >= filteredInstanciaIds.length) {
+        return toast.error(
+          `Nenhum número disponível: todos os selecionados estão fora do pool (${nomes}). Ative o pool para iniciar a campanha.`,
+        );
+      }
+      toast.warning(
+        `${foraDoPool.length} número(s) fora do pool foram ignorados nesta campanha: ${nomes}.`,
       );
     }
 
-    // O estado do nome de exibição é informativo. A tentativa segue e qualquer
-    // recusa real da Meta é registrada pelo envio.
-    const idsOk = filteredInstanciaIds;
+    const idsOk = filteredInstanciaIds.filter((id) => !foraDoPool.includes(id));
 
 
 
