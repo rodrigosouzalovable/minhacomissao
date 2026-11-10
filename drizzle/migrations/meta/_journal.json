@@ -1660,6 +1660,13 @@
       "when": 1794317203442,
       "tag": "0236_prospeccao_b2b",
       "breakpoints": true
+    },
+    {
+      "idx": 237,
+      "version": "7",
+      "when": 1794334864459,
+      "tag": "0237_sftp_ume_registrar_valor_parcela",
+      "breakpoints": true
     }
   ]
 }
