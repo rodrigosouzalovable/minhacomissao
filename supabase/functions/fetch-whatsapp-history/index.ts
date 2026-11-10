@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, callerCanSeeRows, forbidden } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -14,12 +14,30 @@ Deno.serve(async (req) => {
   if (__caller instanceof Response) return __caller;
 
   try {
-    const { server_url, instance_token, instancia_id, telefone } = await req.json();
+    const { instancia_id, telefone } = await req.json();
 
-    if (!server_url || !instance_token || !instancia_id || !telefone) {
+    if (!instancia_id || !telefone) {
       return new Response(
-        JSON.stringify({ error: "Parâmetros obrigatórios: server_url, instance_token, instancia_id, telefone" }),
+        JSON.stringify({ error: "Parâmetros obrigatórios: instancia_id, telefone" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (!(await callerCanSeeRows(__caller, "user_whatsapp_instances", [instancia_id]))) {
+      return forbidden("Sem acesso a esta instância", corsHeaders);
+    }
+    // Server URL and token always come from the stored instance, never from the request.
+    const instClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: instRow } = await instClient
+      .from("user_whatsapp_instances")
+      .select("server_url, instance_token")
+      .eq("id", instancia_id)
+      .maybeSingle();
+    const server_url: string = instRow?.server_url || "";
+    const instance_token: string = instRow?.instance_token || "";
+    if (!server_url || !instance_token) {
+      return new Response(
+        JSON.stringify({ error: "Instância não encontrada" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

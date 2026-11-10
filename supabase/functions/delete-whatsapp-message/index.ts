@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, callerCanSeeRows, forbidden } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -36,6 +36,10 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Mensagem não encontrada' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+    // The caller must be able to see this message under their own access rules.
+    if (!(await callerCanSeeRows(__caller, 'whatsapp_mensagens', [msg.id]))) {
+      return forbidden('Sem acesso a esta mensagem', corsHeaders);
     }
 
     let deletedOnWhatsApp = false;

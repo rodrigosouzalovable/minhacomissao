@@ -3,7 +3,7 @@
 // Marks ALL imported messages as unread (lida=false). Runs at most ONCE per instance,
 // controlled by user_whatsapp_instances.historico_inicial_importado_em.
 
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, callerCanSeeRows, forbidden } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -230,6 +230,9 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "instancia_id é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+    if (!(await callerCanSeeRows(__caller, "user_whatsapp_instances", [instancia_id]))) {
+      return forbidden("Sem acesso a esta instância", corsHeaders);
     }
 
     const supabase = createClient(
