@@ -1368,7 +1368,7 @@ serve(async (req) => {
           if (!upErr) {
             const { data: signedData } = await supabase.storage
               .from('inbox-media')
-              .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+              .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
             inboxPermanentMediaUrl = signedData?.signedUrl || null;
             console.log(`[INBOX] ✅ Mídia salva no storage: ${storagePath} (${correctMimeType}) via ${downloadStrategy}`);
           } else {

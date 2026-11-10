@@ -246,10 +246,10 @@ async function baixarMidiaMeta(
       console.error('[MetaWebhook] falha upload mídia', upErr.message);
       return null;
     }
-    // Bucket privado: URL assinada de 1 ano (mídia é limpa pelo cleanup em 3 dias)
+    // Bucket privado: link curto (mídia é limpa em 3 dias; a tela reemite o link para quem tem acesso)
     const { data: signed } = await supabase.storage
       .from('inbox-media')
-      .createSignedUrl(path, 60 * 60 * 24 * 365);
+      .createSignedUrl(path, 60 * 60 * 24 * 7);
     return signed?.signedUrl || null;
   } catch (e) {
     console.error('[MetaWebhook] erro baixarMidiaMeta', e instanceof Error ? e.message : e);
