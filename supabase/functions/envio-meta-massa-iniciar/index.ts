@@ -569,7 +569,7 @@ Deno.serve(async (req) => {
     // Insere itens em lotes de 500 para não estourar payload.
     // Em modo rajada: pré-atribui instância em round-robin para permitir workers paralelos.
     // Credor do acordo ativo (por CPF) prevalece sobre o credor da planilha.
-    const empresaPorCpf = new Map<string, string>();
+    const empresaPorCpf = new Map<string, Set<string>>();
     {
       const cpfs = [...new Set(clientesEnvio.map((c: any) => soDigitos(c.cpf)).filter((d) => d.length === 11))];
       const fmt = (d: string) => `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
@@ -579,7 +579,11 @@ Deno.serve(async (req) => {
           .select('cliente_cpf, empresa').eq('status', 'ativo')
           .in('cliente_cpf', [...lote, ...lote.map(fmt)]);
         if (acErr) { console.error('[iniciar] credor por acordo falhou', acErr); break; }
-        for (const a of acs || []) if (a.empresa) empresaPorCpf.set(soDigitos(a.cliente_cpf), a.empresa);
+        for (const a of acs || []) if (a.empresa) {
+          const d = soDigitos(a.cliente_cpf);
+          if (!empresaPorCpf.has(d)) empresaPorCpf.set(d, new Set());
+          empresaPorCpf.get(d)!.add(a.empresa);
+        }
       }
     }
     const CHUNK = 500;
