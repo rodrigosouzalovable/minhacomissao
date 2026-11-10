@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, sanitizeChatMessages } from '../_shared/auth-guard.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -31,7 +31,8 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub;
-    const { messages } = await req.json();
+    const { messages: rawMessages } = await req.json();
+    const messages = sanitizeChatMessages(rawMessages);
 
     // Fetch all knowledge data using service role
     const adminClient = createClient(
