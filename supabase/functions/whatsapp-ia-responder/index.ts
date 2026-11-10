@@ -497,6 +497,14 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
+    // Instance ids are interpolated into query filters: accept only UUIDs.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    for (const k of ["instancia_origem_id", "instancia_destino_id"]) {
+      if (body?.[k] != null && !UUID_RE.test(String(body[k]))) {
+        return json({ error: `${k} inválido` }, 400);
+      }
+    }
+
     const sb = getSupabaseAdmin();
 
     // ========== Iniciar conversa com IA ==========
