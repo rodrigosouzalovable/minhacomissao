@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { lerArquivoSftp } from './umeSftpCsv';
 
 // Linha real do arquivo Odres de 10/11/2026: pago em 09/11/2026 a parcela que vence em 12/02/2027.
