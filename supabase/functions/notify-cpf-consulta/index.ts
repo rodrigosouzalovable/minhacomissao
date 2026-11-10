@@ -23,7 +23,26 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const cpfLimpo = (cpf || '').replace(/\D/g, '');
+    const cpfLimpo = String(cpf || '').replace(/\D/g, '');
+    const ok = (body: Record<string, unknown> = {}) => new Response(JSON.stringify({ success: true, ...body }), {
+      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+    // Public portal hook: accept only a valid CPF, shared per-IP abuse guard and one notice per CPF per 10 min.
+    if (cpfLimpo.length !== 11) return ok({ skipped: 'cpf_invalido' });
+    {
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('cf-connecting-ip') || 'unknown';
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${serviceKey}:notify-cpf:${ip}`));
+      const chave = Array.from(new Uint8Array(digest), v => v.toString(16).padStart(2, '0')).join('');
+      const { data: permitido, error: guardErr } = await supabase.rpc('portal_reservar_consulta', { p_chave: chave });
+      if (guardErr || permitido !== true) return ok({ skipped: 'limite' });
+      const { count: recentes } = await supabase
+        .from('consulta_cpf_notificacoes')
+        .select('id', { count: 'exact', head: true })
+        .eq('cpf', cpfLimpo)
+        .gte('created_at', new Date(Date.now() - 10 * 60_000).toISOString());
+      if ((recentes ?? 0) > 0) return ok({ skipped: 'duplicado' });
+    }
     const cpfFormatado = cpfLimpo.length === 11
       ? `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`
       : cpf;
@@ -146,13 +165,13 @@ _Portal de Acordos - Souza e Ribeiro_`;
       mensagem,
     });
 
-    return new Response(JSON.stringify({ success: !!result.success, ...result }), {
+    return new Response(JSON.stringify({ success: !!result.success }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Erro notify-cpf-consulta:', error);
-    return new Response(JSON.stringify({ success: false, error: String(error), fallback: true }), {
+    return new Response(JSON.stringify({ success: false, fallback: true }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
