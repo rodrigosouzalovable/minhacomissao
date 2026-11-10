@@ -88,7 +88,7 @@ async function gerarSugestoesIA(resumo: Record<string, any>): Promise<string> {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  const __caller = await requireCaller(req, { user: 'any' });
+  const __caller = await requireCaller(req, { user: 'staff' });
   if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
