@@ -1,7 +1,7 @@
 // Envia o pedido de permissão de chamada para o cliente.
 // Dentro da janela de 24h usa a mensagem interativa "call_permission_request";
 // fora da janela usa o template UTILITY com botão de permissão (nome em template).
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, asCaller } from '../_shared/auth-guard.ts';
 import {
   corsHeaders, json, service, userDaRequisicao, carregarInstancia, podeUsarInstancia,
   humanizarErroChamada, digitos, GRAPH,
@@ -30,6 +30,15 @@ Deno.serve(async (req) => {
     const userId = await userDaRequisicao(req);
     if (!(await podeUsarInstancia(supabase, userId, instanciaId))) {
       return json({ ok: false, error: 'Sem acesso a esta instância' }, 403);
+    }
+    // Users may only reach an existing conversation they can see on this number.
+    if (__caller.kind === 'user') {
+      if (!contatoId) return json({ ok: false, error: 'contato_id é obrigatório' }, 400);
+      const { data: contato } = await asCaller(__caller)
+        .from('meta_whatsapp_contatos').select('id, instancia_id, telefone').eq('id', contatoId).maybeSingle();
+      if (!contato || contato.instancia_id !== instanciaId || digitos(contato.telefone).slice(-8) !== telefone.slice(-8)) {
+        return json({ ok: false, error: 'Contato não encontrado nesta instância' }, 403);
+      }
     }
     const inst = await carregarInstancia(supabase, instanciaId);
 
