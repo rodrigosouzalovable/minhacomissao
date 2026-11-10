@@ -73,6 +73,11 @@ Deno.serve(async (req) => {
 
     // Envio de teste para um destino (grupo) específico
     if (body.action === "testar_destino") {
+      if (!__caller.isAdmin) {
+        return new Response(JSON.stringify({ error: "Apenas administradores podem testar destinos" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const jid = String(body.jid || "").trim();
       if (!jid) {
         return new Response(JSON.stringify({ error: "jid obrigatório" }), {
@@ -92,6 +97,8 @@ Deno.serve(async (req) => {
 
     const dia: string = body.dia || agora.dia;
     let notificar: boolean = body.notificar !== false;
+    // Only the scheduler, internal calls or administrators send report messages.
+    if (__caller.kind === "user" && !__caller.isAdmin) notificar = false;
     let consolidado: boolean = body.consolidado === true;
 
     // Reenvio manual (somente admin): força consolidado e ignora a trava diária
