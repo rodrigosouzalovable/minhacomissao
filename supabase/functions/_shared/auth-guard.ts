@@ -171,3 +171,15 @@ export async function resolverInstanciaUazapi(
   }
   return { ok: false, status: 403, error: 'Instância não autorizada para este usuário' };
 }
+
+/** Keeps only user/assistant chat turns with bounded text, so callers cannot inject system or tool messages. */
+export function sanitizeChatMessages(input: unknown, maxMessages = 40, maxChars = 8000): Array<{ role: 'user' | 'assistant'; content: string }> {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant'))
+    .slice(-maxMessages)
+    .map((m: any) => ({
+      role: m.role as 'user' | 'assistant',
+      content: (typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')).slice(0, maxChars),
+    }));
+}
