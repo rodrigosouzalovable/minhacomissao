@@ -54,8 +54,9 @@ export function lerArquivoSftp(conteudo: string): ArquivoSftpLido {
         contrato: txt(p[3]), vencimento: dataBR(p[5]), valor: num(p[6]) });
     }
     else if (p[0] === '08' && cpf) {
-      baixas.push({ tipo: '08', cpf, contrato: txt(p[7]), parcela_ref: txt(p[6]), vencimento: dataBR(p[4]),
-        valor: num(p[5]), data_pagamento: dataBR(p[8]), valor_pago: num(p[9]) });
+      // 08 = pagamento: borrowerId;CPF;…;data do pagamento;valor pago;…;…;vencimento da parcela;valor da parcela
+      baixas.push({ tipo: '08', cpf, contrato: txt(p[7]), parcela_ref: txt(p[6]), vencimento: dataBR(p[8]),
+        valor: num(p[9]), data_pagamento: dataBR(p[4]), valor_pago: num(p[5]) });
     } else if (p[0] === '22' && cpf) {
       baixas.push({ tipo: '22', cpf, contrato: txt(p[3]), parcela_ref: txt(p[5]), vencimento: dataBR(p[6]),
         valor: num(p[7]), data_pagamento: null, valor_pago: num(p[12]) ?? num(p[7]) });
