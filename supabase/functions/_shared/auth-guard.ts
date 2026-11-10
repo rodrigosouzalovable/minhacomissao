@@ -9,7 +9,7 @@ export type UserLevel = 'any' | 'staff' | 'admin';
 export type Caller =
   | { kind: 'service'; userId: null; isAdmin: true; isGestor: true; token: string }
   | { kind: 'scheduler'; userId: null; isAdmin: true; isGestor: true; token: string }
-  | { kind: 'user'; userId: string; isAdmin: boolean; isGestor: boolean; token: string; email: string | null };
+  | { kind: 'user'; userId: string; isAdmin: boolean; isGestor: boolean; hasRole: boolean; token: string; email: string | null };
 
 export type GuardOptions = {
   /** Allow pg_cron jobs that carry a registered scheduler token. */
@@ -66,7 +66,7 @@ export async function identifyCaller(req: Request): Promise<Caller | null> {
   const { data: roles } = await service().from('user_roles').select('role').eq('user_id', user.id);
   const set = new Set((roles || []).map((r: any) => String(r.role)));
   const isAdmin = set.has('admin');
-  return { kind: 'user', userId: user.id, isAdmin, isGestor: isAdmin || set.has('gestor'), token, email: user.email ?? null };
+  return { kind: 'user', userId: user.id, isAdmin, isGestor: isAdmin || set.has('gestor'), hasRole: set.size > 0, token, email: user.email ?? null };
 }
 
 function deny(status: number, message: string, cors?: Record<string, string>) {
@@ -86,6 +86,8 @@ export async function requireCaller(req: Request, opts: GuardOptions = {}): Prom
   }
   const level = opts.user;
   if (level === false) return deny(403, 'Acesso não permitido', opts.corsHeaders);
+  // Only provisioned team accounts (with an application role) may use backend functions.
+  if (!caller.hasRole) return deny(403, 'Acesso não permitido', opts.corsHeaders);
   if (caller.isAdmin) return caller;
   if (opts.tabs && opts.tabs.length) {
     const { data: perm } = await service().from('user_permissions').select('abas_permitidas').eq('user_id', caller.userId).maybeSingle();
