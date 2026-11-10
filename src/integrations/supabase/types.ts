@@ -9530,6 +9530,75 @@ export type Database = {
         }
         Relationships: []
       }
+      prospeccao_b2b_leads: {
+        Row: {
+          apollo_person_id: string
+          cargo: string | null
+          cidade: string | null
+          created_at: string
+          email: string | null
+          email_status: string | null
+          empresa: string | null
+          empresa_dominio: string | null
+          id: string
+          linkedin_url: string | null
+          nome: string | null
+          observacoes: string | null
+          owner_id: string
+          revelado: boolean
+          segmento: string | null
+          sobrenome: string | null
+          status: string
+          telefone: string | null
+          ultimo_contato_em: string | null
+          updated_at: string
+        }
+        Insert: {
+          apollo_person_id: string
+          cargo?: string | null
+          cidade?: string | null
+          created_at?: string
+          email?: string | null
+          email_status?: string | null
+          empresa?: string | null
+          empresa_dominio?: string | null
+          id?: string
+          linkedin_url?: string | null
+          nome?: string | null
+          observacoes?: string | null
+          owner_id: string
+          revelado?: boolean
+          segmento?: string | null
+          sobrenome?: string | null
+          status?: string
+          telefone?: string | null
+          ultimo_contato_em?: string | null
+          updated_at?: string
+        }
+        Update: {
+          apollo_person_id?: string
+          cargo?: string | null
+          cidade?: string | null
+          created_at?: string
+          email?: string | null
+          email_status?: string | null
+          empresa?: string | null
+          empresa_dominio?: string | null
+          id?: string
+          linkedin_url?: string | null
+          nome?: string | null
+          observacoes?: string | null
+          owner_id?: string
+          revelado?: boolean
+          segmento?: string | null
+          sobrenome?: string | null
+          status?: string
+          telefone?: string | null
+          ultimo_contato_em?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       receitas_empresa: {
         Row: {
           categoria: string
