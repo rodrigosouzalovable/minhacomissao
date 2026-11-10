@@ -323,7 +323,7 @@ serve(async (req) => {
     const rawBody = await req.text();
     const assinatura = await verificarAssinaturaMeta(req.headers.get('x-hub-signature-256'), rawBody);
     if (!assinatura.ok) {
-      console.warn('[MetaWebhook] assinatura inválida', { motivo: assinatura.motivo });
+      console.warn('[MetaWebhook] assinatura inválida', { motivo: assinatura.motivo, waba: rawBody.match(/"entry":\[\{"id":"(\d+)"/)?.[1] || null });
       if (META_WEBHOOK_EXIGIR_ASSINATURA) return new Response('invalid signature', { status: 401, headers: corsHeaders });
     }
     const payload = JSON.parse(rawBody || '{}');
