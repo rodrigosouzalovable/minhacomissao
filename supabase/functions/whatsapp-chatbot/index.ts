@@ -811,6 +811,33 @@ serve(async (req) => {
       });
     }
 
+    // Webhook authenticity: the payload must carry the token of a registered instance.
+    // The server URL always comes from our records, never from the request.
+    {
+      const tokenPayload = String(payload?.token || payload?.instance_token || '').trim();
+      const tokenEnv = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || '';
+      let serverRegistrado: string | null = null;
+      let autorizado = false;
+      if (tokenPayload) {
+        if (tokenEnv && tokenPayload === tokenEnv) {
+          autorizado = true;
+          serverRegistrado = Deno.env.get('UAZAPI_SERVER_URL') || null;
+        } else {
+          const sbTok = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+          const { data: instTok } = await sbTok
+            .from('user_whatsapp_instances').select('server_url').eq('instance_token', tokenPayload).limit(1).maybeSingle();
+          if (instTok) { autorizado = true; serverRegistrado = instTok.server_url || null; }
+        }
+      }
+      if (!autorizado) {
+        return new Response(JSON.stringify({ success: false, error: 'unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (serverRegistrado) payload.BaseUrl = serverRegistrado;
+      else delete payload.BaseUrl;
+    }
+
     // 🔬 DEBUG opcional: ativar com env DEBUG_DM=true.
     if (Deno.env.get('DEBUG_DM') === 'true') {
       const _dmFrom = payload?.chatid || payload?.remoteJid || payload?.from || payload?.message?.key?.remoteJid || 'unknown';
