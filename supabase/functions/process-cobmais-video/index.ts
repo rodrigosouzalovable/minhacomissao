@@ -34,6 +34,16 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    // Non-admin users may only process videos they uploaded (path starts with their user id).
+    if (__caller.kind === 'user' && !__caller.isAdmin) {
+      const vp = String(video_path)
+      if (vp.includes('..') || !vp.startsWith(`${__caller.userId}/`)) {
+        return new Response(JSON.stringify({ error: 'Acesso não permitido a este vídeo' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
     // Download video from storage
     console.log(`[process-video] Downloading video: ${video_path}`)
     const { data: videoData, error: downloadError } = await adminClient.storage
