@@ -197,8 +197,8 @@ Deno.serve(async (req) => {
 
     const dia = hojeBrt();
     const maxPorDestino = Math.max(1, Number(cfg?.recuperacao_max_por_destino_dia ?? 2));
-    const intMin = Math.min(2400, Math.max(1200, Number(cfg?.recuperacao_intervalo_min_seg ?? 1200)));
-    const intMax = Math.min(2400, Math.max(intMin, Number(cfg?.recuperacao_intervalo_max_seg ?? 2400)));
+    const intMin = Math.min(2400, Math.max(480, Number(cfg?.recuperacao_intervalo_min_seg ?? 480)));
+    const intMax = Math.min(2400, Math.max(intMin, Number(cfg?.recuperacao_intervalo_max_seg ?? 900)));
 
     // Uso dos destinos hoje (limite por destino é global, não por emissor)
     const { data: logsHoje } = await supabase

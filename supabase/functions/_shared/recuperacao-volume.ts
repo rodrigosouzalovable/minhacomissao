@@ -1,5 +1,5 @@
-export const RECUPERACAO_MAX_DIA = 26;
-export const RECUPERACAO_MIN_DIA = 13;
+export const RECUPERACAO_MAX_DIA = 40;
+export const RECUPERACAO_MIN_DIA = 20;
 export const RECUPERACAO_TETO_BRL = 26.39;
 
 export function metaRecuperacao(value: number): number {

@@ -1646,6 +1646,13 @@
       "when": 1794236713111,
       "tag": "0234_ume_proposta_modelos_por_credor",
       "breakpoints": true
+    },
+    {
+      "idx": 235,
+      "version": "7",
+      "when": 1794315000000,
+      "tag": "0235_novo_mundo_volume_acelerado",
+      "breakpoints": true
     }
   ]
 }
