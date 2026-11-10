@@ -170,8 +170,9 @@ async function fatia(db: any, pasta: string, continuar: boolean): Promise<Record
         parcelas.push({ installment_id: txt(p[4]), cpf: cpf.padStart(11, '0'), borrower_id: txt(p[1]) ?? '',
           contrato: txt(p[3]), vencimento: dataBR(p[5]), valor: num(p[6]) });
       } else if (p[0] === '08' && cpf) {
-        baixas.push({ tipo: '08', cpf, contrato: txt(p[7]), parcela_ref: txt(p[6]), vencimento: dataBR(p[4]),
-          valor: num(p[5]), data_pagamento: dataBR(p[8]), valor_pago: num(p[9]) });
+        // 08: …;data do pagamento;valor pago;…;…;vencimento da parcela;valor da parcela (p[4] nunca é futuro).
+        baixas.push({ tipo: '08', cpf, contrato: txt(p[7]), parcela_ref: txt(p[6]), vencimento: dataBR(p[8]),
+          valor: num(p[9]), data_pagamento: dataBR(p[4]), valor_pago: num(p[5]) });
       } else if (p[0] === '22' && cpf) {
         baixas.push({ tipo: '22', cpf, contrato: txt(p[3]), parcela_ref: txt(p[5]), vencimento: dataBR(p[6]),
           valor: num(p[7]), data_pagamento: null, valor_pago: num(p[12]) ?? num(p[7]) });
