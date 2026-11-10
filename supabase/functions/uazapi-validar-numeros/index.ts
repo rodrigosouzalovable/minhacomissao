@@ -88,13 +88,18 @@ Deno.serve(async (req) => {
 
     if (numbers.length > 20000) return json({ error: 'Máximo de 20.000 números por validação' }, 400);
     // Non-admin users validate only through the WhatsApp numbers their access rules allow.
-    const leitor = __caller.kind === 'user' && !__caller.isAdmin ? asCaller(__caller) : supabase;
-    const { data: instRows, error: instErr } = await leitor
+    let visiveis: Set<string> | null = null;
+    if (__caller.kind === 'user' && !__caller.isAdmin) {
+      const { data: vis } = await asCaller(__caller).from('user_whatsapp_instances').select('id');
+      visiveis = new Set((vis || []).map((v: any) => v.id));
+    }
+    const { data: instRowsTodas, error: instErr } = await supabase
       .from('user_whatsapp_instances')
       .select('id, nome, server_url, instance_token')
       .eq('ativo', true)
       .order('nome');
     if (instErr) return json({ error: 'Não foi possível carregar as instâncias' }, 500);
+    const instRows = (instRowsTodas || []).filter((i: any) => !visiveis || visiveis.has(i.id));
 
     const candidatas = (instRows || []).filter((i: any) => i.server_url && i.instance_token) as Inst[];
     if (candidatas.length === 0) {
