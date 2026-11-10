@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { brtDate, greenSender, reminderValues, reminderWindow } from './meta-atrasados-rules.ts';
+import { carregarParcelasPagas, parcelaJaPaga } from './parcela-ja-paga.ts';
 import { handleSendWhatsAppMeta } from './send-whatsapp-meta-handler.ts';
 
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), {status, headers:{...corsHeaders,'Content-Type':'application/json'}});
@@ -37,6 +38,7 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
       let processed=0,accepted=0; const rows: any[]=[];
       try {
         const candidates=must(await db.rpc('meta_atrasados_candidatos',{p_owner:cfg.owner_id,p_tenant:cfg.tenant_id,p_dia:today,p_template:cfg.template_nome,p_idioma:cfg.idioma,p_limite:preview?50:20}))||[];
+        const pagas=await carregarParcelasPagas(db,candidates.map((c:any)=>c.cliente_cpf));
         for(const candidate of candidates){
           if(!preview && Date.now()-start>65000) break;
           const sender=candidate.sender; let reason: string|null=null;
@@ -56,6 +58,7 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
           const legacyQueue=must(await db.from('whatsapp_fila').select('id').eq('pagamento_id',candidate.pagamento_id).like('tipo_lembrete','vencido%').eq('status','pendente').limit(1));
           const legacyLog=must(await db.from('whatsapp_lembretes_log').select('id').eq('pagamento_id',candidate.pagamento_id).like('tipo_lembrete','vencido%').eq('sucesso',true).gte('enviado_em',today+'T03:00:00Z').limit(1));
           if(legacyQueue?.length||legacyLog?.length) reason=reason||'Lembrete já enviado hoje ou pendente na outra automação';
+          if(parcelaJaPaga(pagas,candidate.cliente_cpf,candidate.empresa,candidate.data_prevista,String(today).slice(0,7))) reason='Parcela já paga (mesmo vencimento ou neste mês)';
           const message=String(sender?.body_text||'').replace(/\{\{\s*([\w]+)\s*\}\}/g,(_m,k)=>vars?.[k]||`{{${k}}}`);
           rows.push({...candidate,sender:sender?{id:sender.id,nome:sender.nome}:null,mensagem:message,motivo:reason});
           if(preview) continue;
