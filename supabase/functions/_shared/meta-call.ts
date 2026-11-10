@@ -29,15 +29,20 @@ export function service() {
 /** Usuário autenticado que fez a chamada HTTP (null quando cron/service role). */
 export async function userDaRequisicao(req: Request): Promise<string | null> {
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
-  if (!token || token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) return null;
+  // Only the service role counts as an internal call; missing/invalid credentials never do.
+  if (token && token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) return null;
+  if (!token) return SEM_USUARIO;
   const anon = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
   const asUser = createClient(Deno.env.get('SUPABASE_URL')!, anon, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false },
   });
   const { data } = await asUser.auth.getUser();
-  return data?.user?.id ?? null;
+  return data?.user?.id ?? SEM_USUARIO;
 }
+
+/** Sentinel for requests without a valid user or service credential. */
+export const SEM_USUARIO = '__sem_usuario__';
 
 export type Instancia = {
   id: string;
@@ -65,7 +70,8 @@ export async function carregarInstancia(supabase: any, instanciaId: string): Pro
 
 /** Confere se o usuário pode operar aquela instância (RLS via função do banco). */
 export async function podeUsarInstancia(supabase: any, userId: string | null, instanciaId: string) {
-  if (!userId) return true; // chamada interna
+  if (userId === null) return true; // chamada interna (service role)
+  if (!userId || userId === SEM_USUARIO) return false;
   const { data } = await supabase.rpc('pode_ver_instancia_meta', { _uid: userId, _instancia: instanciaId });
   return data === true;
 }
