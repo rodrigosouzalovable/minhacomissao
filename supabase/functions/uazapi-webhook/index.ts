@@ -57,6 +57,21 @@ serve(async (req) => {
       });
     }
 
+    // Only events carrying the token of a registered instance are accepted.
+    const tokenPayload = String(body?.token || body?.instance_token || req.headers.get('token') || '').trim();
+    if (!tokenPayload) {
+      return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const { data: instToken } = await supabase
+      .from('user_whatsapp_instances').select('id').eq('instance_token', tokenPayload).limit(1).maybeSingle();
+    if (!instToken) {
+      return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // UAZAPI envia eventos de tipos diversos — tentamos extrair de forma tolerante.
     const eventType = String(body?.event || body?.type || body?.EventType || body?.action || '').toLowerCase();
 
@@ -114,7 +129,7 @@ serve(async (req) => {
   } catch (err) {
     console.error('[uazapi-webhook] erro:', err);
     // Sempre 200 para não causar retry agressivo da UAZAPI
-    return new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
+    return new Response(JSON.stringify({ ok: false }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
