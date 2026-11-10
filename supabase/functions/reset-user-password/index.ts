@@ -30,7 +30,7 @@ serve(async (req) => {
 
     if (!callingUserId) throw new Error('Usuário não autenticado')
 
-    console.log(`User ${callingEmail} attempting password reset`)
+    console.log(`User ${callingUser?.id ?? 'desconhecido'} attempting password reset`)
 
     // Criar cliente admin
     const supabaseAdmin = createClient(
@@ -53,7 +53,7 @@ serve(async (req) => {
     }
 
     if (!adminRole) {
-      console.error(`User ${callingEmail} is not admin`)
+      console.error(`User ${callingUser?.id ?? 'desconhecido'} is not admin`)
       throw new Error('Apenas administradores podem redefinir senhas')
     }
 
@@ -77,7 +77,7 @@ serve(async (req) => {
       throw updateError
     }
 
-    console.log(`SUCCESS: Admin ${callingEmail} reset password for user ${userId}`)
+    console.log(`SUCCESS: Admin ${callingUser?.id ?? 'desconhecido'} reset password for user ${userId}`)
 
     return new Response(
       JSON.stringify({ success: true, message: 'Senha redefinida com sucesso' }),

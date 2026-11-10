@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, mask } from '../_shared/auth-guard.ts';
 import { carregarParcelasPagas, parcelaJaPaga } from '../_shared/parcela-ja-paga.ts';
 // Envia lembretes de boletos (D-3 e D0) via API oficial Meta.
 // Chamado 1x/dia pelo cron às 08:30 BRT. Toggle ativo/inativo em meta_lembrete_config.
@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
 
         if (dryRun) {
           totalEnviado++;
-          console.log(`[DRY] ${t.tipo} ${telefone} inst=${chosen.nome}`, vars);
+          console.log(`[DRY] ${t.tipo} ${mask(telefone)} inst=${chosen.nome}`);
           continue;
         }
 

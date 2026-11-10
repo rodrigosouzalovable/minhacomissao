@@ -70,7 +70,7 @@ serve(async (req) => {
     }
     
     if (!isAdmin) {
-      console.error(`User ${callingUser.email} attempted to create user without admin role`)
+      console.error(`User ${callingUser.id} attempted to create user without admin role`)
       throw new Error('Apenas administradores podem criar usuários')
     }
 
@@ -130,7 +130,7 @@ serve(async (req) => {
     }
 
     // 8. Log de sucesso
-    console.log(`SUCCESS: Admin ${callingUser.email} created user ${email} (ID: ${newUser.user.id})`)
+    console.log(`SUCCESS: Admin ${callingUser.id} created user ${newUser.user.id}`)
 
     return jsonResponse({
         success: true, 

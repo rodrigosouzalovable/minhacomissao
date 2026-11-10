@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, mask } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -254,7 +254,7 @@ function deveResponderPorFase(fase: number): boolean {
 async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, numero: string, nome: string): Promise<boolean> {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
   const cleanNumber = numero.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
-  console.log(`[IA] 📋 Tentando salvar contato na agenda: numero=${cleanNumber}, nome="${nome}", server=${cleanUrl}`);
+  console.log(`[IA] 📋 Tentando salvar contato na agenda: numero=${mask(cleanNumber)}`);
   
   const payloads = [
     { number: cleanNumber, name: nome },
@@ -279,7 +279,7 @@ async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, num
         const text = await res.text();
         console.log(`[IA] 📱 ${url} payload=${JSON.stringify(payload)} → status=${res.status} body=${text.substring(0, 200)}`);
         if (res.ok) {
-          console.log(`[IA] ✅ Contato salvo na agenda: ${cleanNumber} como "${nome}" via ${url}`);
+          console.log(`[IA] ✅ Contato salvo na agenda: ${mask(cleanNumber)}`);
           return true;
         }
       } catch (e) {
@@ -288,7 +288,7 @@ async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, num
       }
     }
   }
-  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${cleanNumber} na agenda (todos endpoints falharam)`);
+  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${mask(cleanNumber)} na agenda (todos endpoints falharam)`);
   return false;
 }
 
@@ -414,7 +414,7 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
 
       if (newContato) {
         phoneToStore = newContato.telefone;
-        console.log(`[IA] 📇 Contato criado: ${cleanPhone} para instância ${instanciaId}`);
+        console.log(`[IA] 📇 Contato criado: ${mask(cleanPhone)} para instância ${instanciaId}`);
       }
     } else {
       await sb.from("whatsapp_contatos").update({

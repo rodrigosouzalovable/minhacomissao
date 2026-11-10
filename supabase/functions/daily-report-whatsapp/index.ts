@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, mask } from '../_shared/auth-guard.ts';
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -60,7 +60,7 @@ serve(async (req) => {
     const telefoneDestino = config.telefone_destino;
 
     console.log('Usando instância:', instancia.nome || config.instancia_id);
-    console.log('Telefone destino:', telefoneDestino);
+    console.log('Telefone destino:', mask(telefoneDestino));
 
     // Obter data de hoje no fuso de Brasília
     const now = new Date();
@@ -185,7 +185,7 @@ serve(async (req) => {
       `${cleanUrl}/send/text`,
     ];
 
-    console.log('Enviando relatório para:', telefoneDestino);
+    console.log('Enviando relatório para:', mask(telefoneDestino));
 
     let data: any;
     let sent = false;

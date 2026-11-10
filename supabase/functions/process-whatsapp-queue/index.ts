@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, mask } from '../_shared/auth-guard.ts';
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -89,7 +89,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true, enviado: false, message: 'Lembrete substituído pela sequência oficial' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
-    console.log(`Processando mensagem ${mensagem.id} para ${mensagem.telefone}...`);
+    console.log(`Processando mensagem ${mensagem.id} para ${mask(mensagem.telefone)}...`);
 
     try {
       // Use per-message credentials if available, fallback to global
@@ -154,7 +154,7 @@ serve(async (req) => {
               nao_lido: 0,
             });
           }
-          console.log(`[INBOX] Mensagem da fila salva para ${mensagem.telefone}`);
+          console.log(`[INBOX] Mensagem da fila salva para ${mask(mensagem.telefone)}`);
         }
       } catch (inboxErr) {
         console.error('[INBOX] Erro ao salvar msg da fila no inbox:', inboxErr);

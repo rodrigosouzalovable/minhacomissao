@@ -1,3 +1,4 @@
+import { mask } from '../_shared/auth-guard.ts';
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -15,7 +16,7 @@ serve(async (req) => {
 
   try {
     const { cpf, nome, credor, totalDebitos } = await req.json();
-    console.log('Notificação de consulta CPF:', { cpf, nome, credor, totalDebitos });
+    console.log('Notificação de consulta CPF:', { cpf: mask(cpf), credor, totalDebitos });
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',

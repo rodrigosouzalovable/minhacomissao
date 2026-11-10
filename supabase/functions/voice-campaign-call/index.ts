@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, mask } from '../_shared/auth-guard.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -29,7 +29,7 @@ serve(async (req) => {
     const telefoneCompleto = telefoneFormatado.startsWith('55') ? telefoneFormatado : `55${telefoneFormatado}`;
     const cleanUrl = server_url.replace(/\/+$/, '');
 
-    console.log(`[VOICE-CALL] Initiating call to ${telefoneCompleto} via ${cleanUrl}`);
+    console.log(`[VOICE-CALL] Initiating call to ${mask(telefoneCompleto)}`);
 
     // Update contact status to 'chamando'
     await supabase
