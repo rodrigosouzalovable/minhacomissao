@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, callerCanAccessUmeCpf } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
@@ -36,6 +36,7 @@ Deno.serve(async (req) => {
     const { cpf: cpfBruto, vencimento, origem } = parsed.data;
     const cpf = soDigitos(cpfBruto);
     if (cpf.length !== 11) return json({ error: 'CPF inválido' }, 400);
+    if (!(await callerCanAccessUmeCpf(__caller, cpf))) return json({ error: 'Sem permissão para este cliente' }, 403);
 
     // Vencimento não pode ser no passado
     const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); // data em Brasília

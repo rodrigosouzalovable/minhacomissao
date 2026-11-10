@@ -183,3 +183,14 @@ export function sanitizeChatMessages(input: unknown, maxMessages = 40, maxChars 
       content: (typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')).slice(0, maxChars),
     }));
 }
+
+/** UME/Novo Mundo debtor access: admin/gestor, users allowed for that creditor portfolio, or users who can see a debtor with this CPF. */
+export async function callerCanAccessUmeCpf(caller: Caller, cpf: string): Promise<boolean> {
+  if (caller.kind !== 'user' || caller.isGestor) return true;
+  const db = service();
+  const [{ data: credor }, { data: devedor }] = await Promise.all([
+    db.rpc('can_view_credor', { _user: caller.userId, _credor: 'ume_novo_mundo' }),
+    db.rpc('can_view_devedor_cpf', { _user: caller.userId, _cpf: cpf }),
+  ]);
+  return credor === true || devedor === true;
+}
