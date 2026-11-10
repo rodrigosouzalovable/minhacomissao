@@ -16,6 +16,8 @@ export type GuardOptions = {
   scheduler?: boolean;
   /** Minimum role for signed-in users; false/undefined refuses users (admins are always accepted unless false). */
   user?: UserLevel | false;
+  /** Screen paths (user_permissions.abas_permitidas) that grant access to non-admin users, mirroring PermissionRoute. */
+  tabs?: string[];
   corsHeaders?: Record<string, string>;
 };
 
@@ -85,6 +87,12 @@ export async function requireCaller(req: Request, opts: GuardOptions = {}): Prom
   const level = opts.user;
   if (level === false) return deny(403, 'Acesso não permitido', opts.corsHeaders);
   if (caller.isAdmin) return caller;
+  if (opts.tabs && opts.tabs.length) {
+    const { data: perm } = await service().from('user_permissions').select('abas_permitidas').eq('user_id', caller.userId).maybeSingle();
+    const abas: string[] | null = perm?.abas_permitidas ?? null;
+    if (abas ? opts.tabs.some((t) => abas.includes(t)) : caller.isGestor) return caller;
+    return deny(403, 'Acesso não permitido para esta tela', opts.corsHeaders);
+  }
   if (level === 'any') return caller;
   if (level === 'staff' && caller.isGestor) return caller;
   return deny(403, 'Acesso restrito ao administrador', opts.corsHeaders);
