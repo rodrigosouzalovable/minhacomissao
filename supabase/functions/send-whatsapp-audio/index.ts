@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     const endpoint = `${cleanUrl}/send/media`;
     const body = { number: telefoneCompleto, type: 'ptt', file: audio_url };
 
-    console.log(`Enviando áudio para ${telefoneCompleto} via ${endpoint}`);
+    console.log(`Enviando áudio para ${mask(telefoneCompleto)} via ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
           });
         }
 
-        console.log(`[INBOX] Áudio de saída salvo para ${telefoneCompleto}`);
+        console.log(`[INBOX] Áudio de saída salvo para ${mask(telefoneCompleto)}`);
       }
     } catch (inboxErr) {
       console.error('[INBOX] Erro ao salvar áudio no inbox:', inboxErr);

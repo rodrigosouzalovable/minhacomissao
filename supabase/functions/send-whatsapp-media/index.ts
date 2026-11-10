@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       body.docName = file_name;
     }
 
-    console.log(`Enviando ${type} para ${telefoneCompleto} via ${endpoint}`);
+    console.log(`Enviando ${type} para ${mask(telefoneCompleto)} via ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
           });
         }
 
-        console.log(`[INBOX] ${tipoConteudo} de saída salvo para ${telefoneCompleto}`);
+        console.log(`[INBOX] ${tipoConteudo} de saída salvo para ${mask(telefoneCompleto)}`);
       }
     } catch (inboxErr) {
       console.error('[INBOX] Erro ao salvar mídia no inbox:', inboxErr);

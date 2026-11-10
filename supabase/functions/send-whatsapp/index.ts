@@ -79,7 +79,7 @@ serve(async (req) => {
     const { telefone, mensagem, uazapi_server_url, uazapi_instance_token, instancia_id, quoted } = await req.json();
     
     const tokenSuffix = uazapi_instance_token ? uazapi_instance_token.slice(-8) : 'global';
-    console.log('Recebendo requisição para enviar WhatsApp:', { telefone, instance: tokenSuffix });
+    console.log('Recebendo requisição para enviar WhatsApp:', { telefone: mask(telefone), instance: tokenSuffix });
 
     if (!telefone) throw new Error('Telefone não informado');
 
@@ -88,7 +88,7 @@ serve(async (req) => {
       ? telefoneFormatado 
       : `55${telefoneFormatado}`;
 
-    console.log('Telefone formatado:', telefoneCompleto);
+    console.log('Telefone formatado:', mask(telefoneCompleto));
 
     // Use provided credentials or fall back to global UAZAPI secrets
     const __inst = await resolverInstanciaUazapi(__caller, uazapi_server_url, uazapi_instance_token);
@@ -175,7 +175,7 @@ serve(async (req) => {
           });
         }
 
-        console.log(`[INBOX] Mensagem de saída salva para ${telefoneCompleto}`);
+        console.log(`[INBOX] Mensagem de saída salva para ${mask(telefoneCompleto)}`);
       }
     } catch (inboxErr) {
       console.error('[INBOX] Erro ao salvar msg de saída:', inboxErr);

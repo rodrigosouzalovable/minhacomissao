@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       footerText: footerText || 'Escolha uma opção',
     };
 
-    console.log(`Enviando botões para ${telefoneCompleto} via ${endpoint}`);
+    console.log(`Enviando botões para ${mask(telefoneCompleto)} via ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -140,7 +140,7 @@ Deno.serve(async (req) => {
           });
         }
 
-        console.log(`[INBOX] Botões de saída salvos para ${telefoneCompleto}`);
+        console.log(`[INBOX] Botões de saída salvos para ${mask(telefoneCompleto)}`);
       }
     } catch (inboxErr) {
       console.error('[INBOX] Erro ao salvar botões no inbox:', inboxErr);
