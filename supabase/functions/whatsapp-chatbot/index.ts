@@ -2264,7 +2264,7 @@ serve(async (req) => {
             console.log(`[ADMIN-INSTRUCTION] Modo literal: (len=${String(respostaProposta ?? "").length})`);
           } else {
             respostaProposta = await gerarRespostaComInstrucaoAdmin(instrucao.conteudo, contextoCliente);
-            console.log(`[ADMIN-INSTRUCTION] Modo IA: instrução="${instrucao.conteudo}" -> resposta=(len=${String(respostaProposta ?? "").length})`);
+            console.log(`[ADMIN-INSTRUCTION] Modo IA: instrução=(len=${String(instrucao.conteudo ?? "").length}) -> resposta=(len=${String(respostaProposta ?? "").length})`);
           }
           
           // Obter mensagem original do cliente do histórico
