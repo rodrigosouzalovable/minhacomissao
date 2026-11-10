@@ -47,11 +47,11 @@ export async function executarBaseNovoMundo(db: any, insts: any[], simulacao: bo
       (!inst.recuperacao_proximo_envio_em || Date.parse(inst.recuperacao_proximo_envio_em) <= Date.now()));
     const defer = async (inst: any, reason: string) => {
       resultados.push({ instancia: inst.nome, skip: reason });
-      const next = new Date(Date.now() + (1200 + Math.floor(Math.random() * 1201)) * 1000).toISOString();
+      const next = new Date(Date.now() + (480 + Math.floor(Math.random() * 421)) * 1000).toISOString();
       const { error } = await db.from('meta_whatsapp_instances').update({ recuperacao_proximo_envio_em: next }).eq('id', inst.id);
       if (error) throw error;
     };
-    for (const inst of eligible.slice(0, 8)) {
+    for (const inst of eligible.slice(0, 20)) {
       if (Date.now() >= deadline) break;
       if (!telefoneNovoMundo(inst.display_phone) || (inst.recuperacao_proximo_envio_em && Date.parse(inst.recuperacao_proximo_envio_em) > Date.now())) continue;
       if (simulacao) { resultados.push({ instancia: inst.nome, simulado: true, fonte: 'novo_mundo' }); continue; }
