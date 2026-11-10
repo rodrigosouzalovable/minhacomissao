@@ -36,12 +36,20 @@ Deno.serve(async (req) => {
 
     if (jobError || !job) {
       return new Response(
-        JSON.stringify({ error: "Job not found", details: jobError?.message }),
+        JSON.stringify({ error: "Job not found" }),
         {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // Only the job owner (or an administrator/internal caller) may process it.
+    if (__caller.kind === "user" && !__caller.isAdmin && job.user_id !== __caller.userId) {
+      return new Response(JSON.stringify({ error: "Acesso não permitido" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (job.status !== "pendente") {
