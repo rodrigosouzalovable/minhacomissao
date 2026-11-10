@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ensureInboxMediaUrl } from '@/lib/inboxMediaUrl';
+import { ensureInboxMediaUrl, inboxMediaPathFromUrl } from '@/lib/inboxMediaUrl';
 import { extrairPix } from '@/lib/pixCode';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -138,12 +138,14 @@ export function ChatMessage({ msg, formatMsgTime, onApagarParaMim, onApagarParaT
   };
 
   // Bucket de mídia é privado: reassina URLs antigas/expiradas antes de exibir.
-  const [mediaUrl, setMediaUrl] = useState<string | null>(msg.media_url ?? null);
+  // Stored inbox links are never shown directly; only a fresh link issued for this viewer.
+  const linkDireto = (u?: string | null) => (u && !inboxMediaPathFromUrl(u) ? u : null);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(linkDireto(msg.media_url));
   useEffect(() => {
     let cancelled = false;
-    setMediaUrl(msg.media_url ?? null);
+    setMediaUrl(linkDireto(msg.media_url));
     if (!msg.media_url) return;
-    ensureInboxMediaUrl(msg.media_url).then((u) => { if (!cancelled && u) setMediaUrl(u); });
+    ensureInboxMediaUrl(msg.media_url).then((u) => { if (!cancelled) setMediaUrl(u); });
     return () => { cancelled = true; };
   }, [msg.media_url]);
   const lightboxImageSrc = blobUrl || mediaUrl;
