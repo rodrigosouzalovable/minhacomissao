@@ -1653,6 +1653,13 @@
       "when": 1794315000000,
       "tag": "0235_novo_mundo_volume_acelerado",
       "breakpoints": true
+    },
+    {
+      "idx": 236,
+      "version": "7",
+      "when": 1794317203442,
+      "tag": "0236_prospeccao_b2b",
+      "breakpoints": true
     }
   ]
 }
