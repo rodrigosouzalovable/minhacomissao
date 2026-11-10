@@ -311,7 +311,7 @@ async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, nu
       const body = await res.text();
       lastBody = body.substring(0, 200);
       if (res.ok) {
-        console.log(`[IA] ✅ Enviada via ${url} ms=${ms} status=${res.status} → ${numero}: "${texto}"`);
+        console.log(`[IA] ✅ Enviada via ${url} ms=${ms} status=${res.status} → ${mask(numero)} len=${String(texto).length}`);
         auditar({ etapa: 'uazapi_send', status: 'ok', http_status: res.status, tempo_resposta_ms: ms, numero_destino: numero, resposta_gerada: texto, motivo: url, ...(auditCtx || {}) });
         return true;
       }

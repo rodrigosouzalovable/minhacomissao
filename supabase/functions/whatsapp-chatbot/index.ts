@@ -201,7 +201,7 @@ async function salvarContatoUAZAPI(baseUrl: string, token: string, numero: strin
           body: JSON.stringify(payload),
         });
         if (res.ok) {
-          console.log(`[CONTATO-AGENDA] ✅ Salvo: ${nome} (${cleanNumber}) via ${url}`);
+          console.log(`[CONTATO-AGENDA] ✅ Salvo: ${mask(cleanNumber)} via ${url}`);
           return true;
         }
         const txt = await res.text();
@@ -211,7 +211,7 @@ async function salvarContatoUAZAPI(baseUrl: string, token: string, numero: strin
       }
     }
   }
-  console.warn(`[CONTATO-AGENDA] ❌ Nenhum endpoint funcionou para ${nome} (${cleanNumber})`);
+  console.warn(`[CONTATO-AGENDA] ❌ Nenhum endpoint funcionou para ${mask(cleanNumber)}`);
   return false;
 }
 
