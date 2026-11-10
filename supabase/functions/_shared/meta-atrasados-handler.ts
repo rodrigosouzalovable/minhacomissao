@@ -58,10 +58,11 @@ export async function handleMetaAtrasados(req: Request): Promise<Response> {
           const legacyQueue=must(await db.from('whatsapp_fila').select('id').eq('pagamento_id',candidate.pagamento_id).like('tipo_lembrete','vencido%').eq('status','pendente').limit(1));
           const legacyLog=must(await db.from('whatsapp_lembretes_log').select('id').eq('pagamento_id',candidate.pagamento_id).like('tipo_lembrete','vencido%').eq('sucesso',true).gte('enviado_em',today+'T03:00:00Z').limit(1));
           if(legacyQueue?.length||legacyLog?.length) reason=reason||'Lembrete já enviado hoje ou pendente na outra automação';
-          if(parcelaJaPaga(pagas,candidate.cliente_cpf,candidate.empresa,candidate.data_prevista,String(today).slice(0,7))) reason='Parcela já paga (mesmo vencimento ou neste mês)';
+          const jaPaga=parcelaJaPaga(pagas,candidate.cliente_cpf,candidate.empresa,candidate.data_prevista,String(today).slice(0,7));
+          if(jaPaga) reason='Parcela já paga (mesmo vencimento ou neste mês)';
           const message=String(sender?.body_text||'').replace(/\{\{\s*([\w]+)\s*\}\}/g,(_m,k)=>vars?.[k]||`{{${k}}}`);
           rows.push({...candidate,sender:sender?{id:sender.id,nome:sender.nome}:null,mensagem:message,motivo:reason});
-          if(preview) continue;
+          if(preview||jaPaga) continue;
           const reservation=must(await db.rpc('meta_atrasados_reservar',{p_config:cfg.id,p_pagamento:candidate.pagamento_id,p_etapa:candidate.etapa,p_vencimento:candidate.data_prevista,p_dia:today}));
           if(!reservation)continue;
           processed++;
