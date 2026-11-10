@@ -8,3 +8,4 @@
 - Campaign instance picks pass job_id so senders rotate by fewest sends in that campaign; YELLOW/RED stay below 30% of the healthy average, keeping BM quota and real blocks as filters.
 - Portal agreements send the client confirmation through send-whatsapp-meta-text on their latest Inbox conversation; failures only flag the admin notice so the portal never breaks.
 - The D-1 preventive reminder (UME/Novo Mundo/Odres, Utility-only senders) runs inside recuperacao-quebrados-auto's existing daily schedule as a separate campaign, so it adds no new cron and skips phones the recovery run already targets.
+- Automatic Meta charge/reminder sends skip a CPF+creditor that already has a paid installment with the same due date or paid this month (_shared/parcela-ja-paga.ts), because duplicate agreements otherwise trigger charges to clients who paid.
