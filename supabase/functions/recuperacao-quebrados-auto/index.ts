@@ -3,6 +3,7 @@
 // Também resgata acordos QUEBRADOS (1ª parcela vencida há 11–60 dias), 1 envio a cada 15 dias por número.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { carregarParcelasPagas, parcelaJaPaga } from "../_shared/parcela-ja-paga.ts";
 import { CREDOR_PREVENTIVO, datasAlvoPreventivo, montarClientesPreventivo } from "../_shared/lembrete-preventivo.ts";
 
 const DONO = "ee649720-b8ce-47a2-859e-100a3a9ae6bb";
@@ -56,9 +57,13 @@ Deno.serve(async (req) => {
     }
   }
 
+  const mesAtual = hoje.slice(0, 7);
+  const pagas = await carregarParcelasPagas(db, rows.map((r: any) => r.acordos?.cliente_cpf));
+  let puladosPagos = 0;
   const porSuf = new Map<string, any>();
   for (const r of rows) {
     const a = r.acordos;
+    if (parcelaJaPaga(pagas, a?.cliente_cpf, a?.empresa, r.data_prevista, mesAtual)) { puladosPagos++; continue; }
     let tel = String(a?.cliente_telefone || "").replace(/\D/g, "");
     if (tel.length < 10 || tel.length > 13) continue;
     if (!tel.startsWith("55")) tel = `55${tel}`;
@@ -121,8 +126,10 @@ Deno.serve(async (req) => {
     if (!data || data.length < 1000) break;
   }
   let qtdQuebrados = 0;
+  pagas.push(...await carregarParcelasPagas(db, [...ativosAtrasados, ...quebrados].map((a: any) => a.cliente_cpf)));
   for (const a of [...ativosAtrasados, ...quebrados]) {
     if (!a._ativo && cpfsAtivos.has(String(a.cliente_cpf || "").replace(/\D/g, ""))) continue;
+    if (parcelaJaPaga(pagas, a.cliente_cpf, a.empresa, String(a.data_primeiro_pagamento).slice(0, 10), mesAtual)) { puladosPagos++; continue; }
     let tel = String(a.cliente_telefone || "").replace(/\D/g, "");
     if (tel.length < 10 || tel.length > 13) continue;
     if (!tel.startsWith("55")) tel = `55${tel}`;
@@ -137,7 +144,7 @@ Deno.serve(async (req) => {
       vars: { name: nome, nome, "1": nome, "2": credor, "3": `${d}/${m}/${y}` } });
     qtdQuebrados++;
   }
-  console.log(`[recuperacao-quebrados] vencidos=${porSuf.size - qtdQuebrados} quebrados=${qtdQuebrados}`);
+  console.log(`[recuperacao-quebrados] vencidos=${porSuf.size - qtdQuebrados} quebrados=${qtdQuebrados} pulados_parcela_ja_paga=${puladosPagos}`);
 
   // ===== Lembrete preventivo D-1 (mesmo agendamento, campanha separada) =====
   let preventivo: unknown = null;
@@ -200,7 +207,10 @@ async function lancarPreventivo(db: any, url: string, key: string, hoje: string,
       if (!data || data.length < 1000) break;
     }
   }
-  const clientes = montarClientesPreventivo(rows, hoje, excluir);
+  const pagasPrev = await carregarParcelasPagas(db, rows.map((r: any) => r.cliente_cpf));
+  const semPagos = rows.filter((r: any) => !parcelaJaPaga(pagasPrev, r.cliente_cpf, r.empresa, r.data_prevista, hoje.slice(0, 7)));
+  console.log(`[lembrete-preventivo] pulados_parcela_ja_paga=${rows.length - semPagos.length}`);
+  const clientes = montarClientesPreventivo(semPagos, hoje, excluir);
   if (!clientes.length) return { success: true, clientes: 0 };
 
   const { data: inst } = await db.from("meta_whatsapp_instances").select("id")

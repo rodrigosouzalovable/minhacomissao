@@ -1,3 +1,4 @@
+import { carregarParcelasPagas, parcelaJaPaga } from '../_shared/parcela-ja-paga.ts';
 // Envia lembretes de boletos (D-3 e D0) via API oficial Meta.
 // Chamado 1x/dia pelo cron às 08:30 BRT. Toggle ativo/inativo em meta_lembrete_config.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -167,15 +168,21 @@ Deno.serve(async (req) => {
       // Pagamentos alvo
       const { data: pagamentos } = await supabase
         .from('pagamentos')
-        .select('id, acordo_id, numero_parcela, data_prevista, valor_parcela, acordos!inner(id, user_id, cliente_nome, cliente_cpf, cliente_telefone, status)')
+        .select('id, acordo_id, numero_parcela, data_prevista, valor_parcela, acordos!inner(id, user_id, cliente_nome, cliente_cpf, cliente_telefone, status, empresa)')
         .eq('status', 'pendente')
         .eq('data_prevista', t.dataRef)
         .eq('acordos.status', 'ativo');
 
       const items = (pagamentos as any[]) || [];
+      // Pula quem já tem parcela paga (mesmo vencimento em outro acordo do CPF/credor, ou paga neste mês).
+      const pagas = await carregarParcelasPagas(supabase, items.map((p: any) => p.acordos?.cliente_cpf));
 
       for (const p of items) {
         const acordo = p.acordos;
+        if (parcelaJaPaga(pagas, acordo?.cliente_cpf, acordo?.empresa, p.data_prevista, hoje.slice(0, 7))) {
+          console.log(`[lembrete] pulado: parcela já paga cpf=${String(acordo?.cliente_cpf || '').slice(-4)}`);
+          totalPulado++; continue;
+        }
         const telRaw = acordo?.cliente_telefone;
         if (!telRaw) { totalPulado++; continue; }
         const telefone = normalizePhone(String(telRaw));
