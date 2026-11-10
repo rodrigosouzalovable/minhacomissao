@@ -1,3 +1,4 @@
+import { mask } from '../_shared/auth-guard.ts';
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -540,7 +541,7 @@ Mantenha o tom informal e cordial. Não mencione o administrador. Responda APENA
 async function notificarAdmin(supabase: any, telefoneCliente: string, telefoneInstancia: string, textoCliente: string) {
   try {
     const msg = `Olá Rodrigo, na mensagem enviada pelo número ${telefoneInstancia} para o número ${telefoneCliente}, o cliente respondeu algo que eu não soube informar: "${textoCliente}". Você poderia analisar por favor?`;
-    console.log(`[ADMIN] Notificando admin: ${msg}`);
+    console.log(`[ADMIN] Notificando admin: (len=${String(msg ?? "").length})`);
     await enqueueAdminNotification(supabase, {
       tipo: 'iago_aguardando_humano',
       mensagem: `🤖 *Aviso Sistema*\n\n${msg}`,
@@ -572,7 +573,7 @@ async function notificarAcordoFechado(supabase: any, telefoneCliente: string, da
 
     const telefoneFormatado = telefoneCliente.replace(/^55/, '');
     const msg = `Rodrigo, acabei de fechar um acordo com o cliente ${primeiroNome}, número ${telefoneFormatado}, ${detalhes}, para pagamento ${dataPgto}.`;
-    console.log(`[ACORDO] Notificando admin: ${msg}`);
+    console.log(`[ACORDO] Notificando admin: (len=${String(msg ?? "").length})`);
     await enqueueAdminNotification(supabase, {
       tipo: 'iago_acordo_fechado',
       mensagem: `🤖 *Aviso Sistema*\n\n${msg}`,
@@ -902,7 +903,7 @@ serve(async (req) => {
                       body: JSON.stringify(ep.body),
                     });
                     const resText = await res.text();
-                    console.log(`[VOICE-CALL] Play audio response: ${res.status} - ${resText}`);
+                    console.log(`[VOICE-CALL] Play audio response: ${res.status} - (len=${String(resText ?? "").length})`);
                     if (res.ok) break;
                   } catch (e) {
                     console.log(`[VOICE-CALL] Play endpoint failed: ${ep.url}`, e);
@@ -941,7 +942,7 @@ serve(async (req) => {
 
         console.log(`[VOICE-CALL] Contact ${contact.id} updated to status: ${callStatus}`);
       } else {
-        console.log(`[VOICE-CALL] No matching campaign contact found for call event (phone: ${callPhone}, callId: ${callId})`);
+        console.log(`[VOICE-CALL] No matching campaign contact found for call event (phone: ${mask(callPhone)}, callId: ${callId})`);
       }
 
       return new Response(JSON.stringify({ success: true, handled: 'call_event' }), {
@@ -958,7 +959,7 @@ serve(async (req) => {
 
     // --- LOG DE ENTRADA (antes de bloqueios DM) ---
     const _msgText = payload?.message?.text || payload?.message?.content || payload?.text || '';
-    console.log(`[CHATBOT] IN from=${remoteJid} isGroup=${isGroup} type=${uazapiMsgType} textLen=${_msgText.length} fromMe=${payload?.message?.fromMe ?? payload?.fromMe ?? false}`);
+    console.log(`[CHATBOT] IN from=${mask(remoteJid)} isGroup=${isGroup} type=${uazapiMsgType} textLen=${_msgText.length} fromMe=${payload?.message?.fromMe ?? payload?.fromMe ?? false}`);
 
     if (isGroup || isBlockedChat || uazapiMsgType === 'reactionmessage' || uazapiMsgType === 'protocolmessage') {
       return new Response(JSON.stringify({ success: true, ignored: true }), {
@@ -1159,7 +1160,7 @@ serve(async (req) => {
               if (downloadSuccess) break;
               try {
                 const headerMode = 'token' in headers ? 'token-header' : 'bearer-header';
-                console.log(`[INBOX] Tentando UAZAPI: ${attempt.method} ${attempt.url} [${headerMode}] body=${JSON.stringify(attempt.body)}`);
+                console.log(`[INBOX] Tentando UAZAPI: ${attempt.method} ${attempt.url} [${headerMode}] `);
                 const uazapiResp = await fetch(attempt.url, {
                   method: attempt.method,
                   headers,
@@ -1448,7 +1449,7 @@ serve(async (req) => {
             }
 
             if (savedNow) {
-              console.log(`[INBOX] Mensagem manual (fromMe) salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo}`);
+              console.log(`[INBOX] Mensagem manual (fromMe) salva: ${mask(telefoneParaSalvar)} tipo=${inboxTipoConteudo}`);
               if (matchedContact) {
                 await supabase.from('whatsapp_contatos').update({
                   ultima_mensagem: inboxConteudo.slice(0, 200),
@@ -1495,8 +1496,8 @@ serve(async (req) => {
               insErr = error;
               mensagemEntradaId = data?.id || null;
             }
-            if (insErr) console.error('[INBOX] insert entrada erro:', insErr.message, 'tel=', telefoneParaSalvar, 'msgId=', cleanedMsgId);
-            else console.log(`[INBOX] ✅ Mensagem entrada salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo} len=${inboxConteudo.length}`);
+            if (insErr) console.error('[INBOX] insert entrada erro:', insErr.message, 'tel=', mask(telefoneParaSalvar), 'msgId=', cleanedMsgId);
+            else console.log(`[INBOX] ✅ Mensagem entrada salva: ${mask(telefoneParaSalvar)} tipo=${inboxTipoConteudo} len=${inboxConteudo.length}`);
 
             if (!insErr && mensagemEntradaId && inboxTipoConteudo === 'texto') {
               try {
@@ -1540,7 +1541,7 @@ serve(async (req) => {
                 .catch(err => console.error('[CONTATO-AGENDA] Erro fire-and-forget:', err));
             }
 
-            console.log(`[INBOX] Mensagem entrada salva: ${telefoneParaSalvar} tipo=${inboxTipoConteudo} (instancia: ${instanciaId})`);
+            console.log(`[INBOX] Mensagem entrada salva: ${mask(telefoneParaSalvar)} tipo=${inboxTipoConteudo} (instancia: ${instanciaId})`);
           }
         }
       } catch (inboxErr) {
@@ -1654,7 +1655,7 @@ serve(async (req) => {
         // Robust phone matching: extract last 8 digits to compare
         // This handles all variations: with/without 55 prefix, with/without 9th digit
         const webhookLast8 = inboxTelefone.replace(/\D/g, '').slice(-8);
-        console.log(`[AQUECIMENTO] Verificando se ${inboxTelefone} (last8: ${webhookLast8}) é instância interna...`);
+        console.log(`[AQUECIMENTO] Verificando se ${mask(inboxTelefone)} (last8: ${webhookLast8}) é instância interna...`);
 
         // Identifica o chip que enviou a mensagem. O fluxo legado usa
         // user_whatsapp_instances; a recuperação Meta usa a instância oficial e
@@ -1694,7 +1695,7 @@ serve(async (req) => {
         );
 
         if (!senderInstance && !senderMeta) {
-          console.log(`[AQUECIMENTO] Nenhuma instância interna encontrou match para ${inboxTelefone}`);
+          console.log(`[AQUECIMENTO] Nenhuma instância interna encontrou match para ${mask(inboxTelefone)}`);
         }
 
         // Recuperação Meta → UAZAPI: a entrada chega pelo webhook da instância
@@ -1769,7 +1770,7 @@ serve(async (req) => {
                 .eq('id', origemAquec.id);
             }
 
-            console.log(`[AQUECIMENTO] Resposta detectada de ${inboxTelefone}, interação ${warmingInteraction.id} marcada como RESPONDIDO (${tempoRespostaSeg}s)`);
+            console.log(`[AQUECIMENTO] Resposta detectada de ${mask(inboxTelefone)}, interação ${warmingInteraction.id} marcada como RESPONDIDO (${tempoRespostaSeg}s)`);
 
             // --- IA CONVERSACIONAL: Gerar resposta automática via Ollama ---
             try {
@@ -1872,7 +1873,7 @@ serve(async (req) => {
             await supabase.from('whatsapp_aquecimento_instancias')
               .update({ mensagens_sem_resposta: 0, pausado_por_silencio: false })
               .eq('instancia_id', instanciaId);
-            console.log(`[AUTOSAVE] ✅ Resposta capturada de ${inboxTelefone} para envio ${match.id}`);
+            console.log(`[AUTOSAVE] ✅ Resposta capturada de ${mask(inboxTelefone)} para envio ${match.id}`);
           }
         }
       } catch (asErr) {
@@ -1883,7 +1884,7 @@ serve(async (req) => {
     // --- INBOX-ONLY MODE: Não responder automaticamente ---
     // Mensagens de clientes (não-admin, não-fromMe) são apenas salvas no Inbox
     if (!isFromMe && !isAdminNumber(inboxTelefone)) {
-      console.log(`[INBOX-ONLY] Mensagem de ${inboxTelefone} salva no Inbox. Chatbot desativado - sem resposta automática.`);
+      console.log(`[INBOX-ONLY] Mensagem de ${mask(inboxTelefone)} salva no Inbox. Chatbot desativado - sem resposta automática.`);
       return new Response(JSON.stringify({ success: true, inbox_only: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -1913,7 +1914,7 @@ serve(async (req) => {
 
         if (convAguardando?.etapa === 'aguardando_humano') {
           const etapaAnterior = convAguardando.dados?.etapa_antes_humano || 'novo';
-          console.log(`[UNLOCK] Admin respondeu para ${destinoTelefone}, desbloqueando de aguardando_humano -> ${etapaAnterior}`);
+          console.log(`[UNLOCK] Admin respondeu para ${mask(destinoTelefone)}, desbloqueando de aguardando_humano -> ${etapaAnterior}`);
           const dadosDesbloq = { ...convAguardando.dados };
           delete dadosDesbloq.etapa_antes_humano;
           await supabaseFm.from('chatbot_conversas').upsert({
@@ -1929,7 +1930,7 @@ serve(async (req) => {
         const dadosAtuais = convAguardando?.dados || {};
         // Só marca atendimento_humano se NÃO for proposta (proposta tem lógica própria abaixo)
         if (!propostaFromMe && !aberturaAutomaticaDesconto) {
-          console.log(`[HUMAN] Mensagem manual detectada para ${destinoTelefone}, pausando bot por 30min`);
+          console.log(`[HUMAN] Mensagem manual detectada para ${mask(destinoTelefone)}, pausando bot por 30min`);
           const etapaParaSalvar = etapaAtualConv === 'atendimento_humano' 
             ? 'atendimento_humano' 
             : 'atendimento_humano';
@@ -1951,7 +1952,7 @@ serve(async (req) => {
 
         // --- Proposta detection (existing logic) ---
         if (propostaFromMe) {
-          console.log(`[fromMe] Proposta detectada para ${destinoTelefone}, atualizando estado...`);
+          console.log(`[fromMe] Proposta detectada para ${mask(destinoTelefone)}, atualizando estado...`);
 
           const serverUrlFm = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
           const instanceTokenFm = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
@@ -2003,7 +2004,7 @@ serve(async (req) => {
           };
 
           if (hasPreHydration) {
-            console.log(`[fromMe] Pre-hydrated data found for ${destinoTelefone}: valor_total=${preHydrated.valor_total}, preserving spreadsheet values`);
+            console.log(`[fromMe] Pre-hydrated data found for ${mask(destinoTelefone)}: valor_total=${preHydrated.valor_total}, preserving spreadsheet values`);
             await supabaseFm.from('chatbot_conversas').upsert({
               telefone: destinoTelefone,
               etapa: 'proposta_enviada',
@@ -2015,7 +2016,7 @@ serve(async (req) => {
               server_url: serverUrlFm, instance_token: instanceTokenFm,
               atualizado_em: new Date().toISOString(),
             }, { onConflict: 'telefone' });
-            console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (dados da planilha preservados)`);
+            console.log(`[fromMe] Estado definido como proposta_enviada para ${mask(destinoTelefone)} (dados da planilha preservados)`);
           } else if (devedoresEncontrados.length > 0) {
             const devedor = devedoresEncontrados[0];
             const cpf = devedor.cpf.replace(/\D/g, '');
@@ -2043,7 +2044,7 @@ serve(async (req) => {
               server_url: serverUrlFm, instance_token: instanceTokenFm,
               atualizado_em: new Date().toISOString(),
             }, { onConflict: 'telefone' });
-            console.log(`[fromMe] Estado definido como proposta_enviada para ${destinoTelefone} (CPF: ${cpf})`);
+            console.log(`[fromMe] Estado definido como proposta_enviada para ${mask(destinoTelefone)} (CPF: ${mask(cpf)})`);
           } else {
             const { data: existingConv } = await supabaseFm
               .from('chatbot_conversas')
@@ -2065,7 +2066,7 @@ serve(async (req) => {
               server_url: serverUrlFm, instance_token: instanceTokenFm,
               atualizado_em: new Date().toISOString(),
             }, { onConflict: 'telefone' });
-            console.log(`[fromMe] Proposta detectada para ${destinoTelefone} (devedor não no banco) - estado resetado para proposta_enviada`);
+            console.log(`[fromMe] Proposta detectada para ${mask(destinoTelefone)} (devedor não no banco) - estado resetado para proposta_enviada`);
           }
         }
       }
@@ -2087,12 +2088,12 @@ serve(async (req) => {
         || payload?.message?.audioMessage?.mediaUrl;
 
       if (audioUrl) {
-        console.log(`Áudio detectado de ${telefone}, URL: ${audioUrl}`);
+        console.log(`Áudio detectado de ${mask(telefone)}, URL: ${audioUrl}`);
         try {
           texto = await transcreverAudio(audioUrl);
-          console.log(`Transcrição do áudio de ${telefone}: "${texto}"`);
+          console.log(`Transcrição do áudio de ${mask(telefone)}: (len=${String(texto ?? "").length})`);
         } catch (err) {
-          console.error(`Erro ao transcrever áudio de ${telefone}:`, err);
+          console.error(`Erro ao transcrever áudio de ${mask(telefone)}:`, err);
           // Responder pedindo texto
           const sUrl = payload?.BaseUrl?.replace(/\/+$/, '') || Deno.env.get('UAZAPI_SERVER_URL');
           const iTok = payload?.token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
@@ -2112,7 +2113,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Mensagem de ${telefone}: "${texto}"`);
+    console.log(`Mensagem de ${mask(telefone)}: (len=${String(texto ?? "").length})`);
 
     // --- INTERCEPTAÇÃO: Admin respondendo instrução para cliente pendente ---
     if (isAdminNumber(telefone)) {
@@ -2144,7 +2145,7 @@ serve(async (req) => {
               const clienteInstanceToken = dados.instance_token || instanceTokenAdmin;
               const respostaProposta = dados.resposta_proposta;
               
-              console.log(`[ADMIN-CONFIRM] Admin confirmou envio para ${clienteTelefone}: "${respostaProposta}"`);
+              console.log(`[ADMIN-CONFIRM] Admin confirmou envio para ${mask(clienteTelefone)}: (len=${String(respostaProposta ?? "").length})`);
               
               // Enviar mensagem ao cliente com simulação de digitação
               const delay = Math.floor(Math.random() * 10000) + 5000;
@@ -2182,7 +2183,7 @@ serve(async (req) => {
                   dados: dadosDesbloq,
                   atualizado_em: new Date().toISOString(),
                 }, { onConflict: 'telefone' });
-                console.log(`[ADMIN-CONFIRM] Cliente ${clienteTelefone} desbloqueado: aguardando_humano -> ${etapaAnterior}`);
+                console.log(`[ADMIN-CONFIRM] Cliente ${mask(clienteTelefone)} desbloqueado: aguardando_humano -> ${etapaAnterior}`);
               }
               
               // Limpar registro pendente
@@ -2211,7 +2212,7 @@ serve(async (req) => {
             }
             
             // Resposta ambígua
-            console.log(`[ADMIN-AMBIGUOUS] Resposta ambígua do admin: "${texto}"`);
+            console.log(`[ADMIN-AMBIGUOUS] Resposta ambígua do admin: (len=${String(texto ?? "").length})`);
             await sendMessage(serverUrlAdmin!, instanceTokenAdmin, ADMIN_NUMERO, 'Por favor responda "sim" para confirmar ou "não" para cancelar.');
             
             return new Response(JSON.stringify({ success: true, admin_ambiguous: true }), {
@@ -2225,7 +2226,7 @@ serve(async (req) => {
           const clienteInstanceToken = dados.instance_token || instanceTokenAdmin;
           const contextoCliente = dados.contexto || {};
           
-          console.log(`[ADMIN-INSTRUCTION] Admin enviou instrução para ${clienteTelefone}: "${texto}"`);
+          console.log(`[ADMIN-INSTRUCTION] Admin enviou instrução para ${mask(clienteTelefone)}: (len=${String(texto ?? "").length})`);
           
           // Parse instrução
           const instrucao = parseAdminInstruction(texto);
@@ -2233,10 +2234,10 @@ serve(async (req) => {
           
           if (instrucao.literal) {
             respostaProposta = instrucao.conteudo;
-            console.log(`[ADMIN-INSTRUCTION] Modo literal: "${respostaProposta}"`);
+            console.log(`[ADMIN-INSTRUCTION] Modo literal: (len=${String(respostaProposta ?? "").length})`);
           } else {
             respostaProposta = await gerarRespostaComInstrucaoAdmin(instrucao.conteudo, contextoCliente);
-            console.log(`[ADMIN-INSTRUCTION] Modo IA: instrução="${instrucao.conteudo}" -> resposta="${respostaProposta}"`);
+            console.log(`[ADMIN-INSTRUCTION] Modo IA: instrução="${instrucao.conteudo}" -> resposta=(len=${String(respostaProposta ?? "").length})`);
           }
           
           // Obter mensagem original do cliente do histórico
@@ -2271,7 +2272,7 @@ serve(async (req) => {
       // --- CASO 3: Admin especifica número de telefone direto na mensagem ---
       const targeted = parseAdminInstructionWithTarget(texto);
       if (targeted.telefoneAlvo) {
-        console.log(`[ADMIN-TARGET] Telefone alvo: ${targeted.telefoneAlvo}, instrução: "${targeted.instrucao}"`);
+        console.log(`[ADMIN-TARGET] Telefone alvo: ${mask(targeted.telefoneAlvo)}, instrução: (len=${String(targeted.instrucao ?? "").length})`);
         
         // Buscar conversa do cliente alvo
         const { data: clienteConv } = await supabase
@@ -2339,7 +2340,7 @@ serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         } else {
-          console.log(`[ADMIN-TARGET] Conversa não encontrada para ${targeted.telefoneAlvo}`);
+          console.log(`[ADMIN-TARGET] Conversa não encontrada para ${mask(targeted.telefoneAlvo)}`);
           await sendMessage(serverUrlAdmin!, instanceTokenAdmin!, ADMIN_NUMERO, `❌ Não encontrei conversa ativa com o número ${targeted.telefoneAlvo.replace(/^55/, '')}. Verifique o número e tente novamente.`);
           return new Response(JSON.stringify({ success: true, admin_target_not_found: true }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -2348,7 +2349,7 @@ serve(async (req) => {
       }
 
       // FALLBACK: encaminhar para teach-chatbot (ensino, perguntas, ações)
-      console.log(`[ADMIN-FALLBACK] Encaminhando mensagem do admin para teach-chatbot: "${texto}"`);
+      console.log(`[ADMIN-FALLBACK] Encaminhando mensagem do admin para teach-chatbot: (len=${String(texto ?? "").length})`);
       try {
         // Carregar histórico recente do admin via chat_ia_mensagens
         const { data: adminUser } = await supabase.from('profiles').select('id').eq('email', 'rodrigo@grupoaltum.com.br').maybeSingle();
@@ -2434,7 +2435,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (convDebounce?.ultimo_webhook_em && convDebounce.ultimo_webhook_em > debounceTimestamp) {
-      console.log(`[DEBOUNCE] Webhook mais recente detectado para ${telefone}, abortando este.`);
+      console.log(`[DEBOUNCE] Webhook mais recente detectado para ${mask(telefone)}, abortando este.`);
       return new Response(JSON.stringify({ success: true, deferred: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -2443,7 +2444,7 @@ serve(async (req) => {
     // Somos o mais recente — pegar todas as mensagens pendentes e limpar buffer
     const mensagensPendentes = convDebounce?.mensagens_pendentes || [texto];
     if (mensagensPendentes.length > 1) {
-      console.log(`[DEBOUNCE] Combinando ${mensagensPendentes.length} mensagens de ${telefone}: ${JSON.stringify(mensagensPendentes)}`);
+      console.log(`[DEBOUNCE] Combinando ${mensagensPendentes.length} mensagens de ${mask(telefone)}: (conteúdo omitido)`);
       texto = mensagensPendentes.join('\n');
     }
     // Limpar buffer atomicamente
@@ -2579,7 +2580,7 @@ serve(async (req) => {
       const minutosDecorridos = (Date.now() - inicioAtendimento.getTime()) / 60000;
       
       if (minutosDecorridos < 30) {
-        console.log(`[SILENCED] Bot pausado para ${telefone} (atendimento humano há ${Math.round(minutosDecorridos)}min)`);
+        console.log(`[SILENCED] Bot pausado para ${mask(telefone)} (atendimento humano há ${Math.round(minutosDecorridos)}min)`);
         // Apenas bufferar no histórico sem responder
         dados = addToHistorico(dados, 'cliente', texto);
         await supabase.from('chatbot_conversas').upsert({
@@ -2595,7 +2596,7 @@ serve(async (req) => {
       
       // Expirou → restaurar etapa anterior
       const etapaAnterior = dados.etapa_antes_humano || 'novo';
-      console.log(`[HUMAN-EXPIRED] Atendimento humano expirou para ${telefone} (${Math.round(minutosDecorridos)}min), restaurando etapa: ${etapaAnterior}`);
+      console.log(`[HUMAN-EXPIRED] Atendimento humano expirou para ${mask(telefone)} (${Math.round(minutosDecorridos)}min), restaurando etapa: ${etapaAnterior}`);
       etapaAtual = etapaAnterior;
       delete dados.atendimento_humano_em;
       delete dados.etapa_antes_humano;
@@ -2693,7 +2694,7 @@ serve(async (req) => {
       let regraAplicada = false;
       for (const regra of regrasCustomizadas) {
         if (textoLower.includes(regra.gatilho.toLowerCase())) {
-          console.log(`[REGRA] Gatilho "${regra.gatilho}" detectado em "${textoLower}" — aplicando resposta customizada`);
+          console.log(`[REGRA] Gatilho "${regra.gatilho}" detectado em (len=${String(textoLower ?? "").length}) — aplicando resposta customizada`);
           resposta = aplicarVariaveisTemplate(regra.resposta, dados);
           await salvarEResponder(etapaAtual);
           regraAplicada = true;
@@ -3021,7 +3022,7 @@ serve(async (req) => {
           break;
         } else {
           // Client said no or unclear — notify admin, stay silent
-          console.log(`[SILÊNCIO] proposta_enviada: cliente não aceitou/ambíguo: "${texto}"`);
+          console.log(`[SILÊNCIO] proposta_enviada: cliente não aceitou/ambíguo: (len=${String(texto ?? "").length})`);
           await salvarSilenciosoENotificar('proposta_enviada', texto);
           break;
         }
@@ -3116,7 +3117,7 @@ serve(async (req) => {
           }
 
           // AI não entendeu — notificar admin e silenciar
-          console.log(`[SILÊNCIO] oferta_valores: não entendeu escolha: "${texto}"`);
+          console.log(`[SILÊNCIO] oferta_valores: não entendeu escolha: (len=${String(texto ?? "").length})`);
           await salvarSilenciosoENotificar('oferta_valores', texto);
           break;
         }
@@ -3198,7 +3199,7 @@ serve(async (req) => {
           }
 
           // AI não entendeu — notificar admin e silenciar
-          console.log(`[SILÊNCIO] aguardando_pagamento_hoje: resposta ambígua: "${texto}"`);
+          console.log(`[SILÊNCIO] aguardando_pagamento_hoje: resposta ambígua: (len=${String(texto ?? "").length})`);
           await salvarSilenciosoENotificar('aguardando_pagamento_hoje', texto);
           break;
         }
@@ -3226,7 +3227,7 @@ serve(async (req) => {
           }
 
           // AI não entendeu a data — notificar admin e silenciar
-          console.log(`[SILÊNCIO] aguardando_data: data não identificada: "${texto}"`);
+          console.log(`[SILÊNCIO] aguardando_data: data não identificada: (len=${String(texto ?? "").length})`);
           await salvarSilenciosoENotificar('aguardando_data', texto);
           break;
         }
@@ -3254,7 +3255,7 @@ serve(async (req) => {
       // -------- AGUARDANDO HUMANO (IA não soube responder) --------
       case 'aguardando_humano': {
         // Não responde nada ao cliente, apenas re-notifica o admin se insistir
-        console.log(`[AGUARDANDO_HUMANO] Cliente ${telefone} insistiu: "${texto}" — re-notificando admin`);
+        console.log(`[AGUARDANDO_HUMANO] Cliente ${mask(telefone)} insistiu: (len=${String(texto ?? "").length}) — re-notificando admin`);
         await notificarAdmin(supabase, telefone, telefoneInstancia, texto);
         // Salvar histórico sem mudar etapa
         await supabase.from('chatbot_conversas').upsert({
