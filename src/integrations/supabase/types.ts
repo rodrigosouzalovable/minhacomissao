@@ -14691,6 +14691,10 @@ export type Database = {
           template_id: string
         }[]
       }
+      scheduler_token_autorizado: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
       sftp_ume_aplicar: { Args: { p_arquivo: string }; Returns: number }
       sftp_ume_auto_autorizada: { Args: { p_token: string }; Returns: boolean }
       sftp_ume_chave_status: { Args: never; Returns: string }
