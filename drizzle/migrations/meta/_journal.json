@@ -1674,6 +1674,13 @@
       "when": 1794336098773,
       "tag": "0238_scheduler_token_autorizado",
       "breakpoints": true
+    },
+    {
+      "idx": 239,
+      "version": "7",
+      "when": 1794337337289,
+      "tag": "0239_restringir_acessos_equipe_e_midia_inbox",
+      "breakpoints": true
     }
   ]
 }
