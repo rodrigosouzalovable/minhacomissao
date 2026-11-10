@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireCaller } from '../_shared/auth-guard.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,26 +12,12 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  const caller = await requireCaller(req, { user: 'admin', corsHeaders })
+  if (caller instanceof Response) return caller
+
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      throw new Error('Não autorizado')
-    }
-
-    const token = authHeader.replace('Bearer ', '')
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-
-    // Decode JWT payload to get user ID (bypass session validation)
-    const parts = token.split('.')
-    if (parts.length !== 3) throw new Error('Token inválido')
-
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
-    const callingUserId = payload.sub
-    const callingEmail = payload.email
-
-    if (!callingUserId) throw new Error('Usuário não autenticado')
-
-    console.log(`User ${callingUser?.id ?? 'desconhecido'} attempting password reset`)
+    console.log(`User ${caller.userId ?? caller.kind} attempting password reset`)
 
     // Criar cliente admin
     const supabaseAdmin = createClient(
@@ -38,24 +25,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
-
-    // Verificar se é admin
-    const { data: adminRole, error: roleError } = await supabaseAdmin
-      .from('user_roles')
-      .select('id')
-      .eq('user_id', callingUserId)
-      .eq('role', 'admin')
-      .maybeSingle()
-
-    if (roleError) {
-      console.error('Role check error:', roleError)
-      throw new Error('Erro ao verificar permissões')
-    }
-
-    if (!adminRole) {
-      console.error(`User ${callingUser?.id ?? 'desconhecido'} is not admin`)
-      throw new Error('Apenas administradores podem redefinir senhas')
-    }
 
     const { userId, newPassword } = await req.json()
     
@@ -77,7 +46,7 @@ serve(async (req) => {
       throw updateError
     }
 
-    console.log(`SUCCESS: Admin ${callingUser?.id ?? 'desconhecido'} reset password for user ${userId}`)
+    console.log(`SUCCESS: Admin ${caller.userId ?? caller.kind} reset password for user ${userId}`)
 
     return new Response(
       JSON.stringify({ success: true, message: 'Senha redefinida com sucesso' }),
