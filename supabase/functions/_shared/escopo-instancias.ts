@@ -1,6 +1,7 @@
 // Escopo de instâncias Meta por usuário chamador.
 // Retorna null quando não há restrição (cron/service role/admin) ou um Set de ids permitidos.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { identifyCaller } from './auth-guard.ts';
 
 export async function idsInstanciasPermitidas(
   req: Request,
@@ -8,10 +9,14 @@ export async function idsInstanciasPermitidas(
 ): Promise<Set<string> | null> {
   const authHeader = req.headers.get('Authorization') || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (!token) return null; // chamada interna/cron
+  // Sem credencial: nada visível (chamadas internas usam service role ou token do agendador).
+  if (!token) return new Set<string>();
 
-  // Service role key chamando diretamente: sem restrição.
+  // Service role key ou token de agendador registrado: sem restrição.
   if (token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) return null;
+  const caller = await identifyCaller(req);
+  if (caller && caller.kind !== 'user') return null;
+  if (!caller) return new Set<string>();
 
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
   const asUser = createClient(Deno.env.get('SUPABASE_URL')!, anonKey, {
