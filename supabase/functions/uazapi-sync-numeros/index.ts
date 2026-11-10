@@ -42,8 +42,16 @@ Deno.serve(async (req) => {
       .eq('provider', 'uazapi')
       .not('uazapi_instance_id', 'is', null);
     if (folderId) q = q.eq('folder_padrao_id', folderId);
-    const { data: espelhos, error: e1 } = await q;
+    const { data: espelhosTodos, error: e1 } = await q;
     if (e1) throw e1;
+    // Non-admin users only sync numbers they can see under their own access rules.
+    let espelhos = espelhosTodos || [];
+    if (__caller.kind === 'user' && !__caller.isAdmin && espelhos.length) {
+      const { data: visiveis } = await asCaller(__caller)
+        .from('meta_whatsapp_instances').select('id').in('id', espelhos.map((e: any) => e.id));
+      const ok = new Set((visiveis || []).map((v: any) => v.id));
+      espelhos = espelhos.filter((e: any) => ok.has(e.id));
+    }
 
     const ids = (espelhos || []).map((e: any) => e.uazapi_instance_id);
     if (!ids.length) return json({ ok: true, atualizados: 0, total: 0 });
