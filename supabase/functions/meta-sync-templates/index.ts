@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, callerCanSeeRows, forbidden } from '../_shared/auth-guard.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sincronizarTemplatesMeta } from "../_shared/sincronizar-templates-meta.ts";
@@ -19,6 +19,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: false, error: 'instancia_id inválido' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+    if (!(await callerCanSeeRows(__caller, 'meta_whatsapp_instances', [instanciaId]))) {
+      return forbidden('Sem acesso a esta instância', corsHeaders);
     }
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const { data: inst, error: ie } = await supabase
