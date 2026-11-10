@@ -13099,6 +13099,10 @@ export type Database = {
         Args: { _folder: string; _uid: string }
         Returns: boolean
       }
+      can_view_meta_webhook_media: {
+        Args: { _object_name: string }
+        Returns: boolean
+      }
       can_view_uazapi_inbox_media: {
         Args: { _object_name: string; _uid: string }
         Returns: boolean

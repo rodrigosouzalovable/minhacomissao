@@ -1681,6 +1681,13 @@
       "when": 1794337337289,
       "tag": "0239_restringir_acessos_equipe_e_midia_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 240,
+      "version": "7",
+      "when": 1794337404057,
+      "tag": "0240_midia_inbox_leitura_por_conversa",
+      "breakpoints": true
     }
   ]
 }
