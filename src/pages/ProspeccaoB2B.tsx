@@ -59,7 +59,7 @@ async function erroDetalhe(error: unknown) {
 }
 
 function preencher(t: string, l: Lead) {
-  return t.replaceAll("{nome}", l.nome ?? "").replaceAll("{empresa}", l.empresa ?? "sua empresa").replaceAll("{cargo}", l.cargo ?? "");
+  return t.split("{nome}").join(l.nome ?? "").split("{empresa}").join(l.empresa ?? "sua empresa").split("{cargo}").join(l.cargo ?? "");
 }
 
 export default function ProspeccaoB2B() {
