@@ -128,3 +128,47 @@ export function mask(value: unknown): string {
   if (!s) return '';
   return `***${s.slice(-4)}`;
 }
+
+const normUrl = (u: unknown) => String(u ?? '').trim().replace(/\/+$/, '').toLowerCase();
+
+/**
+ * Resolves which UAZAPI server/token a send may use.
+ * - Supplied token: must belong to an instance the caller can see (RLS); server URL is taken from that instance.
+ * - No token: the company default number from env, ignoring any caller-supplied server URL.
+ */
+export async function resolverInstanciaUazapi(
+  caller: Caller,
+  serverUrl: string | null | undefined,
+  instanceToken: string | null | undefined,
+): Promise<{ ok: true; serverUrl: string; instanceToken: string } | { ok: false; status: number; error: string }> {
+  const envUrl = Deno.env.get('UAZAPI_SERVER_URL') || '';
+  const envToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || '';
+  if (!instanceToken) {
+    return { ok: true, serverUrl: envUrl, instanceToken: envToken };
+  }
+  const client = caller.kind === 'user' && !caller.isAdmin ? asCaller(caller) : service();
+  const { data } = await client
+    .from('user_whatsapp_instances')
+    .select('server_url')
+    .eq('instance_token', instanceToken)
+    .limit(1);
+  const row = (data || [])[0];
+  if (row?.server_url) {
+    return { ok: true, serverUrl: String(row.server_url), instanceToken };
+  }
+  // Internal/admin callers may still use the company default credentials explicitly.
+  if ((caller.kind !== 'user' || caller.isAdmin) && instanceToken === envToken) {
+    return { ok: true, serverUrl: envUrl, instanceToken };
+  }
+  if ((caller.kind !== 'user' || caller.isAdmin) && serverUrl) {
+    // Admin/internal using an unregistered instance: keep behavior but only toward the configured server host.
+    try {
+      const host = new URL(String(serverUrl)).host;
+      const allowed = envUrl ? new URL(envUrl).host : '';
+      if (host && (host === allowed || host.endsWith('.uazapi.com'))) {
+        return { ok: true, serverUrl: String(serverUrl), instanceToken };
+      }
+    } catch { /* invalid URL */ }
+  }
+  return { ok: false, status: 403, error: 'Instância não autorizada para este usuário' };
+}
