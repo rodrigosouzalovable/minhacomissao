@@ -1,3 +1,4 @@
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { carregarParcelasPagas, parcelaJaPaga } from '../_shared/parcela-ja-paga.ts';
 // Envia lembretes de boletos (D-3 e D0) via API oficial Meta.
 // Chamado 1x/dia pelo cron às 08:30 BRT. Toggle ativo/inativo em meta_lembrete_config.
@@ -57,6 +58,8 @@ async function notifyAdmin(supabase: any, telefones: string[], mensagem: string,
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const body = await req.json().catch(() => ({} as any));

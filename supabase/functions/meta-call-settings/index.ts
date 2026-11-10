@@ -1,5 +1,6 @@
 // Consulta e liga/desliga a Calling API em números da Meta (call_settings).
 // Aceita uma instância (instancia_id) ou lote (instancia_ids / todas: true).
+import { requireCaller } from '../_shared/auth-guard.ts';
 import {
   corsHeaders, json, service, userDaRequisicao, carregarInstancia, podeUsarInstancia,
   humanizarErroChamada, GRAPH, type Instancia,
@@ -61,6 +62,8 @@ async function lerStatus(inst: Instancia) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const body = await req.json().catch(() => ({}));

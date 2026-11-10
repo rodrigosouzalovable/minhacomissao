@@ -1,6 +1,7 @@
 // Sincroniza custos reais cobrados pela Meta por WABA/dia/categoria.
 // Usa conversation_analytics da Graph API. Requer META_SYSTEM_USER_TOKEN
 // como fallback quando as instâncias não têm token válido para acessar a WABA.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -31,6 +32,8 @@ async function fetchFxRate(): Promise<number> {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,

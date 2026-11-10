@@ -2,6 +2,7 @@
 // de cada instância Meta. A URL de foto que a Meta devolve é temporária, então a
 // imagem é copiada para o bucket privado "meta-perfis" e gravamos uma URL assinada
 // de longa duração na instância.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { idsInstanciasPermitidas, filtrarInstancias } from '../_shared/escopo-instancias.ts';
 
@@ -36,6 +37,8 @@ function isProfileOnlyLock(code: number | null, message: string) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const body = await req.json().catch(() => ({}));

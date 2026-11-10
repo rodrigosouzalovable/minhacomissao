@@ -1,6 +1,7 @@
 // Envia o pedido de permissão de chamada para o cliente.
 // Dentro da janela de 24h usa a mensagem interativa "call_permission_request";
 // fora da janela usa o template UTILITY com botão de permissão (nome em template).
+import { requireCaller } from '../_shared/auth-guard.ts';
 import {
   corsHeaders, json, service, userDaRequisicao, carregarInstancia, podeUsarInstancia,
   humanizarErroChamada, digitos, GRAPH,
@@ -10,6 +11,8 @@ const TEXTO_PADRAO = 'Podemos falar por chamada de voz agora para agilizar sua n
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const body = await req.json().catch(() => ({}));

@@ -3,6 +3,7 @@
 //  - persegue 1.000 contatos inéditos com WhatsApp confirmado em cada dia
 //  - escolhe os nichos/cidades com melhor histórico de resposta (aquecimento_nicho_score)
 //  - busca no Google Maps, confirma quem tem WhatsApp e guarda sem duplicar telefone
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { hojeBrt } from "../_shared/meta-aquecimento-alvo.ts";
 import { notificarNumeros } from "../_shared/notificar-numeros.ts";
@@ -117,6 +118,8 @@ async function haInstanciaVerificadora(supabase: any) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

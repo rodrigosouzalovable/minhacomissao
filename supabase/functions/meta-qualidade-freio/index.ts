@@ -3,6 +3,7 @@
 // e grava o teto efetivo do dia em meta_instance_freio_diario.
 // Números com engajamento ruim têm o teto cortado pela metade; se resposta E leitura
 // estiverem ruins ao mesmo tempo, o número é pausado no dia (teto = 0).
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   aplicarFreio,
@@ -19,6 +20,8 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

@@ -1,6 +1,7 @@
 // Relatório diário de custo Meta WhatsApp enviado no WhatsApp do admin.
 // Roda via pg_cron às 08:30 BRT. Sincroniza billing primeiro (meta-billing-sync)
 // e depois lê meta_billing_snapshot + envios_log para montar o resumo.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.88.0';
 import { notificarAdmin } from '../_shared/notificar-admin.ts';
 
@@ -14,6 +15,8 @@ const usd = (v: number) => v.toLocaleString('en-US', { style: 'currency', curren
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,

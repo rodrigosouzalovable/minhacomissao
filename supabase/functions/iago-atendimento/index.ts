@@ -1,5 +1,6 @@
 // IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
 // Na PADRÃO pode escalar; na AQUECIMENTO responde curto, sem humano e sem follow-up.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { borrowerIdSftp } from '../_shared/ume-carteira.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.88.0';
 import {
@@ -34,6 +35,8 @@ function blocoConhecimento(itens: any[], tipo: string) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 

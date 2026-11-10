@@ -1,4 +1,5 @@
 // Processa um lote de consultas UME em blocos e se auto-reencadeia até terminar.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { consultarUme } from '../_shared/ume-desconto.ts';
@@ -93,6 +94,8 @@ async function processarItem(item: any, forcar: boolean) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const inicio = Date.now();
   try {

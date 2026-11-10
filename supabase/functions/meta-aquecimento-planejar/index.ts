@@ -2,6 +2,7 @@
 // Para cada número Meta saudável define, com apoio da IA, o alvo de
 // destinatários ÚNICOS do dia e o mix entre destinos UAZAPI e leads reais.
 // Sem loop, sem auto-invocação: 1 execução por dia, 1 chamada de IA.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { hojeBrt, instanciasComTemplateLeadAprovado } from '../_shared/meta-aquecimento-alvo.ts';
 import { alvoDiarioPorTier, carregarOrcamento, proximoTier, tierAtual } from '../_shared/meta-aquecimento-inteligente.ts';
@@ -37,6 +38,8 @@ function alvoBase(tier: number, diasGreen: number, unicos7d: number): number {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,

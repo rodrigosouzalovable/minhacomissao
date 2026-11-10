@@ -2,6 +2,7 @@
 // Modo single: { instance_id } (lê config do banco) OU
 //              { server_url, instance_token, proxy: {...} } (ad-hoc)
 // Modo lote:   { instance_ids: [uuid,...] } (lê do banco para cada)
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -100,6 +101,8 @@ async function processInstance(supabase: any, instanceId: string) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
   try {
     const body = await req.json().catch(() => ({}));
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);

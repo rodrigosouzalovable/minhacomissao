@@ -3,6 +3,7 @@
 // Marks ALL imported messages as unread (lida=false). Runs at most ONCE per instance,
 // controlled by user_whatsapp_instances.historico_inicial_importado_em.
 
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -219,6 +220,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const { instancia_id, force } = await req.json();

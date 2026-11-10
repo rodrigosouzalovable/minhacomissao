@@ -1,5 +1,6 @@
 // Ações sobre uma chamada existente: pre_accept, accept, reject e terminate.
 // Usada tanto para atender/rejeitar chamadas de entrada quanto para encerrar as de saída.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import {
   corsHeaders, json, service, userDaRequisicao, carregarInstancia, podeUsarInstancia,
   chamarGraph, humanizarErroChamada, custoEstimado,
@@ -10,6 +11,8 @@ type Acao = typeof ACOES[number];
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const body = await req.json().catch(() => ({}));

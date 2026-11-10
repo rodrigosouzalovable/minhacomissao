@@ -6,6 +6,7 @@
 // - Erros transitórios (502/503/504 sem rate limit): devolve item para 'pendente'
 //   com contador de tentativas até 3.
 // - Erros permanentes: marca como 'erro' (o usuário pode reenviar em lote).
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -339,6 +340,8 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
   try {
     const inicio = Date.now();
     const body = await req.json();

@@ -1,5 +1,6 @@
 // Integração 3C Plus (API Discador)
 // Ações: testar | campanhas | qualificacoes | sync
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 
 const corsHeaders = {
@@ -81,6 +82,8 @@ async function tresc(base: string, token: string, path: string, params: Record<s
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
