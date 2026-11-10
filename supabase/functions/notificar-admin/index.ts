@@ -22,6 +22,11 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const tipo: string = body.tipo || "teste";
+    // Regular users may only send a bounded custom/test notice to the administrators.
+    if (__caller.kind === "user" && !__caller.isAdmin && !["teste", "custom"].includes(tipo)) {
+      return json({ success: false, error: "Acesso não permitido" }, 403);
+    }
+    if (typeof body.mensagem === "string") body.mensagem = body.mensagem.slice(0, 2000);
 
     if (tipo === "teste") {
       const r = await notificarAdmin(supabase, {
