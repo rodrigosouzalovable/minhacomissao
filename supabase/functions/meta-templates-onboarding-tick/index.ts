@@ -1,3 +1,4 @@
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { templateIntervalSeconds } from "../_shared/meta-template-pacing.ts";
 import { nextTemplateDay, isGhostSubmission } from "../_shared/meta-template-completion.ts";
 import { podeDistribuirModelo } from "../_shared/meta-template-distribution.ts";
@@ -54,6 +55,8 @@ const erroDeLimiteMeta = (texto: string) => {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

@@ -1,5 +1,6 @@
 // Backfill: percorre o histórico de aquecimento e salva cada par de instâncias
 // na agenda física uma da outra (com cache + delay anti-ban).
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { salvarContatoAgendaCacheado, nomeAmigavelInstancia } from "../_shared/agenda-contatos.ts";
 
@@ -10,6 +11,8 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

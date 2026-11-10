@@ -1,3 +1,4 @@
+import { requireCaller, resolverInstanciaUazapi, mask } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -9,6 +10,8 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const { telefone, media_url, type, uazapi_server_url, uazapi_instance_token, instancia_id, file_name } = await req.json();
@@ -17,8 +20,12 @@ Deno.serve(async (req) => {
     if (!media_url) throw new Error('URL da mídia não informada');
     if (!type || !['image', 'document'].includes(type)) throw new Error('Tipo inválido (use image ou document)');
 
-    const serverUrl = uazapi_server_url || Deno.env.get('UAZAPI_SERVER_URL');
-    const instanceToken = uazapi_instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    const __inst = await resolverInstanciaUazapi(__caller, uazapi_server_url, uazapi_instance_token);
+    if (!__inst.ok) {
+      return new Response(JSON.stringify({ success: false, error: __inst.error }), { status: __inst.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const serverUrl = __inst.serverUrl;
+    const instanceToken = __inst.instanceToken;
 
     if (!serverUrl || !instanceToken) {
       throw new Error('Credenciais UAZAPI não configuradas');
@@ -37,7 +44,7 @@ Deno.serve(async (req) => {
       body.docName = file_name;
     }
 
-    console.log(`Enviando ${type} para ${telefoneCompleto} via ${endpoint}`);
+    console.log(`Enviando ${type} para ${mask(telefoneCompleto)} via ${endpoint}`);
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -136,7 +143,7 @@ Deno.serve(async (req) => {
           });
         }
 
-        console.log(`[INBOX] ${tipoConteudo} de saída salvo para ${telefoneCompleto}`);
+        console.log(`[INBOX] ${tipoConteudo} de saída salvo para ${mask(telefoneCompleto)}`);
       }
     } catch (inboxErr) {
       console.error('[INBOX] Erro ao salvar mídia no inbox:', inboxErr);

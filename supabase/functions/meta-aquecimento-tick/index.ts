@@ -7,6 +7,7 @@
 // Modo intensivo (números de nova BM): envia em lotes por rodada para alcançar
 // o alvo do dia (ex.: 450 únicos/dia → ~1.300 em 3 dias), sempre em UTILITY.
 // A recuperação de números YELLOW/RED continua em meta-recuperacao-tick.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   dentroJanelaAquecimento,
@@ -56,6 +57,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,

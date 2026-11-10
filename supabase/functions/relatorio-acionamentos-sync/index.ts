@@ -1,5 +1,6 @@
 // Sincroniza o Relatório de Acionamentos com os dados do Inbox Meta Oficial
 // e envia resumo no WhatsApp (parcial de hora em hora + consolidado do dia).
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarNumeros } from "../_shared/notificar-numeros.ts";
 
@@ -56,6 +57,8 @@ async function fetchAll(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -70,6 +73,11 @@ Deno.serve(async (req) => {
 
     // Envio de teste para um destino (grupo) específico
     if (body.action === "testar_destino") {
+      if (!__caller.isAdmin) {
+        return new Response(JSON.stringify({ error: "Apenas administradores podem testar destinos" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const jid = String(body.jid || "").trim();
       if (!jid) {
         return new Response(JSON.stringify({ error: "jid obrigatório" }), {
@@ -89,6 +97,8 @@ Deno.serve(async (req) => {
 
     const dia: string = body.dia || agora.dia;
     let notificar: boolean = body.notificar !== false;
+    // Only the scheduler, internal calls or administrators send report messages.
+    if (__caller.kind === "user" && !__caller.isAdmin) notificar = false;
     let consolidado: boolean = body.consolidado === true;
 
     // Reenvio manual (somente admin): força consolidado e ignora a trava diária

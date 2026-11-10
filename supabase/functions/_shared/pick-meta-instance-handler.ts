@@ -60,6 +60,13 @@ const TETO_PROTECAO_CAMPANHA_DIA = 300;
 
 export async function handlePickMetaInstance(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  // Internal-only: campaign workers call this with the service-role key.
+  const serviceKeyPick = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  if (!serviceKeyPick || (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim() !== serviceKeyPick) {
+    return new Response(JSON.stringify({ success: false, error: 'Não autorizado' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
   try {
     const reqBody = await req.json();
     const { instancia_ids, user_id, excluir_id, excluir_ids, ignorar_pausa_qualidade } = reqBody;

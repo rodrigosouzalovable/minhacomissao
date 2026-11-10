@@ -4,6 +4,7 @@
 // (ultima_msg_entrada_em preenchida OU mensagem de entrada registrada em
 // meta_whatsapp_mensagens) NUNCA são tocadas.
 // Reaparecem automaticamente quando o cliente responde (webhook desarquiva).
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 
 const corsHeaders = {
@@ -13,6 +14,8 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

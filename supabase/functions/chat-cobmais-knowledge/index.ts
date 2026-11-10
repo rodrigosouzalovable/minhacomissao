@@ -1,3 +1,4 @@
+import { requireCaller, sanitizeChatMessages } from '../_shared/auth-guard.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -8,6 +9,8 @@ const corsHeaders = {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { tabs: ['/admin/automacao-cobmais'] });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -28,7 +31,8 @@ serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub;
-    const { messages } = await req.json();
+    const { messages: rawMessages } = await req.json();
+    const messages = sanitizeChatMessages(rawMessages);
 
     // Fetch all knowledge data using service role
     const adminClient = createClient(

@@ -1,5 +1,6 @@
 // IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
 // Na PADRÃO pode escalar; na AQUECIMENTO responde curto, sem humano e sem follow-up.
+import { requireCaller, mask } from '../_shared/auth-guard.ts';
 import { borrowerIdSftp } from '../_shared/ume-carteira.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.88.0';
 import {
@@ -34,6 +35,8 @@ function blocoConhecimento(itens: any[], tipo: string) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
@@ -741,9 +744,9 @@ Deno.serve(async (req) => {
             const pUme = propostaDaUme(consulta, tabela);
             if (pUme) {
               proposta = pUme as any;
-              console.log('[IAGO] proposta UME', { cpf, tabela, total: pUme.total, opcoes: pUme.opcoes.length });
+              console.log('[IAGO] proposta UME', { cpf: mask(cpf), tabela, total: pUme.total, opcoes: pUme.opcoes.length });
             } else {
-              console.log('[IAGO] CPF não localizado ou sem valor sem juros na UME', { cpf });
+              console.log('[IAGO] CPF não localizado ou sem valor sem juros na UME', { cpf: mask(cpf) });
             }
           } catch (e) {
             console.error('[IAGO] falha na consulta UME', String((e as Error)?.message || e));
@@ -934,7 +937,7 @@ Deno.serve(async (req) => {
               ultima_msg_cliente_em: agoraBol,
             }).eq('id', estado.id);
             await finalizarEntrada();
-            console.log('[IAGO] boleto UME enviado', { contato_id, cpf, ambiente });
+            console.log('[IAGO] boleto UME enviado', { contato_id, cpf: mask(cpf), ambiente });
             return json({ success: true, etapa: 'boleto_enviado' });
           }
           console.error('[IAGO] UME recusou boleto', r.status, JSON.stringify(r.data).slice(0, 300));
@@ -963,7 +966,7 @@ Deno.serve(async (req) => {
       if (!perfilOk) {
         await supabase.from('meta_whatsapp_contatos').update({ nome }).eq('id', contato_id);
       }
-      console.log('[IAGO] nome do cliente gravado', { contato_id, nome });
+      console.log('[IAGO] nome do cliente gravado', { contato_id });
     };
 
     if (!nomeInformado && !proposta?.nomeCliente && !nomePorTelefone) {

@@ -2,6 +2,7 @@
 // Modo single: { instance_id } (lê config do banco) OU
 //              { server_url, instance_token, proxy: {...} } (ad-hoc)
 // Modo lote:   { instance_ids: [uuid,...] } (lê do banco para cada)
+import { requireCaller, callerCanSeeRows, forbidden } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -100,18 +101,23 @@ async function processInstance(supabase: any, instanceId: string) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
   try {
     const body = await req.json().catch(() => ({}));
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     // Modo ad-hoc (sem persistir)
     if (body.server_url && body.instance_token && body.proxy) {
+      // Destino informado pelo chamador: somente administradores.
+      if (!__caller.isAdmin) return forbidden("Somente administradores podem aplicar proxy avulso", corsHeaders);
       const r = await applyToUazapi(body.server_url, body.instance_token, body.proxy);
       return json(r);
     }
 
     const ids: string[] = body.instance_ids || (body.instance_id ? [body.instance_id] : []);
     if (ids.length === 0) return json({ error: "instance_id ou instance_ids obrigatório" }, 400);
+    if (!(await callerCanSeeRows(__caller, "user_whatsapp_instances", ids))) return forbidden("Sem acesso a uma ou mais instâncias", corsHeaders);
 
     const results: any[] = [];
     for (let i = 0; i < ids.length; i++) {

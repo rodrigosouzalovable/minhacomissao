@@ -1,6 +1,7 @@
 // Processa a fila diária das campanhas Meta agendadas.
 // Chamado por pg_cron todo dia às 08:00 BRT (11:00 UTC), seg-sáb.
 // Regras: bloqueia domingo, respeita horário 08-20h BRT, delays randomizados.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -65,6 +66,8 @@ async function invokeSend(supabase: any, item: any, campanha: any, varianteIdx =
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 

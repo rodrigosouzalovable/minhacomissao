@@ -1,3 +1,4 @@
+import { requireCaller, resolverInstanciaUazapi, mask } from '../_shared/auth-guard.ts';
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -71,12 +72,14 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const { telefone, mensagem, uazapi_server_url, uazapi_instance_token, instancia_id, quoted } = await req.json();
     
     const tokenSuffix = uazapi_instance_token ? uazapi_instance_token.slice(-8) : 'global';
-    console.log('Recebendo requisição para enviar WhatsApp:', { telefone, instance: tokenSuffix });
+    console.log('Recebendo requisição para enviar WhatsApp:', { telefone: mask(telefone), instance: tokenSuffix });
 
     if (!telefone) throw new Error('Telefone não informado');
 
@@ -85,11 +88,15 @@ serve(async (req) => {
       ? telefoneFormatado 
       : `55${telefoneFormatado}`;
 
-    console.log('Telefone formatado:', telefoneCompleto);
+    console.log('Telefone formatado:', mask(telefoneCompleto));
 
     // Use provided credentials or fall back to global UAZAPI secrets
-    const serverUrl = uazapi_server_url || Deno.env.get('UAZAPI_SERVER_URL');
-    const instanceToken = uazapi_instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    const __inst = await resolverInstanciaUazapi(__caller, uazapi_server_url, uazapi_instance_token);
+    if (!__inst.ok) {
+      return new Response(JSON.stringify({ success: false, error: __inst.error }), { status: __inst.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const serverUrl = __inst.serverUrl;
+    const instanceToken = __inst.instanceToken;
 
     if (!serverUrl || !instanceToken) {
       throw new Error('Credenciais UAZAPI não configuradas');
@@ -168,7 +175,7 @@ serve(async (req) => {
           });
         }
 
-        console.log(`[INBOX] Mensagem de saída salva para ${telefoneCompleto}`);
+        console.log(`[INBOX] Mensagem de saída salva para ${mask(telefoneCompleto)}`);
       }
     } catch (inboxErr) {
       console.error('[INBOX] Erro ao salvar msg de saída:', inboxErr);

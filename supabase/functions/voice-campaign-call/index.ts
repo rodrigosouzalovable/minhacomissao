@@ -1,3 +1,4 @@
+import { requireCaller, mask, resolverInstanciaUazapi } from '../_shared/auth-guard.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -10,6 +11,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const { campaign_id, contact_id, phone_number, server_url, instance_token } = await req.json();
@@ -24,9 +27,11 @@ serve(async (req) => {
 
     const telefoneFormatado = phone_number.replace(/\D/g, '');
     const telefoneCompleto = telefoneFormatado.startsWith('55') ? telefoneFormatado : `55${telefoneFormatado}`;
-    const cleanUrl = server_url.replace(/\/+$/, '');
+    const inst = await resolverInstanciaUazapi(__caller, server_url, instance_token);
+    if (!inst.ok) throw new Error(inst.error);
+    const cleanUrl = inst.serverUrl.replace(/\/+$/, '');
 
-    console.log(`[VOICE-CALL] Initiating call to ${telefoneCompleto} via ${cleanUrl}`);
+    console.log(`[VOICE-CALL] Initiating call to ${mask(telefoneCompleto)}`);
 
     // Update contact status to 'chamando'
     await supabase

@@ -1,3 +1,4 @@
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
@@ -10,6 +11,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+  const __caller = await requireCaller(req, { tabs: ['/admin/importar-devedores'] });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const { job_id } = await req.json();
@@ -33,12 +36,20 @@ Deno.serve(async (req) => {
 
     if (jobError || !job) {
       return new Response(
-        JSON.stringify({ error: "Job not found", details: jobError?.message }),
+        JSON.stringify({ error: "Job not found" }),
         {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // Only the job owner (or an administrator/internal caller) may process it.
+    if (__caller.kind === "user" && !__caller.isAdmin && job.user_id !== __caller.userId) {
+      return new Response(JSON.stringify({ error: "Acesso não permitido" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (job.status !== "pendente") {

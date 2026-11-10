@@ -1,3 +1,4 @@
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { criarTokenResolver } from '../_shared/webhook-token.ts';
@@ -8,6 +9,8 @@ const GRAPH_VERSION = 'v21.0';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

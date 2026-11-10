@@ -1,5 +1,6 @@
 // Sincroniza o número real (telefone) de cada instância UAZAPI da aba Acionamento
 // e propaga para a instância espelho do Inbox Meta (display_phone).
+import { requireCaller, asCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
@@ -25,6 +26,8 @@ function extrairTelefone(data: any): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const supabase = createClient(
@@ -42,8 +45,16 @@ Deno.serve(async (req) => {
       .eq('provider', 'uazapi')
       .not('uazapi_instance_id', 'is', null);
     if (folderId) q = q.eq('folder_padrao_id', folderId);
-    const { data: espelhos, error: e1 } = await q;
+    const { data: espelhosTodos, error: e1 } = await q;
     if (e1) throw e1;
+    // Non-admin users only sync numbers they can see under their own access rules.
+    let espelhos = espelhosTodos || [];
+    if (__caller.kind === 'user' && !__caller.isAdmin && espelhos.length) {
+      const { data: visiveis } = await asCaller(__caller)
+        .from('meta_whatsapp_instances').select('id').in('id', espelhos.map((e: any) => e.id));
+      const ok = new Set((visiveis || []).map((v: any) => v.id));
+      espelhos = espelhos.filter((e: any) => ok.has(e.id));
+    }
 
     const ids = (espelhos || []).map((e: any) => e.uazapi_instance_id);
     if (!ids.length) return json({ ok: true, atualizados: 0, total: 0 });

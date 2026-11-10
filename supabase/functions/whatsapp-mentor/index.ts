@@ -1,3 +1,4 @@
+import { requireCaller, sanitizeChatMessages } from '../_shared/auth-guard.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -33,9 +34,12 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
-    const { messages, contexto } = await req.json();
+    const { messages: rawMessages, contexto } = await req.json();
+    const messages = Array.isArray(rawMessages) ? sanitizeChatMessages(rawMessages) : rawMessages;
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: "messages é obrigatório" }), {

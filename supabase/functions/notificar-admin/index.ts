@@ -1,5 +1,6 @@
 // Edge function pública para enviar notificações ao admin (manual ou cron)
 // Tipos suportados: 'teste', 'resumo_diario', 'proxies_faltando', 'custom'
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
 
@@ -10,6 +11,8 @@ const corsHeaders = {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -19,6 +22,11 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const tipo: string = body.tipo || "teste";
+    // Regular users may only send a bounded custom/test notice to the administrators.
+    if (__caller.kind === "user" && !__caller.isAdmin && !["teste", "custom"].includes(tipo)) {
+      return json({ success: false, error: "Acesso não permitido" }, 403);
+    }
+    if (typeof body.mensagem === "string") body.mensagem = body.mensagem.slice(0, 2000);
 
     if (tipo === "teste") {
       const r = await notificarAdmin(supabase, {

@@ -1,3 +1,4 @@
+import { requireCaller, callerCanSeeRows, forbidden } from '../_shared/auth-guard.ts';
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sincronizarTemplatesMeta } from "../_shared/sincronizar-templates-meta.ts";
@@ -9,6 +10,8 @@ const corsHeaders = {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
   try {
     const body = await req.json().catch(() => ({}));
     const instanciaId = typeof body?.instancia_id === 'string' ? body.instancia_id.trim() : '';
@@ -16,6 +19,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: false, error: 'instancia_id inválido' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+    if (!(await callerCanSeeRows(__caller, 'meta_whatsapp_instances', [instanciaId]))) {
+      return forbidden('Sem acesso a esta instância', corsHeaders);
     }
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const { data: inst, error: ie } = await supabase

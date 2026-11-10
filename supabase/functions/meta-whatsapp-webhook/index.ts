@@ -246,15 +246,38 @@ async function baixarMidiaMeta(
       console.error('[MetaWebhook] falha upload mídia', upErr.message);
       return null;
     }
-    // Bucket privado: URL assinada de 1 ano (mídia é limpa pelo cleanup em 3 dias)
+    // Bucket privado: link curto (mídia é limpa em 3 dias; a tela reemite o link para quem tem acesso)
     const { data: signed } = await supabase.storage
       .from('inbox-media')
-      .createSignedUrl(path, 60 * 60 * 24 * 365);
+      .createSignedUrl(path, 60 * 60 * 24 * 7);
     return signed?.signedUrl || null;
   } catch (e) {
     console.error('[MetaWebhook] erro baixarMidiaMeta', e instanceof Error ? e.message : e);
     return null;
   }
+}
+
+// Meta signs every webhook POST with HMAC-SHA256 of the raw body using the app secret.
+// Extra app secrets (partner apps) can be listed comma-separated in META_APP_SECRETS_EXTRA.
+const META_WEBHOOK_EXIGIR_ASSINATURA = false;
+async function verificarAssinaturaMeta(header: string | null, raw: string): Promise<{ ok: boolean; motivo?: string }> {
+  const recebida = String(header || '').replace(/^sha256=/i, '').trim().toLowerCase();
+  if (!recebida) return { ok: false, motivo: 'sem_assinatura' };
+  const segredos = [Deno.env.get('META_APP_SECRET') || '', ...(Deno.env.get('META_APP_SECRETS_EXTRA') || '').split(',')]
+    .map((x) => x.trim()).filter(Boolean);
+  if (!segredos.length) return { ok: false, motivo: 'sem_segredo' };
+  const enc = new TextEncoder();
+  for (const segredo of segredos) {
+    const key = await crypto.subtle.importKey('raw', enc.encode(segredo), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(raw)));
+    const hex = Array.from(sig, (b) => b.toString(16).padStart(2, '0')).join('');
+    if (hex.length === recebida.length) {
+      let diff = 0;
+      for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ recebida.charCodeAt(i);
+      if (diff === 0) return { ok: true };
+    }
+  }
+  return { ok: false, motivo: 'divergente' };
 }
 
 serve(async (req) => {
@@ -297,7 +320,13 @@ serve(async (req) => {
   }
 
   try {
-    const payload = await req.json();
+    const rawBody = await req.text();
+    const assinatura = await verificarAssinaturaMeta(req.headers.get('x-hub-signature-256'), rawBody);
+    if (!assinatura.ok) {
+      console.warn('[MetaWebhook] assinatura inválida', { motivo: assinatura.motivo, waba: rawBody.match(/"entry":\[\{"id":"(\d+)"/)?.[1] || null });
+      if (META_WEBHOOK_EXIGIR_ASSINATURA) return new Response('invalid signature', { status: 401, headers: corsHeaders });
+    }
+    const payload = JSON.parse(rawBody || '{}');
     const firstEntry = payload?.entry?.[0]?.changes?.[0];
     console.log('[MetaWebhook] POST recebido', {
       object: payload?.object,

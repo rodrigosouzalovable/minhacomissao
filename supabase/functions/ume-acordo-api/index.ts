@@ -1,5 +1,6 @@
 // Acordo parcelado UME pela API oficial (/renegotiations), usando os installmentIds
 // gravados pelos arquivos diários do SFTP. Efetivar exige simulação prévia e confirmação explícita.
+import { requireCaller, callerCanAccessUmeCpf } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
@@ -34,6 +35,8 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   try {
     const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
@@ -44,6 +47,7 @@ Deno.serve(async (req) => {
     const parsed = Body.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
     const b = parsed.data;
+    if (!(await callerCanAccessUmeCpf(__caller, b.cpf))) return json({ error: 'Sem permissão para este cliente' }, 403);
 
     const { data: cli } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira, data_lote').eq('cpf', b.cpf).maybeSingle();
     if (!cli?.borrower_id) {

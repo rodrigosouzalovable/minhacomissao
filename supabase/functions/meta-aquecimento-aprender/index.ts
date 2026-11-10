@@ -2,6 +2,7 @@
 // Recalcula o score de cada nicho a partir do log real de disparos, bane nichos
 // que geram reclamação e repõe o estoque de leads buscando no Google Maps
 // apenas os nichos campeões. Uma execução por dia, sem loop.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { hojeBrt } from '../_shared/meta-aquecimento-alvo.ts';
 import { classificarRespostaAutomatica } from '../_shared/resposta-automatica.ts';
@@ -22,6 +23,8 @@ function json(payload: unknown, status = 200) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,

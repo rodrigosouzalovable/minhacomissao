@@ -2,6 +2,7 @@
 // Cadência: cada instância posta a cada 48-72h, em janela 09h-19h BRT,
 // nunca aos domingos. Pool de imagens, sem repetir as últimas 3.
 
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 
 const corsHeaders = {
@@ -138,6 +139,8 @@ async function agendarInteracoes(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

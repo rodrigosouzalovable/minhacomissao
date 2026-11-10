@@ -1667,6 +1667,27 @@
       "when": 1794334864459,
       "tag": "0237_sftp_ume_registrar_valor_parcela",
       "breakpoints": true
+    },
+    {
+      "idx": 238,
+      "version": "7",
+      "when": 1794336098773,
+      "tag": "0238_scheduler_token_autorizado",
+      "breakpoints": true
+    },
+    {
+      "idx": 239,
+      "version": "7",
+      "when": 1794337337289,
+      "tag": "0239_restringir_acessos_equipe_e_midia_inbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 240,
+      "version": "7",
+      "when": 1794337404057,
+      "tag": "0240_midia_inbox_leitura_por_conversa",
+      "breakpoints": true
     }
   ]
 }

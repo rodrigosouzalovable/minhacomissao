@@ -13099,6 +13099,14 @@ export type Database = {
         Args: { _folder: string; _uid: string }
         Returns: boolean
       }
+      can_view_meta_webhook_media: {
+        Args: { _object_name: string }
+        Returns: boolean
+      }
+      can_view_uazapi_inbox_media: {
+        Args: { _object_name: string; _uid: string }
+        Returns: boolean
+      }
       certificado_redistribuir_pendentes_instancia: {
         Args: { p_instancia_id: string; p_job_id: string; p_limite?: number }
         Returns: number
@@ -13847,6 +13855,7 @@ export type Database = {
       is_instancia_parceiro: { Args: { _instancia: string }; Returns: boolean }
       is_owner_admin: { Args: { _user_id: string }; Returns: boolean }
       is_parceiro_meta: { Args: { _uid: string }; Returns: boolean }
+      is_staff_member: { Args: { _uid: string }; Returns: boolean }
       liberar_trava_notificacao_admin: { Args: never; Returns: undefined }
       limpar_pix_links_expirados: { Args: never; Returns: number }
       listar_credores_distintos: {
@@ -14690,6 +14699,10 @@ export type Database = {
         Returns: {
           template_id: string
         }[]
+      }
+      scheduler_token_autorizado: {
+        Args: { p_token: string }
+        Returns: boolean
       }
       sftp_ume_aplicar: { Args: { p_arquivo: string }; Returns: number }
       sftp_ume_auto_autorizada: { Args: { p_token: string }; Returns: boolean }

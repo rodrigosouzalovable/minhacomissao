@@ -23,7 +23,7 @@
 - Inbox assignments/sends are atomic and authorized; IAGO rotates in PADRÃO and in custom boxes where it is a member, handing off only to that box's humans. Unread filtering precedes pagination; opening does not clear unread.
 - Unknown Meta messages keep restricted diagnostics and show a clear content-unavailable notice.
 - Inbox pool returns reuse authorized RPCs after individual Meta health confirmation; never bypass real blocks.
-- Inbox media uses conversation-level authorization, never broad folder access, to isolate attachments.
+- Inbox media uses conversation-level authorization, never broad folder access, and the UI re-issues short links per viewer instead of trusting stored links.
 - Meta→UAZAPI migration reuses the instance, verifies phone/inbox before disabling Meta, and preserves history.
 - Certificate reservations belong to one instance; Meta refusal fails only that contact, preserving other sends and quotas.
 - De 28/09 a 02/10/2026, o Certificado busca a data exata de um ano antes; não retoma D+5 a D+30 após o teste.
@@ -63,3 +63,4 @@
 - Campaign picks cap each sender at a fixed daily protection limit and the mass tick enforces a 5–10s minimum interval, spreading volume to protect Meta quality.
 - Template onboarding queues the owner's main campaign templates (Odres portal, UME portal, Novo Mundo debt) with top priority so new numbers get them approved first.
 - UME proposal text uses a per-user saved template filled locally; AI only suggests fields on explicit click.
+- Public sign-up stays disabled; accounts are created by admins and team-wide reads require an app role (`is_staff_member`).

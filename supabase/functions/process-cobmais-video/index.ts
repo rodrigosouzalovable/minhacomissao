@@ -1,3 +1,4 @@
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -9,6 +10,8 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
+  const __caller = await requireCaller(req, { tabs: ['/admin/automacao-cobmais'] });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const { video_path, nome_fluxo } = await req.json()
@@ -30,6 +33,16 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
+
+    // Non-admin users may only process videos they uploaded (path starts with their user id).
+    if (__caller.kind === 'user' && !__caller.isAdmin) {
+      const vp = String(video_path)
+      if (vp.includes('..') || !vp.startsWith(`${__caller.userId}/`)) {
+        return new Response(JSON.stringify({ error: 'Acesso não permitido a este vídeo' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    }
 
     // Download video from storage
     console.log(`[process-video] Downloading video: ${video_path}`)

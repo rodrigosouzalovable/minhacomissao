@@ -1,5 +1,6 @@
 // Devolve ao atendente humano original as conversas que o IAGO assumiu no plantão.
 // Roda pela manhã (08:05 BRT): fora da janela do plantão, a etiqueta original volta.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
@@ -32,6 +33,8 @@ function plantaoAtivoAgora(janela: any) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const supabase = createClient(

@@ -1,10 +1,13 @@
 // Aprendizado do copiloto de objeções: fecha os logs pendentes, calcula conversão
 // por resposta e consolida as vencedoras no catálogo.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, json, soDigitos, chamarIA, extrairJson } from '../_shared/iago.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 

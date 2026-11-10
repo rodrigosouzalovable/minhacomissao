@@ -1,3 +1,4 @@
+import { requireCaller, resolverInstanciaUazapi } from '../_shared/auth-guard.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -18,6 +19,8 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const { numbers, server_url, instance_token } = await req.json();
@@ -29,7 +32,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'server_url e instance_token são obrigatórios' }, 400);
     }
 
-    const cleanUrl = server_url.replace(/\/+$/, '');
+    // Destination is always the stored server of an instance the caller may use.
+    const inst = await resolverInstanciaUazapi(__caller, server_url, instance_token);
+    if (!inst.ok) return jsonResponse({ error: inst.error }, inst.status);
+    const cleanUrl = inst.serverUrl.replace(/\/+$/, '');
     const formattedNumbers = numbers.map((n: string) => formatPhone(n));
 
     const valid: string[] = [];

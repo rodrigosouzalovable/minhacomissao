@@ -1,3 +1,4 @@
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -11,6 +12,8 @@ function errorMessage(error: unknown, fallback: string): string {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
   try {
     const brt = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     if (brt.getDay() === 0 || brt.getDay() === 6 || ![8, 10, 12].includes(brt.getHours())) return json({ success: true, skipped: true, motivo: "Fora das reposições diárias das 08h, 10h e 12h BRT" });

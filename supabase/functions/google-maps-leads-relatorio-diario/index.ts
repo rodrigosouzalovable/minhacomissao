@@ -1,4 +1,5 @@
 // Relatório diário (20h BRT) da base de leads do Google Maps e do aquecimento com esses contatos
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { notificarNumeros } from "../_shared/notificar-numeros.ts";
 
@@ -21,6 +22,8 @@ const count = async (q: any) => {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

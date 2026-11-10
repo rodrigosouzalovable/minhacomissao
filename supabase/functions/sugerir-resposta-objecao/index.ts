@@ -1,5 +1,6 @@
 // Copiloto de objeções: gera sugestões de resposta para o atendente durante o atendimento.
 // Uma chamada de IA por mensagem do cliente (cache no banco por mensagem_id).
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, json, chamarIA, extrairJson } from '../_shared/iago.ts';
 
@@ -23,6 +24,8 @@ export function detectarObjecao(texto: string): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 

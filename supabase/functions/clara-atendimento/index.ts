@@ -1,3 +1,4 @@
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { enviarTexto, etiquetasAtendente, etiquetarAguardandoHumano, ehOptOut, iagoAtendeCaixa, suprimirDestinatario, temAtendenteHumanoNoTelefone } from "../_shared/iago.ts";
@@ -141,6 +142,8 @@ async function atualizarMetrica(service: any, contato: any, decisao: Decisao, te
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'admin' });
+  if (__caller instanceof Response) return __caller;
   try {
     const service = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
     const body = await req.json().catch(() => ({}));

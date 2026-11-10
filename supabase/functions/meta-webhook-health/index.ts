@@ -3,6 +3,7 @@
 // - Se não estiver, reinscreve automaticamente.
 // - Compara conversas user_initiated do dia (Meta analytics) vs. mensagens de entrada
 //   registradas no banco. Se detectar perda relevante, marca suspeita e notifica admin.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { notificarAdmin } from "../_shared/notificar-admin.ts";
@@ -51,6 +52,8 @@ async function subscriptionStatus(wabaId: string, auth: Record<string, string>, 
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const startedAt = Date.now();

@@ -6,6 +6,7 @@
 // Cron a cada 5min. Janela 08h-21h BRT, nunca aos domingos.
 // Limites por instância/dia: 8 reações + 3 respostas (visualização sem limite).
 
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 import { getCalendarioHoje } from "../_shared/calendario-aquecimento.ts";
 
@@ -62,6 +63,8 @@ async function uazPost(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

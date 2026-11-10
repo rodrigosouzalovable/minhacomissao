@@ -1,3 +1,4 @@
+import { requireCaller, sanitizeChatMessages } from '../_shared/auth-guard.ts';
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -110,9 +111,12 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+  const __caller = await requireCaller(req, { user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   try {
-    const { messages } = await req.json();
+    const { messages: rawMessages } = await req.json();
+    const messages = sanitizeChatMessages(rawMessages);
 
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     if (!lovableApiKey) throw new Error('LOVABLE_API_KEY not configured');

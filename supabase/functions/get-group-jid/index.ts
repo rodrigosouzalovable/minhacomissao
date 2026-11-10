@@ -2,6 +2,7 @@
 // Body: { instance_id: uuid, name_contains?: string }
 // Retorna { ok, endpoint_used, instance_id, instance_name, total, groups: [{jid,nome,participants_count,is_admin}] }
 
+import { requireCaller, callerCanSeeRows, forbidden } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.88.0";
 
 const corsHeaders = {
@@ -41,6 +42,8 @@ function extractGroupArray(parsed: any): any[] {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -48,6 +51,7 @@ Deno.serve(async (req) => {
     const name_contains: string | undefined = body?.name_contains;
 
     if (!instance_id) return json({ ok: false, error: "instance_id obrigatório" }, 400);
+    if (!(await callerCanSeeRows(__caller, "user_whatsapp_instances", [instance_id]))) return forbidden("Sem acesso a esta instância", corsHeaders);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

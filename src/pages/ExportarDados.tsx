@@ -71,6 +71,8 @@ function toCSV(rows: any[]): string {
   const escape = (val: any) => {
     if (val === null || val === undefined) return '';
     let s = typeof val === 'object' ? JSON.stringify(val) : String(val);
+    // Neutralize spreadsheet formulas in text cells (CSV injection).
+    if (typeof val === 'string' && /^[=+\-@\t\r]/.test(s) && !/^[+-]?[\d\s().]+$/.test(s)) s = `'${s}`;
     if (/[",\n\r]/.test(s)) s = `"${s.replace(/"/g, '""')}"`;
     return s;
   };

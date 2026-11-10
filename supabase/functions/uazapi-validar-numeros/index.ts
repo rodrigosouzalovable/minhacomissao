@@ -1,6 +1,7 @@
 // Valida se números têm WhatsApp usando TODAS as instâncias UAZAPI conectadas.
 // Distribui os lotes em paralelo entre as instâncias conectadas, o que permite
 // validar listas grandes (milhares) sem depender de um único número.
+import { requireCaller, asCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { telefoneMeta } from '../_shared/meta-destinatario.ts';
 
@@ -71,6 +72,8 @@ async function checkBatch(inst: Inst, batch: string[]): Promise<any[] | null> {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const { numbers } = await req.json();
@@ -83,12 +86,20 @@ Deno.serve(async (req) => {
       return json({ valid: [], invalid: [], errors: semFormato, total: numbers.length, total_valid: 0, total_invalid: 0, total_errors: semFormato.length });
     }
 
-    const { data: instRows, error: instErr } = await supabase
+    if (numbers.length > 20000) return json({ error: 'Máximo de 20.000 números por validação' }, 400);
+    // Non-admin users validate only through the WhatsApp numbers their access rules allow.
+    let visiveis: Set<string> | null = null;
+    if (__caller.kind === 'user' && !__caller.isAdmin) {
+      const { data: vis } = await asCaller(__caller).from('user_whatsapp_instances').select('id');
+      visiveis = new Set((vis || []).map((v: any) => v.id));
+    }
+    const { data: instRowsTodas, error: instErr } = await supabase
       .from('user_whatsapp_instances')
       .select('id, nome, server_url, instance_token')
       .eq('ativo', true)
       .order('nome');
-    if (instErr) return json({ error: instErr.message }, 500);
+    if (instErr) return json({ error: 'Não foi possível carregar as instâncias' }, 500);
+    const instRows = (instRowsTodas || []).filter((i: any) => !visiveis || visiveis.has(i.id));
 
     const candidatas = (instRows || []).filter((i: any) => i.server_url && i.instance_token) as Inst[];
     if (candidatas.length === 0) {

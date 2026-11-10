@@ -1,5 +1,6 @@
 // Vincula CPFs de um mailing (CSV "sufixo8,cpf") aos itens de campanha, contatos do Inbox
 // e à base de vínculo telefone -> CPF. Usado para corrigir campanhas importadas sem a coluna de CPF.
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -19,6 +20,8 @@ function padDoc(raw: string): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const __caller = await requireCaller(req, { scheduler: true, user: 'admin' });
+  if (__caller instanceof Response) return __caller;
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
     const { bucket, path, job_id } = await req.json().catch(() => ({} as any));

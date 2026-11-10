@@ -1,3 +1,4 @@
+import { requireCaller, mask } from '../_shared/auth-guard.ts';
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -253,7 +254,7 @@ function deveResponderPorFase(fase: number): boolean {
 async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, numero: string, nome: string): Promise<boolean> {
   const cleanUrl = serverUrl.replace(/\/+$/, "");
   const cleanNumber = numero.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
-  console.log(`[IA] 📋 Tentando salvar contato na agenda: numero=${cleanNumber}, nome="${nome}", server=${cleanUrl}`);
+  console.log(`[IA] 📋 Tentando salvar contato na agenda: numero=${mask(cleanNumber)}`);
   
   const payloads = [
     { number: cleanNumber, name: nome },
@@ -278,7 +279,7 @@ async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, num
         const text = await res.text();
         console.log(`[IA] 📱 ${url} payload=${JSON.stringify(payload)} → status=${res.status} body=${text.substring(0, 200)}`);
         if (res.ok) {
-          console.log(`[IA] ✅ Contato salvo na agenda: ${cleanNumber} como "${nome}" via ${url}`);
+          console.log(`[IA] ✅ Contato salvo na agenda: ${mask(cleanNumber)}`);
           return true;
         }
       } catch (e) {
@@ -287,7 +288,7 @@ async function salvarContatoUAZAPI(serverUrl: string, instanceToken: string, num
       }
     }
   }
-  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${cleanNumber} na agenda (todos endpoints falharam)`);
+  console.warn(`[IA] ⚠️ Não foi possível salvar contato ${mask(cleanNumber)} na agenda (todos endpoints falharam)`);
   return false;
 }
 
@@ -310,7 +311,7 @@ async function enviarMensagemUAZAPI(serverUrl: string, instanceToken: string, nu
       const body = await res.text();
       lastBody = body.substring(0, 200);
       if (res.ok) {
-        console.log(`[IA] ✅ Enviada via ${url} ms=${ms} status=${res.status} → ${numero}: "${texto}"`);
+        console.log(`[IA] ✅ Enviada via ${url} ms=${ms} status=${res.status} → ${mask(numero)} len=${String(texto).length}`);
         auditar({ etapa: 'uazapi_send', status: 'ok', http_status: res.status, tempo_resposta_ms: ms, numero_destino: numero, resposta_gerada: texto, motivo: url, ...(auditCtx || {}) });
         return true;
       }
@@ -413,7 +414,7 @@ async function logToInbox(sb: any, instanciaId: string, telefoneRemoto: string, 
 
       if (newContato) {
         phoneToStore = newContato.telefone;
-        console.log(`[IA] 📇 Contato criado: ${cleanPhone} para instância ${instanciaId}`);
+        console.log(`[IA] 📇 Contato criado: ${mask(cleanPhone)} para instância ${instanciaId}`);
       }
     } else {
       await sb.from("whatsapp_contatos").update({
@@ -489,10 +490,20 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  const __caller = await requireCaller(req, { user: 'admin' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const body = await req.json();
     const { action } = body;
+
+    // Instance ids are interpolated into query filters: accept only UUIDs.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    for (const k of ["instancia_origem_id", "instancia_destino_id"]) {
+      if (body?.[k] != null && !UUID_RE.test(String(body[k]))) {
+        return json({ error: `${k} inválido` }, 400);
+      }
+    }
 
     const sb = getSupabaseAdmin();
 
