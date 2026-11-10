@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, resolverInstanciaUazapi, mask } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -48,8 +48,12 @@ Deno.serve(async (req) => {
     if (!telefone) throw new Error('Telefone não informado');
     if (!audio_url) throw new Error('URL do áudio não informada');
 
-    const serverUrl = uazapi_server_url || Deno.env.get('UAZAPI_SERVER_URL');
-    const instanceToken = uazapi_instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    const __inst = await resolverInstanciaUazapi(__caller, uazapi_server_url, uazapi_instance_token);
+    if (!__inst.ok) {
+      return new Response(JSON.stringify({ success: false, error: __inst.error }), { status: __inst.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const serverUrl = __inst.serverUrl;
+    const instanceToken = __inst.instanceToken;
 
     if (!serverUrl || !instanceToken) {
       throw new Error('Credenciais UAZAPI não configuradas');

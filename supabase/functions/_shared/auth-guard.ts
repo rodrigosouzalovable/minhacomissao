@@ -129,7 +129,6 @@ export function mask(value: unknown): string {
   return `***${s.slice(-4)}`;
 }
 
-const normUrl = (u: unknown) => String(u ?? '').trim().replace(/\/+$/, '').toLowerCase();
 
 /**
  * Resolves which UAZAPI server/token a send may use.

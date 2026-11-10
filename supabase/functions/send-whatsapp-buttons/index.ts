@@ -1,4 +1,4 @@
-import { requireCaller } from '../_shared/auth-guard.ts';
+import { requireCaller, resolverInstanciaUazapi, mask } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -21,8 +21,12 @@ Deno.serve(async (req) => {
     if (!choices || !Array.isArray(choices) || choices.length === 0) throw new Error('Botões não configurados');
     if (choices.length > 3) throw new Error('Máximo de 3 botões permitidos');
 
-    const serverUrl = uazapi_server_url || Deno.env.get('UAZAPI_SERVER_URL');
-    const instanceToken = uazapi_instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    const __inst = await resolverInstanciaUazapi(__caller, uazapi_server_url, uazapi_instance_token);
+    if (!__inst.ok) {
+      return new Response(JSON.stringify({ success: false, error: __inst.error }), { status: __inst.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const serverUrl = __inst.serverUrl;
+    const instanceToken = __inst.instanceToken;
 
     if (!serverUrl || !instanceToken) {
       throw new Error('Credenciais UAZAPI não configuradas');
