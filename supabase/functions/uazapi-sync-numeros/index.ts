@@ -1,5 +1,6 @@
 // Sincroniza o número real (telefone) de cada instância UAZAPI da aba Acionamento
 // e propaga para a instância espelho do Inbox Meta (display_phone).
+import { requireCaller } from '../_shared/auth-guard.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
@@ -25,6 +26,8 @@ function extrairTelefone(data: any): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  const __caller = await requireCaller(req, { user: 'any' });
+  if (__caller instanceof Response) return __caller;
 
   try {
     const supabase = createClient(
