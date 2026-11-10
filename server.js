@@ -123,7 +123,7 @@ async function gerarBoleto({ cpf, valor_final, tipo_pagamento, parcelas }, cobma
   const cpfLimpo = cpf.replace(/\D/g, '');
 
   console.log(`\n🚀 Iniciando geração de boleto`);
-  console.log(`   CPF: ${cpfLimpo}`);
+  console.log(`   CPF: ***${cpfLimpo.slice(-4)}`);
   console.log(`   Valor: R$ ${valor_final}`);
   console.log(`   Parcelas: ${parcelas || 1}`);
 
