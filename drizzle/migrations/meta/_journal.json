@@ -1688,6 +1688,20 @@
       "when": 1794337404057,
       "tag": "0240_midia_inbox_leitura_por_conversa",
       "breakpoints": true
+    },
+    {
+      "idx": 241,
+      "version": "7",
+      "when": 1794402323084,
+      "tag": "0241_migration",
+      "breakpoints": true
+    },
+    {
+      "idx": 242,
+      "version": "7",
+      "when": 1794402387794,
+      "tag": "0242_migration",
+      "breakpoints": true
     }
   ]
 }

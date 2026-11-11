@@ -383,6 +383,7 @@ export default function ConfigurarMeta() {
 
   const carregar = async () => {
     setLoading(true);
+    try {
     const [i, t, b, vp] = await Promise.all([
       supabase.from("meta_whatsapp_instances").select("*").is("excluida_em", null).order("criado_em", { ascending: false }),
       carregarTodosTemplates(),
@@ -402,7 +403,12 @@ export default function ConfigurarMeta() {
     }
     setTemplates(t);
     if (b.data) setBms(b.data as BM[]);
-    setLoading(false);
+    } catch (e) {
+      console.error("Falha ao carregar API Oficial Meta", e);
+      toast.error("Não foi possível carregar todos os dados desta tela. Atualize a página em instantes.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Progresso do aquecimento de tier (somente admin, sem polling)
