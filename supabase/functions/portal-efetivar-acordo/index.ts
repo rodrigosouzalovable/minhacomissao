@@ -1,4 +1,5 @@
 // Autoatendimento público do portal (UME / Odres Cred): o cliente confirma a condição,
+import { empresaDoPortal } from './empresa.ts';
 // o acordo é fechado na UME, o PIX/boleto da 1ª parcela é emitido e o acordo é lançado
 // no login do administrador, que recebe aviso no WhatsApp. Qualquer recusa devolve
 // fallback:true para o portal oferecer o WhatsApp com a proposta pronta.
@@ -106,7 +107,7 @@ Deno.serve(async (req) => {
       valor_total: total, parcelas: n, valor_parcela: valores[0], data_primeiro_pagamento: b.primeiroVencimento,
       dias_atraso: dias, percentual_comissao: pct, comissao_total: r2(valores.reduce((s, v) => s + v * pct / 100, 0)),
       observacoes: `Acordo fechado pelo cliente no portal (${label}) — ${ambiente.toUpperCase()}${boleto ? ' — PIX/boleto emitido' : ' — boleto pendente'}`,
-      empresa: credorReal === 'ume' ? 'ume_novo_mundo' : 'odres_cred', boleto_enviado: !!boleto, termo_formalizacao_status: 'pendente',
+      empresa: empresaDoPortal(credorReal), boleto_enviado: !!boleto, termo_formalizacao_status: 'pendente',
     }).select('id').single();
     if (error) console.error('[portal-efetivar] lançamento', error.message);
     else {
