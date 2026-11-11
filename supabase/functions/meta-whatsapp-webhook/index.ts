@@ -1228,6 +1228,37 @@ serve(async (req) => {
 
 
 
+                // ---- Mesmo cliente em outro número nosso: herda o atendente já vinculado ----
+                // Evita operadores diferentes atendendo o mesmo cliente em chips distintos.
+                if (!atendenteAcordoId && atendenteRodizioIds.length > 0 && outroLado) {
+                  try {
+                    const { data: irmaos } = await supabase
+                      .from('meta_whatsapp_contatos')
+                      .select('id')
+                      .in('telefone', variantesTelefone(String(outroLado)))
+                      .neq('id', contatoIdFinal)
+                      .limit(20);
+                    const irmaoIds = (irmaos || []).map((r: any) => r.id);
+                    if (irmaoIds.length > 0) {
+                      const { data: links } = await supabase
+                        .from('meta_whatsapp_contato_etiquetas')
+                        .select('etiqueta_id, criado_em')
+                        .in('contato_id', irmaoIds)
+                        .in('etiqueta_id', atendenteRodizioIds)
+                        .order('criado_em', { ascending: false })
+                        .limit(1);
+                      const herdada = (links || [])[0]?.etiqueta_id;
+                      if (herdada) {
+                        atendenteAcordoId = herdada;
+                        const at: any = atendentesRodizio.find((a: any) => a.id === herdada);
+                        atendenteAcordoNome = `${at?.nome || herdada} (mesmo cliente em outro número)`;
+                      }
+                    }
+                  } catch (e: any) {
+                    console.error('[MetaWebhook] erro herança atendente', e?.message || e);
+                  }
+                }
+
                 const { data: etiquetaEscolhidaId, error: rodizioErr } = await supabase
                   .rpc('atribuir_atendente_conversa', {
                     p_contato_id: contatoIdFinal,
