@@ -4,12 +4,35 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Search, RefreshCw, Copy, Send, Barcode, Settings2 } from 'lucide-react';
+import { Loader2, Search, RefreshCw, Copy, Send, Barcode, Settings2, ChevronDown, ChevronUp, AlarmClock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { preencherModelo, estenderParcelasUme, carregarOpcoes, opcoesDeJson, filtrarTextoPadrao, modeloDoCredor, CREDORES_PROPOSTA, type CredorProposta, type ModeloCredor, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
 import { ConfigurarModeloUmeDialog } from './ConfigurarModeloUmeDialog';
 import { identificarCredorPorCpf } from '@/lib/credorPorCpf';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+
+interface ParcelaAtualizada {
+  boleto: BoletoUme;
+  atrasada: boolean;
+  nome: string;
+  parcela: { numero: number; total: number; valorOriginal: number | null; vencimentoOriginal: string };
+}
+
+function textoParcelaAtualizada(p: ParcelaAtualizada) {
+  const primeiro = (p.nome || '').split(' ')[0];
+  return [
+    `Olá${primeiro ? `, ${primeiro}` : ''}! Segue a sua *parcela ${p.parcela.numero} de ${p.parcela.total}*${p.atrasada ? ' atualizada' : ''} para pagamento:`,
+    '',
+    `💰 *Valor:* ${fmt(p.boleto.valor)}`,
+    `📅 *Vencimento:* ${fmtData(p.boleto.vencimento)}`,
+    '',
+    p.boleto.pixCode ? `🔑 *PIX copia e cola:*\n${p.boleto.pixCode}` : null,
+    p.boleto.invoiceUrl ? `\n📄 *Boleto (PDF):* ${p.boleto.invoiceUrl}` : null,
+    '',
+    'Qualquer dúvida, estou à disposição!',
+  ].filter((l) => l !== null).join('\n');
+}
 
 const NOME_TABELA = { padrao: 'Tabela Padrão', especial: 'Desconto Especial', sem_juros_10: 'Sem Juros + 10%' } as const;
 
@@ -193,6 +216,28 @@ export function ConsultaUmeDialog({
   };
 
   const [previa, setPrevia] = useState('');
+  const [previaAberta, setPreviaAberta] = useState(false);
+  const [parcelaLoading, setParcelaLoading] = useState(false);
+  const [parcelaAtual, setParcelaAtual] = useState<ParcelaAtualizada | null>(null);
+  const [textoParcela, setTextoParcela] = useState('');
+
+  const atualizarParcelaAtraso = async () => {
+    const digitos = soDigitos(cpf);
+    if (digitos.length !== 11) { toast.error('Informe um CPF com 11 dígitos'); return; }
+    setParcelaLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ume-parcela-atraso', { body: { cpf: digitos } });
+      if (error) throw error;
+      if (!(data as any)?.success) throw new Error((data as any)?.message || 'Falha ao atualizar a parcela');
+      const p = data as ParcelaAtualizada;
+      setParcelaAtual(p);
+      setTextoParcela(textoParcelaAtualizada(p));
+    } catch (e) {
+      toast.error(String((e as Error)?.message || e));
+    } finally {
+      setParcelaLoading(false);
+    }
+  };
   useEffect(() => {
     if (consulta) setPrevia(textoFinal(consulta));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -412,9 +457,16 @@ export function ConsultaUmeDialog({
                   <Button key={c.valor} size="sm" className="h-7" variant={credor === c.valor ? 'default' : 'outline'} aria-pressed={credor === c.valor} onClick={() => setCredor(c.valor)}>{c.nome}</Button>
                 ))}
               </div>
-              <p className="text-sm font-medium">Prévia da mensagem</p>
-              <Textarea rows={8} value={previa} onChange={(e) => setPrevia(e.target.value)} aria-label="Prévia da mensagem" />
-              <p className="text-xs text-muted-foreground">É exatamente isso que será enviado. Você pode ajustar antes de enviar.</p>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2" aria-expanded={previaAberta} onClick={() => setPreviaAberta((v) => !v)}>
+                {previaAberta ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
+                {previaAberta ? 'Ocultar prévia da mensagem' : 'Ver prévia da mensagem'}
+              </Button>
+              {previaAberta && (
+                <>
+                  <Textarea rows={8} value={previa} onChange={(e) => setPrevia(e.target.value)} aria-label="Prévia da mensagem" />
+                  <p className="text-xs text-muted-foreground">É exatamente isso que será enviado. Você pode ajustar antes de enviar.</p>
+                </>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -440,6 +492,39 @@ export function ConsultaUmeDialog({
               <Button variant="outline" size="icon" title="Configurar mensagem" aria-label="Configurar mensagem" onClick={() => setConfigOpen(true)}>
                 <Settings2 className="h-4 w-4" />
               </Button>
+              <Button variant="outline" title="Atualizar parcela em atraso (API UME)" onClick={() => void atualizarParcelaAtraso()} disabled={parcelaLoading}>
+                {parcelaLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlarmClock className="mr-2 h-4 w-4" />}
+                Parcela em atraso
+              </Button>
+              <AlertDialog open={!!parcelaAtual} onOpenChange={(v) => { if (!v) setParcelaAtual(null); }}>
+                <AlertDialogContent className="max-w-lg">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Aprovar envio da parcela {parcelaAtual?.parcela.numero} de {parcelaAtual?.parcela.total}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {parcelaAtual?.atrasada ? 'Parcela em atraso, atualizada pela UME para hoje.' : 'Próxima parcela em aberto.'}
+                      {' '}Original: {fmt(parcelaAtual?.parcela.valorOriginal)} em {parcelaAtual ? fmtData(String(parcelaAtual.parcela.vencimentoOriginal)) : ''}.
+                      {parcelaAtual?.boleto.ambiente === 'dev' ? ' (ambiente de testes)' : ''}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <Textarea rows={10} value={textoParcela} onChange={(e) => setTextoParcela(e.target.value)} aria-label="Mensagem da parcela" />
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <Button variant="outline" onClick={() => { void navigator.clipboard.writeText(textoParcela); toast.success('Mensagem copiada'); }}>
+                      <Copy className="mr-2 h-4 w-4" /> Copiar
+                    </Button>
+                    {onEnviar && (
+                      <AlertDialogAction onClick={() => {
+                        if (!textoParcela.trim()) return;
+                        onEnviar(textoParcela);
+                        setParcelaAtual(null);
+                        onOpenChange(false);
+                      }}>
+                        <Send className="mr-2 h-4 w-4" /> Aprovar e enviar
+                      </AlertDialogAction>
+                    )}
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <ConfigurarModeloUmeDialog
                 open={configOpen}
                 onOpenChange={setConfigOpen}
