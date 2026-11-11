@@ -28,8 +28,8 @@ Deno.serve(async (req) => {
     const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
     const rls = asCaller(caller);
     const fmtCpf = `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`;
-    const { data: acordos } = await rls.from('acordos').select('id, cliente_nome, created_at')
-      .in('cliente_cpf', [cpf, fmtCpf]).eq('status', 'ativo').order('created_at', { ascending: false }).limit(1);
+    const { data: acordos } = await rls.from('acordos').select('id, cliente_nome, criado_em')
+      .in('cliente_cpf', [cpf, fmtCpf]).eq('status', 'ativo').order('criado_em', { ascending: false }).limit(1);
     const acordo = acordos?.[0];
     if (!acordo) return json({ success: false, message: 'Nenhum acordo ativo encontrado para este CPF.' });
 

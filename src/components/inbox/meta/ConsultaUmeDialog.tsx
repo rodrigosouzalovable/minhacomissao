@@ -506,6 +506,13 @@ export function ConsultaUmeDialog({
                       {parcelaAtual?.boleto.ambiente === 'dev' ? ' (ambiente de testes)' : ''}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  {parcelaAtual && (
+                    <div className="grid grid-cols-2 gap-3 rounded border p-3 text-sm">
+                      <div><span className="text-xs text-muted-foreground">Valor real do boleto/PIX</span><div className="text-lg font-semibold">{fmt(parcelaAtual.boleto.valor)}</div></div>
+                      <div><span className="text-xs text-muted-foreground">Vencimento</span><div className="text-lg font-semibold">{fmtData(parcelaAtual.boleto.vencimento)}</div></div>
+                      {parcelaAtual.boleto.invoiceUrl && <a className="col-span-2 text-primary underline" href={parcelaAtual.boleto.invoiceUrl} target="_blank" rel="noreferrer">Abrir boleto (PDF)</a>}
+                    </div>
+                  )}
                   <Textarea rows={10} value={textoParcela} onChange={(e) => setTextoParcela(e.target.value)} aria-label="Mensagem da parcela" />
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -519,7 +526,7 @@ export function ConsultaUmeDialog({
                         setParcelaAtual(null);
                         onOpenChange(false);
                       }}>
-                        <Send className="mr-2 h-4 w-4" /> Aprovar e enviar
+                        <Send className="mr-2 h-4 w-4" /> Confirmar e enviar
                       </AlertDialogAction>
                     )}
                   </AlertDialogFooter>
