@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
     const sessao = caller.userId ? await sessaoUme(db, caller.userId, ambiente) : null;
     if (!sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME });
-    const alvo = { amb: ambiente, token: sessao.token };
+    const alvo = ambiente; // sessão do atendente valida a identidade; API usa a conta da empresa
     const { data: cliSftp } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira').eq('cpf', cpf).maybeSingle();
     let cli: { borrower_id: string; nome: string | null; carteira: string | null } | null = cliSftp?.borrower_id ? cliSftp as any : null;
     let online = false;

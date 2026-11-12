@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     if (origem === 'atendente' && !sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME });
 
     const t0 = Date.now();
-    const r = await umeApi.gerarBoletoUnico(sessao ? { amb: ambiente, token: sessao.token } : ambiente, consulta.borrowerId, vencimento);
+    const r = await umeApi.gerarBoletoUnico(ambiente, consulta.borrowerId, vencimento);
     console.log('[ume-boleto]', { ambiente, ms: Date.now() - t0, status: r.status });
 
     if (!r.ok) {

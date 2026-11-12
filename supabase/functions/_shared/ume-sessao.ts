@@ -1,10 +1,12 @@
 // Sessão UME por atendente: login no backoffice com usuário/senha dele.
 // A senha nunca é salva; guardamos só os tokens, acessíveis apenas pelo servidor.
-import { UME_BASES, UME_UA, umeClient, type UmeAmbiente } from './ume-api.ts';
+import { UME_BASES, UME_UA, type UmeAmbiente } from './ume-api.ts';
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
-const URL_TOKEN = (amb: UmeAmbiente) => `${UME_BASES[amb]}/keycloak/realms/consultancy/protocol/openid-connect/token`;
+// Login do atendente usa o mesmo acesso do site do backoffice (realm "analysts", cliente público "backoffice").
+// Esse token só prova a identidade; a API de cobrança continua usando a conta da empresa.
+const URL_TOKEN = (amb: UmeAmbiente) => `${UME_BASES[amb]}/keycloak/realms/analysts/protocol/openid-connect/token`;
 
 export interface SessaoUme { token: string; username: string; expiraEm: string }
 
@@ -12,7 +14,7 @@ async function pedirToken(amb: UmeAmbiente, extra: Record<string, string>) {
   const resp = await fetch(URL_TOKEN(amb), {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UME_UA },
-    body: new URLSearchParams({ ...umeClient(amb), ...extra }),
+    body: new URLSearchParams({ client_id: 'backoffice', ...extra }),
     signal: AbortSignal.timeout(15_000),
   });
   const txt = await resp.text();
