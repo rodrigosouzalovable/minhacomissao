@@ -64,3 +64,4 @@
 - Template onboarding queues the owner's main campaign templates (Odres portal, UME portal, Novo Mundo debt) with top priority so new numbers get them approved first.
 - UME proposal text uses a per-user saved template filled locally; AI only suggests fields on explicit click.
 - Public sign-up stays disabled; accounts are created by admins and team-wide reads require an app role (`is_staff_member`).
+- Inbox UME calculator sends (proposal, boleto/PIX, overdue installment) require the attendant's own UME login session (ume_sessoes_usuario, server-only tokens, password never stored); portal, cron and IAGO keep the company account.

@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { preencherModelo, estenderParcelasUme, carregarOpcoes, opcoesDeJson, filtrarTextoPadrao, modeloDoCredor, CREDORES_PROPOSTA, type CredorProposta, type ModeloCredor, type DadosProposta, type OpcoesProposta } from '@/lib/umePropostaModelo';
 import { ConfigurarModeloUmeDialog } from './ConfigurarModeloUmeDialog';
+import { UmeLoginBox, type SessaoUmeAtendente } from './UmeLoginBox';
 import { identificarCredorPorCpf } from '@/lib/credorPorCpf';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
@@ -179,6 +180,10 @@ export function ConsultaUmeDialog({
   onEnviar?: (texto: string) => void;
 }) {
   const [cpf, setCpf] = useState('');
+  const [sessaoUme, setSessaoUme] = useState<SessaoUmeAtendente | null>(null);
+  const semLogin = !sessaoUme;
+  const exigirLogin = () => { if (semLogin) { toast.error('Faça login na UME para enviar.'); return true; } return false; };
+  const tratarLogin = (d: any) => { if (d?.error === 'login_ume') setSessaoUme(null); };
   const [loading, setLoading] = useState(false);
   const [consulta, setConsulta] = useState<Consulta | null>(null);
   const [tabela, setTabela] = useState<TabelaKey>('padrao');
@@ -227,11 +232,12 @@ export function ConsultaUmeDialog({
   const atualizarParcelaAtraso = async (vencimento?: string) => {
     const digitos = soDigitos(cpf);
     if (digitos.length !== 11) { toast.error('Informe um CPF com 11 dígitos'); return; }
+    if (exigirLogin()) return;
     setParcelaLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('ume-parcela-atraso', { body: vencimento ? { cpf: digitos, vencimento } : { cpf: digitos } });
       if (error) throw error;
-      if (!(data as any)?.success) throw new Error((data as any)?.message || 'Falha ao atualizar a parcela');
+      if (!(data as any)?.success) { tratarLogin(data); throw new Error((data as any)?.message || 'Falha ao atualizar a parcela'); }
       const p = data as ParcelaAtualizada;
       setParcelaAtual(p);
       setVencParcela(String(p.boleto.vencimento || '').slice(0, 10));
@@ -264,6 +270,7 @@ export function ConsultaUmeDialog({
       toast.error('Informe um CPF com 11 dígitos');
       return;
     }
+    if (exigirLogin()) return;
     setBoletoLoading(true);
     setBoleto(null);
     try {
@@ -272,6 +279,7 @@ export function ConsultaUmeDialog({
       });
       if (error) throw error;
       if (!(data as any)?.success) {
+        tratarLogin(data);
         throw new Error((data as any)?.message || (data as any)?.error || 'Falha ao gerar o boleto');
       }
       setBoleto((data as any).boleto as BoletoUme);
@@ -375,6 +383,8 @@ export function ConsultaUmeDialog({
         <DialogHeader>
           <DialogTitle>Consulta UME — calculadora de desconto</DialogTitle>
         </DialogHeader>
+
+        <UmeLoginBox open={open} sessao={sessaoUme} onSessao={setSessaoUme} />
 
         <div className="flex items-center gap-2">
           <Input
@@ -495,7 +505,10 @@ export function ConsultaUmeDialog({
               </Button>
               {onEnviar && (
                 <Button
+                  disabled={semLogin}
+                  title={semLogin ? 'Faça login na UME para enviar' : undefined}
                   onClick={() => {
+                    if (exigirLogin()) return;
                     if (!previa.trim()) { toast.error('A mensagem está vazia'); return; }
                     onEnviar(previa);
                     onOpenChange(false);
@@ -507,7 +520,7 @@ export function ConsultaUmeDialog({
               <Button variant="outline" size="icon" title="Configurar mensagem" aria-label="Configurar mensagem" onClick={() => setConfigOpen(true)}>
                 <Settings2 className="h-4 w-4" />
               </Button>
-              <Button variant="outline" title="Enviar parcela em atraso ou a próxima a vencer (API UME)" onClick={() => void atualizarParcelaAtraso()} disabled={parcelaLoading}>
+              <Button variant="outline" title="Enviar parcela em atraso ou a próxima a vencer (API UME)" onClick={() => void atualizarParcelaAtraso()} disabled={parcelaLoading || semLogin}>
                 {parcelaLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlarmClock className="mr-2 h-4 w-4" />}
                 Parcela (atraso / a vencer)
               </Button>
@@ -543,7 +556,7 @@ export function ConsultaUmeDialog({
                       <Copy className="mr-2 h-4 w-4" /> Copiar
                     </Button>
                     {onEnviar && (
-                      <AlertDialogAction disabled={dataPendente || parcelaLoading} onClick={(e) => {
+                      <AlertDialogAction disabled={dataPendente || parcelaLoading || semLogin} onClick={(e) => {
                         if (dataPendente || parcelaLoading) { e.preventDefault(); return; }
                         if (!textoParcela.trim()) return;
                         onEnviar(textoParcela);
@@ -579,7 +592,7 @@ export function ConsultaUmeDialog({
                   onChange={(e) => setVencimentoBoleto(e.target.value)}
                   className="w-[150px]"
                 />
-                <Button size="sm" variant="outline" onClick={() => void gerarBoleto()} disabled={boletoLoading}>
+                <Button size="sm" variant="outline" onClick={() => void gerarBoleto()} disabled={boletoLoading || semLogin}>
                   {boletoLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Barcode className="mr-2 h-4 w-4" />}
                   Gerar boleto + PIX
                 </Button>
@@ -609,7 +622,7 @@ export function ConsultaUmeDialog({
                     </div>
                   )}
                   {onEnviar && (
-                    <Button size="sm" onClick={() => { onEnviar(textoBoleto(boleto, consulta?.nome || '')); onOpenChange(false); }}>
+                    <Button size="sm" disabled={semLogin} onClick={() => { if (exigirLogin()) return; onEnviar(textoBoleto(boleto, consulta?.nome || '')); onOpenChange(false); }}>
                       <Send className="mr-2 h-4 w-4" /> Enviar boleto na conversa
                     </Button>
                   )}

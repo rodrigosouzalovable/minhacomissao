@@ -57,14 +57,27 @@ export async function obterTokenUme(amb: UmeAmbiente, forcar = false): Promise<s
 
 export interface UmeResposta { status: number; ok: boolean; data: unknown }
 
+// Alvo da chamada: conta da empresa (ambiente) ou sessão de um atendente.
+export type UmeAlvo = UmeAmbiente | { amb: UmeAmbiente; token: string };
+const ambDe = (a: UmeAlvo): UmeAmbiente => (typeof a === 'string' ? a : a.amb);
+
+export const UME_BASES = BASES;
+export const UME_UA = UA;
+export function umeClient(amb: UmeAmbiente) {
+  const c = credenciais(amb);
+  return { client_id: c.client_id, client_secret: c.client_secret };
+}
+
 export async function chamarUme(
-  amb: UmeAmbiente,
+  alvo: UmeAlvo,
   metodo: 'GET' | 'POST',
   caminho: string,
   body?: unknown,
 ): Promise<UmeResposta> {
+  const amb = ambDe(alvo);
+  const tokenUsuario = typeof alvo === 'string' ? null : alvo.token;
   for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const token = await obterTokenUme(amb, tentativa > 0);
+    const token = tokenUsuario ?? await obterTokenUme(amb, tentativa > 0);
     await aguardarVez();
     const resp = await fetch(`${BASES[amb]}${COORD}${caminho}`, {
       method: metodo,
@@ -79,6 +92,7 @@ export async function chamarUme(
     const txt = await resp.text();
     let data: unknown = null;
     try { data = txt ? JSON.parse(txt) : null; } catch { data = { raw: txt.slice(0, 2000) }; }
+    if (resp.status === 401 && tokenUsuario) throw new Error('ume_login_expirado');
     if (resp.status === 401 && tentativa === 0) { tokens.delete(amb); continue; }
     return { status: resp.status, ok: resp.ok, data };
   }
@@ -86,7 +100,7 @@ export async function chamarUme(
 }
 
 export const umeApi = {
-  simularBoletos: (amb: UmeAmbiente, idsOrdem: Array<string | number>, data: string) => {
+  simularBoletos: (amb: UmeAlvo, idsOrdem: Array<string | number>, data: string) => {
     // A API real espera os IDs separados por vírgula em um único parâmetro
     // "installmentsIds" (o manual cita id_order repetido).
     const qs = new URLSearchParams();
@@ -94,13 +108,13 @@ export const umeApi = {
     qs.set('date', data);
     return chamarUme(amb, 'GET', `/contracts/simulate-multiple-installments?${qs}`);
   },
-  gerarBoletos: (amb: UmeAmbiente, installmentsIds: Array<string | number>, dueDate: string) =>
+  gerarBoletos: (amb: UmeAlvo, installmentsIds: Array<string | number>, dueDate: string) =>
     chamarUme(amb, 'POST', '/invoices/multiple', { installmentsIds: installmentsIds.map(String), dueDate, generatedAt: UME_ASSESSORIA }),
-  gerarBoletoUnico: (amb: UmeAmbiente, borrowerId: string, dueDate: string) =>
+  gerarBoletoUnico: (amb: UmeAlvo, borrowerId: string, dueDate: string) =>
     chamarUme(amb, 'POST', '/invoices/chatbot', { borrowerId, dueDate, generatedAt: UME_ASSESSORIA }),
-  simularRenegociacao: (amb: UmeAmbiente, p: UmeRenegociacao) =>
+  simularRenegociacao: (amb: UmeAlvo, p: UmeRenegociacao) =>
     chamarUme(amb, 'POST', '/renegotiations/simulations', corpoReneg(p)),
-  fecharAcordo: (amb: UmeAmbiente, p: UmeRenegociacao) =>
+  fecharAcordo: (amb: UmeAlvo, p: UmeRenegociacao) =>
     chamarUme(amb, 'POST', '/renegotiations', corpoReneg(p)),
 };
 

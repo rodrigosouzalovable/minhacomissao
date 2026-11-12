@@ -1,4 +1,5 @@
 import { requireCaller, callerCanAccessUmeCpf } from '../_shared/auth-guard.ts';
+import { sessaoUme, MSG_LOGIN_UME } from '../_shared/ume-sessao.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
@@ -55,9 +56,11 @@ Deno.serve(async (req) => {
 
     // Fase de homologação: somente DEV. Produção só quando liberada explicitamente.
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
+    const sessao = origem === 'atendente' ? await sessaoUme(service, u.user.id, ambiente) : null;
+    if (origem === 'atendente' && !sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME });
 
     const t0 = Date.now();
-    const r = await umeApi.gerarBoletoUnico(ambiente, consulta.borrowerId, vencimento);
+    const r = await umeApi.gerarBoletoUnico(sessao ? { amb: ambiente, token: sessao.token } : ambiente, consulta.borrowerId, vencimento);
     console.log('[ume-boleto]', { ambiente, ms: Date.now() - t0, status: r.status });
 
     if (!r.ok) {
@@ -87,12 +90,14 @@ Deno.serve(async (req) => {
       invoice_url: boleto.invoiceUrl || null,
       origem,
       ambiente,
+      ume_username: sessao?.username ?? null,
     });
 
     return json({ success: true, boleto, nomeCliente: consulta.nome });
   } catch (e) {
     const msg = String((e as Error)?.message || e);
     console.error('[ume-boleto] erro', msg);
+    if (msg === 'ume_login_expirado') return json({ success: false, error: 'login_ume', message: 'Sua sessão da UME expirou. ' + MSG_LOGIN_UME });
     return json({ success: false, error: msg }, 200);
   }
 });

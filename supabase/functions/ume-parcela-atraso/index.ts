@@ -7,6 +7,7 @@ import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
 import { traduzirErroUme } from '../_shared/ume-erros.ts';
 import { consultarUme } from '../_shared/ume-desconto.ts';
+import { sessaoUme, MSG_LOGIN_UME } from '../_shared/ume-sessao.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,6 +37,9 @@ Deno.serve(async (req) => {
     const escolhido = parsed.data.vencimento;
     if (escolhido && escolhido < hoje) return json({ success: false, message: 'A data de vencimento não pode ser anterior a hoje.' });
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
+    const sessao = caller.userId ? await sessaoUme(db, caller.userId, ambiente) : null;
+    if (!sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME });
+    const alvo = { amb: ambiente, token: sessao.token };
     const { data: cliSftp } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira').eq('cpf', cpf).maybeSingle();
     let cli: { borrower_id: string; nome: string | null; carteira: string | null } | null = cliSftp?.borrower_id ? cliSftp as any : null;
     let online = false;
@@ -55,13 +59,13 @@ Deno.serve(async (req) => {
         invoiceUrl: String(d.invoiceUrl ?? ''), pixQrCodeUrl: String(d.pixQrCodeUrl ?? ''), ambiente,
       };
     };
-    const registrar = (b: ReturnType<typeof lerBoleto>) => db.from('ume_boleto_log').insert({ user_id: caller.userId, cpf, borrower_id: String(cli!.borrower_id), invoice_id: b.invoiceId || null, valor: b.valor, vencimento: b.vencimento, invoice_url: b.invoiceUrl || null, origem: 'atendente', ambiente });
+    const registrar = (b: ReturnType<typeof lerBoleto>) => db.from('ume_boleto_log').insert({ user_id: caller.userId, cpf, borrower_id: String(cli!.borrower_id), invoice_id: b.invoiceId || null, valor: b.valor, vencimento: b.vencimento, invoice_url: b.invoiceUrl || null, origem: 'atendente', ambiente, ume_username: sessao.username });
 
     if (!acordo) {
       // Sem acordo nosso: usa a compra original (parcelas em aberto do SFTP) sem renegociar.
       if (online) {
         // Sem parcelas do SFTP: a UME calcula e emite a cobrança atualizada da parcela em atraso.
-        const r = await umeApi.gerarBoletoUnico(ambiente, String(cli.borrower_id), escolhido ?? hoje);
+        const r = await umeApi.gerarBoletoUnico(alvo, String(cli.borrower_id), escolhido ?? hoje);
         if (!r.ok) {
           const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
           return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
@@ -77,7 +81,7 @@ Deno.serve(async (req) => {
       const { data: parc } = await q.order('vencimento').limit(500);
       const lista = parc ?? [];
       if (!lista.length) {
-        const r = await umeApi.gerarBoletoUnico(ambiente, String(cli.borrower_id), escolhido ?? hoje);
+        const r = await umeApi.gerarBoletoUnico(alvo, String(cli.borrower_id), escolhido ?? hoje);
         if (!r.ok) {
           const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
           return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
@@ -92,7 +96,7 @@ Deno.serve(async (req) => {
       const doContrato = lista.filter((x: any) => x.contrato === p.contrato);
       const atrasada = String(p.vencimento) < hoje;
       const venc = escolhido ?? (atrasada ? hoje : String(p.vencimento));
-      const r = await umeApi.gerarBoletos(ambiente, [String(p.installment_id)], venc);
+      const r = await umeApi.gerarBoletos(alvo, [String(p.installment_id)], venc);
       if (!r.ok) {
         const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
         return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
@@ -114,7 +118,7 @@ Deno.serve(async (req) => {
     const parcela: any = abertas[0];
     const atrasada = String(parcela.data_prevista) < hoje;
     const venc = escolhido ?? (atrasada ? hoje : String(parcela.data_prevista));
-    const r = await umeApi.gerarBoletoUnico(ambiente, String(cli.borrower_id), venc);
+    const r = await umeApi.gerarBoletoUnico(alvo, String(cli.borrower_id), venc);
     if (!r.ok) {
       const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
       return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
@@ -129,6 +133,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error('[ume-parcela-atraso]', String((e as Error)?.message || e));
+    if (String((e as Error)?.message) === 'ume_login_expirado') return json({ success: false, error: 'login_ume', message: 'Sua sessão da UME expirou. ' + MSG_LOGIN_UME });
     return json({ success: false, message: 'Não foi possível atualizar a parcela agora.' });
   }
 });

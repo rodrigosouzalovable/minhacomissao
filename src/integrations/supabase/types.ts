@@ -10661,6 +10661,7 @@ export type Database = {
           invoice_id: string | null
           invoice_url: string | null
           origem: string
+          ume_username: string | null
           user_id: string | null
           valor: number | null
           vencimento: string
@@ -10674,6 +10675,7 @@ export type Database = {
           invoice_id?: string | null
           invoice_url?: string | null
           origem?: string
+          ume_username?: string | null
           user_id?: string | null
           valor?: number | null
           vencimento: string
@@ -10687,6 +10689,7 @@ export type Database = {
           invoice_id?: string | null
           invoice_url?: string | null
           origem?: string
+          ume_username?: string | null
           user_id?: string | null
           valor?: number | null
           vencimento?: string
@@ -10904,6 +10907,42 @@ export type Database = {
           credor?: string
           opcoes?: Json | null
           texto?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ume_sessoes_usuario: {
+        Row: {
+          access_expira_em: string
+          access_token: string
+          ambiente: string
+          atualizado_em: string
+          criado_em: string
+          refresh_expira_em: string | null
+          refresh_token: string | null
+          ume_username: string
+          user_id: string
+        }
+        Insert: {
+          access_expira_em: string
+          access_token: string
+          ambiente: string
+          atualizado_em?: string
+          criado_em?: string
+          refresh_expira_em?: string | null
+          refresh_token?: string | null
+          ume_username: string
+          user_id: string
+        }
+        Update: {
+          access_expira_em?: string
+          access_token?: string
+          ambiente?: string
+          atualizado_em?: string
+          criado_em?: string
+          refresh_expira_em?: string | null
+          refresh_token?: string | null
+          ume_username?: string
           user_id?: string
         }
         Relationships: []
