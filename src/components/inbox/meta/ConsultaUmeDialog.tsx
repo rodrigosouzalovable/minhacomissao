@@ -18,7 +18,7 @@ interface ParcelaAtualizada {
   nome: string;
   origem?: 'acordo' | 'compra_original';
   contrato?: string | null;
-  parcela: { numero: number; total: number; valorOriginal: number | null; vencimentoOriginal: string };
+  parcela: { numero: number; total: number; valorOriginal: number | null; vencimentoOriginal: string | null };
 }
 
 function textoParcelaAtualizada(p: ParcelaAtualizada) {
@@ -504,7 +504,7 @@ export function ConsultaUmeDialog({
                     <AlertDialogTitle>{parcelaAtual?.origem === 'compra_original' ? `Aprovar envio — compra original${parcelaAtual?.contrato ? ` (contrato ${parcelaAtual.contrato})` : ''}` : `Aprovar envio da parcela ${parcelaAtual?.parcela.numero} de ${parcelaAtual?.parcela.total}`}</AlertDialogTitle>
                     <AlertDialogDescription>
                       {parcelaAtual?.atrasada ? 'Parcela em atraso, atualizada pela UME para hoje.' : 'Próxima parcela em aberto.'}
-                      {' '}Original: {fmt(parcelaAtual?.parcela.valorOriginal)} em {parcelaAtual ? fmtData(String(parcelaAtual.parcela.vencimentoOriginal)) : ''}.
+                      {parcelaAtual?.parcela.vencimentoOriginal ? <>{' '}Original: {fmt(parcelaAtual?.parcela.valorOriginal)} em {fmtData(String(parcelaAtual.parcela.vencimentoOriginal))}.</> : ' Valor calculado direto pela UME.'}
                       {parcelaAtual?.boleto.ambiente === 'dev' ? ' (ambiente de testes)' : ''}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
