@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Textarea } from '@/components/ui/textarea';
 import * as XLSX from 'xlsx';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,17 @@ interface LinhaPreview {
 }
 
 const SOMENTE_AVISTA = 'Somente à vista';
+const CHAVE_MODELO = 'layout-vista-parcelamento-modelo-v1';
+const NOME_CREDOR: Record<CredorPlanilha, string> = { novo_mundo: 'Novo Mundo', ume: 'UME' };
+
+interface ModeloMsg { comParcela: string; soVista: string; parcelaVazia: string }
+const MODELO_PADRAO: ModeloMsg = {
+  comParcela:
+    '*{credor}. Você tem uma condição imperdível de renegociação BLACK FRIDAY! Negocie hoje com {desconto_vista}% de desconto para pagamento à vista no valor de {valor_a_vista} ou parcelamento em: {parcelamento}.*',
+  soVista:
+    '*{credor}. Você tem uma condição imperdível de renegociação BLACK FRIDAY! Negocie hoje com {desconto_vista}% de desconto para pagamento à vista no valor de {valor_a_vista}.*',
+  parcelaVazia: 'somente à vista',
+};
 
 const fmtBRL = (n: number) =>
   n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -54,8 +66,22 @@ export function LayoutVistaParcelamentoTab() {
   const [descParcelado, setDescParcelado] = useState(30);
   const [preview, setPreview] = useState<LinhaPreview[]>([]);
 
-  const comParcelamento = preview.filter((l) => l.parcelamento !== SOMENTE_AVISTA);
-  const somenteAVista = preview.filter((l) => l.parcelamento === SOMENTE_AVISTA);
+  const [modelo, setModelo] = useState<ModeloMsg>(() => {
+    try { return { ...MODELO_PADRAO, ...JSON.parse(localStorage.getItem(CHAVE_MODELO) || '{}') }; }
+    catch { return MODELO_PADRAO; }
+  });
+  useEffect(() => { localStorage.setItem(CHAVE_MODELO, JSON.stringify(modelo)); }, [modelo]);
+
+  const soVista = (l: LinhaPreview) => l.parcelamento === SOMENTE_AVISTA;
+  const varParcelamento = (l: LinhaPreview) => (soVista(l) ? modelo.parcelaVazia : l.parcelamento);
+  const mensagem = (l: LinhaPreview) =>
+    (soVista(l) ? modelo.soVista : modelo.comParcela)
+      .split('{credor}').join(NOME_CREDOR[credor])
+      .split('{nome}').join(l.nome)
+      .split('{desconto_vista}').join(String(descVista))
+      .split('{desconto_parcelado}').join(String(descParcelado))
+      .split('{valor_a_vista}').join(moeda(l.aVista))
+      .split('{parcelamento}').join(l.parcelamento);
 
   async function handleFile(file: File) {
     try {
@@ -94,29 +120,17 @@ export function LayoutVistaParcelamentoTab() {
     toast.success(`${base.length} clientes processados`);
   }
 
-  function exportar(linhas: LinhaPreview[], comColunaParcelamento: boolean, nome: string) {
-    if (linhas.length === 0) return;
-    const head = ['Telefone', 'CPF', 'Nome', 'Valor original', 'À vista'];
-    if (comColunaParcelamento) head.push('Parcelamento');
+  function exportar() {
+    if (preview.length === 0) return;
     const aoa = [
-      head,
-      ...linhas.map((l) => {
-        const linha: (string | number)[] = [
-          l.telefone,
-          l.cpf,
-          l.nome,
-          moeda(l.valor),
-          moeda(l.aVista),
-        ];
-        if (comColunaParcelamento) linha.push(l.parcelamento);
-        return linha;
-      }),
+      ['Telefone', 'CPF', 'Nome {{1}}', 'Credor {{2}}', 'À vista {{3}}', 'Parcelamento {{4}}', 'Mensagem completa'],
+      ...preview.map((l) => [l.telefone, l.cpf, l.nome, NOME_CREDOR[credor], moeda(l.aVista), varParcelamento(l), mensagem(l)]),
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 120 }];
+    ws['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 90 }, { wch: 140 }];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, comColunaParcelamento ? 'A vista e Parcelado' : 'Somente a vista');
-    XLSX.writeFile(wb, `${nome}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'A vista e Parcelado');
+    XLSX.writeFile(wb, `avista-parcelamento-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   function limpar() {
@@ -200,6 +214,28 @@ export function LayoutVistaParcelamentoTab() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardContent className="pt-6 space-y-3">
+          <p className="text-sm font-medium">Mensagem (coluna "Mensagem completa")</p>
+          <p className="text-xs text-muted-foreground">
+            Use: {'{credor}'}, {'{nome}'}, {'{desconto_vista}'}, {'{desconto_parcelado}'}, {'{valor_a_vista}'}, {'{parcelamento}'}. Salvo automaticamente.
+          </p>
+          <div className="space-y-1">
+            <Label>Com parcelamento</Label>
+            <Textarea rows={3} value={modelo.comParcela} onChange={(e) => setModelo({ ...modelo, comParcela: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Somente à vista (quando não há parcela acima do mínimo)</Label>
+            <Textarea rows={3} value={modelo.soVista} onChange={(e) => setModelo({ ...modelo, soVista: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Texto da coluna Parcelamento {'{{4}}'} quando for somente à vista</Label>
+            <Input value={modelo.parcelaVazia} onChange={(e) => setModelo({ ...modelo, parcelaVazia: e.target.value })} />
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setModelo(MODELO_PADRAO)}>Restaurar padrão</Button>
+        </CardContent>
+      </Card>
+
       <MapearColunasPlanilha rows={rows} mapeamento={mapeamento} onChange={setMapeamento} />
 
       {preview.length > 0 && (
@@ -227,19 +263,8 @@ export function LayoutVistaParcelamentoTab() {
               <Button variant="secondary" onClick={aplicar}>
                 <Wand2 className="h-4 w-4 mr-2" /> Reaplicar
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => exportar(comParcelamento, true, 'avista-parcelamento')}
-                disabled={comParcelamento.length === 0}
-              >
-                <Download className="h-4 w-4 mr-2" /> À vista + parcelado ({comParcelamento.length})
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => exportar(somenteAVista, false, 'somente-a-vista')}
-                disabled={somenteAVista.length === 0}
-              >
-                <Download className="h-4 w-4 mr-2" /> Somente à vista ({somenteAVista.length})
+              <Button variant="outline" onClick={exportar}>
+                <Download className="h-4 w-4 mr-2" /> Baixar à vista + parcelamento ({preview.length})
               </Button>
             </div>
 
@@ -252,7 +277,8 @@ export function LayoutVistaParcelamentoTab() {
                     <TableHead>Nome</TableHead>
                     <TableHead>Valor original</TableHead>
                     <TableHead>À vista</TableHead>
-                    <TableHead>Parcelamento</TableHead>
+                    <TableHead>Parcelamento {'{{4}}'}</TableHead>
+                    <TableHead>Mensagem</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -265,7 +291,8 @@ export function LayoutVistaParcelamentoTab() {
                       <TableCell className="whitespace-nowrap font-medium">
                         {moeda(l.aVista)}
                       </TableCell>
-                      <TableCell className="text-xs">{l.parcelamento}</TableCell>
+                      <TableCell className="text-xs">{varParcelamento(l)}</TableCell>
+                      <TableCell className="text-xs min-w-[320px]">{mensagem(l)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
