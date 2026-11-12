@@ -236,13 +236,23 @@ export function ConsultaUmeDialog({
       setParcelaAtual(p);
       setVencParcela(String(p.boleto.vencimento || '').slice(0, 10));
       setTextoParcela(textoParcelaAtualizada(p));
-      if (vencimento) toast.success('Valor recalculado pela UME para a nova data');
+      const devolvido = String(p.boleto.vencimento || '').slice(0, 10);
+      if (vencimento && devolvido !== vencimento) toast.warning(`A UME gerou a cobrança para ${fmtData(devolvido)}, não para ${fmtData(vencimento)}. Confira antes de enviar.`);
+      else if (vencimento) toast.success('Valor recalculado pela UME para a nova data');
     } catch (e) {
       toast.error(String((e as Error)?.message || e));
     } finally {
       setParcelaLoading(false);
     }
   };
+  const vencGerado = String(parcelaAtual?.boleto.vencimento || '').slice(0, 10);
+  const dataPendente = !!parcelaAtual && !!vencParcela && vencParcela !== vencGerado;
+  useEffect(() => {
+    if (!dataPendente || parcelaLoading) return;
+    const t = setTimeout(() => void atualizarParcelaAtraso(vencParcela), 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vencParcela, vencGerado]);
   useEffect(() => {
     if (consulta) setPrevia(textoFinal(consulta));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -522,6 +532,7 @@ export function ConsultaUmeDialog({
                           {parcelaLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} Recalcular
                         </Button>
                       </div>
+                      {(dataPendente || parcelaLoading) && <p className="col-span-2 text-xs text-destructive">Gerando a cobrança para a nova data. O envio fica liberado quando o valor e o PIX forem atualizados.</p>}
                       {parcelaAtual.boleto.invoiceUrl && <a className="col-span-2 text-primary underline" href={parcelaAtual.boleto.invoiceUrl} target="_blank" rel="noreferrer">Abrir boleto (PDF)</a>}
                     </div>
                   )}
@@ -532,7 +543,8 @@ export function ConsultaUmeDialog({
                       <Copy className="mr-2 h-4 w-4" /> Copiar
                     </Button>
                     {onEnviar && (
-                      <AlertDialogAction onClick={() => {
+                      <AlertDialogAction disabled={dataPendente || parcelaLoading} onClick={(e) => {
+                        if (dataPendente || parcelaLoading) { e.preventDefault(); return; }
                         if (!textoParcela.trim()) return;
                         onEnviar(textoParcela);
                         setParcelaAtual(null);
