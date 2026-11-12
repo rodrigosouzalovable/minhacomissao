@@ -223,17 +223,20 @@ export function ConsultaUmeDialog({
   const [parcelaAtual, setParcelaAtual] = useState<ParcelaAtualizada | null>(null);
   const [textoParcela, setTextoParcela] = useState('');
 
-  const atualizarParcelaAtraso = async () => {
+  const [vencParcela, setVencParcela] = useState('');
+  const atualizarParcelaAtraso = async (vencimento?: string) => {
     const digitos = soDigitos(cpf);
     if (digitos.length !== 11) { toast.error('Informe um CPF com 11 dígitos'); return; }
     setParcelaLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('ume-parcela-atraso', { body: { cpf: digitos } });
+      const { data, error } = await supabase.functions.invoke('ume-parcela-atraso', { body: vencimento ? { cpf: digitos, vencimento } : { cpf: digitos } });
       if (error) throw error;
       if (!(data as any)?.success) throw new Error((data as any)?.message || 'Falha ao atualizar a parcela');
       const p = data as ParcelaAtualizada;
       setParcelaAtual(p);
+      setVencParcela(String(p.boleto.vencimento || '').slice(0, 10));
       setTextoParcela(textoParcelaAtualizada(p));
+      if (vencimento) toast.success('Valor recalculado pela UME para a nova data');
     } catch (e) {
       toast.error(String((e as Error)?.message || e));
     } finally {
@@ -494,16 +497,16 @@ export function ConsultaUmeDialog({
               <Button variant="outline" size="icon" title="Configurar mensagem" aria-label="Configurar mensagem" onClick={() => setConfigOpen(true)}>
                 <Settings2 className="h-4 w-4" />
               </Button>
-              <Button variant="outline" title="Atualizar parcela em atraso (API UME)" onClick={() => void atualizarParcelaAtraso()} disabled={parcelaLoading}>
+              <Button variant="outline" title="Enviar parcela em atraso ou a próxima a vencer (API UME)" onClick={() => void atualizarParcelaAtraso()} disabled={parcelaLoading}>
                 {parcelaLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlarmClock className="mr-2 h-4 w-4" />}
-                Parcela em atraso
+                Parcela (atraso / a vencer)
               </Button>
               <AlertDialog open={!!parcelaAtual} onOpenChange={(v) => { if (!v) setParcelaAtual(null); }}>
                 <AlertDialogContent className="max-w-lg">
                   <AlertDialogHeader>
                     <AlertDialogTitle>{parcelaAtual?.origem === 'compra_original' ? `Aprovar envio — compra original${parcelaAtual?.contrato ? ` (contrato ${parcelaAtual.contrato})` : ''}` : `Aprovar envio da parcela ${parcelaAtual?.parcela.numero} de ${parcelaAtual?.parcela.total}`}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      {parcelaAtual?.atrasada ? 'Parcela em atraso, atualizada pela UME para hoje.' : 'Próxima parcela em aberto.'}
+                      {parcelaAtual?.atrasada ? 'Parcela em atraso, atualizada pela UME.' : 'Próxima parcela a vencer.'}
                       {parcelaAtual?.parcela.vencimentoOriginal ? <>{' '}Original: {fmt(parcelaAtual?.parcela.valorOriginal)} em {fmtData(String(parcelaAtual.parcela.vencimentoOriginal))}.</> : ' Valor calculado direto pela UME.'}
                       {parcelaAtual?.boleto.ambiente === 'dev' ? ' (ambiente de testes)' : ''}
                     </AlertDialogDescription>
@@ -512,6 +515,13 @@ export function ConsultaUmeDialog({
                     <div className="grid grid-cols-2 gap-3 rounded border p-3 text-sm">
                       <div><span className="text-xs text-muted-foreground">Valor real do boleto/PIX</span><div className="text-lg font-semibold">{fmt(parcelaAtual.boleto.valor)}</div></div>
                       <div><span className="text-xs text-muted-foreground">Vencimento</span><div className="text-lg font-semibold">{fmtData(parcelaAtual.boleto.vencimento)}</div></div>
+                      <div className="col-span-2 flex flex-wrap items-end gap-2">
+                        <div><span className="text-xs text-muted-foreground">Alterar vencimento</span>
+                          <Input type="date" value={vencParcela} min={dataParaInput(new Date())} onChange={(e) => setVencParcela(e.target.value)} className="w-[160px]" aria-label="Nova data de vencimento" /></div>
+                        <Button size="sm" variant="outline" disabled={parcelaLoading || !vencParcela || vencParcela === String(parcelaAtual.boleto.vencimento).slice(0, 10)} onClick={() => void atualizarParcelaAtraso(vencParcela)}>
+                          {parcelaLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} Recalcular
+                        </Button>
+                      </div>
                       {parcelaAtual.boleto.invoiceUrl && <a className="col-span-2 text-primary underline" href={parcelaAtual.boleto.invoiceUrl} target="_blank" rel="noreferrer">Abrir boleto (PDF)</a>}
                     </div>
                   )}
