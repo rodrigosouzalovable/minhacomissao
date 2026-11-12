@@ -16,13 +16,15 @@ interface ParcelaAtualizada {
   boleto: BoletoUme;
   atrasada: boolean;
   nome: string;
+  origem?: 'acordo' | 'compra_original';
+  contrato?: string | null;
   parcela: { numero: number; total: number; valorOriginal: number | null; vencimentoOriginal: string };
 }
 
 function textoParcelaAtualizada(p: ParcelaAtualizada) {
   const primeiro = (p.nome || '').split(' ')[0];
   return [
-    `Olá${primeiro ? `, ${primeiro}` : ''}! Segue a sua *parcela ${p.parcela.numero} de ${p.parcela.total}*${p.atrasada ? ' atualizada' : ''} para pagamento:`,
+    `Olá${primeiro ? `, ${primeiro}` : ''}! Segue a sua *${p.origem === 'compra_original' ? `parcela em aberto da sua compra${p.contrato ? ` (contrato ${p.contrato})` : ''}` : `parcela ${p.parcela.numero} de ${p.parcela.total}`}*${p.atrasada ? ' atualizada' : ''} para pagamento:`,
     '',
     `💰 *Valor:* ${fmt(p.boleto.valor)}`,
     `📅 *Vencimento:* ${fmtData(p.boleto.vencimento)}`,
@@ -499,7 +501,7 @@ export function ConsultaUmeDialog({
               <AlertDialog open={!!parcelaAtual} onOpenChange={(v) => { if (!v) setParcelaAtual(null); }}>
                 <AlertDialogContent className="max-w-lg">
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Aprovar envio da parcela {parcelaAtual?.parcela.numero} de {parcelaAtual?.parcela.total}</AlertDialogTitle>
+                    <AlertDialogTitle>{parcelaAtual?.origem === 'compra_original' ? `Aprovar envio — compra original${parcelaAtual?.contrato ? ` (contrato ${parcelaAtual.contrato})` : ''}` : `Aprovar envio da parcela ${parcelaAtual?.parcela.numero} de ${parcelaAtual?.parcela.total}`}</AlertDialogTitle>
                     <AlertDialogDescription>
                       {parcelaAtual?.atrasada ? 'Parcela em atraso, atualizada pela UME para hoje.' : 'Próxima parcela em aberto.'}
                       {' '}Original: {fmt(parcelaAtual?.parcela.valorOriginal)} em {parcelaAtual ? fmtData(String(parcelaAtual.parcela.vencimentoOriginal)) : ''}.

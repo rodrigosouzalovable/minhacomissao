@@ -31,38 +31,65 @@ Deno.serve(async (req) => {
     const { data: acordos } = await rls.from('acordos').select('id, cliente_nome, criado_em')
       .in('cliente_cpf', [cpf, fmtCpf]).eq('status', 'ativo').order('criado_em', { ascending: false }).limit(1);
     const acordo = acordos?.[0];
-    if (!acordo) return json({ success: false, message: 'Nenhum acordo ativo encontrado para este CPF.' });
+    const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+    const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
+    const { data: cli } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira').eq('cpf', cpf).maybeSingle();
+    if (!cli?.borrower_id) return json({ success: false, message: 'Cadastro do cliente na UME não encontrado (SFTP).' });
+
+    const lerBoleto = (raw: unknown, venc: string) => {
+      const d = (Array.isArray(raw) ? raw[0] : (raw as any)?.invoices?.[0] ?? (raw as any)?.data?.[0] ?? raw ?? {}) as Record<string, unknown>;
+      return {
+        invoiceId: String(d.id ?? ''), valor: Number(d.invoiceTotalValue ?? d.totalValue ?? 0) || null,
+        vencimento: String(d.invoiceDueDate ?? d.dueDate ?? venc).slice(0, 10), pixCode: String(d.pixCode ?? ''),
+        invoiceUrl: String(d.invoiceUrl ?? ''), pixQrCodeUrl: String(d.pixQrCodeUrl ?? ''), ambiente,
+      };
+    };
+    const registrar = (b: ReturnType<typeof lerBoleto>) => db.from('ume_boleto_log').insert({ user_id: caller.userId, cpf, borrower_id: String(cli.borrower_id), invoice_id: b.invoiceId || null, valor: b.valor, vencimento: b.vencimento, invoice_url: b.invoiceUrl || null, origem: 'atendente', ambiente });
+
+    if (!acordo) {
+      // Sem acordo nosso: usa a compra original (parcelas em aberto do SFTP) sem renegociar.
+      let q = db.from('ume_carteira_parcelas').select('installment_id, contrato, vencimento, valor').eq('cpf', cpf);
+      if (cli.carteira) q = q.eq('carteira', cli.carteira);
+      const { data: parc } = await q.order('vencimento').limit(500);
+      const lista = parc ?? [];
+      if (!lista.length) return json({ success: false, message: 'Nenhum acordo ativo nem parcela em aberto da compra original para este CPF.' });
+      const p: any = lista[0];
+      const doContrato = lista.filter((x: any) => x.contrato === p.contrato);
+      const atrasada = String(p.vencimento) < hoje;
+      const venc = atrasada ? hoje : String(p.vencimento);
+      const r = await umeApi.gerarBoletos(ambiente, [String(p.installment_id)], venc);
+      if (!r.ok) {
+        const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
+        return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
+      }
+      const boleto = lerBoleto(r.data, venc);
+      if (!boleto.pixCode && !boleto.invoiceUrl) return json({ success: false, message: 'A UME não devolveu PIX nem boleto.' });
+      await registrar(boleto);
+      return json({
+        success: true, origem: 'compra_original', contrato: p.contrato ?? null, boleto, atrasada, nome: cli.nome ?? '',
+        parcela: { numero: 1, total: doContrato.length, valorOriginal: p.valor, vencimentoOriginal: p.vencimento },
+      });
+    }
 
     const { data: parcelas } = await rls.from('pagamentos').select('numero_parcela, valor_parcela, data_prevista, status')
       .eq('acordo_id', acordo.id).order('numero_parcela', { ascending: true });
     const lista = parcelas || [];
     const abertas = lista.filter((p: any) => p.status !== 'pago');
     if (!abertas.length) return json({ success: false, message: 'Todas as parcelas deste acordo constam como pagas.' });
-    const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
     const parcela: any = abertas[0];
     const atrasada = String(parcela.data_prevista) < hoje;
-
-    const { data: cli } = await db.from('ume_carteira_clientes').select('borrower_id').eq('cpf', cpf).maybeSingle();
-    if (!cli?.borrower_id) return json({ success: false, message: 'Cadastro do cliente na UME não encontrado (SFTP).' });
-
     const venc = atrasada ? hoje : String(parcela.data_prevista);
-    const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
     const r = await umeApi.gerarBoletoUnico(ambiente, String(cli.borrower_id), venc);
     if (!r.ok) {
       const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
       return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
     }
-    const d = (r.data ?? {}) as Record<string, unknown>;
-    const boleto = {
-      invoiceId: String(d.id ?? ''), valor: Number(d.invoiceTotalValue ?? 0) || null,
-      vencimento: String(d.invoiceDueDate ?? venc).slice(0, 10), pixCode: String(d.pixCode ?? ''),
-      invoiceUrl: String(d.invoiceUrl ?? ''), pixQrCodeUrl: String(d.pixQrCodeUrl ?? ''), ambiente,
-    };
+    const boleto = lerBoleto(r.data, venc);
     if (!boleto.pixCode && !boleto.invoiceUrl) return json({ success: false, message: 'A UME não devolveu PIX nem boleto.' });
-    await db.from('ume_boleto_log').insert({ user_id: caller.userId, cpf, borrower_id: String(cli.borrower_id), invoice_id: boleto.invoiceId || null, valor: boleto.valor, vencimento: boleto.vencimento, invoice_url: boleto.invoiceUrl || null, origem: 'atendente', ambiente });
+    await registrar(boleto);
 
     return json({
-      success: true, boleto, atrasada, nome: acordo.cliente_nome,
+      success: true, origem: 'acordo', boleto, atrasada, nome: acordo.cliente_nome,
       parcela: { numero: parcela.numero_parcela, total: lista.length, valorOriginal: parcela.valor_parcela, vencimentoOriginal: parcela.data_prevista },
     });
   } catch (e) {
