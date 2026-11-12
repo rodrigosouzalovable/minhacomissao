@@ -16,7 +16,7 @@ const Body = z.object({ cpf: z.string().min(11).max(14) });
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  const caller = await requireCaller(req, { user: 'staff' });
+  const caller = await requireCaller(req, { user: 'any' });
   if (caller instanceof Response) return caller;
   try {
     const parsed = Body.safeParse(await req.json().catch(() => ({})));
