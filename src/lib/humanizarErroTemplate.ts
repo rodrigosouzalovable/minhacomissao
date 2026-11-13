@@ -59,3 +59,26 @@ export function humanizarErroTemplate(erroBruto?: string | null): string {
 
   return raw.length > 400 ? raw.slice(0, 400) + "…" : raw;
 }
+
+export type ErroMetaDetalhe = { code?: number; error_subcode?: number; fbtrace_id?: string; message?: string; type?: string };
+
+/** Explicação acionável a partir do código da Meta (Graph API). */
+export function explicarErroMetaPorCodigo(e?: ErroMetaDetalhe | null): string | null {
+  if (!e) return null;
+  const code = Number(e.code ?? 0);
+  const sub = Number(e.error_subcode ?? 0);
+  const msg = (e.message || "").toLowerCase();
+  if (code === 200 && (sub === 5258005 || msg.includes("api access blocked")))
+    return "A Meta bloqueou o acesso do APLICATIVO dono deste token (não é o número). Trocar só o token não resolve se for do mesmo app. Faça: 1) developers.facebook.com → seu app → Painel/Alertas: veja se há restrição, verificação da empresa pendente ou app desativado; 2) confira se o app está em modo Ativo (Live); 3) em business.facebook.com → Usuários do sistema, gere o token NO MESMO app vinculado à WABA, com as permissões whatsapp_business_management e whatsapp_business_messaging e acesso total à WABA; 4) se o app estiver restrito, gere o token por outro app ativo da BM e atualize aqui.";
+  if (code === 190) return "Token expirado ou inválido. Gere um novo token permanente pelo usuário do sistema da BM e atualize no card.";
+  if (code === 10 || code === 200) return "O token não tem permissão para esta WABA/número. Dê ao usuário do sistema acesso total à WABA e as permissões whatsapp_business_management e whatsapp_business_messaging, e gere o token de novo.";
+  if (code === 100 || code === 33) return "O ID do número ou da WABA não pertence a este token. Confira o Phone ID e o WABA ID no WhatsApp Manager e se o token é da mesma BM.";
+  if (code === 4 || code === 80008 || code === 613) return "Limite de chamadas da Meta atingido. Aguarde alguns minutos e tente de novo.";
+  if (code === 368 || code === 131031) return "A conta foi restringida pela Meta. Veja Qualidade da conta no WhatsApp Manager e solicite revisão.";
+  return null;
+}
+
+export function detalheTecnicoMeta(e?: ErroMetaDetalhe | null): string | null {
+  if (!e?.code) return null;
+  return `Meta código ${e.code}${e.error_subcode ? ` / subcódigo ${e.error_subcode}` : ""}${e.fbtrace_id ? ` · rastreio ${e.fbtrace_id}` : ""}${e.message ? ` · "${e.message}"` : ""}`;
+}

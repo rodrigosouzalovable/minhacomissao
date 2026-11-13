@@ -34,7 +34,7 @@ import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useUserRole } from "@/hooks/useUserRole";
 import ParceirosMetaTab from "@/components/meta/ParceirosMetaTab";
 import { isInformationalDisplayNameLimit, isMetaDisplayNameUsable } from "@/lib/metaNameStatus";
-import { humanizarErroTemplate } from "@/lib/humanizarErroTemplate";
+import { humanizarErroTemplate, explicarErroMetaPorCodigo, detalheTecnicoMeta, type ErroMetaDetalhe } from "@/lib/humanizarErroTemplate";
 import { nationalInstanceCount } from "@/lib/metaNationalInstances";
 import { summarizeBmQuotas } from "@/lib/metaBmQuotaSummary";
 
@@ -1065,6 +1065,7 @@ export default function ConfigurarMeta() {
 
   const aplicarTemplates = async (inst: Instancia) => {
     setSincronizando(inst.id);
+    let etapa = "Verificação da conta na Meta";
     try {
       const { data: healthData, error: healthError } = await supabase.functions.invoke("check-meta-instance-health", {
         body: { instancia_id: inst.id },
@@ -1075,12 +1076,14 @@ export default function ConfigurarMeta() {
         throw new Error(healthResult?.error || "A Meta não confirmou a situação desta conta. Tente novamente em alguns minutos.");
       }
 
+      etapa = "Sincronização dos templates";
       const { data: syncData, error: syncError } = await supabase.functions.invoke("meta-sync-templates", {
         body: { instancia_id: inst.id },
       });
       if (syncError) throw syncError;
       if (syncData?.success === false) throw new Error(syncData?.error || "Não foi possível sincronizar os templates atuais");
 
+      etapa = "Fila de aplicação";
       const { data: filaData, error: filaError } = await supabase.functions.invoke("meta-templates-onboarding-enfileirar", {
         body: { instancia_id: inst.id, aplicacao_manual: true },
       });
@@ -1113,9 +1116,19 @@ export default function ConfigurarMeta() {
       }
       await carregar();
     } catch (e: any) {
+      let metaErr: ErroMetaDetalhe | null = null;
+      try {
+        const { data: row } = await supabase.from("meta_whatsapp_instances").select("saude_raw").eq("id", inst.id).maybeSingle();
+        const raw = (row as any)?.saude_raw;
+        metaErr = raw?.phone?.error || raw?.waba?.error || null;
+      } catch { /* sem detalhe */ }
+      const causa = explicarErroMetaPorCodigo(metaErr) || humanizarErroTemplate(e.message);
+      const tecnico = detalheTecnicoMeta(metaErr);
       toast.error(`Não foi possível aplicar os templates · ${inst.nome}`, {
-        description: humanizarErroTemplate(e.message),
-        duration: 12000,
+        description: `Etapa: ${etapa}. ${causa}${tecnico ? `\n\n${tecnico}` : ""}`,
+        duration: Infinity,
+        closeButton: true,
+        action: tecnico ? { label: "Copiar", onClick: () => navigator.clipboard?.writeText(`${inst.nome} · ${etapa} · ${tecnico}`) } : undefined,
       });
     } finally {
       setSincronizando(null);
