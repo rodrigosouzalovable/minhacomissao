@@ -1716,6 +1716,13 @@
       "when": 1794571319121,
       "tag": "0244_ume_carteira_telefone",
       "breakpoints": true
+    },
+    {
+      "idx": 245,
+      "version": "7",
+      "when": 1794572608568,
+      "tag": "0245_carteira_sftp_campanha_auto",
+      "breakpoints": true
     }
   ]
 }

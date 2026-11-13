@@ -10704,6 +10704,7 @@ export type Database = {
           cpf: string
           data_lote: string
           nome: string | null
+          primeiro_lote: string | null
           telefone: string | null
         }
         Insert: {
@@ -10713,6 +10714,7 @@ export type Database = {
           cpf: string
           data_lote: string
           nome?: string | null
+          primeiro_lote?: string | null
           telefone?: string | null
         }
         Update: {
@@ -10722,6 +10724,7 @@ export type Database = {
           cpf?: string
           data_lote?: string
           nome?: string | null
+          primeiro_lote?: string | null
           telefone?: string | null
         }
         Relationships: []
@@ -13148,6 +13151,23 @@ export type Database = {
       can_view_uazapi_inbox_media: {
         Args: { _object_name: string; _uid: string }
         Returns: boolean
+      }
+      carteira_sftp_candidatos: {
+        Args: {
+          p_dias_fadiga: number
+          p_limite_odres: number
+          p_limite_ume: number
+        }
+        Returns: {
+          atraso: number
+          avista: number
+          cpf: string
+          credor: string
+          nome: string
+          novo: boolean
+          score: number
+          telefone: string
+        }[]
       }
       certificado_redistribuir_pendentes_instancia: {
         Args: { p_instancia_id: string; p_job_id: string; p_limite?: number }

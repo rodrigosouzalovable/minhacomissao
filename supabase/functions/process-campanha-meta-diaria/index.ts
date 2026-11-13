@@ -90,6 +90,19 @@ Deno.serve(async (req) => {
 
     const hoje = todayBRT();
 
+    // Campanha diária da carteira SFTP (UME + Odres): mesmo agendamento das 08h, sem cron novo.
+    let carteiraSftp: unknown = null;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/carteira-sftp-auto`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SERVICE_KEY}` },
+        body: '{}', signal: AbortSignal.timeout(140_000),
+      });
+      carteiraSftp = await r.json().catch(() => ({ status: r.status }));
+    } catch (e) {
+      carteiraSftp = { success: false, error: e instanceof Error ? e.message : String(e) };
+    }
+    console.log('[campanha-diaria] carteira SFTP', JSON.stringify(carteiraSftp));
+
     // Puxa itens pendentes com data_prevista <= hoje, campanhas ativas
     const { data: campanhas, error: cErr } = await supabase
       .from('meta_campanha_agendada')
@@ -199,6 +212,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       hoje,
+      carteiraSftp,
       enviados: enviadosTotais,
       erros: errosTotais,
       campanhas: detalhePorCampanha,
