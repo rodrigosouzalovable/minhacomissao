@@ -9,7 +9,7 @@ import { requireCaller } from '../_shared/auth-guard.ts';
 import { textoOferta } from '../_shared/oferta-carteira.ts';
 
 const DONO = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
-const INICIO = '2026-11-16';
+const INICIO = '2026-11-14';
 const NOME = 'Carteira SFTP auto';
 const TEMPLATES = { ume: 'acesse_o_portal_de_negociacao', odres_cred: 'odres_portal_de_negociacao' } as const;
 const LIMITE = { ume: 3000, odres_cred: 4000 };
