@@ -153,7 +153,7 @@ async function fatia(db: any, pasta: string, continuar: boolean): Promise<Record
     if (!ultimo) { const nl = buf.lastIndexOf(10); if (nl < 0) throw new Error('Linha maior que a fatia'); usar = nl + 1; }
     const texto = new TextDecoder('latin1').decode(buf.subarray(0, usar));
 
-    const clientes: unknown[] = [], parcelas: unknown[] = [];
+    const clientes: unknown[] = [], parcelas: unknown[] = [], telefones: unknown[] = [];
     const baixas: unknown[] = Array.isArray(st.baixas) ? st.baixas : [];
     let { data_lote: dataLote, carteira } = st;
     let linhas = 0;
@@ -166,6 +166,10 @@ async function fatia(db: any, pasta: string, continuar: boolean): Promise<Record
       else if (p[0] === '01') {
         const c = (p[3] ?? '').replace(/\D/g, ''); const id = txt(p[1]);
         if (c && id) clientes.push({ cpf: c.padStart(11, '0'), borrower_id: id, nome: txt(p[4]) });
+      } else if (p[0] === '02' && cpf) {
+        // 02: borrower_id;cpf;tipo;telefone com DDD.
+        const t = (p[4] ?? '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+        if (t.length === 10 || t.length === 11) telefones.push({ cpf: cpf.padStart(11, '0'), telefone: `55${t}` });
       } else if (p[0] === '06' && cpf && txt(p[4])) {
         parcelas.push({ installment_id: txt(p[4]), cpf: cpf.padStart(11, '0'), borrower_id: txt(p[1]) ?? '',
           contrato: txt(p[3]), vencimento: dataBR(p[5]), valor: num(p[6]) });
@@ -192,6 +196,10 @@ async function fatia(db: any, pasta: string, continuar: boolean): Promise<Record
     };
     for (let i = 0; i < Math.max(clientes.length, parcelas.length); i += BLOCO) {
       await gravar(clientes.slice(i, i + BLOCO), parcelas.slice(i, i + BLOCO));
+    }
+    for (let i = 0; i < telefones.length; i += BLOCO) {
+      const { error: et } = await db.rpc('ume_carteira_gravar_telefones', { p_telefones: telefones.slice(i, i + BLOCO) });
+      if (et) console.error('sftp-ume-auto telefones', pasta, et.message);
     }
     const novo = { posicao: inicio + usar, data_lote: dataLote, carteira, total_linhas: st.total_linhas + linhas,
       clientes: st.clientes + clientes.length, parcelas: st.parcelas + parcelas.length, baixas, atualizado_em: new Date().toISOString() };

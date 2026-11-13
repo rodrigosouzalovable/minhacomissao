@@ -10704,6 +10704,7 @@ export type Database = {
           cpf: string
           data_lote: string
           nome: string | null
+          telefone: string | null
         }
         Insert: {
           atualizado_em?: string
@@ -10712,6 +10713,7 @@ export type Database = {
           cpf: string
           data_lote: string
           nome?: string | null
+          telefone?: string | null
         }
         Update: {
           atualizado_em?: string
@@ -10720,6 +10722,7 @@ export type Database = {
           cpf?: string
           data_lote?: string
           nome?: string | null
+          telefone?: string | null
         }
         Relationships: []
       }
@@ -14779,6 +14782,10 @@ export type Database = {
           p_lote: string
           p_parcelas: Json
         }
+        Returns: number
+      }
+      ume_carteira_gravar_telefones: {
+        Args: { p_telefones: Json }
         Returns: number
       }
       ume_vencimento_mais_antigo: { Args: { p_cpf: string }; Returns: string }
