@@ -15,6 +15,7 @@ import { PlusCircle, FileText, DollarSign, Clock, CheckCircle, Target, Sparkles 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, subMonths, startOfMonth, endOfDay, min } from 'date-fns';
 import { MetasMensal } from '@/components/MetasMensal';
+import { buscarTodos } from '@/lib/buscarTodos';
 import { ComparativoMensal } from '@/components/ComparativoMensal';
 import { MetaMesBanner } from '@/components/MetaMesBanner';
 import { MotivacaoCard } from '@/components/MotivacaoCard';
@@ -61,13 +62,11 @@ export default function Dashboard() {
       const mesmoDiaAnteriorISO = mesmoDiaMesAnterior.toISOString();
 
       // Personal data queries
-      const [acordosRes, pagamentosRes] = await Promise.all([
-        supabase.from('acordos').select('*').eq('user_id', user.id).order('criado_em', { ascending: false }),
-        supabase.from('pagamentos').select('*, acordos!inner(user_id, empresa)').eq('acordos.user_id', user.id),
+      const [acordosTodos, pagamentos] = await Promise.all([
+        buscarTodos<any>(() => supabase.from('acordos').select('*').eq('user_id', user.id).order('id')),
+        buscarTodos<any>(() => supabase.from('pagamentos').select('*, acordos!inner(user_id, empresa)').eq('acordos.user_id', user.id).order('id')),
       ]);
-
-      const acordos = acordosRes.data || [];
-      const pagamentos = pagamentosRes.data || [];
+      const acordos = [...acordosTodos].sort((x, y) => String(y.criado_em).localeCompare(String(x.criado_em)));
 
       const acordosAtivos = acordos.filter(a => a.status === 'ativo').length;
       const pagamentosPagos = pagamentos.filter(p => p.status === 'pago');
@@ -116,16 +115,6 @@ export default function Dashboard() {
           valorRecebidoAnterior: Number(g.pgtos_anterior_valor),
         };
       } else {
-        const buscarTodos = async (montar: () => any) => {
-          const linhas: any[] = [];
-          for (let de = 0; ; de += 1000) {
-            const { data: bloco, error } = await montar().range(de, de + 999);
-            if (error) throw error;
-            linhas.push(...(bloco || []));
-            if (!bloco || bloco.length < 1000) break;
-          }
-          return linhas;
-        };
         const [acAtual, acAnterior, pgAtual, pgAnterior] = await Promise.all([
           buscarTodos(() => supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAtualISO).lte('criado_em', agoraISO).order('id')),
           buscarTodos(() => supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAnteriorISO).lte('criado_em', mesmoDiaAnteriorISO).order('id')),

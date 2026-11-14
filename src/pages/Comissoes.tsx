@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { formatarMoeda, formatarData, calcularComissaoFuncionarioParcela } from '@/lib/comissao';
+import { buscarTodos } from '@/lib/buscarTodos';
 import { getEmpresaLabel } from '@/lib/empresaLabels';
 import { exportarParaExcel } from '@/lib/exportExcel';
 import { Clock, CheckCircle, Download, DollarSign } from 'lucide-react';
@@ -50,14 +51,12 @@ export default function Comissoes() {
   const { data: acordos, isLoading: loadingAcordos } = useQuery({
     queryKey: ['meus-acordos', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      return buscarTodos<Acordo>(() => supabase
         .from('acordos')
         .select('id, cliente_nome, cliente_cpf, valor_total, comissao_total, parcelas, status, dias_atraso, empresa')
         .eq('user_id', user!.id)
-        .order('criado_em', { ascending: false });
-
-      if (error) throw error;
-      return data as Acordo[];
+        .order('criado_em', { ascending: false })
+        .order('id'));
     },
     enabled: !!user,
   });
@@ -67,14 +66,16 @@ export default function Comissoes() {
     queryFn: async () => {
       if (!acordos || acordos.length === 0) return [];
       
-      const { data, error } = await supabase
+      const linhas = await buscarTodos<Pagamento & { acordos?: unknown }>(() => supabase
         .from('pagamentos')
-        .select('id, acordo_id, numero_parcela, valor_parcela, comissao_parcela, data_prevista, data_paga, status')
-        .in('acordo_id', acordos.map(a => a.id))
-        .order('numero_parcela', { ascending: true });
-
-      if (error) throw error;
-      return data as Pagamento[];
+        .select('id, acordo_id, numero_parcela, valor_parcela, comissao_parcela, data_prevista, data_paga, status, acordos!inner(user_id)')
+        .eq('acordos.user_id', user!.id)
+        .order('id'));
+      const ids = new Set(acordos.map(a => a.id));
+      return linhas
+        .filter(p => ids.has(p.acordo_id))
+        .map(({ acordos: _a, ...p }) => p as Pagamento)
+        .sort((x, y) => x.numero_parcela - y.numero_parcela);
     },
     enabled: !!acordos && acordos.length > 0,
   });

@@ -1,3 +1,4 @@
+import { buscarTodos } from '@/lib/buscarTodos';
 import { RecebimentosCredores } from '@/components/RecebimentosCredores';
 import { totaisCredorVazios } from '@/lib/recebimentosPorCredor';
 import { EMPRESAS_ACORDO, type EmpresaAcordo } from '@/lib/empresaLabels';
@@ -231,21 +232,15 @@ export default function Financeiro() {
   const { data: pagamentosPagos = [] } = useQuery({
     queryKey: ['pagamentos-pagos-financeiro', dataInicio, dataFim],
     queryFn: async () => {
-      let query = supabase
-        .from('pagamentos')
-        .select('*, acordos!inner(user_id, dias_atraso, empresa)')
-        .eq('status', 'pago');
-      
-      if (dataInicio) {
-        query = query.gte('data_paga', format(dataInicio, 'yyyy-MM-dd'));
-      }
-      if (dataFim) {
-        query = query.lte('data_paga', format(dataFim, 'yyyy-MM-dd'));
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
+      return buscarTodos<any>(() => {
+        let query = supabase
+          .from('pagamentos')
+          .select('*, acordos!inner(user_id, dias_atraso, empresa)')
+          .eq('status', 'pago');
+        if (dataInicio) query = query.gte('data_paga', format(dataInicio, 'yyyy-MM-dd'));
+        if (dataFim) query = query.lte('data_paga', format(dataFim, 'yyyy-MM-dd'));
+        return query.order('id');
+      });
     }
   });
 
