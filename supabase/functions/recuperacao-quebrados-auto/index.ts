@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { carregarParcelasPagas, parcelaJaPaga } from "../_shared/parcela-ja-paga.ts";
 import { CREDOR_PREVENTIVO, datasAlvoPreventivo, montarClientesPreventivo } from "../_shared/lembrete-preventivo.ts";
+import { REPESCAGEM_NOME, REPESCAGEM_TEMPLATE, datasRepescagem, montarClientesRepescagem } from "../_shared/repescagem-primeira-parcela.ts";
 
 const DONO = "ee649720-b8ce-47a2-859e-100a3a9ae6bb";
 const TEMPLATE = "abertura_para_reagendamento_de_pagamento";
@@ -43,8 +44,9 @@ Deno.serve(async (req) => {
   }
 
   // Últimos 3 dias já acionados por esta rotina ficam de fora.
+  // A repescagem da 1ª parcela também conta, para o cliente não receber os dois modelos em sequência.
   const { data: jobs } = await db.from("envio_meta_job").select("id")
-    .eq("user_id", DONO).ilike("nome_campanha", "Recuperação quebrados%")
+    .eq("user_id", DONO).or(`nome_campanha.ilike."Recuperação quebrados%",nome_campanha.ilike."${REPESCAGEM_NOME}%"`)
     .gte("created_at", new Date(Date.now() - 3 * 86400_000).toISOString());
   const recentes = new Set<string>();
   const jobIds = (jobs || []).map((j: any) => j.id);
@@ -58,6 +60,17 @@ Deno.serve(async (req) => {
   }
 
   const mesAtual = hoje.slice(0, 7);
+
+  // ===== Repescagem da 1ª parcela (D+1 a D+3): campanha própria, 1 por dia por número =====
+  let repescagem: any = null;
+  const sufRepescagem = new Set<string>();
+  try {
+    repescagem = await lancarRepescagem(db, url, key, hoje, mesAtual);
+    for (const s of repescagem?.sufixos || []) sufRepescagem.add(s);
+  } catch (e) { repescagem = { success: false, error: e instanceof Error ? e.message : String(e) }; }
+  console.log("[repescagem-1a-parcela]", JSON.stringify({ ...repescagem, sufixos: undefined }));
+  for (const s of sufRepescagem) recentes.add(s);
+
   const pagas = await carregarParcelasPagas(db, rows.map((r: any) => r.acordos?.cliente_cpf));
   let puladosPagos = 0;
   const porSuf = new Map<string, any>();
@@ -148,12 +161,13 @@ Deno.serve(async (req) => {
 
   // ===== Lembrete preventivo D-1 (mesmo agendamento, campanha separada) =====
   let preventivo: unknown = null;
-  try { preventivo = await lancarPreventivo(db, url, key, hoje, new Set(porSuf.keys())); }
+  try { preventivo = await lancarPreventivo(db, url, key, hoje, new Set([...porSuf.keys(), ...sufRepescagem])); }
   catch (e) { preventivo = { success: false, error: e instanceof Error ? e.message : String(e) }; }
   console.log("[lembrete-preventivo]", JSON.stringify(preventivo));
 
   const clientes = [...porSuf.values()];
-  if (!clientes.length) return json({ success: true, clientes: 0, preventivo });
+  const rep = repescagem ? { ...repescagem, sufixos: undefined } : null;
+  if (!clientes.length) return json({ success: true, clientes: 0, preventivo, repescagem: rep });
 
   const { data: inst } = await db.from("meta_whatsapp_instances").select("id")
     .eq("user_id", DONO).eq("ativo", true).eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN")
@@ -177,8 +191,68 @@ Deno.serve(async (req) => {
     }),
   });
   const out = await resp.json().catch(() => ({}));
-  return json({ success: resp.ok, clientes: clientes.length, quebrados: qtdQuebrados, numeros: instIds.length, resultado: out, preventivo }, resp.ok ? 200 : 500);
+  return json({ success: resp.ok, clientes: clientes.length, quebrados: qtdQuebrados, numeros: instIds.length, resultado: out, preventivo, repescagem: rep }, resp.ok ? 200 : 500);
 });
+
+// 1ª parcela pendente de acordos ativos vencida há 1–3 dias. Botões do modelo: o IAGO emite o PIX
+// (SIM) ou pergunta a nova data (ALTERAR DATA). Devolve os sufixos acionados para as outras etapas pularem.
+async function lancarRepescagem(db: any, url: string, key: string, hoje: string, mesAtual: string) {
+  const datas = datasRepescagem(hoje);
+  if (!datas.length) return { success: true, clientes: 0, sufixos: [] };
+  const rows: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("pagamentos")
+      .select("numero_parcela,data_prevista,valor_parcela,acordos!inner(cliente_nome,cliente_telefone,cliente_cpf,empresa,status)")
+      .eq("status", "pendente").eq("numero_parcela", 1).in("data_prevista", datas)
+      .eq("acordos.status", "ativo").in("acordos.empresa", ["ume_novo_mundo", "odres_cred"])
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    for (const r of data || []) rows.push({ ...r.acordos, numero_parcela: r.numero_parcela, data_prevista: r.data_prevista, valor_parcela: r.valor_parcela });
+    if (!data || data.length < 1000) break;
+  }
+  // Só um envio por dia por número, mesmo se a rotina rodar de novo.
+  const excluir = new Set<string>();
+  const { data: jobsHoje } = await db.from("envio_meta_job").select("id")
+    .eq("user_id", DONO).ilike("nome_campanha", `${REPESCAGEM_NOME}%`)
+    .gte("created_at", new Date(Date.now() - 20 * 3600_000).toISOString());
+  for (const j of jobsHoje || []) {
+    for (let from = 0; ; from += 1000) {
+      const { data } = await db.from("envio_meta_job_item").select("telefone").eq("job_id", j.id).range(from, from + 999);
+      for (const it of data || []) excluir.add(String(it.telefone || "").replace(/\D/g, "").slice(-8));
+      if (!data || data.length < 1000) break;
+    }
+  }
+  const pagas = await carregarParcelasPagas(db, rows.map((r: any) => r.cliente_cpf));
+  const semPagos = rows.filter((r: any) => !parcelaJaPaga(pagas, r.cliente_cpf, r.empresa, r.data_prevista, mesAtual));
+  const clientes = montarClientesRepescagem(semPagos, hoje, excluir);
+  const sufixos = [...excluir, ...clientes.map((c) => c.telefone.slice(-8))];
+  const base = { pendentes: rows.length, pulados_parcela_ja_paga: rows.length - semPagos.length, sufixos };
+  if (!clientes.length) return { success: true, clientes: 0, ...base };
+
+  const { data: inst } = await db.from("meta_whatsapp_instances").select("id")
+    .eq("user_id", DONO).eq("ativo", true).eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN")
+    .eq("estado_pool", "ativo").eq("instancia_teste_aquecimento", false);
+  const ids = (inst || []).map((i: any) => i.id);
+  const { data: tpls } = await db.from("meta_whatsapp_templates").select("id,instancia_id")
+    .in("instancia_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
+    .eq("nome_template", REPESCAGEM_TEMPLATE).eq("status", "approved").ilike("categoria", "utility");
+  const byInst: Record<string, string> = {};
+  for (const t of tpls || []) byInst[t.instancia_id] = t.id;
+  const instIds = Object.keys(byInst);
+  if (!instIds.length) return { success: false, clientes: clientes.length, error: "nenhum número GREEN com o modelo Utility", ...base, sufixos: [] };
+
+  const resp = await fetch(`${url}/functions/v1/envio-meta-massa-iniciar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      asUserId: DONO, template: { id: byInst[instIds[0]], nome_template: REPESCAGEM_TEMPLATE },
+      instanciaIds: instIds, templateIdByInstance: byInst, clientes, minSec: 5, maxSec: 10,
+      nomeCampanha: `${REPESCAGEM_NOME} ${hoje}`, validarNoEnvio: false,
+    }),
+  });
+  const out = await resp.json().catch(() => ({}));
+  return { success: resp.ok && out?.success !== false, clientes: clientes.length, numeros: instIds.length, job_id: out?.job_id, erro: out?.error, ...base };
+}
 
 // Parcelas pendentes de acordos ativos que vencem amanhã (sábado: domingo e segunda).
 async function lancarPreventivo(db: any, url: string, key: string, hoje: string, jaAcionados: Set<string>) {

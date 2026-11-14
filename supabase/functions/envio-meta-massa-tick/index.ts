@@ -673,6 +673,14 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
 
 
   if (!pend) {
+    // Campanha recém-criada ainda gravando os contatos: outra rodada (de outra campanha ou do
+    // agendador) pode chegar antes do fim da gravação. Não encerra enquanto faltarem itens.
+    const criadoMs = new Date(job.created_at ?? 0).getTime();
+    if (Number.isFinite(criadoMs) && Date.now() - criadoMs < 10 * 60_000) {
+      const { count: nItens } = await supabase.from('envio_meta_job_item')
+        .select('id', { count: 'exact', head: true }).eq('job_id', job.id);
+      if ((nItens ?? 0) < Number(job.total ?? 0)) return { advanced: false, waitMs: 5_000 };
+    }
     const { data: transitioned } = await supabase.from('envio_meta_job').update({
       status: 'concluido',
       concluido_em: new Date().toISOString(),

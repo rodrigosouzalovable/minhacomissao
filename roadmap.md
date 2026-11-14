@@ -6,6 +6,8 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Repescagem automática da 1ª parcela (D+1 a D+3, 1/dia, nova_parcela_vencida_2) na rotina de recuperação das 09:30; testes passaram.
+- [x] Escala da campanha diária da carteira: corte de 1.000 clientes corrigido, Odres com 5 dias sem repetir, duas campanhas (UME/Odres) com números separados e complemento de hoje lançado; campanha recém-criada não encerra mais antes de gravar os contatos.
 - [x] Corrigir erro genérico do envio: recusa real HTTP 404 confirmada em número desativado; quatro testes passaram e aviso validado no navegador, compilação OK. Sem reativação ou mensagens reais; página autenticada redireciona para /novomundo, impedindo conferência completa pela conversa.
 - [x] Corrigir rolagem da importação Meta, preservar registros multilinha e preencher prévia principal; 23 testes passaram e arquivo real confirmou 99 clientes/cinco colunas/Edson na prévia, sem disparos.
 - [x] Payment-reminder finding is stale: active cron has no caller for check-payment-reminders or job 8; preserved authentication and schedules.

@@ -1723,6 +1723,20 @@
       "when": 1794572608568,
       "tag": "0245_carteira_sftp_campanha_auto",
       "breakpoints": true
+    },
+    {
+      "idx": 246,
+      "version": "7",
+      "when": 1794654608994,
+      "tag": "0246_carteira_sftp_candidatos_json",
+      "breakpoints": true
+    },
+    {
+      "idx": 247,
+      "version": "7",
+      "when": 1794655024406,
+      "tag": "0247_carteira_sftp_candidatos_json_todos_envios",
+      "breakpoints": true
     }
   ]
 }

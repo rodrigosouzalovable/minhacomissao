@@ -13169,6 +13169,15 @@ export type Database = {
           telefone: string
         }[]
       }
+      carteira_sftp_candidatos_json: {
+        Args: {
+          p_dias_odres: number
+          p_dias_ume: number
+          p_limite_odres: number
+          p_limite_ume: number
+        }
+        Returns: Json
+      }
       certificado_redistribuir_pendentes_instancia: {
         Args: { p_instancia_id: string; p_job_id: string; p_limite?: number }
         Returns: number
