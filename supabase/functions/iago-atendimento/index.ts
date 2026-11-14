@@ -15,6 +15,7 @@ import {
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
 import { umeApi } from '../_shared/ume-api.ts';
 import { detectarPropostaPreviaNoHistorico, type PropostaPrevia } from '../_shared/proposta-previa.ts';
+import { ehPedidoBoletoImediato, credorBoletoAutomatico, vencimentoDiaUtil } from '../_shared/boleto-imediato.ts';
 import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-resposta.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
@@ -130,6 +131,52 @@ Deno.serve(async (req) => {
     let credorCaixa = credorResolvido.nome;
     let credorAmbiguo = credorResolvido.ambiguo;
 
+
+    // ===== Pedido de boleto/PIX (UME/Odres Cred): responde na hora, mesmo com atendente humano =====
+    if (!modoAquecimento && ehPedidoBoletoImediato(String(texto || '')) && credorBoletoAutomatico(credorCaixa || '')) {
+      try {
+        let cpfBol = soDigitos(String((contato as any).cpf || ''));
+        if (cpfBol.length !== 11 && cpfBol.length !== 14) {
+          const res = await resolverTelefone(supabase, (contato as any).telefone);
+          cpfBol = res?.cpf && res.candidatos.length <= 1 ? res.cpf : '';
+        }
+        if (cpfBol) {
+          const idSftp = await borrowerIdSftp(supabase, cpfBol);
+          const consulta = idSftp ?? await consultarUme(supabase, cpfBol, { perfil: 'essencial', aguardarCache: false });
+          if (consulta.encontrado && consulta.borrowerId) {
+            const ambiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
+            const venc = vencimentoDiaUtil(hojeSP());
+            const r = await umeApi.gerarBoletoUnico(ambiente, consulta.borrowerId, venc);
+            if (r.ok) {
+              const d = r.data as Record<string, unknown>;
+              const valor = Number(d.invoiceTotalValue ?? 0) || null;
+              const vencIso = String(d.invoiceDueDate ?? venc).slice(0, 10);
+              const nome = String((contato as any).nome || consulta.nome || '').trim();
+              const txt = [
+                `Prontinho${nome ? `, ${primeiroNome(nome)}` : ''}! Segue sua parcela atualizada da ${credorCaixa} 🙏`,
+                '',
+                valor ? `💰 *Valor:* ${fmtBRL(valor)}` : null,
+                `📅 *Vencimento:* ${vencIso.split('-').reverse().join('/')}`,
+                d.pixCode ? `\n🔑 *PIX copia e cola:*\n${d.pixCode}` : null,
+                d.invoiceUrl ? `\n📄 *Boleto (PDF):* ${d.invoiceUrl}` : null,
+              ].filter(Boolean).join('\n');
+              await enviarTexto(supabase, contato, txt.slice(0, 3500));
+              await supabase.from('ume_boleto_log').insert({
+                user_id: null, cpf: cpfBol, borrower_id: consulta.borrowerId, invoice_id: String(d.id ?? '') || null,
+                valor, vencimento: vencIso, invoice_url: String(d.invoiceUrl ?? '') || null, origem: 'iago_boleto_imediato', ambiente,
+              });
+              await supabase.rpc('iago_finish_message', { p_contato_id: contato_id, p_entrada_id: String(entrada_id) });
+              console.log('[IAGO] boleto imediato enviado', { contato_id, cpf: mask(cpfBol), credor: credorCaixa });
+              return json({ success: true, etapa: 'boleto_imediato' });
+            }
+            console.error('[IAGO] boleto imediato recusado', r.status, JSON.stringify(r.data).slice(0, 300));
+          }
+        }
+      } catch (e) {
+        console.error('[IAGO] falha no boleto imediato', String((e as Error)?.message || e));
+      }
+      // Falha => segue o fluxo normal (atendente humano continua responsável)
+    }
 
     // ===== A conversa é do IAGO? (etiqueta de atendente) =====
     const tags = await etiquetasAtendente(supabase, contato_id);
@@ -898,13 +945,13 @@ Deno.serve(async (req) => {
     }
 
     // ===== Pedido de boleto/PIX em conversa UME => gera pela API oficial e responde na hora =====
-    if (cpf && !modoAquecimento && /\bUME\b/i.test(credorCaixa) && ehPedidoBoleto(textoAtual)) {
+    if (cpf && !modoAquecimento && credorBoletoAutomatico(credorCaixa) && ehPedidoBoleto(textoAtual)) {
       try {
         const idSftpBol = await borrowerIdSftp(supabase, cpf);
         const consultaBol = idSftpBol ?? await consultarUme(supabase, cpf, { perfil: 'essencial', aguardarCache: false });
         if (consultaBol.encontrado && consultaBol.borrowerId) {
           const ambiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
-          const venc = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+          const venc = vencimentoDiaUtil(hojeSP());
           const r = await umeApi.gerarBoletoUnico(ambiente, consultaBol.borrowerId, venc);
           if (r.ok) {
             const d = r.data as Record<string, unknown>;
