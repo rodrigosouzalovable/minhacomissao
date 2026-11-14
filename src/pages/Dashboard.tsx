@@ -116,16 +116,22 @@ export default function Dashboard() {
           valorRecebidoAnterior: Number(g.pgtos_anterior_valor),
         };
       } else {
-        const [acordosAtualRes, acordosAnteriorRes, pgRecAtualRes, pgRecAnteriorRes] = await Promise.all([
-          supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAtualISO).lte('criado_em', agoraISO),
-          supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAnteriorISO).lte('criado_em', mesmoDiaAnteriorISO),
-          supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAtualISO.slice(0, 10)).lte('data_paga', agoraISO.slice(0, 10)),
-          supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAnteriorISO.slice(0, 10)).lte('data_paga', mesmoDiaAnteriorISO.slice(0, 10)),
+        const buscarTodos = async (montar: () => any) => {
+          const linhas: any[] = [];
+          for (let de = 0; ; de += 1000) {
+            const { data: bloco, error } = await montar().range(de, de + 999);
+            if (error) throw error;
+            linhas.push(...(bloco || []));
+            if (!bloco || bloco.length < 1000) break;
+          }
+          return linhas;
+        };
+        const [acAtual, acAnterior, pgAtual, pgAnterior] = await Promise.all([
+          buscarTodos(() => supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAtualISO).lte('criado_em', agoraISO).order('id')),
+          buscarTodos(() => supabase.from('acordos').select('id, valor_total').gte('criado_em', inicioAnteriorISO).lte('criado_em', mesmoDiaAnteriorISO).order('id')),
+          buscarTodos(() => supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAtualISO.slice(0, 10)).lte('data_paga', agoraISO.slice(0, 10)).order('id')),
+          buscarTodos(() => supabase.from('pagamentos').select('id, valor_parcela').eq('status', 'pago').gte('data_paga', inicioAnteriorISO.slice(0, 10)).lte('data_paga', mesmoDiaAnteriorISO.slice(0, 10)).order('id')),
         ]);
-        const acAtual = acordosAtualRes.data || [];
-        const acAnterior = acordosAnteriorRes.data || [];
-        const pgAtual = pgRecAtualRes.data || [];
-        const pgAnterior = pgRecAnteriorRes.data || [];
         comparativo = {
           acordosCriados: acAtual.length,
           acordosCriadosAnterior: acAnterior.length,
