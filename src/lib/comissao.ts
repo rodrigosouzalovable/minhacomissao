@@ -23,9 +23,9 @@ export const tabelaComissoesFuncionarioOut2026 = [
 
 // Vigente para pagamentos a partir de 01/11/2026
 export const tabelaComissoesFuncionario = [
-  { min: 1,   max: 90,     percentual: 2 },
-  { min: 91,  max: 360,    percentual: 4 },
-  { min: 361, max: 999999, percentual: 7 },
+  { min: 1,   max: 90,     percentual: 1.5 },
+  { min: 91,  max: 360,    percentual: 3.5 },
+  { min: 361, max: 999999, percentual: 5 },
 ];
 
 export const DATA_INICIO_NOVA_COMISSAO_FUNCIONARIO = '2026-10-01';
