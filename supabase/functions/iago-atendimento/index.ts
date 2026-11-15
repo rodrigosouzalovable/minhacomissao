@@ -9,7 +9,7 @@ import {
   avisarEmergencia as avisarEmergenciaBase, etiquetarAguardandoHumano as etiquetarAguardandoHumanoBase, etiquetarAcordoFechado, enviarTexto, resolverTelefone, calcularProposta, chamarIA, extrairJson,
   classificarDataPagamento, detectarEscolha, respostaPagamentoHoje, contextoDataHoje,
   carregarQualificacoesDisponiveis, qualificarConversa, type QualificacaoIA,
-  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa, credorDasMensagensEnviadas, garantirApresentacaoVirtual, FOLDER_AQUECIMENTO_INBOX,
+  nomePerfilConfiavel, extrairNomeInformado, nomeDeSaudacaoEnviada, ehConfirmacaoIdentidade, resolverCredorConversa, credorDasMensagensEnviadas, garantirApresentacaoVirtual, FOLDER_AQUECIMENTO_INBOX, FOLDER_BLACK_FRIDAY_INBOX,
   ehPropostaPortal,
 } from '../_shared/iago.ts';
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
@@ -46,6 +46,7 @@ Deno.serve(async (req) => {
   let travaEntradaId: string | null = null;
 
   let modoAquecimento = false;
+  let modoVendas = false;
   let modoCaixaPadrao = false;
   const etiquetarAguardandoHumano = async (sb: any, contatoId: string) => {
     if (modoAquecimento) {
@@ -107,13 +108,15 @@ Deno.serve(async (req) => {
       return json({ success: true, cadastral: true });
     }
 
-    // Leads do Google Maps usados no aquecimento não são atendidos pelo IAGO.
-    if (String((contato as any).origem_aquecimento || '') === 'lead_google_maps') {
+    modoVendas = (contato as any).folder_id === FOLDER_BLACK_FRIDAY_INBOX;
+    // Leads do Google Maps usados no aquecimento não são atendidos pelo IAGO (exceto na BLACK FRIDAY).
+    if (!modoVendas && String((contato as any).origem_aquecimento || '') === 'lead_google_maps') {
       return json({ success: false, skipped: 'lead de aquecimento (Google Maps)' });
     }
 
     const folderId = (contato as any).folder_id ?? null;
-    modoAquecimento = folderId === FOLDER_AQUECIMENTO_INBOX;
+    // BLACK FRIDAY reaproveita o modo sem escalada/sem trava humana, com roteiro de vendas.
+    modoAquecimento = folderId === FOLDER_AQUECIMENTO_INBOX || modoVendas;
     // PADRÃO e caixas personalizadas onde o IAGO foi marcado como atendente
     // funcionam igual: rodízio, respostas e transferência para humanos da mesma caixa.
     if (!modoAquecimento) {
@@ -1060,7 +1063,7 @@ Deno.serve(async (req) => {
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
       qualificacoes: await quals(),
-      propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao,
+      propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao, modoVendas,
     });
 
     // ===== A IA entendeu que não é o titular (mesmo com erro de escrita) => encerra =====
@@ -1205,7 +1208,7 @@ Deno.serve(async (req) => {
     }
 
     // Aquecimento: a conversa nunca pode ficar sem resposta.
-    if (modoAquecimento && !mensagens.length) {
+    if (modoAquecimento && !modoVendas && !mensagens.length) {
       const pn = primeiroNome(nomeCliente);
       const genericas = [
         `Entendi${pn ? `, ${pn}` : ''}. E como estão as coisas por aí?`,
@@ -1394,6 +1397,7 @@ async function gerarResposta(args: {
   respostaAutomatica?: boolean;
   precisaPerguntarNome?: boolean;
   modoAquecimento?: boolean;
+  modoVendas?: boolean;
   modoCaixaPadrao?: boolean;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
@@ -1404,7 +1408,7 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa, credorAmbiguo,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao,
+    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao, modoVendas,
   } = args;
 
   const textoNormalizado = String(texto || '')
@@ -1413,6 +1417,34 @@ async function gerarResposta(args: {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+
+  if (modoVendas) {
+    const conversa = historico.length
+      ? historico.map((m) => `${m.direcao === 'entrada' ? 'EMPRESA' : 'VOCÊ'}: ${String(m.conteudo || '').slice(0, 500)}`).join('\n')
+      : '(primeira resposta)';
+    const systemVendas = [
+      `Você é ${cfg.persona_nome || 'Iago'}, consultor comercial da Souza Ribeiro, falando por WhatsApp oficial com donos/gestores de comércios de Goiânia.`,
+      'CONTEXTO: enviamos antes "Só passando para confirmar se você recebeu nossa mensagem anterior". A empresa respondeu por curiosidade. NÃO é cobrança: nunca fale de dívida, CPF, boleto ou credor.',
+      'O QUE VENDEMOS: campanha de Black Friday e Natal por WhatsApp OFICIAL (API da Meta): disparo para a base de clientes da empresa (antigos e atuais), mensagem com botões, entrega oficial sem risco de bloqueio do número deles, relatório de entregas e respostas direto no WhatsApp da empresa.',
+      'PACOTES: Essencial R$ 997 (até 3.000 contatos, 1 campanha) e Completo R$ 1.490 (até 5.000 contatos, 2 campanhas, ex.: Black Friday + Natal). Pagamento via PIX; começamos em até 24h após o pagamento. Não invente outros preços, descontos ou garantias de faturamento.',
+      'ROTEIRO: 1) Se perguntarem "qual mensagem?", explique em 1-2 frases que é uma ação de vendas de fim de ano para empresas de Goiânia e pergunte se eles têm lista de clientes no WhatsApp. 2) Entenda o negócio (segmento, tamanho da base). 3) Apresente o pacote mais adequado com o benefício principal. 4) Responda objeções com calma (custo: 1 venda extra já paga; bloqueio: é número oficial). 5) Feche: pergunte qual pacote prefere e diga que o responsável já envia o PIX e o contrato nesta conversa.',
+      'Se pedirem para não receber mais mensagens ou disserem que não têm interesse, agradeça educadamente em uma frase e encerre sem insistir.',
+      'Escreva como pessoa real: 1 a 3 linhas por mensagem, no máximo 2 mensagens, no máximo 1 emoji, termine com uma pergunta quando fizer sentido. Não repita o que já foi dito no histórico. Nunca diga que é IA ou robô; se perguntarem diretamente, diga que é da equipe comercial.',
+      'Responda SOMENTE com JSON válido: {"mensagens":["texto"],"escalar":false,"motivo":""}',
+    ].join('\n');
+    const userVendas = `HISTÓRICO:\n${conversa}\n\nÚLTIMA MENSAGEM DA EMPRESA:\n${texto}`;
+    try {
+      const out = await chamarIA(systemVendas, userVendas);
+      const parsed = extrairJson(out);
+      const respostas = Array.isArray(parsed?.mensagens)
+        ? parsed.mensagens.map((m: any) => String(m).trim()).filter(Boolean).slice(0, 2)
+        : [];
+      if (respostas.length) return { mensagens: respostas, escalar: false, motivo: '' };
+    } catch (e: any) {
+      console.error('[IAGO] falha no modo vendas', e?.message || e);
+    }
+    return { mensagens: ['Era sobre uma ação de vendas de Black Friday e Natal pelo WhatsApp oficial para empresas de Goiânia. Vocês costumam falar com seus clientes pelo WhatsApp?'], escalar: false, motivo: 'fallback vendas' };
+  }
 
   if (modoAquecimento) {
     const conversaAquecimento = historico.length

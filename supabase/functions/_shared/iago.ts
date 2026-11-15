@@ -391,6 +391,8 @@ export async function etiquetasAtendente(supabase: any, contatoId: string): Prom
  * Compara pelos últimos 8 dígitos, padrão do sistema.
  */
 export const FOLDER_AQUECIMENTO_INBOX = '4f7a52c0-9c86-4b80-8867-4ade7a6df441';
+/** Caixa BLACK FRIDAY: IAGO atua como vendedor B2B de disparos oficiais. */
+export const FOLDER_BLACK_FRIDAY_INBOX = '19fed3ec-61b9-4b74-9a57-4d4b9d7fc6ab';
 
 /** Mensagem pronta enviada pelo cliente a partir do portal de negociação. */
 export function ehPropostaPortal(texto: string): boolean {
@@ -427,7 +429,7 @@ export async function temAtendenteHumanoNoTelefone(
 
     // AQUECIMENTO é uma conversa isolada. O mesmo telefone pode existir em outra
     // caixa com atendente humano, mas isso nunca deve calar o IAGO aqui.
-    if (folderId === FOLDER_AQUECIMENTO_INBOX) {
+    if (folderId === FOLDER_AQUECIMENTO_INBOX || folderId === FOLDER_BLACK_FRIDAY_INBOX) {
       return null;
     }
 
