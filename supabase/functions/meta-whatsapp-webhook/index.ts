@@ -971,7 +971,7 @@ serve(async (req) => {
               .maybeSingle();
             _folderIdContato = (_cFolder as any)?.folder_id ?? null;
             _leadAquecimento = ['lead_google_maps', ORIGEM_CADASTRAL, NOVO_MUNDO_ORIGEM].includes(String((_cFolder as any)?.origem_aquecimento || ''));
-            if ((_cFolder as any)?.folder_id === '19fed3ec-61b9-4b74-9a57-4d4b9d7fc6ab') _leadAquecimento = false; // BLACK FRIDAY: IAGO vende
+            if ((_cFolder as any)?.folder_id === '19fed3ec-61b9-4b74-9a57-4d4b9d7fc6ab' || (_cFolder as any)?.folder_id === '7b3e9a10-4c2d-4f8e-9a61-0d5e2c8b1a47') _leadAquecimento = false; // BLACK FRIDAY: IAGO vende
             if ([ORIGEM_CADASTRAL, NOVO_MUNDO_ORIGEM].includes(String(_cFolder?.origem_aquecimento || ''))) _cadastralContato = _cFolder;
 
             // Regra: todo atendimento fica na caixa Padrão. Conversas marcadas na

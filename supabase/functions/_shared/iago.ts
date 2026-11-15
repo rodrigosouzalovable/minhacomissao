@@ -429,7 +429,7 @@ export async function temAtendenteHumanoNoTelefone(
 
     // AQUECIMENTO é uma conversa isolada. O mesmo telefone pode existir em outra
     // caixa com atendente humano, mas isso nunca deve calar o IAGO aqui.
-    if (folderId === FOLDER_AQUECIMENTO_INBOX || folderId === FOLDER_BLACK_FRIDAY_INBOX) {
+    if (folderId === FOLDER_AQUECIMENTO_INBOX || folderId === FOLDER_BLACK_FRIDAY_INBOX || folderId === '7b3e9a10-4c2d-4f8e-9a61-0d5e2c8b1a47') {
       return null;
     }
 
