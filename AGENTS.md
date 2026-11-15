@@ -65,3 +65,4 @@
 - UME proposal text uses a per-user saved template filled locally; AI only suggests fields on explicit click.
 - Public sign-up stays disabled; accounts are created by admins and team-wide reads require an app role (`is_staff_member`).
 - Inbox UME calculator sends (proposal, boleto/PIX, overdue installment) require the attendant's own UME login session (ume_sessoes_usuario, server-only tokens, password never stored); portal, cron and IAGO keep the company account.
+- Video factory (/admin/fabrica-videos) is admin-only via RLS and stores scripts, affiliate products and a posting queue; Higgsfield and social publishing stay unconnected until credentials exist, so nothing spends money automatically.

@@ -1737,6 +1737,13 @@
       "when": 1794655024406,
       "tag": "0247_carteira_sftp_candidatos_json_todos_envios",
       "breakpoints": true
+    },
+    {
+      "idx": 248,
+      "version": "7",
+      "when": 1794772569993,
+      "tag": "0248_migration",
+      "breakpoints": true
     }
   ]
 }

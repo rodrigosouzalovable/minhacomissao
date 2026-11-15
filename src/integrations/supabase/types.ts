@@ -11184,6 +11184,143 @@ export type Database = {
         }
         Relationships: []
       }
+      video_afiliado_produtos: {
+        Row: {
+          ativo: boolean
+          cliques: number
+          comissao_pct: number | null
+          created_at: string
+          id: string
+          link: string
+          nome: string
+          plataforma: string
+          preco: number | null
+          slug: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          cliques?: number
+          comissao_pct?: number | null
+          created_at?: string
+          id?: string
+          link: string
+          nome: string
+          plataforma?: string
+          preco?: number | null
+          slug?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          cliques?: number
+          comissao_pct?: number | null
+          created_at?: string
+          id?: string
+          link?: string
+          nome?: string
+          plataforma?: string
+          preco?: number | null
+          slug?: string | null
+        }
+        Relationships: []
+      }
+      video_postagens: {
+        Row: {
+          agendado_para: string | null
+          created_at: string
+          erro: string | null
+          id: string
+          rede: string
+          roteiro_id: string | null
+          status: string
+          url_publicada: string | null
+        }
+        Insert: {
+          agendado_para?: string | null
+          created_at?: string
+          erro?: string | null
+          id?: string
+          rede: string
+          roteiro_id?: string | null
+          status?: string
+          url_publicada?: string | null
+        }
+        Update: {
+          agendado_para?: string | null
+          created_at?: string
+          erro?: string | null
+          id?: string
+          rede?: string
+          roteiro_id?: string | null
+          status?: string
+          url_publicada?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_postagens_roteiro_id_fkey"
+            columns: ["roteiro_id"]
+            isOneToOne: false
+            referencedRelation: "video_roteiros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_roteiros: {
+        Row: {
+          cenas: Json
+          created_at: string
+          criado_por: string | null
+          cta: string | null
+          duracao_seg: number
+          gancho: string | null
+          hashtags: string | null
+          id: string
+          legenda: string | null
+          modelo_video: string
+          nicho: string
+          produto_id: string | null
+          roteiro: string | null
+          status: string
+          tema: string
+          updated_at: string
+        }
+        Insert: {
+          cenas?: Json
+          created_at?: string
+          criado_por?: string | null
+          cta?: string | null
+          duracao_seg?: number
+          gancho?: string | null
+          hashtags?: string | null
+          id?: string
+          legenda?: string | null
+          modelo_video?: string
+          nicho?: string
+          produto_id?: string | null
+          roteiro?: string | null
+          status?: string
+          tema: string
+          updated_at?: string
+        }
+        Update: {
+          cenas?: Json
+          created_at?: string
+          criado_por?: string | null
+          cta?: string | null
+          duracao_seg?: number
+          gancho?: string | null
+          hashtags?: string | null
+          id?: string
+          legenda?: string | null
+          modelo_video?: string
+          nicho?: string
+          produto_id?: string | null
+          roteiro?: string | null
+          status?: string
+          tema?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       virtualsms_config: {
         Row: {
           id: string
