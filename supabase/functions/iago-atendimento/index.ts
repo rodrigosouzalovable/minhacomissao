@@ -1,3 +1,4 @@
+import { notificarAdmin } from '../_shared/notificar-admin.ts';
 // IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
 // Na PADRÃO pode escalar; na AQUECIMENTO responde curto, sem humano e sem follow-up.
 import { requireCaller, mask } from '../_shared/auth-guard.ts';
@@ -1066,6 +1067,19 @@ Deno.serve(async (req) => {
       propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao, modoVendas,
     });
 
+    // ===== BLACK FRIDAY: avisa o admin no WhatsApp quando o lead demonstra interesse (1x por contato) =====
+    if (modoVendas && (resultado as any)?.interessado) {
+      try {
+        const tel = String((contato as any).telefone || '');
+        await notificarAdmin(supabase, {
+          tipo: 'black_friday_interesse',
+          chaveIdempotencia: `bf_interesse_${contato_id}`,
+          umaVezPorChave: true,
+          mensagem: `🎯 LEAD INTERESSADO — BLACK FRIDAY\n\n🏢 ${nomeCliente || 'Empresa'}\n📱 ${tel}\n💬 "${String(textoAtual || '').slice(0, 300)}"\n📌 ${(resultado as any).interesse_resumo || ''}\n\n👉 Abra o Inbox na caixa BLACK FRIDAY e assuma a conversa.`,
+        });
+      } catch (e: any) { console.error('[IAGO] aviso interesse BF falhou', e?.message || e); }
+    }
+
     // ===== A IA entendeu que não é o titular (mesmo com erro de escrita) => encerra =====
     // Durante negociação (escolha/data), nunca encerra: escala para o humano.
     const naoEhTitular = resultado?.nao_e_titular === true || String(resultado?.nao_e_titular || '').toLowerCase() === 'sim';
@@ -1430,7 +1444,8 @@ async function gerarResposta(args: {
       'ROTEIRO: 1) Se perguntarem "qual mensagem?", explique em 1-2 frases que é uma ação de vendas de fim de ano para empresas de Goiânia e pergunte se eles têm lista de clientes no WhatsApp. 2) Entenda o negócio (segmento, tamanho da base). 3) Apresente o pacote mais adequado com o benefício principal. 4) Responda objeções com calma (custo: 1 venda extra já paga; bloqueio: é número oficial). 5) Feche: pergunte qual pacote prefere e diga que o responsável já envia o PIX e o contrato nesta conversa.',
       'Se pedirem para não receber mais mensagens ou disserem que não têm interesse, agradeça educadamente em uma frase e encerre sem insistir.',
       'Escreva como pessoa real: 1 a 3 linhas por mensagem, no máximo 2 mensagens, no máximo 1 emoji, termine com uma pergunta quando fizer sentido. Não repita o que já foi dito no histórico. Nunca diga que é IA ou robô; se perguntarem diretamente, diga que é da equipe comercial.',
-      'Responda SOMENTE com JSON válido: {"mensagens":["texto"],"escalar":false,"motivo":""}',
+      'INTERESSE: marque "interessado":true quando a empresa demonstrar interesse real (pergunta preço, como funciona, pacotes, diz que tem lista de clientes, quer fechar ou pede PIX). Em "interesse_resumo" resuma em até 15 palavras.',
+      'Responda SOMENTE com JSON válido: {"mensagens":["texto"],"escalar":false,"motivo":"","interessado":false,"interesse_resumo":""}',
     ].join('\n');
     const userVendas = `HISTÓRICO:\n${conversa}\n\nÚLTIMA MENSAGEM DA EMPRESA:\n${texto}`;
     try {
@@ -1439,7 +1454,7 @@ async function gerarResposta(args: {
       const respostas = Array.isArray(parsed?.mensagens)
         ? parsed.mensagens.map((m: any) => String(m).trim()).filter(Boolean).slice(0, 2)
         : [];
-      if (respostas.length) return { mensagens: respostas, escalar: false, motivo: '' };
+      if (respostas.length) return { mensagens: respostas, escalar: false, motivo: '', interessado: parsed?.interessado === true, interesse_resumo: String(parsed?.interesse_resumo || '').slice(0, 200) } as any;
     } catch (e: any) {
       console.error('[IAGO] falha no modo vendas', e?.message || e);
     }
