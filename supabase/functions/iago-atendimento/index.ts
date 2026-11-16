@@ -1,3 +1,4 @@
+import { decidirParada } from '../_shared/vendas-encerramento.ts';
 import { FOLDER_USA_B2B_INBOX, promptVendasUsa, FALLBACK_USA } from '../_shared/vendas-usa.ts';
 import { notificarAdmin } from '../_shared/notificar-admin.ts';
 // IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
@@ -258,6 +259,33 @@ Deno.serve(async (req) => {
       return json({ success: true, etapa: 'optout' });
     }
     if (estado.optout) return json({ success: true, skipped: 'contato bloqueado' });
+    // ===== Vendas B2B: parar de responder sem interesse, para robôs e sem progresso (cada envio custa) =====
+    if (modoVendas) {
+      if (estado.etapa === 'vendas_encerrado') return json({ success: true, skipped: 'vendas encerrado' });
+      const { data: ult } = await supabase.from('meta_whatsapp_mensagens')
+        .select('direcao, conteudo, transcricao, criado_em, template_nome')
+        .eq('instancia_id', (contato as any).instancia_id).eq('telefone', (contato as any).telefone || '')
+        .order('criado_em', { ascending: false }).limit(40);
+      const lista = (ult || []) as any[];
+      const saidasIago = lista.filter((m) => m.direcao === 'saida' && !m.template_nome);
+      const entradasAnt = lista.filter((m) => m.direcao === 'entrada').slice(1)
+        .map((m) => String(m.transcricao || m.conteudo || ''));
+      const chave = `${mercadoUsa ? 'usa' : 'bf'}_interesse_${contato_id}`;
+      const { count: avisos } = await supabase.from('admin_notificacoes_log')
+        .select('id', { count: 'exact', head: true }).like('chave_idempotencia', `${chave}:%`);
+      const parada = decidirParada({
+        texto: String(texto || ''), entradasAnteriores: entradasAnt, respostasIago: saidasIago.length,
+        ultimaSaidaMs: saidasIago[0] ? new Date(saidasIago[0].criado_em).getTime() : null,
+        agoraMs: Date.now(), interessado: Number(avisos || 0) > 0,
+      });
+      if (parada === 'intervalo') return json({ success: true, skipped: 'vendas: resposta recente' });
+      if (parada) {
+        await supabase.from('iago_conversa_estado')
+          .update({ etapa: 'vendas_encerrado', followup_em: null, followup_feito: true }).eq('id', estado.id);
+        console.log('[IAGO] vendas encerrado', { contato_id, parada });
+        return json({ success: true, skipped: `vendas encerrado (${parada})` });
+      }
+    }
     if (estado.aguardando_humano) {
       if (!modoAquecimento) return json({ success: true, skipped: 'aguardando humano' });
       // Aquecimento: destrava e segue respondendo.
@@ -1086,6 +1114,14 @@ Deno.serve(async (req) => {
       } catch (e: any) { console.error('[IAGO] aviso interesse BF falhou', e?.message || e); }
     }
 
+    if (modoVendas && (resultado as any)?.encerrar) {
+      await supabase.from('iago_conversa_estado')
+        .update({ etapa: 'vendas_encerrado', followup_em: null, followup_feito: true }).eq('id', estado.id);
+      await finalizarEntrada();
+      console.log('[IAGO] vendas encerrado (ia)', { contato_id });
+      return json({ success: true, skipped: 'vendas encerrado (sem_interesse)' });
+    }
+
     // ===== A IA entendeu que não é o titular (mesmo com erro de escrita) => encerra =====
     // Durante negociação (escolha/data), nunca encerra: escala para o humano.
     const naoEhTitular = resultado?.nao_e_titular === true || String(resultado?.nao_e_titular || '').toLowerCase() === 'sim';
@@ -1449,15 +1485,16 @@ async function gerarResposta(args: {
       'O QUE VENDEMOS: campanha de Black Friday e Natal por WhatsApp OFICIAL (API da Meta): disparo para a base de clientes da empresa (antigos e atuais), mensagem com botões, entrega oficial sem risco de bloqueio do número deles, relatório de entregas e respostas direto no WhatsApp da empresa.',
       'PACOTES: Essencial R$ 997 (até 3.000 contatos, 1 campanha) e Completo R$ 1.490 (até 5.000 contatos, 2 campanhas, ex.: Black Friday + Natal). Pagamento via PIX; começamos em até 24h após o pagamento. Não invente outros preços, descontos ou garantias de faturamento.',
       'ROTEIRO: 1) Se perguntarem "qual mensagem?", explique em 1-2 frases que é uma ação de vendas de fim de ano para empresas de Goiânia e pergunte se eles têm lista de clientes no WhatsApp. 2) Entenda o negócio (segmento, tamanho da base). 3) Apresente o pacote mais adequado com o benefício principal. 4) Responda objeções com calma (custo: 1 venda extra já paga; bloqueio: é número oficial). 5) Feche: pergunte qual pacote prefere e diga que o responsável já envia o PIX e o contrato nesta conversa.',
-      'Se pedirem para não receber mais mensagens ou disserem que não têm interesse, agradeça educadamente em uma frase e encerre sem insistir.',
+      'ENCERRAR: marque "encerrar":true e "mensagens":[] quando a empresa não tiver interesse, recusar, pedir para parar, disser que não compartilha lista de clientes, ou quando o outro lado for robô/assistente virtual/resposta automática. Não mande despedida.',
       'Escreva como pessoa real: 1 a 3 linhas por mensagem, no máximo 2 mensagens, no máximo 1 emoji, termine com uma pergunta quando fizer sentido. Não repita o que já foi dito no histórico. Nunca diga que é IA ou robô; se perguntarem diretamente, diga que é da equipe comercial.',
       'INTERESSE: marque "interessado":true quando a empresa demonstrar interesse real (pergunta preço, como funciona, pacotes, diz que tem lista de clientes, quer fechar ou pede PIX). Em "interesse_resumo" resuma em até 15 palavras.',
-      'Responda SOMENTE com JSON válido: {"mensagens":["texto"],"escalar":false,"motivo":"","interessado":false,"interesse_resumo":""}',
+      'Responda SOMENTE com JSON válido: {"mensagens":["texto"],"escalar":false,"motivo":"","interessado":false,"interesse_resumo":"","encerrar":false}',
     ].join('\n');
     const userVendas = `HISTÓRICO:\n${conversa}\n\nÚLTIMA MENSAGEM DA EMPRESA:\n${texto}`;
     try {
       const out = await chamarIA(systemVendas, userVendas);
       const parsed = extrairJson(out);
+      if (parsed?.encerrar === true && parsed?.interessado !== true) return { mensagens: [], escalar: false, motivo: 'vendas_encerrar', encerrar: true } as any;
       const respostas = Array.isArray(parsed?.mensagens)
         ? parsed.mensagens.map((m: any) => String(m).trim()).filter(Boolean).slice(0, 2)
         : [];
