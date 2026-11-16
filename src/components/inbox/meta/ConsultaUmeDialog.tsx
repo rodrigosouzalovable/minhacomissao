@@ -61,7 +61,7 @@ interface BoletoUme {
   ambiente: 'dev' | 'prd';
 }
 
-const dataParaInput = (d: Date) => d.toISOString().slice(0, 10);
+const dataParaInput = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 const vencimentoPadrao = () => {
   const d = new Date();
   d.setDate(d.getDate() + 3);
@@ -249,6 +249,7 @@ export function ConsultaUmeDialog({
       setDataUme(vencimento && devolvido !== vencimento ? { pedida: vencimento, devolvida: devolvido } : null);
       if (vencimento && devolvido !== vencimento) toast.warning(`A UME gerou a cobrança para ${fmtData(devolvido)}, não para ${fmtData(vencimento)}. Confira antes de enviar.`);
       else if (vencimento) toast.success('Valor recalculado pela UME para a nova data');
+      if ((p.boleto as { contaEmpresa?: boolean }).contaEmpresa) toast.info("A UME não liberou o mesmo dia no seu login; o boleto de hoje foi emitido pela conta da empresa.");
     } catch (e) {
       toast.error(String((e as Error)?.message || e));
     } finally {
